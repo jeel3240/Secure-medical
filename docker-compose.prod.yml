@@ -1,0 +1,52 @@
+# docker-compose.prod.yml  (OVERRIDE - only applied on the server)
+# Server command:  docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
+#
+# Anything written here REPLACES the same setting in docker-compose.yml.
+# Anything not mentioned here stays as it is in docker-compose.yml.
+
+services:
+  postgres:
+    profiles: ["dev-only"]               # hidden on server; RDS is used instead
+
+  redis:
+    ports: !reset []                     # not reachable from outside
+    restart: always
+
+  api:
+    ports: !reset []                     # only Caddy talks to it
+    volumes: !reset []                   # no hot reload; use built image
+    command: npm run api                 # compiled dist/, not ts-node
+    restart: always
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: ${DATABASE_URL}      # RDS, from .env
+      JWT_SECRET: ${JWT_SECRET}          # real secret, from .env
+    depends_on: !reset
+      - redis
+
+  worker:
+    volumes: !reset []
+    command: npm run worker              # compiled dist/, not ts-node
+    restart: always
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: ${DATABASE_URL}
+    depends_on: !reset
+      - redis
+
+  caddy:                                 # NEW service, server only
+    image: caddy:2
+    restart: always
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - api
+
+volumes:
+  caddy_data:
+  caddy_config:
