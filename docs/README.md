@@ -65,13 +65,21 @@ is deliberate, not unfinished.
 
 ## Documentation
 
-| Doc | |
-|---|---|
-| `../CLAUDE.md` | Architecture decisions, data model, four-week plan |
-| `SCHEMA.md` | Database tables and why they are shaped that way |
-| `EZTEXTING-API.md` | Verified API behaviour - read before touching the poller |
-| `DESIGN-PROMPT.md` | Frontend design brief |
-| `Secure-Medical-Call-Center-Mockup.pdf` | All screens; page 3 is the state machine |
+Each area has one doc. When you change something, update its doc in the same
+commit.
+
+| Doc | Covers | Update it when you change |
+|---|---|---|
+| `../CLAUDE.md` | Architecture decisions, four-week plan | An architectural decision |
+| `SCHEMA.md` | Database tables and why | A migration |
+| `POLLER.md` | How leads are pulled in | The poller or worker loop |
+| `EZTEXTING-API.md` | Verified API behaviour | You learn something new about the API |
+| `WORKFLOW.md` | Branches, PRs, migrations, deploys | The process itself |
+| `DESIGN-PROMPT.md` | Frontend design brief | The design direction |
+| `Secure-Medical-Call-Center-Mockup.pdf` | All screens; page 3 is the state machine | — |
+
+Docs still to write, as the code arrives: `AUTH.md`, `WEBHOOKS.md`,
+`STATE-MACHINE.md`, `TWILIO.md`, `DEPLOYMENT.md`.
 
 ## Troubleshooting
 

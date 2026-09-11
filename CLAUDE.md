@@ -333,8 +333,9 @@ Done when:
 - Read `docs/SCHEMA.md` before changing the data model or writing a migration.
 - Read `docs/Secure-Medical-Call-Center-Mockup.pdf` for screen layouts and the reply-handling flow (page 3 is the state machine).
 - Read `docs/DESIGN-PROMPT.md` before any frontend work.
-- **Keep `docs/` current.** Anything that changes the schema, the EZ Texting
-  integration, or how the app is run needs its doc updated in the same commit.
+- **Every area has one doc, and it is updated in the same commit as the change.**
+  Not afterwards, not in a follow-up. `docs/README.md` maps each doc to what
+  changes should trigger an update. New area, new doc - add it to that table.
   A finding that cost time to establish belongs in a doc, not just a commit
   message.
 - Production settings live in `docker-compose.prod.yml`. Never put real credentials in any committed file.

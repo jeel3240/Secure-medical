@@ -4,7 +4,9 @@ Documentation lives in [`docs/`](docs/):
 
 - [How to run it](docs/README.md)
 - [Database schema](docs/SCHEMA.md)
+- [Poller](docs/POLLER.md)
 - [EZ Texting API behaviour](docs/EZTEXTING-API.md)
+- [Workflow](docs/WORKFLOW.md)
 - [Frontend design brief](docs/DESIGN-PROMPT.md)
 
 Architecture decisions, the data model and the four-week plan are in
