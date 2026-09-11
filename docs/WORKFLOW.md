@@ -6,15 +6,17 @@ section 9 is the policy; this is the practice.
 ## Branches
 
 `main` is what deploys. `dev` is the integration branch. Work happens on a
-feature branch off `dev`, and reaches `main` through a PR that Jeel reviews.
+feature branch off `dev` and reaches `dev` through a PR. Jeel merges `dev` into
+`main` separately.
 
 ```bash
 git checkout dev && git pull
 git checkout -b feat/short-description
 ```
 
-Nobody pushes to `main` directly, and the developer never touches EC2, RDS or
-the client's accounts.
+**Every change goes through a PR into `dev`.** Nothing is committed directly to
+`dev` or `main`, and no PR targets `main`. The developer never touches EC2, RDS
+or the client's accounts.
 
 ## Commits
 
