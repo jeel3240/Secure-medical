@@ -17,7 +17,16 @@ GET /v1/contacts?filters[groupName][like]=weightloss&filters[source][eq]=API&sor
 ```
 
 - `size` must be one of 10, 20, 50, 100, 200. Anything else returns 400.
-- `sort=createdAt,desc` works (response shows `"sorted": true`).
+- `sort=createdAt,desc` genuinely sorts server-side. Verified 2026-09-11 against
+  the 1773-contact group: `desc` and `asc` return entirely different first pages
+  (newest 2026-07-20 vs oldest 2024-07-19), so this is not coincidental ordering.
+  Do not rely on `"sorted": true` in the response as evidence - it appears even
+  when the sort field is invalid.
+- **The default order is ascending (oldest first).** Omitting `sort`, or passing
+  an unrecognised field like `sort=bogusField,desc`, silently yields oldest-first
+  rather than erroring. A typo in the sort field would leave the poller reading
+  the oldest end of the group on every tick and never seeing new contacts, with
+  no error to show for it.
 - `filters[groupName][like]=weightloss` returns only the 3 contacts in the group
   named exactly `weightloss`, even though `like` is a substring match elsewhere.
   But `filters[groupName][like]=weightloss - sent` returns that group's 1,773, so

@@ -36,6 +36,19 @@ async function readOverlapMs(): Promise<number> {
   return (Number.isFinite(minutes) ? minutes : 5) * 60 * 1000;
 }
 
+function assertNewestFirst(contacts: EztContact[]): void {
+  for (let i = 1; i < contacts.length; i++) {
+    const prev = Date.parse(contacts[i - 1].createdAt);
+    const curr = Date.parse(contacts[i].createdAt);
+    if (curr > prev) {
+      throw new Error(
+        'EZ Texting returned contacts oldest-first; expected sort=createdAt,desc. ' +
+          'Refusing to poll, since the checkpoint logic depends on newest-first order.'
+      );
+    }
+  }
+}
+
 async function isOnDnc(phone: string): Promise<boolean> {
   const { rowCount } = await pool.query('SELECT 1 FROM dnc_list WHERE phone = $1', [phone]);
   return rowCount! > 0;
@@ -131,6 +144,12 @@ export async function pollOnce(): Promise<PollStats> {
       source: config.ezt.source,
     });
     stats.fetched += result.content.length;
+
+    // An unrecognised sort field is ignored rather than rejected, and the
+    // default order is oldest-first - which would make the loop below break on
+    // the first contact every tick and never see anything new. Fail loudly
+    // instead: the checkpoint is not advanced, so nothing is lost.
+    assertNewestFirst(result.content);
 
     for (const contact of result.content) {
       const addedAt = new Date(contact.createdAt);
