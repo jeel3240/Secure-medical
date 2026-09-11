@@ -116,8 +116,17 @@ secure-medical/
   docker-compose.yml        local + prod (prod uses RDS via env)
   Caddyfile
   .env.example
-  README.md
+  CLAUDE.md                 must stay at root; Claude Code loads it from there
+  docs/                     all other documentation
+    README.md               how to run it
+    SCHEMA.md               data model
+    EZTEXTING-API.md        verified API behaviour
+    DESIGN-PROMPT.md        frontend design brief
+    Secure-Medical-Call-Center-Mockup.pdf
 ```
+
+All documentation lives in `docs/`, except `CLAUDE.md`. Keep it that way: when
+you change something the docs describe, update the doc in the same commit.
 
 `api` and `worker` build from the same Dockerfile; only the start command differs.
 
@@ -321,8 +330,13 @@ Done when:
 ## 12. Working with Claude Code
 
 - Read `docs/EZTEXTING-API.md` before touching the poller, sender, or webhook. It has verified endpoints and field names.
+- Read `docs/SCHEMA.md` before changing the data model or writing a migration.
 - Read `docs/Secure-Medical-Call-Center-Mockup.pdf` for screen layouts and the reply-handling flow (page 3 is the state machine).
 - Read `docs/DESIGN-PROMPT.md` before any frontend work.
+- **Keep `docs/` current.** Anything that changes the schema, the EZ Texting
+  integration, or how the app is run needs its doc updated in the same commit.
+  A finding that cost time to establish belongs in a doc, not just a commit
+  message.
 - Production settings live in `docker-compose.prod.yml`. Never put real credentials in any committed file.
 - Prod `api` and `worker` must run compiled `dist/` output, not ts-node.
 - Prefer small PRs, one concern each. Run `npm test` before opening one.

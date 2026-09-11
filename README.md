@@ -1,30 +1,11 @@
 # Secure Medical — Lead Qualification & Call Center
 
-Medical SMS qualification flow + browser-based call center.
+Documentation lives in [`docs/`](docs/):
 
-## Quick Start
+- [How to run it](docs/README.md)
+- [Database schema](docs/SCHEMA.md)
+- [EZ Texting API behaviour](docs/EZTEXTING-API.md)
+- [Frontend design brief](docs/DESIGN-PROMPT.md)
 
-```bash
-# Install dependencies
-cd backend && npm install
-cd ../frontend && npm install
-
-# Start services
-cd ..
-docker compose up -d
-
-# Migrate database
-docker compose exec api npm run migrate
-
-# View logs
-docker compose logs -f api
-docker compose logs -f worker
-```
-
-## Architecture
-
-- **Backend**: Node + Express + Postgres + Redis
-- **Frontend**: React + Vite
-- **Deployment**: EC2 (Caddy + Docker Compose) + RDS
-
-See `CLAUDE.md` for architecture decisions, data model and the four-week plan.
+Architecture decisions, the data model and the four-week plan are in
+[`CLAUDE.md`](CLAUDE.md).
