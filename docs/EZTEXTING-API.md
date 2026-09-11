@@ -21,6 +21,14 @@ GET /v1/contacts?filters[groupName][like]=weightloss&filters[source][eq]=API&sor
 - `filters[groupName][like]=weightloss` matched only the group named exactly `weightloss`, not `weightloss - sent`. Still verify `groups[].name` after fetch.
 - `filters[source][eq]` values: Unknown, WebInterface, Upload, WebWidget, API, Keyword. Partner leads arrive as `API`.
 - Other filters available: `filters[optOut][eq]`, `filters[phoneNumber][like]`, `filters[firstName][like]`, `filters[lastName][like]`, `filters[email][like]`.
+- **No date filter exists.** Tested 2026-09-11: `filters[createdAt]` with `gt`,
+  `gte`, `after`, `greaterThan` and `eq`, plus a bare `createdAtFrom`, all
+  returned the full unfiltered set including a contact three months older than
+  the cutoff. Unrecognised filters are silently ignored rather than rejected, so
+  a filter that appears to work may be doing nothing - always verify against a
+  contact you expect it to exclude. This is why the poller sorts `createdAt,desc`
+  and stops reading at the checkpoint instead of asking the server for "contacts
+  since X".
 - Response is Spring-Data style paging: `content[]`, `totalElements`, `totalPages`, `last`, `pageable`.
 
 ### Response shape (one contact)
