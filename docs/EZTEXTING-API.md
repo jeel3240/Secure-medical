@@ -18,9 +18,44 @@ GET /v1/contacts?filters[groupName][like]=weightloss&filters[source][eq]=API&sor
 
 - `size` must be one of 10, 20, 50, 100, 200. Anything else returns 400.
 - `sort=createdAt,desc` works (response shows `"sorted": true`).
-- `filters[groupName][like]=weightloss` matched only the group named exactly `weightloss`, not `weightloss - sent`. Still verify `groups[].name` after fetch.
+- `filters[groupName][like]=weightloss` returns only the 3 contacts in the group
+  named exactly `weightloss`, even though `like` is a substring match elsewhere.
+  But `filters[groupName][like]=weightloss - sent` returns that group's 1,773, so
+  the matching is on the whole group name, not a prefix. Re-verify `groups[].name`
+  after fetch regardless.
 - `filters[source][eq]` values: Unknown, WebInterface, Upload, WebWidget, API, Keyword. Partner leads arrive as `API`.
-- Other filters available: `filters[optOut][eq]`, `filters[phoneNumber][like]`, `filters[firstName][like]`, `filters[lastName][like]`, `filters[email][like]`.
+
+### Filters that work
+
+Verified 2026-09-11 by running each against a value expected to exclude
+something and checking `totalElements` actually moved.
+
+| Filter | Notes |
+|---|---|
+| `filters[groupName][like]` | |
+| `filters[phoneNumber][like]` | |
+| `filters[firstName][like]` | |
+| `filters[lastName][like]` | |
+| `filters[email][like]` | |
+| `filters[note][like]` | |
+| `filters[firstName][eq]` | exact match |
+| `filters[source][eq]` | enum, see values above |
+| `filters[optOut][eq]` | `true` / `false` |
+
+`like` is a case-insensitive substring match: `har`, `arol` and `HAROLD` all
+matched "harold". Hence the group-membership re-check in the poller.
+
+### Filters that are silently ignored
+
+`filters[groupId]` and `filters[id]` in any form; the operators `ne`, `in`,
+and `like` on `source`; and every date/time filter (below). These return the
+full unfiltered set, exactly like a made-up field name.
+
+Validation is inconsistent: `filters[source][like]=ZZZ` returns 400 (`No enum
+constant ...Contact.ContactSource.ZZZ`) because `source` is a validated enum,
+but `filters[bogusField][gt]=xyz` returns 200 and every row. An absent error
+is not evidence a filter is working.
+
 - **No date filter exists.** Tested 2026-09-11 against a group of 3 contacts,
   one of them three months older than the cutoff. Seventeen variants all
   returned the full set: field names `createdAt`, `created`, `dateCreated`,
