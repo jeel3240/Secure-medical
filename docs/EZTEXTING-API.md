@@ -21,14 +21,22 @@ GET /v1/contacts?filters[groupName][like]=weightloss&filters[source][eq]=API&sor
 - `filters[groupName][like]=weightloss` matched only the group named exactly `weightloss`, not `weightloss - sent`. Still verify `groups[].name` after fetch.
 - `filters[source][eq]` values: Unknown, WebInterface, Upload, WebWidget, API, Keyword. Partner leads arrive as `API`.
 - Other filters available: `filters[optOut][eq]`, `filters[phoneNumber][like]`, `filters[firstName][like]`, `filters[lastName][like]`, `filters[email][like]`.
-- **No date filter exists.** Tested 2026-09-11: `filters[createdAt]` with `gt`,
-  `gte`, `after`, `greaterThan` and `eq`, plus a bare `createdAtFrom`, all
-  returned the full unfiltered set including a contact three months older than
-  the cutoff. Unrecognised filters are silently ignored rather than rejected, so
-  a filter that appears to work may be doing nothing - always verify against a
-  contact you expect it to exclude. This is why the poller sorts `createdAt,desc`
-  and stops reading at the checkpoint instead of asking the server for "contacts
-  since X".
+- **No date filter exists.** Tested 2026-09-11 against a group of 3 contacts,
+  one of them three months older than the cutoff. Seventeen variants all
+  returned the full set: field names `createdAt`, `created`, `dateCreated`,
+  `created_at`; operators `gt`, `gte`, `ge`, `$gt`, `after`, `greaterThan`,
+  `min`, `from`, `start`, `between`, `eq`; values as ISO, date-only, no-Z and
+  epoch millis; and top-level `since`, `startDate`, `fromDate`, `createdAfter`,
+  `createdAtFrom`, `updatedAfter`.
+- Controls for that test: `filters[firstName][like]=harold` returned 1 and
+  `filters[optOut][eq]=true` returned 1, so filtering does reach the server,
+  while a deliberately invalid `filters[bogusField][gt]=xyz` returned all 3 -
+  identical to every date attempt.
+- **Unrecognised filters are silently ignored, never rejected.** A filter that
+  appears to work may be doing nothing. Always verify a new filter against a
+  record you expect it to exclude.
+- Consequence: the poller sorts `createdAt,desc` and stops reading at the
+  checkpoint rather than asking the server for contacts since a given time.
 - Response is Spring-Data style paging: `content[]`, `totalElements`, `totalPages`, `last`, `pageable`.
 
 ### Response shape (one contact)
