@@ -95,3 +95,10 @@ contacts. Two standing rules:
 - Sending is only ever to a `dev-test` group of our own phones. No such group
   exists yet, so `sendMessage` refuses to send while `EZT_SEND_GROUP` is unset.
   Do not set it to a real group to get a test working.
+
+**Update 2026-09-14 (Jeel):** the EZ Texting account is a test account, not the
+client's live account. The text above is kept for history. `weightloss` is the
+test group: contacts are added to it by hand in the dashboard and arrive with
+source `WebInterface`. Test settings are `EZT_GROUP=weightloss`,
+`EZT_SOURCE=WebInterface` and `EZT_SEND_GROUP=weightloss`. Keep the group filter
+on every contacts query.
