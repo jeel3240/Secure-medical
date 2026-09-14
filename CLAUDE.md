@@ -294,9 +294,11 @@ Build:
 7. Admin (mockup p.8): edit scoring rules and tier thresholds, recalculate existing, edit question copy / clarification / STOP text / expiry days, manage agents
 8. Superadmin overview: all activity across agents
 9. Caddy serves the built frontend; API under `/api`
+10. **Admin > Leads** *(added 2026-09-14, not in the original plan)*: superadmin-only list of every lead, including ones that never replied, with status tabs (Awaiting reply, In progress, Completed, Needs review, Opted out, Expired), source and date filters, search, pagination, and row click to the timeline. Read-only. Backed by `GET /api/admin/leads?status=&source=&since=&q=&page=`, superadmin only; status comes from the lead's newest conversation. Spec in `docs/DESIGN-PROMPT.md` section 6g. It needs only the `leads`, `conversations` and `messages` tables, so it can be built before the queue if useful for watching the poller and the SMS flow.
 
 Done when:
 - Two agents logged in at once cannot claim the same lead
+- A lead added in EZ Texting appears in Admin > Leads as Awaiting reply within one poll interval, without a manual refresh
 - Superadmin changes a scoring rule → next completed lead uses the new value
 - Every screen in the mockup exists and works with sandbox data
 
