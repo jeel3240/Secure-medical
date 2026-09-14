@@ -45,6 +45,7 @@ docker compose exec postgres psql -U app -d leads \
 | `EZT_GROUP` | Contact group the poller reads. Required - the account holds ~120k real contacts, so every query is scoped to one group. |
 | `EZT_SOURCE` | Defaults to `API`, which is how partner leads arrive. Set to `WebInterface` to test with a contact added by hand in the dashboard. |
 | `EZT_SEND_GROUP` | Leave unset. `sendMessage` refuses to send without it - see below. |
+| | *Update 2026-09-14:* the account is a test account. Set this to the name of a group you created with your own phone in it, and sending is unlocked. See below. |
 
 Never commit `.env`.
 
@@ -56,6 +57,18 @@ exists yet, so `sendMessage` throws unless `EZT_SEND_GROUP` is set.
 
 The poller therefore ingests leads but does not send the opening question. That
 is deliberate, not unfinished.
+
+**Update 2026-09-14 (Jeel):** the account is a test account, not the client's
+live account, so the block above no longer needs to stay in place. The text is
+kept for history. To unlock sending:
+
+1. In the EZ Texting dashboard, create a group (for example `dev-test`) and add
+   your own phone number to it.
+2. In `.env`, set `EZT_SEND_GROUP=dev-test` (the group's exact name).
+3. `docker compose up -d worker api` so the new value is picked up.
+
+`EZT_SEND_GROUP` is only the on/off switch for `sendMessage`. Wiring the opener
+send into the poller is separate work and is not done yet.
 
 ## Architecture
 

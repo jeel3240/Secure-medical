@@ -2,6 +2,8 @@
 
 Tested against the client account on 2026-09-10. Use these exact endpoints and field names.
 
+> **Update 2026-09-14 (Jeel):** this account is a test account, not the client's live account. It may be used for development, including sending. Findings below still hold; the "live" wording is kept as written on the day.
+
 ## Auth
 - HTTP Basic Auth: account username + password. No API key.
 - Env vars: `EZT_USERNAME`, `EZT_PASSWORD`
@@ -212,3 +214,4 @@ for inbound. See SCHEMA.md.
 ## Safety
 - Client account contains ~120,000 real contacts. Never query without the group filter. Never send to any group other than a `dev-test` group you created.
 - Developers use their own EZ Texting trial account, never these credentials.
+- **Update 2026-09-14 (Jeel):** the account is a test account and these credentials may be used directly for development, including sending. The two rules above are kept for history. Keep the group filter on every contacts query regardless (the account is large), and for send tests prefer a group you created with your own phone in it until the existing contacts are confirmed to be fake.
