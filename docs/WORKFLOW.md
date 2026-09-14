@@ -32,7 +32,9 @@ commit message.
 
 ```bash
 cd backend && npx tsc --noEmit    # must be clean
-npm test                          # when there are tests
+npm test                          # must pass
+cd ../frontend && npm run build   # type-checks and builds the frontend
+cd ..
 docker compose build api worker   # catches what a local node_modules hides
 docker compose up -d
 docker compose logs -f worker     # no errors, poll ticks look right

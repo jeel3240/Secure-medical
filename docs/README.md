@@ -19,6 +19,12 @@ docker compose up -d
 # Create the schema
 docker compose exec api npm run migrate
 
+# Create the first superadmin (prints a one-time temporary password)
+docker compose exec api npm run dev:create-superadmin -- you@example.com "Your Name"
+
+# Start the frontend, then open http://localhost:5173
+cd frontend && npm run dev
+
 # Watch the poller pick up leads
 docker compose logs -f worker
 ```
@@ -40,7 +46,7 @@ docker compose exec postgres psql -U app -d leads \
 
 | Variable | Notes |
 |---|---|
-| `DATABASE_URL`, `REDIS_URL`, `JWT_SECRET` | Required. |
+| `DATABASE_URL`, `REDIS_URL`, `JWT_SECRET` | Required. In production `JWT_SECRET` must be at least 32 characters and not a placeholder, or the API refuses to start - see AUTH.md. |
 | `EZT_USERNAME`, `EZT_PASSWORD` | EZ Texting account login. Basic auth, no API key. |
 | `EZT_GROUP` | Contact group the poller reads. Required - the account holds ~120k real contacts, so every query is scoped to one group. |
 | `EZT_SOURCE` | Defaults to `API`, which is how partner leads arrive. Set to `WebInterface` to test with a contact added by hand in the dashboard. |
@@ -86,6 +92,7 @@ commit.
 | Doc | Covers | Update it when you change |
 |---|---|---|
 | `../CLAUDE.md` | Architecture decisions, four-week plan | An architectural decision |
+| `AUTH.md` | Sign-in, sessions, roles, account management | Auth routes, guards or the users table |
 | `SCHEMA.md` | Database tables and why | A migration |
 | `POLLER.md` | How leads are pulled in | The poller or worker loop |
 | `EZTEXTING-API.md` | Verified API behaviour | You learn something new about the API |
@@ -93,7 +100,7 @@ commit.
 | `DESIGN-PROMPT.md` | Frontend design brief | The design direction |
 | `Secure-Medical-Call-Center-Mockup.pdf` | All screens; page 3 is the state machine | — |
 
-Docs still to write, as the code arrives: `AUTH.md`, `WEBHOOKS.md`,
+Docs still to write, as the code arrives: `WEBHOOKS.md`,
 `STATE-MACHINE.md`, `TWILIO.md`, `DEPLOYMENT.md`.
 
 ## Troubleshooting

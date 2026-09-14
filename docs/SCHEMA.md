@@ -27,7 +27,7 @@ the RDS CA bundle if strict verification is ever wanted.
 
 | Table | Holds |
 |---|---|
-| `users` | Agents and superadmins. bcrypt hash, role, active flag. |
+| `users` | Agents and superadmins. bcrypt hash, role, active flag, last sign-in, session version. |
 | `leads` | One person, pulled from EZ Texting. |
 | `conversations` | The 3-question SMS flow for a lead, plus its score and tier. |
 | `messages` | Every SMS in or out. |
@@ -44,6 +44,13 @@ Everything hangs off `leads.id` with `ON DELETE CASCADE`, so deleting a lead
 removes its whole history.
 
 ## Things worth knowing
+
+**`users.session_version` ends sessions.** Added in `002_auth_sessions.sql`.
+Every session token carries the version current at sign-in, and the API rejects
+a token whose version no longer matches. Bumping it signs the user out
+everywhere at once - on deactivation, admin password reset, password change and
+sign-out. AUTH.md has the full table. `users.last_login_at` came in the same
+migration, for the admin Agents list.
 
 **Phone is the identity.** The EZ Texting contacts API returns no per-contact
 id, so there is nothing else stable to key on. `leads.phone` is unique and
