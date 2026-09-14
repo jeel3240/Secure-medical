@@ -8,6 +8,21 @@ Migrations are plain numbered `.sql` files run by `backend/scripts/migrate.js`,
 which records each filename in `schema_migrations` and never re-runs it. Never
 edit a migration that has already run against RDS - add a new numbered file.
 
+## Connecting
+
+Both `src/db/pool.ts` and `scripts/migrate.js` pass `ssl:
+{ rejectUnauthorized: false }` when `NODE_ENV=production`, and nothing locally.
+
+RDS certificates are signed by Amazon's CA, which Node does not trust by
+default. A production `DATABASE_URL` carries `sslmode=require`, so without this
+the first connection fails with `self signed certificate in certificate chain`.
+The connection is still encrypted; only the issuer check is skipped, which is
+acceptable because RDS is reachable only from inside the VPC. Point `ssl.ca` at
+the RDS CA bundle if strict verification is ever wanted.
+
+`psql` does not hit this, because it does not verify by default - so a working
+`psql` connection is not evidence that the app will connect.
+
 ## Tables
 
 | Table | Holds |
@@ -50,11 +65,21 @@ id lets that check be exact.
 question - `responded` and `completed`. Questions 1-3 carry a `choice` of
 `'1'`, `'2'` or `'3'`.
 
-**`previous_lead_id` is unused so far.** It exists for the resold-lead case in
-CLAUDE.md section 6: the same phone sold again later should become a new lead
-linked back to the old one. The poller does not do this yet - it skips a phone
-it already has. Implementing it means `leads.phone UNIQUE` has to go, since the
-same person would legitimately appear twice.
+**`previous_lead_id` is unused and is expected to be dropped.** It exists for
+the resold-lead case in CLAUDE.md section 6, which describes one lead row per
+delivery, linked back to the previous one. The decision since is the opposite:
+one person is one lead row, and a re-delivery months later becomes a new
+conversation on the existing lead.
+
+So `leads.phone` stays unique, `conversations` becomes one-to-many, and "seen
+before" is derived from a lead's prior conversations rather than stored. The
+column comes out in the migration that implements this. See POLLER.md for the
+per-contact decision table and what it is blocked on.
+
+**`conversations.expires_at` is never populated.** The poller creates the
+conversation without it, so nothing can auto-expire. It should be
+`now + expiry_days` from `settings` at creation - Phase 2, with the state
+machine.
 
 ## Seeded data
 

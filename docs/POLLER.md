@@ -86,11 +86,35 @@ steady state `inserted=0` with a small `skipped` is normal and correct.
 `sendMessage` belongs. Sending is blocked until there is a `dev-test` group -
 see WORKFLOW.md.
 
-**Resold leads are dropped.** A phone we already have is skipped. CLAUDE.md
-section 6 says it should expire the old conversation and create a new lead
-linked by `previous_lead_id`. That is Week 2 work, and it needs
-`leads.phone UNIQUE` to go, since the same person would then legitimately
-appear twice.
+**Returning leads are dropped.** A phone we already hold is skipped forever,
+which is wrong for a lead that comes back months later. Phase 2 work. The
+decision per contact should be:
+
+| Situation | Action |
+|---|---|
+| `optOut`, or phone on `dnc_list` | Save as suppressed, send nothing |
+| Phone not in our DB | Create lead + conversation (open, step 1), send opener |
+| Phone held, newest conversation `open` | Already in the pipeline, do nothing |
+| Phone held, newest conversation `completed` | New conversation, send opener |
+| Phone held, newest conversation `expired` | New conversation, send opener |
+| Phone held, newest conversation `suppressed` | Never text, whatever else is true |
+
+The shape that follows: `leads.phone` stays unique, a lead gets many
+conversations over time, and `previous_lead_id` is dropped. "Seen before" in
+the queue is then derived from a lead's prior conversations rather than stored.
+
+Note this reverses CLAUDE.md section 6, which describes one lead row per
+delivery linked by `previous_lead_id`. One person is one lead; a re-delivery is
+a new conversation.
+
+Blocked on confirming with Jim whether a re-delivered phone arrives as a new EZ
+Texting contact or an update to the existing one. That decides whether
+`createdAt` moves, and so whether the poller sees the contact again at all - if
+it does not, none of the above ever triggers.
+
+**`expires_at` is never set.** The conversation is created without it, so
+nothing can auto-expire. It should be `now + expiry_days` from `settings` at
+creation. Phase 2, with the state machine.
 
 **No page cap.** A checkpoint set far in the past would walk the whole group in
 one cycle - 178 requests for a 1,773-contact group, thousands for the full

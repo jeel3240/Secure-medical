@@ -13,7 +13,13 @@ async function main() {
     process.exit(1);
   }
 
-  const client = new Client({ connectionString: process.env.DATABASE_URL });
+  // Same reason as src/db/pool.ts: RDS certs are signed by Amazon's CA, which
+  // Node does not trust, so a sslmode=require URL fails verification. Encrypted
+  // without the issuer check; RDS is only reachable from inside the VPC.
+  const client = new Client({
+    connectionString: process.env.DATABASE_URL,
+    ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : undefined,
+  });
   await client.connect();
 
   try {

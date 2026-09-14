@@ -57,6 +57,30 @@ async function isOnDnc(phone: string): Promise<boolean> {
 /**
  * Inserts the lead and its conversation together. Returns null when the phone
  * is already known, which is how a re-poll of the overlap window stays a no-op.
+ *
+ * TODO (Phase 2): returning leads. Dropping every known phone is wrong for a
+ * lead that comes back months later. The poller should instead decide per
+ * contact:
+ *
+ *   a. optOut, or phone on dnc_list  -> save as suppressed, send nothing, stop
+ *   b. phone not in our DB           -> create lead + conversation (open,
+ *                                       step 1), send opener
+ *   c. phone already in our DB       -> look at its newest conversation:
+ *        open       -> already in the pipeline, do nothing
+ *        completed  -> new conversation, send opener
+ *        expired    -> new conversation, send opener
+ *        suppressed -> never text, whatever else is true
+ *
+ * That means keeping leads.phone unique, allowing many conversations per lead,
+ * and dropping previous_lead_id - "seen before" in the queue is then derived
+ * from the prior conversations. Blocked on Jim confirming whether a
+ * re-delivered phone arrives as a new EZ Texting contact or an update to the
+ * existing one, since that decides whether createdAt moves and the poller sees
+ * it at all. Wire it with the state machine.
+ *
+ * TODO (Phase 2): expires_at is never set on the conversation created below,
+ * so nothing can auto-expire. Set it to now + expiry_days (from settings) at
+ * creation. Wire it with the state machine.
  */
 async function insertLead(
   contact: EztContact,
@@ -170,6 +194,9 @@ export async function pollOnce(): Promise<PollStats> {
 
       const phone = toE164(contact.phoneNumber);
 
+      // TODO (Phase 2): this branches on optOut vs not. It needs a third case
+      // for a phone we already hold, keyed on that lead's newest conversation
+      // status - see the note on insertLead.
       if (contact.optOut || (await isOnDnc(phone))) {
         const leadId = await insertLead(contact, phone, 'suppressed');
         if (leadId === null) {
