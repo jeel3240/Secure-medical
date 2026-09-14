@@ -15,7 +15,7 @@ Produce high-fidelity designs for every page and state listed below, plus a comp
 | Role | What they do | What they must never see |
 |---|---|---|
 | **Agent** | Work the queue, call/text leads, add notes, set callbacks, set dispositions, see their own callbacks | Other agents' activity, admin settings |
-| **Superadmin** | Everything an agent can do, plus: see all agents' activity, manage agent accounts, edit scoring rules and tiers, edit SMS copy and settings, manage the DNC list | – |
+| **Superadmin** | Everything an agent can do, plus: see all agents' activity, see every lead including ones that never replied, manage agent accounts, edit scoring rules and tiers, edit SMS copy and settings, manage the DNC list | – |
 
 Role is set at login. Navigation adapts to role.
 
@@ -176,7 +176,7 @@ Role is set at login. Navigation adapts to role.
 
 ### 6. Admin (superadmin only)
 
-Left sub-navigation within the page: **Overview** · **Scoring** · **Messages** · **Agents** · **DNC list** · **Settings**.
+Left sub-navigation within the page: **Overview** · **Leads** · **Scoring** · **Messages** · **Agents** · **DNC list** · **Settings**.
 
 **6a. Overview**
 - KPI cards for the selected period (Today / 7d / 30d): Leads received, Responded %, Completed %, HOT count, Calls made, Reached %, Callbacks set, DNC added.
@@ -221,6 +221,27 @@ Left sub-navigation within the page: **Overview** · **Scoring** · **Messages**
 - Poll interval (seconds, 30–60).
 - Twilio caller ID number.
 - Agent SMS templates (list, add/edit/remove).
+
+**6g. Leads (all leads)** – *added 2026-09-14*
+
+**Purpose:** every lead the poller has pulled in, whether or not they replied. The Priority Queue shows only responders, because agents should spend their time on people who texted back; this page shows everyone else too, so a superadmin can confirm leads are arriving and see where they drop off. It sits under Admin, not in the queue, so non-responders never bury HOT leads for agents.
+
+- **Status tabs** with counts, each a filter:
+  - `All`
+  - `Awaiting reply` – conversation open, no answer yet
+  - `In progress` – conversation open, answered at least one question
+  - `Completed` – answered all three, scored
+  - `Needs review` – invalid reply twice
+  - `Opted out` – replied STOP, opted out in EZ Texting, or on the DNC list
+  - `Expired` – no reply within the expiry window, or replaced by a newer delivery
+- **Filters:** Source (multi-select), Received (Last 1h / 24h / 7d / 30d / All). **Search:** name or phone.
+- **Table columns:** Received (date and time, tabular), Lead (first name + last initial), Phone (formatted), Source (monospace), Status (tag, as above), Step reached (`–`, `Q1`, `Q2`, `Q3`), Score and tier (only when completed, else `–`), Last activity (time of the most recent SMS in or out, with direction).
+- **Default sort:** newest received first.
+- **Row click** opens the Lead Timeline (page 4) for that lead.
+- **Read-only.** No Call or SMS buttons here; working a lead happens in the Agent Workspace. `Opted out` rows are tinted with the Danger colour and say so.
+- **Pagination:** 50 rows per page, page controls at the bottom, total count at the top. At 50–100 leads a day the list passes 30,000 rows within a year.
+- **Live:** new leads appear at the top without a refresh, with the same 600ms row highlight as the queue.
+- **States:** loading skeleton; empty ("No leads in this view"); a warning banner when the last successful poll is older than three poll intervals ("No new leads pulled since 2:14 PM – check the worker").
 
 ---
 

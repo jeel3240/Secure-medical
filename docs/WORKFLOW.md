@@ -32,7 +32,9 @@ commit message.
 
 ```bash
 cd backend && npx tsc --noEmit    # must be clean
-npm test                          # when there are tests
+npm test                          # must pass
+cd ../frontend && npm run build   # type-checks and builds the frontend
+cd ..
 docker compose build api worker   # catches what a local node_modules hides
 docker compose up -d
 docker compose logs -f worker     # no errors, poll ticks look right
@@ -95,3 +97,10 @@ contacts. Two standing rules:
 - Sending is only ever to a `dev-test` group of our own phones. No such group
   exists yet, so `sendMessage` refuses to send while `EZT_SEND_GROUP` is unset.
   Do not set it to a real group to get a test working.
+
+**Update 2026-09-14 (Jeel):** the EZ Texting account is a test account, not the
+client's live account. The text above is kept for history. `weightloss` is the
+test group: contacts are added to it by hand in the dashboard and arrive with
+source `WebInterface`. Test settings are `EZT_GROUP=weightloss`,
+`EZT_SOURCE=WebInterface` and `EZT_SEND_GROUP=weightloss`. Keep the group filter
+on every contacts query.

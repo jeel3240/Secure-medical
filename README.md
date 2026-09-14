@@ -3,6 +3,7 @@
 Documentation lives in [`docs/`](docs/):
 
 - [How to run it](docs/README.md)
+- [Auth: sign-in, sessions, roles](docs/AUTH.md)
 - [Database schema](docs/SCHEMA.md)
 - [Poller](docs/POLLER.md)
 - [EZ Texting API behaviour](docs/EZTEXTING-API.md)
