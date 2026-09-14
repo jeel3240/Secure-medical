@@ -73,13 +73,14 @@ commit.
 | `../CLAUDE.md` | Architecture decisions, four-week plan | An architectural decision |
 | `SCHEMA.md` | Database tables and why | A migration |
 | `POLLER.md` | How leads are pulled in | The poller or worker loop |
+| `WEBHOOKS.md` | How replies are received | The webhook handler |
 | `EZTEXTING-API.md` | Verified API behaviour | You learn something new about the API |
 | `WORKFLOW.md` | Branches, PRs, migrations, deploys | The process itself |
 | `DESIGN-PROMPT.md` | Frontend design brief | The design direction |
 | `Secure-Medical-Call-Center-Mockup.pdf` | All screens; page 3 is the state machine | — |
 
-Docs still to write, as the code arrives: `AUTH.md`, `WEBHOOKS.md`,
-`STATE-MACHINE.md`, `TWILIO.md`, `DEPLOYMENT.md`.
+Docs still to write, as the code arrives: `AUTH.md`, `STATE-MACHINE.md`,
+`TWILIO.md`, `DEPLOYMENT.md`.
 
 ## Troubleshooting
 
