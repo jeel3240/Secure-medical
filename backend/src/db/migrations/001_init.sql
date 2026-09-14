@@ -50,16 +50,34 @@ CREATE TABLE conversations (
 CREATE UNIQUE INDEX one_open_conversation_per_lead
   ON conversations (lead_id) WHERE status = 'open';
 
+-- Outbound and inbound are keyed differently, because the webhook's "id" is not
+-- an id for the reply: it is the id of OUR message the lead replied to. Two
+-- replies to the same question arrive carrying the same value, so it cannot be
+-- unique across inbound rows. See docs/EZTEXTING-API.md.
 CREATE TABLE messages (
-  id              SERIAL PRIMARY KEY,
-  lead_id         INTEGER NOT NULL REFERENCES leads(id) ON DELETE CASCADE,
-  direction       TEXT NOT NULL CHECK (direction IN ('inbound', 'outbound')),
-  body            TEXT NOT NULL,
-  ezt_message_id  TEXT UNIQUE,
-  sent_by         INTEGER REFERENCES users(id),
-  delivery_status TEXT,
-  created_at      TIMESTAMPTZ NOT NULL DEFAULT now()
+  id                SERIAL PRIMARY KEY,
+  lead_id           INTEGER NOT NULL REFERENCES leads(id) ON DELETE CASCADE,
+  direction         TEXT NOT NULL CHECK (direction IN ('inbound', 'outbound')),
+  body              TEXT NOT NULL,
+  -- Outbound only: the id returned by POST /messages.
+  ezt_message_id    TEXT,
+  -- Inbound only: which of our messages this is a reply to. Not unique - a
+  -- lead may reply more than once to the same question.
+  in_reply_to_ezt_id TEXT,
+  -- Inbound only: dedupe key. EZ Texting retries webhooks, and the same phone
+  -- cannot send two texts in the same millisecond.
+  from_number       TEXT,
+  received_at       TIMESTAMPTZ,
+  sent_by           INTEGER REFERENCES users(id),
+  delivery_status   TEXT,
+  created_at        TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+
+CREATE UNIQUE INDEX messages_ezt_message_id_outbound
+  ON messages (ezt_message_id) WHERE direction = 'outbound';
+
+CREATE UNIQUE INDEX messages_inbound_dedupe
+  ON messages (from_number, received_at) WHERE direction = 'inbound';
 
 CREATE TABLE calls (
   id              SERIAL PRIMARY KEY,

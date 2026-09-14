@@ -160,9 +160,53 @@ POST /v1/messages
 - Delivery type (Standard 130 / Express 160) still unconfirmed with client. Opener is 158 chars.
 
 ## Inbound webhook
-- Not yet verified. Check the Webhooks section of the API reference (Create Webhook / List Webhooks).
-- Expected payload: sender phone, message text, message id, timestamp. Confirm exact field names in the developer's trial account before writing the parser.
-- Dedupe on message id; EZ Texting may retry.
+
+Verified against the live account 2026-09-14.
+
+```json
+{
+  "id": "309112289003",
+  "type": "inbound_text.received",
+  "fromNumber": "16026203572",
+  "toNumber": "15207799209",
+  "message": "3",
+  "received": "2026-09-14T17:06:31.042+00:00",
+  "optIn": false,
+  "optOut": false
+}
+```
+
+| Field | Meaning |
+|---|---|
+| `fromNumber` | The lead's phone, no `+`. Normalize before lookup. |
+| `toNumber` | Our sending number. |
+| `message` | What they typed. |
+| `received` | Arrival time, with milliseconds. |
+| `optOut` | If true, suppress them. |
+| `id` | **Not an id for the reply** - see below. |
+
+### `id` is the outbound message being replied to
+
+It is the id of *our* message the lead replied to, not an identifier for their
+reply. Established by sending a text, noting the `id` the send API returned
+(`309112289003`), then replying from the handset: the webhook came back with
+that same value.
+
+So a lead who replies twice to the same question - "3", then "sorry, 2" -
+produces two webhooks carrying an identical `id`. Deduping on it would reject
+the correction as a duplicate and lose it, which is a normal thing for a lead
+to do mid-qualification.
+
+**Dedupe inbound on `(fromNumber, received)`.** The same phone cannot send two
+texts in the same millisecond. The id is still worth keeping, in
+`messages.in_reply_to_ezt_id`, because it says which question was being
+answered.
+
+The schema reflects this: `ezt_message_id` is unique only for `direction =
+'outbound'`, and a separate unique index covers `(from_number, received_at)`
+for inbound. See SCHEMA.md.
+
+- EZ Texting retries webhooks, so the dedupe is load-bearing, not defensive.
 - Return 200 fast.
 
 ## Safety

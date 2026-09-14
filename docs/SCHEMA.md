@@ -76,6 +76,18 @@ before" is derived from a lead's prior conversations rather than stored. The
 column comes out in the migration that implements this. See POLLER.md for the
 per-contact decision table and what it is blocked on.
 
+**`messages` is keyed differently by direction.** Outbound rows carry the id
+returned by the send API in `ezt_message_id`, unique via a partial index on
+`direction = 'outbound'`. Inbound rows leave it null and instead fill
+`in_reply_to_ezt_id`, `from_number` and `received_at`, with a separate unique
+index on `(from_number, received_at)`.
+
+The split exists because the inbound webhook's `id` is not an id for the reply -
+it is the id of our message being replied to, so two replies to the same
+question carry the same value. A single unique column across both directions
+would reject the second reply. `in_reply_to_ezt_id` is deliberately not unique.
+EZTEXTING-API.md has the evidence.
+
 **`conversations.expires_at` is never populated.** The poller creates the
 conversation without it, so nothing can auto-expire. It should be
 `now + expiry_days` from `settings` at creation - Phase 2, with the state
