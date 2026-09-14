@@ -45,12 +45,22 @@ removes its whole history.
 
 ## Things worth knowing
 
-**`users.session_version` ends sessions.** Added in `002_auth_sessions.sql`.
-Every session token carries the version current at sign-in, and the API rejects
-a token whose version no longer matches. Bumping it signs the user out
-everywhere at once - on deactivation, admin password reset, password change and
-sign-out. AUTH.md has the full table. `users.last_login_at` came in the same
-migration, for the admin Agents list.
+**`users.session_version` ends sessions.** Every session token carries the
+version current at sign-in, and the API rejects a token whose version no longer
+matches. Bumping it signs the user out everywhere at once - on deactivation,
+admin password reset, password change and sign-out. AUTH.md has the full table.
+`users.last_login_at` feeds the admin Agents list.
+
+Both columns were added to `001_init.sql` directly rather than in a new
+migration, because 001 had not yet run against RDS. A local database created
+from the earlier 001 lacks them. Either recreate it (`docker compose down -v`,
+then `up -d` and `npm run migrate` - this deletes local data) or add them by
+hand:
+
+```sql
+ALTER TABLE users ADD COLUMN session_version INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE users ADD COLUMN last_login_at TIMESTAMPTZ;
+```
 
 **Phone is the identity.** The EZ Texting contacts API returns no per-contact
 id, so there is nothing else stable to key on. `leads.phone` is unique and

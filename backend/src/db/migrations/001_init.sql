@@ -1,3 +1,10 @@
+-- email is stored lowercased, so sign-in is case-insensitive.
+--
+-- session_version is copied into every session token at sign-in, and the API
+-- rejects a token whose version no longer matches. Bumping it ends every
+-- existing session for the user at once: on deactivation, admin password
+-- reset, password change and sign-out. Without it a token stays valid until
+-- it expires, 12 hours later. See docs/AUTH.md.
 CREATE TABLE users (
   id                   SERIAL PRIMARY KEY,
   email                TEXT NOT NULL UNIQUE,
@@ -6,6 +13,8 @@ CREATE TABLE users (
   role                 TEXT NOT NULL CHECK (role IN ('superadmin', 'agent')),
   is_active            BOOLEAN NOT NULL DEFAULT true,
   must_change_password BOOLEAN NOT NULL DEFAULT false,
+  session_version      INTEGER NOT NULL DEFAULT 0,
+  last_login_at        TIMESTAMPTZ,
   created_at           TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at           TIMESTAMPTZ NOT NULL DEFAULT now()
 );
