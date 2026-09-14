@@ -45,7 +45,7 @@ docker compose exec postgres psql -U app -d leads \
 | `EZT_GROUP` | Contact group the poller reads. Required - the account holds ~120k real contacts, so every query is scoped to one group. |
 | `EZT_SOURCE` | Defaults to `API`, which is how partner leads arrive. Set to `WebInterface` to test with a contact added by hand in the dashboard. |
 | `EZT_SEND_GROUP` | Leave unset. `sendMessage` refuses to send without it - see below. |
-| | *Update 2026-09-14:* the account is a test account. Set this to the name of a group you created with your own phone in it, and sending is unlocked. See below. |
+| | *Update 2026-09-14:* the account is a test account and `weightloss` is the test group. Set this to `weightloss` and sending is unlocked. See below. |
 
 Never commit `.env`.
 
@@ -62,10 +62,12 @@ is deliberate, not unfinished.
 live account, so the block above no longer needs to stay in place. The text is
 kept for history. To unlock sending:
 
-1. In the EZ Texting dashboard, create a group (for example `dev-test`) and add
-   your own phone number to it.
-2. In `.env`, set `EZT_SEND_GROUP=dev-test` (the group's exact name).
-3. `docker compose up -d worker api` so the new value is picked up.
+1. In the EZ Texting dashboard, add your own phone number to the `weightloss`
+   group. It is the test group; contacts added by hand arrive with source
+   `WebInterface`.
+2. In `.env`, set `EZT_GROUP=weightloss`, `EZT_SOURCE=WebInterface` and
+   `EZT_SEND_GROUP=weightloss`.
+3. `docker compose up -d worker api` so the new values are picked up.
 
 `EZT_SEND_GROUP` is only the on/off switch for `sendMessage`. Wiring the opener
 send into the poller is separate work and is not done yet.

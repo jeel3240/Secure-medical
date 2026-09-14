@@ -214,4 +214,4 @@ for inbound. See SCHEMA.md.
 ## Safety
 - Client account contains ~120,000 real contacts. Never query without the group filter. Never send to any group other than a `dev-test` group you created.
 - Developers use their own EZ Texting trial account, never these credentials.
-- **Update 2026-09-14 (Jeel):** the account is a test account and these credentials may be used directly for development, including sending. The two rules above are kept for history. Keep the group filter on every contacts query regardless (the account is large), and for send tests prefer a group you created with your own phone in it until the existing contacts are confirmed to be fake.
+- **Update 2026-09-14 (Jeel):** the account is a test account and these credentials may be used directly for development, including sending. The two rules above are kept for history. The `weightloss` group is the test group: contacts are added to it by hand in the dashboard (source `WebInterface`) and SMS is sent to it. Keep the group filter on every contacts query regardless, since the account is large.

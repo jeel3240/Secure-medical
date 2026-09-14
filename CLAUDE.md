@@ -96,7 +96,7 @@ Lambda is right for bursty, stateless, no-background-work apps. This is the oppo
 - Auth: HTTP Basic Auth with the account username + password. No separate API key. Store as `EZT_USERNAME` / `EZT_PASSWORD` in `.env`.
 - Send: `POST /v1/messages` with `{ "toNumbers": ["15551234567"], "message": "..." }`. Save the returned message ID to `messages.ezt_message_id`.
 - The account is Secure Medical's **live** account. Only send to the `dev-test` group (our own phones). Never touch `weightloss` or any real group.
-- **Update 2026-09-14 (Jeel):** the account behind the credentials in `.env` is a **test account**, not the client's live account. The whole account may be used for development, including sending SMS. The line above is kept for history. The `~120,000 contacts` observed on 2026-09-10 (see `docs/EZTEXTING-API.md`) have not been confirmed as fake, so for send tests still prefer a group you created and put your own phone in. Sending is unlocked by setting `EZT_SEND_GROUP` to that group's name.
+- **Update 2026-09-14 (Jeel):** the account behind the credentials in `.env` is a **test account**, not the client's live account. The whole account may be used for development, including sending SMS. The line above is kept for history. The `weightloss` group is the **test group**: add contacts to it by hand in the dashboard (they arrive with source `WebInterface`) and send to it. Test settings: `EZT_GROUP=weightloss`, `EZT_SOURCE=WebInterface`, `EZT_SEND_GROUP=weightloss`. Partner leads in production arrive with source `API`.
 
 ---
 
