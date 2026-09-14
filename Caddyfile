@@ -1,4 +1,4 @@
-leads.securemedical.com {
+dailyleadhub.com {
 	handle /api/* {
 		reverse_proxy api:3000
 	}

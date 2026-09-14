@@ -17,10 +17,70 @@ GET /v1/contacts?filters[groupName][like]=weightloss&filters[source][eq]=API&sor
 ```
 
 - `size` must be one of 10, 20, 50, 100, 200. Anything else returns 400.
-- `sort=createdAt,desc` works (response shows `"sorted": true`).
-- `filters[groupName][like]=weightloss` matched only the group named exactly `weightloss`, not `weightloss - sent`. Still verify `groups[].name` after fetch.
+- `sort=createdAt,desc` genuinely sorts server-side. Verified 2026-09-11 against
+  the 1773-contact group: `desc` and `asc` return entirely different first pages
+  (newest 2026-07-20 vs oldest 2024-07-19), so this is not coincidental ordering.
+  Do not rely on `"sorted": true` in the response as evidence - it appears even
+  when the sort field is invalid.
+- **The default order is ascending (oldest first).** Omitting `sort`, or passing
+  an unrecognised field like `sort=bogusField,desc`, silently yields oldest-first
+  rather than erroring. A typo in the sort field would leave the poller reading
+  the oldest end of the group on every tick and never seeing new contacts, with
+  no error to show for it.
+- `filters[groupName][like]=weightloss` returns only the 3 contacts in the group
+  named exactly `weightloss`, even though `like` is a substring match elsewhere.
+  But `filters[groupName][like]=weightloss - sent` returns that group's 1,773, so
+  the matching is on the whole group name, not a prefix. Re-verify `groups[].name`
+  after fetch regardless.
 - `filters[source][eq]` values: Unknown, WebInterface, Upload, WebWidget, API, Keyword. Partner leads arrive as `API`.
-- Other filters available: `filters[optOut][eq]`, `filters[phoneNumber][like]`, `filters[firstName][like]`, `filters[lastName][like]`, `filters[email][like]`.
+
+### Filters that work
+
+Verified 2026-09-11 by running each against a value expected to exclude
+something and checking `totalElements` actually moved.
+
+| Filter | Notes |
+|---|---|
+| `filters[groupName][like]` | |
+| `filters[phoneNumber][like]` | |
+| `filters[firstName][like]` | |
+| `filters[lastName][like]` | |
+| `filters[email][like]` | |
+| `filters[note][like]` | |
+| `filters[firstName][eq]` | exact match |
+| `filters[source][eq]` | enum, see values above |
+| `filters[optOut][eq]` | `true` / `false` |
+
+`like` is a case-insensitive substring match: `har`, `arol` and `HAROLD` all
+matched "harold". Hence the group-membership re-check in the poller.
+
+### Filters that are silently ignored
+
+`filters[groupId]` and `filters[id]` in any form; the operators `ne`, `in`,
+and `like` on `source`; and every date/time filter (below). These return the
+full unfiltered set, exactly like a made-up field name.
+
+Validation is inconsistent: `filters[source][like]=ZZZ` returns 400 (`No enum
+constant ...Contact.ContactSource.ZZZ`) because `source` is a validated enum,
+but `filters[bogusField][gt]=xyz` returns 200 and every row. An absent error
+is not evidence a filter is working.
+
+- **No date filter exists.** Tested 2026-09-11 against a group of 3 contacts,
+  one of them three months older than the cutoff. Seventeen variants all
+  returned the full set: field names `createdAt`, `created`, `dateCreated`,
+  `created_at`; operators `gt`, `gte`, `ge`, `$gt`, `after`, `greaterThan`,
+  `min`, `from`, `start`, `between`, `eq`; values as ISO, date-only, no-Z and
+  epoch millis; and top-level `since`, `startDate`, `fromDate`, `createdAfter`,
+  `createdAtFrom`, `updatedAfter`.
+- Controls for that test: `filters[firstName][like]=harold` returned 1 and
+  `filters[optOut][eq]=true` returned 1, so filtering does reach the server,
+  while a deliberately invalid `filters[bogusField][gt]=xyz` returned all 3 -
+  identical to every date attempt.
+- **Unrecognised filters are silently ignored, never rejected.** A filter that
+  appears to work may be doing nothing. Always verify a new filter against a
+  record you expect it to exclude.
+- Consequence: the poller sorts `createdAt,desc` and stops reading at the
+  checkpoint rather than asking the server for contacts since a given time.
 - Response is Spring-Data style paging: `content[]`, `totalElements`, `totalPages`, `last`, `pageable`.
 
 ### Response shape (one contact)
@@ -100,9 +160,53 @@ POST /v1/messages
 - Delivery type (Standard 130 / Express 160) still unconfirmed with client. Opener is 158 chars.
 
 ## Inbound webhook
-- Not yet verified. Check the Webhooks section of the API reference (Create Webhook / List Webhooks).
-- Expected payload: sender phone, message text, message id, timestamp. Confirm exact field names in the developer's trial account before writing the parser.
-- Dedupe on message id; EZ Texting may retry.
+
+Verified against the live account 2026-09-14.
+
+```json
+{
+  "id": "309112289003",
+  "type": "inbound_text.received",
+  "fromNumber": "16026203572",
+  "toNumber": "15207799209",
+  "message": "3",
+  "received": "2026-09-14T17:06:31.042+00:00",
+  "optIn": false,
+  "optOut": false
+}
+```
+
+| Field | Meaning |
+|---|---|
+| `fromNumber` | The lead's phone, no `+`. Normalize before lookup. |
+| `toNumber` | Our sending number. |
+| `message` | What they typed. |
+| `received` | Arrival time, with milliseconds. |
+| `optOut` | If true, suppress them. |
+| `id` | **Not an id for the reply** - see below. |
+
+### `id` is the outbound message being replied to
+
+It is the id of *our* message the lead replied to, not an identifier for their
+reply. Established by sending a text, noting the `id` the send API returned
+(`309112289003`), then replying from the handset: the webhook came back with
+that same value.
+
+So a lead who replies twice to the same question - "3", then "sorry, 2" -
+produces two webhooks carrying an identical `id`. Deduping on it would reject
+the correction as a duplicate and lose it, which is a normal thing for a lead
+to do mid-qualification.
+
+**Dedupe inbound on `(fromNumber, received)`.** The same phone cannot send two
+texts in the same millisecond. The id is still worth keeping, in
+`messages.in_reply_to_ezt_id`, because it says which question was being
+answered.
+
+The schema reflects this: `ezt_message_id` is unique only for `direction =
+'outbound'`, and a separate unique index covers `(from_number, received_at)`
+for inbound. See SCHEMA.md.
+
+- EZ Texting retries webhooks, so the dedupe is load-bearing, not defensive.
 - Return 200 fast.
 
 ## Safety
