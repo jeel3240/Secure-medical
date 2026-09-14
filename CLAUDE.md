@@ -116,8 +116,17 @@ secure-medical/
   docker-compose.yml        local + prod (prod uses RDS via env)
   Caddyfile
   .env.example
-  README.md
+  CLAUDE.md                 must stay at root; Claude Code loads it from there
+  docs/                     all other documentation
+    README.md               how to run it
+    SCHEMA.md               data model
+    EZTEXTING-API.md        verified API behaviour
+    DESIGN-PROMPT.md        frontend design brief
+    Secure-Medical-Call-Center-Mockup.pdf
 ```
+
+All documentation lives in `docs/`, except `CLAUDE.md`. Keep it that way: when
+you change something the docs describe, update the doc in the same commit.
 
 `api` and `worker` build from the same Dockerfile; only the start command differs.
 
@@ -214,8 +223,9 @@ Never commit `.env`. Never use real lead data locally. Generate fake leads.
 
 ## 9. Workflow
 
-1. Developer works on a branch, opens a PR.
-2. Jeel reviews, merges to `main`.
+1. Developer branches off `dev`, works there, opens a PR **into `dev`**. Never
+   commits to `dev` or `main` directly.
+2. Jeel reviews, merges to `dev`, then `dev` to `main`.
 3. Jeel SSHs into EC2: `git pull && docker compose up -d --build && docker compose exec api npm run migrate`.
 4. Developer never touches EC2, RDS, or client accounts.
 
@@ -320,9 +330,38 @@ Done when:
 
 ## 12. Working with Claude Code
 
+### The order of work, every time
+
+1. **Understand what is already there.** Read the existing code and the doc for
+   that area before changing anything. Do not assume how something works from
+   its name, and do not trust a doc over the code if they disagree - check, then
+   fix whichever is wrong.
+2. **Make the change.**
+3. **Verify it.** Run it. A change that has not been executed is not done.
+4. **Update the doc, in the same commit.** In depth: what changed, why, and what
+   the change does not cover. If no doc exists for that area, create it and add
+   it to the table in `docs/README.md`.
+5. **Open a PR into `dev`.** Never commit to `main` or `dev` directly.
+
+Skipping step 1 is how the `createdAt` bug got written: the plan's field names
+were taken on trust and the poller silently ingested nothing.
+
+### Reading first
+
 - Read `docs/EZTEXTING-API.md` before touching the poller, sender, or webhook. It has verified endpoints and field names.
+- Read `docs/SCHEMA.md` before changing the data model or writing a migration.
 - Read `docs/Secure-Medical-Call-Center-Mockup.pdf` for screen layouts and the reply-handling flow (page 3 is the state machine).
 - Read `docs/DESIGN-PROMPT.md` before any frontend work.
+- **Every area has one doc, and it is updated in the same commit as the change.**
+  Not afterwards, not in a follow-up. `docs/README.md` maps each doc to what
+  changes should trigger an update. New area, new doc - add it to that table.
+  A finding that cost time to establish belongs in a doc, not just a commit
+  message.
 - Production settings live in `docker-compose.prod.yml`. Never put real credentials in any committed file.
 - Prod `api` and `worker` must run compiled `dist/` output, not ts-node.
-- Prefer small PRs, one concern each. Run `npm test` before opening one.
+- **Every change reaches the repo through a PR into `dev`.** Branch off `dev`,
+  push the branch, open the PR against `dev` - never against `main`, and never
+  by committing to either directly. Jeel merges `dev` into `main`.
+- Prefer small PRs, one concern each. Run `npm test` before opening one, and
+  `docker compose build api worker` - a local `node_modules` can hide a
+  dependency missing from `package.json`.

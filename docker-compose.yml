@@ -38,6 +38,9 @@ services:
       JWT_SECRET: ${JWT_SECRET:-dev-secret}
       EZT_USERNAME: ${EZT_USERNAME}
       EZT_PASSWORD: ${EZT_PASSWORD}
+      EZT_GROUP: ${EZT_GROUP}
+      EZT_SOURCE: ${EZT_SOURCE:-API}
+      EZT_SEND_GROUP: ${EZT_SEND_GROUP:-}
       TWILIO_ACCOUNT_SID: ${TWILIO_ACCOUNT_SID}
       TWILIO_AUTH_TOKEN: ${TWILIO_AUTH_TOKEN}
     depends_on:
@@ -60,6 +63,9 @@ services:
       JWT_SECRET: ${JWT_SECRET:-dev-secret}
       EZT_USERNAME: ${EZT_USERNAME}
       EZT_PASSWORD: ${EZT_PASSWORD}
+      EZT_GROUP: ${EZT_GROUP}
+      EZT_SOURCE: ${EZT_SOURCE:-API}
+      EZT_SEND_GROUP: ${EZT_SEND_GROUP:-}
     depends_on:
       postgres:
         condition: service_healthy
