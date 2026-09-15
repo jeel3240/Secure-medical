@@ -84,7 +84,10 @@ docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
 docker compose exec api npm run migrate
 ```
 
-Production runs compiled `dist/`, not ts-node. Real credentials live in `.env`
+Production runs compiled `dist/`, not ts-node. The `caddy` service is built
+from `frontend/Dockerfile`, which compiles the React app and copies it into the
+Caddy image, so the same `--build` rebuilds the frontend and the server needs no
+Node install. Real credentials live in `.env`
 on the server and in no committed file.
 
 ## Credentials

@@ -2,6 +2,14 @@ dailyleadhub.com {
 	handle /api/* {
 		reverse_proxy api:3000
 	}
+	# Built JS and CSS. A missing file here must 404, not fall back to
+	# index.html: right after a deploy, a browser still holding the old page
+	# asks for the old hashed files, and getting HTML back as JavaScript leaves
+	# a blank screen instead of a reload.
+	handle /assets/* {
+		root * /srv
+		file_server
+	}
 	handle {
 		root * /srv
 		try_files {path} /index.html
