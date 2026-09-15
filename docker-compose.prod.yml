@@ -35,7 +35,7 @@ services:
       - redis
 
   caddy:                                 # NEW service, server only
-    image: caddy:2
+    build: ./frontend                    # caddy:2 with the built frontend in /srv
     restart: always
     ports:
       - "80:80"

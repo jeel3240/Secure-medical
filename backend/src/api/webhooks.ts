@@ -1,8 +1,22 @@
 import { Request, Response, Router } from 'express';
-import { pool } from '../db/pool';
-import { toE164 } from '../integrations/ezt-client';
 
 export const webhooksRouter = Router();
+
+/**
+ * Loaded inside the handler rather than at module scope. Both modules pull in
+ * src/config, which calls process.exit(1) when a required env var is missing -
+ * so importing them at the top would kill any test that builds the app without
+ * a full environment. Everything else in the API takes its dependencies through
+ * AppDeps for the same reason; this route predates that and reaches for the
+ * pool directly.
+ */
+function deps() {
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  const { pool } = require('../db/pool') as typeof import('../db/pool');
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  const { toE164 } = require('../integrations/ezt-client') as typeof import('../integrations/ezt-client');
+  return { pool, toE164 };
+}
 
 /**
  * Inbound reply from EZ Texting. Payload verified against the live account -
@@ -71,6 +85,7 @@ webhooksRouter.post('/eztexting', async (req: Request, res: Response) => {
     return res.sendStatus(200);
   }
 
+  const { pool, toE164 } = deps();
   const phone = toE164(payload.fromNumber);
   const client = await pool.connect();
 

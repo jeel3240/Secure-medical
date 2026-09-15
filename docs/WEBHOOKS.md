@@ -1,6 +1,10 @@
 # Webhooks
 
-`POST /webhooks/eztexting` receives inbound SMS replies.
+`POST /api/webhooks/eztexting` receives inbound SMS replies.
+
+Under `/api` because that is the only path Caddy forwards to the API. It is
+mounted before the `/api` catch-all 404, and is deliberately unauthenticated -
+EZ Texting has no session.
 
 Code: `backend/src/api/webhooks.ts`. Payload shape: `docs/EZTEXTING-API.md`.
 
@@ -64,7 +68,7 @@ them.
 ## Testing it by hand
 
 ```bash
-curl -X POST http://localhost:3000/webhooks/eztexting \
+curl -X POST http://localhost:3000/api/webhooks/eztexting \
   -H 'Content-Type: application/json' \
   -d '{"id":"309112289003","type":"inbound_text.received",
        "fromNumber":"16026203572","toNumber":"15207799209",

@@ -86,6 +86,10 @@ steady state `inserted=0` with a small `skipped` is normal and correct.
 `sendMessage` belongs. Sending is blocked until there is a `dev-test` group -
 see WORKFLOW.md.
 
+*Update 2026-09-14:* the EZ Texting account is a test account and `weightloss`
+is the test group, so sending can be unlocked by setting `EZT_SEND_GROUP=weightloss`.
+The TODO itself is still there; Jeel is building the opener send.
+
 **Returning leads are dropped.** A phone we already hold is skipped forever,
 which is wrong for a lead that comes back months later. Phase 2 work. The
 decision per contact should be:

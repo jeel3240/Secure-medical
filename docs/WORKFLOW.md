@@ -32,7 +32,9 @@ commit message.
 
 ```bash
 cd backend && npx tsc --noEmit    # must be clean
-npm test                          # when there are tests
+npm test                          # must pass
+cd ../frontend && npm run build   # type-checks and builds the frontend
+cd ..
 docker compose build api worker   # catches what a local node_modules hides
 docker compose up -d
 docker compose logs -f worker     # no errors, poll ticks look right
@@ -82,7 +84,21 @@ docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
 docker compose exec api npm run migrate
 ```
 
-Production runs compiled `dist/`, not ts-node. Real credentials live in `.env`
+On the very first deploy, after migrating, create the first superadmin. It
+prints a one-time temporary password:
+
+```bash
+docker compose exec api npm run create-superadmin -- you@example.com "Your Name"
+```
+
+The API refuses to start in production if `JWT_SECRET` in the server's `.env`
+is a placeholder or shorter than 32 characters. Generate one with
+`openssl rand -hex 32`.
+
+Production runs compiled `dist/`, not ts-node. The `caddy` service is built
+from `frontend/Dockerfile`, which compiles the React app and copies it into the
+Caddy image, so the same `--build` rebuilds the frontend and the server needs no
+Node install. Real credentials live in `.env`
 on the server and in no committed file.
 
 ## Credentials
@@ -95,3 +111,10 @@ contacts. Two standing rules:
 - Sending is only ever to a `dev-test` group of our own phones. No such group
   exists yet, so `sendMessage` refuses to send while `EZT_SEND_GROUP` is unset.
   Do not set it to a real group to get a test working.
+
+**Update 2026-09-14 (Jeel):** the EZ Texting account is a test account, not the
+client's live account. The text above is kept for history. `weightloss` is the
+test group: contacts are added to it by hand in the dashboard and arrive with
+source `WebInterface`. Test settings are `EZT_GROUP=weightloss`,
+`EZT_SOURCE=WebInterface` and `EZT_SEND_GROUP=weightloss`. Keep the group filter
+on every contacts query.

@@ -2,6 +2,8 @@
 
 Tested against the client account on 2026-09-10. Use these exact endpoints and field names.
 
+> **Update 2026-09-14 (Jeel):** this account is a test account, not the client's live account. It may be used for development, including sending. Findings below still hold; the "live" wording is kept as written on the day.
+
 ## Auth
 - HTTP Basic Auth: account username + password. No API key.
 - Env vars: `EZT_USERNAME`, `EZT_PASSWORD`
@@ -108,7 +110,7 @@ is not evidence a filter is working.
 | `phoneNumber` | `leads.phone` | Arrives without `+`. Normalize to E.164: `"+" + phoneNumber`. |
 | `firstName`, `lastName` | `first_name`, `last_name` | May be absent. |
 | `email` | `email` | Optional. |
-| `source` | `source` | Only accept `API`. |
+| `source` | `source` | Only accept `API`. *(2026-09-14: configurable via `EZT_SOURCE`, default `API`; test contacts added by hand are `WebInterface`.)* |
 | `createdAt` | `ezt_added_at` | ISO 8601 with seconds. This is the checkpoint field. |
 | `optOut` | conversation `suppressed` + `dnc_list` | If true, never text. |
 | `groups[].id`, `groups[].name` | `group_id`, `group_name` | Store both. Filter on name (API constraint), verify by id in code. |
@@ -149,6 +151,12 @@ Rules:
 - Never advance the checkpoint on error.
 - One poller instance only.
 - Log per tick: fetched, inserted, skipped, duration.
+
+*As implemented, 2026-09-14* - `docs/POLLER.md` describes the real code. It
+differs from the sketch above in three ways: the interval is 60 seconds by
+default and read from `settings` each tick; there is no job queue, and the
+opener is not sent yet; and the source filter comes from `EZT_SOURCE` rather
+than being fixed to `API`.
 
 ## Send message
 ```
@@ -212,3 +220,4 @@ for inbound. See SCHEMA.md.
 ## Safety
 - Client account contains ~120,000 real contacts. Never query without the group filter. Never send to any group other than a `dev-test` group you created.
 - Developers use their own EZ Texting trial account, never these credentials.
+- **Update 2026-09-14 (Jeel):** the account is a test account and these credentials may be used directly for development, including sending. The two rules above are kept for history. The `weightloss` group is the test group: contacts are added to it by hand in the dashboard (source `WebInterface`) and SMS is sent to it. Keep the group filter on every contacts query regardless, since the account is large.
