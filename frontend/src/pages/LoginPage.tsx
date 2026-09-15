@@ -3,7 +3,7 @@ import { Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { toApiError } from '../api/client';
 import { useAuth } from '../auth/store';
 import { Banner } from '../components/Banner';
-import { BrandMark } from '../components/BrandMark';
+import { AuthLayout } from '../components/AuthLayout';
 import { Button } from '../components/Button';
 import { Spinner } from '../components/Spinner';
 import { TextField } from '../components/TextField';
@@ -61,42 +61,38 @@ export function LoginPage() {
   }
 
   return (
-    <main className="auth-page">
-      <div className="auth-card">
-        <div className="auth-card__mark">
-          <BrandMark />
-          SM Call Center
-        </div>
-        <h1 className="auth-card__title">Sign in</h1>
-        <p className="auth-card__subtitle">Use the email and password your admin gave you.</p>
+    <AuthLayout>
+      <h1 className="auth-card__title">Sign in</h1>
+      <p className="auth-card__subtitle">Use the email and password your admin gave you.</p>
 
-        <form className="auth-card__form" onSubmit={handleSubmit} noValidate>
-          {notice && !error ? <Banner tone="info">{notice}</Banner> : null}
-          {error ? <Banner tone="error">{error}</Banner> : null}
+      <form className="auth-card__form" onSubmit={handleSubmit} noValidate>
+        {notice && !error ? <Banner tone="info">{notice}</Banner> : null}
+        {error ? <Banner tone="error">{error}</Banner> : null}
 
-          <TextField
-            label="Email"
-            type="email"
-            name="email"
-            autoComplete="username"
-            autoFocus
-            value={email}
-            onChange={(event) => setEmail(event.target.value)}
-          />
-          <TextField
-            ref={passwordRef}
-            label="Password"
-            type="password"
-            name="password"
-            autoComplete="current-password"
-            value={password}
-            onChange={(event) => setPassword(event.target.value)}
-          />
-          <Button type="submit" size="lg" block loading={submitting}>
-            Sign in
-          </Button>
-        </form>
-      </div>
-    </main>
+        <TextField
+          label="Email"
+          type="email"
+          name="email"
+          autoComplete="username"
+          placeholder="name@company.com"
+          autoFocus
+          value={email}
+          onChange={(event) => setEmail(event.target.value)}
+        />
+        <TextField
+          ref={passwordRef}
+          label="Password"
+          type="password"
+          name="password"
+          autoComplete="current-password"
+          placeholder="Enter your password"
+          value={password}
+          onChange={(event) => setPassword(event.target.value)}
+        />
+        <Button type="submit" size="lg" block loading={submitting}>
+          Sign in
+        </Button>
+      </form>
+    </AuthLayout>
   );
 }
