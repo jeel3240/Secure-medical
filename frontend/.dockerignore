@@ -1,0 +1,4 @@
+# node_modules is installed fresh inside the image by npm ci. Copying a local
+# one in would put packages built for the host OS on top of the Linux ones.
+node_modules
+dist
