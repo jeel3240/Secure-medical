@@ -4,6 +4,8 @@ Medical SMS qualification flow + browser-based call center.
 
 ## Quick start
 
+Prerequisites: Docker (Docker Desktop or Colima), Node 20, Git.
+
 ```bash
 # Install dependencies
 cd backend && npm install
@@ -22,12 +24,19 @@ docker compose exec api npm run migrate
 # Create the first superadmin (prints a one-time temporary password)
 docker compose exec api npm run dev:create-superadmin -- you@example.com "Your Name"
 
-# Start the frontend, then open http://localhost:5173
-cd frontend && npm run dev
-
 # Watch the poller pick up leads
 docker compose logs -f worker
+
+# In a second terminal: start the frontend, then open http://localhost:5173
+cd frontend && npm run dev
 ```
+
+The frontend dev server forwards `/api` to the API on port 3000. Local Docker
+runs postgres, redis, api and worker only; Caddy is used in production.
+
+**Stopping for the day.** `docker compose stop` keeps all data. Stop the
+frontend with Ctrl+C. On Colima, `colima stop` frees the VM's memory. Next time:
+`colima start`, `docker compose up -d`, `cd frontend && npm run dev`.
 
 The worker logs a line each minute:
 
@@ -52,6 +61,9 @@ docker compose exec postgres psql -U app -d leads \
 | `EZT_SOURCE` | Defaults to `API`, which is how partner leads arrive. Set to `WebInterface` to test with a contact added by hand in the dashboard. |
 | `EZT_SEND_GROUP` | Leave unset. `sendMessage` refuses to send without it - see below. |
 | | *Update 2026-09-14:* the account is a test account and `weightloss` is the test group. Set this to `weightloss` and sending is unlocked. See below. |
+| `NODE_ENV` | `production` turns on the Secure cookie flag, RDS SSL, and the `JWT_SECRET` strength check. Set by the compose files; no need to change it in `.env`. |
+| `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_PHONE_NUMBER` | Not read by any code yet. Week 4. |
+| `CADDY_DOMAIN` | Not read by anything. The production `Caddyfile` names `dailyleadhub.com` directly. |
 
 Never commit `.env`.
 
@@ -84,6 +96,11 @@ send into the poller is separate work and is not done yet.
 - **Frontend**: React + Vite
 - **Deployment**: EC2 (Caddy + Docker Compose) + RDS
 
+*As of 2026-09-14:* all API routes are under `/api`, which is the only path
+Caddy forwards to the API. Sign-in uses an httpOnly session cookie (AUTH.md).
+In production the frontend is built into the Caddy image from
+`frontend/Dockerfile`. Redis runs but nothing uses it yet.
+
 ## Documentation
 
 Each area has one doc. When you change something, update its doc in the same
@@ -110,6 +127,15 @@ names it. `EZT_GROUP` is easy to forget.
 
 **`npm error Missing script`.** The container is running a stale image.
 `docker compose build worker api` then `docker compose up -d`.
+
+**Sign-in fails with a server error after pulling.** Your local database was
+created before `users.session_version` and `users.last_login_at` were added to
+`001_init.sql`. SCHEMA.md has the two-line fix, or rebuild the database.
+
+**`/api` requests return the page's HTML instead of JSON on :5173.** The Vite
+dev server restarted without its config, which happens if `vite.config.ts`
+briefly disappears, for example while switching branches. Stop it and run
+`npm run dev` again.
 
 **Cannot connect to Postgres on localhost:5433.** A native PostgreSQL service
 may be bound to the same port and winning. Run queries through
