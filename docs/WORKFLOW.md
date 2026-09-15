@@ -84,6 +84,17 @@ docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
 docker compose exec api npm run migrate
 ```
 
+On the very first deploy, after migrating, create the first superadmin. It
+prints a one-time temporary password:
+
+```bash
+docker compose exec api npm run create-superadmin -- you@example.com "Your Name"
+```
+
+The API refuses to start in production if `JWT_SECRET` in the server's `.env`
+is a placeholder or shorter than 32 characters. Generate one with
+`openssl rand -hex 32`.
+
 Production runs compiled `dist/`, not ts-node. The `caddy` service is built
 from `frontend/Dockerfile`, which compiles the React app and copies it into the
 Caddy image, so the same `--build` rebuilds the frontend and the server needs no

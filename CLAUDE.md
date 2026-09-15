@@ -89,6 +89,18 @@ Lambda is right for bursty, stateless, no-background-work apps. This is the oppo
 | SMS | EZ Texting REST API + inbound webhook – see below |
 | Auth | Email + password, bcrypt/argon2, JWT or session cookie |
 
+**As built, 2026-09-14.** Where the table above left a choice open, or the code
+went a different way:
+
+| Layer | Actual |
+|---|---|
+| API | Express 4. Every route is under `/api`. |
+| Worker | A plain serialised loop in `backend/src/worker/index.ts`, no job queue. `bull` and `redis` are in `package.json` and Redis runs, but no code uses either yet. |
+| Migrations | Plain numbered `.sql` files run by `backend/scripts/migrate.js`. No Prisma, no node-pg-migrate. |
+| Auth | bcrypt (cost 12) and a JWT in an httpOnly, SameSite=Strict cookie. See `docs/AUTH.md`. |
+| Frontend | React 18, Vite 4, React Router 6, zustand, plain CSS with design tokens. |
+| Production web server | The `caddy` service is built from `frontend/Dockerfile`: the React build copied into a `caddy:2` image. |
+
 **EZ Texting API notes**
 - Quick start: https://developers.eztexting.com/docs/quick-start-guide
 - API reference (has a "Try It" button to test calls in the browser): https://developers.eztexting.com/reference
@@ -129,6 +141,27 @@ secure-medical/
 All documentation lives in `docs/`, except `CLAUDE.md`. Keep it that way: when
 you change something the docs describe, update the doc in the same commit.
 
+**As built, 2026-09-14.** The tree above is the target. What exists today also includes:
+
+```
+  docker-compose.prod.yml   server-only override: RDS, no exposed ports, caddy service
+  Caddyfile.dev             not used by anything; local dev goes through Vite
+  backend/
+    scripts/migrate.js      migration runner
+    src/api/auth/           sign-in, sessions, guards
+    src/api/users/          superadmin account management
+    src/cli/                create-superadmin
+    src/integrations/       EZ Texting client
+    src/db/users.ts         user queries; src/db/pool.ts
+  frontend/
+    Dockerfile              production Caddy image with the built app
+  docs/
+    AUTH.md  POLLER.md  WORKFLOW.md
+```
+
+`core/` does not exist yet; it arrives with the state machine. `docker-compose.yml`
+is local only; production layers `docker-compose.prod.yml` on top of it.
+
 `api` and `worker` build from the same Dockerfile; only the start command differs.
 
 ---
@@ -148,6 +181,15 @@ you change something the docs describe, update the doc in the same commit.
 
 Rule: **only one `open` conversation per phone number, ever.**
 
+**As built, 2026-09-14.** `backend/src/db/migrations/001_init.sql` is the source
+of truth and `docs/SCHEMA.md` explains it. It differs from the list above:
+
+- **users** also has `session_version` and `last_login_at`.
+- **leads** has `group_id`, `group_name` and `ezt_added_at` instead of `group` and `ezt_contact_id`; EZ Texting returns no contact id.
+- **messages** also has `in_reply_to_ezt_id`, `from_number` and `received_at`; `ezt_message_id` is unique for outbound only.
+- **calls** also has `ended_at`.
+- **leads.previous_lead_id** exists but is unused and expected to be dropped - see §6.
+
 ---
 
 ## 6. Core flows (see mockup p.2–3 for exact copy)
@@ -159,6 +201,12 @@ Rule: **only one `open` conversation per phone number, ever.**
 4. Phone seen before with open conversation → set old one `expired`, link new lead to old.
 5. Create conversation `open`, step 1. Send opener. Set expiry timer (default 7 days, admin-editable).
 6. Advance checkpoint only after success.
+
+**Update 2026-09-14.** Step 4 has since been reversed: one person is one lead
+row, and a returning phone gets a new conversation on the existing lead rather
+than a new linked lead. The design and what it is blocked on are in
+`docs/POLLER.md` under "Not done yet". As built, the poller does steps 1-3 and 6,
+creates the conversation, but does not send the opener or set `expires_at` yet.
 
 ### Reply (API webhook `POST /webhooks/eztexting`)
 1. Dedupe on `ezt_message_id`.
@@ -179,6 +227,13 @@ Tiers: HOT 75–100, WARM 45–74, LOW 1–44
 4. Agent sets disposition/note/callback. DNC disposition = same as SMS STOP.
 
 Queue tags (New, Attempted 1x, In progress, Callback, Needs review, Stalled at Q2, Inbound reply, Seen before) are **computed** from these tables, not stored as a status.
+
+**Paths, as of 2026-09-14.** Caddy forwards only `/api/*` to the API; everything
+else is the frontend. The paths above - `/webhooks/eztexting`,
+`/webhooks/twilio/voice`, `/twilio/token`, and `/leads` in Week 2 - would not
+reach the API in production as written. When each is built, either put it under
+`/api` (and register the webhook URLs with that prefix) or add a matching
+`handle` block to the `Caddyfile`.
 
 ---
 
@@ -202,6 +257,13 @@ Frontend dev: `cd frontend && npm run dev` (Vite on :5173, proxies /api to :3000
 **Daily:** `docker compose stop` / `docker compose up -d` keeps your data. `docker compose down -v` wipes it.
 
 **Browse tables:** DBeaver / TablePlus → `localhost:5432`, user `app`, pass `app`, db `leads`.
+
+**Corrections, 2026-09-14.** `docs/README.md` has the current steps. Differences from the above:
+
+- The local compose file starts **postgres, redis, api and worker**. There is no caddy locally; the frontend runs on the Vite dev server.
+- Postgres is on host port **5433**, not 5432.
+- After migrating, create the first account: `docker compose exec api npm run dev:create-superadmin -- you@example.com "Your Name"`.
+- Colima works in place of Docker Desktop.
 
 ---
 
@@ -228,6 +290,7 @@ Never commit `.env`. Never use real lead data locally. Generate fake leads.
    commits to `dev` or `main` directly.
 2. Jeel reviews, merges to `dev`, then `dev` to `main`.
 3. Jeel SSHs into EC2: `git pull && docker compose up -d --build && docker compose exec api npm run migrate`.
+   *(2026-09-14: the full command includes the production override - `docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build`. `docs/WORKFLOW.md` has the exact steps.)*
 4. Developer never touches EC2, RDS, or client accounts.
 
 **Migrations:** plain files in `backend/src/db/migrations/`, numbered. Never edit one that has already run on RDS – add a new one.
@@ -239,6 +302,18 @@ Never commit `.env`. Never use real lead data locally. Generate fake leads.
 ## 10. Four-week plan
 
 Each week ends with something that can be demonstrated. Do not start the next week's work until the current week's "done when" is met.
+
+### Progress, as of 2026-09-14
+
+| Week | Done | Not done |
+|---|---|---|
+| 1 | 1 repo and Docker setup · 2 migrations · 3 auth · 4 EZ Texting client · 5 poller (60s default, admin-editable, not 45s) | 6 inbound webhook route (payload verified, see `docs/EZTEXTING-API.md`) · 7 ngrok wiring |
+| 2 | – | All. The opener send (item 3) is being built by Jeel. |
+| 3 | 1 scaffold, login, role-based routing · 7 in part: manage agents · 9 Caddy serves the built frontend | 2-6, 8, the rest of 7, and 10 (specified only) |
+| 4 | – | All |
+
+Auth (Week 1) and the Week 3 login were built together, ahead of the Week 1
+webhook, at Jeel's request.
 
 ### Week 1 – Foundation + prove EZ Texting works
 
@@ -355,6 +430,8 @@ were taken on trust and the poller silently ingested nothing.
 - Read `docs/SCHEMA.md` before changing the data model or writing a migration.
 - Read `docs/Secure-Medical-Call-Center-Mockup.pdf` for screen layouts and the reply-handling flow (page 3 is the state machine).
 - Read `docs/DESIGN-PROMPT.md` before any frontend work.
+- Read `docs/AUTH.md` before touching sign-in, sessions, roles or the users table.
+- Read `docs/POLLER.md` before changing the worker loop, and `docs/WORKFLOW.md` for branches, migrations and deploys.
 - **Every area has one doc, and it is updated in the same commit as the change.**
   Not afterwards, not in a follow-up. `docs/README.md` maps each doc to what
   changes should trigger an update. New area, new doc - add it to that table.
