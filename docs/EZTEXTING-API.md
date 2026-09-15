@@ -110,7 +110,7 @@ is not evidence a filter is working.
 | `phoneNumber` | `leads.phone` | Arrives without `+`. Normalize to E.164: `"+" + phoneNumber`. |
 | `firstName`, `lastName` | `first_name`, `last_name` | May be absent. |
 | `email` | `email` | Optional. |
-| `source` | `source` | Only accept `API`. |
+| `source` | `source` | Only accept `API`. *(2026-09-14: configurable via `EZT_SOURCE`, default `API`; test contacts added by hand are `WebInterface`.)* |
 | `createdAt` | `ezt_added_at` | ISO 8601 with seconds. This is the checkpoint field. |
 | `optOut` | conversation `suppressed` + `dnc_list` | If true, never text. |
 | `groups[].id`, `groups[].name` | `group_id`, `group_name` | Store both. Filter on name (API constraint), verify by id in code. |
@@ -151,6 +151,12 @@ Rules:
 - Never advance the checkpoint on error.
 - One poller instance only.
 - Log per tick: fetched, inserted, skipped, duration.
+
+*As implemented, 2026-09-14* - `docs/POLLER.md` describes the real code. It
+differs from the sketch above in three ways: the interval is 60 seconds by
+default and read from `settings` each tick; there is no job queue, and the
+opener is not sent yet; and the source filter comes from `EZT_SOURCE` rather
+than being fixed to `API`.
 
 ## Send message
 ```
