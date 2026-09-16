@@ -177,9 +177,14 @@ INSERT INTO settings (key, value) VALUES
   ('poll_overlap_minutes', '5'),
   ('expiry_days', '7'),
   ('max_invalid_before_review', '1'),
-  ('question_1', 'Reply 1 Supplements, 2 Telehealth/Rx, 3 Both. Reply STOP to opt out.'),
-  ('question_2', 'Reply 1 Today, 2 This week, 3 Just researching.'),
-  ('question_3', 'Reply 1 Call me now, 2 Text me, 3 Contact me later.'),
+  -- Copy from the mockup, page 2. The opener carries the sender name, the
+  -- reason for the text and the opt-out, which is what US carriers expect in a
+  -- first message; the options alone would arrive as an unexplained menu from
+  -- an unknown number. 158 characters with a six-letter name: one segment on
+  -- Express delivery. {first_name} is filled in at send time.
+  ('question_1', 'Secure Medical: Hi {first_name}, you asked about health & wellness options. What interests you? Reply 1 Supplements, 2 Telehealth/Rx, 3 Both. Reply STOP to opt out.'),
+  ('question_2', 'Great. When are you looking for help? Reply 1 Today, 2 This week, 3 Just researching.'),
+  ('question_3', 'How would you like us to help? Reply 1 Call me now, 2 Text me, 3 Contact me later.'),
   ('message_clarify', 'Sorry, please reply with just a number: 1, 2, or 3.'),
   ('message_stop', 'You have been unsubscribed and will not receive further messages from Secure Medical.'),
   ('message_thanks', 'Thanks! A team member will reach out shortly.'),

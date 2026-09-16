@@ -148,6 +148,12 @@ machine.
 
 ## Seeded data
 
+The seeded message copy is the mockup's wording, page 2: the opener carries the
+sender name, the reason for the text and the opt-out, and `{first_name}` is
+filled in at send time. Copy that is only the reply options would reach a lead
+as an unexplained menu from an unknown number, which is also what US carriers
+object to in a first message.
+
 `001_init.sql` seeds `settings`, `scoring_rules` and `tiers` with the defaults
 from the mockup: Responded +10, Completed +10, Q1 5/10/15, Q2 30/20/5,
 Q3 35/25/10, and HOT 75-100 / WARM 45-74 / LOW 1-44. It also seeds the question

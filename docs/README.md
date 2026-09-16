@@ -60,6 +60,7 @@ docker compose exec postgres psql -U app -d leads \
 | `EZT_GROUP` | Contact group the poller reads. Required - the account holds ~120k real contacts, so every query is scoped to one group. |
 | `EZT_SOURCE` | Defaults to `API`, which is how partner leads arrive. Set to `WebInterface` to test with a contact added by hand in the dashboard. |
 | `EZT_SEND_GROUP` | Leave unset. `sendMessage` refuses to send without it - see below. |
+| `EZT_WEBHOOK_TOKEN` | Optional random string forming the last segment of the inbound webhook path. Unset accepts the plain path, which is fine locally; always set it in production. See WEBHOOKS.md. |
 | | *Update 2026-09-14:* the account is a test account and `weightloss` is the test group. Set this to `weightloss` and sending is unlocked. See below. |
 | `NODE_ENV` | `production` turns on the Secure cookie flag, RDS SSL, and the `JWT_SECRET` strength check. Set by the compose files; no need to change it in `.env`. |
 | `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_PHONE_NUMBER` | Not read by any code yet. Week 4. |
@@ -67,7 +68,7 @@ docker compose exec postgres psql -U app -d leads \
 
 Never commit `.env`.
 
-## Sending is currently blocked
+## Sending (was blocked until 2026-09-15)
 
 This is a live EZ Texting account with real customer contacts. `CLAUDE.md`
 permits sending only to a `dev-test` group of our own phones, and no such group
@@ -89,6 +90,11 @@ kept for history. To unlock sending:
 
 `EZT_SEND_GROUP` is only the on/off switch for `sendMessage`. Wiring the opener
 send into the poller is separate work and is not done yet.
+
+**Update 2026-09-15:** sending is live. The poller now sends question 1 when it
+creates a lead and records it in `messages`, so with `EZT_SEND_GROUP` set, a new
+contact in the group gets a text within a poll interval. The `openers` count in
+the tick log says how many went out. POLLER.md has the detail.
 
 ## Architecture
 

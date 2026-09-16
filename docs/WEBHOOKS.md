@@ -18,7 +18,10 @@ Code: `backend/src/api/webhooks.ts`. Payload shape: `docs/EZTEXTING-API.md`.
    `review` - see below.
 4. Insert the message, deduped on `(from_number, received_at)`.
 5. Set `leads.has_unread_inbound`.
-6. If `optOut`, add to `dnc_list` and suppress any open conversation.
+6. If `optOut`, add to `dnc_list` and suppress any open conversation. A lead can
+   opt out with no open conversation - already completed, or created by this
+   webhook in `review` - and the `dnc_list` row is what blocks future contact
+   either way.
 7. Return 200.
 
 All of it runs in one transaction.
@@ -93,8 +96,8 @@ TODO sits at the end of the handler. Week 2.
 
 **Nothing verifies the sender cryptographically.** A `secret` is passed when
 registering the subscription, but EZ Texting sends no signature header, so it
-cannot be checked. The path token below is the fallback, and it is a weaker
-guarantee: anyone who learns the URL can post.
+cannot be checked. The path token described above is the fallback, and it is a
+weaker guarantee: anyone who learns the URL can post.
 
 ## Testing it by hand
 
