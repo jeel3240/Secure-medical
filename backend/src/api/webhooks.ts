@@ -70,7 +70,32 @@ async function createLeadForUnknownSender(
   return leadId;
 }
 
-webhooksRouter.post('/eztexting', async (req: Request, res: Response) => {
+/**
+ * EZ Texting sends no signature header, so the caller cannot be verified. The
+ * fallback is a random segment in the path, known only to them and us: the
+ * subscription is registered against /eztexting/<token>.
+ *
+ * A wrong token gets 404 rather than 401, so probing the path reveals nothing.
+ * When EZT_WEBHOOK_TOKEN is unset the plain path is accepted, which keeps local
+ * curl testing simple - production should always set it.
+ */
+function rejectBadToken(req: Request, res: Response): boolean {
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  const { config } = require('../config') as typeof import('../config');
+  const expected = config.ezt.webhookToken;
+  const supplied = req.params.token ?? '';
+
+  if (!expected) return false;
+  if (supplied === expected) return false;
+
+  console.warn('webhook rejected: bad or missing path token');
+  res.status(404).json({ error: 'not_found', message: 'No such endpoint.' });
+  return true;
+}
+
+const handleInbound = async (req: Request, res: Response) => {
+  if (rejectBadToken(req, res)) return;
+
   const payload = req.body as InboundText;
 
   // Only inbound replies are handled. Anything else is acknowledged so EZ
@@ -150,4 +175,7 @@ webhooksRouter.post('/eztexting', async (req: Request, res: Response) => {
   } finally {
     client.release();
   }
-});
+};
+
+webhooksRouter.post('/eztexting', handleInbound);
+webhooksRouter.post('/eztexting/:token', handleInbound);

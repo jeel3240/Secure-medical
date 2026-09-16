@@ -42,6 +42,41 @@ at `status = 'review'`. That puts it in front of a human instead of dropping it.
 Name, source and group are all null, because nothing in the payload carries
 them.
 
+## The path token
+
+`EZT_WEBHOOK_TOKEN` is a random string that becomes the last path segment:
+`/api/webhooks/eztexting/<token>`. The subscription is registered against that
+URL, so only EZ Texting and we know it.
+
+A wrong or missing token gets 404 rather than 401, so probing the base path
+gives nothing away. When the variable is unset the plain path is accepted,
+which keeps local `curl` testing simple - production should always set it.
+
+Generate one with:
+
+```bash
+node -e "console.log(require('crypto').randomBytes(24).toString('hex'))"
+```
+
+## Registering the subscription
+
+There is no settings page for this; it is API-only.
+
+```bash
+POST https://a.eztexting.com/v1/webhooks/subscriptions
+{ "type": "inbound_text.received",
+  "callbackUrl": "https://<host>/api/webhooks/eztexting/<token>",
+  "secret": "<token>" }
+```
+
+`GET` the same path to list, `DELETE /webhooks/subscriptions/{id}` to remove
+one. Locally the callback is an ngrok URL, which changes each time ngrok
+restarts, so the subscription has to be re-registered per session and deleted
+afterwards.
+
+**The account already has other subscriptions of this type** - one pointing at
+Zapier, one at webhook.site. Several can coexist. Do not delete them.
+
 ## Status codes
 
 200 for everything handled, including ignored events, malformed payloads and
@@ -56,19 +91,15 @@ retrying safe.
 is saved to `q1`/`q2`/`q3`, no score, no advance, no next question sent. The
 TODO sits at the end of the handler. Week 2.
 
-**No signature verification.** The endpoint trusts any caller. Anyone who finds
-the URL can post a reply and create leads. EZ Texting's webhook signing has not
-been checked - if it offers one, it should be verified before this is public.
-
-**Untested against the real service.** Every case here was exercised with
-`curl` against the documented payload. Nothing has arrived from EZ Texting
-itself, which needs ngrok pointing at port 3000 and the URL registered with
-them.
+**Nothing verifies the sender cryptographically.** A `secret` is passed when
+registering the subscription, but EZ Texting sends no signature header, so it
+cannot be checked. The path token below is the fallback, and it is a weaker
+guarantee: anyone who learns the URL can post.
 
 ## Testing it by hand
 
 ```bash
-curl -X POST http://localhost:3000/api/webhooks/eztexting \
+curl -X POST http://localhost:3000/api/webhooks/eztexting/$EZT_WEBHOOK_TOKEN \
   -H 'Content-Type: application/json' \
   -d '{"id":"309112289003","type":"inbound_text.received",
        "fromNumber":"16026203572","toNumber":"15207799209",
