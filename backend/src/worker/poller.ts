@@ -1,5 +1,6 @@
 import { pool } from '../db/pool';
 import { config } from '../config';
+import { renderMessage } from '../core/messages';
 import {
   EztContact,
   findGroup,
@@ -166,20 +167,27 @@ async function insertLead(
  * simply has no opener, which is visible as a conversation with no outbound
  * message.
  */
-async function sendOpener(leadId: number, phone: string): Promise<boolean> {
+async function sendOpener(leadId: number, phone: string, firstName: string | null): Promise<boolean> {
   try {
-    const opener = await readSetting('question_1');
-    if (!opener) {
+    const template = await readSetting('question_1');
+    if (!template) {
       console.error('no question_1 in settings, opener not sent');
       return false;
     }
 
-    const result = await sendMessage([phone], opener);
+    // The stored copy carries {first_name}; what goes out, and what is recorded
+    // in messages.body, is the rendered text.
+    const { text, nameDropped } = renderMessage(template, firstName);
+    if (nameDropped) {
+      console.log(`opener for lead ${leadId}: name dropped to stay within one segment`);
+    }
+
+    const result = await sendMessage([phone], text);
 
     await pool.query(
       `INSERT INTO messages (lead_id, direction, body, ezt_message_id)
        VALUES ($1, 'outbound', $2, $3)`,
-      [leadId, opener, result.id]
+      [leadId, text, result.id]
     );
 
     console.log(`opener sent to lead ${leadId}, ezt id ${result.id}`);
@@ -272,7 +280,7 @@ export async function pollOnce(): Promise<PollStats> {
         stats.skipped += 1;
       } else {
         stats.inserted += 1;
-        if (await sendOpener(leadId, phone)) {
+        if (await sendOpener(leadId, phone, contact.firstName ?? null)) {
           stats.openersSent += 1;
         }
       }

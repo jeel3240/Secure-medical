@@ -56,6 +56,13 @@ rest of the page and leave the checkpoint behind, re-polling every later contact
 because one send failed. A lead with no opener shows as a conversation with no
 outbound message, and `openers` in the tick log will be lower than `inserted`.
 
+**The opener is rendered before it is sent.** `question_1` in `settings` holds
+the copy, including `{first_name}`. `core/messages.ts` substitutes the lead's
+first name, or "there" when EZ Texting gave none, and drops the name when
+keeping it would push the text past one 160-character segment - a long name
+would otherwise cost a second segment on every send. `messages.body` stores the
+rendered text, not the template.
+
 **The opener's message id is the link to the reply.** `sendMessage` returns an
 id, stored as `messages.ezt_message_id`. An inbound reply carries that same id
 in its payload, which is how a reply is tied to the question it answers - see

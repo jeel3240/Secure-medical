@@ -153,12 +153,20 @@ const handleInbound = async (req: Request, res: Response) => {
          ON CONFLICT (phone) DO NOTHING`,
         [phone]
       );
-      await client.query(
+      const closed = await client.query(
         `UPDATE conversations SET status = 'suppressed', updated_at = now()
          WHERE lead_id = $1 AND status = 'open'`,
         [leadId]
       );
-      console.log(`webhook: ${phone} opted out, suppressed`);
+      // A lead can opt out with no open conversation - already completed, or
+      // created by this webhook in `review`. The dnc_list row is what blocks
+      // future contact either way, so say which happened rather than implying
+      // a conversation changed.
+      console.log(
+        closed.rowCount
+          ? `webhook: ${phone} opted out, open conversation suppressed`
+          : `webhook: ${phone} opted out, added to dnc_list (no open conversation)`
+      );
     }
 
     await client.query('COMMIT');
