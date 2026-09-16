@@ -113,6 +113,7 @@ commit.
 | `SCHEMA.md` | Database tables and why | A migration |
 | `POLLER.md` | How leads are pulled in | The poller or worker loop |
 | `WEBHOOKS.md` | How replies are received | The webhook handler |
+| `ADMIN-LEADS.md` | The superadmin Leads page | That page or its API |
 | `EZTEXTING-API.md` | Verified API behaviour | You learn something new about the API |
 | `WORKFLOW.md` | Branches, PRs, migrations, deploys | The process itself |
 | `DESIGN-PROMPT.md` | Frontend design brief | The design direction |

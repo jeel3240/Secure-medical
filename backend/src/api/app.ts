@@ -1,5 +1,6 @@
 import cookieParser from 'cookie-parser';
 import express from 'express';
+import { adminLeadsRouter } from './admin/leads';
 import { authRouter } from './auth/routes';
 import type { AppDeps } from './deps';
 import { errorHandler } from './http';
@@ -31,6 +32,7 @@ export function createApp(deps: AppDeps): express.Express {
 
   app.use('/api/auth', authRouter(deps));
   app.use('/api/users', usersRouter(deps));
+  app.use('/api/admin/leads', adminLeadsRouter(deps));
 
   // Unauthenticated: EZ Texting posts here. Under /api because that is the only
   // path Caddy forwards to the API.
