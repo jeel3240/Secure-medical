@@ -169,7 +169,17 @@ POST /v1/messages
 
 ## Inbound webhook
 
-Verified against the live account 2026-09-14.
+Verified against the live account 2026-09-14, and confirmed 2026-09-15 with a
+real text arriving through an ngrok tunnel.
+
+Subscriptions are API-only - there is no settings page:
+`POST|GET /v1/webhooks/subscriptions`, `DELETE /v1/webhooks/subscriptions/{id}`.
+Several of the same type can coexist; the account already has one pointing at
+Zapier and one at webhook.site, neither of which should be removed.
+
+**The `secret` passed at registration never appears on delivery.** No signature
+header comes through, so the sender cannot be verified. A random segment in the
+callback path is the fallback - see WEBHOOKS.md.
 
 ```json
 {

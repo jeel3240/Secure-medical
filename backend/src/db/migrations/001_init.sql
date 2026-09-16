@@ -32,7 +32,11 @@ CREATE TABLE leads (
   group_name         TEXT,
   ezt_added_at       TIMESTAMPTZ,
   previous_lead_id   INTEGER REFERENCES leads(id),
+  -- Claim/release: an agent claims a lead, and releases it when they are done
+  -- with it. Claims do not expire - assigned_at is what lets a superadmin see
+  -- a lead has been held too long and force-release it.
   assigned_to        INTEGER REFERENCES users(id),
+  assigned_at        TIMESTAMPTZ,
   has_unread_inbound BOOLEAN NOT NULL DEFAULT false,
   created_at         TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at         TIMESTAMPTZ NOT NULL DEFAULT now()

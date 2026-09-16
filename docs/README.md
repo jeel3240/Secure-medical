@@ -41,7 +41,7 @@ frontend with Ctrl+C. On Colima, `colima stop` frees the VM's memory. Next time:
 The worker logs a line each minute:
 
 ```
-poll tick fetched=2 inserted=0 skipped=2 suppressed=0 ms=336
+poll tick fetched=2 inserted=0 skipped=2 suppressed=0 openers=0 ms=336
 ```
 
 `inserted` is new leads. To see them:
@@ -112,13 +112,15 @@ commit.
 | `AUTH.md` | Sign-in, sessions, roles, account management | Auth routes, guards or the users table |
 | `SCHEMA.md` | Database tables and why | A migration |
 | `POLLER.md` | How leads are pulled in | The poller or worker loop |
+| `WEBHOOKS.md` | How replies are received | The webhook handler |
+| `ADMIN-LEADS.md` | The superadmin Leads page | That page or its API |
 | `EZTEXTING-API.md` | Verified API behaviour | You learn something new about the API |
 | `WORKFLOW.md` | Branches, PRs, migrations, deploys | The process itself |
 | `DESIGN-PROMPT.md` | Frontend design brief | The design direction |
 | `Secure-Medical-Call-Center-Mockup.pdf` | All screens; page 3 is the state machine | — |
 
-Docs still to write, as the code arrives: `WEBHOOKS.md`,
-`STATE-MACHINE.md`, `TWILIO.md`, `DEPLOYMENT.md`.
+Docs still to write, as the code arrives: `STATE-MACHINE.md`, `TWILIO.md`,
+`DEPLOYMENT.md`.
 
 ## Troubleshooting
 

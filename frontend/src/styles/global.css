@@ -1022,3 +1022,127 @@ a {
     display: none;
   }
 }
+
+/* ---------------------------------------------------------------- Leads */
+
+.leads__tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+  border-bottom: 1px solid var(--color-border);
+  margin-bottom: var(--space-4);
+}
+
+.leads__tab {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-4);
+  border: 0;
+  border-bottom: 2px solid transparent;
+  background: none;
+  color: var(--color-text-muted);
+  font: inherit;
+  font-weight: 500;
+  cursor: pointer;
+  margin-bottom: -1px;
+}
+
+.leads__tab:hover {
+  color: var(--color-text);
+}
+
+.leads__tab--active {
+  color: var(--color-text);
+  border-bottom-color: var(--color-accent);
+}
+
+.leads__tab-count {
+  min-width: 1.5rem;
+  padding: 0 var(--space-2);
+  border-radius: 999px;
+  background: var(--color-surface-muted);
+  color: var(--color-text-subtle);
+  font-size: 0.78rem;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+}
+
+.leads__tab--active .leads__tab-count {
+  background: var(--color-accent-soft);
+  color: var(--color-accent);
+}
+
+.leads__filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
+  margin-bottom: var(--space-4);
+}
+
+.leads__search,
+.leads__select {
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface);
+  color: var(--color-text);
+  font: inherit;
+}
+
+.leads__search {
+  min-width: 16rem;
+  flex: 1 1 16rem;
+}
+
+.leads__search:focus-visible,
+.leads__select:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring-field);
+  border-color: var(--color-primary);
+}
+
+.leads__total {
+  margin-left: auto;
+  color: var(--color-text-subtle);
+  font-size: 0.85rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.leads__loading,
+.leads__empty {
+  padding: var(--space-8);
+  text-align: center;
+  color: var(--color-text-muted);
+}
+
+/* Opted-out rows are tinted so they read as excluded at a glance. */
+.leads__row--danger td {
+  background: var(--color-danger-soft);
+}
+
+/* Matches the 600ms highlight the queue uses for newly arrived rows. */
+@keyframes leads-row-in {
+  from { background: var(--color-accent-soft); }
+  to { background: transparent; }
+}
+
+.leads__row--new td {
+  animation: leads-row-in 600ms ease-out;
+}
+
+.leads__pager {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-4);
+  margin-top: var(--space-4);
+  color: var(--color-text-muted);
+  font-size: 0.9rem;
+}
+
+.mono {
+  font-family: var(--font-mono);
+  font-size: 0.85em;
+}

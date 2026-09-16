@@ -5,6 +5,7 @@ import { useAuth } from './auth/store';
 import { AppShell } from './layout/AppShell';
 import { AdminLayout } from './pages/admin/AdminLayout';
 import { AgentsPage } from './pages/admin/AgentsPage';
+import { LeadsPage } from './pages/admin/LeadsPage';
 import { ChangePasswordPage } from './pages/ChangePasswordPage';
 import { LoginPage } from './pages/LoginPage';
 import { PlaceholderPage } from './pages/PlaceholderPage';
@@ -48,7 +49,8 @@ export function App() {
             />
             <Route element={<RequireRole role="superadmin" />}>
               <Route path="/admin" element={<AdminLayout />}>
-                <Route index element={<Navigate to="/admin/agents" replace />} />
+                <Route index element={<Navigate to="/admin/leads" replace />} />
+                <Route path="leads" element={<LeadsPage />} />
                 <Route path="agents" element={<AgentsPage />} />
               </Route>
             </Route>
