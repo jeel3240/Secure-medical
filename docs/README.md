@@ -41,7 +41,7 @@ frontend with Ctrl+C. On Colima, `colima stop` frees the VM's memory. Next time:
 The worker logs a line each minute:
 
 ```
-poll tick fetched=2 inserted=0 skipped=2 suppressed=0 ms=336
+poll tick fetched=2 inserted=0 skipped=2 suppressed=0 openers=0 ms=336
 ```
 
 `inserted` is new leads. To see them:

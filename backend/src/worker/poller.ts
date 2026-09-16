@@ -1,6 +1,13 @@
 import { pool } from '../db/pool';
 import { config } from '../config';
-import { EztContact, findGroup, isInGroup, listContacts, toE164 } from '../integrations/ezt-client';
+import {
+  EztContact,
+  findGroup,
+  isInGroup,
+  listContacts,
+  sendMessage,
+  toE164,
+} from '../integrations/ezt-client';
 
 const CHECKPOINT_KEY = 'ezt_poll_checkpoint';
 const PAGE_SIZE = 50;
@@ -11,6 +18,7 @@ export interface PollStats {
   inserted: number;
   skipped: number;
   suppressed: number;
+  openersSent: number;
   durationMs: number;
 }
 
@@ -30,9 +38,14 @@ async function writeCheckpoint(at: Date): Promise<void> {
   );
 }
 
+async function readSetting(key: string): Promise<string | null> {
+  const { rows } = await pool.query('SELECT value FROM settings WHERE key = $1', [key]);
+  return rows.length > 0 ? rows[0].value : null;
+}
+
 async function readOverlapMs(): Promise<number> {
-  const { rows } = await pool.query('SELECT value FROM settings WHERE key = $1', ['poll_overlap_minutes']);
-  const minutes = rows.length > 0 ? Number(rows[0].value) : 5;
+  const raw = await readSetting('poll_overlap_minutes');
+  const minutes = raw !== null ? Number(raw) : 5;
   return (Number.isFinite(minutes) ? minutes : 5) * 60 * 1000;
 }
 
@@ -141,6 +154,46 @@ async function insertLead(
 }
 
 /**
+ * Sends question 1 to a newly created lead and records it.
+ *
+ * The returned id goes in messages.ezt_message_id, which is what an inbound
+ * reply's `id` field points back at - that is how a reply is tied to the
+ * question it answers.
+ *
+ * A failure here is logged and swallowed: the lead is already committed, and
+ * throwing would abandon the rest of the page and leave the checkpoint behind,
+ * so every later contact would be re-polled because one send failed. The lead
+ * simply has no opener, which is visible as a conversation with no outbound
+ * message.
+ */
+async function sendOpener(leadId: number, phone: string): Promise<boolean> {
+  try {
+    const opener = await readSetting('question_1');
+    if (!opener) {
+      console.error('no question_1 in settings, opener not sent');
+      return false;
+    }
+
+    const result = await sendMessage([phone], opener);
+
+    await pool.query(
+      `INSERT INTO messages (lead_id, direction, body, ezt_message_id)
+       VALUES ($1, 'outbound', $2, $3)`,
+      [leadId, opener, result.id]
+    );
+
+    console.log(`opener sent to lead ${leadId}, ezt id ${result.id}`);
+    return true;
+  } catch (err) {
+    const detail =
+      (err as { response?: { data?: unknown } })?.response?.data ??
+      (err instanceof Error ? err.message : err);
+    console.error(`opener failed for lead ${leadId}:`, JSON.stringify(detail));
+    return false;
+  }
+}
+
+/**
  * One poll cycle: page through the group newest-first, stopping once contacts
  * predate the checkpoint's overlap window.
  *
@@ -155,7 +208,14 @@ export async function pollOnce(): Promise<PollStats> {
   const checkpoint = await readCheckpoint();
   const cutoff = new Date(checkpoint.getTime() - (await readOverlapMs()));
 
-  const stats: PollStats = { fetched: 0, inserted: 0, skipped: 0, suppressed: 0, durationMs: 0 };
+  const stats: PollStats = {
+    fetched: 0,
+    inserted: 0,
+    skipped: 0,
+    suppressed: 0,
+    openersSent: 0,
+    durationMs: 0,
+  };
   let newest: Date | null = null;
   let page = 0;
   let reachedCutoff = false;
@@ -212,8 +272,9 @@ export async function pollOnce(): Promise<PollStats> {
         stats.skipped += 1;
       } else {
         stats.inserted += 1;
-        // TODO: enqueue the opener once there is a dev-test group to send to.
-        // sendMessage throws while EZT_SEND_GROUP is unset, by design.
+        if (await sendOpener(leadId, phone)) {
+          stats.openersSent += 1;
+        }
       }
     }
 
