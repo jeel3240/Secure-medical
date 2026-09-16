@@ -24,5 +24,11 @@ export const config = {
     // `required`: with no dev-test group to send to yet, leaving it unset
     // keeps sendMessage from texting real leads.
     sendGroup: process.env.EZT_SEND_GROUP ?? '',
+    // EZ Texting sends no signature header, even though a secret is passed when
+    // registering the subscription, so the caller cannot be verified. A random
+    // segment in the callback path is the fallback: only EZ Texting and we know
+    // the URL. Unset means the webhook accepts any path, which is fine locally
+    // but should always be set in production.
+    webhookToken: process.env.EZT_WEBHOOK_TOKEN ?? '',
   },
 };

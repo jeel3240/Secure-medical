@@ -22,7 +22,8 @@ async function loop(): Promise<void> {
       const stats = await pollOnce();
       console.log(
         `poll tick fetched=${stats.fetched} inserted=${stats.inserted} ` +
-          `skipped=${stats.skipped} suppressed=${stats.suppressed} ms=${stats.durationMs}`
+          `skipped=${stats.skipped} suppressed=${stats.suppressed} ` +
+          `openers=${stats.openersSent} ms=${stats.durationMs}`
       );
     } catch (err) {
       // Checkpoint is left where it was, so the next tick retries this ground.

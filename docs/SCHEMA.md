@@ -110,6 +110,20 @@ question carry the same value. A single unique column across both directions
 would reject the second reply. `in_reply_to_ezt_id` is deliberately not unique.
 EZTEXTING-API.md has the evidence.
 
+**Leads are claimed and released explicitly.** An agent claims a lead, which
+sets `assigned_to` and `assigned_at`. Everyone else sees it as in progress. The
+agent releases it by clearing both, and it returns to the queue. A superadmin
+can clear anyone's claim.
+
+Claims never expire. With ten agents who know each other, a timer risks taking
+a lead off someone who stepped away, and manual reassignment is enough.
+`assigned_at` is still needed so a superadmin can tell a lead claimed two
+minutes ago from one held since last week - without it both look identical.
+
+A released lead carries no marker. Context comes from the timeline, which
+already shows calls, messages, notes and dispositions for the lead. A lead that
+is genuinely bad should get a disposition rather than being released.
+
 **Four columns are unconstrained free text.** Every other categorical column has
 a CHECK; these do not, because their permitted values are not settled yet:
 
@@ -134,6 +148,12 @@ machine.
 
 ## Seeded data
 
+The seeded message copy is the mockup's wording, page 2: the opener carries the
+sender name, the reason for the text and the opt-out, and `{first_name}` is
+filled in at send time. Copy that is only the reply options would reach a lead
+as an unexplained menu from an unknown number, which is also what US carriers
+object to in a first message.
+
 `001_init.sql` seeds `settings`, `scoring_rules` and `tiers` with the defaults
 from the mockup: Responded +10, Completed +10, Q1 5/10/15, Q2 30/20/5,
 Q3 35/25/10, and HOT 75-100 / WARM 45-74 / LOW 1-44. It also seeds the question
@@ -142,25 +162,18 @@ and reply copy, the 60s poll interval and the 5 minute poll overlap.
 All three tables are meant to be edited by a superadmin at runtime, so treat
 the seeds as starting values rather than constants.
 
-### The seeded tiers barely use LOW
+### LOW is mostly for partial conversations
 
-Worth knowing before anyone reads a queue and wonders where the LOW leads are.
-`responded` and `completed` are flat awards, so any completed conversation
-starts at 20 before a single answer is scored. The reachable range is therefore
-40 to 100, not 0 to 100.
+A completed conversation cannot score below 40: `responded` and `completed` add
+20 between them, and the cheapest answers add another 20. Of the 27 possible
+answer combinations, 13 land HOT, 13 WARM, and only one - the least engaged
+answer to all three questions - lands LOW.
 
-Across all 27 answer combinations:
+That is not a mis-set band. Scoring applies to partial conversations too. A
+lead who replies once and goes quiet scores 10 and is LOW; one who stalls after
+Q2 sits in the low WARM range. The admin screen's own preview shows
+"Responded, stalled at Q1 -> 10 LOW".
 
-| Tier | Combinations | Range |
-|---|---|---|
-| HOT 75-100 | 13 | 75-100 |
-| WARM 45-74 | 13 | 45-70 |
-| LOW 1-44 | 1 | 40 |
-
-Only 1/3/3 - the least engaged answer to every question - lands LOW. Nothing
-can score below 40, so most of the LOW band is unreachable.
-
-These numbers come from the mockup, so this is the client's design rather than
-a bug on our side. Raised with Jeel; unchanged pending his answer. If the intent
-was a roughly even three-way split, either the flat awards or the band
-boundaries need moving.
+So the tiers are only skewed if you look at completions alone, and at 50-100
+leads a day the drop-outs will not be rare. The implication for the state
+machine is that it has to score as answers arrive, not only on completion.

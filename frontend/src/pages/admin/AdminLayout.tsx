@@ -2,14 +2,21 @@ import { NavLink, Outlet } from 'react-router-dom';
 
 const UPCOMING = ['Overview', 'Scoring', 'Messages', 'DNC list', 'Settings'];
 
+const LIVE = [
+  { to: '/admin/leads', label: 'Leads' },
+  { to: '/admin/agents', label: 'Agents' },
+];
+
 export function AdminLayout() {
   return (
     <div className="admin">
       <nav className="admin__nav" aria-label="Admin">
         <div className="admin__nav-heading">Admin</div>
-        <NavLink to="/admin/agents" className="admin__nav-link">
-          Agents
-        </NavLink>
+        {LIVE.map((item) => (
+          <NavLink key={item.to} to={item.to} className="admin__nav-link">
+            {item.label}
+          </NavLink>
+        ))}
         {UPCOMING.map((label) => (
           <span key={label} className="admin__nav-link admin__nav-link--disabled" aria-disabled="true">
             {label}

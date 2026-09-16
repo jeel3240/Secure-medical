@@ -6,6 +6,8 @@ Documentation lives in [`docs/`](docs/):
 - [Auth: sign-in, sessions, roles](docs/AUTH.md)
 - [Database schema](docs/SCHEMA.md)
 - [Poller](docs/POLLER.md)
+- [Webhooks](docs/WEBHOOKS.md)
+- [Admin: Leads](docs/ADMIN-LEADS.md)
 - [EZ Texting API behaviour](docs/EZTEXTING-API.md)
 - [Workflow](docs/WORKFLOW.md)
 - [Frontend design brief](docs/DESIGN-PROMPT.md)

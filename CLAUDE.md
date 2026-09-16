@@ -150,16 +150,20 @@ you change something the docs describe, update the doc in the same commit.
     scripts/migrate.js      migration runner
     src/api/auth/           sign-in, sessions, guards
     src/api/users/          superadmin account management
+    src/api/admin/leads.ts  Admin > Leads query endpoint
+    src/api/webhooks.ts     inbound SMS from EZ Texting
+    src/core/messages.ts    renders outbound copy ({first_name}, segment limit)
+    src/db/leads.ts         Admin > Leads SQL
     src/cli/                create-superadmin
     src/integrations/       EZ Texting client
     src/db/users.ts         user queries; src/db/pool.ts
   frontend/
     Dockerfile              production Caddy image with the built app
   docs/
-    AUTH.md  POLLER.md  WORKFLOW.md
+    AUTH.md  POLLER.md  WORKFLOW.md  WEBHOOKS.md  ADMIN-LEADS.md
 ```
 
-`core/` does not exist yet; it arrives with the state machine. `docker-compose.yml`
+`core/` currently holds only message rendering; the state machine joins it in Week 2. `docker-compose.yml`
 is local only; production layers `docker-compose.prod.yml` on top of it.
 
 `api` and `worker` build from the same Dockerfile; only the start command differs.
@@ -189,6 +193,7 @@ of truth and `docs/SCHEMA.md` explains it. It differs from the list above:
 - **messages** also has `in_reply_to_ezt_id`, `from_number` and `received_at`; `ezt_message_id` is unique for outbound only.
 - **calls** also has `ended_at`.
 - **leads.previous_lead_id** exists but is unused and expected to be dropped - see §6.
+- **leads.assigned_at** records when an agent claimed the lead. Claims do not expire; it is what lets a superadmin see one held too long. Added 2026-09-15.
 
 ---
 
@@ -228,12 +233,12 @@ Tiers: HOT 75–100, WARM 45–74, LOW 1–44
 
 Queue tags (New, Attempted 1x, In progress, Callback, Needs review, Stalled at Q2, Inbound reply, Seen before) are **computed** from these tables, not stored as a status.
 
-**Paths, as of 2026-09-14.** Caddy forwards only `/api/*` to the API; everything
-else is the frontend. The paths above - `/webhooks/eztexting`,
-`/webhooks/twilio/voice`, `/twilio/token`, and `/leads` in Week 2 - would not
-reach the API in production as written. When each is built, either put it under
-`/api` (and register the webhook URLs with that prefix) or add a matching
-`handle` block to the `Caddyfile`.
+**Paths, as of 2026-09-15.** Caddy forwards only `/api/*` to the API; everything
+else is the frontend, so every route lives under `/api`. The EZ Texting webhook
+was built that way: `POST /api/webhooks/eztexting/<token>`, unauthenticated,
+with a random path segment in place of a signature - see `docs/WEBHOOKS.md`. The
+Twilio paths above, `/webhooks/twilio/voice` and `/twilio/token`, and the Week 2
+queue API still need the same treatment when they are built.
 
 ---
 
@@ -307,13 +312,13 @@ Each week ends with something that can be demonstrated. Do not start the next we
 
 | Week | Done | Not done |
 |---|---|---|
-| 1 | 1 repo and Docker setup · 2 migrations · 3 auth · 4 EZ Texting client · 5 poller (60s default, admin-editable, not 45s) | 6 inbound webhook route (payload verified, see `docs/EZTEXTING-API.md`) · 7 ngrok wiring |
-| 2 | – | All. The opener send (item 3) is being built by Jeel. |
-| 3 | 1 scaffold, login, role-based routing · 7 in part: manage agents · 9 Caddy serves the built frontend | 2-6, 8, the rest of 7, and 10 (specified only) |
+| 1 | All of it: 1 repo and Docker setup · 2 migrations · 3 auth · 4 EZ Texting client · 5 poller (60s default, admin-editable, not 45s) · 6 inbound webhook (`docs/WEBHOOKS.md`) · 7 ngrok wiring, confirmed with a real text | – |
+| 2 | 3 opener sent when the poller creates a lead | 1, 2, 4-10: the state machine, scoring, expiry, resold leads, the queue API and its tests |
+| 3 | 1 scaffold, login, role-based routing · 7 in part: manage agents · 9 Caddy serves the built frontend · 10 Admin > Leads (`docs/ADMIN-LEADS.md`) | 2-6, 8, the rest of 7 |
 | 4 | – | All |
 
 Auth (Week 1) and the Week 3 login were built together, ahead of the Week 1
-webhook, at Jeel's request.
+webhook, at Jeel's request. *(Table updated 2026-09-15.)*
 
 ### Week 1 – Foundation + prove EZ Texting works
 

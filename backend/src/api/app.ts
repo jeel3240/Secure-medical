@@ -1,9 +1,11 @@
 import cookieParser from 'cookie-parser';
 import express from 'express';
+import { adminLeadsRouter } from './admin/leads';
 import { authRouter } from './auth/routes';
 import type { AppDeps } from './deps';
 import { errorHandler } from './http';
 import { usersRouter } from './users/routes';
+import { webhooksRouter } from './webhooks';
 
 /** Builds the Express app without listening, so tests can drive it directly. */
 export function createApp(deps: AppDeps): express.Express {
@@ -30,6 +32,11 @@ export function createApp(deps: AppDeps): express.Express {
 
   app.use('/api/auth', authRouter(deps));
   app.use('/api/users', usersRouter(deps));
+  app.use('/api/admin/leads', adminLeadsRouter(deps));
+
+  // Unauthenticated: EZ Texting posts here. Under /api because that is the only
+  // path Caddy forwards to the API.
+  app.use('/api/webhooks', webhooksRouter);
 
   app.use('/api', (_req, res) => {
     res.status(404).json({ error: 'not_found', message: 'No such endpoint.' });

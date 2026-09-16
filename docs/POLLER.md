@@ -29,7 +29,8 @@ filter would have done server-side.
    - normalise the phone to E.164
    - if `optOut`, or the phone is on `dnc_list`: insert the lead with a
      `suppressed` conversation and add it to `dnc_list`
-   - otherwise insert the lead with an `open` conversation at step 1
+   - otherwise insert the lead with an `open` conversation at step 1, then send
+     question 1 and record it as an outbound message
 6. If the page was not the last, request the next one.
 7. Write the checkpoint to the newest `createdAt` actually seen.
 
@@ -49,6 +50,29 @@ verified against `groups[]` rather than trusted from the filter.
 **Checkpoint written last, and only on success.** A throw anywhere leaves it
 untouched, so the next cycle re-covers the same ground rather than skipping it.
 
+**A failed opener does not fail the cycle.** `sendOpener` catches its own
+errors. The lead is already committed by then, so throwing would abandon the
+rest of the page and leave the checkpoint behind, re-polling every later contact
+because one send failed. A lead with no opener shows as a conversation with no
+outbound message, and `openers` in the tick log will be lower than `inserted`.
+
+**The opener is rendered before it is sent.** `question_1` in `settings` holds
+the copy, including `{first_name}`. `core/messages.ts` substitutes the lead's
+first name, or "there" when EZ Texting gave none, and drops the name when
+keeping it would push the text past one 160-character segment - a long name
+would otherwise cost a second segment on every send. `messages.body` stores the
+rendered text, not the template.
+
+**The opener's message id is the link to the reply.** `sendMessage` returns an
+id, stored as `messages.ezt_message_id`. An inbound reply carries that same id
+in its payload, which is how a reply is tied to the question it answers - see
+WEBHOOKS.md.
+
+**Sending is gated on `EZT_SEND_GROUP`.** `sendMessage` throws when it is unset.
+The account holds real contacts, so this is the switch that stops a poll from
+texting people. The poll group and the send gate are separate settings on
+purpose.
+
 **`assertNewestFirst`.** An unrecognised sort field is ignored rather than
 rejected, and the default order is oldest-first. If the sort silently broke, the
 loop would stop on the first contact every cycle and never ingest anything, with
@@ -57,7 +81,7 @@ no error. The guard turns that into a loud failure.
 ## Reading the log
 
 ```
-poll tick fetched=3 inserted=1 skipped=1 suppressed=0 ms=352
+poll tick fetched=3 inserted=1 skipped=1 suppressed=0 openers=1 ms=352
 ```
 
 | | |
@@ -66,6 +90,7 @@ poll tick fetched=3 inserted=1 skipped=1 suppressed=0 ms=352
 | `inserted` | new leads written |
 | `skipped` | examined but not written - already known, or not in the group |
 | `suppressed` | opted out; lead written, added to `dnc_list` |
+| `openers` | question 1 sent. Lower than `inserted` means a send failed |
 
 These do not have to add up. Contacts below the cutoff stop the cycle and are
 never examined, so `fetched` is usually larger than the rest combined. In
@@ -77,18 +102,11 @@ steady state `inserted=0` with a small `skipped` is normal and correct.
 |---|---|
 | `EZT_GROUP` | Group to read. Required. |
 | `EZT_SOURCE` | Defaults to `API`, how partner leads arrive. `WebInterface` for contacts added by hand. |
+| `EZT_SEND_GROUP` | Unset means `sendMessage` throws, so no opener goes out. |
 | `poll_interval_seconds` | In `settings`, read each tick, so it changes without a restart. |
 | `poll_overlap_minutes` | In `settings`. |
 
 ## Not done yet
-
-**The opener is not sent.** The insert branch has a TODO where
-`sendMessage` belongs. Sending is blocked until there is a `dev-test` group -
-see WORKFLOW.md.
-
-*Update 2026-09-14:* the EZ Texting account is a test account and `weightloss`
-is the test group, so sending can be unlocked by setting `EZT_SEND_GROUP=weightloss`.
-The TODO itself is still there; Jeel is building the opener send.
 
 **Returning leads are dropped.** A phone we already hold is skipped forever,
 which is wrong for a lead that comes back months later. Phase 2 work. The
