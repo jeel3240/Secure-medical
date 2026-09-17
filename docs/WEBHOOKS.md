@@ -14,14 +14,13 @@ Code: `backend/src/api/webhooks.ts`. Payload shape: `docs/EZTEXTING-API.md`.
    missing `fromNumber`, `received` or `message`. Both return 200 so EZ Texting
    stops retrying.
 2. Normalise `fromNumber` to E.164.
-3. Find the lead by phone. If there is none, create one and a conversation in
-   `review` - see below.
+3. Find the lead by phone. **If there is none, stop**: log it, opt the number
+   out if the reply was a STOP, return 200, and create nothing - see below.
 4. Insert the message, deduped on `(from_number, received_at)`.
 5. Set `leads.has_unread_inbound`.
-6. If `optOut`, add to `dnc_list` and suppress any open conversation. A lead can
-   opt out with no open conversation - already completed, or created by this
-   webhook in `review` - and the `dnc_list` row is what blocks future contact
-   either way.
+6. If it is an opt-out, add to `dnc_list` and suppress any open conversation. A
+   lead can opt out with no open conversation - already completed, for instance -
+   and the `dnc_list` row is what blocks future contact either way.
 7. Return 200.
 
 All of it runs in one transaction.
@@ -37,13 +36,35 @@ the same handset cannot send two texts in the same millisecond.
 The `id` is still stored, in `in_reply_to_ezt_id`, because it says which
 question was being answered.
 
-## Replies from unknown numbers
+## Replies from numbers we hold no lead for
 
-A reply from a phone with no lead - someone texting the number cold, or a lead
-since deleted - creates a bare lead holding only the phone, plus a conversation
-at `status = 'review'`. That puts it in front of a human instead of dropping it.
-Name, source and group are all null, because nothing in the payload carries
-them.
+**They are ignored.** Nothing is created: no lead, no conversation, no message.
+The handler logs the number, returns 200 so EZ Texting stops retrying, and
+moves on.
+
+This is the important one. **The subscription is registered per EZ Texting
+account, not per group or per sending number**, so every reply to every campaign
+on the account arrives here - including the client's own marketing drips, which
+have nothing to do with this app. A reply from a number we never texted is
+therefore someone else's, not a lead of ours.
+
+Until 2026-09-17 the handler created a bare lead and a conversation in `review`
+for these, on the reasoning that a stray reply should reach a human rather than
+be dropped. On a live account that produced 34 leads of noise against 1 real
+one in a day - real customer phone numbers from campaigns outside this project,
+growing with every campaign the client sends. Only replies from numbers already
+in `leads` are processed.
+
+**One thing is still written: an opt-out.** If the reply is a STOP, the number
+goes into `dnc_list` with reason `sms_stop`, even with no lead to attach it to -
+the table is keyed on phone alone. If that number is later delivered as a
+partner lead, the poller's `dnc_list` check stops us texting someone who has
+already opted out of this client's messages.
+
+Opt-out is `optOut` on the payload, or the message being one of the CTIA
+keywords: STOP, STOPALL, UNSUBSCRIBE, CANCEL, END, QUIT, REVOKE, OPTOUT. Case
+and trailing punctuation are ignored, and the whole message must be the keyword -
+"stop by tomorrow" is not an opt-out.
 
 ## The path token
 
@@ -93,6 +114,10 @@ retrying safe.
 **The state machine.** The message is stored, but nothing reads it: no answer
 is saved to `q1`/`q2`/`q3`, no score, no advance, no next question sent. The
 TODO sits at the end of the handler. Week 2.
+
+**No STOP confirmation is sent.** The number is blocked and any open
+conversation suppressed, but the "you have been unsubscribed" reply in
+`settings.message_stop` is not sent yet. Week 2, with the state machine.
 
 **Nothing verifies the sender cryptographically.** A `secret` is passed when
 registering the subscription, but EZ Texting sends no signature header, so it

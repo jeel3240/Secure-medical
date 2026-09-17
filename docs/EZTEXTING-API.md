@@ -177,6 +177,12 @@ Subscriptions are API-only - there is no settings page:
 Several of the same type can coexist; the account already has one pointing at
 Zapier and one at webhook.site, neither of which should be removed.
 
+**A subscription covers the whole account.** There is no group, number or
+campaign filter on it: every inbound text to any of the account's numbers is
+delivered to every subscription. Confirmed 2026-09-16, when replies to the
+client's own marketing campaigns arrived at our callback. The handler therefore
+cannot treat an unrecognised sender as a new lead - see WEBHOOKS.md.
+
 **The `secret` passed at registration never appears on delivery.** No signature
 header comes through, so the sender cannot be verified. A random segment in the
 callback path is the fallback - see WEBHOOKS.md.

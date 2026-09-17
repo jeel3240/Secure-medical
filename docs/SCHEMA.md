@@ -62,6 +62,12 @@ ALTER TABLE users ADD COLUMN session_version INTEGER NOT NULL DEFAULT 0;
 ALTER TABLE users ADD COLUMN last_login_at TIMESTAMPTZ;
 ```
 
+**A `dnc_list` row needs no lead.** The webhook writes one for a STOP from a
+number we hold no lead for, because the subscription covers the whole EZ Texting
+account and those replies belong to the client's other campaigns. Blocking the
+number costs nothing and protects us if it is delivered as a partner lead later.
+See WEBHOOKS.md.
+
 **Phone is the identity.** The EZ Texting contacts API returns no per-contact
 id, so there is nothing else stable to key on. `leads.phone` is unique and
 stored E.164 (`+15551234567`), while EZ Texting returns it without the `+`.
@@ -131,7 +137,7 @@ a CHECK; these do not, because their permitted values are not settled yet:
 |---|---|---|
 | `dispositions.value` | Agent, Week 3 | Defined on mockup p.6. The PDF is images, so the list has to come from Jeel or a visual read. |
 | `calls.outcome` | Twilio callback, Week 4 | Depends on Twilio's own status values. |
-| `dnc_list.reason` | Poller and webhook | Poller writes `ezt_opt_out`; a STOP reply will need its own value. |
+| `dnc_list.reason` | Poller and webhook | Poller writes `ezt_opt_out` for a contact already opted out in EZ Texting; the webhook writes `sms_stop` for a STOP reply. An agent DNC disposition will need its own value in Week 4. |
 | `messages.delivery_status` | Send path | Whatever EZ Texting returns. Unverified - we have never read a delivery status back. |
 
 Each should get a CHECK once its values are known. Until then anything is
