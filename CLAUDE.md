@@ -220,6 +220,34 @@ creates the conversation, but does not send the opener or set `expires_at` yet.
 3. Text = STOP → `suppressed`, add to DNC, send STOP confirmation.
 4. Text in {1,2,3} → save to `q{step}`, add points. If step 3 → `completed`, score + tier, send thanks. Else step+1, send next question.
 5. Anything else → first time: send clarification, `invalid_count=1`. Second time: `review`, send review message.
+
+**Answer matching, decided 2026-09-17.** A number is not the only valid answer:
+people reply in words, and treating "supplements" as invalid turns a clear
+answer into a clarification and then manual review. A short fixed list of words
+is accepted per question, at most three forms each:
+
+| | Option 1 | Option 2 | Option 3 |
+|---|---|---|---|
+| Q1 | 1, supplements, supplement | 2, telehealth, rx | 3, both |
+| Q2 | 1, today | 2, this week, week | 3, researching |
+| Q3 | 1, call, call me | 2, text, text me | 3, later |
+
+Before matching, the reply is lowercased and trimmed, trailing punctuation is
+dropped, and a leading `option` or `#` is stripped - so `1.`, `Option 1` and
+`Supplements!` all match.
+
+Rules:
+- **The whole message must be one of the accepted forms.** No matching inside a
+  sentence, or "not today" would count as "today" and "I don't want supplements"
+  as supplements.
+- **Anything else is invalid** and goes through step 5 unchanged: clarification
+  once, then `review`. That includes every sentence and anything ambiguous, such
+  as "both today" - a human reads those.
+- **STOP is checked first**, before any answer matching.
+- The word list is small and fixed in code for now. If the client wants to edit
+  it, it moves to `settings` like the message copy.
+- `settings.message_clarify` says "reply with just a number", which is now
+  narrower than what is accepted. The client should approve new wording.
 6. Return 200 fast.
 
 ### Scoring (defaults, admin-editable)
@@ -349,7 +377,7 @@ Build:
 2. Wire it into the webhook: load conversation → run → save → send
 3. Opener sent automatically when worker inserts a new lead
 4. STOP handling → `suppressed` + `dnc_list`
-5. Invalid reply → clarification once, then `review`
+5. Invalid reply → clarification once, then `review`. Answer matching accepts the numbers plus the short word list in §6; everything else is invalid. A pure function - reply text and step in, choice of 1/2/3 or unclear out - so it can be unit tested on its own
 6. Scoring from `scoring_rules` table, tiers from `tiers` table (seed with mockup defaults)
 7. Expiry: `expires_at` set on each send; worker marks stale `open` conversations `expired`
 8. Resold-lead logic: existing phone → DNC check → expire old open conversation → new lead linked via `previous_lead_id`
