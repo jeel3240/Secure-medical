@@ -216,6 +216,7 @@ creates the conversation, but does not send the opener or set `expires_at` yet.
 ### Reply (API webhook `POST /webhooks/eztexting`)
 1. Dedupe on `ezt_message_id`.
 2. Find conversation `phone = X AND status = 'open'`. None → save as plain inbound message on latest lead, flag `has_unread_inbound`.
+   *(2026-09-17: and if no **lead** exists for that phone at all, ignore the reply entirely. The EZ Texting subscription covers the whole account, so replies to the client's other campaigns arrive here too; creating leads from them filled the table with unrelated customer numbers. A STOP still goes to `dnc_list`. See `docs/WEBHOOKS.md`.)*
 3. Text = STOP → `suppressed`, add to DNC, send STOP confirmation.
 4. Text in {1,2,3} → save to `q{step}`, add points. If step 3 → `completed`, score + tier, send thanks. Else step+1, send next question.
 5. Anything else → first time: send clarification, `invalid_count=1`. Second time: `review`, send review message.

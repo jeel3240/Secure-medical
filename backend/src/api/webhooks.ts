@@ -45,29 +45,32 @@ interface InboundText {
 }
 
 /**
- * A reply from a phone we hold no lead for - someone texting the number cold,
- * or a lead since deleted. Creating a bare lead and a conversation in `review`
- * puts it in front of a human rather than dropping it. Everything but the
- * phone is unknown.
+ * Opt-out keywords. EZ Texting sets `optOut` itself, but a reply is checked
+ * against these too so a STOP that arrives without the flag still blocks the
+ * number. CTIA's standard set.
  */
-async function createLeadForUnknownSender(
+/** dnc_list.reason for an opt-out that arrived as a reply, vs the poller's `ezt_opt_out`. */
+const STOP_REASON = 'sms_stop';
+
+const STOP_WORDS = new Set(['stop', 'stopall', 'unsubscribe', 'cancel', 'end', 'quit', 'revoke', 'optout']);
+
+function isOptOut(payload: InboundText): boolean {
+  if (payload.optOut) return true;
+  const text = (payload.message ?? '').trim().toLowerCase().replace(/[.!,]+$/, '');
+  return STOP_WORDS.has(text);
+}
+
+/** Added without a lead, which the table allows: phone is its only key. */
+async function blockNumber(
   client: { query: (q: string, v?: unknown[]) => Promise<{ rows: any[]; rowCount: number | null }> },
-  phone: string
-): Promise<number> {
-  const lead = await client.query(
-    `INSERT INTO leads (phone) VALUES ($1)
-     ON CONFLICT (phone) DO UPDATE SET phone = EXCLUDED.phone
-     RETURNING id`,
-    [phone]
-  );
-  const leadId: number = lead.rows[0].id;
-
+  phone: string,
+  reason: string
+): Promise<void> {
   await client.query(
-    `INSERT INTO conversations (lead_id, status) VALUES ($1, 'review')`,
-    [leadId]
+    `INSERT INTO dnc_list (phone, reason) VALUES ($1, $2)
+     ON CONFLICT (phone) DO NOTHING`,
+    [phone, reason]
   );
-
-  return leadId;
 }
 
 /**
@@ -119,13 +122,29 @@ const handleInbound = async (req: Request, res: Response) => {
 
     const existing = await client.query('SELECT id FROM leads WHERE phone = $1', [phone]);
 
-    let leadId: number;
-    if (existing.rowCount && existing.rowCount > 0) {
-      leadId = existing.rows[0].id;
-    } else {
-      leadId = await createLeadForUnknownSender(client, phone);
-      console.log(`webhook: unknown sender ${phone}, lead ${leadId} created for review`);
+    // The subscription is registered per EZ Texting account, not per group or
+    // number, so every reply to every campaign on the account arrives here -
+    // including the client's own marketing drips, which this app has nothing to
+    // do with. A reply from a phone we hold no lead for is therefore not ours:
+    // it is ignored rather than turned into a lead. Creating one filled the
+    // table with real customer numbers from unrelated campaigns, 34 of them to
+    // 1 real lead.
+    if (!existing.rowCount) {
+      if (isOptOut(payload)) {
+        // Kept even though there is no lead. If this number is later delivered
+        // as a partner lead, the poller's dnc_list check stops us texting
+        // someone who has already opted out of this client's messages.
+        await blockNumber(client, phone, STOP_REASON);
+      }
+      await client.query('COMMIT');
+      console.log(
+        `webhook: ignored reply from ${phone} - no lead for that number` +
+          (isOptOut(payload) ? ', added to dnc_list' : '')
+      );
+      return res.sendStatus(200);
     }
+
+    const leadId: number = existing.rows[0].id;
 
     // Dedupe on (from_number, received_at): EZ Texting retries, and the
     // payload's id belongs to our outbound message, so it repeats across
@@ -147,12 +166,8 @@ const handleInbound = async (req: Request, res: Response) => {
 
     await client.query('UPDATE leads SET has_unread_inbound = true WHERE id = $1', [leadId]);
 
-    if (payload.optOut) {
-      await client.query(
-        `INSERT INTO dnc_list (phone, reason) VALUES ($1, 'ezt_opt_out')
-         ON CONFLICT (phone) DO NOTHING`,
-        [phone]
-      );
+    if (isOptOut(payload)) {
+      await blockNumber(client, phone, STOP_REASON);
       const closed = await client.query(
         `UPDATE conversations SET status = 'suppressed', updated_at = now()
          WHERE lead_id = $1 AND status = 'open'`,
