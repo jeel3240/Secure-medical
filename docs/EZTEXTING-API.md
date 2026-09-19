@@ -233,6 +233,24 @@ for inbound. See SCHEMA.md.
 - EZ Texting retries webhooks, so the dedupe is load-bearing, not defensive.
 - Return 200 fast.
 
+## STOP handling
+
+Verified 2026-09-19 by texting STOP to the account's number from Jeel's phone.
+EZ Texting replies on its own, immediately, before our webhook is involved:
+
+> PillRx: You have opted out of this program & will no longer receive any
+> messages. Reply REPORT to report unwanted messaging. Text START to opt back in.
+
+It also sets the contact's `optOut` to `true`, which the poller already reads.
+Consequences for us:
+
+- **Never send our own STOP confirmation**; the lead would get two.
+- **"PillRx" is the brand name configured on the account**, and it appears in
+  the platform's own compliance replies. Our copy signs as "Secure Medical".
+  Which name is right is the client's call.
+- The reply invites START to opt back in. What EZ Texting does with START has
+  not been tested; our `dnc_list` blocks the number regardless (STATE-MACHINE.md).
+
 ## Safety
 - Client account contains ~120,000 real contacts. Never query without the group filter. Never send to any group other than a `dev-test` group you created.
 - Developers use their own EZ Texting trial account, never these credentials.

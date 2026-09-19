@@ -217,7 +217,7 @@ creates the conversation, but does not send the opener or set `expires_at` yet.
 1. Dedupe on `ezt_message_id`.
 2. Find conversation `phone = X AND status = 'open'`. None → save as plain inbound message on latest lead, flag `has_unread_inbound`.
    *(2026-09-17: and if no **lead** exists for that phone at all, ignore the reply entirely. The EZ Texting subscription covers the whole account, so replies to the client's other campaigns arrive here too; creating leads from them filled the table with unrelated customer numbers. A STOP still goes to `dnc_list`. See `docs/WEBHOOKS.md`.)*
-3. Text = STOP → `suppressed`, add to DNC, send STOP confirmation.
+3. Text = STOP → `suppressed`, add to DNC, send STOP confirmation. *(2026-09-19: EZ Texting sends the confirmation itself, so we send nothing - `docs/EZTEXTING-API.md`, "STOP handling".)*
 4. Text in {1,2,3} → save to `q{step}`, add points. If step 3 → `completed`, score + tier, send thanks. Else step+1, send next question.
 5. Anything else → first time: send clarification, `invalid_count=1`. Second time: `review`, send review message.
 
@@ -382,7 +382,7 @@ Build:
 1. State machine in `core/` – pure function: `(conversation, incomingText) → (newConversation, messageToSend | null)`. No DB calls inside; easy to unit test.
 2. Wire it into the webhook: load conversation → run → save → send
 3. Opener sent automatically when worker inserts a new lead
-4. STOP handling → `suppressed` + `dnc_list` *(whether we also send a confirmation depends on one test of EZ Texting's own STOP handling - `docs/STATE-MACHINE.md`, open item 1)*
+4. STOP handling → `suppressed` + `dnc_list` *(2026-09-19: we send no confirmation - EZ Texting sends its own automatically, verified with a real STOP. See `docs/STATE-MACHINE.md`, rule 1.)*
 5. Invalid reply → clarification once, then `review`. Answer matching accepts the numbers plus the short word list in §6; everything else is invalid. A pure function - reply text and step in, choice of 1/2/3 or unclear out - so it can be unit tested on its own
 6. Scoring from `scoring_rules` table, tiers from `tiers` table (seed with mockup defaults)
 7. Expiry: `expires_at` set on each send; worker marks stale `open` conversations `expired`
