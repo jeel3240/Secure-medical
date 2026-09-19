@@ -233,6 +233,18 @@ for inbound. See SCHEMA.md.
 - EZ Texting retries webhooks, so the dedupe is load-bearing, not defensive.
 - Return 200 fast.
 
+## One contact per phone number
+
+Verified 2026-09-19 by Jeel: **EZ Texting does not allow two contacts with the
+same phone number.** A number already on the account cannot be added again as a
+second contact.
+
+So when the partner delivers a number that is already there, EZ Texting either
+rejects it or updates the existing contact - it never creates a new one. The
+existing contact keeps its original `createdAt` unless an update resets it,
+which has not been checked. This matters to the poller, which finds new leads
+by `createdAt`: see POLLER.md, "Returning leads".
+
 ## STOP handling
 
 Verified 2026-09-19 by texting STOP to the account's number from Jeel's phone.

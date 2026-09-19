@@ -119,8 +119,9 @@ adding a conversation to the existing lead.
 
 **What it depends on, unverified:** whether a lead re-delivered by the partner
 reaches EZ Texting as a new contact, with a new `createdAt`, or only updates the
-existing contact. Jeel's understanding is that EZ Texting keeps one contact per
-number, which would make it the second. The poller finds contacts by `createdAt` newer than its
+existing contact. It cannot be the first: EZ Texting does not allow two
+contacts with the same number (verified 2026-09-19, EZTEXTING-API.md). What is
+still unchecked is whether updating the existing contact resets `createdAt`. The poller finds contacts by `createdAt` newer than its
 checkpoint, so if a re-delivery leaves `createdAt` unchanged, the poller never
 sees it and none of the rules ever run. This can be checked on the test account:
 add a contact through the API that already exists in the group, and see whether
