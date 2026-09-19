@@ -84,6 +84,27 @@ trailing punctuation ignored). This is already implemented in the webhook.
   `settings.message_stop` is never sent; it stays seeded only in case the
   account's own handling is ever switched off.
 
+#### What STOP does, end to end
+
+| Who | What happens |
+|---|---|
+| EZ Texting, automatically | Sends the unsubscribe confirmation and marks the contact `optOut` |
+| Our app | Adds the phone number to `dnc_list` |
+| Our app | If the conversation is `open`, sets it `suppressed` |
+| Our app | Stores the STOP message on the lead, so the history shows it |
+| Our app | Sends nothing |
+
+The lead row stays. What is blocked is the **phone number**: `dnc_list` is keyed
+on phone, so the block holds whatever lead or conversation the number later
+belongs to. From then on:
+
+- no automated text of any kind goes to that number;
+- if the number is delivered again as a new lead, the poller saves it as
+  suppressed and sends nothing;
+- agents cannot call or text it, once calling and agent SMS exist;
+- Admin > Leads shows it as Opted out;
+- START does not unblock it - see "Opting back in".
+
 ### 2. Conversation not `open`
 
 `completed`, `review`, `expired` or `suppressed`: store the message, set
@@ -158,6 +179,12 @@ expired by the same tick once `created_at` is older than `expiry_days`.
 
 ## Sending
 
+- **Every send checks `dnc_list` immediately before sending**, automated or
+  not: the opener, every reply in the flow, and later an agent's manual SMS.
+  `sendMessage` in `integrations/ezt-client.ts` does not check it today - the
+  poller checks before creating a lead, which covers the opener, but a reply
+  sent minutes after a STOP from another source would not be caught. The check
+  belongs inside the send path, so no caller can forget it.
 - Every automated send uses the copy in `settings`, rendered by
   `core/messages.ts` (`{first_name}`, one-segment limit), and is recorded in
   `messages` with the id EZ Texting returns - that id is what links the lead's

@@ -62,6 +62,16 @@ ALTER TABLE users ADD COLUMN session_version INTEGER NOT NULL DEFAULT 0;
 ALTER TABLE users ADD COLUMN last_login_at TIMESTAMPTZ;
 ```
 
+**`dnc_list` is the permanent record of blocked numbers.** One row per phone,
+with the reason and when it was added. Rows are never deleted automatically -
+the design brief keeps deletion out of v1 - so the table can show the client
+which numbers were blocked and when, if they are ever asked to prove it.
+
+It has no `added_by` yet. The Admin > DNC list page in the design brief shows
+who added each number, which only matters once an agent can mark a number DNC
+after a call. That column arrives in Week 4 with the agent DNC disposition,
+alongside a third `reason` value for it.
+
 **A `dnc_list` row needs no lead.** The webhook writes one for a STOP from a
 number we hold no lead for, because the subscription covers the whole EZ Texting
 account and those replies belong to the client's other campaigns. Blocking the
