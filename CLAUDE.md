@@ -210,54 +210,18 @@ of truth and `docs/SCHEMA.md` explains it. It differs from the list above:
 **Update 2026-09-14.** Step 4 has since been reversed: one person is one lead
 row, and a returning phone gets a new conversation on the existing lead rather
 than a new linked lead. The design and what it is blocked on are in
-`docs/POLLER.md` under "Not done yet". As built, the poller does steps 1-3 and 6,
-creates the conversation, but does not send the opener or set `expires_at` yet.
+`docs/POLLER.md` under "Not done yet". As built, the poller does steps 1-3, 5
+and 6: it creates the conversation and sends the opener, but does not set
+`expires_at` yet, and step 4 is deferred (§10, Week 2 item 8).
 
-### Reply (API webhook `POST /webhooks/eztexting`)
-1. Dedupe on `ezt_message_id`.
-2. Find conversation `phone = X AND status = 'open'`. None → save as plain inbound message on latest lead, flag `has_unread_inbound`.
-   *(2026-09-17: and if no **lead** exists for that phone at all, ignore the reply entirely. The EZ Texting subscription covers the whole account, so replies to the client's other campaigns arrive here too; creating leads from them filled the table with unrelated customer numbers. A STOP still goes to `dnc_list`. See `docs/WEBHOOKS.md`.)*
-3. Text = STOP → `suppressed`, add to DNC, send STOP confirmation. *(2026-09-19: EZ Texting sends the confirmation itself, so we send nothing - `docs/EZTEXTING-API.md`, "STOP handling".)*
-4. Text in {1,2,3} → save to `q{step}`, add points. If step 3 → `completed`, score + tier, send thanks. Else step+1, send next question.
-5. Anything else → first time: send clarification, `invalid_count=1`. Second time: `review`, send review message.
+### Reply (API webhook `POST /api/webhooks/eztexting/<token>`)
 
-**Answer matching, decided 2026-09-17.** A number is not the only valid answer:
-people reply in words, and treating "supplements" as invalid turns a clear
-answer into a clarification and then manual review. A short fixed list of words
-is accepted per question, at most three forms each:
-
-| | Option 1 | Option 2 | Option 3 |
-|---|---|---|---|
-| Q1 | 1, supplements, supplement | 2, telehealth, rx | 3, both |
-| Q2 | 1, today | 2, this week, week | 3, researching |
-| Q3 | 1, call, call me | 2, text, text me | 3, later |
-
-Before matching, the reply is lowercased and trimmed, trailing punctuation is
-dropped, and a leading `option` or `#` is stripped - so `1.`, `Option 1` and
-`Supplements!` all match.
-
-Rules:
-- **The whole message must be one of the accepted forms.** No matching inside a
-  sentence, or "not today" would count as "today" and "I don't want supplements"
-  as supplements.
-- **Anything else is invalid** and goes through step 5 unchanged: clarification
-  once, then `review`. That includes every sentence and anything ambiguous, such
-  as "both today" - a human reads those.
-- **STOP is checked first**, before any answer matching.
-- The word list is small and fixed in code for now. If the client wants to edit
-  it, it moves to `settings` like the message copy.
-- `settings.message_clarify` says "reply with just a number", which is now
-  narrower than what is accepted. The client should approve new wording.
-  *(2026-09-19: replaced by one clarification per question that repeats its
-  options, e.g. "Sorry, please reply with just a number: 1 Today, 2 This week,
-  or 3 Just researching." Approved by Jeel. `docs/STATE-MACHINE.md`, rule 4.)*
-6. Return 200 fast.
-
-**Flow authority, 2026-09-19.** `docs/STATE-MACHINE.md` is the build spec for
-replies, scoring, expiry, sending and repeat leads, and it overrides the
-mockup PDF where they differ - Jeel's decision: the mockup is a reference for
-screens and wording, not for flow logic. The steps above are the original plan;
-where they and the spec disagree, the spec wins.
+How a reply is handled - opt-outs, valid answers and the accepted words,
+unclear replies, scoring, expiry - is specified in `docs/STATE-MACHINE.md`, and
+only there. It overrides the mockup PDF where they differ: Jeel's decision,
+2026-09-19, the mockup is a reference for screens and wording, not for flow
+logic. What the webhook itself does before the state machine runs - dedupe,
+ignoring numbers we hold no lead for - is in `docs/WEBHOOKS.md`.
 
 ### Scoring (defaults, admin-editable)
 Responded +10 · Completed +10 · Q1: 5/10/15 · Q2: 30/20/5 · Q3: 35/25/10
@@ -351,7 +315,7 @@ Each week ends with something that can be demonstrated. Do not start the next we
 | Week | Done | Not done |
 |---|---|---|
 | 1 | All of it: 1 repo and Docker setup · 2 migrations · 3 auth · 4 EZ Texting client · 5 poller (60s default, admin-editable, not 45s) · 6 inbound webhook (`docs/WEBHOOKS.md`) · 7 ngrok wiring, confirmed with a real text | – |
-| 2 | 3 opener sent when the poller creates a lead | 1, 2, 4-10: the state machine, scoring, expiry, resold leads, the queue API and its tests |
+| 2 | 3 opener sent when the poller creates a lead | 1, 2, 4-7, 9, 10: the state machine, STOP, unclear replies, scoring, expiry, the queue API and tests. Item 8, repeat leads, is deferred until after Week 4 |
 | 3 | 1 scaffold, login, role-based routing · 7 in part: manage agents · 9 Caddy serves the built frontend · 10 Admin > Leads (`docs/ADMIN-LEADS.md`) | 2-6, 8, the rest of 7 |
 | 4 | – | All |
 
@@ -381,22 +345,25 @@ Done when:
 
 **Goal:** the full 3-question flow runs automatically and every lead ends with a status, score and tier.
 
+This list is the scope. How each item behaves is in `docs/STATE-MACHINE.md`.
+
 Build:
-1. State machine in `core/` – pure function: `(conversation, incomingText) → (newConversation, messageToSend | null)`. No DB calls inside; easy to unit test.
+1. State machine in `core/` – a pure function, no database calls, so every rule is unit-testable
 2. Wire it into the webhook: load conversation → run → save → send
-3. Opener sent automatically when worker inserts a new lead
-4. STOP handling → `suppressed` + `dnc_list` *(2026-09-19: we send no confirmation - EZ Texting sends its own automatically, verified with a real STOP. See `docs/STATE-MACHINE.md`, rule 1.)*
-5. Invalid reply → clarification once, then `review`. Answer matching accepts the numbers plus the short word list in §6; everything else is invalid. A pure function - reply text and step in, choice of 1/2/3 or unclear out - so it can be unit tested on its own
-6. Scoring from `scoring_rules` table, tiers from `tiers` table (seed with mockup defaults)
-7. Expiry: `expires_at` set on each send; worker marks stale `open` conversations `expired`
-8. Resold-lead logic: existing phone → DNC check → expire old open conversation → new lead linked via `previous_lead_id` *(superseded 2026-09-19: one person is one lead, a return is a new conversation, and an open conversation is left alone. **Deferred until after Week 4, only if the client asks** - Jeel. Until then a phone already held is skipped. See `docs/STATE-MACHINE.md`, "Repeat leads".)*
-9. Queue API: `GET /leads?tier=&source=&since=` returning score, tier, age, q1–q3, computed queue tag *(2026-09-19: expired leads are excluded, including responders who went quiet; "Stalled at Qn" applies only while the conversation is still open. Exception: an expired lead who texts again returns with the "Inbound reply" tag until an agent opens it. Numbers on `dnc_list` are never shown. See `docs/STATE-MACHINE.md`, "Expiry".)*
-10. Unit tests for the state machine covering: happy path, invalid twice, STOP at each step, reply after completed, reply after expired *(full list in `docs/STATE-MACHINE.md`)*
-11. *(2026-09-19: a sending-hours window was proposed and rejected. The opener is sent immediately when the lead is received, at any hour, as built.)*
+3. Opener sent automatically when the worker inserts a new lead - **done**
+4. STOP handling
+5. Unclear replies, and answer matching: numbers plus a short list of accepted words
+6. Scoring and tiers, updated on every reply
+7. Expiry of conversations that go quiet
+8. ~~Repeat leads~~ - **deferred until after Week 4, only if the client asks.** Until then a phone already held is skipped.
+9. Queue API: `GET /api/leads?tier=&source=&since=` returning score, tier, age, q1–q3 and the computed queue tag
+10. Unit tests for the state machine - the list is in `docs/STATE-MACHINE.md`
+
+Not in Week 2: a sending-hours window for the opener (rejected 2026-09-19; it is sent as soon as the lead arrives), and retrying a failed opener.
 
 Done when:
 - A test phone can complete all three questions and lands as `completed` with the correct score
-- Every branch on mockup p.3 is reproducible with a real SMS
+- Every rule in `docs/STATE-MACHINE.md` is reproducible with a real SMS
 - Queue API returns leads sorted by score then age
 
 ### Week 3 – Frontend: queue, agent workspace, timeline, admin
@@ -447,6 +414,7 @@ Done when:
 - Client UAT with real agents
 - Fixes from UAT
 - Later phase (not in scope now): ElevenLabs AI attendant, voicemail, after-hours handling
+- Only if the client asks: repeat-lead handling (design in `docs/POLLER.md`, "Returning leads"), and showing responders whose conversation expired in the agents' queue as "Stalled at Qn"
 
 ---
 
