@@ -217,7 +217,11 @@ covers both kinds:
 Both stay visible on Admin > Leads under Expired. "Stalled at Q1" and "Stalled
 at Q2" therefore apply only to responders whose conversation is still `open`.
 
-**An expired lead who texts again comes back - Decided by Jeel, 2026-09-19.**
+**An expired lead who texts again comes back - Decided by Jeel, 2026-09-19,
+confirmed the same day.** This is the lead texting us themselves, which arrives
+through the webhook. It is not the partner sending the same number again - that
+is "A number that comes back", below.
+
 A reply after expiry still gets no automated answer (rule 2), but it is not
 left sitting unseen:
 
@@ -266,6 +270,10 @@ A failed opener is not retried. POLLER.md records the gap.
 ---
 
 ## A number that comes back
+
+This is the **partner delivering the same number again** through the API, so
+the poller finds it in EZ Texting. It is not the lead texting us after their
+conversation expired - that is handled under "Expiry".
 
 **Not built.** Today the poller skips a phone it already holds: no new
 conversation, no text. The rules below are decided and wait for a check on
