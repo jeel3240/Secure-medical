@@ -387,7 +387,7 @@ Build:
 6. Scoring from `scoring_rules` table, tiers from `tiers` table (seed with mockup defaults)
 7. Expiry: `expires_at` set on each send; worker marks stale `open` conversations `expired`
 8. Resold-lead logic: existing phone → DNC check → expire old open conversation → new lead linked via `previous_lead_id` *(superseded 2026-09-19: one person is one lead, a return is a new conversation, and an open conversation is left alone, by Jeel's decision - see `docs/STATE-MACHINE.md`, "Repeat leads". Blocked on confirming with Jim how a re-delivered lead arrives.)*
-9. Queue API: `GET /leads?tier=&source=&since=` returning score, tier, age, q1–q3, computed queue tag
+9. Queue API: `GET /leads?tier=&source=&since=` returning score, tier, age, q1–q3, computed queue tag *(2026-09-19: expired leads are excluded, including responders who went quiet; "Stalled at Qn" applies only while the conversation is still open. Possible future feature if the client asks - `docs/STATE-MACHINE.md`, "Expiry".)*
 10. Unit tests for the state machine covering: happy path, invalid twice, STOP at each step, reply after completed, reply after expired *(full list in `docs/STATE-MACHINE.md`)*
 11. *(2026-09-19: a sending-hours window was proposed and rejected. The opener is sent immediately when the lead is received, at any hour, as built.)*
 
