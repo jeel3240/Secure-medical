@@ -8,6 +8,7 @@ Documentation lives in [`docs/`](docs/):
 - [Poller](docs/POLLER.md)
 - [Webhooks](docs/WEBHOOKS.md)
 - [Admin: Leads](docs/ADMIN-LEADS.md)
+- [State machine: the SMS flow spec](docs/STATE-MACHINE.md)
 - [EZ Texting API behaviour](docs/EZTEXTING-API.md)
 - [Workflow](docs/WORKFLOW.md)
 - [Frontend design brief](docs/DESIGN-PROMPT.md)
