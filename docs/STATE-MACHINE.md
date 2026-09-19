@@ -194,27 +194,14 @@ expired by the same tick once `created_at` is older than `expiry_days`.
   back. The lead has answered, and losing that would be worse than a missing
   follow-up.
 
-### Sending hours - Decided, not in the original plan
+### When the opener is sent - Decided by Jeel, 2026-09-19
 
-The opener goes out the moment the poller finds a lead, so a lead delivered at
-2 a.m. is texted at 2 a.m. US rules on marketing texts generally limit them to
-8 a.m.-9 p.m. in the recipient's local time.
+**Immediately.** The opener goes out in the same poll cycle that finds the lead,
+at any hour - this is how it is built today, and it stays that way. There is no
+sending-hours window.
 
-- **The opener is only sent inside 8:00-21:00 in the lead's local time**,
-  worked out from the phone's area code. When the area code does not map to a
-  single time zone, use the window that is legal everywhere in the continental
-  US: 11:00-21:00 Eastern.
-- Outside the window, the lead and conversation are created as now, and the
-  opener waits. Each worker tick sends any opener that is due and inside its
-  window.
-- **Replies are exempt.** Questions 2 and 3, the clarification, the review
-  message and the thanks go out immediately, because they answer a text the
-  lead has just sent.
-
-The same "opener due" check also fixes the gap POLLER.md records, where a failed
-opener is never retried: a conversation that is `open` at step 1 with no
-outbound message is an opener still owed. Retries are capped so a number that
-always fails does not hit the API every minute - see "Schema changes".
+A failed opener is still not retried. POLLER.md records that gap; it is not part
+of Week 2 unless decided otherwise.
 
 ---
 
@@ -228,7 +215,7 @@ is a new conversation on it. POLLER.md has the full reasoning; the rules:
 |---|---|
 | none - phone not in `leads` | Create lead and conversation, send opener |
 | on `dnc_list`, or `suppressed` | Nothing, ever |
-| `open` | Nothing. They are already mid-flow; restarting would re-send question 1 to someone partway through |
+| `open` | Nothing. They are already mid-flow; restarting would re-send question 1 to someone partway through. **Decided by Jeel, 2026-09-19.** |
 | `completed`, `expired` or `review` | New conversation at step 1, send opener |
 
 **Blocked**, as POLLER.md records: it depends on whether a lead re-delivered by
@@ -257,11 +244,7 @@ compliance.
 In a new numbered migration once `001_init.sql` has run anywhere that matters,
 or folded into 001 while it has not:
 
-- `conversations.opener_attempts SMALLINT NOT NULL DEFAULT 0` - counts send
-  attempts for question 1, so retries stop after 5.
 - Drop `leads.previous_lead_id`, with the repeat-lead work.
-- An area code to time zone lookup for sending hours. A static table in code is
-  enough; it changes rarely.
 
 ---
 

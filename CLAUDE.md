@@ -386,10 +386,10 @@ Build:
 5. Invalid reply → clarification once, then `review`. Answer matching accepts the numbers plus the short word list in §6; everything else is invalid. A pure function - reply text and step in, choice of 1/2/3 or unclear out - so it can be unit tested on its own
 6. Scoring from `scoring_rules` table, tiers from `tiers` table (seed with mockup defaults)
 7. Expiry: `expires_at` set on each send; worker marks stale `open` conversations `expired`
-8. Resold-lead logic: existing phone → DNC check → expire old open conversation → new lead linked via `previous_lead_id` *(superseded 2026-09-19: one person is one lead, a return is a new conversation, and an open conversation is left alone - see `docs/STATE-MACHINE.md`, "Repeat leads". Blocked on confirming with Jim how a re-delivered lead arrives.)*
+8. Resold-lead logic: existing phone → DNC check → expire old open conversation → new lead linked via `previous_lead_id` *(superseded 2026-09-19: one person is one lead, a return is a new conversation, and an open conversation is left alone, by Jeel's decision - see `docs/STATE-MACHINE.md`, "Repeat leads". Blocked on confirming with Jim how a re-delivered lead arrives.)*
 9. Queue API: `GET /leads?tier=&source=&since=` returning score, tier, age, q1–q3, computed queue tag
 10. Unit tests for the state machine covering: happy path, invalid twice, STOP at each step, reply after completed, reply after expired *(full list in `docs/STATE-MACHINE.md`)*
-11. *(Added 2026-09-19.)* Sending hours: the opener is sent only between 8:00 and 21:00 in the lead's local time, from the area code; outside that it waits for a later worker tick. Replies are exempt. The same "opener still owed" check retries failed openers, capped at 5 attempts. See `docs/STATE-MACHINE.md`, "Sending hours".
+11. *(2026-09-19: a sending-hours window was proposed and rejected. The opener is sent immediately when the lead is received, at any hour, as built.)*
 
 Done when:
 - A test phone can complete all three questions and lands as `completed` with the correct score
