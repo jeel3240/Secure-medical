@@ -110,10 +110,12 @@ column comes out in the migration that implements this. The rules are in
 STATE-MACHINE.md, "A number that comes back"; what detection depends on is in
 POLLER.md.
 
-It is deliberately still here rather than removed now: the design depends on
-whether a re-delivered phone reaches EZ Texting as a new contact or an update
-to the existing one, and that is unconfirmed. Removing the column early would
-mean re-adding it if the answer changes the shape.
+It is deliberately still here rather than removed now: repeat leads are a
+future item (CLAUDE.md §10). Half of what they depend on is settled - EZ Texting
+does not allow two contacts with the same number, so a re-delivery updates the
+existing contact (verified 2026-09-19) - but whether that update moves
+`createdAt` is not. Removing the column early would mean re-adding it if the
+answer changes the shape.
 
 **`messages` is keyed differently by direction.** Outbound rows carry the id
 returned by the send API in `ezt_message_id`, unique via a partial index on
