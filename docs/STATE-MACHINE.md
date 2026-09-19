@@ -1,8 +1,8 @@
 # State machine
 
 How a lead moves through the SMS qualification flow: what each reply does, what
-gets sent, how it is scored, and when it stops. This is the build spec for
-Week 2.
+gets sent, how it is scored, and when it stops. This file describes behaviour
+only. What is built, and when, is the plan's job - CLAUDE.md §10.
 
 **This document is the authority for the flow.** Where it differs from the
 mockup PDF, this document wins. Decided by Jeel on 2026-09-19: the mockup is a
@@ -115,10 +115,26 @@ implemented.
 
 ### 3. A valid answer to the current question
 
-`matchAnswer(text, step)` returns a choice. The accepted forms are the plan's §6
-table: the number, or at most three words per option, whole message only, after
-lowercasing, trimming, dropping trailing punctuation and a leading `option` or
-`#`.
+`matchAnswer(text, step)` returns a choice. Accepted forms - the number, or at
+most three words per option (decided 2026-09-17):
+
+| | Option 1 | Option 2 | Option 3 |
+|---|---|---|---|
+| Q1 | 1, supplements, supplement | 2, telehealth, rx | 3, both |
+| Q2 | 1, today | 2, this week, week | 3, researching |
+| Q3 | 1, call, call me | 2, text, text me | 3, later |
+
+Before matching, the reply is lowercased and trimmed, trailing punctuation is
+dropped, and a leading `option` or `#` is stripped - so `1.`, `Option 1` and
+`Supplements!` all match.
+
+- **The whole message must be one of the accepted forms.** No matching inside a
+  sentence, or "not today" would count as "today" and "I don't want
+  supplements" as supplements.
+- **Anything else is unclear** and goes to rule 4. That includes every sentence
+  and anything ambiguous, such as "both today" - a human reads those.
+- The word list is fixed in code. If the client wants to edit it, it moves to
+  `settings` like the message copy.
 
 - Save the choice to `q{step}`.
 - Reset `invalid_count` to 0.
@@ -195,11 +211,8 @@ covers both kinds:
 | Never replied, then expired | Not shown - the queue only ever shows responders |
 | Replied at least once, then went quiet and expired | Not shown either |
 
-Both stay visible on Admin > Leads under Expired. Showing the second kind in
-the queue as "Stalled at Q1" or "Stalled at Q2", so an agent can call and finish
-what the texts did not, is a possible future feature if the client asks for it;
-it is not part of Week 2. "Stalled" tags therefore apply only to responders
-whose conversation is still `open`.
+Both stay visible on Admin > Leads under Expired. "Stalled at Q1" and "Stalled
+at Q2" therefore apply only to responders whose conversation is still `open`.
 
 **An expired lead who texts again comes back - Decided by Jeel, 2026-09-19.**
 A reply after expiry still gets no automated answer (rule 2), but it is not
@@ -245,39 +258,18 @@ expired by the same tick once `created_at` is older than `expiry_days`.
 at any hour - this is how it is built today, and it stays that way. There is no
 sending-hours window.
 
-A failed opener is still not retried. POLLER.md records that gap; it is not part
-of Week 2 unless decided otherwise.
+A failed opener is not retried. POLLER.md records the gap.
 
 ---
 
-## Repeat leads - deferred until after Week 4
+## A phone we already hold
 
-**Not part of Week 2. Decided by Jeel, 2026-09-19:** repeat-lead handling is
-built after Week 4, and only if the client asks for it.
+The poller skips a phone that is already in `leads`: no new conversation, no
+text. So a number that comes back is not restarted, and an opted-out number is
+never texted again.
 
-**Until then, as built:** a phone already in `leads` is skipped by the poller -
-no new conversation, no text. That also means an opted-out number is never
-texted again, which holds regardless.
-
-The design below is kept so it is ready if the work is requested.
-
-The plan's Week 2 item 8 - a new lead row per delivery, linked by
-`previous_lead_id` - is **superseded**. One person is one lead row, and a return
-is a new conversation on it. POLLER.md has the full reasoning; the rules:
-
-| Newest conversation for that phone | What happens |
-|---|---|
-| none - phone not in `leads` | Create lead and conversation, send opener |
-| on `dnc_list`, or `suppressed` | Nothing, ever |
-| `open` | Nothing. They are already mid-flow; restarting would re-send question 1 to someone partway through. **Decided by Jeel, 2026-09-19.** |
-| `completed`, `expired` or `review` | New conversation at step 1, send opener |
-
-If it is ever built, it first needs an answer to what POLLER.md records: does
-a lead re-delivered by the partner reappear in EZ Texting as a new contact with
-a new `createdAt`, or only update the existing one? If it only updates, the
-poller never sees it again and none of this runs.
-
-`leads.previous_lead_id` is dropped in the migration that implements this.
+A design for restarting returning leads, and what it depends on, is in
+POLLER.md under "Returning leads". It is not built.
 
 ---
 
@@ -289,13 +281,6 @@ Texting may re-subscribe the number on its platform, but our list is checked
 before every send, so it still blocks. Taking a number off `dnc_list` is a
 deliberate human action; the design brief keeps DNC deletion out of v1 for
 compliance.
-
----
-
-## Schema changes this needs
-
-None for Week 2. Dropping `leads.previous_lead_id` waits for the repeat-lead
-work, which is deferred.
 
 ---
 
@@ -327,14 +312,7 @@ Plus integration tests for the webhook wiring, in the style of
 
 ## Open items
 
-None. Everything Week 2 needs is decided, as of 2026-09-19:
+None.
 
-- STOP: EZ Texting confirms on its own, so we send nothing (rule 1).
-- Clarification: one per question, repeating its options (rule 4).
-- A reply after expiry brings the lead back to the queue as Inbound reply
-  (Expiry).
-- Repeat leads: deferred until after Week 4 (Repeat leads).
-
-**Parked, not blocking:** EZ Texting's automatic STOP reply signs as "PillRx",
-the account's brand, while our opener signs as "Secure Medical". Jeel: not
-needed now.
+**Parked:** EZ Texting's automatic STOP reply signs as "PillRx", the account's
+brand, while our opener signs as "Secure Medical". Jeel: not needed now.
