@@ -251,7 +251,7 @@ Rules:
 6. Return 200 fast.
 
 **Flow authority, 2026-09-19.** `docs/STATE-MACHINE.md` is the build spec for
-replies, scoring, expiry, sending hours and repeat leads, and it overrides the
+replies, scoring, expiry, sending and repeat leads, and it overrides the
 mockup PDF where they differ - Jeel's decision: the mockup is a reference for
 screens and wording, not for flow logic. The steps above are the original plan;
 where they and the spec disagree, the spec wins.
