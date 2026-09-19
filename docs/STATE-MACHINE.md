@@ -71,11 +71,18 @@ trailing punctuation ignored). This is already implemented in the webhook.
 - Add the phone to `dnc_list`, reason `sms_stop`.
 - If the conversation is `open`, set it `suppressed`. Other statuses keep their
   status; the `dnc_list` row is what blocks contact.
-- **Send nothing ourselves. Decided**, pending one test (see "Open items"). SMS
-  platforms normally answer STOP with their own unsubscribe confirmation and
-  refuse further sends to that number. If EZ Texting does, a message from us
-  would be a duplicate at best and a rejected send at worst. If the test shows
-  it does not, send `message_stop` instead.
+- **Send nothing ourselves.** The lead must get exactly one unsubscribe
+  confirmation, and EZ Texting sends it automatically. Verified 2026-09-19 by
+  texting STOP from Jeel's phone; the reply was:
+
+  > PillRx: You have opted out of this program & will no longer receive any
+  > messages. Reply REPORT to report unwanted messaging. Text START to opt back
+  > in.
+
+  A confirmation from us as well would reach the lead as a second unsubscribe
+  message. EZ Texting also marked the contact `optOut: true`. So
+  `settings.message_stop` is never sent; it stays seeded only in case the
+  account's own handling is ever switched off.
 
 ### 2. Conversation not `open`
 
@@ -257,9 +264,13 @@ Plus integration tests for the webhook wiring, in the style of
 
 ## Open items
 
-1. **Test one STOP on the account** before building rule 1. Text STOP to the EZ
-   Texting number from a phone we control and see whether the platform sends its
-   own confirmation. That decides whether we send `message_stop`.
+1. ~~Test one STOP on the account.~~ Done 2026-09-19: EZ Texting confirms on its
+   own, so we send nothing. See rule 1.
+4. **Brand name.** EZ Texting's automatic STOP reply signs as "PillRx", the
+   brand configured on the account, while our opener signs as "Secure Medical".
+   A lead would see two names from one number, and carriers expect one brand per
+   campaign. The client decides which is right: change the account's brand, or
+   change `question_1`.
 2. **Confirm with Jim** how a re-delivered lead arrives. Blocks repeat leads.
 3. **Client approval of copy.** `message_clarify` still says "reply with just a
    number", narrower than what is now accepted.
