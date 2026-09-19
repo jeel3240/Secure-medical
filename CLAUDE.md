@@ -160,7 +160,7 @@ you change something the docs describe, update the doc in the same commit.
   frontend/
     Dockerfile              production Caddy image with the built app
   docs/
-    AUTH.md  POLLER.md  WORKFLOW.md  WEBHOOKS.md  ADMIN-LEADS.md
+    AUTH.md  POLLER.md  WORKFLOW.md  WEBHOOKS.md  ADMIN-LEADS.md  STATE-MACHINE.md
 ```
 
 `core/` currently holds only message rendering; the state machine joins it in Week 2. `docker-compose.yml`
@@ -197,7 +197,7 @@ of truth and `docs/SCHEMA.md` explains it. It differs from the list above:
 
 ---
 
-## 6. Core flows (see mockup p.2–3 for exact copy)
+## 6. Core flows (message copy is seeded in `settings` by `001_init.sql`; the flow itself is specified in `docs/STATE-MACHINE.md`)
 
 ### New lead (Worker, every 30–60s)
 1. Poll EZ Texting Contacts API for the lead group, since last checkpoint (overlap window 5 min).
@@ -233,7 +233,7 @@ Tiers: HOT 75–100, WARM 45–74, LOW 1–44
 3. On end, Twilio status callback → save to `calls`.
 4. Agent sets disposition/note/callback. DNC disposition = same as SMS STOP.
 
-Queue tags (New, Attempted 1x, In progress, Callback, Needs review, Stalled at Q2, Inbound reply, Seen before) are **computed** from these tables, not stored as a status.
+Queue tags (New, Attempted 1x, In progress, Callback, Needs review, Stalled at Q2, Inbound reply, Seen before) are **computed** from these tables, not stored as a status. *(2026-09-19: "Seen before" cannot occur until repeat-lead handling is built, which is deferred - §10.)*
 
 **Paths, as of 2026-09-15.** Caddy forwards only `/api/*` to the API; everything
 else is the frontend, so every route lives under `/api`. The EZ Texting webhook
@@ -310,7 +310,7 @@ Never commit `.env`. Never use real lead data locally. Generate fake leads.
 
 Each week ends with something that can be demonstrated. Do not start the next week's work until the current week's "done when" is met.
 
-### Progress, as of 2026-09-14
+### Progress, as of 2026-09-19
 
 | Week | Done | Not done |
 |---|---|---|
@@ -320,7 +320,7 @@ Each week ends with something that can be demonstrated. Do not start the next we
 | 4 | – | All |
 
 Auth (Week 1) and the Week 3 login were built together, ahead of the Week 1
-webhook, at Jeel's request. *(Table updated 2026-09-15.)*
+webhook, at Jeel's request. *(Table updated 2026-09-19.)*
 
 ### Week 1 – Foundation + prove EZ Texting works
 
@@ -440,7 +440,7 @@ were taken on trust and the poller silently ingested nothing.
 
 - Read `docs/EZTEXTING-API.md` before touching the poller, sender, or webhook. It has verified endpoints and field names.
 - Read `docs/SCHEMA.md` before changing the data model or writing a migration.
-- Read `docs/Secure-Medical-Call-Center-Mockup.pdf` for screen layouts and the reply-handling flow (page 3 is the state machine).
+- Read `docs/Secure-Medical-Call-Center-Mockup.pdf` for screen layouts and wording. Its page 3 sketches the reply flow, but `docs/STATE-MACHINE.md` overrides it (2026-09-19).
 - Read `docs/DESIGN-PROMPT.md` before any frontend work.
 - Read `docs/STATE-MACHINE.md` before any Week 2 work. It is the flow spec and overrides the mockup where they differ.
 - Read `docs/AUTH.md` before touching sign-in, sessions, roles or the users table.

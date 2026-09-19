@@ -53,8 +53,9 @@ Answer matching is a separate pure function the state machine calls:
 | `suppressed` | Opted out | Never |
 | `expired` | Went quiet past the expiry window | No |
 
-Only `open` is ever advanced. The other four are final for that conversation. A
-new conversation can start later only through the repeat-lead rules below.
+Only `open` is ever advanced. The other four are final for that conversation.
+No new conversation is started for a phone we already hold - see "A phone we
+already hold".
 
 ---
 
@@ -136,6 +137,8 @@ dropped, and a leading `option` or `#` is stripped - so `1.`, `Option 1` and
 - The word list is fixed in code. If the client wants to edit it, it moves to
   `settings` like the message copy.
 
+On a valid answer:
+
 - Save the choice to `q{step}`.
 - Reset `invalid_count` to 0.
 - Add points - see "Scoring".
@@ -147,6 +150,7 @@ dropped, and a leading `option` or `#` is stripped - so `1.`, `Option 1` and
 
 - If `invalid_count` < `settings.max_invalid_before_review` (seeded `1`):
   increment it and send `message_clarify_{step}`. The step does not change.
+- Otherwise: status `review`, send `message_review`.
 
 **One clarification per question - Decided by Jeel, 2026-09-19.** Each repeats
 that question's options, so the lead is reminded what the numbers mean:
@@ -159,7 +163,6 @@ that question's options, so the lead is reminded what the numbers mean:
 
 It says "just a number" although words are accepted too; asking for a number
 keeps the next reply as simple as possible.
-- Otherwise: status `review`, send `message_review`.
 
 **Decided: the count is per question.** It resets to 0 on every valid answer. A
 lead who fumbles question 1 and then answers it should not arrive at question 2
