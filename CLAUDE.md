@@ -422,17 +422,20 @@ When the same number is delivered again, it should start a new conversation
 unless it is mid-flow or blocked. The rules are decided and written in
 `docs/STATE-MACHINE.md`, "A number that comes back".
 
-**It is not built yet, because it may not be detectable.** Jeel's understanding
-(2026-09-19): EZ Texting keeps one contact per phone number, so a re-delivered
-number updates the existing contact instead of creating a new one. The poller
-finds leads by the contact's `createdAt`, so if that time does not move, the
-poller never sees the return and the rules never run.
+**It is not built yet, because a return may not be detectable.** Verified
+2026-09-19 by Jeel: EZ Texting does not allow two contacts with the same phone
+number (`docs/EZTEXTING-API.md`). So a re-delivered number never arrives as a
+new contact; it is rejected or updates the existing one. The poller finds leads
+by the contact's `createdAt`, so unless an update resets that time, the poller
+never sees the return and the rules never run.
 
 Before building it:
-1. Check on the test account: add a contact through the API with a phone that
-   already exists in the group, then read its `createdAt`. Did it change?
-2. If it did, build the rules as written.
-3. If it did not, the poller needs another signal for a return - for example
+1. Check on the test account what happens when a number already on the account
+   is added again through the API, the way the partner sends leads: is it
+   rejected, or does it update the existing contact - and if it updates, do
+   `createdAt` or `updatedAt` change?
+2. If `createdAt` moves, build the rules as written.
+3. If not, the poller needs another signal for a return - for example
    `updatedAt`, a group move, or the partner telling us - and that has to be
    found first. `docs/POLLER.md`, "Returning leads", has the detail.
 
