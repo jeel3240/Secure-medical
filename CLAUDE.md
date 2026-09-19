@@ -250,6 +250,12 @@ Rules:
   narrower than what is accepted. The client should approve new wording.
 6. Return 200 fast.
 
+**Flow authority, 2026-09-19.** `docs/STATE-MACHINE.md` is the build spec for
+replies, scoring, expiry, sending hours and repeat leads, and it overrides the
+mockup PDF where they differ - Jeel's decision: the mockup is a reference for
+screens and wording, not for flow logic. The steps above are the original plan;
+where they and the spec disagree, the spec wins.
+
 ### Scoring (defaults, admin-editable)
 Responded +10 · Completed +10 · Q1: 5/10/15 · Q2: 30/20/5 · Q3: 35/25/10
 Tiers: HOT 75–100, WARM 45–74, LOW 1–44
@@ -376,13 +382,14 @@ Build:
 1. State machine in `core/` – pure function: `(conversation, incomingText) → (newConversation, messageToSend | null)`. No DB calls inside; easy to unit test.
 2. Wire it into the webhook: load conversation → run → save → send
 3. Opener sent automatically when worker inserts a new lead
-4. STOP handling → `suppressed` + `dnc_list`
+4. STOP handling → `suppressed` + `dnc_list` *(whether we also send a confirmation depends on one test of EZ Texting's own STOP handling - `docs/STATE-MACHINE.md`, open item 1)*
 5. Invalid reply → clarification once, then `review`. Answer matching accepts the numbers plus the short word list in §6; everything else is invalid. A pure function - reply text and step in, choice of 1/2/3 or unclear out - so it can be unit tested on its own
 6. Scoring from `scoring_rules` table, tiers from `tiers` table (seed with mockup defaults)
 7. Expiry: `expires_at` set on each send; worker marks stale `open` conversations `expired`
-8. Resold-lead logic: existing phone → DNC check → expire old open conversation → new lead linked via `previous_lead_id`
+8. Resold-lead logic: existing phone → DNC check → expire old open conversation → new lead linked via `previous_lead_id` *(superseded 2026-09-19: one person is one lead, a return is a new conversation, and an open conversation is left alone - see `docs/STATE-MACHINE.md`, "Repeat leads". Blocked on confirming with Jim how a re-delivered lead arrives.)*
 9. Queue API: `GET /leads?tier=&source=&since=` returning score, tier, age, q1–q3, computed queue tag
-10. Unit tests for the state machine covering: happy path, invalid twice, STOP at each step, reply after completed, reply after expired
+10. Unit tests for the state machine covering: happy path, invalid twice, STOP at each step, reply after completed, reply after expired *(full list in `docs/STATE-MACHINE.md`)*
+11. *(Added 2026-09-19.)* Sending hours: the opener is sent only between 8:00 and 21:00 in the lead's local time, from the area code; outside that it waits for a later worker tick. Replies are exempt. The same "opener still owed" check retries failed openers, capped at 5 attempts. See `docs/STATE-MACHINE.md`, "Sending hours".
 
 Done when:
 - A test phone can complete all three questions and lands as `completed` with the correct score
@@ -464,6 +471,7 @@ were taken on trust and the poller silently ingested nothing.
 - Read `docs/SCHEMA.md` before changing the data model or writing a migration.
 - Read `docs/Secure-Medical-Call-Center-Mockup.pdf` for screen layouts and the reply-handling flow (page 3 is the state machine).
 - Read `docs/DESIGN-PROMPT.md` before any frontend work.
+- Read `docs/STATE-MACHINE.md` before any Week 2 work. It is the flow spec and overrides the mockup where they differ.
 - Read `docs/AUTH.md` before touching sign-in, sessions, roles or the users table.
 - Read `docs/POLLER.md` before changing the worker loop, and `docs/WORKFLOW.md` for branches, migrations and deploys.
 - **Every area has one doc, and it is updated in the same commit as the change.**
