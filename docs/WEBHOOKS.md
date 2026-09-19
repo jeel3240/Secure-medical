@@ -115,9 +115,9 @@ retrying safe.
 is saved to `q1`/`q2`/`q3`, no score, no advance, no next question sent. The
 TODO sits at the end of the handler. Week 2.
 
-**No STOP confirmation is sent.** The number is blocked and any open
-conversation suppressed, but the "you have been unsubscribed" reply in
-`settings.message_stop` is not sent yet. Week 2, with the state machine.
+**We never send a STOP confirmation, by design** (decided 2026-09-19). EZ
+Texting replies to STOP itself, so one from us would reach the lead as a second
+unsubscribe message. See EZTEXTING-API.md, "STOP handling".
 
 **Nothing verifies the sender cryptographically.** A `secret` is passed when
 registering the subscription, but EZ Texting sends no signature header, so it

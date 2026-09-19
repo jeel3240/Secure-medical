@@ -90,7 +90,7 @@ Role is set at login. Navigation adapts to role.
    - `Needs review` (invalid replies, agent must read raw text)
    - `Stalled at Q2` / `Stalled at Q1` (partial responder)
    - `Inbound reply` (lead texted after conversation ended – unread indicator)
-   - `Seen before, stopped at Q2` (resold lead with history)
+   - `Seen before, stopped at Q2` (resold lead with history) - *2026-09-19: does not occur until repeat-lead handling is built, which is deferred until after Week 4.*
 11. **Actions** – "Open" button; on hover, quick "Call" and "SMS" icons.
 
 **Row behaviour**
@@ -163,7 +163,7 @@ Role is set at login. Navigation adapts to role.
 - Consent ref (partner reference if present, else "–")
 - DNC: Yes/No
 - Dispositions list (date · value · agent)
-- Duplicate check: "This number has not been seen before" or "Linked to earlier lead (Jun 2026)" with link.
+- Duplicate check: "This number has not been seen before" or "Linked to earlier lead (Jun 2026)" with link. *(2026-09-19: always the first, until repeat-lead handling is built.)*
 
 ### 5. My Callbacks
 
@@ -200,6 +200,7 @@ Left sub-navigation within the page: **Overview** · **Leads** · **Scoring** ·
 
 **6c. Messages (SMS copy)**
 - Editable text for: Opener (Q1), Q2, Q3, Completion message, Clarification message, Review message, STOP confirmation.
+- *Update 2026-09-19:* the clarification is three messages, one per question, each repeating that question's options - edit them as three fields. The STOP confirmation is sent by EZ Texting, not by this app, so it is not editable here; show it read-only with that explanation or leave it out. See `docs/STATE-MACHINE.md`.
 - Each field shows live character count and segment count; warning when over the configured limit (130 or 160).
 - Placeholder chips: `{first_name}`.
 - Phone-frame preview on the right showing the full happy-path conversation with current copy.
