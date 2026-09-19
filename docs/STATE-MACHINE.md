@@ -279,14 +279,21 @@ blocked.
 | Newest conversation `completed`, `expired` or `review` | New conversation at step 1 on the same lead, opener sent |
 | Newest conversation `suppressed` | Nothing, ever - the number opted out |
 
-One person is always one lead row; each return is a new conversation on it, so
-the history of earlier conversations stays on the lead. The new conversation
-starts clean: step 1, no answers, `invalid_count` 0, score 0, no tier.
+One person is always one lead row; each return is a new conversation on it.
+The new conversation starts clean: step 1, no answers, `invalid_count` 0, score
+0, no tier.
 
-**Proposed, to confirm:** on a return, the lead's `source`, `group_id`,
-`group_name` and `ezt_added_at` are updated from the new delivery, and name and
-email only where the new contact has them, so the lead shows where it most
-recently came from.
+**The earlier conversation is kept exactly as it ended.** Its status -
+`completed`, `expired` or `review` - its answers, score and tier are never
+changed or deleted, and every message from it stays on the lead. The **newest**
+conversation is the one that drives the flow, the queue and the status on
+Admin > Leads; the earlier ones are history, and are what "Seen before" shows.
+
+**The lead takes the new delivery's date and origin - Decided by Jeel,
+2026-09-19.** On a return, `ezt_added_at`, `source`, `group_id` and
+`group_name` are updated from the new contact, and name and email where the new
+contact has them. So the lead's age counts from the day it came back, and it
+reads as a fresh lead in the queue rather than one received months ago.
 
 "Seen before" in the queue is computed: the lead has an earlier conversation.
 
