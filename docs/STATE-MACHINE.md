@@ -170,6 +170,22 @@ for responding, and so reads as LOW.
 - Each worker tick marks `open` conversations past `expires_at` as `expired`.
   Nothing is sent to the lead.
 - A reply that arrives after expiry follows rule 2: stored, flagged, no reply.
+- Only `open` conversations expire. A `completed` or `review` conversation is
+  not waiting on the lead, so it never does.
+
+**Expired leads leave the agents' queue - Decided by Jeel, 2026-09-19.** This
+covers both kinds:
+
+| Case | Queue |
+|---|---|
+| Never replied, then expired | Not shown - the queue only ever shows responders |
+| Replied at least once, then went quiet and expired | Not shown either |
+
+Both stay visible on Admin > Leads under Expired. Showing the second kind in
+the queue as "Stalled at Q1" or "Stalled at Q2", so an agent can call and finish
+what the texts did not, is a possible future feature if the client asks for it;
+it is not part of Week 2. "Stalled" tags therefore apply only to responders
+whose conversation is still `open`.
 
 The poller does not set `expires_at` on the conversations it creates today. It
 must, when it sends the opener. Conversations already created without one are
