@@ -248,6 +248,9 @@ Rules:
   it, it moves to `settings` like the message copy.
 - `settings.message_clarify` says "reply with just a number", which is now
   narrower than what is accepted. The client should approve new wording.
+  *(2026-09-19: replaced by one clarification per question that repeats its
+  options, e.g. "Sorry, please reply with just a number: 1 Today, 2 This week,
+  or 3 Just researching." Approved by Jeel. `docs/STATE-MACHINE.md`, rule 4.)*
 6. Return 200 fast.
 
 **Flow authority, 2026-09-19.** `docs/STATE-MACHINE.md` is the build spec for

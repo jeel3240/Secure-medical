@@ -30,7 +30,7 @@ step(conversation, reply, rules) -> { conversation', send: messageKey | null, bl
 - `conversation` - the current row: status, step, q1-q3, invalid_count, score, tier.
 - `reply` - the inbound text and the payload's `optOut` flag.
 - `rules` - scoring rules, tiers and settings, loaded by the caller.
-- `send` - which copy to send (`question_2`, `message_clarify`, ...), or null.
+- `send` - which copy to send (`question_2`, `message_clarify_2`, ...), or null.
   The caller renders it with `core/messages.ts` and sends it.
 - `blockNumber` - the caller adds the phone to `dnc_list`.
 
@@ -101,7 +101,9 @@ belongs to. From then on:
 - no automated text of any kind goes to that number;
 - if the number is delivered again as a new lead, the poller saves it as
   suppressed and sends nothing;
-- agents cannot call or text it, once calling and agent SMS exist;
+- agents cannot call or text it, once calling and agent SMS exist, and the
+  queue never shows a number that is on `dnc_list`, whatever its conversation
+  status;
 - Admin > Leads shows it as Opted out;
 - START does not unblock it - see "Opting back in".
 
@@ -128,7 +130,19 @@ lowercasing, trimming, dropping trailing punctuation and a leading `option` or
 ### 4. Anything else - an unclear reply
 
 - If `invalid_count` < `settings.max_invalid_before_review` (seeded `1`):
-  increment it and send `message_clarify`. The step does not change.
+  increment it and send `message_clarify_{step}`. The step does not change.
+
+**One clarification per question - Decided by Jeel, 2026-09-19.** Each repeats
+that question's options, so the lead is reminded what the numbers mean:
+
+| Step | `settings` key | Text |
+|---|---|---|
+| 1 | `message_clarify_1` | Sorry, please reply with just a number: 1 Supplements, 2 Telehealth/Rx, or 3 Both. |
+| 2 | `message_clarify_2` | Sorry, please reply with just a number: 1 Today, 2 This week, or 3 Just researching. |
+| 3 | `message_clarify_3` | Sorry, please reply with just a number: 1 Call me now, 2 Text me, or 3 Contact me later. |
+
+It says "just a number" although words are accepted too; asking for a number
+keeps the next reply as simple as possible.
 - Otherwise: status `review`, send `message_review`.
 
 **Decided: the count is per question.** It resets to 0 on every valid answer. A
@@ -290,13 +304,17 @@ Plus integration tests for the webhook wiring, in the style of
 
 ## Open items
 
-1. ~~Test one STOP on the account.~~ Done 2026-09-19: EZ Texting confirms on its
-   own, so we send nothing. See rule 1.
-4. **Brand name.** EZ Texting's automatic STOP reply signs as "PillRx", the
+1. **Brand name.** EZ Texting's automatic STOP reply signs as "PillRx", the
    brand configured on the account, while our opener signs as "Secure Medical".
    A lead would see two names from one number, and carriers expect one brand per
    campaign. The client decides which is right: change the account's brand, or
    change `question_1`.
-2. **Confirm with Jim** how a re-delivered lead arrives. Blocks repeat leads.
-3. **Client approval of copy.** `message_clarify` still says "reply with just a
-   number", narrower than what is now accepted.
+2. **Confirm with Jim** how a re-delivered lead arrives. Blocks repeat leads
+   only; everything else can be built now.
+3. **A reply after expiry.** An expired lead has left the queue. If they text
+   again - "sorry, 2" on day 9 - the message is stored and flagged unread, and
+   nothing else happens. Should it bring them back into the queue with the
+   "Inbound reply" tag the plan defines, so an agent follows up? Undecided.
+
+Resolved: the STOP test (EZ Texting confirms on its own, rule 1) and the
+clarification copy (one per question, rule 4), both 2026-09-19.

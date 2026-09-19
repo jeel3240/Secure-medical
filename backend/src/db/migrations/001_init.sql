@@ -185,7 +185,12 @@ INSERT INTO settings (key, value) VALUES
   ('question_1', 'Secure Medical: Hi {first_name}, you asked about health & wellness options. What interests you? Reply 1 Supplements, 2 Telehealth/Rx, 3 Both. Reply STOP to opt out.'),
   ('question_2', 'Great. When are you looking for help? Reply 1 Today, 2 This week, 3 Just researching.'),
   ('question_3', 'How would you like us to help? Reply 1 Call me now, 2 Text me, 3 Contact me later.'),
-  ('message_clarify', 'Sorry, please reply with just a number: 1, 2, or 3.'),
+  -- One clarification per question, repeating that question's options, so a
+  -- confused lead is reminded what 1, 2 and 3 mean. Wording approved by Jeel
+  -- 2026-09-19. Sent for an unclear reply to question N.
+  ('message_clarify_1', 'Sorry, please reply with just a number: 1 Supplements, 2 Telehealth/Rx, or 3 Both.'),
+  ('message_clarify_2', 'Sorry, please reply with just a number: 1 Today, 2 This week, or 3 Just researching.'),
+  ('message_clarify_3', 'Sorry, please reply with just a number: 1 Call me now, 2 Text me, or 3 Contact me later.'),
   ('message_stop', 'You have been unsubscribed and will not receive further messages from Secure Medical.'),
   ('message_thanks', 'Thanks! A team member will reach out shortly.'),
   ('message_review', 'Thanks! A team member will follow up with you directly.');
