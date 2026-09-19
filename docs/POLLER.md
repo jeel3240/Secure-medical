@@ -109,8 +109,10 @@ steady state `inserted=0` with a small `skipped` is normal and correct.
 ## Not done yet
 
 **Returning leads are dropped.** A phone we already hold is skipped forever,
-which is wrong for a lead that comes back months later. Phase 2 work. The
-decision per contact should be:
+which is wrong for a lead that comes back months later. *(2026-09-19: deferred
+until after Week 4, and only if the client asks - see STATE-MACHINE.md, "Repeat
+leads". Skipping stays the behaviour until then.)* The decision per contact
+should be:
 
 | Situation | Action |
 |---|---|

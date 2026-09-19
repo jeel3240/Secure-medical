@@ -201,6 +201,21 @@ what the texts did not, is a possible future feature if the client asks for it;
 it is not part of Week 2. "Stalled" tags therefore apply only to responders
 whose conversation is still `open`.
 
+**An expired lead who texts again comes back - Decided by Jeel, 2026-09-19.**
+A reply after expiry still gets no automated answer (rule 2), but it is not
+left sitting unseen:
+
+- the message is stored and `leads.has_unread_inbound` is set, as today;
+- the lead reappears in the agents' queue with the **Inbound reply** tag, so an
+  agent follows up by hand;
+- the conversation stays `expired` - no questions restart;
+- once an agent opens the lead, the flag clears and it leaves the queue again,
+  unless it now has a callback or other reason to be there.
+
+This applies whether or not the lead ever answered before: texting us is
+interest either way. A number on `dnc_list` never comes back, whatever it
+sends.
+
 The poller does not set `expires_at` on the conversations it creates today. It
 must, when it sends the opener. Conversations already created without one are
 expired by the same tick once `created_at` is older than `expiry_days`.
@@ -235,7 +250,16 @@ of Week 2 unless decided otherwise.
 
 ---
 
-## Repeat leads
+## Repeat leads - deferred until after Week 4
+
+**Not part of Week 2. Decided by Jeel, 2026-09-19:** repeat-lead handling is
+built after Week 4, and only if the client asks for it.
+
+**Until then, as built:** a phone already in `leads` is skipped by the poller -
+no new conversation, no text. That also means an opted-out number is never
+texted again, which holds regardless.
+
+The design below is kept so it is ready if the work is requested.
 
 The plan's Week 2 item 8 - a new lead row per delivery, linked by
 `previous_lead_id` - is **superseded**. One person is one lead row, and a return
@@ -248,11 +272,10 @@ is a new conversation on it. POLLER.md has the full reasoning; the rules:
 | `open` | Nothing. They are already mid-flow; restarting would re-send question 1 to someone partway through. **Decided by Jeel, 2026-09-19.** |
 | `completed`, `expired` or `review` | New conversation at step 1, send opener |
 
-**Blocked**, as POLLER.md records: it depends on whether a lead re-delivered by
-the partner reappears in EZ Texting as a new contact with a new `createdAt`, or
-only updates the existing one. If it only updates, the poller never sees it
-again and none of this runs. That needs confirming with Jim before this part is
-built.
+If it is ever built, it first needs an answer to what POLLER.md records: does
+a lead re-delivered by the partner reappear in EZ Texting as a new contact with
+a new `createdAt`, or only update the existing one? If it only updates, the
+poller never sees it again and none of this runs.
 
 `leads.previous_lead_id` is dropped in the migration that implements this.
 
@@ -271,10 +294,8 @@ compliance.
 
 ## Schema changes this needs
 
-In a new numbered migration once `001_init.sql` has run anywhere that matters,
-or folded into 001 while it has not:
-
-- Drop `leads.previous_lead_id`, with the repeat-lead work.
+None for Week 2. Dropping `leads.previous_lead_id` waits for the repeat-lead
+work, which is deferred.
 
 ---
 
@@ -296,6 +317,8 @@ All against the pure function, no database:
   sent, conversation unchanged.
 - A lead who answers question 1 and stops scores 15, 20 or 25 depending on the choice, and is LOW.
 - `responded` is awarded once only, however many replies arrive.
+- A reply to an `expired` conversation → nothing sent, conversation stays
+  `expired`, lead flagged unread so the queue shows it as Inbound reply.
 
 Plus integration tests for the webhook wiring, in the style of
 `backend/src/api/__tests__/webhooks.test.ts`.
@@ -304,17 +327,14 @@ Plus integration tests for the webhook wiring, in the style of
 
 ## Open items
 
-1. **Brand name.** EZ Texting's automatic STOP reply signs as "PillRx", the
-   brand configured on the account, while our opener signs as "Secure Medical".
-   A lead would see two names from one number, and carriers expect one brand per
-   campaign. The client decides which is right: change the account's brand, or
-   change `question_1`.
-2. **Confirm with Jim** how a re-delivered lead arrives. Blocks repeat leads
-   only; everything else can be built now.
-3. **A reply after expiry.** An expired lead has left the queue. If they text
-   again - "sorry, 2" on day 9 - the message is stored and flagged unread, and
-   nothing else happens. Should it bring them back into the queue with the
-   "Inbound reply" tag the plan defines, so an agent follows up? Undecided.
+None. Everything Week 2 needs is decided, as of 2026-09-19:
 
-Resolved: the STOP test (EZ Texting confirms on its own, rule 1) and the
-clarification copy (one per question, rule 4), both 2026-09-19.
+- STOP: EZ Texting confirms on its own, so we send nothing (rule 1).
+- Clarification: one per question, repeating its options (rule 4).
+- A reply after expiry brings the lead back to the queue as Inbound reply
+  (Expiry).
+- Repeat leads: deferred until after Week 4 (Repeat leads).
+
+**Parked, not blocking:** EZ Texting's automatic STOP reply signs as "PillRx",
+the account's brand, while our opener signs as "Secure Medical". Jeel: not
+needed now.
