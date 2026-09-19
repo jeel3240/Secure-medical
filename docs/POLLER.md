@@ -109,9 +109,9 @@ steady state `inserted=0` with a small `skipped` is normal and correct.
 ## Not done yet
 
 **Returning leads are dropped.** A phone we already hold is skipped by
-`ON CONFLICT (phone) DO NOTHING`. *(2026-09-19: in scope for Week 2 - a
-returning number starts a new conversation unless it is mid-flow or blocked.
-The rules are in STATE-MACHINE.md, "A number that comes back".)*
+`ON CONFLICT (phone) DO NOTHING`. *(2026-09-19: a future item, not
+Week 2 - CLAUDE.md §10, "Future: repeat leads". The decided rules are in
+STATE-MACHINE.md, "A number that comes back".)*
 
 What the poller has to change: instead of skipping a known phone, look up its
 newest conversation and apply those rules, keeping `leads.phone` unique and
@@ -119,7 +119,8 @@ adding a conversation to the existing lead.
 
 **What it depends on, unverified:** whether a lead re-delivered by the partner
 reaches EZ Texting as a new contact, with a new `createdAt`, or only updates the
-existing contact. The poller finds contacts by `createdAt` newer than its
+existing contact. Jeel's understanding is that EZ Texting keeps one contact per
+number, which would make it the second. The poller finds contacts by `createdAt` newer than its
 checkpoint, so if a re-delivery leaves `createdAt` unchanged, the poller never
 sees it and none of the rules ever run. This can be checked on the test account:
 add a contact through the API that already exists in the group, and see whether

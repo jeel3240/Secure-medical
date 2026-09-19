@@ -53,9 +53,9 @@ Answer matching is a separate pure function the state machine calls:
 | `suppressed` | Opted out | Never |
 | `expired` | Went quiet past the expiry window | No |
 
-Only `open` is ever advanced. The other four are final for that conversation;
-a number that comes back later gets a new conversation instead - see "A number
-that comes back".
+Only `open` is ever advanced. The other four are final for that conversation.
+Today a number that comes back is skipped; the decided rules for restarting it
+are under "A number that comes back", not built yet.
 
 ---
 
@@ -267,7 +267,12 @@ A failed opener is not retried. POLLER.md records the gap.
 
 ## A number that comes back
 
-When the poller finds a contact whose phone is already in `leads`, it decides
+**Not built.** Today the poller skips a phone it already holds: no new
+conversation, no text. The rules below are decided and wait for a check on
+whether a returning number can be detected at all - CLAUDE.md §10, "Future:
+repeat leads".
+
+When built: when the poller finds a contact whose phone is already in `leads`, it decides
 from the number's block status and its **newest** conversation. Decided by
 Jeel, 2026-09-19: a returning number starts fresh, except when it is mid-flow or
 blocked.
