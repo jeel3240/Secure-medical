@@ -90,7 +90,7 @@ Role is set at login. Navigation adapts to role.
    - `Needs review` (invalid replies, agent must read raw text)
    - `Stalled at Q2` / `Stalled at Q1` (partial responder)
    - `Inbound reply` (lead texted after conversation ended – unread indicator)
-   - `Seen before, stopped at Q2` (resold lead with history) - *2026-09-19: does not occur until repeat-lead handling is built, which is deferred until after Week 4.*
+   - `Seen before, stopped at Q2` (resold lead with history) - *2026-09-19: does not occur until repeat-lead handling is built, Week 2.*
 11. **Actions** – "Open" button; on hover, quick "Call" and "SMS" icons.
 
 **Row behaviour**
@@ -163,7 +163,7 @@ Role is set at login. Navigation adapts to role.
 - Consent ref (partner reference if present, else "–")
 - DNC: Yes/No
 - Dispositions list (date · value · agent)
-- Duplicate check: "This number has not been seen before" or "Linked to earlier lead (Jun 2026)" with link. *(2026-09-19: always the first, until repeat-lead handling is built.)*
+- Duplicate check: "This number has not been seen before" or "Linked to earlier lead (Jun 2026)" with link. *(2026-09-19: always the first until repeat-lead handling is built, Week 2.)*
 
 ### 5. My Callbacks
 

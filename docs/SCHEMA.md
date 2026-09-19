@@ -106,8 +106,9 @@ conversation on the existing lead.
 
 So `leads.phone` stays unique, `conversations` becomes one-to-many, and "seen
 before" is derived from a lead's prior conversations rather than stored. The
-column comes out in the migration that implements this. See POLLER.md for the
-per-contact decision table and what it is blocked on.
+column comes out in the migration that implements this. The rules are in
+STATE-MACHINE.md, "A number that comes back"; what detection depends on is in
+POLLER.md.
 
 It is deliberately still here rather than removed now: the design depends on
 whether a re-delivered phone reaches EZ Texting as a new contact or an update

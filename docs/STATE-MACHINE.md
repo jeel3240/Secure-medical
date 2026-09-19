@@ -53,9 +53,9 @@ Answer matching is a separate pure function the state machine calls:
 | `suppressed` | Opted out | Never |
 | `expired` | Went quiet past the expiry window | No |
 
-Only `open` is ever advanced. The other four are final for that conversation.
-No new conversation is started for a phone we already hold - see "A phone we
-already hold".
+Only `open` is ever advanced. The other four are final for that conversation;
+a number that comes back later gets a new conversation instead - see "A number
+that comes back".
 
 ---
 
@@ -265,14 +265,33 @@ A failed opener is not retried. POLLER.md records the gap.
 
 ---
 
-## A phone we already hold
+## A number that comes back
 
-The poller skips a phone that is already in `leads`: no new conversation, no
-text. So a number that comes back is not restarted, and an opted-out number is
-never texted again.
+When the poller finds a contact whose phone is already in `leads`, it decides
+from the number's block status and its **newest** conversation. Decided by
+Jeel, 2026-09-19: a returning number starts fresh, except when it is mid-flow or
+blocked.
 
-A design for restarting returning leads, and what it depends on, is in
-POLLER.md under "Returning leads". It is not built.
+| Situation | What happens |
+|---|---|
+| Phone on `dnc_list`, or the contact is `optOut` in EZ Texting | Nothing, ever. Added to `dnc_list` if it was not already |
+| Newest conversation `open` - mid-flow | Nothing. Restarting would send question 1 to someone partway through |
+| Newest conversation `completed`, `expired` or `review` | New conversation at step 1 on the same lead, opener sent |
+| Newest conversation `suppressed` | Nothing, ever - the number opted out |
+
+One person is always one lead row; each return is a new conversation on it, so
+the history of earlier conversations stays on the lead. The new conversation
+starts clean: step 1, no answers, `invalid_count` 0, score 0, no tier.
+
+**Proposed, to confirm:** on a return, the lead's `source`, `group_id`,
+`group_name` and `ezt_added_at` are updated from the new delivery, and name and
+email only where the new contact has them, so the lead shows where it most
+recently came from.
+
+"Seen before" in the queue is computed: the lead has an earlier conversation.
+
+**Depends on:** EZ Texting showing a re-delivered lead to the poller at all.
+POLLER.md, "Returning leads", explains why that is unverified and how to check.
 
 ---
 

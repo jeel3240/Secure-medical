@@ -212,7 +212,7 @@ row, and a returning phone gets a new conversation on the existing lead rather
 than a new linked lead. The design and what it is blocked on are in
 `docs/POLLER.md` under "Not done yet". As built, the poller does steps 1-3, 5
 and 6: it creates the conversation and sends the opener, but does not set
-`expires_at` yet, and step 4 is deferred (§10, Week 2 item 8).
+`expires_at` yet, and step 4 is Week 2 item 8, still to build.
 
 ### Reply (API webhook `POST /api/webhooks/eztexting/<token>`)
 
@@ -233,7 +233,7 @@ Tiers: HOT 75–100, WARM 45–74, LOW 1–44
 3. On end, Twilio status callback → save to `calls`.
 4. Agent sets disposition/note/callback. DNC disposition = same as SMS STOP.
 
-Queue tags (New, Attempted 1x, In progress, Callback, Needs review, Stalled at Q2, Inbound reply, Seen before) are **computed** from these tables, not stored as a status. *(2026-09-19: "Seen before" cannot occur until repeat-lead handling is built, which is deferred - §10.)*
+Queue tags (New, Attempted 1x, In progress, Callback, Needs review, Stalled at Q2, Inbound reply, Seen before) are **computed** from these tables, not stored as a status. *(2026-09-19: "Seen before" cannot occur until repeat-lead handling is built - §10, Week 2 item 8.)*
 
 **Paths, as of 2026-09-15.** Caddy forwards only `/api/*` to the API; everything
 else is the frontend, so every route lives under `/api`. The EZ Texting webhook
@@ -315,7 +315,7 @@ Each week ends with something that can be demonstrated. Do not start the next we
 | Week | Done | Not done |
 |---|---|---|
 | 1 | All of it: 1 repo and Docker setup · 2 migrations · 3 auth · 4 EZ Texting client · 5 poller (60s default, admin-editable, not 45s) · 6 inbound webhook (`docs/WEBHOOKS.md`) · 7 ngrok wiring, confirmed with a real text | – |
-| 2 | 3 opener sent when the poller creates a lead | 1, 2, 4-7, 9, 10: the state machine, STOP, unclear replies, scoring, expiry, the queue API and tests. Item 8, repeat leads, is deferred until after Week 4 |
+| 2 | 3 opener sent when the poller creates a lead | 1, 2, 4-10: the state machine, STOP, unclear replies, scoring, expiry, repeat leads, the queue API and tests |
 | 3 | 1 scaffold, login, role-based routing · 7 in part: manage agents · 9 Caddy serves the built frontend · 10 Admin > Leads (`docs/ADMIN-LEADS.md`) | 2-6, 8, the rest of 7 |
 | 4 | – | All |
 
@@ -355,7 +355,7 @@ Build:
 5. Unclear replies, and answer matching: numbers plus a short list of accepted words
 6. Scoring and tiers, updated on every reply
 7. Expiry of conversations that go quiet
-8. ~~Repeat leads~~ - **deferred until after Week 4, only if the client asks.** Until then a phone already held is skipped.
+8. Repeat leads: a returning number starts a new conversation unless it is mid-flow, on `dnc_list` or opted out *(back in scope 2026-09-19)*
 9. Queue API: `GET /api/leads?tier=&source=&since=` returning score, tier, age, q1–q3 and the computed queue tag
 10. Unit tests for the state machine - the list is in `docs/STATE-MACHINE.md`
 
@@ -414,7 +414,7 @@ Done when:
 - Client UAT with real agents
 - Fixes from UAT
 - Later phase (not in scope now): ElevenLabs AI attendant, voicemail, after-hours handling
-- Only if the client asks: repeat-lead handling (design in `docs/POLLER.md`, "Returning leads"), and showing responders whose conversation expired in the agents' queue as "Stalled at Qn"
+- Only if the client asks: showing responders whose conversation expired in the agents' queue as "Stalled at Qn"
 
 ---
 
