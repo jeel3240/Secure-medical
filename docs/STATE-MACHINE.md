@@ -16,6 +16,27 @@ Code: `backend/src/core/` for the pure logic, wired in from
 `backend/src/api/webhooks.ts` (replies) and `backend/src/worker/` (opener,
 expiry). Related: WEBHOOKS.md, POLLER.md, SCHEMA.md, the plan's §6.
 
+## What is built, 2026-09-21
+
+The pure core only:
+
+| File | Holds |
+|---|---|
+| `core/state-machine.ts` | `step()` and `tierFor()` - every branch below, and scoring |
+| `core/answers.ts` | `matchAnswer()` - the numbers and the word lists |
+| `core/state-machine.test.ts` | 34 tests, one per case in "Tests the state machine needs" |
+
+**Nothing calls it yet.** A real reply still lands in `messages` and stops
+there: the webhook stores it without advancing the conversation, so a lead who
+has answered still reads as Awaiting reply on Admin > Leads. Wiring it in is the
+next piece, and until then these behaviours exist only in the tests.
+
+Also still to come: the expiry sweep, `expires_at` on send, and the queue API.
+
+Opt-out detection is deliberately **not** in `core`. `api/webhooks.ts` already
+holds the keyword list and passes the outcome in as `reply.optOut`, so there is
+one list rather than two that can drift.
+
 ---
 
 ## Shape of the code

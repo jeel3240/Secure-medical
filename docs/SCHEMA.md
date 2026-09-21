@@ -186,7 +186,10 @@ the seeds as starting values rather than constants.
 A completed conversation cannot score below 40: `responded` and `completed` add
 20 between them, and the cheapest answers add another 20. Of the 27 possible
 answer combinations, 13 land HOT, 13 WARM, and only one - the least engaged
-answer to all three questions - lands LOW.
+answer to all three questions - lands LOW. A test in
+`core/state-machine.test.ts` walks all 27 and asserts that split, so a change
+to the seeded points or bands fails there rather than quietly reshaping the
+queue.
 
 That is not a mis-set band. Scoring applies to partial conversations too. A
 lead who replies once and goes quiet scores 10 and is LOW; one who stalls after
