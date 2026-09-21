@@ -108,31 +108,24 @@ steady state `inserted=0` with a small `skipped` is normal and correct.
 
 ## Not done yet
 
-**Returning leads are dropped.** A phone we already hold is skipped forever,
-which is wrong for a lead that comes back months later. Phase 2 work. The
-decision per contact should be:
+**Returning leads are dropped.** A phone we already hold is skipped by
+`ON CONFLICT (phone) DO NOTHING`. *(2026-09-19: a future item, not
+Week 2 - CLAUDE.md §10, "Future: repeat leads". The decided rules are in
+STATE-MACHINE.md, "A number that comes back".)*
 
-| Situation | Action |
-|---|---|
-| `optOut`, or phone on `dnc_list` | Save as suppressed, send nothing |
-| Phone not in our DB | Create lead + conversation (open, step 1), send opener |
-| Phone held, newest conversation `open` | Already in the pipeline, do nothing |
-| Phone held, newest conversation `completed` | New conversation, send opener |
-| Phone held, newest conversation `expired` | New conversation, send opener |
-| Phone held, newest conversation `suppressed` | Never text, whatever else is true |
+What the poller has to change: instead of skipping a known phone, look up its
+newest conversation and apply those rules, keeping `leads.phone` unique and
+adding a conversation to the existing lead.
 
-The shape that follows: `leads.phone` stays unique, a lead gets many
-conversations over time, and `previous_lead_id` is dropped. "Seen before" in
-the queue is then derived from a lead's prior conversations rather than stored.
-
-Note this reverses CLAUDE.md section 6, which describes one lead row per
-delivery linked by `previous_lead_id`. One person is one lead; a re-delivery is
-a new conversation.
-
-Blocked on confirming with Jim whether a re-delivered phone arrives as a new EZ
-Texting contact or an update to the existing one. That decides whether
-`createdAt` moves, and so whether the poller sees the contact again at all - if
-it does not, none of the above ever triggers.
+**What it depends on, unverified:** whether a lead re-delivered by the partner
+reaches EZ Texting as a new contact, with a new `createdAt`, or only updates the
+existing contact. It cannot be the first: EZ Texting does not allow two
+contacts with the same number (verified 2026-09-19, EZTEXTING-API.md). What is
+still unchecked is whether updating the existing contact resets `createdAt`. The poller finds contacts by `createdAt` newer than its
+checkpoint, so if a re-delivery leaves `createdAt` unchanged, the poller never
+sees it and none of the rules ever run. This can be checked on the test account:
+add a contact through the API that already exists in the group, and see whether
+its `createdAt` moves.
 
 **`expires_at` is never set.** The conversation is created without it, so
 nothing can auto-expire. It should be `now + expiry_days` from `settings` at

@@ -160,7 +160,7 @@ you change something the docs describe, update the doc in the same commit.
   frontend/
     Dockerfile              production Caddy image with the built app
   docs/
-    AUTH.md  POLLER.md  WORKFLOW.md  WEBHOOKS.md  ADMIN-LEADS.md
+    AUTH.md  POLLER.md  WORKFLOW.md  WEBHOOKS.md  ADMIN-LEADS.md  STATE-MACHINE.md
 ```
 
 `core/` currently holds only message rendering; the state machine joins it in Week 2. `docker-compose.yml`
@@ -197,7 +197,7 @@ of truth and `docs/SCHEMA.md` explains it. It differs from the list above:
 
 ---
 
-## 6. Core flows (see mockup p.2–3 for exact copy)
+## 6. Core flows (message copy is seeded in `settings` by `001_init.sql`; the flow itself is specified in `docs/STATE-MACHINE.md`)
 
 ### New lead (Worker, every 30–60s)
 1. Poll EZ Texting Contacts API for the lead group, since last checkpoint (overlap window 5 min).
@@ -210,17 +210,18 @@ of truth and `docs/SCHEMA.md` explains it. It differs from the list above:
 **Update 2026-09-14.** Step 4 has since been reversed: one person is one lead
 row, and a returning phone gets a new conversation on the existing lead rather
 than a new linked lead. The design and what it is blocked on are in
-`docs/POLLER.md` under "Not done yet". As built, the poller does steps 1-3 and 6,
-creates the conversation, but does not send the opener or set `expires_at` yet.
+`docs/POLLER.md` under "Not done yet". As built, the poller does steps 1-3, 5
+and 6: it creates the conversation and sends the opener, but does not set
+`expires_at` yet, and step 4 is a future item (§10, "Future").
 
-### Reply (API webhook `POST /webhooks/eztexting`)
-1. Dedupe on `ezt_message_id`.
-2. Find conversation `phone = X AND status = 'open'`. None → save as plain inbound message on latest lead, flag `has_unread_inbound`.
-   *(2026-09-17: and if no **lead** exists for that phone at all, ignore the reply entirely. The EZ Texting subscription covers the whole account, so replies to the client's other campaigns arrive here too; creating leads from them filled the table with unrelated customer numbers. A STOP still goes to `dnc_list`. See `docs/WEBHOOKS.md`.)*
-3. Text = STOP → `suppressed`, add to DNC, send STOP confirmation.
-4. Text in {1,2,3} → save to `q{step}`, add points. If step 3 → `completed`, score + tier, send thanks. Else step+1, send next question.
-5. Anything else → first time: send clarification, `invalid_count=1`. Second time: `review`, send review message.
-6. Return 200 fast.
+### Reply (API webhook `POST /api/webhooks/eztexting/<token>`)
+
+How a reply is handled - opt-outs, valid answers and the accepted words,
+unclear replies, scoring, expiry - is specified in `docs/STATE-MACHINE.md`, and
+only there. It overrides the mockup PDF where they differ: Jeel's decision,
+2026-09-19, the mockup is a reference for screens and wording, not for flow
+logic. What the webhook itself does before the state machine runs - dedupe,
+ignoring numbers we hold no lead for - is in `docs/WEBHOOKS.md`.
 
 ### Scoring (defaults, admin-editable)
 Responded +10 · Completed +10 · Q1: 5/10/15 · Q2: 30/20/5 · Q3: 35/25/10
@@ -232,7 +233,7 @@ Tiers: HOT 75–100, WARM 45–74, LOW 1–44
 3. On end, Twilio status callback → save to `calls`.
 4. Agent sets disposition/note/callback. DNC disposition = same as SMS STOP.
 
-Queue tags (New, Attempted 1x, In progress, Callback, Needs review, Stalled at Q2, Inbound reply, Seen before) are **computed** from these tables, not stored as a status.
+Queue tags (New, Attempted 1x, In progress, Callback, Needs review, Stalled at Q2, Inbound reply, Seen before) are **computed** from these tables, not stored as a status. *(2026-09-19: "Seen before" cannot occur until repeat-lead handling is built - a future item, §10.)*
 
 **Paths, as of 2026-09-15.** Caddy forwards only `/api/*` to the API; everything
 else is the frontend, so every route lives under `/api`. The EZ Texting webhook
@@ -309,17 +310,17 @@ Never commit `.env`. Never use real lead data locally. Generate fake leads.
 
 Each week ends with something that can be demonstrated. Do not start the next week's work until the current week's "done when" is met.
 
-### Progress, as of 2026-09-14
+### Progress, as of 2026-09-19
 
 | Week | Done | Not done |
 |---|---|---|
 | 1 | All of it: 1 repo and Docker setup · 2 migrations · 3 auth · 4 EZ Texting client · 5 poller (60s default, admin-editable, not 45s) · 6 inbound webhook (`docs/WEBHOOKS.md`) · 7 ngrok wiring, confirmed with a real text | – |
-| 2 | 3 opener sent when the poller creates a lead | 1, 2, 4-10: the state machine, scoring, expiry, resold leads, the queue API and its tests |
+| 2 | 3 opener sent when the poller creates a lead | 1, 2, 4-7, 9, 10: the state machine, STOP, unclear replies, scoring, expiry, the queue API and tests. Item 8, repeat leads, is a future item |
 | 3 | 1 scaffold, login, role-based routing · 7 in part: manage agents · 9 Caddy serves the built frontend · 10 Admin > Leads (`docs/ADMIN-LEADS.md`) | 2-6, 8, the rest of 7 |
 | 4 | – | All |
 
 Auth (Week 1) and the Week 3 login were built together, ahead of the Week 1
-webhook, at Jeel's request. *(Table updated 2026-09-15.)*
+webhook, at Jeel's request. *(Table updated 2026-09-19.)*
 
 ### Week 1 – Foundation + prove EZ Texting works
 
@@ -344,21 +345,25 @@ Done when:
 
 **Goal:** the full 3-question flow runs automatically and every lead ends with a status, score and tier.
 
+This list is the scope. How each item behaves is in `docs/STATE-MACHINE.md`.
+
 Build:
-1. State machine in `core/` – pure function: `(conversation, incomingText) → (newConversation, messageToSend | null)`. No DB calls inside; easy to unit test.
+1. State machine in `core/` – a pure function, no database calls, so every rule is unit-testable
 2. Wire it into the webhook: load conversation → run → save → send
-3. Opener sent automatically when worker inserts a new lead
-4. STOP handling → `suppressed` + `dnc_list`
-5. Invalid reply → clarification once, then `review`
-6. Scoring from `scoring_rules` table, tiers from `tiers` table (seed with mockup defaults)
-7. Expiry: `expires_at` set on each send; worker marks stale `open` conversations `expired`
-8. Resold-lead logic: existing phone → DNC check → expire old open conversation → new lead linked via `previous_lead_id`
-9. Queue API: `GET /leads?tier=&source=&since=` returning score, tier, age, q1–q3, computed queue tag
-10. Unit tests for the state machine covering: happy path, invalid twice, STOP at each step, reply after completed, reply after expired
+3. Opener sent automatically when the worker inserts a new lead - **done**
+4. STOP handling
+5. Unclear replies, and answer matching: numbers plus a short list of accepted words
+6. Scoring and tiers, updated on every reply
+7. Expiry of conversations that go quiet
+8. ~~Repeat leads~~ - **future, not Week 2** *(2026-09-19)*. Until then the poller skips a phone it already holds. See "Future" below
+9. Queue API: `GET /api/leads?tier=&source=&since=` returning score, tier, age, q1–q3 and the computed queue tag
+10. Unit tests for the state machine - the list is in `docs/STATE-MACHINE.md`
+
+Not in Week 2: a sending-hours window for the opener (rejected 2026-09-19; it is sent as soon as the lead arrives), and retrying a failed opener.
 
 Done when:
 - A test phone can complete all three questions and lands as `completed` with the correct score
-- Every branch on mockup p.3 is reproducible with a real SMS
+- Every rule in `docs/STATE-MACHINE.md` is reproducible with a real SMS
 - Queue API returns leads sorted by score then age
 
 ### Week 3 – Frontend: queue, agent workspace, timeline, admin
@@ -409,6 +414,30 @@ Done when:
 - Client UAT with real agents
 - Fixes from UAT
 - Later phase (not in scope now): ElevenLabs AI attendant, voicemail, after-hours handling
+- Only if the client asks: showing responders whose conversation expired in the agents' queue as "Stalled at Qn"
+
+### Future: repeat leads - check first, then build
+
+When the same number is delivered again, it should start a new conversation
+unless it is mid-flow or blocked. The rules are decided and written in
+`docs/STATE-MACHINE.md`, "A number that comes back".
+
+**It is not built yet, because a return may not be detectable.** Verified
+2026-09-19 by Jeel: EZ Texting does not allow two contacts with the same phone
+number (`docs/EZTEXTING-API.md`). So a re-delivered number never arrives as a
+new contact; it is rejected or updates the existing one. The poller finds leads
+by the contact's `createdAt`, so unless an update resets that time, the poller
+never sees the return and the rules never run.
+
+Before building it:
+1. Check on the test account what happens when a number already on the account
+   is added again through the API, the way the partner sends leads: is it
+   rejected, or does it update the existing contact - and if it updates, do
+   `createdAt` or `updatedAt` change?
+2. If `createdAt` moves, build the rules as written.
+3. If not, the poller needs another signal for a return - for example
+   `updatedAt`, a group move, or the partner telling us - and that has to be
+   found first. `docs/POLLER.md`, "Returning leads", has the detail.
 
 ---
 
@@ -434,8 +463,9 @@ were taken on trust and the poller silently ingested nothing.
 
 - Read `docs/EZTEXTING-API.md` before touching the poller, sender, or webhook. It has verified endpoints and field names.
 - Read `docs/SCHEMA.md` before changing the data model or writing a migration.
-- Read `docs/Secure-Medical-Call-Center-Mockup.pdf` for screen layouts and the reply-handling flow (page 3 is the state machine).
+- Read `docs/Secure-Medical-Call-Center-Mockup.pdf` for screen layouts and wording. Its page 3 sketches the reply flow, but `docs/STATE-MACHINE.md` overrides it (2026-09-19).
 - Read `docs/DESIGN-PROMPT.md` before any frontend work.
+- Read `docs/STATE-MACHINE.md` before any Week 2 work. It is the flow spec and overrides the mockup where they differ.
 - Read `docs/AUTH.md` before touching sign-in, sessions, roles or the users table.
 - Read `docs/POLLER.md` before changing the worker loop, and `docs/WORKFLOW.md` for branches, migrations and deploys.
 - **Every area has one doc, and it is updated in the same commit as the change.**

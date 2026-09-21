@@ -120,13 +120,13 @@ commit.
 | `POLLER.md` | How leads are pulled in | The poller or worker loop |
 | `WEBHOOKS.md` | How replies are received | The webhook handler |
 | `ADMIN-LEADS.md` | The superadmin Leads page | That page or its API |
+| `STATE-MACHINE.md` | The SMS flow: replies, scoring, expiry, sending, repeat leads. Overrides the mockup | The state machine, or any flow decision |
 | `EZTEXTING-API.md` | Verified API behaviour | You learn something new about the API |
 | `WORKFLOW.md` | Branches, PRs, migrations, deploys | The process itself |
 | `DESIGN-PROMPT.md` | Frontend design brief | The design direction |
-| `Secure-Medical-Call-Center-Mockup.pdf` | All screens; page 3 is the state machine | — |
+| `Secure-Medical-Call-Center-Mockup.pdf` | All screens. Page 3 sketches the flow, but STATE-MACHINE.md is the authority for it | — |
 
-Docs still to write, as the code arrives: `STATE-MACHINE.md`, `TWILIO.md`,
-`DEPLOYMENT.md`.
+Docs still to write, as the code arrives: `TWILIO.md`, `DEPLOYMENT.md`.
 
 ## Troubleshooting
 

@@ -62,6 +62,16 @@ ALTER TABLE users ADD COLUMN session_version INTEGER NOT NULL DEFAULT 0;
 ALTER TABLE users ADD COLUMN last_login_at TIMESTAMPTZ;
 ```
 
+**`dnc_list` is the permanent record of blocked numbers.** One row per phone,
+with the reason and when it was added. Rows are never deleted automatically -
+the design brief keeps deletion out of v1 - so the table can show the client
+which numbers were blocked and when, if they are ever asked to prove it.
+
+It has no `added_by` yet. The Admin > DNC list page in the design brief shows
+who added each number, which only matters once an agent can mark a number DNC
+after a call. That column arrives in Week 4 with the agent DNC disposition,
+alongside a third `reason` value for it.
+
 **A `dnc_list` row needs no lead.** The webhook writes one for a STOP from a
 number we hold no lead for, because the subscription covers the whole EZ Texting
 account and those replies belong to the client's other campaigns. Blocking the
@@ -96,13 +106,16 @@ conversation on the existing lead.
 
 So `leads.phone` stays unique, `conversations` becomes one-to-many, and "seen
 before" is derived from a lead's prior conversations rather than stored. The
-column comes out in the migration that implements this. See POLLER.md for the
-per-contact decision table and what it is blocked on.
+column comes out in the migration that implements this. The rules are in
+STATE-MACHINE.md, "A number that comes back"; what detection depends on is in
+POLLER.md.
 
-It is deliberately still here rather than removed now: the design depends on
-whether a re-delivered phone reaches EZ Texting as a new contact or an update
-to the existing one, and that is unconfirmed. Removing the column early would
-mean re-adding it if the answer changes the shape.
+It is deliberately still here rather than removed now: repeat leads are a
+future item (CLAUDE.md §10). Half of what they depend on is settled - EZ Texting
+does not allow two contacts with the same number, so a re-delivery updates the
+existing contact (verified 2026-09-19) - but whether that update moves
+`createdAt` is not. Removing the column early would mean re-adding it if the
+answer changes the shape.
 
 **`messages` is keyed differently by direction.** Outbound rows carry the id
 returned by the send API in `ezt_message_id`, unique via a partial index on
