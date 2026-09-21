@@ -32,11 +32,15 @@ Order matters. `opted_out` is checked first so it wins over any conversation
 state, and against `dnc_list` as well as the conversation, because a phone can
 reach that list without ever holding one.
 
-**A reply alone does not move a lead off `awaiting_reply`.** The status follows
-the conversation, not the message log. Until the state machine reads an inbound
-message and writes `q1`, a lead who has replied still reads as awaiting - the
-inbound arrow in Last activity is what shows the reply arrived. This is correct
-rather than a bug, but it surprises people.
+**The status follows the conversation, not the message log.** A lead who has
+answered moves to `in_progress` or `completed` because the state machine wrote
+`q1`, not because a message arrived.
+
+Until 2026-09-21 nothing advanced the conversation, so a lead who had replied
+still read as `awaiting_reply` and only the inbound arrow in Last activity
+showed it. That is fixed. It can still happen for a reply the flow does not
+act on - one that arrives with no conversation on the lead - and in that case
+awaiting is the honest answer.
 
 ## The query
 

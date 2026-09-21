@@ -18,24 +18,34 @@ expiry). Related: WEBHOOKS.md, POLLER.md, SCHEMA.md, the plan's §6.
 
 ## What is built, 2026-09-21
 
-The pure core only:
-
 | File | Holds |
 |---|---|
 | `core/state-machine.ts` | `step()` and `tierFor()` - every branch below, and scoring |
 | `core/answers.ts` | `matchAnswer()` - the numbers and the word lists |
+| `api/reply-flow.ts` | Loads the conversation and rules, runs `step`, saves, sends |
 | `core/state-machine.test.ts` | 34 tests, one per case in "Tests the state machine needs" |
+| `api/__tests__/webhooks.test.ts` | 24, including the flow advancing through the webhook |
 
-**Nothing calls it yet.** A real reply still lands in `messages` and stops
-there: the webhook stores it without advancing the conversation, so a lead who
-has answered still reads as Awaiting reply on Admin > Leads. Wiring it in is the
-next piece, and until then these behaviours exist only in the tests.
+A reply now advances the conversation. Verified against the live account on
+2026-09-21: replies of 3, 1, 1 walked a lead from step 1 to `completed`, score
+100, HOT, with question 2, question 3 and the thanks arriving as real SMS, and
+Admin > Leads showing Completed rather than Awaiting reply.
 
-Also still to come: the expiry sweep, `expires_at` on send, and the queue API.
+**Still to come:** the expiry sweep (`expires_at` is now set on every send, but
+nothing marks a stale conversation `expired`), and the queue API.
 
-Opt-out detection is deliberately **not** in `core`. `api/webhooks.ts` already
-holds the keyword list and passes the outcome in as `reply.optOut`, so there is
-one list rather than two that can drift.
+Two things deliberately not where the spec's sketch might suggest:
+
+**Opt-out detection stays in `api/webhooks.ts`,** which already held the keyword
+list. The core is told the outcome via `reply.optOut`, so there is one list
+rather than two that drift. `blockNumber` on the result is what drives the
+`dnc_list` write, so the rule itself lives in the core.
+
+**The send is a closure, not part of `applyReply`.** `applyReply` returns
+`{ result, send }`: the caller commits the transaction, then calls `send()`.
+That order is the spec's - a failed send must not roll back an answer the lead
+has already given - and making it two steps means the caller cannot get it
+wrong by accident.
 
 ---
 

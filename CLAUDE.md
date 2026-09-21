@@ -155,6 +155,7 @@ you change something the docs describe, update the doc in the same commit.
     src/core/messages.ts    renders outbound copy ({first_name}, segment limit)
     src/core/state-machine.ts  the SMS flow, pure; scoring and tiers
     src/core/answers.ts     matches a reply to an option, pure
+    src/api/reply-flow.ts   runs the state machine for an inbound reply
     src/db/leads.ts         Admin > Leads SQL
     src/cli/                create-superadmin
     src/integrations/       EZ Texting client
@@ -165,8 +166,8 @@ you change something the docs describe, update the doc in the same commit.
     AUTH.md  POLLER.md  WORKFLOW.md  WEBHOOKS.md  ADMIN-LEADS.md  STATE-MACHINE.md
 ```
 
-`core/` holds message rendering, the state machine and answer matching, none of
-it yet called by the webhook. `docker-compose.yml`
+`core/` holds message rendering, the state machine and answer matching, all of
+it now driven from the webhook through `api/reply-flow.ts`. `docker-compose.yml`
 is local only; production layers `docker-compose.prod.yml` on top of it.
 
 `api` and `worker` build from the same Dockerfile; only the start command differs.
@@ -318,7 +319,7 @@ Each week ends with something that can be demonstrated. Do not start the next we
 | Week | Done | Not done |
 |---|---|---|
 | 1 | All of it: 1 repo and Docker setup · 2 migrations · 3 auth · 4 EZ Texting client · 5 poller (60s default, admin-editable, not 45s) · 6 inbound webhook (`docs/WEBHOOKS.md`) · 7 ngrok wiring, confirmed with a real text | – |
-| 2 | 3 opener sent when the poller creates a lead · 1 the pure state machine and its tests (`core/state-machine.ts`, `core/answers.ts`) · 6 scoring, inside it · 10 the state machine tests | 2 wiring it into the webhook - nothing calls the core yet · 4, 5 STOP and unclear replies exist in the core but are not reached · 7 expiry · 9 the queue API. Item 8, repeat leads, is a future item |
+| 2 | 1 the pure state machine (`core/state-machine.ts`, `core/answers.ts`) · 2 wired into the webhook via `api/reply-flow.ts` · 3 opener sent by the poller · 4 STOP · 5 unclear replies · 6 scoring · 10 tests. The full 3-question flow was walked against the live account on 2026-09-21 | 7 expiry: `expires_at` is set on every send, but nothing marks a stale conversation `expired` · 9 the queue API. Item 8, repeat leads, is a future item |
 | 3 | 1 scaffold, login, role-based routing · 7 in part: manage agents · 9 Caddy serves the built frontend · 10 Admin > Leads (`docs/ADMIN-LEADS.md`) | 2-6, 8, the rest of 7 |
 | 4 | – | All |
 

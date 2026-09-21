@@ -109,11 +109,29 @@ duplicates - EZ Texting should not retry any of those.
 500 only on an unexpected failure, where a retry is wanted. The dedupe makes
 retrying safe.
 
+## The reply advances the conversation
+
+After storing the message, the handler calls `applyReply` in
+`api/reply-flow.ts`, which loads the lead's newest conversation and the
+admin-editable rules, runs the pure `step` from `core/state-machine.ts`, and
+saves the result. STATE-MACHINE.md is the authority for what each reply does.
+
+Two details matter here:
+
+**The send happens after the commit.** `applyReply` returns
+`{ result, send }`; the handler commits, then calls `send()`. A failed send is
+logged and leaves the conversation advanced - the lead has answered, and
+re-asking a question they already answered is worse than a missing follow-up.
+For the same reason a failed send still returns 200: a retry would not re-send.
+
+**`blockNumber` comes from the state machine's result,** not from the handler
+re-reading the text. The handler decides whether the reply *is* an opt-out,
+because it holds the keyword list; the core decides what that means.
+
 ## Not done yet
 
-**The state machine.** The message is stored, but nothing reads it: no answer
-is saved to `q1`/`q2`/`q3`, no score, no advance, no next question sent. The
-TODO sits at the end of the handler. Week 2.
+**The expiry sweep.** `expires_at` is set on every send, but nothing yet marks
+a conversation past it as `expired`. That is a worker job.
 
 **We never send a STOP confirmation, by design** (decided 2026-09-19). EZ
 Texting replies to STOP itself, so one from us would reach the lead as a second

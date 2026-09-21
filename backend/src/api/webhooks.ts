@@ -15,7 +15,9 @@ function deps() {
   const { pool } = require('../db/pool') as typeof import('../db/pool');
   // eslint-disable-next-line @typescript-eslint/no-var-requires
   const { toE164 } = require('../integrations/ezt-client') as typeof import('../integrations/ezt-client');
-  return { pool, toE164 };
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  const { applyReply } = require('./reply-flow') as typeof import('./reply-flow');
+  return { pool, toE164, applyReply };
 }
 
 /**
@@ -113,14 +115,16 @@ const handleInbound = async (req: Request, res: Response) => {
     return res.sendStatus(200);
   }
 
-  const { pool, toE164 } = deps();
+  const { pool, toE164, applyReply } = deps();
   const phone = toE164(payload.fromNumber);
   const client = await pool.connect();
 
   try {
     await client.query('BEGIN');
 
-    const existing = await client.query('SELECT id FROM leads WHERE phone = $1', [phone]);
+    const existing = await client.query('SELECT id, first_name FROM leads WHERE phone = $1', [
+      phone,
+    ]);
 
     // The subscription is registered per EZ Texting account, not per group or
     // number, so every reply to every campaign on the account arrives here -
@@ -145,6 +149,7 @@ const handleInbound = async (req: Request, res: Response) => {
     }
 
     const leadId: number = existing.rows[0].id;
+    const firstName: string | null = existing.rows[0].first_name ?? null;
 
     // Dedupe on (from_number, received_at): EZ Texting retries, and the
     // payload's id belongs to our outbound message, so it repeats across
@@ -166,28 +171,43 @@ const handleInbound = async (req: Request, res: Response) => {
 
     await client.query('UPDATE leads SET has_unread_inbound = true WHERE id = $1', [leadId]);
 
-    if (isOptOut(payload)) {
+    const optedOut = isOptOut(payload);
+
+    // The state machine decides what the reply does to the conversation, and
+    // what to send. It is told the opt-out outcome rather than parsing the text
+    // itself, so the keyword list above stays the only one.
+    const pending = await applyReply(client, leadId, phone, firstName, {
+      text: payload.message,
+      optOut: optedOut,
+    });
+
+    // blockNumber is driven by the state machine's result, so the rule lives in
+    // one place. A lead with no conversation at all still gets blocked.
+    if (pending?.result.blockNumber ?? optedOut) {
       await blockNumber(client, phone, STOP_REASON);
-      const closed = await client.query(
-        `UPDATE conversations SET status = 'suppressed', updated_at = now()
-         WHERE lead_id = $1 AND status = 'open'`,
-        [leadId]
-      );
-      // A lead can opt out with no open conversation - already completed, or
-      // created by this webhook in `review`. The dnc_list row is what blocks
-      // future contact either way, so say which happened rather than implying
-      // a conversation changed.
+    }
+
+    await client.query('COMMIT');
+
+    if (optedOut) {
       console.log(
-        closed.rowCount
+        pending?.result.conversation.status === 'suppressed'
           ? `webhook: ${phone} opted out, open conversation suppressed`
           : `webhook: ${phone} opted out, added to dnc_list (no open conversation)`
       );
     }
 
-    await client.query('COMMIT');
-
-    // TODO (Week 2): run the state machine here - save the answer to q{step},
-    // score it, advance or complete, and send the next question.
+    // After the commit, deliberately: a failed send must not roll back an
+    // answer the lead has already given, and nothing should go out on the back
+    // of a transaction that later fails.
+    if (pending?.result.send) {
+      await pending.send();
+      const c = pending.result.conversation;
+      console.log(
+        `webhook: lead ${leadId} -> ${c.status} step=${c.step ?? '-'}` +
+          ` score=${c.score} tier=${c.tier ?? '-'} sent=${pending.result.send}`
+      );
+    }
 
     return res.sendStatus(200);
   } catch (err) {
