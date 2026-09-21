@@ -201,11 +201,15 @@ const handleInbound = async (req: Request, res: Response) => {
     // answer the lead has already given, and nothing should go out on the back
     // of a transaction that later fails.
     if (pending?.result.send) {
-      await pending.send();
+      const sentId = await pending.send();
       const c = pending.result.conversation;
+      // Says what actually happened: a send can be refused (dnc_list) or fail
+      // while the conversation still advances, and a log line claiming it went
+      // out would hide exactly the case worth noticing.
       console.log(
         `webhook: lead ${leadId} -> ${c.status} step=${c.step ?? '-'}` +
-          ` score=${c.score} tier=${c.tier ?? '-'} sent=${pending.result.send}`
+          ` score=${c.score} tier=${c.tier ?? '-'}` +
+          (sentId ? ` sent=${pending.result.send}` : ` NOT sent=${pending.result.send}`)
       );
     }
 

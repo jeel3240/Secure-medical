@@ -128,6 +128,10 @@ For the same reason a failed send still returns 200: a retry would not re-send.
 re-reading the text. The handler decides whether the reply *is* an opt-out,
 because it holds the keyword list; the core decides what that means.
 
+A send to a number on `dnc_list` is refused inside `sendMessage`, so a reply
+arriving after a STOP from elsewhere advances the conversation but sends
+nothing. The log line reads `NOT sent=` in that case.
+
 ## Not done yet
 
 **The expiry sweep.** `expires_at` is set on every send, but nothing yet marks

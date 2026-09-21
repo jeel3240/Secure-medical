@@ -277,10 +277,14 @@ expired by the same tick once `created_at` is older than `expiry_days`.
 
 - **Every send checks `dnc_list` immediately before sending**, automated or
   not: the opener, every reply in the flow, and later an agent's manual SMS.
-  `sendMessage` in `integrations/ezt-client.ts` does not check it today - the
-  poller checks before creating a lead, which covers the opener, but a reply
-  sent minutes after a STOP from another source would not be caught. The check
-  belongs inside the send path, so no caller can forget it.
+  Built 2026-09-21: `sendMessage` in `integrations/ezt-client.ts` queries
+  `dnc_list` and throws `BlockedNumberError` before calling the API, so no
+  caller can forget. A bare number is normalised to E.164 first - comparing
+  `16026203572` against a stored `+16026203572` would match nothing and send to
+  a blocked phone.
+  The conversation still advances when a send is refused: the lead's answer is
+  recorded, and only the message is withheld. The tick log says `NOT sent=`
+  rather than `sent=`, so the case is visible.
 - Every automated send uses the copy in `settings`, rendered by
   `core/messages.ts` (`{first_name}`, one-segment limit), and is recorded in
   `messages` with the id EZ Texting returns - that id is what links the lead's
