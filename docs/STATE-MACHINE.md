@@ -31,8 +31,7 @@ A reply now advances the conversation. Verified against the live account on
 100, HOT, with question 2, question 3 and the thanks arriving as real SMS, and
 Admin > Leads showing Completed rather than Awaiting reply.
 
-**Still to come:** the expiry sweep (`expires_at` is now set on every send, but
-nothing marks a stale conversation `expired`), and the queue API.
+**Still to come:** the queue API.
 
 Two things deliberately not where the spec's sketch might suggest:
 
@@ -230,7 +229,9 @@ for responding, and so reads as LOW.
 
 ## Expiry
 
-- Every automated send sets `expires_at = now + settings.expiry_days` (seeded 7).
+- A send that **succeeds** sets `expires_at = now + settings.expiry_days`
+  (seeded 7). A send that fails leaves it where it was, so a lead who was never
+  actually messaged expires on schedule rather than a week late.
 - Each worker tick marks `open` conversations past `expires_at` as `expired`.
   Nothing is sent to the lead.
 - A reply that arrives after expiry follows rule 2: stored, flagged, no reply.
@@ -271,12 +272,17 @@ sends.
 poll and in its own try/catch: expiring is local work that must keep happening
 while EZ Texting is unreachable.
 
-`expires_at` is set when a message is sent, not when the conversation is
-created - by `sendOpener` in the poller and by `reply-flow.ts` for every send in
-the flow. It is the window the lead has to reply to *that message*, so a
-conversation whose opener failed has not started one. Those, and any created
-before this existed, fall back to `created_at + expiry_days` in the sweep,
-which is what stops them sitting `open` forever.
+`expires_at` is set once a message has actually gone out, not when the
+conversation is created and not when a send is merely attempted - by
+`sendOpener` in the poller and by `bumpExpiry` in `reply-flow.ts`, both after
+the send returns. It is the window the lead has to reply to *that message*, so
+a conversation whose opener or follow-up failed has not started one. Those, and
+any created before this existed, fall back to `created_at + expiry_days` in the
+sweep, which is what stops them sitting `open` forever.
+
+*(Corrected 2026-09-22: the flow used to move the deadline as soon as it decided
+to send, so a failed message still bought the lead another week. The two paths
+now behave the same.)*
 
 The sweep is idempotent - a second run in the same minute expires nothing - and
 verified against the database: of seven conversations, the two overdue `open`
