@@ -356,7 +356,7 @@ Build:
 1. State machine in `core/` – a pure function, no database calls, so every rule is unit-testable
 2. Wire it into the webhook: load conversation → run → save → send
 3. Opener sent automatically when the worker inserts a new lead - **done**
-4. STOP handling
+4. STOP handling, and START releasing the block while keeping the record *(added 2026-09-22)*
 5. Unclear replies, and answer matching: numbers plus a short list of accepted words
 6. Scoring and tiers, updated on every reply
 7. Expiry of conversations that go quiet
