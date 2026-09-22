@@ -54,8 +54,17 @@ change the numbers beside them.
 Search matches name, or phone with punctuation stripped, so `(602) 620-3572`
 finds `+16026203572`.
 
-Score and tier are returned only for `completed` leads; a partial conversation
-has a score, but showing it next to a completed one would invite comparing them.
+Score and tier are the running values, returned at every stage. Scoring starts
+at the first reply, so a lead part-way through has a real score - 10 for
+responding, 25 once question 1 is answered - and a tier that follows it.
+
+They were hidden until `completed` until 2026-09-22, on the reasoning that a
+partial score next to a final one invites comparing them. That cost more than
+it saved: a superadmin watching the flow could not see a lead accumulating
+points, which is the thing the page is for.
+
+A score of 0 returns null rather than `0`, so the column reads `-`. Zero means
+no reply yet, and printing it looks like a judgement rather than an absence.
 
 ## The page
 
