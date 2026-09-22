@@ -84,6 +84,23 @@ rejected, and the default order is oldest-first. If the sort silently broke, the
 loop would stop on the first contact every cycle and never ingest anything, with
 no error. The guard turns that into a loud failure.
 
+## Who is never texted
+
+Two checks stop a contact being messaged, and both save the lead so the arrival
+is still visible:
+
+| Check | What happens |
+|---|---|
+| EZ Texting has the contact `optOut: true` | Lead saved with a `suppressed` conversation, added to `dnc_list` with reason `ezt_opt_out`, nothing sent |
+| The phone is on our `dnc_list`, not released | Lead saved with a `suppressed` conversation, nothing sent |
+
+In practice EZ Texting also removes an opted-out contact from every group, so
+the poller usually never sees one at all - observed 2026-09-22, when a number
+that texted STOP was struck through and left with no groups. The check is the
+second line of defence for a contact that arrives with the flag anyway.
+
+`worker/poller.test.ts` covers both, with EZ Texting and the database mocked.
+
 ## Reading the log
 
 ```
