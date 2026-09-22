@@ -195,9 +195,15 @@ that question's options, so the lead is reminded what the numbers mean:
 
 | Step | `settings` key | Text |
 |---|---|---|
-| 1 | `message_clarify_1` | Sorry, please reply with just a number: 1 Supplements, 2 Telehealth/Rx, or 3 Both. |
-| 2 | `message_clarify_2` | Sorry, please reply with just a number: 1 Today, 2 This week, or 3 Just researching. |
-| 3 | `message_clarify_3` | Sorry, please reply with just a number: 1 Call me now, 2 Text me, or 3 Contact me later. |
+| 1 | `message_clarify_1` | Sorry, please reply with just a number: 1. Supplements, 2. Telehealth/Rx, or 3. Both. |
+| 2 | `message_clarify_2` | Sorry, please reply with just a number: 1. Today, 2. This week, or 3. Just researching. |
+| 3 | `message_clarify_3` | Sorry, please reply with just a number: 1. Call me now, 2. Text me, or 3. Contact me later. |
+
+The options are numbered `1.` rather than `1` (Jeel, 2026-09-22): the dot
+separates the number from the word at a glance. The same change applies to the
+three questions. It costs three characters, which the opener paid for by
+dropping the word "options" - otherwise a name of six letters or more would push
+it past one segment and be dropped by `core/messages.ts`.
 
 It says "just a number" although words are accepted too; asking for a number
 keeps the next reply as simple as possible.
