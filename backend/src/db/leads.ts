@@ -70,7 +70,7 @@ const BASE = `
     ORDER BY COALESCE(m.received_at, m.created_at) DESC, m.id DESC
     LIMIT 1
   ) m ON true
-  LEFT JOIN dnc_list d ON d.phone = l.phone
+  LEFT JOIN dnc_list d ON d.phone = l.phone AND d.released_at IS NULL
 `;
 
 /**

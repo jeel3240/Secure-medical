@@ -54,12 +54,55 @@ interface InboundText {
 /** dnc_list.reason for an opt-out that arrived as a reply, vs the poller's `ezt_opt_out`. */
 const STOP_REASON = 'sms_stop';
 
+/** dnc_list.released_reason when a lead texts START. */
+const START_REASON = 'sms_start';
+
+/**
+ * Opt-in keywords. EZ Texting re-subscribes the contact on its side and sets
+ * `optIn`; the keywords are checked too, so a START that arrives without the
+ * flag still lifts our block.
+ */
+const START_WORDS = new Set(['start', 'unstop', 'yes', 'subscribe']);
+
 const STOP_WORDS = new Set(['stop', 'stopall', 'unsubscribe', 'cancel', 'end', 'quit', 'revoke', 'optout']);
+
+function normalised(payload: InboundText): string {
+  return (payload.message ?? '').trim().toLowerCase().replace(/[.!,]+$/, '');
+}
 
 function isOptOut(payload: InboundText): boolean {
   if (payload.optOut) return true;
-  const text = (payload.message ?? '').trim().toLowerCase().replace(/[.!,]+$/, '');
-  return STOP_WORDS.has(text);
+  return STOP_WORDS.has(normalised(payload));
+}
+
+/** A lead asking to hear from us again. Never both: an opt-out wins. */
+function isOptIn(payload: InboundText): boolean {
+  if (isOptOut(payload)) return false;
+  return Boolean(payload.optIn) || START_WORDS.has(normalised(payload));
+}
+
+/**
+ * Lifts every live block on the number, keeping the row as the record.
+ *
+ * Every reason is released, including one an agent set - Jeel's decision,
+ * 2026-09-22: someone who asks to be contacted again is asking whatever the
+ * block was for. The dates stay on the row, so the history reads "blocked on
+ * the 22nd, released on the 22nd".
+ *
+ * Returns how many rows were released, which is 0 when the number was not
+ * blocked - a START from someone we never blocked changes nothing.
+ */
+async function releaseNumber(
+  client: { query: (q: string, v?: unknown[]) => Promise<{ rows: any[]; rowCount: number | null }> },
+  phone: string
+): Promise<number> {
+  const { rowCount } = await client.query(
+    `UPDATE dnc_list
+     SET released_at = now(), released_reason = $2
+     WHERE phone = $1 AND released_at IS NULL`,
+    [phone, START_REASON]
+  );
+  return rowCount ?? 0;
 }
 
 /** Added without a lead, which the table allows: phone is its only key. */
@@ -68,9 +111,13 @@ async function blockNumber(
   phone: string,
   reason: string
 ): Promise<void> {
+  // A number that opted out, was released, and opts out again reuses its row:
+  // the block is live again and the release dates are cleared.
   await client.query(
     `INSERT INTO dnc_list (phone, reason) VALUES ($1, $2)
-     ON CONFLICT (phone) DO NOTHING`,
+     ON CONFLICT (phone) DO UPDATE
+     SET reason = EXCLUDED.reason, added_at = now(),
+         released_at = NULL, released_reason = NULL`,
     [phone, reason]
   );
 }
@@ -134,6 +181,19 @@ const handleInbound = async (req: Request, res: Response) => {
     // table with real customer numbers from unrelated campaigns, 34 of them to
     // 1 real lead.
     if (!existing.rowCount) {
+      // A START from a number we hold no lead for still lifts a block we hold -
+      // it may be a lead the partner delivered before, or one still to come.
+      if (isOptIn(payload)) {
+        const released = await releaseNumber(client, phone);
+        await client.query('COMMIT');
+        console.log(
+          released
+            ? `webhook: ${phone} opted back in, block released (no lead)`
+            : `webhook: ignored reply from ${phone} - no lead for that number`
+        );
+        return res.sendStatus(200);
+      }
+
       if (isOptOut(payload)) {
         // Kept even though there is no lead. If this number is later delivered
         // as a partner lead, the poller's dnc_list check stops us texting
@@ -172,6 +232,17 @@ const handleInbound = async (req: Request, res: Response) => {
     await client.query('UPDATE leads SET has_unread_inbound = true WHERE id = $1', [leadId]);
 
     const optedOut = isOptOut(payload);
+
+    // START lifts the block first, so anything else in this reply is handled
+    // as a normal message. The conversation itself is not reopened: a
+    // suppressed one is finished, and what the lead sends next reaches an
+    // agent as an inbound reply - STATE-MACHINE.md, "Opting back in".
+    if (isOptIn(payload)) {
+      const released = await releaseNumber(client, phone);
+      if (released) {
+        console.log(`webhook: ${phone} opted back in, block released`);
+      }
+    }
 
     // The state machine decides what the reply does to the conversation, and
     // what to send. It is told the opt-out outcome rather than parsing the text

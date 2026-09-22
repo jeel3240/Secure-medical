@@ -21,6 +21,9 @@ Code: `backend/src/api/webhooks.ts`. Payload shape: `docs/EZTEXTING-API.md`.
 6. If it is an opt-out, add to `dnc_list` and suppress any open conversation. A
    lead can opt out with no open conversation - already completed, for instance -
    and the `dnc_list` row is what blocks future contact either way.
+7. If it is an opt-in - START, UNSTOP, YES, SUBSCRIBE, or the payload's `optIn`
+   flag - release the block instead, keeping the row. The conversation is left
+   as it is. See STATE-MACHINE.md, "Opting back in".
 7. Return 200.
 
 All of it runs in one transaction.

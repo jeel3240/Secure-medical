@@ -260,8 +260,12 @@ Consequences for us:
 - **"PillRx" is the brand name configured on the account**, and it appears in
   the platform's own compliance replies. Our copy signs as "Secure Medical".
   Which name is right is the client's call.
-- The reply invites START to opt back in. What EZ Texting does with START has
-  not been tested; our `dnc_list` blocks the number regardless (STATE-MACHINE.md).
+- The reply invites START to opt back in. Verified 2026-09-22: texting START
+  sets the contact's `optOut` back to `false` on EZ Texting's side. Our own
+  block is released by the webhook when that message arrives - see
+  STATE-MACHINE.md, "Opting back in".
+- The inbound payload carries `optIn` as well as `optOut`, which is how an
+  opt-in arrives alongside the keyword.
 
 ## Safety
 - Client account contains ~120,000 real contacts. Never query without the group filter. Never send to any group other than a `dev-test` group you created.

@@ -63,9 +63,16 @@ ALTER TABLE users ADD COLUMN last_login_at TIMESTAMPTZ;
 ```
 
 **`dnc_list` is the permanent record of blocked numbers.** One row per phone,
-with the reason and when it was added. Rows are never deleted automatically -
-the design brief keeps deletion out of v1 - so the table can show the client
-which numbers were blocked and when, if they are ever asked to prove it.
+with the reason and when it was added. Rows are never deleted - the design brief
+keeps deletion out of v1 - so the table can show the client which numbers were
+blocked and when, if they are ever asked to prove it.
+
+A block is lifted by filling in `released_at` and `released_reason`
+(`002_dnc_release.sql`), not by deleting the row, so both dates survive. **Only
+a row with `released_at IS NULL` blocks anything**; every read - the poller,
+`sendMessage`, the Admin > Leads status - filters on it. Today the only thing
+that releases a row is a lead texting START; see STATE-MACHINE.md, "Opting back
+in".
 
 It has no `added_by` yet. The Admin > DNC list page in the design brief shows
 who added each number, which only matters once an agent can mark a number DNC

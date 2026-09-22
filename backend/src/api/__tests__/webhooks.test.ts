@@ -207,6 +207,80 @@ describe('a reply from a number with no lead', () => {
   });
 });
 
+describe('START, a lead asking to hear from us again', () => {
+  it('releases the block and keeps the row as the record', async () => {
+    const { client, calls } = fakeClient({ leadId: 42, conversation: { status: 'suppressed' } });
+    connect.mockReturnValue(client);
+
+    const res = await request(buildApp()).post('/api/webhooks/eztexting').send(reply({ message: 'START' }));
+
+    expect(res.status).toBe(200);
+    const release = calls.find((c) => /UPDATE dnc_list/i.test(c.sql));
+    expect(release?.sql).toMatch(/released_at = now\(\)/);
+    // Only live blocks, and the row is never deleted.
+    expect(release?.sql).toMatch(/released_at IS NULL/);
+    expect(release?.values).toEqual(['+15551230000', 'sms_start']);
+    expect(sqlOf(calls)).not.toMatch(/DELETE FROM dnc_list/i);
+  });
+
+  it.each([['start'], [' Start. '], ['UNSTOP'], ['yes']])('accepts %j', async (message) => {
+    const { client, calls } = fakeClient({ leadId: 42, conversation: { status: 'suppressed' } });
+    connect.mockReturnValue(client);
+
+    await request(buildApp()).post('/api/webhooks/eztexting').send(reply({ message }));
+
+    expect(calls.some((c) => /UPDATE dnc_list/i.test(c.sql))).toBe(true);
+  });
+
+  it('leaves the suppressed conversation closed and sends nothing', async () => {
+    const { client, calls } = fakeClient({ leadId: 42, conversation: { status: 'suppressed' } });
+    connect.mockReturnValue(client);
+
+    await request(buildApp()).post('/api/webhooks/eztexting').send(reply({ message: 'START' }));
+
+    // Stored and flagged, so an agent sees they came back.
+    expect(sqlOf(calls)).toMatch(/INSERT INTO messages/i);
+    expect(sqlOf(calls)).toMatch(/UPDATE leads SET has_unread_inbound/i);
+    expect(savedConversation(calls)).toMatchObject({ status: 'suppressed' });
+    expect(sendMessage).not.toHaveBeenCalled();
+  });
+
+  it('releases a block for a number we hold no lead for, without creating one', async () => {
+    const { client, calls } = fakeClient({ leadId: null });
+    connect.mockReturnValue(client);
+
+    const res = await request(buildApp()).post('/api/webhooks/eztexting').send(reply({ message: 'START' }));
+
+    expect(res.status).toBe(200);
+    expect(calls.some((c) => /UPDATE dnc_list/i.test(c.sql))).toBe(true);
+    expect(sqlOf(calls)).not.toMatch(/INSERT INTO leads/i);
+    expect(sqlOf(calls)).not.toMatch(/INSERT INTO messages/i);
+  });
+
+  it('is not triggered by STOP, nor by a sentence containing start', async () => {
+    for (const message of ['STOP', 'start the process please']) {
+      const { client, calls } = fakeClient({ leadId: 42, conversation: {} });
+      connect.mockReturnValue(client);
+
+      await request(buildApp()).post('/api/webhooks/eztexting').send(reply({ message }));
+
+      expect(calls.some((c) => /UPDATE dnc_list/i.test(c.sql))).toBe(false);
+    }
+  });
+
+  it('blocks again if they opt out after opting back in', async () => {
+    const { client, calls } = fakeClient({ leadId: 42, conversation: {} });
+    connect.mockReturnValue(client);
+
+    await request(buildApp()).post('/api/webhooks/eztexting').send(reply({ message: 'STOP' }));
+
+    const block = calls.find((c) => /INSERT INTO dnc_list/i.test(c.sql));
+    // The same row comes back to life rather than a second one being written.
+    expect(block?.sql).toMatch(/ON CONFLICT \(phone\) DO UPDATE/i);
+    expect(block?.sql).toMatch(/released_at = NULL/i);
+  });
+});
+
 describe('a reply from a lead we hold', () => {
   it('is stored and flagged unread', async () => {
     const { client, calls } = fakeClient({ leadId: 42 });
