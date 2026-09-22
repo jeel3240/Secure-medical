@@ -165,7 +165,7 @@ POST /v1/messages
 ```
 - `toNumbers` without `+` (matches how contacts come back). Confirm in sandbox whether `+1...` is also accepted.
 - Response includes a message id. Store in `messages.ezt_message_id`.
-- Delivery type (Standard 130 / Express 160) still unconfirmed with client. Opener is 158 chars.
+- Delivery type (Standard 130 / Express 160) still unconfirmed with client. The opener is 151 characters for a four-letter name and 158 at its longest, so it is one segment on Express and two on Standard - worth settling before real volume.
 
 ## Inbound webhook
 
