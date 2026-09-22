@@ -25,6 +25,14 @@ export interface ConversationRow extends Conversation {
 /**
  * The newest conversation for a lead, which is the one that drives the flow.
  * Earlier ones are history - see STATE-MACHINE.md, "A number that comes back".
+ *
+ * Locked with FOR UPDATE, inside the caller's transaction. Two texts sent a
+ * moment apart arrive as two requests at once; without the lock both could read
+ * the same step, treat their text as the answer to it, and each send the next
+ * question - the lead gets it twice and one of their answers is lost. The lock
+ * makes the second wait, so it reads the conversation the first one left and
+ * answers the question the lead is actually on. It holds one lead's row, so
+ * replies from other leads are unaffected.
  */
 export async function loadNewestConversation(
   client: PoolClient,
@@ -35,7 +43,8 @@ export async function loadNewestConversation(
      FROM conversations
      WHERE lead_id = $1
      ORDER BY created_at DESC, id DESC
-     LIMIT 1`,
+     LIMIT 1
+     FOR UPDATE`,
     [leadId]
   );
 

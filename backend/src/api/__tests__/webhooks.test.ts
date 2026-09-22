@@ -405,6 +405,19 @@ describe('the reply advances the conversation', () => {
     expect(committedBeforeSend).toBe(true);
   });
 
+  it('locks the conversation while it works, so two replies at once cannot clash', async () => {
+    const { client, calls } = fakeClient({ leadId: 42, conversation: {} });
+    connect.mockReturnValue(client);
+
+    await request(buildApp()).post('/api/webhooks/eztexting').send(reply({ message: '3' }));
+
+    const read = calls.find((c) => /SELECT .* FROM conversations/i.test(c.sql));
+    expect(read?.sql).toMatch(/FOR UPDATE/i);
+    // Inside the transaction, or the lock would be released immediately.
+    const order = calls.map((c) => c.sql);
+    expect(order.indexOf('BEGIN')).toBeLessThan(order.findIndex((s) => /FOR UPDATE/i.test(s)));
+  });
+
   it('restarts the reply window only after the send succeeds', async () => {
     const { client } = fakeClient({ leadId: 42, conversation: {} });
     connect.mockReturnValue(client);

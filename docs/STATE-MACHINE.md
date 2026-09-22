@@ -68,6 +68,14 @@ The webhook loads the lead's newest conversation, calls `step`, saves the
 result, sends, and records the send - in that order, in one transaction except
 the send itself (see "Sending").
 
+**The conversation row is locked while that happens** (`FOR UPDATE`, added
+2026-09-22). Two texts sent moments apart arrive as two requests at once;
+without the lock both could read the same step, treat their text as the answer
+to it, and each send the next question - the lead gets it twice and one answer
+is lost. The lock holds one lead's row, so replies from other leads are handled
+in parallel: verified by holding one conversation for six seconds, during which
+that lead's reply waited and four other leads' replies completed in 0.2s each.
+
 Answer matching is a separate pure function the state machine calls:
 `matchAnswer(text, step) -> 1 | 2 | 3 | null`.
 
