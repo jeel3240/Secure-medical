@@ -927,6 +927,59 @@ a {
   color: var(--color-text-subtle);
 }
 
+/* ---------- Score and tier ---------- */
+
+/*
+ * Colour carries the tier, so a scan down the column shows where the heat is
+ * without reading every number. The palette is the design brief's: HOT red,
+ * WARM amber, LOW slate. A lead with no reply has no score and shows "-".
+ */
+.score {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.score__value {
+  font-weight: 700;
+  color: var(--color-text);
+}
+
+.score__tier {
+  display: inline-flex;
+  align-items: center;
+  height: 20px;
+  padding: 0 var(--space-2);
+  border-radius: 999px;
+  font-size: var(--text-xs);
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  background: var(--color-low-soft);
+  color: var(--color-low);
+}
+
+.score--hot .score__value {
+  color: var(--color-hot);
+}
+
+.score--hot .score__tier {
+  background: var(--color-hot-soft);
+  color: var(--color-hot);
+}
+
+.score--warm .score__value {
+  color: var(--color-warm);
+}
+
+.score--warm .score__tier {
+  background: var(--color-warm-soft);
+  color: var(--color-warm);
+}
+
+.score--low .score__value {
+  color: var(--color-low);
+}
+
 /* ---------- Data table ---------- */
 
 .table-wrap {
