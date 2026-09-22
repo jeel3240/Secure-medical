@@ -267,9 +267,23 @@ This applies whether or not the lead ever answered before: texting us is
 interest either way. A number on `dnc_list` never comes back, whatever it
 sends.
 
-The poller does not set `expires_at` on the conversations it creates today. It
-must, when it sends the opener. Conversations already created without one are
-expired by the same tick once `created_at` is older than `expiry_days`.
+**Built 2026-09-22.** `worker/expiry.ts` runs on every worker tick, after the
+poll and in its own try/catch: expiring is local work that must keep happening
+while EZ Texting is unreachable.
+
+`expires_at` is set when a message is sent, not when the conversation is
+created - by `sendOpener` in the poller and by `reply-flow.ts` for every send in
+the flow. It is the window the lead has to reply to *that message*, so a
+conversation whose opener failed has not started one. Those, and any created
+before this existed, fall back to `created_at + expiry_days` in the sweep,
+which is what stops them sitting `open` forever.
+
+The sweep is idempotent - a second run in the same minute expires nothing - and
+verified against the database: of seven conversations, the two overdue `open`
+ones expired (including one with no `expires_at`), the future-dated and
+freshly-created `open` ones did not, and `completed`, `review` and `suppressed`
+were untouched despite all being overdue. A reply to an expired conversation
+left it `expired`, set `has_unread_inbound`, and sent nothing.
 
 ---
 

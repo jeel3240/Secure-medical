@@ -6,6 +6,12 @@ one cycle at a time, every 60 seconds.
 Code: `backend/src/worker/poller.ts` and `backend/src/worker/index.ts`.
 API behaviour it depends on: `docs/EZTEXTING-API.md`.
 
+The worker tick does two things: this poll, then the expiry sweep in
+`worker/expiry.ts`, each in its own try/catch so a failure on one does not stop
+the other. Expiring is local work that must keep happening while EZ Texting is
+unreachable. The sweep's rules are in STATE-MACHINE.md, "Expiry"; what the
+poller owns is setting `expires_at` when the opener goes out.
+
 ## Why polling
 
 EZ Texting does not tell us when a contact appears, so we ask. There is also no
@@ -126,10 +132,6 @@ checkpoint, so if a re-delivery leaves `createdAt` unchanged, the poller never
 sees it and none of the rules ever run. This can be checked on the test account:
 add a contact through the API that already exists in the group, and see whether
 its `createdAt` moves.
-
-**`expires_at` is never set.** The conversation is created without it, so
-nothing can auto-expire. It should be `now + expiry_days` from `settings` at
-creation. Phase 2, with the state machine.
 
 **No page cap.** A checkpoint set far in the past would walk the whole group in
 one cycle - 178 requests for a 1,773-contact group, thousands for the full
