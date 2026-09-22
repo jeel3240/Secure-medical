@@ -24,14 +24,12 @@ expiry). Related: WEBHOOKS.md, POLLER.md, SCHEMA.md, the plan's §6.
 | `core/answers.ts` | `matchAnswer()` - the numbers and the word lists |
 | `api/reply-flow.ts` | Loads the conversation and rules, runs `step`, saves, sends |
 | `core/state-machine.test.ts` | 34 tests, one per case in "Tests the state machine needs" |
-| `api/__tests__/webhooks.test.ts` | 24, including the flow advancing through the webhook |
+| `api/__tests__/webhooks.test.ts` | 36, including the flow advancing through the webhook |
 
 A reply now advances the conversation. Verified against the live account on
 2026-09-21: replies of 3, 1, 1 walked a lead from step 1 to `completed`, score
 100, HOT, with question 2, question 3 and the thanks arriving as real SMS, and
 Admin > Leads showing Completed rather than Awaiting reply.
-
-**Still to come:** the queue API.
 
 Two things deliberately not where the spec's sketch might suggest:
 
@@ -278,6 +276,11 @@ left sitting unseen:
 - the conversation stays `expired` - no questions restart;
 - once an agent opens the lead, the flag clears and it leaves the queue again,
   unless it now has a callback or other reason to be there.
+
+*(2026-09-22: the last bullet is not built. `api/webhooks.ts` sets
+`has_unread_inbound` and nothing anywhere unsets it, so such a lead stays in
+the queue tagged Inbound reply instead of leaving it. Opening a lead is the
+agent workspace, Week 3 - that is where the clear belongs.)*
 
 This applies whether or not the lead ever answered before: texting us is
 interest either way. A number on `dnc_list` never comes back, whatever it
