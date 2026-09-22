@@ -151,11 +151,15 @@ function reply(over: Record<string, unknown> = {}) {
   };
 }
 
+/** The SQL sent through the pool, collapsed so multi-line statements match. */
+const poolSql = () => poolQuery.mock.calls.map(([sql]) => String(sql).replace(/\s+/g, ' ').trim());
+
 const sqlOf = (calls: Recorded[]) => calls.map((c) => c.sql).join(' || ');
 
 beforeEach(() => {
   fakeConfig.config.ezt.webhookToken = '';
   connect.mockReset();
+  poolQuery.mockClear();
   sendMessage.mockClear();
   sendMessage.mockResolvedValue({ id: 'sent-1' });
   poolQuery.mockClear();
@@ -399,6 +403,32 @@ describe('the reply advances the conversation', () => {
 
     // An answer the lead has given must not be rolled back by a failed send.
     expect(committedBeforeSend).toBe(true);
+  });
+
+  it('restarts the reply window only after the send succeeds', async () => {
+    const { client } = fakeClient({ leadId: 42, conversation: {} });
+    connect.mockReturnValue(client);
+
+    await request(buildApp()).post('/api/webhooks/eztexting').send(reply({ message: '3' }));
+
+    const bump = poolSql().find((sql) => /UPDATE conversations SET expires_at/i.test(sql));
+    expect(bump).toBeDefined();
+    // Only while the lead still owes us an answer.
+    expect(bump).toMatch(/status = 'open'/);
+  });
+
+  it('leaves the reply window alone when the send fails', async () => {
+    const { client, calls } = fakeClient({ leadId: 42, conversation: {} });
+    connect.mockReturnValue(client);
+    sendMessage.mockRejectedValue(new Error('EZ Texting down'));
+
+    await request(buildApp()).post('/api/webhooks/eztexting').send(reply({ message: '3' }));
+
+    // A lead who was never actually messaged should expire on schedule, not a
+    // week later. The conversation still advances.
+    expect(poolSql().some((sql) => /expires_at/i.test(sql))).toBe(false);
+    expect(sqlOf(calls)).not.toMatch(/expires_at/i);
+    expect(savedConversation(calls)).toMatchObject({ step: 2, q1: '3' });
   });
 
   it('keeps the advanced conversation when the send fails', async () => {

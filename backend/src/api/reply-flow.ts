@@ -84,37 +84,16 @@ export async function loadRules(client: PoolClient): Promise<Rules> {
   };
 }
 
-async function saveConversation(
-  client: PoolClient,
-  id: number,
-  c: Conversation,
-  expiryDays: number | null
-): Promise<void> {
-  // expires_at moves forward only when something is sent, because it is the
-  // window the lead has to reply to that message. A reply that sends nothing -
-  // review, or a completed conversation - leaves it alone.
-  const bumpExpiry = expiryDays !== null;
-
+async function saveConversation(client: PoolClient, id: number, c: Conversation): Promise<void> {
+  // expires_at is not touched here. It is the window the lead has to reply to a
+  // message, so it moves only once that message has actually gone out - see
+  // bumpExpiry, called after the send succeeds.
   await client.query(
     `UPDATE conversations
      SET status = $2, step = $3, q1 = $4, q2 = $5, q3 = $6,
-         invalid_count = $7, score = $8, tier = $9,
-         expires_at = CASE WHEN $10 THEN now() + ($11 || ' days')::interval ELSE expires_at END,
-         updated_at = now()
+         invalid_count = $7, score = $8, tier = $9, updated_at = now()
      WHERE id = $1`,
-    [
-      id,
-      c.status,
-      c.step,
-      c.q1,
-      c.q2,
-      c.q3,
-      c.invalidCount,
-      c.score,
-      c.tier,
-      bumpExpiry,
-      String(expiryDays ?? 0),
-    ]
+    [id, c.status, c.step, c.q1, c.q2, c.q3, c.invalidCount, c.score, c.tier]
   );
 }
 
@@ -152,20 +131,42 @@ export async function applyReply(
   const rules = await loadRules(client);
   const result = step(conversation, reply, rules);
 
-  const expiryDays = result.send ? await readExpiryDays(client) : null;
-  await saveConversation(client, conversation.id, result.conversation, expiryDays);
+  await saveConversation(client, conversation.id, result.conversation);
 
   // The send is handed back as a closure so the caller can commit first.
   return {
     result,
-    send: async () => (result.send ? sendFlowMessage(leadId, phone, firstName, result.send) : null),
+    send: async () =>
+      result.send ? sendFlowMessage(leadId, conversation.id, phone, firstName, result.send) : null,
   };
 }
 
-async function readExpiryDays(client: PoolClient): Promise<number> {
-  const { rows } = await client.query(`SELECT value FROM settings WHERE key = 'expiry_days'`);
+interface Querier {
+  query: (sql: string, values?: unknown[]) => Promise<{ rows: Array<Record<string, unknown>> }>;
+}
+
+async function readExpiryDays(q: Querier): Promise<number> {
+  const { rows } = await q.query(`SELECT value FROM settings WHERE key = 'expiry_days'`);
   const days = Number(rows[0]?.value);
   return Number.isFinite(days) && days > 0 ? days : 7;
+}
+
+/**
+ * Restarts the lead's reply window, after a message has actually gone out.
+ *
+ * Only for a conversation still `open`: a `completed` one is not waiting on the
+ * lead, and `suppressed` must never change. The poller does the same thing
+ * after the opener, so a message that failed to send never buys the lead
+ * another week of silence in either path.
+ */
+async function bumpExpiry(q: Querier, conversationId: number): Promise<void> {
+  const days = await readExpiryDays(q);
+  await q.query(
+    `UPDATE conversations
+     SET expires_at = now() + ($2 || ' days')::interval, updated_at = now()
+     WHERE id = $1 AND status = 'open'`,
+    [conversationId, String(days)]
+  );
 }
 
 /**
@@ -176,9 +177,13 @@ async function readExpiryDays(client: PoolClient): Promise<number> {
  * rolling that back would mean re-asking a question the lead has answered; a
  * missing follow-up is the lesser problem. It is visible as a conversation
  * whose newest message is inbound.
+ *
+ * A failure also leaves `expires_at` where it was, so a lead who was never
+ * actually messaged expires on schedule rather than a week late.
  */
 async function sendFlowMessage(
   leadId: number,
+  conversationId: number,
   phone: string,
   firstName: string | null,
   key: MessageKey
@@ -208,6 +213,8 @@ async function sendFlowMessage(
        VALUES ($1, 'outbound', $2, $3)`,
       [leadId, text, sent.id]
     );
+
+    await bumpExpiry(pool, conversationId);
 
     console.log(`sent ${key} to lead ${leadId}, ezt id ${sent.id}`);
     return sent.id;

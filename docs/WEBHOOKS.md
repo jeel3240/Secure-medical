@@ -134,9 +134,6 @@ nothing. The log line reads `NOT sent=` in that case.
 
 ## Not done yet
 
-**The expiry sweep.** `expires_at` is set on every send, but nothing yet marks
-a conversation past it as `expired`. That is a worker job.
-
 **We never send a STOP confirmation, by design** (decided 2026-09-19). EZ
 Texting replies to STOP itself, so one from us would reach the lead as a second
 unsubscribe message. See EZTEXTING-API.md, "STOP handling".
