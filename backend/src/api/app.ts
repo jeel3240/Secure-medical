@@ -2,6 +2,7 @@ import cookieParser from 'cookie-parser';
 import express from 'express';
 import { adminLeadsRouter } from './admin/leads';
 import { authRouter } from './auth/routes';
+import { queueRouter } from './leads';
 import type { AppDeps } from './deps';
 import { errorHandler } from './http';
 import { usersRouter } from './users/routes';
@@ -32,6 +33,7 @@ export function createApp(deps: AppDeps): express.Express {
 
   app.use('/api/auth', authRouter(deps));
   app.use('/api/users', usersRouter(deps));
+  app.use('/api/leads', queueRouter(deps));
   app.use('/api/admin/leads', adminLeadsRouter(deps));
 
   // Unauthenticated: EZ Texting posts here. Under /api because that is the only

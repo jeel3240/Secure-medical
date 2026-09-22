@@ -11,7 +11,7 @@ Spec: `DESIGN-PROMPT.md` section 6g. Code: `frontend/src/pages/admin/LeadsPage.t
 The Priority Queue shows only leads who replied, because agents should spend
 their time on people who texted back. This page shows everyone, so a superadmin
 can confirm leads are arriving and see where they drop off, without
-non-responders burying HOT leads in the agents' view.
+non-responders burying HOT leads in the agents' view. That list is `QUEUE.md`.
 
 ## Status is derived, never stored
 
