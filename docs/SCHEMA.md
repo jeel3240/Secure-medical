@@ -63,9 +63,16 @@ ALTER TABLE users ADD COLUMN last_login_at TIMESTAMPTZ;
 ```
 
 **`dnc_list` is the permanent record of blocked numbers.** One row per phone,
-with the reason and when it was added. Rows are never deleted automatically -
-the design brief keeps deletion out of v1 - so the table can show the client
-which numbers were blocked and when, if they are ever asked to prove it.
+with the reason and when it was added. Rows are never deleted - the design brief
+keeps deletion out of v1 - so the table can show the client which numbers were
+blocked and when, if they are ever asked to prove it.
+
+A block is lifted by filling in `released_at` and `released_reason`
+(`002_dnc_release.sql`), not by deleting the row, so both dates survive. **Only
+a row with `released_at IS NULL` blocks anything**; every read - the poller,
+`sendMessage`, the Admin > Leads status - filters on it. Today the only thing
+that releases a row is a lead texting START; see STATE-MACHINE.md, "Opting back
+in".
 
 It has no `added_by` yet. The Admin > DNC list page in the design brief shows
 who added each number, which only matters once an agent can mark a number DNC
@@ -139,6 +146,10 @@ a lead off someone who stepped away, and manual reassignment is enough.
 `assigned_at` is still needed so a superadmin can tell a lead claimed two
 minutes ago from one held since last week - without it both look identical.
 
+*(2026-09-22: designed, not built. The columns exist and the queue query reads
+`assigned_to` to tag a lead In progress, but nothing writes either one -
+claiming is Week 3.)*
+
 A released lead carries no marker. Context comes from the timeline, which
 already shows calls, messages, notes and dispositions for the lead. A lead that
 is genuinely bad should get a disposition rather than being released.
@@ -186,7 +197,10 @@ the seeds as starting values rather than constants.
 A completed conversation cannot score below 40: `responded` and `completed` add
 20 between them, and the cheapest answers add another 20. Of the 27 possible
 answer combinations, 13 land HOT, 13 WARM, and only one - the least engaged
-answer to all three questions - lands LOW.
+answer to all three questions - lands LOW. A test in
+`core/state-machine.test.ts` walks all 27 and asserts that split, so a change
+to the seeded points or bands fails there rather than quietly reshaping the
+queue.
 
 That is not a mis-set band. Scoring applies to partial conversations too. A
 lead who replies once and goes quiet scores 10 and is LOW; one who stalls after

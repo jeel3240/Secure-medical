@@ -177,20 +177,22 @@ INSERT INTO settings (key, value) VALUES
   ('poll_overlap_minutes', '5'),
   ('expiry_days', '7'),
   ('max_invalid_before_review', '1'),
-  -- Copy from the mockup, page 2. The opener carries the sender name, the
-  -- reason for the text and the opt-out, which is what US carriers expect in a
-  -- first message; the options alone would arrive as an unexplained menu from
-  -- an unknown number. 158 characters with a six-letter name: one segment on
-  -- Express delivery. {first_name} is filled in at send time.
-  ('question_1', 'Secure Medical: Hi {first_name}, you asked about health & wellness options. What interests you? Reply 1 Supplements, 2 Telehealth/Rx, 3 Both. Reply STOP to opt out.'),
-  ('question_2', 'Great. When are you looking for help? Reply 1 Today, 2 This week, 3 Just researching.'),
-  ('question_3', 'How would you like us to help? Reply 1 Call me now, 2 Text me, 3 Contact me later.'),
+  -- Copy from the mockup, page 2, with the options numbered "1." rather than
+  -- "1" - Jeel, 2026-09-22 - because the dot separates the number from the word
+  -- at a glance. The word "options" came out of the opener to pay for the three
+  -- extra characters: without that, a name of six letters or more would push the
+  -- text past one 160-character segment and lose the name. The opener carries
+  -- the sender name, the reason for the text and the opt-out, which is what US
+  -- carriers expect in a first message. {first_name} is filled in at send time.
+  ('question_1', 'Secure Medical: Hi {first_name}, you asked about health & wellness. What interests you? Reply 1. Supplements, 2. Telehealth/Rx, 3. Both. Reply STOP to opt out.'),
+  ('question_2', 'Great. When are you looking for help? Reply 1. Today, 2. This week, 3. Just researching.'),
+  ('question_3', 'How would you like us to help? Reply 1. Call me now, 2. Text me, 3. Contact me later.'),
   -- One clarification per question, repeating that question's options, so a
   -- confused lead is reminded what 1, 2 and 3 mean. Wording approved by Jeel
   -- 2026-09-19. Sent for an unclear reply to question N.
-  ('message_clarify_1', 'Sorry, please reply with just a number: 1 Supplements, 2 Telehealth/Rx, or 3 Both.'),
-  ('message_clarify_2', 'Sorry, please reply with just a number: 1 Today, 2 This week, or 3 Just researching.'),
-  ('message_clarify_3', 'Sorry, please reply with just a number: 1 Call me now, 2 Text me, or 3 Contact me later.'),
+  ('message_clarify_1', 'Sorry, please reply with just a number: 1. Supplements, 2. Telehealth/Rx, or 3. Both.'),
+  ('message_clarify_2', 'Sorry, please reply with just a number: 1. Today, 2. This week, or 3. Just researching.'),
+  ('message_clarify_3', 'Sorry, please reply with just a number: 1. Call me now, 2. Text me, or 3. Contact me later.'),
   ('message_stop', 'You have been unsubscribed and will not receive further messages from Secure Medical.'),
   ('message_thanks', 'Thanks! A team member will reach out shortly.'),
   ('message_review', 'Thanks! A team member will follow up with you directly.');

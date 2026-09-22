@@ -249,10 +249,10 @@ export function LeadsPage() {
                   <td>{lead.stepReached ? `Q${lead.stepReached}` : '-'}</td>
                   <td>
                     {lead.score !== null ? (
-                      <>
-                        {lead.score}
-                        {lead.tier ? ` ${lead.tier}` : ''}
-                      </>
+                      <span className={`score${lead.tier ? ` score--${lead.tier.toLowerCase()}` : ''}`}>
+                        <span className="score__value tabular">{lead.score}</span>
+                        {lead.tier ? <span className="score__tier">{lead.tier}</span> : null}
+                      </span>
                     ) : (
                       '-'
                     )}

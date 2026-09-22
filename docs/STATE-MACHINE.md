@@ -16,6 +16,34 @@ Code: `backend/src/core/` for the pure logic, wired in from
 `backend/src/api/webhooks.ts` (replies) and `backend/src/worker/` (opener,
 expiry). Related: WEBHOOKS.md, POLLER.md, SCHEMA.md, the plan's §6.
 
+## What is built, 2026-09-21
+
+| File | Holds |
+|---|---|
+| `core/state-machine.ts` | `step()` and `tierFor()` - every branch below, and scoring |
+| `core/answers.ts` | `matchAnswer()` - the numbers and the word lists |
+| `api/reply-flow.ts` | Loads the conversation and rules, runs `step`, saves, sends |
+| `core/state-machine.test.ts` | 34 tests, one per case in "Tests the state machine needs" |
+| `api/__tests__/webhooks.test.ts` | 36, including the flow advancing through the webhook |
+
+A reply now advances the conversation. Verified against the live account on
+2026-09-21: replies of 3, 1, 1 walked a lead from step 1 to `completed`, score
+100, HOT, with question 2, question 3 and the thanks arriving as real SMS, and
+Admin > Leads showing Completed rather than Awaiting reply.
+
+Two things deliberately not where the spec's sketch might suggest:
+
+**Opt-out detection stays in `api/webhooks.ts`,** which already held the keyword
+list. The core is told the outcome via `reply.optOut`, so there is one list
+rather than two that drift. `blockNumber` on the result is what drives the
+`dnc_list` write, so the rule itself lives in the core.
+
+**The send is a closure, not part of `applyReply`.** `applyReply` returns
+`{ result, send }`: the caller commits the transaction, then calls `send()`.
+That order is the spec's - a failed send must not roll back an answer the lead
+has already given - and making it two steps means the caller cannot get it
+wrong by accident.
+
 ---
 
 ## Shape of the code
@@ -37,6 +65,14 @@ step(conversation, reply, rules) -> { conversation', send: messageKey | null, bl
 The webhook loads the lead's newest conversation, calls `step`, saves the
 result, sends, and records the send - in that order, in one transaction except
 the send itself (see "Sending").
+
+**The conversation row is locked while that happens** (`FOR UPDATE`, added
+2026-09-22). Two texts sent moments apart arrive as two requests at once;
+without the lock both could read the same step, treat their text as the answer
+to it, and each send the next question - the lead gets it twice and one answer
+is lost. The lock holds one lead's row, so replies from other leads are handled
+in parallel: verified by holding one conversation for six seconds, during which
+that lead's reply waited and four other leads' replies completed in 0.2s each.
 
 Answer matching is a separate pure function the state machine calls:
 `matchAnswer(text, step) -> 1 | 2 | 3 | null`.
@@ -157,9 +193,15 @@ that question's options, so the lead is reminded what the numbers mean:
 
 | Step | `settings` key | Text |
 |---|---|---|
-| 1 | `message_clarify_1` | Sorry, please reply with just a number: 1 Supplements, 2 Telehealth/Rx, or 3 Both. |
-| 2 | `message_clarify_2` | Sorry, please reply with just a number: 1 Today, 2 This week, or 3 Just researching. |
-| 3 | `message_clarify_3` | Sorry, please reply with just a number: 1 Call me now, 2 Text me, or 3 Contact me later. |
+| 1 | `message_clarify_1` | Sorry, please reply with just a number: 1. Supplements, 2. Telehealth/Rx, or 3. Both. |
+| 2 | `message_clarify_2` | Sorry, please reply with just a number: 1. Today, 2. This week, or 3. Just researching. |
+| 3 | `message_clarify_3` | Sorry, please reply with just a number: 1. Call me now, 2. Text me, or 3. Contact me later. |
+
+The options are numbered `1.` rather than `1` (Jeel, 2026-09-22): the dot
+separates the number from the word at a glance. The same change applies to the
+three questions. It costs three characters, which the opener paid for by
+dropping the word "options" - otherwise a name of six letters or more would push
+it past one segment and be dropped by `core/messages.ts`.
 
 It says "just a number" although words are accepted too; asking for a number
 keeps the next reply as simple as possible.
@@ -199,7 +241,9 @@ for responding, and so reads as LOW.
 
 ## Expiry
 
-- Every automated send sets `expires_at = now + settings.expiry_days` (seeded 7).
+- A send that **succeeds** sets `expires_at = now + settings.expiry_days`
+  (seeded 7). A send that fails leaves it where it was, so a lead who was never
+  actually messaged expires on schedule rather than a week late.
 - Each worker tick marks `open` conversations past `expires_at` as `expired`.
   Nothing is sent to the lead.
 - A reply that arrives after expiry follows rule 2: stored, flagged, no reply.
@@ -216,6 +260,7 @@ covers both kinds:
 
 Both stay visible on Admin > Leads under Expired. "Stalled at Q1" and "Stalled
 at Q2" therefore apply only to responders whose conversation is still `open`.
+Which leads the queue shows and the tag each gets is in `QUEUE.md`.
 
 **An expired lead who texts again comes back - Decided by Jeel, 2026-09-19,
 confirmed the same day.** This is the lead texting us themselves, which arrives
@@ -232,13 +277,37 @@ left sitting unseen:
 - once an agent opens the lead, the flag clears and it leaves the queue again,
   unless it now has a callback or other reason to be there.
 
+*(2026-09-22: the last bullet is not built. `api/webhooks.ts` sets
+`has_unread_inbound` and nothing anywhere unsets it, so such a lead stays in
+the queue tagged Inbound reply instead of leaving it. Opening a lead is the
+agent workspace, Week 3 - that is where the clear belongs.)*
+
 This applies whether or not the lead ever answered before: texting us is
 interest either way. A number on `dnc_list` never comes back, whatever it
 sends.
 
-The poller does not set `expires_at` on the conversations it creates today. It
-must, when it sends the opener. Conversations already created without one are
-expired by the same tick once `created_at` is older than `expiry_days`.
+**Built 2026-09-22.** `worker/expiry.ts` runs on every worker tick, after the
+poll and in its own try/catch: expiring is local work that must keep happening
+while EZ Texting is unreachable.
+
+`expires_at` is set once a message has actually gone out, not when the
+conversation is created and not when a send is merely attempted - by
+`sendOpener` in the poller and by `bumpExpiry` in `reply-flow.ts`, both after
+the send returns. It is the window the lead has to reply to *that message*, so
+a conversation whose opener or follow-up failed has not started one. Those, and
+any created before this existed, fall back to `created_at + expiry_days` in the
+sweep, which is what stops them sitting `open` forever.
+
+*(Corrected 2026-09-22: the flow used to move the deadline as soon as it decided
+to send, so a failed message still bought the lead another week. The two paths
+now behave the same.)*
+
+The sweep is idempotent - a second run in the same minute expires nothing - and
+verified against the database: of seven conversations, the two overdue `open`
+ones expired (including one with no `expires_at`), the future-dated and
+freshly-created `open` ones did not, and `completed`, `review` and `suppressed`
+were untouched despite all being overdue. A reply to an expired conversation
+left it `expired`, set `has_unread_inbound`, and sent nothing.
 
 ---
 
@@ -246,10 +315,14 @@ expired by the same tick once `created_at` is older than `expiry_days`.
 
 - **Every send checks `dnc_list` immediately before sending**, automated or
   not: the opener, every reply in the flow, and later an agent's manual SMS.
-  `sendMessage` in `integrations/ezt-client.ts` does not check it today - the
-  poller checks before creating a lead, which covers the opener, but a reply
-  sent minutes after a STOP from another source would not be caught. The check
-  belongs inside the send path, so no caller can forget it.
+  Built 2026-09-21: `sendMessage` in `integrations/ezt-client.ts` queries
+  `dnc_list` and throws `BlockedNumberError` before calling the API, so no
+  caller can forget. A bare number is normalised to E.164 first - comparing
+  `16026203572` against a stored `+16026203572` would match nothing and send to
+  a blocked phone.
+  The conversation still advances when a send is refused: the lead's answer is
+  recorded, and only the message is withheld. The tick log says `NOT sent=`
+  rather than `sent=`, so the case is visible.
 - Every automated send uses the copy in `settings`, rendered by
   `core/messages.ts` (`{first_name}`, one-segment limit), and is recorded in
   `messages` with the id EZ Texting returns - that id is what links the lead's
@@ -315,14 +388,30 @@ POLLER.md, "Returning leads", explains why that is unverified and how to check.
 
 ---
 
-## Opting back in - Decided
+## Opting back in - Decided by Jeel, 2026-09-22
 
-If an opted-out number texts START or UNSTOP, nothing changes on our side. The
-`dnc_list` row stays and the number is never messaged automatically again. EZ
-Texting may re-subscribe the number on its platform, but our list is checked
-before every send, so it still blocks. Taking a number off `dnc_list` is a
-deliberate human action; the design brief keeps DNC deletion out of v1 for
-compliance.
+**START lifts the block.** A lead who texts START, UNSTOP, YES or SUBSCRIBE is
+asking to hear from us again, and EZ Texting re-subscribes them on its side. If
+our block stayed, the two records would disagree and we would keep ignoring
+someone who asked us not to.
+
+- **Every reason is released, including one an agent set.** Jeel's call: the
+  person is asking whatever the block was for. Worth knowing in use: someone who
+  told an agent "don't call me" and then texts START has asked for texts; this
+  restores both, because one list covers texts and calls.
+- **The row is kept, not deleted.** `released_at` and `released_reason` are
+  filled in, so the history reads "blocked on the 22nd, released on the 22nd" -
+  the compliance record the design brief asks for. Only rows with
+  `released_at IS NULL` block a send, which is what the poller, `sendMessage`
+  and Admin > Leads all check.
+- **The conversation is not reopened.** A `suppressed` conversation is finished.
+  The START itself is stored and flags the lead, and anything the lead sends
+  next is stored too and reaches an agent as an inbound reply (rule 2). The
+  questions do not restart.
+- **Opting out again re-blocks the same row**, clearing the release dates, so a
+  number never accumulates rows.
+- A START from a number we hold no lead for still releases a block we hold, and
+  still creates nothing.
 
 ---
 

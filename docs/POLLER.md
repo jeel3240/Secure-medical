@@ -6,6 +6,12 @@ one cycle at a time, every 60 seconds.
 Code: `backend/src/worker/poller.ts` and `backend/src/worker/index.ts`.
 API behaviour it depends on: `docs/EZTEXTING-API.md`.
 
+The worker tick does two things: this poll, then the expiry sweep in
+`worker/expiry.ts`, each in its own try/catch so a failure on one does not stop
+the other. Expiring is local work that must keep happening while EZ Texting is
+unreachable. The sweep's rules are in STATE-MACHINE.md, "Expiry"; what the
+poller owns is setting `expires_at` when the opener goes out.
+
 ## Why polling
 
 EZ Texting does not tell us when a contact appears, so we ask. There is also no
@@ -78,6 +84,23 @@ rejected, and the default order is oldest-first. If the sort silently broke, the
 loop would stop on the first contact every cycle and never ingest anything, with
 no error. The guard turns that into a loud failure.
 
+## Who is never texted
+
+Two checks stop a contact being messaged, and both save the lead so the arrival
+is still visible:
+
+| Check | What happens |
+|---|---|
+| EZ Texting has the contact `optOut: true` | Lead saved with a `suppressed` conversation, added to `dnc_list` with reason `ezt_opt_out`, nothing sent |
+| The phone is on our `dnc_list`, not released | Lead saved with a `suppressed` conversation, nothing sent |
+
+In practice EZ Texting also removes an opted-out contact from every group, so
+the poller usually never sees one at all - observed 2026-09-22, when a number
+that texted STOP was struck through and left with no groups. The check is the
+second line of defence for a contact that arrives with the flag anyway.
+
+`worker/poller.test.ts` covers both, with EZ Texting and the database mocked.
+
 ## Reading the log
 
 ```
@@ -126,10 +149,6 @@ checkpoint, so if a re-delivery leaves `createdAt` unchanged, the poller never
 sees it and none of the rules ever run. This can be checked on the test account:
 add a contact through the API that already exists in the group, and see whether
 its `createdAt` moves.
-
-**`expires_at` is never set.** The conversation is created without it, so
-nothing can auto-expire. It should be `now + expiry_days` from `settings` at
-creation. Phase 2, with the state machine.
 
 **No page cap.** A checkpoint set far in the past would walk the whole group in
 one cycle - 178 requests for a 1,773-contact group, thousands for the full
