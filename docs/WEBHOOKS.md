@@ -159,3 +159,19 @@ curl -X POST http://localhost:3000/api/webhooks/eztexting/$EZT_WEBHOOK_TOKEN \
 
 Posting it twice should store one row. Changing `received` but not `id` - a
 lead correcting their answer - should store two.
+
+## Receiving real replies locally
+
+A real text needs a public URL, so run a tunnel to the API and register it as a
+subscription. **Delete that subscription when you stop**, because a subscription
+covers the whole account and outlives the tunnel it points at - EZTEXTING-API.md
+says what goes wrong if it is left behind.
+
+```bash
+# list, then delete by id when finished
+curl -s -u "$EZT_USERNAME:$EZT_PASSWORD" https://a.eztexting.com/v1/webhooks/subscriptions
+curl -X DELETE -u "$EZT_USERNAME:$EZT_PASSWORD" \
+  https://a.eztexting.com/v1/webhooks/subscriptions/<id>
+```
+
+Two are permanent and must stay: the client's Zapier one and production.
