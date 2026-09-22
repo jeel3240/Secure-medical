@@ -183,6 +183,22 @@ delivered to every subscription. Confirmed 2026-09-16, when replies to the
 client's own marketing campaigns arrived at our callback. The handler therefore
 cannot treat an unrecognised sender as a new lead - see WEBHOOKS.md.
 
+**EZ Texting disables a subscription whose callback keeps failing,** and emails
+the account to say so, naming the subscription id. Learned 2026-09-22 from such
+an email about a subscription pointing at a dead ngrok tunnel. A disabled one
+still appears in `GET /v1/webhooks/subscriptions` looking normal, so the list
+alone does not tell you a webhook is working. Recreating it is the only way
+back - there is no re-enable.
+
+**Delete a tunnel's subscription when the tunnel dies.** A quick cloudflared or
+ngrok URL is random and is released when the tunnel stops, so the subscription
+outlives it: inbound texts keep being posted to a hostname that is no longer
+ours, with our path token in the URL, until EZ Texting gives up on it. Free
+hostnames are recycled, so someone else can end up being handed the client's
+inbound SMS. As of 2026-09-22 the account holds three subscriptions - the
+client's Zapier one, production, and whichever local tunnel is current. The
+webhook.site one named above is gone; who removed it is not recorded.
+
 **The `secret` passed at registration never appears on delivery.** No signature
 header comes through, so the sender cannot be verified. A random segment in the
 callback path is the fallback - see WEBHOOKS.md.
