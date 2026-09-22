@@ -64,7 +64,11 @@ function assertNewestFirst(contacts: EztContact[]): void {
 }
 
 async function isOnDnc(phone: string): Promise<boolean> {
-  const { rowCount } = await pool.query('SELECT 1 FROM dnc_list WHERE phone = $1', [phone]);
+  // Released rows are history, not a block - see 002_dnc_release.sql.
+  const { rowCount } = await pool.query(
+    'SELECT 1 FROM dnc_list WHERE phone = $1 AND released_at IS NULL',
+    [phone]
+  );
   return rowCount! > 0;
 }
 

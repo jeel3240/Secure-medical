@@ -378,14 +378,30 @@ POLLER.md, "Returning leads", explains why that is unverified and how to check.
 
 ---
 
-## Opting back in - Decided
+## Opting back in - Decided by Jeel, 2026-09-22
 
-If an opted-out number texts START or UNSTOP, nothing changes on our side. The
-`dnc_list` row stays and the number is never messaged automatically again. EZ
-Texting may re-subscribe the number on its platform, but our list is checked
-before every send, so it still blocks. Taking a number off `dnc_list` is a
-deliberate human action; the design brief keeps DNC deletion out of v1 for
-compliance.
+**START lifts the block.** A lead who texts START, UNSTOP, YES or SUBSCRIBE is
+asking to hear from us again, and EZ Texting re-subscribes them on its side. If
+our block stayed, the two records would disagree and we would keep ignoring
+someone who asked us not to.
+
+- **Every reason is released, including one an agent set.** Jeel's call: the
+  person is asking whatever the block was for. Worth knowing in use: someone who
+  told an agent "don't call me" and then texts START has asked for texts; this
+  restores both, because one list covers texts and calls.
+- **The row is kept, not deleted.** `released_at` and `released_reason` are
+  filled in, so the history reads "blocked on the 22nd, released on the 22nd" -
+  the compliance record the design brief asks for. Only rows with
+  `released_at IS NULL` block a send, which is what the poller, `sendMessage`
+  and Admin > Leads all check.
+- **The conversation is not reopened.** A `suppressed` conversation is finished.
+  The START itself is stored and flags the lead, and anything the lead sends
+  next is stored too and reaches an agent as an inbound reply (rule 2). The
+  questions do not restart.
+- **Opting out again re-blocks the same row**, clearing the release dates, so a
+  number never accumulates rows.
+- A START from a number we hold no lead for still releases a block we hold, and
+  still creates nothing.
 
 ---
 

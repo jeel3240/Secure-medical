@@ -122,7 +122,7 @@ async function blockedAmong(phones: string[]): Promise<string[]> {
   const normalised = phones.map((p) => (p.startsWith('+') ? p : toE164(p)));
 
   const { rows } = await pool.query(
-    'SELECT phone FROM dnc_list WHERE phone = ANY($1::text[])',
+    'SELECT phone FROM dnc_list WHERE phone = ANY($1::text[]) AND released_at IS NULL',
     [normalised]
   );
   return rows.map((r: { phone: string }) => r.phone);
