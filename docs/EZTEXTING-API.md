@@ -195,9 +195,12 @@ ngrok URL is random and is released when the tunnel stops, so the subscription
 outlives it: inbound texts keep being posted to a hostname that is no longer
 ours, with our path token in the URL, until EZ Texting gives up on it. Free
 hostnames are recycled, so someone else can end up being handed the client's
-inbound SMS. As of 2026-09-22 the account holds three subscriptions - the
-client's Zapier one, production, and whichever local tunnel is current. The
-webhook.site one named above is gone; who removed it is not recorded.
+inbound SMS. So a tunnel subscription is registered when local testing starts
+and deleted when it stops, rather than left for the next session.
+
+As of 2026-09-22 the account holds **two** subscriptions: the client's Zapier
+one and production. The webhook.site one named above is gone; who removed it is
+not recorded.
 
 **The `secret` passed at registration never appears on delivery.** No signature
 header comes through, so the sender cannot be verified. A random segment in the
