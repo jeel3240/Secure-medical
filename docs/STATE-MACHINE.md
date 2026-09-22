@@ -262,6 +262,7 @@ covers both kinds:
 
 Both stay visible on Admin > Leads under Expired. "Stalled at Q1" and "Stalled
 at Q2" therefore apply only to responders whose conversation is still `open`.
+Which leads the queue shows and the tag each gets is in `QUEUE.md`.
 
 **An expired lead who texts again comes back - Decided by Jeel, 2026-09-19,
 confirmed the same day.** This is the lead texting us themselves, which arrives

@@ -151,6 +151,10 @@ you change something the docs describe, update the doc in the same commit.
     src/api/auth/           sign-in, sessions, guards
     src/api/users/          superadmin account management
     src/api/admin/leads.ts  Admin > Leads query endpoint
+    src/api/leads.ts        the agents' priority queue endpoint
+    src/core/queue-tags.ts  which tag a queued lead gets
+    src/db/queue.ts         the priority queue SQL
+    scripts/queue-live-check.ts  proves that SQL against a real database
     src/api/webhooks.ts     inbound SMS from EZ Texting
     src/core/messages.ts    renders outbound copy ({first_name}, segment limit)
     src/core/state-machine.ts  the SMS flow, pure; scoring and tiers
@@ -165,6 +169,7 @@ you change something the docs describe, update the doc in the same commit.
     Dockerfile              production Caddy image with the built app
   docs/
     AUTH.md  POLLER.md  WORKFLOW.md  WEBHOOKS.md  ADMIN-LEADS.md  STATE-MACHINE.md
+    QUEUE.md
 ```
 
 `core/` holds message rendering, the state machine and answer matching, all of
@@ -238,14 +243,15 @@ Tiers: HOT 75–100, WARM 45–74, LOW 1–44
 3. On end, Twilio status callback → save to `calls`.
 4. Agent sets disposition/note/callback. DNC disposition = same as SMS STOP.
 
-Queue tags (New, Attempted 1x, In progress, Callback, Needs review, Stalled at Q2, Inbound reply, Seen before) are **computed** from these tables, not stored as a status. *(2026-09-19: "Seen before" cannot occur until repeat-lead handling is built - a future item, §10.)*
+Queue tags (New, Attempted 1x, In progress, Callback, Needs review, Stalled at Q2, Inbound reply, Seen before) are **computed** from these tables, not stored as a status. *(2026-09-19: "Seen before" cannot occur until repeat-lead handling is built - a future item, §10.)* *(2026-09-22: built - which tag wins when several apply is in `docs/QUEUE.md`.)*
 
 **Paths, as of 2026-09-15.** Caddy forwards only `/api/*` to the API; everything
 else is the frontend, so every route lives under `/api`. The EZ Texting webhook
 was built that way: `POST /api/webhooks/eztexting/<token>`, unauthenticated,
 with a random path segment in place of a signature - see `docs/WEBHOOKS.md`. The
-Twilio paths above, `/webhooks/twilio/voice` and `/twilio/token`, and the Week 2
-queue API still need the same treatment when they are built.
+Twilio paths above, `/webhooks/twilio/voice` and `/twilio/token`, still need the
+same treatment when they are built. The queue API was built that way:
+`GET /api/leads`, 2026-09-22.
 
 ---
 
@@ -315,17 +321,17 @@ Never commit `.env`. Never use real lead data locally. Generate fake leads.
 
 Each week ends with something that can be demonstrated. Do not start the next week's work until the current week's "done when" is met.
 
-### Progress, as of 2026-09-19
+### Progress, as of 2026-09-22
 
 | Week | Done | Not done |
 |---|---|---|
 | 1 | All of it: 1 repo and Docker setup · 2 migrations · 3 auth · 4 EZ Texting client · 5 poller (60s default, admin-editable, not 45s) · 6 inbound webhook (`docs/WEBHOOKS.md`) · 7 ngrok wiring, confirmed with a real text | – |
-| 2 | 1 the pure state machine (`core/state-machine.ts`, `core/answers.ts`) · 2 wired into the webhook via `api/reply-flow.ts` · 3 opener sent by the poller · 4 STOP, and the `dnc_list` check now inside `sendMessage` · 5 unclear replies · 6 scoring · 7 expiry (`worker/expiry.ts`) · 10 tests. The full 3-question flow was walked against the live account on 2026-09-21 | 9 the queue API. Item 8, repeat leads, is a future item |
+| 2 | 1 the pure state machine (`core/state-machine.ts`, `core/answers.ts`) · 2 wired into the webhook via `api/reply-flow.ts` · 3 opener sent by the poller · 4 STOP, and the `dnc_list` check now inside `sendMessage` · 5 unclear replies · 6 scoring · 7 expiry (`worker/expiry.ts`) · 9 the queue API (`docs/QUEUE.md`) · 10 tests. The full 3-question flow was walked against the account on 2026-09-21 | Item 8, repeat leads, is a future item |
 | 3 | 1 scaffold, login, role-based routing · 7 in part: manage agents · 9 Caddy serves the built frontend · 10 Admin > Leads (`docs/ADMIN-LEADS.md`) | 2-6, 8, the rest of 7 |
 | 4 | – | All |
 
 Auth (Week 1) and the Week 3 login were built together, ahead of the Week 1
-webhook, at Jeel's request. *(Table updated 2026-09-19.)*
+webhook, at Jeel's request. *(Table updated 2026-09-22.)*
 
 ### Week 1 – Foundation + prove EZ Texting works
 
@@ -361,7 +367,7 @@ Build:
 6. Scoring and tiers, updated on every reply
 7. Expiry of conversations that go quiet
 8. ~~Repeat leads~~ - **future, not Week 2** *(2026-09-19)*. Until then the poller skips a phone it already holds. See "Future" below
-9. Queue API: `GET /api/leads?tier=&source=&since=` returning score, tier, age, q1–q3 and the computed queue tag
+9. Queue API: `GET /api/leads?tier=&source=&since=` returning score, tier, age, q1–q3 and the computed queue tag - **done**, `docs/QUEUE.md`
 10. Unit tests for the state machine - the list is in `docs/STATE-MACHINE.md`
 
 Not in Week 2: a sending-hours window for the opener (rejected 2026-09-19; it is sent as soon as the lead arrives), and retrying a failed opener.
