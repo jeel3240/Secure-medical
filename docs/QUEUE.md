@@ -128,6 +128,9 @@ question copy in `settings`, which a superadmin can edit.
   this is a plain request. Polling or SSE is a Week 3 decision.
 - **No claiming.** `assigned_to` is read here, never written. The one-agent lock
   is Week 3 item 3.
+- **Nothing clears `has_unread_inbound`.** An expired lead who texted back is
+  meant to drop out of the queue once an agent opens it. No code unsets the
+  flag, so for now it stays. `STATE-MACHINE.md`, "Expiry".
 - **No paging.** `limit` truncates and `total` says by how much; at 50-100 leads
   a day the default of 100 holds several days of queue. Page when it does not.
 

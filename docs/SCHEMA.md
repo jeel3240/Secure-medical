@@ -146,6 +146,10 @@ a lead off someone who stepped away, and manual reassignment is enough.
 `assigned_at` is still needed so a superadmin can tell a lead claimed two
 minutes ago from one held since last week - without it both look identical.
 
+*(2026-09-22: designed, not built. The columns exist and the queue query reads
+`assigned_to` to tag a lead In progress, but nothing writes either one -
+claiming is Week 3.)*
+
 A released lead carries no marker. Context comes from the timeline, which
 already shows calls, messages, notes and dispositions for the lead. A lead that
 is genuinely bad should get a disposition rather than being released.

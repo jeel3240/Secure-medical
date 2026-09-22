@@ -66,6 +66,8 @@ Role is set at login. Navigation adapts to role.
 
 **Purpose:** show every responder, sorted by score then freshness, so the newest high-intent lead is always at the top. Updates live as replies arrive.
 
+*(2026-09-22: the API behind this screen is built - `QUEUE.md` says what it returns, which leads are in it and which status tag wins when several apply. Two things it does not give the screen: **STATE** has no data behind it, because EZ Texting sends no state with a contact (`EZTEXTING-API.md`), and there is no live channel yet, so "updates live" is still a design intent.)*
+
 **Header row**
 - Three tier counters as pill-buttons that also act as filters: `HOT 4`, `WARM 7`, `LOW 12`. Selected state shows which tiers are visible.
 - Filters: **Source** (multi-select dropdown: e.g. CORE-G-27, CORE-G-31), **Time window** (Last 1h / 24h / 7d / All).
