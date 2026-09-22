@@ -16,6 +16,37 @@ Code: `backend/src/core/` for the pure logic, wired in from
 `backend/src/api/webhooks.ts` (replies) and `backend/src/worker/` (opener,
 expiry). Related: WEBHOOKS.md, POLLER.md, SCHEMA.md, the plan's §6.
 
+## What is built, 2026-09-21
+
+| File | Holds |
+|---|---|
+| `core/state-machine.ts` | `step()` and `tierFor()` - every branch below, and scoring |
+| `core/answers.ts` | `matchAnswer()` - the numbers and the word lists |
+| `api/reply-flow.ts` | Loads the conversation and rules, runs `step`, saves, sends |
+| `core/state-machine.test.ts` | 34 tests, one per case in "Tests the state machine needs" |
+| `api/__tests__/webhooks.test.ts` | 24, including the flow advancing through the webhook |
+
+A reply now advances the conversation. Verified against the live account on
+2026-09-21: replies of 3, 1, 1 walked a lead from step 1 to `completed`, score
+100, HOT, with question 2, question 3 and the thanks arriving as real SMS, and
+Admin > Leads showing Completed rather than Awaiting reply.
+
+**Still to come:** the expiry sweep (`expires_at` is now set on every send, but
+nothing marks a stale conversation `expired`), and the queue API.
+
+Two things deliberately not where the spec's sketch might suggest:
+
+**Opt-out detection stays in `api/webhooks.ts`,** which already held the keyword
+list. The core is told the outcome via `reply.optOut`, so there is one list
+rather than two that drift. `blockNumber` on the result is what drives the
+`dnc_list` write, so the rule itself lives in the core.
+
+**The send is a closure, not part of `applyReply`.** `applyReply` returns
+`{ result, send }`: the caller commits the transaction, then calls `send()`.
+That order is the spec's - a failed send must not roll back an answer the lead
+has already given - and making it two steps means the caller cannot get it
+wrong by accident.
+
 ---
 
 ## Shape of the code
@@ -236,9 +267,23 @@ This applies whether or not the lead ever answered before: texting us is
 interest either way. A number on `dnc_list` never comes back, whatever it
 sends.
 
-The poller does not set `expires_at` on the conversations it creates today. It
-must, when it sends the opener. Conversations already created without one are
-expired by the same tick once `created_at` is older than `expiry_days`.
+**Built 2026-09-22.** `worker/expiry.ts` runs on every worker tick, after the
+poll and in its own try/catch: expiring is local work that must keep happening
+while EZ Texting is unreachable.
+
+`expires_at` is set when a message is sent, not when the conversation is
+created - by `sendOpener` in the poller and by `reply-flow.ts` for every send in
+the flow. It is the window the lead has to reply to *that message*, so a
+conversation whose opener failed has not started one. Those, and any created
+before this existed, fall back to `created_at + expiry_days` in the sweep,
+which is what stops them sitting `open` forever.
+
+The sweep is idempotent - a second run in the same minute expires nothing - and
+verified against the database: of seven conversations, the two overdue `open`
+ones expired (including one with no `expires_at`), the future-dated and
+freshly-created `open` ones did not, and `completed`, `review` and `suppressed`
+were untouched despite all being overdue. A reply to an expired conversation
+left it `expired`, set `has_unread_inbound`, and sent nothing.
 
 ---
 
@@ -246,10 +291,14 @@ expired by the same tick once `created_at` is older than `expiry_days`.
 
 - **Every send checks `dnc_list` immediately before sending**, automated or
   not: the opener, every reply in the flow, and later an agent's manual SMS.
-  `sendMessage` in `integrations/ezt-client.ts` does not check it today - the
-  poller checks before creating a lead, which covers the opener, but a reply
-  sent minutes after a STOP from another source would not be caught. The check
-  belongs inside the send path, so no caller can forget it.
+  Built 2026-09-21: `sendMessage` in `integrations/ezt-client.ts` queries
+  `dnc_list` and throws `BlockedNumberError` before calling the API, so no
+  caller can forget. A bare number is normalised to E.164 first - comparing
+  `16026203572` against a stored `+16026203572` would match nothing and send to
+  a blocked phone.
+  The conversation still advances when a send is refused: the lead's answer is
+  recorded, and only the message is withheld. The tick log says `NOT sent=`
+  rather than `sent=`, so the case is visible.
 - Every automated send uses the copy in `settings`, rendered by
   `core/messages.ts` (`{first_name}`, one-segment limit), and is recorded in
   `messages` with the id EZ Texting returns - that id is what links the lead's

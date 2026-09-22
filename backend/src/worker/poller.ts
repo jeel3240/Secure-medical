@@ -92,9 +92,9 @@ async function isOnDnc(phone: string): Promise<boolean> {
  * existing one, since that decides whether createdAt moves and the poller sees
  * it at all. Wire it with the state machine.
  *
- * TODO (Phase 2): expires_at is never set on the conversation created below,
- * so nothing can auto-expire. Set it to now + expiry_days (from settings) at
- * creation. Wire it with the state machine.
+ * expires_at is set by sendOpener rather than here, because it is the window
+ * the lead has to reply to a message - a conversation whose opener failed has
+ * not started one. The expiry sweep falls back to created_at for those.
  */
 async function insertLead(
   contact: EztContact,
@@ -188,6 +188,17 @@ async function sendOpener(leadId: number, phone: string, firstName: string | nul
       `INSERT INTO messages (lead_id, direction, body, ezt_message_id)
        VALUES ($1, 'outbound', $2, $3)`,
       [leadId, text, result.id]
+    );
+
+    // The reply window starts when the opener actually goes out. Set here
+    // rather than at creation so a conversation whose opener failed has no
+    // deadline it never earned; the sweep falls back to created_at for those.
+    const days = await readSetting('expiry_days');
+    await pool.query(
+      `UPDATE conversations
+       SET expires_at = now() + ($2 || ' days')::interval, updated_at = now()
+       WHERE lead_id = $1 AND status = 'open'`,
+      [leadId, days ?? '7']
     );
 
     console.log(`opener sent to lead ${leadId}, ezt id ${result.id}`);

@@ -1,5 +1,6 @@
 import '../config';
 import { pool } from '../db/pool';
+import { expireStaleConversations } from './expiry';
 import { pollOnce } from './poller';
 
 const DEFAULT_POLL_INTERVAL_SECONDS = 60;
@@ -28,6 +29,18 @@ async function loop(): Promise<void> {
     } catch (err) {
       // Checkpoint is left where it was, so the next tick retries this ground.
       console.error('poll tick failed:', err instanceof Error ? err.message : err);
+    }
+
+    // Separate from the poll, and after it, so a failure on either side does
+    // not stop the other: expiring is local work that must keep happening even
+    // while EZ Texting is unreachable.
+    try {
+      const sweep = await expireStaleConversations();
+      if (sweep.expired > 0) {
+        console.log(`expiry sweep: ${sweep.expired} conversation(s) expired ms=${sweep.durationMs}`);
+      }
+    } catch (err) {
+      console.error('expiry sweep failed:', err instanceof Error ? err.message : err);
     }
 
     let waitMs = DEFAULT_POLL_INTERVAL_SECONDS * 1000;

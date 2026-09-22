@@ -153,6 +153,10 @@ you change something the docs describe, update the doc in the same commit.
     src/api/admin/leads.ts  Admin > Leads query endpoint
     src/api/webhooks.ts     inbound SMS from EZ Texting
     src/core/messages.ts    renders outbound copy ({first_name}, segment limit)
+    src/core/state-machine.ts  the SMS flow, pure; scoring and tiers
+    src/core/answers.ts     matches a reply to an option, pure
+    src/api/reply-flow.ts   runs the state machine for an inbound reply
+    src/worker/expiry.ts    marks stale open conversations expired
     src/db/leads.ts         Admin > Leads SQL
     src/cli/                create-superadmin
     src/integrations/       EZ Texting client
@@ -163,7 +167,8 @@ you change something the docs describe, update the doc in the same commit.
     AUTH.md  POLLER.md  WORKFLOW.md  WEBHOOKS.md  ADMIN-LEADS.md  STATE-MACHINE.md
 ```
 
-`core/` currently holds only message rendering; the state machine joins it in Week 2. `docker-compose.yml`
+`core/` holds message rendering, the state machine and answer matching, all of
+it now driven from the webhook through `api/reply-flow.ts`. `docker-compose.yml`
 is local only; production layers `docker-compose.prod.yml` on top of it.
 
 `api` and `worker` build from the same Dockerfile; only the start command differs.
@@ -211,8 +216,8 @@ of truth and `docs/SCHEMA.md` explains it. It differs from the list above:
 row, and a returning phone gets a new conversation on the existing lead rather
 than a new linked lead. The design and what it is blocked on are in
 `docs/POLLER.md` under "Not done yet". As built, the poller does steps 1-3, 5
-and 6: it creates the conversation and sends the opener, but does not set
-`expires_at` yet, and step 4 is a future item (§10, "Future").
+and 6, including setting `expires_at` when the opener goes out. Step 4 is a
+future item (§10, "Future").
 
 ### Reply (API webhook `POST /api/webhooks/eztexting/<token>`)
 
@@ -315,7 +320,7 @@ Each week ends with something that can be demonstrated. Do not start the next we
 | Week | Done | Not done |
 |---|---|---|
 | 1 | All of it: 1 repo and Docker setup · 2 migrations · 3 auth · 4 EZ Texting client · 5 poller (60s default, admin-editable, not 45s) · 6 inbound webhook (`docs/WEBHOOKS.md`) · 7 ngrok wiring, confirmed with a real text | – |
-| 2 | 3 opener sent when the poller creates a lead | 1, 2, 4-7, 9, 10: the state machine, STOP, unclear replies, scoring, expiry, the queue API and tests. Item 8, repeat leads, is a future item |
+| 2 | 1 the pure state machine (`core/state-machine.ts`, `core/answers.ts`) · 2 wired into the webhook via `api/reply-flow.ts` · 3 opener sent by the poller · 4 STOP, and the `dnc_list` check now inside `sendMessage` · 5 unclear replies · 6 scoring · 7 expiry (`worker/expiry.ts`) · 10 tests. The full 3-question flow was walked against the live account on 2026-09-21 | 9 the queue API. Item 8, repeat leads, is a future item |
 | 3 | 1 scaffold, login, role-based routing · 7 in part: manage agents · 9 Caddy serves the built frontend · 10 Admin > Leads (`docs/ADMIN-LEADS.md`) | 2-6, 8, the rest of 7 |
 | 4 | – | All |
 

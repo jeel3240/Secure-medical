@@ -185,8 +185,12 @@ export async function listAdminLeads(query: AdminLeadQuery): Promise<AdminLeadPa
       receivedAt: r.received_at?.toISOString() ?? null,
       status: r.status,
       stepReached: r.step_reached,
-      score: r.status === 'completed' ? r.score : null,
-      tier: r.status === 'completed' ? r.tier : null,
+      // The running score, not only the final one. Scoring starts at the first
+      // reply, so a lead part-way through has a real score and tier worth
+      // seeing. A score of 0 means no reply yet and shows as blank rather than
+      // "0", which would read as a judgement rather than an absence.
+      score: r.score > 0 ? r.score : null,
+      tier: r.score > 0 ? r.tier : null,
       lastActivityAt: r.last_activity_at?.toISOString() ?? null,
       lastActivityDirection: r.last_activity_direction,
     })),
