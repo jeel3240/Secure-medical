@@ -1,17 +1,18 @@
-# Logging, health and CloudWatch
+# Logging and health
 
 Phase 3. **Not built.** Today the app logs readable single lines to stdout -
 `poll tick fetched=2 inserted=0 ...`, `webhook: lead 42 -> open step=1 ...` -
 which Docker keeps and a person reads with `docker compose logs`. Nothing is
 structured, nothing is shipped anywhere, and there is no health endpoint.
 
-Jeel asked Nilesh to add CloudWatch on 2026-09-23. This doc is what has to be
-true on our side for that to be worth anything.
+Collecting logs off the instance is set up outside this repo. What this repo
+owes it is below: one queryable line per event, and a health endpoint worth
+polling.
 
 ## Structured logs
 
-One JSON object per line on stdout, so CloudWatch Logs Insights can query
-fields instead of matching substrings. Keep the existing lines' information;
+One JSON object per line on stdout, so whatever collects the logs can query by
+field instead of matching substrings. Keep the existing lines' information;
 change only the shape.
 
 ```json
@@ -40,7 +41,7 @@ process is alive - it never touches the database or the worker, so it stays as
 it is for Caddy and container checks.
 
 Phase 3 adds a deeper one, superadmin-only, for the Admin > Overview panel and
-for CloudWatch to alarm on:
+for anything watching the system from outside:
 
 `GET /api/admin/health` - the database round-trip, the last successful poll and
 how long ago, the last inbound webhook, the count of conversations due to expire
@@ -50,23 +51,16 @@ The worker is a separate process with no HTTP server, so its health has to be
 inferred from what it writes: the checkpoint's timestamp is the honest signal
 that it is alive, which is why the last poll time belongs in this response.
 
-## What Nilesh needs to decide
+## The two ways this system goes quiet
 
-Ours is the log format; the shipping is his. The questions worth agreeing before
-the work starts:
+Worth knowing when deciding what to watch, because neither one crashes anything:
 
-1. **How logs leave the container** - the `awslogs` Docker log driver, which
-   needs credentials on the instance and is set per service in
-   `docker-compose.prod.yml`, or the CloudWatch agent tailing the Docker log
-   files. The driver is simpler; the agent survives a Docker restart better.
-2. **Log group and stream names**, one group per service (`/secure-medical/api`,
-   `/secure-medical/worker`) so the two are separable.
-3. **Retention**, because the default is forever and these logs are chatty.
-4. **What alarms.** The three worth having: any `level=error`, no `poll.tick`
-   for ten minutes, and the API health check failing. The first two catch the
-   two ways this system goes quietly wrong - EZ Texting rejecting us, and the
-   worker dying without the container stopping.
+- **EZ Texting starts rejecting us.** The worker keeps ticking and the API keeps
+  answering; leads simply stop arriving. `poll.tick` still appears, so the
+  signal is `inserted` staying at zero while `level=error` lines appear.
+- **The worker dies without its container stopping.** Nothing logs at all from
+  that process. The absence of `poll.tick` is the only sign, which is why the
+  last poll time is in the health response rather than left to the logs.
 
-Note for whoever wires this: a container that logs to CloudWatch through the
-`awslogs` driver no longer answers `docker compose logs`. That is the normal
-trade and it surprises people at 2am.
+Both are silences rather than failures, so anything watching this system should
+alert on the absence of activity as well as on errors.

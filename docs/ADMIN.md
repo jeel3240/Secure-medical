@@ -42,8 +42,8 @@ from the existing tables. Nothing here is stored as a running total; at 50-100
 leads a day the queries are cheap and a stale counter is worse than a slow one.
 
 **Live system status** - last poll, last inbound webhook, worker health - comes
-from the health endpoint in `LOGGING.md` rather than this route, because
-CloudWatch reads the same thing.
+from the health endpoint in `LOGGING.md` rather than this route, so that
+anything monitoring the system from outside reads exactly what the screen does.
 
 The per-agent table and the activity feed are the only place one agent's work is
 visible to anyone but themselves. Agents cannot reach this page: `AUTH.md`.

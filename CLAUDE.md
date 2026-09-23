@@ -353,8 +353,9 @@ but disabled until Phase 4.
 
 Added to Phase 3, not in the original plan:
 
-- **CloudWatch.** Jeel has asked Nilesh to add it (2026-09-23). Our side is
-  structured logs and a health endpoint for it to read - `docs/LOGGING.md`.
+- **Structured logging and a deeper health endpoint** - `docs/LOGGING.md`.
+  Today's logs are readable lines that nothing can query, and the only health
+  check proves the API process is alive and nothing more.
 - **Clearing `has_unread_inbound`.** Nothing unsets it today, so a lead who
   texts after expiry never leaves the queue. Opening the lead is what clears it.
 - **Claiming a lead.** `assigned_to` and `assigned_at` exist and the queue reads
@@ -384,7 +385,7 @@ ever matters. Nothing rescores on its own.
 
 ### Phase 3 task list
 
-31 tasks, each one a PR. The behaviour of every one is specified in the doc
+30 tasks, each one a PR. The behaviour of every one is specified in the doc
 named beside it - read that first, not this line. §9's definition of done
 applies to each: works locally with fake data, tests, docs updated in the same
 commit.
@@ -430,10 +431,9 @@ commit.
 |---|---|---|---|
 | 26 | Structured JSON logging across api and worker | `LOGGING.md` | – |
 | 27 | Error handling and retries: EZ Texting down, failed opener, duplicate webhooks | `POLLER.md`, `WEBHOOKS.md` | – |
-| 28 | Hand the log format and alarm list to Nilesh for CloudWatch | `LOGGING.md` | 26, 13 |
-| 29 | End-to-end test script: lead in, SMS flow, queue, disposition, timeline | – | most |
-| 30 | Fix what task 29 finds | – | 29 |
-| 31 | README: how to run, how to test, env vars, known limits | `README.md` | – |
+| 28 | End-to-end test script: lead in, SMS flow, queue, disposition, timeline | – | most |
+| 29 | Fix what task 28 finds | – | 28 |
+| 30 | README: how to run, how to test, env vars, known limits | `README.md` | – |
 
 **Not in the list, and why**
 
@@ -523,7 +523,7 @@ Build:
 3. Save each call to `calls` (sid, duration, outcome); show in timeline
 4. DNC disposition suppresses number for both SMS and calls
 5. Error handling and retries: EZ Texting API down, webhook duplicate, Twilio token expiry *(items 5-9 moved into Phase 3, 2026-09-23; Twilio token expiry stays here)*
-6. Logging: every worker tick, every webhook, every send, every call - structured for CloudWatch, `docs/LOGGING.md`
+6. Logging: every worker tick, every webhook, every send, every call - structured, `docs/LOGGING.md`
 7. Full end-to-end test script: new lead → SMS flow → queue → call → disposition → timeline
 8. Fix everything found in step 7
 9. README updated: how to run, how to test, env variables, known limits
