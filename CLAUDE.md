@@ -382,6 +382,71 @@ A rule change therefore leaves leads already scored on their old values. That is
 accepted: it is rare, and a one-off rescore script can be run deliberately if it
 ever matters. Nothing rescores on its own.
 
+### Phase 3 task list
+
+31 tasks, each one a PR. The behaviour of every one is specified in the doc
+named beside it - read that first, not this line. §9's definition of done
+applies to each: works locally with fake data, tests, docs updated in the same
+commit.
+
+**Backend (`AGENT-WORKSPACE.md`, `ADMIN.md`, `LOGGING.md`)**
+
+| # | Task | Doc | Needs |
+|---|---|---|---|
+| 1 | Migration: agent take-over timestamp on `conversations` | `SCHEMA.md` | – |
+| 2 | Claim and release a lead, with superadmin force-release | `AGENT-WORKSPACE.md` | – |
+| 3 | Mark a lead read, clearing `has_unread_inbound` | `AGENT-WORKSPACE.md` | – |
+| 4 | Lead detail: card, flags, score breakdown | `AGENT-WORKSPACE.md` | – |
+| 5 | Lead timeline: merged events from five tables | `AGENT-WORKSPACE.md` | – |
+| 6 | Notes | `AGENT-WORKSPACE.md` | – |
+| 7 | Callbacks: create, reschedule, mark done, list | `AGENT-WORKSPACE.md` | – |
+| 8 | Dispositions, and the DNC path that blocks the number | `AGENT-WORKSPACE.md` | – |
+| 9 | Agent SMS, and stopping the automated questions | `STATE-MACHINE.md` 2b | 1 |
+| 10 | Admin Configuration: live copy, scoring and tiers, read-only | `ADMIN.md` | – |
+| 11 | Admin Overview statistics | `ADMIN.md` | – |
+| 12 | Admin DNC list, read-only, showing released rows | `ADMIN.md` | – |
+| 13 | Deep health endpoint: database, last poll, last webhook | `LOGGING.md` | – |
+
+**Frontend (`DESIGN-PROMPT.md`)**
+
+| # | Task | Doc | Needs |
+|---|---|---|---|
+| 14 | Shared polling hook, 5s, one place for every live screen | `QUEUE.md` | – |
+| 15 | Priority Queue screen, replacing the placeholder | `DESIGN-PROMPT.md` 2, `QUEUE.md` | 14 |
+| 16 | One-agent lock in the queue: claimed rows muted and unclickable | `DESIGN-PROMPT.md` 2 | 2, 15 |
+| 17 | Agent Workspace shell: lead card, three columns, Call button disabled | `DESIGN-PROMPT.md` 3 | 4 |
+| 18 | Timeline component | `DESIGN-PROMPT.md` 3 | 5 |
+| 19 | Workspace right column: note, callback, disposition, Save and next | `DESIGN-PROMPT.md` 3 | 6, 7, 8 |
+| 20 | Workspace SMS compose, with templates | `DESIGN-PROMPT.md` 3 | 9 |
+| 21 | Lead Timeline page, full width with summary sidebar | `DESIGN-PROMPT.md` 4 | 18 |
+| 22 | My Callbacks page | `DESIGN-PROMPT.md` 5 | 7 |
+| 23 | Admin Configuration page | `DESIGN-PROMPT.md` 6b, 6c | 10 |
+| 24 | Admin Overview page | `DESIGN-PROMPT.md` 6a | 11, 13 |
+| 25 | Admin DNC page | `DESIGN-PROMPT.md` 6e | 12 |
+
+**Operations (`LOGGING.md`, `README.md`)**
+
+| # | Task | Doc | Needs |
+|---|---|---|---|
+| 26 | Structured JSON logging across api and worker | `LOGGING.md` | – |
+| 27 | Error handling and retries: EZ Texting down, failed opener, duplicate webhooks | `POLLER.md`, `WEBHOOKS.md` | – |
+| 28 | Hand the log format and alarm list to Nilesh for CloudWatch | `LOGGING.md` | 26, 13 |
+| 29 | End-to-end test script: lead in, SMS flow, queue, disposition, timeline | – | most |
+| 30 | Fix what task 29 finds | – | 29 |
+| 31 | README: how to run, how to test, env vars, known limits | `README.md` | – |
+
+**Not in the list, and why**
+
+- **Twilio** - Phase 4. Tasks 17 and 19 leave the Call button and the call
+  entries in the timeline in place but inert.
+- **Repeat leads** - still blocked. The check that unblocks it is one API call
+  against the test account, described in "Future: repeat leads" below. Worth
+  doing early in Phase 3: if `createdAt` moves on a re-delivered contact, it
+  becomes a 32nd task; if it does not, it stays parked and we stop planning
+  around it.
+- **State and Consent ref** on the workspace and timeline - no data reaches us
+  for either. `AGENT-WORKSPACE.md`, "Known gaps in the screens".
+
 ### Week 1 – Foundation + prove EZ Texting works
 
 **Goal:** leads are pulled from EZ Texting into our database, and we can send and receive SMS.
