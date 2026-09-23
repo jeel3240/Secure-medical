@@ -150,6 +150,36 @@ belongs to. From then on:
 `leads.has_unread_inbound`, send nothing. A human sees it on the lead. Already
 implemented.
 
+### 2b. An agent has taken the conversation over - Decided by Jeel, 2026-09-23
+
+Once an agent sends a manual SMS to a lead, the questions stop. The reply is
+stored and `leads.has_unread_inbound` is set, exactly as in rule 2, and the
+agent reads it on the lead. Nothing is scored, no question and no clarification
+goes out.
+
+**Why.** The agent is having a conversation with the lead. A lead who has just
+been asked "when is a good time to call?" and answers "1" is answering the
+agent, not us, and an automated "Question 2 of 3" landing on top of that reads
+as a broken system to the person we are trying to sell to. Losing the score
+matters little, because a lead an agent is already working is not waiting in the
+queue to be picked.
+
+**Opt-out and opt-in are not affected.** Rule 1 is checked first and stays
+first: a STOP after the handoff blocks the number, and a START releases it. An
+opt-out can never depend on whether an agent happened to text first.
+
+The lead keeps the score it had earned. A lead who answered question 1 and was
+then taken over stays at that score and its tier, rather than reaching the
+completion award.
+
+**How it is recorded:** a timestamp on the conversation, set when the first
+agent SMS is sent. The status does not change, so the queue tabs and Admin >
+Leads are unaffected, and expiry still applies - the agent's own callback and
+disposition are what track the lead from then on.
+
+*Not built: the agent SMS send is Phase 3. Until it exists, no conversation can
+be in this state.*
+
 ### 3. A valid answer to the current question
 
 `matchAnswer(text, step)` returns a choice. Accepted forms - the number, or at

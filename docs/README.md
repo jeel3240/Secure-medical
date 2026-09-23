@@ -121,13 +121,16 @@ commit.
 | `WEBHOOKS.md` | How replies are received | The webhook handler |
 | `ADMIN-LEADS.md` | The superadmin Leads page | That page or its API |
 | `QUEUE.md` | The agents' priority queue API: who is in it, the order, the tags | `GET /api/leads`, the queue query or the tag rules |
+| `AGENT-WORKSPACE.md` | The agent screens: claiming, timeline, notes, callbacks, dispositions, agent SMS | Any of those endpoints or screens |
+| `ADMIN.md` | Admin Overview, Configuration and DNC list, and why admin is read-only | An admin screen other than Leads or Agents |
+| `LOGGING.md` | Log format, health endpoints, what CloudWatch needs | Anything logged, or the health routes |
 | `STATE-MACHINE.md` | The SMS flow: replies, scoring, expiry, sending, repeat leads. Overrides the mockup | The state machine, or any flow decision |
 | `EZTEXTING-API.md` | Verified API behaviour | You learn something new about the API |
 | `WORKFLOW.md` | Branches, PRs, migrations, deploys | The process itself |
 | `DESIGN-PROMPT.md` | Frontend design brief | The design direction |
 | `Secure-Medical-Call-Center-Mockup.pdf` | All screens. Page 3 sketches the flow, but STATE-MACHINE.md is the authority for it | — |
 
-Docs still to write, as the code arrives: `TWILIO.md`, `DEPLOYMENT.md`.
+Docs still to write, as the code arrives: `TWILIO.md` (Phase 4), `DEPLOYMENT.md`.
 
 ## Troubleshooting
 

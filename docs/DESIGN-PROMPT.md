@@ -188,6 +188,8 @@ Left sub-navigation within the page: **Overview** · **Leads** · **Scoring** ·
 - Live system status: last poll time, last inbound webhook, worker health.
 
 **6b. Scoring rules and tiers**
+
+*(2026-09-23, Jeel: read-only. No inline editing, no Save, no **Recalculate existing** - that feature is dropped. The table and the tier bands are displayed on one Configuration page together with 6c. Scoring is changed through a migration, not a screen. CLAUDE.md §10 has the reasoning; `ADMIN.md` has the page.)*
 - **Scoring rules table** – editable inline:
   - Response · Responded to opening SMS · `10`
   - Completion · Answered all three · `10`
@@ -201,6 +203,8 @@ Left sub-navigation within the page: **Overview** · **Leads** · **Scoring** ·
 - Unsaved changes indicator.
 
 **6c. Messages (SMS copy)**
+
+*(2026-09-23, Jeel: read-only, and shown on the same Configuration page as the score table. The copy is displayed with its character and segment counts; nothing is editable, so the placeholder chips and the editing affordances below do not apply. The phone-frame preview is still worth having.)*
 - Editable text for: Opener (Q1), Q2, Q3, Completion message, Clarification message, Review message, STOP confirmation.
 - *Update 2026-09-19:* the clarification is three messages, one per question, each repeating that question's options - edit them as three fields. The STOP confirmation is sent by EZ Texting, not by this app, so it is not editable here; show it read-only with that explanation or leave it out. See `docs/STATE-MACHINE.md`.
 - Each field shows live character count and segment count; warning when over the configured limit (130 or 160).
@@ -213,11 +217,15 @@ Left sub-navigation within the page: **Overview** · **Leads** · **Scoring** ·
 - Row actions: Reset password (shows temp password once), Deactivate / Reactivate, Change role.
 
 **6e. DNC list**
+
+*(2026-09-23, Jeel: read-only - no manual add. A number is blocked by an agent's DNC disposition, an SMS STOP or an EZ Texting opt-out. The list must show rows released by START as released, not hide them.)*
 - Table: Phone, Reason (SMS STOP / Agent DNC / Imported), Added by, Date.
 - Search by phone. Add manually. Export CSV.
 - No delete in v1 (compliance) – show a note explaining this.
 
 **6f. Settings**
+
+*(2026-09-23, Jeel: not built. Conversation expiry stays 7 days and is shown on the Configuration page; delivery type, lead group, poll interval and the Twilio caller ID stay environment variables.)*
 - Conversation expiry (days, default 7).
 - Delivery type (Standard 130 / Express 160) – affects message limits.
 - Lead group filter (EZ Texting group name to poll).

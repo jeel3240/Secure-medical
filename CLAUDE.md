@@ -333,6 +333,55 @@ Each week ends with something that can be demonstrated. Do not start the next we
 Auth (Week 1) and the Week 3 login were built together, ahead of the Week 1
 webhook, at Jeel's request. *(Table updated 2026-09-22.)*
 
+### Phases, and what Phase 3 is - decided by Jeel, 2026-09-23
+
+The weeks below are the original plan. Work is now tracked in phases, which map
+onto them:
+
+| Phase | Weeks | State |
+|---|---|---|
+| 1 | Week 1 | Done |
+| 2 | Week 2 | Done, approved 2026-09-23 |
+| 3 | Week 3 **and all of Week 4 except Twilio** | Next |
+| 4 | Week 4 items 1-4, Twilio calling | After Phase 3 |
+
+**Phase 3 is everything that is left except calling.** That means the Week 3
+list below, plus Week 4 items 5-9: error handling and retries, logging, the
+end-to-end test script, the fixes it finds, and the README. Twilio is the only
+thing held back, so the agent workspace is built with its Call button visible
+but disabled until Phase 4.
+
+Added to Phase 3, not in the original plan:
+
+- **CloudWatch.** Jeel has asked Nilesh to add it (2026-09-23). Our side is
+  structured logs and a health endpoint for it to read - `docs/LOGGING.md`.
+- **Clearing `has_unread_inbound`.** Nothing unsets it today, so a lead who
+  texts after expiry never leaves the queue. Opening the lead is what clears it.
+- **Claiming a lead.** `assigned_to` and `assigned_at` exist and the queue reads
+  them, but nothing writes them.
+
+**Admin is read-only except Agents - decided by Jeel, 2026-09-23.** The original
+Week 3 item 7 and `DESIGN-PROMPT.md` 6b, 6c, 6e and 6f had the superadmin
+editing scoring rules, tier bands, message copy and settings from the screen.
+They do not. Admin shows the configuration; it does not change it:
+
+| Screen | Was | Is |
+|---|---|---|
+| Scoring rules and tiers (6b) | Editable inline, with **Recalculate existing** | A read-only card. No Save, no Recalculate - the feature is dropped |
+| Message copy (6c) | Seven editable fields | Read-only, shown on the same page as the score table |
+| Settings (6f) | Expiry, delivery type, poll interval, caller ID | Not built. Expiry stays 7 days; the rest stay environment variables |
+| DNC list (6e) | Table plus **Add manually** | Read-only. Blocking happens through an agent's DNC disposition, a STOP reply, or an EZ Texting opt-out |
+| Agents (6d) | Editable | Unchanged - creating and deactivating accounts is the point of it |
+
+**Why:** scoring and copy are not small changes. A mistyped point value silently
+reshuffles the queue; a broken opener costs a second segment on every message or
+drops the STOP wording. Changing them through a numbered migration means a PR, a
+review and a git history of who changed what. Jeel makes those changes.
+
+A rule change therefore leaves leads already scored on their old values. That is
+accepted: it is rare, and a one-off rescore script can be run deliberately if it
+ever matters. Nothing rescores on its own.
+
 ### Week 1 – Foundation + prove EZ Texting works
 
 **Goal:** leads are pulled from EZ Texting into our database, and we can send and receive SMS.
@@ -388,7 +437,7 @@ Build:
 4. Agent workspace (mockup p.6) minus the call button: lead card, score breakdown, SMS send, note, callback scheduling, disposition, save & next
 5. Lead timeline (mockup p.7): merged view of messages, calls, notes, callbacks, dispositions
 6. My Callbacks page
-7. Admin (mockup p.8): edit scoring rules and tier thresholds, recalculate existing, edit question copy / clarification / STOP text / expiry days, manage agents
+7. Admin (mockup p.8): ~~edit scoring rules and tier thresholds, recalculate existing, edit question copy / clarification / STOP text / expiry days~~, manage agents. *(2026-09-23: all of it read-only except managing agents - see "Phases, and what Phase 3 is" above. The screen shows the questions, the clarifications, the thanks message, the score table and the tier bands; nothing is editable and Recalculate is dropped.)*
 8. Superadmin overview: all activity across agents
 9. Caddy serves the built frontend; API under `/api`
 10. **Admin > Leads** *(added 2026-09-14, not in the original plan)*: superadmin-only list of every lead, including ones that never replied, with status tabs (Awaiting reply, In progress, Completed, Needs review, Opted out, Expired), source and date filters, search, pagination, and row click to the timeline. Read-only. Backed by `GET /api/admin/leads?status=&source=&since=&q=&page=`, superadmin only; status comes from the lead's newest conversation. Spec in `docs/DESIGN-PROMPT.md` section 6g. It needs only the `leads`, `conversations` and `messages` tables, so it can be built before the queue if useful for watching the poller and the SMS flow.
@@ -396,7 +445,7 @@ Build:
 Done when:
 - Two agents logged in at once cannot claim the same lead
 - A lead added in EZ Texting appears in Admin > Leads as Awaiting reply within one poll interval, without a manual refresh
-- Superadmin changes a scoring rule → next completed lead uses the new value
+- ~~Superadmin changes a scoring rule → next completed lead uses the new value~~ *(2026-09-23: rules are not changed from the screen. Instead: the Configuration page shows the values the state machine is actually using.)*
 - Every screen in the mockup exists and works with sandbox data
 
 ### Week 4 – Twilio calling + end-to-end testing + handoff
@@ -408,8 +457,8 @@ Build:
 2. Call button in agent workspace using Twilio Voice JS SDK; live timer; hang up
 3. Save each call to `calls` (sid, duration, outcome); show in timeline
 4. DNC disposition suppresses number for both SMS and calls
-5. Error handling and retries: EZ Texting API down, webhook duplicate, Twilio token expiry
-6. Logging: every worker tick, every webhook, every send, every call
+5. Error handling and retries: EZ Texting API down, webhook duplicate, Twilio token expiry *(items 5-9 moved into Phase 3, 2026-09-23; Twilio token expiry stays here)*
+6. Logging: every worker tick, every webhook, every send, every call - structured for CloudWatch, `docs/LOGGING.md`
 7. Full end-to-end test script: new lead → SMS flow → queue → call → disposition → timeline
 8. Fix everything found in step 7
 9. README updated: how to run, how to test, env variables, known limits
