@@ -311,7 +311,7 @@ Never commit `.env`. Never use real lead data locally. Generate fake leads.
    *(2026-09-14: the full command includes the production override - `docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build`. `docs/WORKFLOW.md` has the exact steps.)*
 4. Developer never touches EC2, RDS, or client accounts.
 
-**Migrations:** plain files in `backend/src/db/migrations/`, numbered. Never edit one that has already run on RDS – add a new one.
+**Migrations:** plain files in `backend/src/db/migrations/`, numbered. Never edit one that has already run on RDS – add a new one. *(2026-09-23: production is live, so every database change is a new migration file and nothing else - no hand-edits, no psql. `docs/WORKFLOW.md`, "Migrations".)*
 
 **Definition of done for a task:** works locally end to end with fake data, PR description says how to test it, no console errors, migrations included if schema changed.
 
