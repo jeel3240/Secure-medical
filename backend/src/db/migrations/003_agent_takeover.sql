@@ -1,0 +1,21 @@
+-- When an agent took the conversation over from the automated questions.
+--
+-- Set the first time an agent sends a manual SMS to the lead. From then on the
+-- state machine stores replies and flags them for the agent, but scores
+-- nothing and sends no question or clarification: the lead is answering the
+-- agent, not us, and an automated "Question 2 of 3" landing on top of that
+-- conversation reads as a broken system to the person we are selling to.
+-- STATE-MACHINE.md rule 2b is the authority.
+--
+-- A timestamp rather than a boolean, because the timeline has to show when the
+-- handoff happened alongside the messages either side of it.
+--
+-- Deliberately not a status. The conversation keeps whatever status it had, so
+-- the queue tabs and Admin > Leads are unaffected and expiry still applies -
+-- the agent's callback and disposition are what track the lead from then on.
+-- Opt-out is checked before this and is unaffected: a STOP after the handoff
+-- still blocks the number, a START still releases it.
+--
+-- A new migration rather than an edit to 001, which has run against the
+-- production database.
+ALTER TABLE conversations ADD COLUMN agent_took_over_at TIMESTAMPTZ;
