@@ -1,13 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { toApiError } from '../../api/client';
 import { listAdminLeads, type AdminLead, type AdminLeadsResponse } from '../../api/leads';
+import { usePolling } from '../../api/usePolling';
 import { Badge } from '../../components/Badge';
 import { Banner } from '../../components/Banner';
 import { Button } from '../../components/Button';
 import { Spinner } from '../../components/Spinner';
 import { formatPhone, formatReceived, formatRelative } from './format';
-
-const REFRESH_MS = 5000;
 
 const TABS: { key: string; label: string }[] = [
   { key: 'all', label: 'All' },
@@ -59,8 +57,6 @@ function pollIsStale(poll: AdminLeadsResponse['poll']): boolean {
 }
 
 export function LeadsPage() {
-  const [data, setData] = useState<AdminLeadsResponse | null>(null);
-  const [error, setError] = useState<string | null>(null);
   const [status, setStatus] = useState('all');
   const [since, setSince] = useState('all');
   const [source, setSource] = useState<string>('');
@@ -73,45 +69,35 @@ export function LeadsPage() {
   const seen = useRef<Set<number>>(new Set());
   const [fresh, setFresh] = useState<Set<number>>(new Set());
 
-  const load = useCallback(
-    async (showSpinner: boolean) => {
-      if (showSpinner) setData(null);
-      try {
-        const next = await listAdminLeads({
-          status,
-          since,
-          source: source ? [source] : undefined,
-          q: query || undefined,
-          page,
-        });
-
-        const newIds = new Set(next.leads.filter((l) => !seen.current.has(l.id)).map((l) => l.id));
-        // Everything is new on the first load; highlighting all of it is noise.
-        if (seen.current.size > 0 && newIds.size > 0) {
-          setFresh(newIds);
-          setTimeout(() => setFresh(new Set()), 600);
-        }
-        next.leads.forEach((l) => seen.current.add(l.id));
-
-        setData(next);
-        setError(null);
-      } catch (err) {
-        setError(toApiError(err).message);
-      }
-    },
+  // Polling lives in one place now - api/usePolling.ts, Phase 3 task 14. This
+  // screen had its own 5s interval before that, and copying it to every live
+  // screen is how several different refresh behaviours get shipped.
+  const fetcher = useCallback(
+    () =>
+      listAdminLeads({
+        status,
+        since,
+        source: source ? [source] : undefined,
+        q: query || undefined,
+        page,
+      }),
     [status, since, source, query, page]
   );
 
-  // Filter changes reload with a spinner; the timer refreshes in place so the
-  // table does not blank out every few seconds.
-  useEffect(() => {
-    void load(true);
-  }, [load]);
+  const { data, error } = usePolling<AdminLeadsResponse>(fetcher);
 
+  // Highlight rows that were not in the previous response. Driven off `data`
+  // rather than the fetch, so it works the same whichever tick delivered them.
   useEffect(() => {
-    const id = setInterval(() => void load(false), REFRESH_MS);
-    return () => clearInterval(id);
-  }, [load]);
+    if (!data) return;
+    const newIds = new Set(data.leads.filter((l) => !seen.current.has(l.id)).map((l) => l.id));
+    // Everything is new on the first load; highlighting all of it is noise.
+    if (seen.current.size > 0 && newIds.size > 0) {
+      setFresh(newIds);
+      setTimeout(() => setFresh(new Set()), 600);
+    }
+    data.leads.forEach((l) => seen.current.add(l.id));
+  }, [data]);
 
   useEffect(() => {
     const id = setTimeout(() => {

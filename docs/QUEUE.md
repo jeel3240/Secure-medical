@@ -130,6 +130,8 @@ question copy in `settings`, which a superadmin can edit.
   `ADMIN-LEADS.md` already does - at 50-100 leads a day an agent cannot tell it
   from a push, and it needs nothing new on the server. The fetching goes in one
   place so a real push can replace it later without touching the screens.)*
+  **Built 2026-09-26** as `frontend/src/api/usePolling.ts`, Phase 3 task 14 -
+  see "The polling hook" below.
 - **Claiming is written elsewhere.** `assigned_to` is read here, never written.
   `POST /api/leads/:id/claim` and `/release` do that - Phase 3 task 2,
   `AGENT-WORKSPACE.md`.
@@ -151,3 +153,40 @@ where most of the rules above actually live, so
 database and asserts what comes back - inclusion, exclusion, order, every tag,
 each filter, the counts. The header of that file says how to run it. Last run
 2026-09-22: 36 checks, all passing.
+
+## The polling hook
+
+`frontend/src/api/usePolling.ts`. Every live screen fetches through it: the
+queue, the workspace, the timeline, My Callbacks and the three admin pages.
+
+```ts
+const fetcher = useCallback(() => listQueue({ tier, source, since, q }), [tier, source, since, q]);
+const { data, loading, error, refresh, updatedAt } = usePolling(fetcher);
+```
+
+**One place, so a push can replace it.** `POLL_MS` is 5000 and the interval
+lives here alone. Swapping polling for websockets later means rewriting this
+file and nothing else. `admin/LeadsPage.tsx` had its own copy of the interval
+before this task and now uses the hook; copying it to eleven more screens is how
+a codebase ends up with five different refresh behaviours.
+
+**What it guarantees, and why each one is tested rather than eyeballed:**
+
+| Behaviour | Why it matters |
+|---|---|
+| `data` survives a tick | The table must not blank out every five seconds |
+| `loading` is true only when there is nothing to show | A spinner on every tick makes the screen flicker |
+| An error keeps the last good `data` | A dropped connection shows a banner over stale rows, not a blank page - the design brief's "Live updates paused" |
+| A stale response is discarded | A slow request from a filter the agent has already changed must not overwrite the current view |
+| The timer stops on unmount | Otherwise it polls forever and sets state on a dead component |
+| `refresh()` fetches now | So a claim or a note appears at once instead of up to 5s later |
+
+**The fetcher must be stable** - wrapped in `useCallback` with the filters as
+dependencies. When it changes that counts as a new view: the spinner returns and
+the old rows are cleared, because rows fetched under the old filter do not
+belong under the new one. A fetcher rebuilt on every render would clear the data
+on every render.
+
+`frontend/src/api/usePolling.test.ts` covers all six rows above. None of them is
+visible in a browser, which is why they are tested at all - the screens
+themselves are judged by eye.
