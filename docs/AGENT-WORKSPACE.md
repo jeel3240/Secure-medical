@@ -3,12 +3,13 @@
 The endpoints behind the Agent Workspace, the Lead Timeline and My Callbacks -
 `DESIGN-PROMPT.md` sections 3, 4 and 5. Phase 3.
 
-**Built so far: claim and release** (task 2) and **marking a lead read** (task
-3), both 2026-09-26 - `api/leads.ts`, `db/claims.ts`, `db/read-flag.ts`.
-Everything else here is still the contract to build against: no route touches
-`notes`, `dispositions` or `callbacks`. Paths and payload shapes for the unbuilt
-ones are proposed, not agreed - say so if you want them different; everything
-under "Rules" is decided.
+**Built so far** (all 2026-09-26): claim and release (task 2), marking a lead
+read (task 3), and the lead card (task 4) - `api/leads.ts`, `db/claims.ts`,
+`db/read-flag.ts`, `db/lead-detail.ts`, `core/score-breakdown.ts`. Everything
+else here is still the contract to build against: no route touches `notes`,
+`dispositions` or `callbacks`, and there is no timeline. Paths and payload
+shapes for the unbuilt ones are proposed, not agreed - say so if you want them
+different; everything under "Rules" is decided.
 
 Every route is under `/api`, requires a session, and is open to any signed-in
 user unless it says superadmin. See `AUTH.md`.
@@ -24,8 +25,14 @@ superadmin can force a release.
 (`QUEUE.md`); the claim endpoint treats such a lead as free.
 
 **Opening a lead marks it read,** clearing `leads.has_unread_inbound`. That flag
-is what brings an expired lead who texted back into the queue, and today nothing
-clears it, so the lead never leaves. This is the missing half.
+is what brings an expired lead who texted back into the queue, and nothing
+cleared it until Phase 3 task 3, so the lead never left.
+
+*Changed 2026-09-26:* the clearing is `POST /api/leads/:id/read`, and the `GET`
+does **not** do it. The workspace polls the lead every few seconds, so a `GET`
+that cleared the flag would clear it on the first tick whether or not anyone had
+read the message - and a list that prefetched detail would mark leads read that
+nobody opened. The frontend says when a lead counts as opened.
 
 **An agent SMS stops the automated questions.** It sets the take-over timestamp
 on the conversation; from then on replies are stored for the agent and never
@@ -46,7 +53,7 @@ the agent SMS box is disabled on a DNC lead rather than failing at send time.
 
 | Method | Path | Does |
 |---|---|---|
-| `GET` | `/api/leads/:id` | Lead card: name, phone, source, age, score, tier, answers, score breakdown, flags (DNC, needs review, unread). Marks the lead read. |
+| `GET` | `/api/leads/:id` | Lead card: name, phone, source, age, score, tier, answer chips, score breakdown, holder, flags (DNC, needs review, unread, expired). Read-only - see below. |
 | `GET` | `/api/leads/:id/timeline` | Every event for the lead, oldest first: system, outbound SMS, inbound reply, agent SMS, call, note, callback, disposition. |
 | `POST` | `/api/leads/:id/read` | Clears `has_unread_inbound`. 204, idempotent. |
 | `POST` | `/api/leads/:id/claim` | Claims it. 409 `already_claimed` with the holder's name when someone else has it. |
@@ -57,6 +64,33 @@ the agent SMS box is disabled on a DNC lead rather than failing at send time.
 | `POST` | `/api/leads/:id/callbacks` | `{ scheduledAt, agentId? }` - defaults to you; a superadmin may assign another agent. |
 | `PATCH` | `/api/callbacks/:id` | `{ scheduledAt }` to reschedule, or `{ done: true }` to complete. |
 | `GET` | `/api/callbacks?when=today\|upcoming\|overdue&agentId=` | My Callbacks. `agentId` is superadmin only. |
+
+## How the lead card is built
+
+`db/lead-detail.ts` for the query, `core/score-breakdown.ts` for the words.
+
+**The newest conversation is the card.** A lateral join picks it, the same way
+the queue and Admin > Leads do. Earlier ones stay on the lead as history; the
+flags follow the newest, so a lead whose old conversation expired but whose new
+one is open does not read as expired.
+
+**A released `dnc_list` row does not raise the DNC flag.** The join is
+`released_at IS NULL`. A number that opted out and later texted START is
+contactable again - migration 002 - and the row is kept only as the record.
+
+**A claim by a deactivated agent is not reported as a holder,** matching the
+queue and the claim endpoint. All three have to agree or the card would show a
+lead as held by someone who cannot work it.
+
+**The breakdown shows only what was earned.** A lead who stopped after question
+1 gets two lines, not five with zeros: the card records what happened rather
+than scoring what was possible. A rule missing from `scoring_rules` contributes
+nothing instead of throwing, because an admin can delete a row and a lead card
+is not the place to fail over it.
+
+`scripts/lead-detail-live-check.ts` proves the parts that live in SQL - which
+conversation wins, the released-DNC join, the deactivated holder - against a
+real database.
 
 ## Marking a lead read
 
@@ -142,7 +176,11 @@ Deciding which ones are worth showing is part of building it.
 - **Seen before** and the timeline's "Previous lead" section need repeat-lead
   handling, still blocked - CLAUDE.md §10, "Future".
 - **The Call button** is built disabled until Phase 4.
-- **Answer chips** (`Interest: Both`) and the score breakdown need the choice
-  numbers mapped to words. The words live in the question copy in `settings`,
-  which is admin-editable in principle, so the mapping belongs in one place
-  rather than hard-coded in the screen.
+- ~~**Answer chips** and the score breakdown need the choice numbers mapped to
+  words.~~ *Done 2026-09-26, `core/score-breakdown.ts`.* The words come from
+  `scoring_rules.label` - `Q1: Both` with the prefix stripped - not from the
+  question copy in `settings`. The labels already pair each choice with the
+  points it earns, so one row answers both "what did they say" and "what was it
+  worth"; the question copy is prose written for a lead to read and free to be
+  reworded. The prefix convention is now something code relies on, and
+  `answerLabel` leaves a label without one alone rather than dropping it.

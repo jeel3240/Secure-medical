@@ -114,6 +114,21 @@ export function queueRouter(deps: AppDeps): Router {
     })
   );
 
+  router.get(
+    '/:id',
+    asyncHandler(async (req, res) => {
+      // eslint-disable-next-line @typescript-eslint/no-var-requires
+      const db = require('../db/lead-detail') as typeof import('../db/lead-detail');
+
+      const lead = await db.getLeadDetail(parseLeadId(req.params.id));
+      if (!lead) {
+        throw new HttpError(404, 'not_found', 'No such lead.');
+      }
+
+      res.json({ lead });
+    })
+  );
+
   router.post(
     '/:id/read',
     asyncHandler(async (req, res) => {

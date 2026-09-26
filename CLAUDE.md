@@ -154,8 +154,11 @@ you change something the docs describe, update the doc in the same commit.
     src/api/leads.ts        the agents' priority queue, and claim/release
     src/db/claims.ts        claiming and releasing a lead
     src/db/read-flag.ts     clears has_unread_inbound
+    src/db/lead-detail.ts   the lead card
+    src/core/score-breakdown.ts  answer chips and the score breakdown, pure
     scripts/claims-live-check.ts  proves that SQL, including the claim race
     scripts/read-flag-live-check.ts  proves a read lead leaves the queue
+    scripts/lead-detail-live-check.ts  proves the card's SQL
     src/core/queue-tags.ts  which tag a queued lead gets
     src/db/queue.ts         the priority queue SQL
     scripts/queue-live-check.ts  proves that SQL against a real database
