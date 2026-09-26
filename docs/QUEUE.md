@@ -130,11 +130,15 @@ question copy in `settings`, which a superadmin can edit.
   `ADMIN-LEADS.md` already does - at 50-100 leads a day an agent cannot tell it
   from a push, and it needs nothing new on the server. The fetching goes in one
   place so a real push can replace it later without touching the screens.)*
-- **No claiming.** `assigned_to` is read here, never written. The one-agent lock
-  is Week 3 item 3.
-- **Nothing clears `has_unread_inbound`.** An expired lead who texted back is
-  meant to drop out of the queue once an agent opens it. No code unsets the
-  flag, so for now it stays. `STATE-MACHINE.md`, "Expiry".
+- **Claiming is written elsewhere.** `assigned_to` is read here, never written.
+  `POST /api/leads/:id/claim` and `/release` do that - Phase 3 task 2,
+  `AGENT-WORKSPACE.md`.
+- **`has_unread_inbound` is cleared by `POST /api/leads/:id/read`** - Phase 3
+  task 3. Until it existed nothing unset the flag, so an expired lead who texted
+  back stayed in the queue however often an agent read the message. Proved
+  against a real database: such a lead leaves the queue once read, while a lead
+  whose conversation is still open stays, because the flag was never what was
+  keeping it there. `STATE-MACHINE.md`, "Expiry".
 - **No paging.** `limit` truncates and `total` says by how much; at 50-100 leads
   a day the default of 100 holds several days of queue. Page when it does not.
 

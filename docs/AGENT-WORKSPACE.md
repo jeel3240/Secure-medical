@@ -3,11 +3,12 @@
 The endpoints behind the Agent Workspace, the Lead Timeline and My Callbacks -
 `DESIGN-PROMPT.md` sections 3, 4 and 5. Phase 3.
 
-**Built so far: claim and release** (task 2, 2026-09-26) - `api/leads.ts` and
-`db/claims.ts`. Everything else here is still the contract to build against: no
-route touches `notes`, `dispositions` or `callbacks`, and nothing marks a lead
-read. Paths and payload shapes for the unbuilt ones are proposed, not agreed -
-say so if you want them different; everything under "Rules" is decided.
+**Built so far: claim and release** (task 2) and **marking a lead read** (task
+3), both 2026-09-26 - `api/leads.ts`, `db/claims.ts`, `db/read-flag.ts`.
+Everything else here is still the contract to build against: no route touches
+`notes`, `dispositions` or `callbacks`. Paths and payload shapes for the unbuilt
+ones are proposed, not agreed - say so if you want them different; everything
+under "Rules" is decided.
 
 Every route is under `/api`, requires a session, and is open to any signed-in
 user unless it says superadmin. See `AUTH.md`.
@@ -47,6 +48,7 @@ the agent SMS box is disabled on a DNC lead rather than failing at send time.
 |---|---|---|
 | `GET` | `/api/leads/:id` | Lead card: name, phone, source, age, score, tier, answers, score breakdown, flags (DNC, needs review, unread). Marks the lead read. |
 | `GET` | `/api/leads/:id/timeline` | Every event for the lead, oldest first: system, outbound SMS, inbound reply, agent SMS, call, note, callback, disposition. |
+| `POST` | `/api/leads/:id/read` | Clears `has_unread_inbound`. 204, idempotent. |
 | `POST` | `/api/leads/:id/claim` | Claims it. 409 `already_claimed` with the holder's name when someone else has it. |
 | `POST` | `/api/leads/:id/release` | Releases your own claim. A superadmin may release anyone's. |
 | `POST` | `/api/leads/:id/notes` | `{ body }`. |
@@ -55,6 +57,29 @@ the agent SMS box is disabled on a DNC lead rather than failing at send time.
 | `POST` | `/api/leads/:id/callbacks` | `{ scheduledAt, agentId? }` - defaults to you; a superadmin may assign another agent. |
 | `PATCH` | `/api/callbacks/:id` | `{ scheduledAt }` to reschedule, or `{ done: true }` to complete. |
 | `GET` | `/api/callbacks?when=today\|upcoming\|overdue&agentId=` | My Callbacks. `agentId` is superadmin only. |
+
+## Marking a lead read
+
+`db/read-flag.ts`, `POST /api/leads/:id/read`. Built as its own endpoint rather
+than only as a side effect of `GET /api/leads/:id`, so the frontend decides when
+a lead counts as opened - a list that prefetches detail would otherwise silently
+mark leads read that nobody looked at. The `GET` may still clear it when that
+route lands; both call the same function.
+
+**Idempotent.** Marking an already-read lead read is a 204: the caller wanted it
+read and it is. The function reports whether this call was the one that changed
+it, which is what a log line keys on.
+
+**Not scoped to the lead's holder.** Reading is not claiming. A superadmin
+looking at a lead an agent holds has still read it, and the flag is about
+whether a human has seen the message, not about who owns the work.
+
+**What it is for.** An expired conversation is closed, so the only thing keeping
+such a lead in the queue is this flag - `db/queue.ts`,
+`c.status = 'expired' AND l.has_unread_inbound`. Nothing cleared it before, so
+the lead never left. `scripts/read-flag-live-check.ts` proves the effect against
+a real database: the lead leaves the queue once read, while one whose
+conversation is still open stays, because the flag was never what held it there.
 
 ## How claim and release are built
 

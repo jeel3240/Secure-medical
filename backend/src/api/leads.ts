@@ -115,6 +115,21 @@ export function queueRouter(deps: AppDeps): Router {
   );
 
   router.post(
+    '/:id/read',
+    asyncHandler(async (req, res) => {
+      // eslint-disable-next-line @typescript-eslint/no-var-requires
+      const db = require('../db/read-flag') as typeof import('../db/read-flag');
+
+      const result = await db.markLeadRead(parseLeadId(req.params.id));
+      if (!result.ok) {
+        throw new HttpError(404, 'not_found', 'No such lead.');
+      }
+
+      res.status(204).end();
+    })
+  );
+
+  router.post(
     '/:id/release',
     asyncHandler(async (req, res) => {
       // eslint-disable-next-line @typescript-eslint/no-var-requires
