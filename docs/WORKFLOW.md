@@ -63,14 +63,31 @@ letting a reviewer discover it.
 Plain numbered `.sql` files in `backend/src/db/migrations/`, applied by
 `npm run migrate` and recorded in `schema_migrations` so each runs once.
 
-**Never edit a migration that has already run against RDS.** Add a new numbered
-file. A file that has only ever run on a local database can still be edited,
-since nothing depends on its previous contents - but be certain that is true
-before doing it.
+**The site is live, so every database change is a new migration file.** There is
+a production database on RDS holding real rows. It is only ever changed by a
+numbered file in this folder, run through the migrate script on deploy. There is
+no other route: no ALTER typed into psql, no change made by hand in a GUI, no
+edit to a file that has already shipped. A schema change that exists only on
+someone's laptop is a schema change that will be missing in production, and the
+code that depends on it will fail there and nowhere else.
+
+**Never edit a migration that has already run.** Add a new numbered file that
+changes what the old one did. Assume every file already in `dev` has run in
+production unless Jeel says otherwise - that assumption is cheap when wrong and
+expensive when right, because editing a file that has run leaves the two
+databases permanently different with nothing to show it.
+
+This applies to the smallest changes as much as the large ones. Adding a column,
+widening one, adding an index, seeding a settings row, correcting a value: each
+one is a file. `002_dnc_release.sql` exists because two columns had to be added
+to `dnc_list` after 001 had shipped - that is the pattern, not an exception.
 
 Run migrations through `npm run migrate`, not by piping SQL into psql.
 Piping applies the schema without recording it, so the runner will try to apply
 the same file again later and fail.
+
+A migration ships in the same PR as the code that needs it, so a deploy never
+lands code expecting a column that is not there yet.
 
 ## Deploying
 
@@ -83,6 +100,28 @@ git pull
 docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
 docker compose exec api npm run migrate
 ```
+
+**`docker compose logs` returns nothing on the server.** The production
+override sets the `awslogs` log driver on api, worker and caddy, so container
+output goes to CloudWatch: log group `/leads-app`, one stream per service named
+`api`, `worker` and `caddy`. Locally there is no override, so
+`docker compose logs` works as usual - the same command behaves differently in
+the two places, which is worth remembering before concluding a service is
+silent.
+
+Two things about that driver, both in `docker-compose.prod.yml`:
+
+- **A missing IAM permission stops containers starting,** rather than merely
+  losing logs - Docker fails at container creation. The instance role needs
+  `logs:CreateLogStream` and `logs:PutLogEvents`, plus `logs:CreateLogGroup`
+  because `awslogs-create-group` is on. So after a deploy that changes this,
+  check `docker compose ps` immediately rather than assuming a clean `up`. If
+  the API is down, drop `awslogs-create-group` and create the group by hand.
+- **Logs are shipped non-blocking,** because Docker's default blocking mode lets
+  a slow log endpoint stall writes to stdout and with them the request handling.
+  Under sustained pressure lines are dropped instead.
+
+Retention is set on the log group itself, not here - 30 days.
 
 On the very first deploy, after migrating, create the first superadmin. It
 prints a one-time temporary password:

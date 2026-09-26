@@ -124,8 +124,12 @@ question copy in `settings`, which a superadmin can edit.
 - **The STATE column in the mockup is not returned.** EZ Texting sends no state
   with a contact - `EZTEXTING-API.md` - so there is nothing to return. It needs
   a source for that field before the column can be built.
-- **No live updates.** The screen is specified as updating without a refresh;
-  this is a plain request. Polling or SSE is a Week 3 decision.
+- **No live updates yet.** The screen is specified as updating without a
+  refresh, and this is a plain request. *(2026-09-23, Jeel: new leads appear by
+  themselves. Done by polling this endpoint every 5 seconds, the way
+  `ADMIN-LEADS.md` already does - at 50-100 leads a day an agent cannot tell it
+  from a push, and it needs nothing new on the server. The fetching goes in one
+  place so a real push can replace it later without touching the screens.)*
 - **No claiming.** `assigned_to` is read here, never written. The one-agent lock
   is Week 3 item 3.
 - **Nothing clears `has_unread_inbound`.** An expired lead who texted back is

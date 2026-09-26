@@ -311,7 +311,7 @@ Never commit `.env`. Never use real lead data locally. Generate fake leads.
    *(2026-09-14: the full command includes the production override - `docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build`. `docs/WORKFLOW.md` has the exact steps.)*
 4. Developer never touches EC2, RDS, or client accounts.
 
-**Migrations:** plain files in `backend/src/db/migrations/`, numbered. Never edit one that has already run on RDS – add a new one.
+**Migrations:** plain files in `backend/src/db/migrations/`, numbered. Never edit one that has already run on RDS – add a new one. *(2026-09-23: production is live, so every database change is a new migration file and nothing else - no hand-edits, no psql. `docs/WORKFLOW.md`, "Migrations".)*
 
 **Definition of done for a task:** works locally end to end with fake data, PR description says how to test it, no console errors, migrations included if schema changed.
 
@@ -332,6 +332,120 @@ Each week ends with something that can be demonstrated. Do not start the next we
 
 Auth (Week 1) and the Week 3 login were built together, ahead of the Week 1
 webhook, at Jeel's request. *(Table updated 2026-09-22.)*
+
+### Phases, and what Phase 3 is - decided by Jeel, 2026-09-23
+
+The weeks below are the original plan. Work is now tracked in phases, which map
+onto them:
+
+| Phase | Weeks | State |
+|---|---|---|
+| 1 | Week 1 | Done |
+| 2 | Week 2 | Done, approved 2026-09-23 |
+| 3 | Week 3 **and all of Week 4 except Twilio** | Next |
+| 4 | Week 4 items 1-4, Twilio calling | After Phase 3 |
+
+**Phase 3 is everything that is left except calling.** That means the Week 3
+list below, plus Week 4 items 5-9: error handling and retries, logging, the
+end-to-end test script, the fixes it finds, and the README. Twilio is the only
+thing held back, so the agent workspace is built with its Call button visible
+but disabled until Phase 4.
+
+Added to Phase 3, not in the original plan:
+
+- **Structured logging and a deeper health endpoint** - `docs/LOGGING.md`.
+  Today's logs are readable lines that nothing can query, and the only health
+  check proves the API process is alive and nothing more.
+- **Clearing `has_unread_inbound`.** Nothing unsets it today, so a lead who
+  texts after expiry never leaves the queue. Opening the lead is what clears it.
+- **Claiming a lead.** `assigned_to` and `assigned_at` exist and the queue reads
+  them, but nothing writes them.
+
+**Admin is read-only except Agents - decided by Jeel, 2026-09-23.** The original
+Week 3 item 7 and `DESIGN-PROMPT.md` 6b, 6c, 6e and 6f had the superadmin
+editing scoring rules, tier bands, message copy and settings from the screen.
+They do not. Admin shows the configuration; it does not change it:
+
+| Screen | Was | Is |
+|---|---|---|
+| Scoring rules and tiers (6b) | Editable inline, with **Recalculate existing** | A read-only card. No Save, no Recalculate - the feature is dropped |
+| Message copy (6c) | Seven editable fields | Read-only, shown on the same page as the score table |
+| Settings (6f) | Expiry, delivery type, poll interval, caller ID | Not built. Expiry stays 7 days; the rest stay environment variables |
+| DNC list (6e) | Table plus **Add manually** | Read-only. Blocking happens through an agent's DNC disposition, a STOP reply, or an EZ Texting opt-out |
+| Agents (6d) | Editable | Unchanged - creating and deactivating accounts is the point of it |
+
+**Why:** scoring and copy are not small changes. A mistyped point value silently
+reshuffles the queue; a broken opener costs a second segment on every message or
+drops the STOP wording. Changing them through a numbered migration means a PR, a
+review and a git history of who changed what. Jeel makes those changes.
+
+A rule change therefore leaves leads already scored on their old values. That is
+accepted: it is rare, and a one-off rescore script can be run deliberately if it
+ever matters. Nothing rescores on its own.
+
+### Phase 3 task list
+
+30 tasks, each one a PR. The behaviour of every one is specified in the doc
+named beside it - read that first, not this line. §9's definition of done
+applies to each: works locally with fake data, tests, docs updated in the same
+commit.
+
+**Backend (`AGENT-WORKSPACE.md`, `ADMIN.md`, `LOGGING.md`)**
+
+| # | Task | Doc | Needs |
+|---|---|---|---|
+| 1 | Migration: agent take-over timestamp on `conversations` | `SCHEMA.md` | – |
+| 2 | Claim and release a lead, with superadmin force-release | `AGENT-WORKSPACE.md` | – |
+| 3 | Mark a lead read, clearing `has_unread_inbound` | `AGENT-WORKSPACE.md` | – |
+| 4 | Lead detail: card, flags, score breakdown | `AGENT-WORKSPACE.md` | – |
+| 5 | Lead timeline: merged events from five tables | `AGENT-WORKSPACE.md` | – |
+| 6 | Notes | `AGENT-WORKSPACE.md` | – |
+| 7 | Callbacks: create, reschedule, mark done, list | `AGENT-WORKSPACE.md` | – |
+| 8 | Dispositions, and the DNC path that blocks the number | `AGENT-WORKSPACE.md` | – |
+| 9 | Agent SMS, and stopping the automated questions | `STATE-MACHINE.md` 2b | 1 |
+| 10 | Admin Configuration: live copy, scoring and tiers, read-only | `ADMIN.md` | – |
+| 11 | Admin Overview statistics | `ADMIN.md` | – |
+| 12 | Admin DNC list, read-only, showing released rows | `ADMIN.md` | – |
+| 13 | Deep health endpoint: database, last poll, last webhook | `LOGGING.md` | – |
+
+**Frontend (`DESIGN-PROMPT.md`)**
+
+| # | Task | Doc | Needs |
+|---|---|---|---|
+| 14 | Shared polling hook, 5s, one place for every live screen | `QUEUE.md` | – |
+| 15 | Priority Queue screen, replacing the placeholder | `DESIGN-PROMPT.md` 2, `QUEUE.md` | 14 |
+| 16 | One-agent lock in the queue: claimed rows muted and unclickable | `DESIGN-PROMPT.md` 2 | 2, 15 |
+| 17 | Agent Workspace shell: lead card, three columns, Call button disabled | `DESIGN-PROMPT.md` 3 | 4 |
+| 18 | Timeline component | `DESIGN-PROMPT.md` 3 | 5 |
+| 19 | Workspace right column: note, callback, disposition, Save and next | `DESIGN-PROMPT.md` 3 | 6, 7, 8 |
+| 20 | Workspace SMS compose, with templates | `DESIGN-PROMPT.md` 3 | 9 |
+| 21 | Lead Timeline page, full width with summary sidebar | `DESIGN-PROMPT.md` 4 | 18 |
+| 22 | My Callbacks page | `DESIGN-PROMPT.md` 5 | 7 |
+| 23 | Admin Configuration page | `DESIGN-PROMPT.md` 6b, 6c | 10 |
+| 24 | Admin Overview page | `DESIGN-PROMPT.md` 6a | 11, 13 |
+| 25 | Admin DNC page | `DESIGN-PROMPT.md` 6e | 12 |
+
+**Operations (`LOGGING.md`, `README.md`)**
+
+| # | Task | Doc | Needs |
+|---|---|---|---|
+| 26 | Structured JSON logging across api and worker | `LOGGING.md` | – |
+| 27 | Error handling and retries: EZ Texting down, failed opener, duplicate webhooks | `POLLER.md`, `WEBHOOKS.md` | – |
+| 28 | End-to-end test script: lead in, SMS flow, queue, disposition, timeline | – | most |
+| 29 | Fix what task 28 finds | – | 28 |
+| 30 | README: how to run, how to test, env vars, known limits | `README.md` | – |
+
+**Not in the list, and why**
+
+- **Twilio** - Phase 4. Tasks 17 and 19 leave the Call button and the call
+  entries in the timeline in place but inert.
+- **Repeat leads** - still blocked. The check that unblocks it is one API call
+  against the test account, described in "Future: repeat leads" below. Worth
+  doing early in Phase 3: if `createdAt` moves on a re-delivered contact, it
+  becomes a 32nd task; if it does not, it stays parked and we stop planning
+  around it.
+- **State and Consent ref** on the workspace and timeline - no data reaches us
+  for either. `AGENT-WORKSPACE.md`, "Known gaps in the screens".
 
 ### Week 1 – Foundation + prove EZ Texting works
 
@@ -388,7 +502,7 @@ Build:
 4. Agent workspace (mockup p.6) minus the call button: lead card, score breakdown, SMS send, note, callback scheduling, disposition, save & next
 5. Lead timeline (mockup p.7): merged view of messages, calls, notes, callbacks, dispositions
 6. My Callbacks page
-7. Admin (mockup p.8): edit scoring rules and tier thresholds, recalculate existing, edit question copy / clarification / STOP text / expiry days, manage agents
+7. Admin (mockup p.8): ~~edit scoring rules and tier thresholds, recalculate existing, edit question copy / clarification / STOP text / expiry days~~, manage agents. *(2026-09-23: all of it read-only except managing agents - see "Phases, and what Phase 3 is" above. The screen shows the questions, the clarifications, the thanks message, the score table and the tier bands; nothing is editable and Recalculate is dropped.)*
 8. Superadmin overview: all activity across agents
 9. Caddy serves the built frontend; API under `/api`
 10. **Admin > Leads** *(added 2026-09-14, not in the original plan)*: superadmin-only list of every lead, including ones that never replied, with status tabs (Awaiting reply, In progress, Completed, Needs review, Opted out, Expired), source and date filters, search, pagination, and row click to the timeline. Read-only. Backed by `GET /api/admin/leads?status=&source=&since=&q=&page=`, superadmin only; status comes from the lead's newest conversation. Spec in `docs/DESIGN-PROMPT.md` section 6g. It needs only the `leads`, `conversations` and `messages` tables, so it can be built before the queue if useful for watching the poller and the SMS flow.
@@ -396,7 +510,7 @@ Build:
 Done when:
 - Two agents logged in at once cannot claim the same lead
 - A lead added in EZ Texting appears in Admin > Leads as Awaiting reply within one poll interval, without a manual refresh
-- Superadmin changes a scoring rule → next completed lead uses the new value
+- ~~Superadmin changes a scoring rule → next completed lead uses the new value~~ *(2026-09-23: rules are not changed from the screen. Instead: the Configuration page shows the values the state machine is actually using.)*
 - Every screen in the mockup exists and works with sandbox data
 
 ### Week 4 – Twilio calling + end-to-end testing + handoff
@@ -408,8 +522,8 @@ Build:
 2. Call button in agent workspace using Twilio Voice JS SDK; live timer; hang up
 3. Save each call to `calls` (sid, duration, outcome); show in timeline
 4. DNC disposition suppresses number for both SMS and calls
-5. Error handling and retries: EZ Texting API down, webhook duplicate, Twilio token expiry
-6. Logging: every worker tick, every webhook, every send, every call
+5. Error handling and retries: EZ Texting API down, webhook duplicate, Twilio token expiry *(items 5-9 moved into Phase 3, 2026-09-23; Twilio token expiry stays here)*
+6. Logging: every worker tick, every webhook, every send, every call - structured, `docs/LOGGING.md`
 7. Full end-to-end test script: new lead → SMS flow → queue → call → disposition → timeline
 8. Fix everything found in step 7
 9. README updated: how to run, how to test, env variables, known limits
