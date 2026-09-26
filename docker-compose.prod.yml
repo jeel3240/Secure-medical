@@ -3,6 +3,10 @@
 #
 # Anything written here REPLACES the same setting in docker-compose.yml.
 # Anything not mentioned here stays as it is in docker-compose.yml.
+#
+# Note: the awslogs log driver below means `docker compose logs` returns nothing
+# on the server. Logs are in CloudWatch, group /leads-app. Locally there is no
+# override, so `docker compose logs` works as usual. WORKFLOW.md, "Deploying".
 
 services:
   postgres:
@@ -17,6 +21,19 @@ services:
     volumes: !reset []                   # no hot reload; use built image
     command: npm run api                 # compiled dist/, not ts-node
     restart: always
+    logging:
+      driver: awslogs
+      options:
+        awslogs-region: us-east-2
+        awslogs-group: /leads-app
+        awslogs-stream: api
+        awslogs-create-group: "true"
+        # Docker's default log mode is blocking: if the log endpoint is slow or
+        # unreachable, writes to stdout block and the back-pressure reaches the
+        # app. This service answers webhooks on a deadline, so it drops log
+        # lines under sustained pressure rather than slowing down.
+        mode: non-blocking
+        max-buffer-size: 4m
     environment:
       NODE_ENV: production
       DATABASE_URL: ${DATABASE_URL}      # RDS, from .env
@@ -28,6 +45,15 @@ services:
     volumes: !reset []
     command: npm run worker              # compiled dist/, not ts-node
     restart: always
+    logging:
+      driver: awslogs
+      options:
+        awslogs-region: us-east-2
+        awslogs-group: /leads-app
+        awslogs-stream: worker
+        awslogs-create-group: "true"
+        mode: non-blocking
+        max-buffer-size: 4m
     environment:
       NODE_ENV: production
       DATABASE_URL: ${DATABASE_URL}
@@ -37,6 +63,15 @@ services:
   caddy:                                 # NEW service, server only
     build: ./frontend                    # caddy:2 with the built frontend in /srv
     restart: always
+    logging:
+      driver: awslogs
+      options:
+        awslogs-region: us-east-2
+        awslogs-group: /leads-app
+        awslogs-stream: caddy
+        awslogs-create-group: "true"
+        mode: non-blocking
+        max-buffer-size: 4m
     ports:
       - "80:80"
       - "443:443"

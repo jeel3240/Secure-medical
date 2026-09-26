@@ -44,6 +44,11 @@ The worker logs a line each minute:
 poll tick fetched=2 inserted=0 skipped=2 suppressed=0 openers=0 ms=336
 ```
 
+**Locally, `docker compose logs` is how you read that.** On the server it
+returns nothing: the production override ships container output to CloudWatch
+instead, log group `/leads-app`, one stream per service - `api`, `worker`,
+`caddy`. `WORKFLOW.md`, "Deploying", has the detail.
+
 `inserted` is new leads. To see them:
 
 ```bash
