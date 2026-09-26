@@ -181,6 +181,46 @@ export function queueRouter(deps: AppDeps): Router {
   );
 
   router.post(
+    '/:id/callbacks',
+    asyncHandler(async (req, res) => {
+      // eslint-disable-next-line @typescript-eslint/no-var-requires
+      const db = require('../db/callbacks') as typeof import('../db/callbacks');
+      // eslint-disable-next-line @typescript-eslint/no-var-requires
+      const parse = require('./callbacks') as typeof import('./callbacks');
+
+      const body = (req.body ?? {}) as { scheduledAt?: unknown; agentId?: unknown };
+
+      // Defaults to the caller. A superadmin may book one for another agent -
+      // covering for someone off sick - and nobody else may.
+      let agentId = req.user!.id;
+      if (body.agentId !== undefined) {
+        if (req.user!.role !== 'superadmin') {
+          throw new HttpError(403, 'forbidden', 'Only a superadmin can assign a callback to another agent.');
+        }
+        const asked = Number(body.agentId);
+        if (!Number.isInteger(asked) || asked < 1) {
+          throw new HttpError(400, 'invalid_agent_id', 'agentId must be a whole number above 0.');
+        }
+        agentId = asked;
+      }
+
+      const result = await db.createCallback(
+        parseLeadId(req.params.id),
+        agentId,
+        parse.parseScheduledAt(body.scheduledAt)
+      );
+
+      if (!result.ok) {
+        throw result.reason === 'lead_not_found'
+          ? new HttpError(404, 'not_found', 'No such lead.')
+          : new HttpError(400, 'invalid_agent_id', 'No such active agent.');
+      }
+
+      res.status(201).json({ callback: result.callback });
+    })
+  );
+
+  router.post(
     '/:id/read',
     asyncHandler(async (req, res) => {
       // eslint-disable-next-line @typescript-eslint/no-var-requires

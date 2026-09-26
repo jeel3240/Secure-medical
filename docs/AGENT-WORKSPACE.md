@@ -4,13 +4,14 @@ The endpoints behind the Agent Workspace, the Lead Timeline and My Callbacks -
 `DESIGN-PROMPT.md` sections 3, 4 and 5. Phase 3.
 
 **Built so far** (all 2026-09-26): claim and release (task 2), marking a lead
-read (task 3), the lead card (task 4), the timeline (task 5) and notes (task 6) -
-`api/leads.ts`, `db/claims.ts`, `db/read-flag.ts`, `db/lead-detail.ts`,
-`db/timeline.ts`, `db/notes.ts`, `core/score-breakdown.ts`. Everything else here
-is still the contract to build against: no route yet writes `dispositions` or
-`callbacks`, though the timeline reads both. Paths and payload shapes for the unbuilt ones are
-proposed, not agreed - say so if you want them different; everything under
-"Rules" is decided.
+read (task 3), the lead card (task 4), the timeline (task 5), notes (task 6) and
+callbacks (task 7) - `api/leads.ts`, `api/callbacks.ts`, `db/claims.ts`,
+`db/read-flag.ts`, `db/lead-detail.ts`, `db/timeline.ts`, `db/notes.ts`,
+`db/callbacks.ts`, `core/score-breakdown.ts`. Everything else here is still the
+contract to build against: no route yet writes `dispositions` or sends agent
+SMS, though the timeline reads both. Paths and payload shapes for the unbuilt
+ones are proposed, not agreed - say so if you want them different; everything
+under "Rules" is decided.
 
 Every route is under `/api`, requires a session, and is open to any signed-in
 user unless it says superadmin. See `AUTH.md`.
@@ -81,6 +82,53 @@ rather than ownership.
 
 The body is trimmed, required, and capped at 5000 characters. The cap exists so
 a runaway client cannot fill the column, not to ration what an agent can say.
+
+## Callbacks
+
+`db/callbacks.ts`, `api/callbacks.ts`, and `POST /api/leads/:id/callbacks` on
+the leads router - creating one belongs to a lead, the rest belong to the agent.
+Backs My Callbacks, `DESIGN-PROMPT.md` section 5.
+
+**The three tabs are windows on one column,** `scheduled_at`, filtered by
+`done_at IS NULL`:
+
+| Tab | Means |
+|---|---|
+| Today | From now until midnight tonight |
+| Upcoming | Tomorrow onwards |
+| Overdue | In the past, still not done |
+
+**Today is the rest of today, not the whole day.** A callback booked for 9am and
+still open at 3pm is overdue, not today. Counting it under both would let an
+agent clear the Today tab while the call they missed sits unmade - the tab's job
+is to say what is still ahead of them.
+
+**A time in the past is accepted.** It arrives straight into Overdue, which is
+what the screen is for. Refusing it would mean an agent logging a call they
+agreed to for an hour ago has nowhere to put it.
+
+**Counts come back for every tab, whichever tab was asked for.** The overdue
+badge has to be right while the agent is looking at Today, so one request
+carries all four numbers.
+
+**Marking a done callback done again leaves the original `done_at`,** via
+`COALESCE(done_at, now())`. That timestamp is when the work happened; a double
+click on Save should not rewrite it. Rescheduling, by contrast, does overwrite -
+that is the point of it.
+
+**Whose callback it is.** An agent sees and changes only their own; a superadmin
+may list another agent's and may change one, which is how a callback left by
+someone off sick gets moved. A refusal names the owner so the screen can say who
+rather than just no.
+
+**The list row carries what the screen shows** - lead name, phone, tier, score
+and the newest note - so My Callbacks needs one request, not one per row.
+
+`scripts/callbacks-live-check.ts` proves the parts that are date arithmetic
+against a real database: the three windows, that a missed callback is not also
+today, that completing twice keeps the first time, and that rescheduling moves a
+callback between tabs.
+
 
 ## How the lead card is built
 

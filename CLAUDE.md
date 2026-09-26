@@ -157,11 +157,14 @@ you change something the docs describe, update the doc in the same commit.
     src/db/lead-detail.ts   the lead card
     src/db/timeline.ts      the merged lead timeline
     src/db/notes.ts         agent notes, append-only
+    src/api/callbacks.ts    My Callbacks: list, reschedule, mark done
+    src/db/callbacks.ts     callbacks, and the today/upcoming/overdue windows
     src/core/score-breakdown.ts  answer chips and the score breakdown, pure
     scripts/claims-live-check.ts  proves that SQL, including the claim race
     scripts/read-flag-live-check.ts  proves a read lead leaves the queue
     scripts/lead-detail-live-check.ts  proves the card's SQL
     scripts/timeline-live-check.ts  proves the merge and the derived events
+    scripts/callbacks-live-check.ts  proves the tab windows against a real clock
     src/core/queue-tags.ts  which tag a queued lead gets
     src/db/queue.ts         the priority queue SQL
     scripts/queue-live-check.ts  proves that SQL against a real database
