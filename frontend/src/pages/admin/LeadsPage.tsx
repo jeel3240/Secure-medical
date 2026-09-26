@@ -5,7 +5,7 @@ import { Badge } from '../../components/Badge';
 import { Banner } from '../../components/Banner';
 import { Button } from '../../components/Button';
 import { Spinner } from '../../components/Spinner';
-import { formatPhone, formatReceived, formatRelative } from './format';
+import { formatPhone, formatReceived, formatRelative } from '../../lib/format';
 
 const TABS: { key: string; label: string }[] = [
   { key: 'all', label: 'All' },

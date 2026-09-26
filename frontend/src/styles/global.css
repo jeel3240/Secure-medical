@@ -1199,3 +1199,149 @@ a {
   font-family: var(--font-mono);
   font-size: 0.85em;
 }
+
+/* ---------------------------------------------------------------------------
+   Priority queue - DESIGN-PROMPT.md 2. Phase 3 tasks 15 and 16.
+   --------------------------------------------------------------------------- */
+
+/* The "Live" indicator: the brief asks agents to be able to tell at a glance
+   that the screen is still updating. */
+.live {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--text-sm);
+  color: var(--color-text-muted);
+}
+
+.live__dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--color-success);
+}
+
+.live--paused {
+  color: var(--color-warning);
+}
+
+.live--paused .live__dot {
+  background: var(--color-warning);
+}
+
+/* Tier pills double as filters - DESIGN-PROMPT.md 2, "pill-buttons that also
+   act as filters". */
+.queue__pills {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-bottom: var(--space-4);
+}
+
+.pill {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: 6px 12px;
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  background: var(--color-surface);
+  font: inherit;
+  font-size: var(--text-sm);
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  cursor: pointer;
+}
+
+.pill:hover {
+  border-color: var(--color-border-strong);
+}
+
+.pill__count {
+  font-weight: 700;
+}
+
+.pill--hot { color: var(--color-hot); }
+.pill--warm { color: var(--color-warm); }
+.pill--low { color: var(--color-low); }
+
+/* Selected state has to survive being one of three: the border and the tinted
+   background together read as "on" without relying on colour alone. */
+.pill--hot.pill--on { background: var(--color-hot-soft); border-color: var(--color-hot); }
+.pill--warm.pill--on { background: var(--color-warm-soft); border-color: var(--color-warm); }
+.pill--low.pill--on { background: var(--color-low-soft); border-color: var(--color-low); }
+
+.queue__clear {
+  border: none;
+  background: none;
+  padding: 0 var(--space-2);
+  font: inherit;
+  font-size: var(--text-sm);
+  color: var(--color-text-muted);
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.queue__table td {
+  vertical-align: middle;
+}
+
+.queue__row {
+  cursor: pointer;
+}
+
+.queue__row:hover {
+  background: var(--color-surface-alt);
+}
+
+/* The one-agent lock, task 16. Muted and not clickable: another agent is
+   working this lead, and the row should not invite a click it will refuse. */
+.queue__row--locked {
+  cursor: not-allowed;
+  color: var(--color-text-muted);
+  background: var(--color-surface-alt);
+}
+
+.queue__row--locked:hover {
+  background: var(--color-surface-alt);
+}
+
+.queue__row--locked strong {
+  font-weight: 500;
+}
+
+.queue__phone {
+  display: block;
+  font-size: var(--text-xs);
+  color: var(--color-text-muted);
+}
+
+.tier {
+  display: inline-block;
+  min-width: 46px;
+  padding: 3px 8px;
+  border-radius: var(--radius-sm);
+  font-size: var(--text-xs);
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-align: center;
+}
+
+.tier--hot { background: var(--color-hot-soft); color: var(--color-hot); }
+.tier--warm { background: var(--color-warm-soft); color: var(--color-warm); }
+.tier--low { background: var(--color-low-soft); color: var(--color-low); }
+
+/* Age turns amber past 5 minutes and red past 15 for HOT - the thresholds are
+   in lib/format.ts, which is where the reasoning lives. */
+.age--warn { color: var(--color-warm); font-weight: 600; }
+.age--urgent { color: var(--color-hot); font-weight: 700; }
+
+.queue__truncated {
+  margin-top: var(--space-3);
+  font-size: var(--text-sm);
+  color: var(--color-text-muted);
+}
+
+.right {
+  text-align: right;
+}

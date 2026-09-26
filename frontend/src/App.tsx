@@ -9,6 +9,7 @@ import { LeadsPage } from './pages/admin/LeadsPage';
 import { ChangePasswordPage } from './pages/ChangePasswordPage';
 import { LoginPage } from './pages/LoginPage';
 import { PlaceholderPage } from './pages/PlaceholderPage';
+import { QueuePage } from './pages/QueuePage';
 
 export function App() {
   const bootstrap = useAuth((s) => s.bootstrap);
@@ -29,15 +30,7 @@ export function App() {
         <Route element={<RequireAuth />}>
           <Route element={<AppShell />}>
             <Route index element={<Navigate to="/queue" replace />} />
-            <Route
-              path="/queue"
-              element={
-                <PlaceholderPage
-                  title="Priority queue"
-                  description="Scored leads will appear here once the conversation engine and queue are built."
-                />
-              }
-            />
+            <Route path="/queue" element={<QueuePage />} />
             <Route
               path="/callbacks"
               element={
