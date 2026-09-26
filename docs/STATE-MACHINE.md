@@ -177,8 +177,21 @@ agent SMS is sent. The status does not change, so the queue tabs and Admin >
 Leads are unaffected, and expiry still applies - the agent's own callback and
 disposition are what track the lead from then on.
 
-*Not built: the agent SMS send is Phase 3. Until it exists, no conversation can
-be in this state.*
+**Built 2026-09-26** (Phase 3 task 9). `conversations.agent_took_over_at` is set
+by `POST /api/leads/:id/messages` - `db/agent-sms.ts` - and read by
+`api/reply-flow.ts`, which passes it to the state machine as `agentTookOverAt`.
+The rule sits between the not-open check and answer matching, so an opt-out is
+still decided first.
+
+The timestamp is set only on the first agent message, by `COALESCE`: the handoff
+happened then, and the tenth message should not rewrite when it happened. It is
+set only while the newest conversation is still `open` - texting a lead whose
+conversation already completed is not taking over a flow that is still running.
+
+A send that fails, or is refused because the number is on `dnc_list`, records no
+take-over: the questions must not stop on the strength of a message the lead
+never received. `scripts/agent-sms-live-check.ts` proves that, and proves a real
+reply after the handoff gets no question, no score and no clarification.
 
 ### 3. A valid answer to the current question
 

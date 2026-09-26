@@ -306,6 +306,87 @@ describe('a conversation that is not open', () => {
   });
 });
 
+describe('an agent has taken the conversation over - rule 2b', () => {
+  const TOOK_OVER = new Date('2026-09-26T10:00:00.000Z');
+
+  it('asks no further question, whatever the lead replies', () => {
+    const before = fresh({ step: 2, q1: '3', score: 25, tier: 'LOW', agentTookOverAt: TOOK_OVER });
+    const result = step(before, answer('1'), RULES);
+
+    // The lead is answering the agent, not us.
+    expect(result.send).toBeNull();
+    expect(result.conversation).toEqual(before);
+  });
+
+  it('scores nothing, even for a valid answer', () => {
+    const before = fresh({ step: 2, q1: '3', score: 25, tier: 'LOW', agentTookOverAt: TOOK_OVER });
+    const result = step(before, answer('1'), RULES);
+
+    // 25 + q2_1 30 would be 55 without the rule; responded was earned already.
+    expect(result.conversation.score).toBe(25);
+    expect(result.conversation.q2).toBeNull();
+    expect(result.conversation.step).toBe(2);
+  });
+
+  it('keeps the score and tier the lead had earned', () => {
+    const before = fresh({ step: 3, q1: '3', q2: '1', score: 55, tier: 'WARM', agentTookOverAt: TOOK_OVER });
+    const result = step(before, answer('2'), RULES);
+
+    expect(result.conversation.score).toBe(55);
+    expect(result.conversation.tier).toBe('WARM');
+    // Never reaches the completion award.
+    expect(result.conversation.status).toBe('open');
+  });
+
+  it('sends no clarification for an unclear reply either', () => {
+    const before = fresh({ step: 1, agentTookOverAt: TOOK_OVER });
+    const result = step(before, answer('what is this about?'), RULES);
+
+    expect(result.send).toBeNull();
+    expect(result.conversation.invalidCount).toBe(0);
+    expect(result.conversation.status).toBe('open');
+  });
+
+  it('never sends the lead to review, however many unclear replies arrive', () => {
+    const before = fresh({ step: 1, invalidCount: 5, agentTookOverAt: TOOK_OVER });
+    const result = step(before, answer('???'), RULES);
+
+    expect(result.conversation.status).toBe('open');
+    expect(result.send).toBeNull();
+  });
+
+  it('still blocks the number on an opt-out', () => {
+    const before = fresh({ step: 2, q1: '3', score: 25, agentTookOverAt: TOOK_OVER });
+    const result = step(before, { text: 'STOP', optOut: true }, RULES);
+
+    // Rule 1 is checked first and stays first: an opt-out can never depend on
+    // whether an agent happened to text first.
+    expect(result.blockNumber).toBe(true);
+    expect(result.conversation.status).toBe('suppressed');
+  });
+
+  it('does nothing when the timestamp is absent', () => {
+    // The ordinary path, to prove the rule is what changed the behaviour above.
+    const before = fresh({ step: 2, q1: '3', score: 25, tier: 'LOW' });
+    const result = step(before, answer('1'), RULES);
+
+    expect(result.send).toBe('question_3');
+    // 25 + q2_1 30. No responded award: q1 is already answered, so it was
+    // earned on an earlier reply and is only ever given once.
+    expect(result.conversation.score).toBe(55);
+  });
+
+  it.each([null, undefined])('treats %s as not taken over', (value) => {
+    const before = fresh({ step: 1, agentTookOverAt: value });
+    expect(step(before, answer('1'), RULES).send).toBe('question_2');
+  });
+
+  it('accepts the timestamp as the string a driver may return', () => {
+    const before = fresh({ step: 1, agentTookOverAt: '2026-09-26T10:00:00.000Z' });
+    expect(step(before, answer('1'), RULES).send).toBeNull();
+  });
+});
+
 describe('admin-editable rules are honoured', () => {
   it('uses changed point values', () => {
     const doubled: Rules = {

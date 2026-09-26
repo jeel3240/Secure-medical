@@ -1,4 +1,7 @@
 import { Request, Response, Router } from 'express';
+// Safe at module scope: db/dnc.ts imports nothing, taking its client as an
+// argument, so it does not drag in src/config the way db/pool does.
+import { blockNumber, DNC_REASONS, releaseNumber } from '../db/dnc';
 
 export const webhooksRouter = Router();
 
@@ -52,10 +55,7 @@ interface InboundText {
  * number. CTIA's standard set.
  */
 /** dnc_list.reason for an opt-out that arrived as a reply, vs the poller's `ezt_opt_out`. */
-const STOP_REASON = 'sms_stop';
-
-/** dnc_list.released_reason when a lead texts START. */
-const START_REASON = 'sms_start';
+const STOP_REASON = DNC_REASONS.smsStop;
 
 /**
  * Opt-in keywords. EZ Texting re-subscribes the contact on its side and sets
@@ -79,47 +79,6 @@ function isOptOut(payload: InboundText): boolean {
 function isOptIn(payload: InboundText): boolean {
   if (isOptOut(payload)) return false;
   return Boolean(payload.optIn) || START_WORDS.has(normalised(payload));
-}
-
-/**
- * Lifts every live block on the number, keeping the row as the record.
- *
- * Every reason is released, including one an agent set - Jeel's decision,
- * 2026-09-22: someone who asks to be contacted again is asking whatever the
- * block was for. The dates stay on the row, so the history reads "blocked on
- * the 22nd, released on the 22nd".
- *
- * Returns how many rows were released, which is 0 when the number was not
- * blocked - a START from someone we never blocked changes nothing.
- */
-async function releaseNumber(
-  client: { query: (q: string, v?: unknown[]) => Promise<{ rows: any[]; rowCount: number | null }> },
-  phone: string
-): Promise<number> {
-  const { rowCount } = await client.query(
-    `UPDATE dnc_list
-     SET released_at = now(), released_reason = $2
-     WHERE phone = $1 AND released_at IS NULL`,
-    [phone, START_REASON]
-  );
-  return rowCount ?? 0;
-}
-
-/** Added without a lead, which the table allows: phone is its only key. */
-async function blockNumber(
-  client: { query: (q: string, v?: unknown[]) => Promise<{ rows: any[]; rowCount: number | null }> },
-  phone: string,
-  reason: string
-): Promise<void> {
-  // A number that opted out, was released, and opts out again reuses its row:
-  // the block is live again and the release dates are cleared.
-  await client.query(
-    `INSERT INTO dnc_list (phone, reason) VALUES ($1, $2)
-     ON CONFLICT (phone) DO UPDATE
-     SET reason = EXCLUDED.reason, added_at = now(),
-         released_at = NULL, released_reason = NULL`,
-    [phone, reason]
-  );
 }
 
 /**

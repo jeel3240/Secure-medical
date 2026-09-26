@@ -171,10 +171,23 @@ accepted, including typos, and nothing will complain.
 fails later at the point of use. Acceptable at this scale, but it is a deliberate
 trade rather than an oversight.
 
-**`conversations.expires_at` is never populated.** The poller creates the
-conversation without it, so nothing can auto-expire. It should be
-`now + expiry_days` from `settings` at creation - Phase 2, with the state
-machine.
+**`conversations.expires_at` is set when a message is sent,** not when the
+conversation is created - by `sendOpener` in the poller and by `reply-flow.ts`
+for every send in the flow. It is the window the lead has to reply to *that
+message*, so a conversation whose opener failed has not started one. The expiry
+sweep falls back to `created_at + expiry_days` for those, which is what stops
+them sitting `open` forever.
+
+**`conversations.agent_took_over_at`** records when an agent first sent a manual
+SMS to the lead. From then on the state machine stores replies and flags them
+but scores nothing and sends nothing: the lead is answering the agent, not us.
+STATE-MACHINE.md rule 2b is the authority.
+
+It is a timestamp rather than a boolean because the timeline has to show when
+the handoff happened, and deliberately not a status - the conversation keeps the
+one it had, so the queue tabs, Admin > Leads and expiry are all unaffected.
+Opt-out is checked before it and is unaffected either way. Added in `003`; the
+column is unused until the agent SMS endpoint exists (Phase 3 task 9).
 
 ## Seeded data
 

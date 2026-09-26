@@ -131,6 +131,15 @@ For the same reason a failed send still returns 200: a retry would not re-send.
 re-reading the text. The handler decides whether the reply *is* an opt-out,
 because it holds the keyword list; the core decides what that means.
 
+**`blockNumber` and `releaseNumber` live in `db/dnc.ts`,** not in this file.
+They were locals here until task 8 gave them a second caller - an agent's DNC
+disposition, `AGENT-WORKSPACE.md`. Moved rather than copied: a compliance table
+with two insert statements is a table that eventually holds two shapes of row.
+Every path that blocks a number - a STOP reply, the poller finding a contact
+already opted out, an agent's disposition - writes the same upsert, and only a
+row with `released_at IS NULL` blocks anything. The keyword lists and the
+decision of what counts as an opt-out stay here.
+
 A send to a number on `dnc_list` is refused inside `sendMessage`, so a reply
 arriving after a STOP from elsewhere advances the conversation but sends
 nothing. The log line reads `NOT sent=` in that case.

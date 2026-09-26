@@ -1,14 +1,15 @@
 # Logging and health
 
-Phase 3. **Not built.** Today the app logs readable single lines to stdout -
-`poll tick fetched=2 inserted=0 ...`, `webhook: lead 42 -> open step=1 ...` -
-which Docker keeps and a person reads with `docker compose logs`. Nothing is
-structured, nothing is shipped anywhere, and there is no health endpoint.
+Phase 3. **The health endpoint is built** (task 13, 2026-09-26);
+**structured logging is not** (task 26). Today the app logs readable single lines
+to stdout - `poll tick fetched=2 inserted=0 ...`, `webhook: lead 42 -> open
+step=1 ...` - so nothing can be queried by field yet.
 
-Shipping the logs off the instance is configured in `docker-compose.prod.yml`,
-and `WORKFLOW.md` says what that changes about reading them - in short,
-`docker compose logs` works locally and not on the server. What the code owes is
-below: one queryable line per event, and a health endpoint worth polling.
+Shipping those lines off the instance *is* configured, in
+`docker-compose.prod.yml`, and `WORKFLOW.md` says what that changes about reading
+them - in short, `docker compose logs` works locally and not on the server. So
+the lines below are already leaving the box; what the code still owes is their
+shape.
 
 ## Structured logs
 
@@ -51,6 +52,51 @@ but not yet swept, and whether `EZT_SEND_GROUP` is set.
 The worker is a separate process with no HTTP server, so its health has to be
 inferred from what it writes: the checkpoint's timestamp is the honest signal
 that it is alive, which is why the last poll time belongs in this response.
+
+**As built** - `db/health.ts`, `api/admin/health.ts`.
+
+Five checks, each with its own `status`, a `message` when it is degraded, and a
+`detail` object. The top-level `status` is `degraded` if any check is.
+
+| Check | Degrades when |
+|---|---|
+| `database` | `SELECT 1` fails. Nothing below runs; the response returns early rather than letting four more queries fail in turn |
+| `poller` | The last poll was over 6 minutes ago, or there has never been one |
+| `webhook` | Never. Reported for a human to read |
+| `expiry` | Never. Reports how many open conversations are past `expires_at` |
+| `sending` | `EZT_SEND_GROUP` is unset, which makes `sendMessage` refuse every send |
+
+**The poller's liveness is `settings.updated_at`, not the checkpoint's value.**
+The value is the newest contact's `createdAt`, so on a quiet account it stands
+still while the worker polls happily every minute - reading it would report a
+healthy system as dead every time leads stop arriving. `updated_at` moves on
+every successful poll. Both are in the response, so the two are not confused.
+`scripts/health-live-check.ts` pins exactly this, in both directions: a
+week-old value with a fresh poll is healthy, and a fresh value with a 15-minute
+-old poll is not.
+
+The 6-minute threshold is six times the default 60s interval: long enough that
+a slow EZ Texting page or a restart is not a false alarm, short enough that a
+dead worker is noticed within the working hour.
+
+**The webhook and expiry checks never set the verdict.** Leads reply when they
+reply, and a quiet night is not a broken webhook; a few unswept expiries between
+sweeps are normal. They are numbers for a human, not alarms.
+
+**It answers 200 even when degraded.** The report is the point, and the body's
+`status` is the verdict. A monitoring tool reading only the status code would
+otherwise see a hard failure for a slightly late poll.
+
+**Consequence of the superadmin guard:** anything watching from outside needs a
+session, so an uptime service cannot poll this URL as it stands. That follows
+this doc's original decision, and the response does say how the business is
+doing rather than just whether a process is up. If external monitoring is wanted
+later it should get a separate unauthenticated route returning less - not this
+guard removed. Worth settling with Jeel before Phase 4.
+
+`GET /api/health` is untouched and still open: `{"status":"ok"}`, no database
+access, for Caddy and the container check. A test asserts it never reaches the
+database, since that is the whole difference between the two.
 
 ## The two ways this system goes quiet
 

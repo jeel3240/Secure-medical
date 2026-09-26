@@ -130,11 +130,17 @@ question copy in `settings`, which a superadmin can edit.
   `ADMIN-LEADS.md` already does - at 50-100 leads a day an agent cannot tell it
   from a push, and it needs nothing new on the server. The fetching goes in one
   place so a real push can replace it later without touching the screens.)*
-- **No claiming.** `assigned_to` is read here, never written. The one-agent lock
-  is Week 3 item 3.
-- **Nothing clears `has_unread_inbound`.** An expired lead who texted back is
-  meant to drop out of the queue once an agent opens it. No code unsets the
-  flag, so for now it stays. `STATE-MACHINE.md`, "Expiry".
+  **Built 2026-09-26** as `frontend/src/api/usePolling.ts`, Phase 3 task 14 -
+  see "The polling hook" below.
+- **Claiming is written elsewhere.** `assigned_to` is read here, never written.
+  `POST /api/leads/:id/claim` and `/release` do that - Phase 3 task 2,
+  `AGENT-WORKSPACE.md`.
+- **`has_unread_inbound` is cleared by `POST /api/leads/:id/read`** - Phase 3
+  task 3. Until it existed nothing unset the flag, so an expired lead who texted
+  back stayed in the queue however often an agent read the message. Proved
+  against a real database: such a lead leaves the queue once read, while a lead
+  whose conversation is still open stays, because the flag was never what was
+  keeping it there. `STATE-MACHINE.md`, "Expiry".
 - **No paging.** `limit` truncates and `total` says by how much; at 50-100 leads
   a day the default of 100 holds several days of queue. Page when it does not.
 
@@ -147,3 +153,71 @@ where most of the rules above actually live, so
 database and asserts what comes back - inclusion, exclusion, order, every tag,
 each filter, the counts. The header of that file says how to run it. Last run
 2026-09-22: 36 checks, all passing.
+
+## The polling hook
+
+`frontend/src/api/usePolling.ts`. Every live screen fetches through it: the
+queue, the workspace, the timeline, My Callbacks and the three admin pages.
+
+```ts
+const fetcher = useCallback(() => listQueue({ tier, source, since, q }), [tier, source, since, q]);
+const { data, loading, error, refresh, updatedAt } = usePolling(fetcher);
+```
+
+**One place, so a push can replace it.** `POLL_MS` is 5000 and the interval
+lives here alone. Swapping polling for websockets later means rewriting this
+file and nothing else. `admin/LeadsPage.tsx` had its own copy of the interval
+before this task and now uses the hook; copying it to eleven more screens is how
+a codebase ends up with five different refresh behaviours.
+
+**What it guarantees, and why each one is tested rather than eyeballed:**
+
+| Behaviour | Why it matters |
+|---|---|
+| `data` survives a tick | The table must not blank out every five seconds |
+| `loading` is true only when there is nothing to show | A spinner on every tick makes the screen flicker |
+| An error keeps the last good `data` | A dropped connection shows a banner over stale rows, not a blank page - the design brief's "Live updates paused" |
+| A stale response is discarded | A slow request from a filter the agent has already changed must not overwrite the current view |
+| The timer stops on unmount | Otherwise it polls forever and sets state on a dead component |
+| `refresh()` fetches now | So a claim or a note appears at once instead of up to 5s later |
+
+**The fetcher must be stable** - wrapped in `useCallback` with the filters as
+dependencies. When it changes that counts as a new view: the spinner returns and
+the old rows are cleared, because rows fetched under the old filter do not
+belong under the new one. A fetcher rebuilt on every render would clear the data
+on every render.
+
+`frontend/src/api/usePolling.test.ts` covers all six rows above. None of them is
+visible in a browser, which is why they are tested at all - the screens
+themselves are judged by eye.
+
+## The one-agent lock on screen
+
+`frontend/src/lib/lock.ts`, Phase 3 task 16. The rule is enforced on the
+server - `db/claims.ts`, and no screen is trusted with it - but the queue has to
+decide which rows to mute before anyone clicks.
+
+A row is locked when its tag is `in_progress` and someone else holds it. Three
+ways it is not:
+
+| Case | Why |
+|---|---|
+| Nobody holds it | The usual case |
+| You hold it | Reopening your own claim is the normal way back into a lead; locking an agent out of it would strand them |
+| You are a superadmin | They can force-release, and need to see what an agent is stuck on |
+
+A locked row is muted, carries a `Locked` badge instead of an Open button, has a
+tooltip naming the holder, and has no click handler at all - the lock has to be
+felt, not only seen.
+
+**An `in_progress` tag with no name counts as unlocked.** The queue joins
+`users` on `is_active`, so a deactivated agent's claim returns no name, and
+`db/claims.ts` lets anyone take such a lead over. Muting it would strand the
+lead where nobody could open it.
+
+**The holder is matched by name, not id,** because the endpoint returns
+`agentName` and no id. Two agents with the same name would each see the other's
+leads as their own; the server still refuses the claim, so the worst case is a
+409 rather than two agents on one lead, but the row would look wrong until then.
+Worth adding the holder's id to the endpoint if duplicate names ever happen -
+not worth a change before they do.

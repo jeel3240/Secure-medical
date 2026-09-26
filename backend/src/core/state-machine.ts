@@ -20,6 +20,13 @@ export interface Conversation {
   invalidCount: number;
   score: number;
   tier: string | null;
+  /**
+   * When an agent sent the first manual SMS, or null. Set by the agent SMS
+   * endpoint, never by this module. Once it is set the questions stop - rule
+   * 2b. A timestamp rather than a flag because the timeline shows the moment
+   * the handoff happened.
+   */
+  agentTookOverAt?: Date | string | null;
 }
 
 export interface Reply {
@@ -127,6 +134,19 @@ export function step(conversation: Conversation, reply: Reply, rules: Rules): St
   // conversation: the caller stores the message and flags the lead, and a human
   // picks it up.
   if (conversation.status !== 'open') {
+    return { conversation, send: null, blockNumber: false };
+  }
+
+  // 2b. An agent has taken the conversation over - Jeel, 2026-09-23. Once an
+  // agent has sent a manual SMS the questions stop: the lead is answering the
+  // agent, not us, and an automated "Question 2 of 3" landing on top of that
+  // reads as a broken system. The reply is stored and the lead is flagged
+  // unread by the caller, exactly as in rule 2; nothing is scored and nothing
+  // is sent. The score earned so far is kept as it stands.
+  //
+  // Below rule 1 deliberately: an opt-out can never depend on whether an agent
+  // happened to text first.
+  if (conversation.agentTookOverAt) {
     return { conversation, send: null, blockNumber: false };
   }
 

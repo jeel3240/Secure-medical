@@ -9,7 +9,7 @@ import { Button } from '../../components/Button';
 import { Modal } from '../../components/Modal';
 import { OneTimeSecret } from '../../components/OneTimeSecret';
 import { AddAgentDrawer } from './AddAgentDrawer';
-import { formatLastLogin } from './format';
+import { formatLastLogin } from '../../lib/format';
 
 type Dialog =
   | { kind: 'add' }

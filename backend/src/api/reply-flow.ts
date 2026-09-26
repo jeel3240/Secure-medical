@@ -39,7 +39,7 @@ export async function loadNewestConversation(
   leadId: number
 ): Promise<ConversationRow | null> {
   const { rows } = await client.query(
-    `SELECT id, status, step, q1, q2, q3, invalid_count, score, tier
+    `SELECT id, status, step, q1, q2, q3, invalid_count, score, tier, agent_took_over_at
      FROM conversations
      WHERE lead_id = $1
      ORDER BY created_at DESC, id DESC
@@ -60,6 +60,8 @@ export async function loadNewestConversation(
     invalidCount: r.invalid_count,
     score: r.score,
     tier: r.tier,
+    // Rule 2b: once this is set the state machine stops asking questions.
+    agentTookOverAt: r.agent_took_over_at,
   };
 }
 
