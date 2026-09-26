@@ -1,5 +1,6 @@
 /**
- * `GET /api/leads` - the agents' priority queue.
+ * `GET /api/leads` - the agents' priority queue - and the claim/release pair
+ * that decides who is working a lead.
  *
  * Open to any signed-in user: agents work from it, and a superadmin sees the
  * same thing. The superadmin-only list of every lead, replied or not, is
@@ -37,6 +38,14 @@ function parseSince(raw: unknown): Date | undefined {
     throw new HttpError(400, 'invalid_since', `Time window must be one of: ${Object.keys(SINCE_HOURS).join(', ')}, all.`);
   }
   return new Date(Date.now() - hours * 3600_000);
+}
+
+function parseLeadId(raw: string): number {
+  const id = Number(raw);
+  if (!Number.isInteger(id) || id < 1) {
+    throw new HttpError(400, 'invalid_lead_id', 'Lead id must be a whole number above 0.');
+  }
+  return id;
 }
 
 /** Page size. Out of range is clamped by the query, not rejected. */
@@ -77,6 +86,58 @@ export function queueRouter(deps: AppDeps): Router {
       });
 
       res.json(result);
+    })
+  );
+
+  router.post(
+    '/:id/claim',
+    asyncHandler(async (req, res) => {
+      // eslint-disable-next-line @typescript-eslint/no-var-requires
+      const db = require('../db/claims') as typeof import('../db/claims');
+
+      const result = await db.claimLead(parseLeadId(req.params.id), req.user!.id);
+
+      if (!result.ok) {
+        if (result.reason === 'not_found') {
+          throw new HttpError(404, 'not_found', 'No such lead.');
+        }
+        // 409 rather than 403: the caller did nothing wrong, someone was
+        // simply first. The holder's name is what the queue shows.
+        throw new HttpError(
+          409,
+          'already_claimed',
+          `${result.heldBy.name} is already working this lead.`
+        );
+      }
+
+      res.json({ claim: result.claim });
+    })
+  );
+
+  router.post(
+    '/:id/release',
+    asyncHandler(async (req, res) => {
+      // eslint-disable-next-line @typescript-eslint/no-var-requires
+      const db = require('../db/claims') as typeof import('../db/claims');
+
+      const result = await db.releaseLead(
+        parseLeadId(req.params.id),
+        req.user!.id,
+        req.user!.role === 'superadmin'
+      );
+
+      if (!result.ok) {
+        if (result.reason === 'not_found') {
+          throw new HttpError(404, 'not_found', 'No such lead.');
+        }
+        throw new HttpError(
+          403,
+          'not_yours',
+          `${result.heldBy.name} is working this lead. Only they or a superadmin can release it.`
+        );
+      }
+
+      res.status(204).end();
     })
   );
 

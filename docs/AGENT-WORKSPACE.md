@@ -3,11 +3,11 @@
 The endpoints behind the Agent Workspace, the Lead Timeline and My Callbacks -
 `DESIGN-PROMPT.md` sections 3, 4 and 5. Phase 3.
 
-**None of this is built.** The screens are specified in the design brief and the
-tables exist from migration 001, but no route touches `notes`, `dispositions` or
-`callbacks`, and nothing writes `leads.assigned_to`. This doc is the contract to
-build against. Paths and payload shapes are proposed, not agreed - say so if you
-want them different; everything under "Rules" is decided.
+**Built so far: claim and release** (task 2, 2026-09-26) - `api/leads.ts` and
+`db/claims.ts`. Everything else here is still the contract to build against: no
+route touches `notes`, `dispositions` or `callbacks`, and nothing marks a lead
+read. Paths and payload shapes for the unbuilt ones are proposed, not agreed -
+say so if you want them different; everything under "Rules" is decided.
 
 Every route is under `/api`, requires a session, and is open to any signed-in
 user unless it says superadmin. See `AUTH.md`.
@@ -55,6 +55,39 @@ the agent SMS box is disabled on a DNC lead rather than failing at send time.
 | `POST` | `/api/leads/:id/callbacks` | `{ scheduledAt, agentId? }` - defaults to you; a superadmin may assign another agent. |
 | `PATCH` | `/api/callbacks/:id` | `{ scheduledAt }` to reschedule, or `{ done: true }` to complete. |
 | `GET` | `/api/callbacks?when=today\|upcoming\|overdue&agentId=` | My Callbacks. `agentId` is superadmin only. |
+
+## How claim and release are built
+
+`db/claims.ts`. The whole one-agent-at-a-time rule is the WHERE clause of a
+single UPDATE:
+
+```sql
+WHERE l.id = $1
+  AND (l.assigned_to IS NULL
+       OR l.assigned_to = $2
+       OR NOT EXISTS (SELECT 1 FROM users u WHERE u.id = l.assigned_to AND u.is_active))
+```
+
+**One statement, not a read then a write.** Checking whether a lead is free and
+then claiming it leaves a gap where both agents see it free. Making the
+condition part of the UPDATE means the database decides: the second agent's
+statement matches no row and updates nothing. Two agents claiming in the same
+millisecond is proved to leave exactly one holder by
+`scripts/claims-live-check.ts`.
+
+**Re-claiming a lead you already hold succeeds and leaves `assigned_at`
+alone.** Opening a lead twice is not a new claim, and a timestamp that reset on
+every open would stop a superadmin spotting one held since last week - which is
+the only reason the column exists.
+
+**A claim by a deactivated agent is treated as free,** matching the queue, which
+already ignores it. If the two disagreed, a lead would appear free in the list
+and refuse to be taken.
+
+Status codes: 409 `already_claimed` when an active agent holds it - the caller
+did nothing wrong, someone was first - and 403 `not_yours` when an agent tries
+to release a claim that is not theirs. Releasing a lead nobody holds succeeds:
+the caller wanted it free, and it is.
 
 ## The timeline
 

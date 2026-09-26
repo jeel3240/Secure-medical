@@ -151,7 +151,9 @@ you change something the docs describe, update the doc in the same commit.
     src/api/auth/           sign-in, sessions, guards
     src/api/users/          superadmin account management
     src/api/admin/leads.ts  Admin > Leads query endpoint
-    src/api/leads.ts        the agents' priority queue endpoint
+    src/api/leads.ts        the agents' priority queue, and claim/release
+    src/db/claims.ts        claiming and releasing a lead
+    scripts/claims-live-check.ts  proves that SQL, including the claim race
     src/core/queue-tags.ts  which tag a queued lead gets
     src/db/queue.ts         the priority queue SQL
     scripts/queue-live-check.ts  proves that SQL against a real database
