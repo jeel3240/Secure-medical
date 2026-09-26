@@ -40,6 +40,22 @@ function parseSince(raw: unknown): Date | undefined {
   return new Date(Date.now() - hours * 3600_000);
 }
 
+/**
+ * Free text from an agent. Trimmed, required, and capped well above anything
+ * anyone types on purpose - the limit is there so a runaway client cannot fill
+ * a column, not to ration what an agent can say.
+ */
+function parseBody(raw: unknown, field = 'body', max = 5000): string {
+  if (typeof raw !== 'string' || !raw.trim()) {
+    throw new HttpError(400, 'invalid_body', `${field} is required.`);
+  }
+  const text = raw.trim();
+  if (text.length > max) {
+    throw new HttpError(400, 'body_too_long', `${field} must be ${max} characters or fewer.`);
+  }
+  return text;
+}
+
 function parseLeadId(raw: string): number {
   const id = Number(raw);
   if (!Number.isInteger(id) || id < 1) {
@@ -141,6 +157,26 @@ export function queueRouter(deps: AppDeps): Router {
       }
 
       res.json({ entries });
+    })
+  );
+
+  router.post(
+    '/:id/notes',
+    asyncHandler(async (req, res) => {
+      // eslint-disable-next-line @typescript-eslint/no-var-requires
+      const db = require('../db/notes') as typeof import('../db/notes');
+
+      const result = await db.addNote(
+        parseLeadId(req.params.id),
+        req.user!.id,
+        parseBody((req.body ?? {}).body)
+      );
+
+      if (!result.ok) {
+        throw new HttpError(404, 'not_found', 'No such lead.');
+      }
+
+      res.status(201).json({ note: result.note });
     })
   );
 

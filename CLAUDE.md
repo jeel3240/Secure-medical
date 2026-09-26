@@ -156,6 +156,7 @@ you change something the docs describe, update the doc in the same commit.
     src/db/read-flag.ts     clears has_unread_inbound
     src/db/lead-detail.ts   the lead card
     src/db/timeline.ts      the merged lead timeline
+    src/db/notes.ts         agent notes, append-only
     src/core/score-breakdown.ts  answer chips and the score breakdown, pure
     scripts/claims-live-check.ts  proves that SQL, including the claim race
     scripts/read-flag-live-check.ts  proves a read lead leaves the queue

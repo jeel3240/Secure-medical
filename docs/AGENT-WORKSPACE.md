@@ -4,11 +4,11 @@ The endpoints behind the Agent Workspace, the Lead Timeline and My Callbacks -
 `DESIGN-PROMPT.md` sections 3, 4 and 5. Phase 3.
 
 **Built so far** (all 2026-09-26): claim and release (task 2), marking a lead
-read (task 3), the lead card (task 4) and the timeline (task 5) - `api/leads.ts`,
-`db/claims.ts`, `db/read-flag.ts`, `db/lead-detail.ts`, `db/timeline.ts`,
-`core/score-breakdown.ts`. Everything else here is still the contract to build
-against: no route yet *writes* `notes`, `dispositions` or `callbacks`, though
-the timeline reads all three. Paths and payload shapes for the unbuilt ones are
+read (task 3), the lead card (task 4), the timeline (task 5) and notes (task 6) -
+`api/leads.ts`, `db/claims.ts`, `db/read-flag.ts`, `db/lead-detail.ts`,
+`db/timeline.ts`, `db/notes.ts`, `core/score-breakdown.ts`. Everything else here
+is still the contract to build against: no route yet writes `dispositions` or
+`callbacks`, though the timeline reads both. Paths and payload shapes for the unbuilt ones are
 proposed, not agreed - say so if you want them different; everything under
 "Rules" is decided.
 
@@ -65,6 +65,22 @@ the agent SMS box is disabled on a DNC lead rather than failing at send time.
 | `POST` | `/api/leads/:id/callbacks` | `{ scheduledAt, agentId? }` - defaults to you; a superadmin may assign another agent. |
 | `PATCH` | `/api/callbacks/:id` | `{ scheduledAt }` to reschedule, or `{ done: true }` to complete. |
 | `GET` | `/api/callbacks?when=today\|upcoming\|overdue&agentId=` | My Callbacks. `agentId` is superadmin only. |
+
+## Notes
+
+`db/notes.ts`, `POST /api/leads/:id/notes`, 201 with the note.
+
+**Append-only.** A note records what an agent thought at a moment and the
+timeline shows it in sequence; nothing edits or deletes one. `notes` has no
+`updated_at`, which is the schema saying the same thing.
+
+**The author is the session,** never the payload - a body carrying `agentId` is
+ignored. **Not restricted to the lead's holder:** a superadmin reviewing a lead
+an agent is working may still record what they saw, and a note is evidence
+rather than ownership.
+
+The body is trimmed, required, and capped at 5000 characters. The cap exists so
+a runaway client cannot fill the column, not to ration what an agent can say.
 
 ## How the lead card is built
 
