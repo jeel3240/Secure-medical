@@ -1712,3 +1712,59 @@ a {
 .actions-panel__problem {
   display: block;
 }
+
+/* Workspace SMS compose - DESIGN-PROMPT.md 3. Phase 3 task 20. */
+.sms {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin-top: var(--space-3);
+}
+
+/* Said before the first send, because it cannot be undone. */
+.sms__warning {
+  margin: 0;
+  padding: var(--space-2) var(--space-3);
+  border-left: 3px solid var(--color-warning-border);
+  background: var(--color-warning-soft);
+  color: var(--color-warning);
+  font-size: var(--text-xs);
+  line-height: 1.5;
+}
+
+.sms__templates {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.sms__foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+
+.sms__buttons {
+  display: flex;
+  gap: var(--space-2);
+}
+
+.sms__count {
+  font-size: var(--text-xs);
+  color: var(--color-text-muted);
+}
+
+/* A second segment is charged on every send, so the last few characters are
+   worth noticing. */
+.sms__count--low {
+  color: var(--color-warm);
+  font-weight: 600;
+}
+
+.sms__blocked {
+  margin: var(--space-3) 0 0;
+  font-size: var(--text-xs);
+  color: var(--color-text-muted);
+  text-align: center;
+}

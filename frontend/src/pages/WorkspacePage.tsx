@@ -9,6 +9,7 @@ import { Button } from '../components/Button';
 import { Spinner } from '../components/Spinner';
 import { Timeline } from '../components/Timeline';
 import { ActionsPanel } from './workspace/ActionsPanel';
+import { SmsCompose } from './workspace/SmsCompose';
 import { formatAge, formatPhone, leadName } from '../lib/format';
 
 /**
@@ -197,7 +198,7 @@ export function WorkspacePage() {
                 : 'Browser calling is not switched on yet.'}
             </p>
 
-            {/* SMS compose lands here - task 20. */}
+            <SmsCompose lead={lead} refresh={refresh} />
           </div>
         </div>
 
