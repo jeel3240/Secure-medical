@@ -129,6 +129,21 @@ export function queueRouter(deps: AppDeps): Router {
     })
   );
 
+  router.get(
+    '/:id/timeline',
+    asyncHandler(async (req, res) => {
+      // eslint-disable-next-line @typescript-eslint/no-var-requires
+      const db = require('../db/timeline') as typeof import('../db/timeline');
+
+      const entries = await db.getTimeline(parseLeadId(req.params.id));
+      if (entries === null) {
+        throw new HttpError(404, 'not_found', 'No such lead.');
+      }
+
+      res.json({ entries });
+    })
+  );
+
   router.post(
     '/:id/read',
     asyncHandler(async (req, res) => {

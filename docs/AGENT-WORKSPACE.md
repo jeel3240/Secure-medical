@@ -4,12 +4,13 @@ The endpoints behind the Agent Workspace, the Lead Timeline and My Callbacks -
 `DESIGN-PROMPT.md` sections 3, 4 and 5. Phase 3.
 
 **Built so far** (all 2026-09-26): claim and release (task 2), marking a lead
-read (task 3), and the lead card (task 4) - `api/leads.ts`, `db/claims.ts`,
-`db/read-flag.ts`, `db/lead-detail.ts`, `core/score-breakdown.ts`. Everything
-else here is still the contract to build against: no route touches `notes`,
-`dispositions` or `callbacks`, and there is no timeline. Paths and payload
-shapes for the unbuilt ones are proposed, not agreed - say so if you want them
-different; everything under "Rules" is decided.
+read (task 3), the lead card (task 4) and the timeline (task 5) - `api/leads.ts`,
+`db/claims.ts`, `db/read-flag.ts`, `db/lead-detail.ts`, `db/timeline.ts`,
+`core/score-breakdown.ts`. Everything else here is still the contract to build
+against: no route yet *writes* `notes`, `dispositions` or `callbacks`, though
+the timeline reads all three. Paths and payload shapes for the unbuilt ones are
+proposed, not agreed - say so if you want them different; everything under
+"Rules" is decided.
 
 Every route is under `/api`, requires a session, and is open to any signed-in
 user unless it says superadmin. See `AUTH.md`.
@@ -155,10 +156,36 @@ One merged, ordered list assembled from `messages`, `calls`, `notes`,
 author where there is one, and its own fields. The screen decides the icons and
 wording, the way it does for queue tags.
 
-System events are not a table. "Lead received from CORE-G-27", "Scored 100 · HOT
-· queued" and "Conversation expired" are derived from the lead and its
-conversation rather than logged rows, so the timeline has to synthesise them.
-Deciding which ones are worth showing is part of building it.
+System events are not a table. They are derived from the lead and its
+conversation rather than logged rows, so the timeline synthesises them.
+
+**Built 2026-09-26**, `db/timeline.ts`. Four system events, each standing on a
+timestamp that actually exists:
+
+| Event | Placed at | Why there |
+|---|---|---|
+| `lead_received` | `ezt_added_at` | Its own timestamp. Carries the source. |
+| `scored` | The last inbound reply | Nothing records when a score was reached. `updated_at` moves on every change, so it cannot be used; the last reply is what earned the final points. |
+| `agent_took_over` | `agent_took_over_at` | Migration 003. |
+| `conversation_expired` | `expires_at`, only when the status is `expired` | `expires_at` is set on every send, so a live conversation always has a future one that has not happened. |
+
+An event with no timestamp to stand on is left out rather than guessed at.
+
+**Ordering.** Oldest first, and ties are common enough to matter: `scored`
+shares a timestamp with the reply that earned it, and `lead_received` shares one
+with the opener it triggered. Within the same instant the order is
+received → inbound → SMS → call → note → callback → disposition → other system
+events, so the story reads in the sequence it happened.
+
+**Three kinds come out of `messages`.** An inbound row is a reply; an outbound
+row with `sent_by` null is one of ours; an outbound row with an agent is their
+manual message. Nothing writes `sent_by` until task 9, so every outbound row is
+automated today and the split is ready for when that changes.
+
+`getTimeline` returns null for a lead that does not exist, so the route can tell
+that apart from a lead with no history - both would otherwise be an empty list.
+`scripts/timeline-live-check.ts` proves the merge, the ordering and the derived
+events against a real database.
 
 ## What it needs that does not exist
 
