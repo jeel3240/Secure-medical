@@ -9,6 +9,7 @@ import { LeadsPage } from './pages/admin/LeadsPage';
 import { ChangePasswordPage } from './pages/ChangePasswordPage';
 import { LoginPage } from './pages/LoginPage';
 import { PlaceholderPage } from './pages/PlaceholderPage';
+import { LeadTimelinePage } from './pages/LeadTimelinePage';
 import { QueuePage } from './pages/QueuePage';
 import { WorkspacePage } from './pages/WorkspacePage';
 
@@ -33,6 +34,7 @@ export function App() {
             <Route index element={<Navigate to="/queue" replace />} />
             <Route path="/queue" element={<QueuePage />} />
             <Route path="/leads/:id" element={<WorkspacePage />} />
+            <Route path="/leads/:id/timeline" element={<LeadTimelinePage />} />
             <Route
               path="/callbacks"
               element={

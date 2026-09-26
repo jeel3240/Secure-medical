@@ -1768,3 +1768,97 @@ a {
   color: var(--color-text-muted);
   text-align: center;
 }
+
+/* Lead Timeline page - DESIGN-PROMPT.md 4. Phase 3 task 21. */
+.timeline-page {
+  display: grid;
+  gap: var(--space-4);
+  grid-template-columns: 1fr;
+  align-items: start;
+}
+
+@media (min-width: 1024px) {
+  .timeline-page {
+    grid-template-columns: 1fr 320px;
+  }
+}
+
+.timeline-page__main {
+  padding: var(--space-4);
+  min-width: 0;
+}
+
+.timeline-page__side {
+  padding: var(--space-4);
+}
+
+.timeline-page__side-title {
+  margin: 0 0 var(--space-3);
+  font-size: var(--text-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--color-text-muted);
+}
+
+.timeline-page__side-title + * {
+  margin-top: 0;
+}
+
+.timeline-page__head-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.summary {
+  margin: 0 0 var(--space-5);
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: var(--space-2) var(--space-3);
+  font-size: var(--text-sm);
+}
+
+.summary dt {
+  color: var(--color-text-muted);
+  white-space: nowrap;
+}
+
+.summary dd {
+  margin: 0;
+}
+
+/* Rows with no data behind them - AGENT-WORKSPACE.md, "Known gaps". */
+.summary__gap {
+  color: var(--color-text-muted);
+}
+
+.summary__list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: var(--text-sm);
+}
+
+.summary__list li {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  padding: var(--space-2) 0;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.summary__list li:last-child {
+  border-bottom: none;
+}
+
+.summary__list-when,
+.summary__list-who {
+  color: var(--color-text-muted);
+  font-size: var(--text-xs);
+}
+
+.summary__empty {
+  margin: 0;
+  font-size: var(--text-sm);
+  color: var(--color-text-muted);
+}
