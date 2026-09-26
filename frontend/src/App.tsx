@@ -5,6 +5,9 @@ import { useAuth } from './auth/store';
 import { AppShell } from './layout/AppShell';
 import { AdminLayout } from './pages/admin/AdminLayout';
 import { AgentsPage } from './pages/admin/AgentsPage';
+import { ConfigPage } from './pages/admin/ConfigPage';
+import { DncPage } from './pages/admin/DncPage';
+import { OverviewPage } from './pages/admin/OverviewPage';
 import { LeadsPage } from './pages/admin/LeadsPage';
 import { ChangePasswordPage } from './pages/ChangePasswordPage';
 import { LoginPage } from './pages/LoginPage';
@@ -38,9 +41,12 @@ export function App() {
             <Route path="/callbacks" element={<CallbacksPage />} />
             <Route element={<RequireRole role="superadmin" />}>
               <Route path="/admin" element={<AdminLayout />}>
-                <Route index element={<Navigate to="/admin/leads" replace />} />
+                <Route index element={<Navigate to="/admin/overview" replace />} />
+                <Route path="overview" element={<OverviewPage />} />
                 <Route path="leads" element={<LeadsPage />} />
                 <Route path="agents" element={<AgentsPage />} />
+                <Route path="config" element={<ConfigPage />} />
+                <Route path="dnc" element={<DncPage />} />
               </Route>
             </Route>
           </Route>
