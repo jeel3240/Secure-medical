@@ -8,9 +8,9 @@ read (task 3), the lead card (task 4), the timeline (task 5), notes (task 6),
 callbacks (task 7) and dispositions (task 8) - `api/leads.ts`,
 `api/callbacks.ts`, `db/claims.ts`, `db/read-flag.ts`, `db/lead-detail.ts`,
 `db/timeline.ts`, `db/notes.ts`, `db/callbacks.ts`, `db/dispositions.ts`,
-`db/dnc.ts`, `core/dispositions.ts`, `core/score-breakdown.ts`. The one route
-left here is agent SMS (task 9), whose payload shape is proposed, not agreed -
-say so if you want it different; everything under "Rules" is decided.
+`db/dnc.ts`, `db/agent-sms.ts`, `core/dispositions.ts`,
+`core/score-breakdown.ts`. Every route in the table below is built (task 9,
+agent SMS, completed the set); everything under "Rules" is decided.
 
 Every route is under `/api`, requires a session, and is open to any signed-in
 user unless it says superadmin. See `AUTH.md`.
@@ -60,7 +60,7 @@ the agent SMS box is disabled on a DNC lead rather than failing at send time.
 | `POST` | `/api/leads/:id/claim` | Claims it. 409 `already_claimed` with the holder's name when someone else has it. |
 | `POST` | `/api/leads/:id/release` | Releases your own claim. A superadmin may release anyone's. |
 | `POST` | `/api/leads/:id/notes` | `{ body }`. |
-| `POST` | `/api/leads/:id/messages` | `{ body }` - agent SMS. Sets the take-over timestamp. Refused on a DNC lead. |
+| `POST` | `/api/leads/:id/messages` | `{ body }` - agent SMS, one segment (160). Sets the take-over timestamp. 409 on a DNC number, 502 when EZ Texting refuses it. |
 | `POST` | `/api/leads/:id/dispositions` | `{ value, confirmDnc? }` - one of the seven in `DESIGN-PROMPT.md` section 3. `dnc` also blocks the number and needs `confirmDnc: true`. |
 | `POST` | `/api/leads/:id/callbacks` | `{ scheduledAt, agentId? }` - defaults to you; a superadmin may assign another agent. |
 | `PATCH` | `/api/callbacks/:id` | `{ scheduledAt }` to reschedule, or `{ done: true }` to complete. |
@@ -182,6 +182,42 @@ behaviour so a change to it is deliberate.
 the transaction, that blocking reuses the single row a number is allowed, that a
 blocked lead leaves the queue and a released one returns, and that re-blocking
 after a release clears the release columns.
+
+
+## Agent SMS
+
+`db/agent-sms.ts`, `POST /api/leads/:id/messages`, 201 with the message.
+
+**Sending one stops the automated questions** - `STATE-MACHINE.md` rule 2b,
+Jeel's decision of 2026-09-23. The response carries `tookOver: true` when this
+send is what stopped them, so the screen can say so once rather than on every
+message.
+
+**The body is capped at one segment, 160 characters.** Longer costs a second
+segment on every send. The compose box counts down to the same number -
+`DESIGN-PROMPT.md` 3.
+
+**The text is sent before it is recorded,** which is the opposite of the usual
+order here and deliberate. Writing first and sending second means a failed send
+leaves a message in the lead's timeline that never arrived, and rule 2b would
+have silenced the automated flow on the strength of it. Sending first means the
+worst case is a delivered text we failed to record - visible in EZ Texting,
+recoverable - rather than a silent lie in the timeline. The record and the
+take-over timestamp then commit together.
+
+**A blocked number is refused by `sendMessage` itself,** which checks `dnc_list`
+immediately before every send. The route answers 409 `number_blocked`; nothing
+is written and no take-over is recorded. A failed send answers 502, also writing
+nothing, so the agent can retry the same text.
+
+**The timeline calls it an agent message** because `messages.sent_by` is set;
+one table gives three kinds - a reply, one of ours, and an agent's.
+
+`scripts/agent-sms-live-check.ts` proves the handoff end to end: a reply before
+it advances and scores, the same reply after it does nothing, the timestamp is
+set once, and neither a blocked number nor a failed send records one. It stubs
+axios rather than `sendMessage`, so the real `dnc_list` check stays in the path
+- stubbing `sendMessage` would remove the guard the script is there to prove.
 
 
 ## How the lead card is built

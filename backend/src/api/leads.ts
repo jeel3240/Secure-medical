@@ -222,6 +222,39 @@ export function queueRouter(deps: AppDeps): Router {
   );
 
   router.post(
+    '/:id/messages',
+    asyncHandler(async (req, res) => {
+      // eslint-disable-next-line @typescript-eslint/no-var-requires
+      const db = require('../db/agent-sms') as typeof import('../db/agent-sms');
+
+      // One segment. Longer costs a second segment on every send, and the
+      // compose box counts down to the same number - DESIGN-PROMPT.md 3.
+      const body = parseBody((req.body ?? {}).body, 'body', db.AGENT_SMS_LIMIT);
+
+      const result = await db.sendAgentSms(parseLeadId(req.params.id), req.user!.id, body);
+
+      if (!result.ok) {
+        if (result.reason === 'lead_not_found') {
+          throw new HttpError(404, 'not_found', 'No such lead.');
+        }
+        if (result.reason === 'blocked') {
+          // 409: the lead opted out, which is not something the agent can fix
+          // by changing the request.
+          throw new HttpError(
+            409,
+            'number_blocked',
+            'This number is on the do-not-call list. Nothing was sent.'
+          );
+        }
+        // Nothing was written, so the agent can retry the same text.
+        throw new HttpError(502, 'send_failed', 'EZ Texting did not accept the message. Nothing was sent.');
+      }
+
+      res.status(201).json({ message: result.message });
+    })
+  );
+
+  router.post(
     '/:id/dispositions',
     asyncHandler(async (req, res) => {
       // eslint-disable-next-line @typescript-eslint/no-var-requires
