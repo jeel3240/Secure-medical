@@ -5,9 +5,10 @@ Phase 3. **Not built.** Today the app logs readable single lines to stdout -
 which Docker keeps and a person reads with `docker compose logs`. Nothing is
 structured, nothing is shipped anywhere, and there is no health endpoint.
 
-Collecting logs off the instance is set up outside this repo. What this repo
-owes it is below: one queryable line per event, and a health endpoint worth
-polling.
+Shipping the logs off the instance is configured in `docker-compose.prod.yml`,
+and `WORKFLOW.md` says what that changes about reading them - in short,
+`docker compose logs` works locally and not on the server. What the code owes is
+below: one queryable line per event, and a health endpoint worth polling.
 
 ## Structured logs
 

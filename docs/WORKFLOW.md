@@ -101,6 +101,28 @@ docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
 docker compose exec api npm run migrate
 ```
 
+**`docker compose logs` returns nothing on the server.** The production
+override sets the `awslogs` log driver on api, worker and caddy, so container
+output goes to CloudWatch: log group `/leads-app`, one stream per service named
+`api`, `worker` and `caddy`. Locally there is no override, so
+`docker compose logs` works as usual - the same command behaves differently in
+the two places, which is worth remembering before concluding a service is
+silent.
+
+Two things about that driver, both in `docker-compose.prod.yml`:
+
+- **A missing IAM permission stops containers starting,** rather than merely
+  losing logs - Docker fails at container creation. The instance role needs
+  `logs:CreateLogStream` and `logs:PutLogEvents`, plus `logs:CreateLogGroup`
+  because `awslogs-create-group` is on. So after a deploy that changes this,
+  check `docker compose ps` immediately rather than assuming a clean `up`. If
+  the API is down, drop `awslogs-create-group` and create the group by hand.
+- **Logs are shipped non-blocking,** because Docker's default blocking mode lets
+  a slow log endpoint stall writes to stdout and with them the request handling.
+  Under sustained pressure lines are dropped instead.
+
+Retention is set on the log group itself, not here - 30 days.
+
 On the very first deploy, after migrating, create the first superadmin. It
 prints a one-time temporary password:
 
