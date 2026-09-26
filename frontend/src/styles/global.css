@@ -1499,3 +1499,103 @@ a {
   color: var(--color-text-muted);
   text-align: center;
 }
+
+/* Timeline - DESIGN-PROMPT.md 3. Shared by the workspace and the timeline page. */
+.timeline-card {
+  padding: var(--space-4);
+  /* Capped so the centre column scrolls rather than the page: the card and the
+     action panel stay put while an agent reads back through the history. */
+  max-height: 70vh;
+  overflow-y: auto;
+}
+
+.timeline {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.timeline__empty {
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+}
+
+.timeline__day {
+  margin: var(--space-4) 0 var(--space-2);
+  font-size: var(--text-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--color-text-muted);
+  border-bottom: 1px solid var(--color-border);
+  padding-bottom: 4px;
+}
+
+.timeline__entry {
+  display: grid;
+  grid-template-columns: 54px 1fr auto;
+  gap: var(--space-3);
+  align-items: start;
+  padding: var(--space-2) 0;
+  /* The left edge carries the entry type's colour - the brief's "distinct
+     left-edge icon/colour" - so the kind is legible before the text is read. */
+  border-left: 3px solid var(--color-border);
+  padding-left: var(--space-3);
+}
+
+.timeline__kind {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  color: var(--color-text-muted);
+  padding-top: 2px;
+}
+
+.timeline__body {
+  min-width: 0;
+}
+
+.timeline__text {
+  margin: 0;
+  font-size: var(--text-sm);
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+.timeline__meta {
+  display: flex;
+  gap: var(--space-2);
+  margin: 2px 0 0;
+  font-size: var(--text-xs);
+  color: var(--color-text-muted);
+}
+
+.timeline__meta:empty {
+  display: none;
+}
+
+.timeline__failed {
+  color: var(--color-danger);
+  font-weight: 600;
+}
+
+.timeline__time {
+  font-size: var(--text-xs);
+  color: var(--color-text-muted);
+  white-space: nowrap;
+}
+
+/* One colour per entry type. Inbound is the accent because a reply from the
+   lead is the thing an agent is waiting for. */
+.timeline__entry--inbound { border-left-color: var(--color-accent); background: var(--color-accent-soft); }
+.timeline__entry--sms { border-left-color: var(--color-border-strong); }
+.timeline__entry--agent_sms { border-left-color: var(--color-primary); }
+.timeline__entry--call { border-left-color: var(--color-low); }
+.timeline__entry--note { border-left-color: var(--color-warm); }
+.timeline__entry--callback { border-left-color: var(--color-accent); }
+.timeline__entry--disposition { border-left-color: var(--color-success); }
+.timeline__entry--system { border-left-color: transparent; }
+
+.timeline__entry--system .timeline__text {
+  color: var(--color-text-muted);
+  font-size: var(--text-xs);
+}

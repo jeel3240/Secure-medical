@@ -2,11 +2,12 @@ import { useCallback, useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { releaseLead } from '../api/leads';
 import { usePolling } from '../api/usePolling';
-import { getLead, markRead, type LeadDetail } from '../api/workspace';
+import { getLead, getTimeline, markRead, type LeadDetail, type TimelineEntry } from '../api/workspace';
 import { Badge } from '../components/Badge';
 import { Banner } from '../components/Banner';
 import { Button } from '../components/Button';
 import { Spinner } from '../components/Spinner';
+import { Timeline } from '../components/Timeline';
 import { formatAge, formatPhone, leadName } from '../lib/format';
 
 /**
@@ -38,10 +39,18 @@ export function WorkspacePage() {
 
   const [releasing, setReleasing] = useState(false);
 
+  const valid = Number.isInteger(leadId) && leadId > 0;
+
   const fetcher = useCallback(() => getLead(leadId), [leadId]);
   const { data: lead, loading, error, refresh } = usePolling<LeadDetail>(fetcher, {
-    enabled: Number.isInteger(leadId) && leadId > 0,
+    enabled: valid,
   });
+
+  // The timeline polls separately from the card. Both are cheap, and keeping
+  // them apart means a slow timeline cannot hold up the card an agent is
+  // reading while the phone rings.
+  const timelineFetcher = useCallback(() => getTimeline(leadId), [leadId]);
+  const { data: entries } = usePolling<TimelineEntry[]>(timelineFetcher, { enabled: valid });
 
   /**
    * Opening the lead is what clears the unread flag - CLAUDE.md §10. Fired once
@@ -192,8 +201,15 @@ export function WorkspacePage() {
         </div>
 
         <div className="workspace__col workspace__col--center">
-          {/* Timeline - task 18. */}
-          <div className="card workspace__pending">Timeline goes here.</div>
+          <div className="card timeline-card">
+            {entries ? (
+              // Auto-scrolled here, unlike the timeline page: an agent on the
+              // phone wants the newest reply in view.
+              <Timeline entries={entries} autoScroll />
+            ) : (
+              <div className="workspace__pending">Loading the timeline...</div>
+            )}
+          </div>
         </div>
 
         <div className="workspace__col workspace__col--right">
