@@ -2,6 +2,7 @@ import cookieParser from 'cookie-parser';
 import express from 'express';
 import { adminConfigRouter } from './admin/config';
 import { adminDncRouter } from './admin/dnc';
+import { adminHealthRouter } from './admin/health';
 import { adminOverviewRouter } from './admin/overview';
 import { adminLeadsRouter } from './admin/leads';
 import { authRouter } from './auth/routes';
@@ -43,6 +44,7 @@ export function createApp(deps: AppDeps): express.Express {
   app.use('/api/admin/config', adminConfigRouter(deps));
   app.use('/api/admin/overview', adminOverviewRouter(deps));
   app.use('/api/admin/dnc', adminDncRouter(deps));
+  app.use('/api/admin/health', adminHealthRouter(deps));
 
   // Unauthenticated: EZ Texting posts here. Under /api because that is the only
   // path Caddy forwards to the API.

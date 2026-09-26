@@ -154,6 +154,8 @@ you change something the docs describe, update the doc in the same commit.
     src/api/admin/config.ts    Admin > Configuration, read-only
     src/api/admin/overview.ts  Admin > Overview statistics
     src/api/admin/dnc.ts       Admin > DNC list, read-only
+    src/api/admin/health.ts    deep health check, superadmin only
+    src/db/health.ts        database, poller, webhook, expiry, sending
     src/db/admin-config.ts  live copy, scoring and tiers, with segment counts
     src/db/admin-overview.ts  KPIs, funnel, per-agent table, activity feed
     src/db/admin-dnc.ts     the DNC list, released rows included
@@ -178,6 +180,7 @@ you change something the docs describe, update the doc in the same commit.
     scripts/dispositions-live-check.ts  proves the DNC block and the queue effect
     scripts/agent-sms-live-check.ts  proves the take-over stops the questions
     scripts/admin-live-check.ts  proves the three admin read models
+    scripts/health-live-check.ts  proves the poller staleness signal
     src/core/queue-tags.ts  which tag a queued lead gets
     src/db/queue.ts         the priority queue SQL
     scripts/queue-live-check.ts  proves that SQL against a real database
