@@ -10,6 +10,7 @@ import { Button } from '../components/Button';
 import { QueueTagBadge } from '../components/QueueTagBadge';
 import { Spinner } from '../components/Spinner';
 import { ageTone, answerLabel, formatAge, formatPhone, leadName } from '../lib/format';
+import { lockHolder } from '../lib/lock';
 
 /**
  * The agents' landing screen: every responder, highest score first.
@@ -81,26 +82,7 @@ export function QueuePage() {
       current.includes(tier) ? current.filter((t) => t !== tier) : [...current, tier]
     );
 
-  /**
-   * Who is allowed to open a row.
-   *
-   * A lead another agent holds is theirs until they release it: the one-agent
-   * lock, `AGENT-WORKSPACE.md`. Your own claim is not a lock - reopening a lead
-   * you are already working is the normal way back into it - and a superadmin
-   * passes, because they can force-release and need to see what an agent is
-   * stuck on.
-   */
-  const lockedBy = useCallback(
-    (lead: QueueLead): string | null => {
-      if (lead.tag.kind !== 'in_progress') return null;
-      const holder = lead.tag.agentName ?? null;
-      if (!holder) return null;
-      if (me?.role === 'superadmin') return null;
-      if (me?.name && holder === me.name) return null;
-      return holder;
-    },
-    [me]
-  );
+  const lockedBy = useCallback((lead: QueueLead) => lockHolder(lead, me), [me]);
 
   /**
    * Claim, then open. Claiming from the queue rather than on arrival means the

@@ -190,3 +190,34 @@ on every render.
 `frontend/src/api/usePolling.test.ts` covers all six rows above. None of them is
 visible in a browser, which is why they are tested at all - the screens
 themselves are judged by eye.
+
+## The one-agent lock on screen
+
+`frontend/src/lib/lock.ts`, Phase 3 task 16. The rule is enforced on the
+server - `db/claims.ts`, and no screen is trusted with it - but the queue has to
+decide which rows to mute before anyone clicks.
+
+A row is locked when its tag is `in_progress` and someone else holds it. Three
+ways it is not:
+
+| Case | Why |
+|---|---|
+| Nobody holds it | The usual case |
+| You hold it | Reopening your own claim is the normal way back into a lead; locking an agent out of it would strand them |
+| You are a superadmin | They can force-release, and need to see what an agent is stuck on |
+
+A locked row is muted, carries a `Locked` badge instead of an Open button, has a
+tooltip naming the holder, and has no click handler at all - the lock has to be
+felt, not only seen.
+
+**An `in_progress` tag with no name counts as unlocked.** The queue joins
+`users` on `is_active`, so a deactivated agent's claim returns no name, and
+`db/claims.ts` lets anyone take such a lead over. Muting it would strand the
+lead where nobody could open it.
+
+**The holder is matched by name, not id,** because the endpoint returns
+`agentName` and no id. Two agents with the same name would each see the other's
+leads as their own; the server still refuses the claim, so the worst case is a
+409 rather than two agents on one lead, but the row would look wrong until then.
+Worth adding the holder's id to the endpoint if duplicate names ever happen -
+not worth a change before they do.
