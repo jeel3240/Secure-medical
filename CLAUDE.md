@@ -196,9 +196,22 @@ you change something the docs describe, update the doc in the same commit.
     src/db/users.ts         user queries; src/db/pool.ts
   frontend/
     Dockerfile              production Caddy image with the built app
+    src/api/usePolling.ts   the one place every live screen fetches from
+    src/api/workspace.ts    lead card, timeline, notes, callbacks, dispositions, SMS
+    src/api/admin.ts        config, overview, DNC, health
+    src/lib/format.ts       phone, age, tier tone, answer labels
+    src/lib/lock.ts         which queue rows an agent may open
+    src/components/Timeline.tsx      shared by the workspace and the timeline page
+    src/components/QueueTagBadge.tsx the STATUS column's tag, in words
+    src/pages/QueuePage.tsx          the priority queue
+    src/pages/WorkspacePage.tsx      the agent workspace shell
+    src/pages/workspace/             actions panel, SMS compose
+    src/pages/LeadTimelinePage.tsx   read-only history with a summary sidebar
+    src/pages/CallbacksPage.tsx      My Callbacks
+    src/pages/admin/                 overview, leads, agents, config, dnc
   docs/
     AUTH.md  POLLER.md  WORKFLOW.md  WEBHOOKS.md  ADMIN-LEADS.md  STATE-MACHINE.md
-    QUEUE.md
+    QUEUE.md  AGENT-WORKSPACE.md  ADMIN.md  LOGGING.md  FRONTEND.md
 ```
 
 `core/` holds message rendering, the state machine and answer matching, all of
@@ -419,11 +432,17 @@ named beside it - read that first, not this line. §9's definition of done
 applies to each: works locally with fake data, tests, docs updated in the same
 commit.
 
-**Backend done, 2026-09-26.** Tasks 1-13 are built and merged as one PR into
-`dev` (branch `feat/phase3-workspace-backend`): the agent workspace endpoints,
-agent SMS with rule 2b, the three read-only admin screens and the deep health
+**Backend done, 2026-09-26.** Tasks 1-13: the agent workspace endpoints, agent
+SMS with rule 2b, the three read-only admin screens and the deep health
 endpoint. Suite at 360 tests, plus eight `scripts/*-live-check.ts` files that
-prove the SQL against a real Postgres. Next: the frontend, tasks 14-25.
+prove the SQL against a real Postgres.
+
+**Frontend done, 2026-09-26.** Tasks 14-25, on the same branch: the shared
+polling hook, the priority queue with the one-agent lock, the agent workspace
+(card, timeline, actions, SMS compose), the lead timeline page, My Callbacks,
+and the three admin pages. `docs/FRONTEND.md` is the record of what was built
+and why. The frontend gains its first test setup - Vitest, jsdom, 69 tests
+covering logic rather than buttons. Next: operations, tasks 26-30.
 
 Two things found while building, neither fixed inside its task, both needing
 Jeel:
