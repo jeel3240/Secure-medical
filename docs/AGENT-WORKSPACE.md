@@ -4,14 +4,13 @@ The endpoints behind the Agent Workspace, the Lead Timeline and My Callbacks -
 `DESIGN-PROMPT.md` sections 3, 4 and 5. Phase 3.
 
 **Built so far** (all 2026-09-26): claim and release (task 2), marking a lead
-read (task 3), the lead card (task 4), the timeline (task 5), notes (task 6) and
-callbacks (task 7) - `api/leads.ts`, `api/callbacks.ts`, `db/claims.ts`,
-`db/read-flag.ts`, `db/lead-detail.ts`, `db/timeline.ts`, `db/notes.ts`,
-`db/callbacks.ts`, `core/score-breakdown.ts`. Everything else here is still the
-contract to build against: no route yet writes `dispositions` or sends agent
-SMS, though the timeline reads both. Paths and payload shapes for the unbuilt
-ones are proposed, not agreed - say so if you want them different; everything
-under "Rules" is decided.
+read (task 3), the lead card (task 4), the timeline (task 5), notes (task 6),
+callbacks (task 7) and dispositions (task 8) - `api/leads.ts`,
+`api/callbacks.ts`, `db/claims.ts`, `db/read-flag.ts`, `db/lead-detail.ts`,
+`db/timeline.ts`, `db/notes.ts`, `db/callbacks.ts`, `db/dispositions.ts`,
+`db/dnc.ts`, `core/dispositions.ts`, `core/score-breakdown.ts`. The one route
+left here is agent SMS (task 9), whose payload shape is proposed, not agreed -
+say so if you want it different; everything under "Rules" is decided.
 
 Every route is under `/api`, requires a session, and is open to any signed-in
 user unless it says superadmin. See `AUTH.md`.
@@ -62,7 +61,7 @@ the agent SMS box is disabled on a DNC lead rather than failing at send time.
 | `POST` | `/api/leads/:id/release` | Releases your own claim. A superadmin may release anyone's. |
 | `POST` | `/api/leads/:id/notes` | `{ body }`. |
 | `POST` | `/api/leads/:id/messages` | `{ body }` - agent SMS. Sets the take-over timestamp. Refused on a DNC lead. |
-| `POST` | `/api/leads/:id/dispositions` | `{ value }` from the seven in `DESIGN-PROMPT.md` section 3. `DNC` also blocks the number. |
+| `POST` | `/api/leads/:id/dispositions` | `{ value, confirmDnc? }` - one of the seven in `DESIGN-PROMPT.md` section 3. `dnc` also blocks the number and needs `confirmDnc: true`. |
 | `POST` | `/api/leads/:id/callbacks` | `{ scheduledAt, agentId? }` - defaults to you; a superadmin may assign another agent. |
 | `PATCH` | `/api/callbacks/:id` | `{ scheduledAt }` to reschedule, or `{ done: true }` to complete. |
 | `GET` | `/api/callbacks?when=today\|upcoming\|overdue&agentId=` | My Callbacks. `agentId` is superadmin only. |
@@ -128,6 +127,61 @@ and the newest note - so My Callbacks needs one request, not one per row.
 against a real database: the three windows, that a missed callback is not also
 today, that completing twice keeps the first time, and that rescheduling moves a
 callback between tabs.
+
+
+## Dispositions
+
+`db/dispositions.ts` for the write, `core/dispositions.ts` for the list of
+seven, `POST /api/leads/:id/dispositions`, 201 with the row.
+
+The seven, as stored: `interested`, `callback_set`, `no_answer`, `voicemail`,
+`not_interested`, `wrong_number`, `dnc`. `dispositions.value` is plain TEXT with
+no check constraint, so `core/dispositions.ts` is the only thing keeping the
+column to a known set - an eighth value means editing that file. The route
+accepts any case and trims, so `  No_Answer ` stores `no_answer`.
+
+**Append-only, like notes.** An agent who changes their mind adds another and
+the newest wins wherever a single value is needed. The timeline shows the
+sequence, which is the point: three `no_answer` rows then `interested` is a
+different story from one `interested`.
+
+**DNC needs `confirmDnc: true`.** The value alone is refused with 400
+`confirm_required`. `DESIGN-PROMPT.md` 3 puts a confirm dialog in front of it
+on the screen; the same guard sits on the API, because the block is lifted only
+by a START from the lead and a mis-typed request should not be able to set it.
+The other six need no confirmation.
+
+**The block and the disposition commit together,** in one transaction with the
+lead row locked. The alternative - write the row, then block - can leave a lead
+recorded as do-not-call whom we would still text, which is the failure that
+actually matters.
+
+**It is the same `dnc_list` row a STOP reply writes.** `db/dnc.ts` holds the one
+upsert all three blocking paths use - a STOP reply, the poller finding a contact
+already opted out, and this. So a number blocked by an agent behaves exactly
+like one blocked by a STOP: it leaves the queue, `sendMessage` refuses it with
+`BlockedNumberError`, the lead card raises the DNC flag, and a later START
+releases it (Jeel, 2026-09-22 - START releases an agent's block too). The reason
+is stored as `agent_disposition` so the DNC screen can tell the two apart.
+
+### What a disposition does not do
+
+**It does not remove the lead from the queue** - except `dnc`, and that only
+because of the `dnc_list` row, not the disposition. `db/queue.ts` does not read
+the `dispositions` table at all. A lead dispositioned `not_interested` stays in
+the queue at full score and the next agent picks it up again.
+
+That is worth a decision from Jeel rather than a quiet fix here: it could be
+that a closing disposition should drop the lead out, or that the queue should
+tag it `worked` and sort it below the rest, or that it is right as it is because
+the disposition screen is a record and the queue is a work list. Nothing is
+built either way. `scripts/dispositions-live-check.ts` pins the current
+behaviour so a change to it is deliberate.
+
+`scripts/dispositions-live-check.ts` proves the parts that live in the database:
+the transaction, that blocking reuses the single row a number is allowed, that a
+blocked lead leaves the queue and a released one returns, and that re-blocking
+after a release clears the release columns.
 
 
 ## How the lead card is built

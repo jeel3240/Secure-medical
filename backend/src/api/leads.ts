@@ -11,6 +11,7 @@ import { Router } from 'express';
 import { requireAuth, requirePasswordChanged } from './auth/middleware';
 import type { AppDeps } from './deps';
 import { asyncHandler, HttpError } from './http';
+import { DISPOSITIONS, DNC_DISPOSITION, isDisposition } from '../core/dispositions';
 
 const TIERS = ['HOT', 'WARM', 'LOW'];
 const SINCE_HOURS: Record<string, number> = { '1h': 1, '24h': 24, '7d': 24 * 7, '30d': 24 * 30 };
@@ -217,6 +218,45 @@ export function queueRouter(deps: AppDeps): Router {
       }
 
       res.status(201).json({ callback: result.callback });
+    })
+  );
+
+  router.post(
+    '/:id/dispositions',
+    asyncHandler(async (req, res) => {
+      // eslint-disable-next-line @typescript-eslint/no-var-requires
+      const db = require('../db/dispositions') as typeof import('../db/dispositions');
+
+      const body = (req.body ?? {}) as { value?: unknown; confirmDnc?: unknown };
+
+      const value = typeof body.value === 'string' ? body.value.trim().toLowerCase() : '';
+      if (!isDisposition(value)) {
+        throw new HttpError(
+          400,
+          'invalid_disposition',
+          `Disposition must be one of: ${DISPOSITIONS.join(', ')}.`
+        );
+      }
+
+      // DNC blocks the number everywhere and only a START lifts it, so the
+      // caller has to say it meant it. DESIGN-PROMPT.md 3 puts a confirm dialog
+      // in front of it; this is the same guard on the API, so a mis-typed
+      // request cannot silently suppress a lead.
+      if (value === DNC_DISPOSITION && body.confirmDnc !== true) {
+        throw new HttpError(
+          400,
+          'confirm_required',
+          'Setting DNC blocks this number for SMS and calls. Send confirmDnc: true to proceed.'
+        );
+      }
+
+      const result = await db.setDisposition(parseLeadId(req.params.id), req.user!.id, value);
+
+      if (!result.ok) {
+        throw new HttpError(404, 'not_found', 'No such lead.');
+      }
+
+      res.status(201).json({ disposition: result.disposition });
     })
   );
 
