@@ -88,11 +88,11 @@ export async function markRead(id: number): Promise<void> {
   await api.post(`/leads/${id}/read`);
 }
 
+/** Mirrors Note in backend/src/db/notes.ts - `author`, not an agent id. */
 export interface Note {
   id: number;
   leadId: number;
-  agentId: number;
-  agentName: string | null;
+  author: string;
   body: string;
   createdAt: string;
 }
@@ -152,24 +152,29 @@ export async function setDisposition(
   return data.disposition;
 }
 
+/** Mirrors Callback in backend/src/db/callbacks.ts. */
 export interface Callback {
   id: number;
   leadId: number;
   agentId: number;
-  agentName: string | null;
+  agentName: string;
   scheduledAt: string;
   doneAt: string | null;
 }
 
+/**
+ * Mirrors CallbackListRow. The lead carries no id of its own - `leadId` on the
+ * callback is the one to link with - and no score, only the tier.
+ */
 export interface CallbackRow extends Callback {
   lead: {
-    id: number;
     phone: string;
     firstName: string | null;
     lastName: string | null;
-    score: number | null;
+    source: string | null;
     tier: string | null;
   };
+  /** The most recent note on the lead, for the excerpt column. */
   latestNote: string | null;
 }
 
@@ -178,7 +183,7 @@ export type CallbackWhen = 'today' | 'upcoming' | 'overdue' | 'all';
 export interface CallbackList {
   callbacks: CallbackRow[];
   /** Every tab's count, whichever tab was asked for. */
-  counts: Record<CallbackWhen, number>;
+  counts: Record<string, number>;
 }
 
 export async function createCallback(

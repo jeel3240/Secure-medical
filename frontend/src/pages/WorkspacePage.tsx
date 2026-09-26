@@ -8,6 +8,7 @@ import { Banner } from '../components/Banner';
 import { Button } from '../components/Button';
 import { Spinner } from '../components/Spinner';
 import { Timeline } from '../components/Timeline';
+import { ActionsPanel } from './workspace/ActionsPanel';
 import { formatAge, formatPhone, leadName } from '../lib/format';
 
 /**
@@ -213,8 +214,7 @@ export function WorkspacePage() {
         </div>
 
         <div className="workspace__col workspace__col--right">
-          {/* Note, callback, disposition - task 19. */}
-          <div className="card workspace__pending">Note, callback and disposition go here.</div>
+          <ActionsPanel lead={lead} refresh={refresh} />
         </div>
       </div>
     </section>
