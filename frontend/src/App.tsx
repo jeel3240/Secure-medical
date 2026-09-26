@@ -10,6 +10,7 @@ import { ChangePasswordPage } from './pages/ChangePasswordPage';
 import { LoginPage } from './pages/LoginPage';
 import { PlaceholderPage } from './pages/PlaceholderPage';
 import { QueuePage } from './pages/QueuePage';
+import { WorkspacePage } from './pages/WorkspacePage';
 
 export function App() {
   const bootstrap = useAuth((s) => s.bootstrap);
@@ -31,6 +32,7 @@ export function App() {
           <Route element={<AppShell />}>
             <Route index element={<Navigate to="/queue" replace />} />
             <Route path="/queue" element={<QueuePage />} />
+            <Route path="/leads/:id" element={<WorkspacePage />} />
             <Route
               path="/callbacks"
               element={

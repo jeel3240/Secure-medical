@@ -1345,3 +1345,157 @@ a {
 .right {
   text-align: right;
 }
+
+/* ---------------------------------------------------------------------------
+   Agent workspace - DESIGN-PROMPT.md 3. Phase 3 tasks 17-20.
+   --------------------------------------------------------------------------- */
+
+.workspace__top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: var(--space-3);
+}
+
+.workspace__timeline-link {
+  font-size: var(--text-sm);
+}
+
+/* Three columns at 1280px and up - 30/40/30, per the brief. Below that they
+   stack: the card first, because it says who is on the phone. */
+.workspace__grid {
+  display: grid;
+  gap: var(--space-4);
+  grid-template-columns: 1fr;
+}
+
+@media (min-width: 1280px) {
+  .workspace__grid {
+    grid-template-columns: 30fr 40fr 30fr;
+    align-items: start;
+  }
+}
+
+.workspace__col {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  min-width: 0;
+}
+
+.workspace__pending {
+  padding: var(--space-5);
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+}
+
+.lead-card__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.lead-card__name {
+  margin: 0;
+  font-size: var(--text-2xl);
+  line-height: 1.2;
+}
+
+.lead-card__phone {
+  margin: var(--space-1) 0 0;
+  color: var(--color-text-muted);
+}
+
+.lead-card__score {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.lead-card__score-value {
+  font-size: var(--text-2xl);
+  font-weight: 700;
+}
+
+.lead-card__facts {
+  display: flex;
+  gap: var(--space-5);
+  margin: var(--space-4) 0 0;
+}
+
+.lead-card__facts dt {
+  font-size: var(--text-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--color-text-muted);
+}
+
+.lead-card__facts dd {
+  margin: 2px 0 0;
+  font-size: var(--text-md);
+}
+
+/* The three answer chips: what the lead actually said, at a glance. */
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin: var(--space-4) 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.chip {
+  display: flex;
+  flex-direction: column;
+  padding: 6px 10px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface-alt);
+}
+
+.chip--empty {
+  opacity: 0.6;
+}
+
+.chip__heading {
+  font-size: var(--text-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--color-text-muted);
+}
+
+.chip__answer {
+  font-size: var(--text-md);
+  font-weight: 600;
+}
+
+.lead-card__breakdown {
+  margin: var(--space-3) 0 0;
+  font-size: var(--text-xs);
+  color: var(--color-text-muted);
+  line-height: 1.6;
+}
+
+.lead-card__flags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin-top: var(--space-4);
+}
+
+.lead-card__flags:empty {
+  display: none;
+}
+
+.workspace__actions {
+  padding: var(--space-4);
+}
+
+.workspace__call-note {
+  margin: var(--space-2) 0 0;
+  font-size: var(--text-xs);
+  color: var(--color-text-muted);
+  text-align: center;
+}
