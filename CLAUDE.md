@@ -419,6 +419,24 @@ named beside it - read that first, not this line. §9's definition of done
 applies to each: works locally with fake data, tests, docs updated in the same
 commit.
 
+**Backend done, 2026-09-26.** Tasks 1-13 are built and merged as one PR into
+`dev` (branch `feat/phase3-workspace-backend`): the agent workspace endpoints,
+agent SMS with rule 2b, the three read-only admin screens and the deep health
+endpoint. Suite at 360 tests, plus eight `scripts/*-live-check.ts` files that
+prove the SQL against a real Postgres. Next: the frontend, tasks 14-25.
+
+Two things found while building, neither fixed inside its task, both needing
+Jeel:
+
+- **A disposition does not remove a lead from the queue.** `db/queue.ts` does
+  not read `dispositions` at all, so a lead dispositioned `not_interested`
+  stays in the queue at full score and the next agent picks it up again. Only
+  `dnc` removes one, and only through `dnc_list`. `AGENT-WORKSPACE.md`, "What
+  a disposition does not do".
+- **The deep health endpoint cannot be polled by external monitoring,** because
+  it is superadmin-only as `LOGGING.md` specified. If an uptime service is
+  wanted, it needs a separate unauthenticated route returning less.
+
 **Backend (`AGENT-WORKSPACE.md`, `ADMIN.md`, `LOGGING.md`)**
 
 | # | Task | Doc | Needs |
