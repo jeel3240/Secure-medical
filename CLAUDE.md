@@ -151,6 +151,12 @@ you change something the docs describe, update the doc in the same commit.
     src/api/auth/           sign-in, sessions, guards
     src/api/users/          superadmin account management
     src/api/admin/leads.ts  Admin > Leads query endpoint
+    src/api/admin/config.ts    Admin > Configuration, read-only
+    src/api/admin/overview.ts  Admin > Overview statistics
+    src/api/admin/dnc.ts       Admin > DNC list, read-only
+    src/db/admin-config.ts  live copy, scoring and tiers, with segment counts
+    src/db/admin-overview.ts  KPIs, funnel, per-agent table, activity feed
+    src/db/admin-dnc.ts     the DNC list, released rows included
     src/api/leads.ts        the agents' priority queue, and claim/release
     src/db/claims.ts        claiming and releasing a lead
     src/db/read-flag.ts     clears has_unread_inbound
@@ -171,6 +177,7 @@ you change something the docs describe, update the doc in the same commit.
     scripts/callbacks-live-check.ts  proves the tab windows against a real clock
     scripts/dispositions-live-check.ts  proves the DNC block and the queue effect
     scripts/agent-sms-live-check.ts  proves the take-over stops the questions
+    scripts/admin-live-check.ts  proves the three admin read models
     src/core/queue-tags.ts  which tag a queued lead gets
     src/db/queue.ts         the priority queue SQL
     scripts/queue-live-check.ts  proves that SQL against a real database
