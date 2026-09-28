@@ -1309,6 +1309,7 @@ a {
 
 .queue-card {
   overflow: hidden;
+  transition: opacity 120ms ease;
   background: var(--color-surface);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-lg);
@@ -2316,6 +2317,13 @@ a {
 .stats__sub {
   color: var(--color-text-subtle);
   font-size: var(--text-small);
+}
+
+/* A card whose numbers are being replaced - Overview's period switch. The old
+   ones stay, a step back, until the new ones land; nothing blanks.
+   `.queue-card` carries the transition. */
+.is-switching {
+  opacity: 0.55;
 }
 
 /* Agents beside System, then activity across the page. */

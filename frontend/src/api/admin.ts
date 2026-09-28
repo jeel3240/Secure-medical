@@ -46,16 +46,18 @@ export interface Overview {
   since: string;
   kpis: {
     leadsReceived: number;
+    /** Leads whose first reply came in the period. */
     responded: number;
-    respondedPct: number;
+    /** Leads whose third answer came in the period. */
     completed: number;
-    completedPct: number;
+    /** Leads closed in the period - leads, not presses. */
     closed: number;
   };
   agents: {
     agentId: number;
     name: string;
-    callbacksPending: number;
+    /** Open callbacks due now or overdue. */
+    callbacksDue: number;
     holding: number;
     closed: number;
     lastActiveAt: string | null;
@@ -114,7 +116,8 @@ export interface Health {
   checkedAt: string;
   checks: {
     name: string;
-    status: 'ok' | 'degraded';
+    /** `info` has no verdict - Incoming replies. Mirrors CheckStatus in db/health.ts. */
+    status: 'ok' | 'degraded' | 'info';
     message: string | null;
     detail: Record<string, unknown>;
   }[];

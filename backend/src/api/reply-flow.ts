@@ -99,10 +99,15 @@ async function saveConversation(client: PoolClient, id: number, c: Conversation)
   // expires_at is not touched here. It is the window the lead has to reply to a
   // message, so it moves only once that message has actually gone out - see
   // bumpExpiry, called after the send succeeds.
+  //
+  // completed_at is stamped the first time the conversation is saved as
+  // completed, and kept after - migration 004, for Admin > Overview's
+  // "Answered all 3".
   await client.query(
     `UPDATE conversations
      SET status = $2, step = $3, q1 = $4, q2 = $5, q3 = $6,
-         invalid_count = $7, score = $8, tier = $9, updated_at = now()
+         invalid_count = $7, score = $8, tier = $9, updated_at = now(),
+         completed_at = CASE WHEN $2 = 'completed' THEN COALESCE(completed_at, now()) ELSE completed_at END
      WHERE id = $1`,
     [id, c.status, c.step, c.q1, c.q2, c.q3, c.invalidCount, c.score, c.tier]
   );

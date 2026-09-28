@@ -62,9 +62,15 @@ Five checks, each with its own `status`, a `message` when it is degraded, and a
 |---|---|
 | `database` | `SELECT 1` fails. Nothing below runs; the response returns early rather than letting four more queries fail in turn |
 | `poller` | The last poll was over 6 minutes ago, or there has never been one |
-| `webhook` | Never. Reported for a human to read |
-| `expiry` | Never. Reports how many open conversations are past `expires_at` |
-| `sending` | `EZT_SEND_GROUP` is unset, which makes `sendMessage` refuse every send |
+| `webhook` | Never - its status is `info`, not `ok`: a quiet night is not a broken webhook, so it has no verdict. Reports the last reply's time for a human to read |
+| `expiry` | An open conversation is more than 10 minutes past its `expires_at`. The worker sweeps about once a minute, so that is several missed sweeps, not one slow one |
+| `sending` | `EZT_SEND_GROUP` is unset, which makes `sendMessage` refuse every send - **or** the newest send attempt of the last day was refused by EZ Texting. Reports the day's failures and the last successful send |
+
+*(2026-09-28, Jeel: "i want all real". Until then `webhook` and `expiry` always
+said `ok`, and `sending` said `ok` while EZ Texting refused every text, because
+it checked only the setting. `sending` can judge real sends now that a refused
+send is kept, marked failed - `db/failed-sends.ts`. `info` never makes the
+whole report degraded.)*
 
 **The poller's liveness is `settings.updated_at`, not the checkpoint's value.**
 The value is the newest contact's `createdAt`, so on a quiet account it stands

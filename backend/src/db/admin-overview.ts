@@ -37,7 +37,8 @@ const SINCE_SQL: Record<OverviewPeriod, string> = {
 export interface AgentRow {
   agentId: number;
   name: string;
-  callbacksPending: number;
+  /** Open callbacks due now or overdue - not ones booked for later. */
+  callbacksDue: number;
   /** Leads this agent holds right now, whatever the period. */
   holding: number;
   /** Leads this agent closed in the period - `closed`, and the retired values that meant the same. */
@@ -60,19 +61,16 @@ export interface Overview {
   since: string;
   kpis: {
     leadsReceived: number;
+    /** Leads whose first reply came in the period. */
     responded: number;
-    respondedPct: number;
+    /** Leads whose third answer came in the period - `completed_at`. */
     completed: number;
-    completedPct: number;
     /** Closed in the period - `closed`, and the retired values that meant the same. */
     closed: number;
   };
   agents: AgentRow[];
   activity: ActivityEntry[];
 }
-
-/** Percentage of a base, rounded, and 0 rather than NaN when the base is 0. */
-const pct = (n: number, base: number): number => (base > 0 ? Math.round((n / base) * 100) : 0);
 
 export async function getOverview(period: OverviewPeriod): Promise<Overview> {
   const since = SINCE_SQL[period];
@@ -87,21 +85,33 @@ export async function getOverview(period: OverviewPeriod): Promise<Overview> {
   const closing = CLOSING_DISPOSITIONS.map((v) => `'${v.replace(/[^a-z_]/g, '')}'`).join(', ');
 
   const [leadRows, agentRows, activityRows] = await Promise.all([
+    // Every total counts things that *happened* in the period - Jeel,
+    // 2026-09-28, "i want all real". Until then Replied and Answered all 3
+    // counted leads that *arrived* in the period, so a lead who arrived
+    // yesterday and answered today counted under yesterday, and Closed counted
+    // presses of the button, so a lead closed twice counted twice.
     pool.query(`
       SELECT
-        count(*)::int AS leads_received,
-        count(*) FILTER (WHERE c.score > 0)::int AS responded,
-        count(*) FILTER (WHERE c.status = 'completed')::int AS completed,
+        (SELECT count(*)::int FROM leads l WHERE ${received} >= ${since}) AS leads_received,
+        -- A lead's first reply ever. A lead writing again weeks later has
+        -- already replied, and is not counted a second time.
         (
-          SELECT count(*)::int FROM dispositions d
-          WHERE d.value IN (${closing}) AND d.created_at >= ${since}
+          SELECT count(*)::int FROM (
+            SELECT min(COALESCE(received_at, created_at)) AS first_reply
+            FROM messages WHERE direction = 'inbound'
+            GROUP BY lead_id
+          ) r WHERE r.first_reply >= ${since}
+        ) AS responded,
+        -- completed_at, migration 004: when the third answer arrived.
+        (
+          SELECT count(DISTINCT lead_id)::int FROM conversations
+          WHERE completed_at >= ${since}
+        ) AS completed,
+        -- Leads, not presses.
+        (
+          SELECT count(DISTINCT lead_id)::int FROM dispositions
+          WHERE value IN (${closing}) AND created_at >= ${since}
         ) AS closed
-      FROM leads l
-      LEFT JOIN LATERAL (
-        SELECT status, score, tier FROM conversations
-        WHERE lead_id = l.id ORDER BY created_at DESC, id DESC LIMIT 1
-      ) c ON true
-      WHERE ${received} >= ${since}
     `),
 
     pool.query(`
@@ -109,13 +119,15 @@ export async function getOverview(period: OverviewPeriod): Promise<Overview> {
         u.id AS agent_id,
         u.name,
         (
-          SELECT count(*)::int FROM dispositions d
+          SELECT count(DISTINCT d.lead_id)::int FROM dispositions d
           WHERE d.agent_id = u.id AND d.value IN (${closing}) AND d.created_at >= ${since}
         ) AS closed,
+        -- Due now or overdue - not next week's. Open ones booked for later
+        -- are not yet anything to act on.
         (
           SELECT count(*)::int FROM callbacks cb
-          WHERE cb.agent_id = u.id AND cb.done_at IS NULL
-        ) AS callbacks_pending,
+          WHERE cb.agent_id = u.id AND cb.done_at IS NULL AND cb.scheduled_at <= now()
+        ) AS callbacks_due,
         (SELECT count(*)::int FROM leads hl WHERE hl.assigned_to = u.id) AS holding,
         (
           SELECT max(at) FROM (
@@ -183,15 +195,13 @@ export async function getOverview(period: OverviewPeriod): Promise<Overview> {
     kpis: {
       leadsReceived: leads.leads_received,
       responded: leads.responded,
-      respondedPct: pct(leads.responded, leads.leads_received),
       completed: leads.completed,
-      completedPct: pct(leads.completed, leads.leads_received),
       closed: leads.closed,
     },
     agents: agentRows.rows.map((r) => ({
       agentId: r.agent_id,
       name: r.name,
-      callbacksPending: r.callbacks_pending,
+      callbacksDue: r.callbacks_due,
       holding: r.holding,
       closed: r.closed,
       lastActiveAt: r.last_active_at?.toISOString() ?? null,

@@ -202,6 +202,17 @@ one it had, so the queue tabs, Admin > Leads and expiry are all unaffected.
 Opt-out is checked before it and is unaffected either way. Added in `003`; the
 column is unused until the agent SMS endpoint exists (Phase 3 task 9).
 
+**`conversations.completed_at`** - migration `004`, 2026-09-28 - is when the
+lead's third answer arrived. `api/reply-flow.ts` stamps it the first time the
+conversation is saved as `completed` and keeps it on later saves; NULL
+otherwise. Admin > Overview counts "Answered all 3" by it: without it the page
+could only count leads that *arrived* in a period and had completed since.
+
+The migration fills it in for conversations already completed, from the time the
+thanks message went out - sent the instant a conversation completes - falling
+back to `updated_at` when the thanks failed to send. Checked on local data: all
+five completed conversations took their thanks message's time exactly.
+
 ## Seeded data
 
 The seeded message copy is the mockup's wording, page 2: the opener carries the
