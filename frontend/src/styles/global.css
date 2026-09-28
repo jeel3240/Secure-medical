@@ -1146,63 +1146,11 @@ a {
 
 /* ---------------------------------------------------------------- Leads */
 
-.leads__tabs {
-  display: flex;
-  flex-wrap: wrap;
-  column-gap: 0;
-  border-bottom: 1px solid var(--color-border);
-  margin-bottom: var(--space-4);
-}
-
 /* Received and Last activity: when things happened, a step quieter than the
    lead and its status. */
 .leads__when {
   color: var(--color-text-muted);
   white-space: nowrap;
-}
-
-.leads__tab {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-1);
-  /* Nine tabs since Working and Closed were added - 2026-09-28. Tighter
-     sides keep them on one line down to a 1280px screen. */
-  padding: var(--space-3) var(--space-2);
-  border: 0;
-  border-bottom: 2px solid transparent;
-  background: none;
-  color: var(--color-text-muted);
-  font: inherit;
-  font-weight: var(--weight-regular);
-  cursor: pointer;
-  margin-bottom: -1px;
-}
-
-.leads__tab:hover {
-  color: var(--color-text);
-}
-
-.leads__tab--active {
-  color: var(--color-text);
-  /* The brand navy, as on the header and the Segmented thumb - never the link
-     blue. Jeel, 2026-09-28. */
-  border-bottom-color: var(--color-primary);
-}
-
-.leads__tab-count {
-  min-width: 1.5rem;
-  padding: 0 var(--space-2);
-  border-radius: 999px;
-  background: var(--color-surface-muted);
-  color: var(--color-text-subtle);
-  font-size: var(--text-small);
-  font-variant-numeric: tabular-nums;
-  text-align: center;
-}
-
-.leads__tab--active .leads__tab-count {
-  background: var(--color-primary);
-  color: var(--color-on-primary);
 }
 
 .leads__filters {
@@ -2093,16 +2041,17 @@ a {
   color: var(--color-text-muted);
 }
 
-/* My Callbacks - DESIGN-PROMPT.md 5. Phase 3 task 22. */
-.callbacks__row--overdue {
-  background: var(--color-danger-soft);
+/* My Callbacks - DESIGN-PROMPT.md 5, rebuilt 2026-09-28 in the other pages'
+   style: an overdue callback says so in amber under its time, not with a red
+   row. */
+.callbacks__due {
+  white-space: nowrap;
 }
 
-.callbacks__late {
-  display: block;
+.callbacks__flag {
+  display: flex;
+  margin-top: 2px;
   font-size: var(--text-small);
-  font-weight: var(--weight-semibold);
-  color: var(--color-danger);
 }
 
 .callbacks__note {
@@ -2111,10 +2060,12 @@ a {
   text-overflow: ellipsis;
   white-space: nowrap;
   color: var(--color-text-muted);
-  font-size: var(--text-body);
 }
 
-.callbacks__actions,
+.callbacks__actions {
+  width: 1%;
+}
+
 .callbacks__reschedule {
   display: flex;
   gap: var(--space-2);
@@ -2122,11 +2073,20 @@ a {
   align-items: center;
 }
 
-/* The overdue count is the one an agent has to act on, so it is the only tab
-   count that shouts. */
-.leads__tab-count--alert {
-  background: var(--color-danger);
-  color: #fff;
+/* A labelled control in a card's toolbar - My Callbacks' Agent picker. */
+.toolbar-field {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.toolbar-field__label {
+  color: var(--color-text-muted);
+  font-size: var(--text-small);
+}
+
+.toolbar-end {
+  margin-left: auto;
 }
 
 /* ---------------------------------------------------------------------------

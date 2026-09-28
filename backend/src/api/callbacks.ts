@@ -52,15 +52,17 @@ export function callbacksRouter(deps: AppDeps): Router {
       // eslint-disable-next-line @typescript-eslint/no-var-requires
       const db = require('../db/callbacks') as typeof import('../db/callbacks');
 
-      // An agent sees only their own. A superadmin may ask for another's -
-      // DESIGN-PROMPT.md 5 gives them an Agent filter - and defaults to
-      // their own, which keeps the screen the same for both roles.
+      // An agent sees only their own. A superadmin may ask for another's, or
+      // for everyone's with `agentId=all` - DESIGN-PROMPT.md 5 gives them an
+      // Agent filter - and defaults to their own, which keeps the screen the
+      // same for both roles.
       const asked = req.query.agentId;
       if (asked !== undefined && req.user!.role !== 'superadmin') {
         throw new HttpError(403, 'forbidden', "Only a superadmin can view another agent's callbacks.");
       }
 
-      const agentId = asked === undefined ? req.user!.id : parseId(String(asked), 'agentId');
+      const agentId: number | 'all' =
+        asked === undefined ? req.user!.id : asked === 'all' ? 'all' : parseId(String(asked), 'agentId');
 
       res.json(await db.listCallbacks({ agentId, when: parseWhen(req.query.when) }));
     })
