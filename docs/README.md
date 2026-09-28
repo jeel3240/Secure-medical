@@ -148,9 +148,9 @@ own number to the test group, as "Sending" above describes.
 Things that are true today and will surprise someone who assumes otherwise.
 
 **Calling is not built.** Twilio is Phase 4. The Call button is visible and
-disabled, call entries render on the timeline, and every call figure on Admin >
-Overview is structurally zero - `callsBuilt: false` in the API says so. Nothing
-writes the `calls` table.
+disabled and call entries render on the timeline, but nothing writes the
+`calls` table, and Admin > Overview shows no call figures at all - they were
+removed on 2026-09-28 rather than shown as zeros (`ADMIN.md`, "Overview").
 
 **The message copy is the mockup's placeholder.** It has never been approved for
 real leads. Nothing has been sent to anyone outside the test group, and the
@@ -161,10 +161,17 @@ a lead the partner delivers twice never starts a second conversation. Whether a
 re-delivery is even detectable is unverified - CLAUDE.md §10, "Future: repeat
 leads", has the one API call that settles it.
 
-**A disposition does not remove a lead from the queue,** except `dnc`. A lead
-marked `not_interested` stays queued at its score and the next agent picks it up
-again. `AGENT-WORKSPACE.md`, "What a disposition does not do" - a decision for
-Jeel rather than a bug.
+**"Today" is the server's day, in UTC.** My Callbacks' Today tab and the
+Overview's Today count from midnight UTC, not the viewer's midnight. For a call
+center on US time, "today" ends in the afternoon: a callback due at 9 PM Pacific
+shows under Upcoming, not Today. Waiting on a decision - each viewer's time zone,
+or one fixed call-center zone.
+
+**A first question more than a day late is not sent.** If a lead's opener
+fails and still has not gone out 24 hours after they arrived, it is never sent
+- a first question days late reads as broken. The lead shows a red "!" on its
+failed message, and an agent can text by hand. `POLLER.md`, "Retrying a failed
+opener".
 
 **The deep health endpoint needs a session.** It is superadmin-only, as
 `LOGGING.md` specified, so an uptime service cannot poll it. `GET /api/health`

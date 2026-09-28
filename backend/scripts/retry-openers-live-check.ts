@@ -64,11 +64,13 @@ async function refuseIfNotEmpty(): Promise<void> {
 
 /**
  * A lead whose opener failed: conversation open, no expiry, and one failed
- * message row per attempt already made.
+ * message row per attempt already made. The failures are stamped when the
+ * lead arrived unless `lastFailedMinutesAgo` says otherwise - the wait before
+ * the next retry counts from the last one.
  */
 async function leadWithFailedOpener(
   phone: string,
-  opts: { minutesAgo: number; attempts?: number }
+  opts: { minutesAgo: number; attempts?: number; lastFailedMinutesAgo?: number }
 ): Promise<number> {
   const { rows } = await pool.query(
     `INSERT INTO leads (phone, first_name, source, ezt_added_at)
@@ -82,11 +84,12 @@ async function leadWithFailedOpener(
     [id]
   );
 
+  const failedAgo = String(opts.lastFailedMinutesAgo ?? opts.minutesAgo);
   for (let i = 0; i < (opts.attempts ?? 1); i++) {
     await pool.query(
-      `INSERT INTO messages (lead_id, direction, body, delivery_status)
-       VALUES ($1, 'outbound', 'opener that failed', 'failed')`,
-      [id]
+      `INSERT INTO messages (lead_id, direction, body, delivery_status, created_at)
+       VALUES ($1, 'outbound', 'opener that failed', 'failed', now() - ($2 || ' minutes')::interval)`,
+      [id, failedAgo]
     );
   }
   return id;
@@ -111,7 +114,7 @@ async function main(): Promise<void> {
   console.log('\na lead whose opener failed, now due');
   {
     sent = [];
-    // 10 minutes old, one attempt made: due at 5 minutes.
+    // Failed on arrival 10 minutes ago: the first retry is due 5 minutes after.
     const lead = await leadWithFailedOpener('+15550000901', { minutesAgo: 10, attempts: 1 });
 
     const stats = await retryFailedOpeners();
@@ -135,7 +138,7 @@ async function main(): Promise<void> {
   console.log('\nthe backoff');
   {
     sent = [];
-    // 2 minutes old with one attempt: the second attempt is not due until 5.
+    // Failed 2 minutes ago: the first retry is not due until 5.
     const early = await leadWithFailedOpener('+15550000902', { minutesAgo: 2, attempts: 1 });
     const stats = await retryFailedOpeners();
 
@@ -143,13 +146,50 @@ async function main(): Promise<void> {
     check('and nothing is sent to it', sent.length, 0);
     check('its opener is still missing', await outboundCount(early), 0);
 
-    // Age it past the 5-minute mark and it becomes due.
+    // Move that failure past the 5-minute mark and it becomes due.
     await pool.query(
-      `UPDATE leads SET ezt_added_at = now() - interval '6 minutes' WHERE id = $1`,
+      `UPDATE messages SET created_at = now() - interval '6 minutes' WHERE lead_id = $1`,
       [early]
     );
     const after = await retryFailedOpeners();
     check('past the wait it is sent', after.sent, 1);
+  }
+
+  console.log('\nthe wait counts from the last failure, not from arrival');
+  {
+    sent = [];
+    // Arrived 10 hours ago - older than the whole schedule - with two failures,
+    // the last a minute ago. Counted from arrival every wait has "passed", and
+    // it used to be retried on every tick: four retries in four minutes. From
+    // the last failure it is due in 30 minutes. Found in review, 2026-09-28.
+    const recent = await leadWithFailedOpener('+15550000910', {
+      minutesAgo: 600,
+      attempts: 2,
+      lastFailedMinutesAgo: 1,
+    });
+    const stats = await retryFailedOpeners();
+    check('a failure a minute ago is not retried yet', stats.due, 0);
+    check('and nothing is sent', sent.length, 0);
+
+    await pool.query(
+      `UPDATE messages SET created_at = now() - interval '31 minutes' WHERE lead_id = $1`,
+      [recent]
+    );
+    check('31 minutes later it is', (await retryFailedOpeners()).sent, 1);
+  }
+
+  console.log('\ntoo old for a first question');
+  {
+    sent = [];
+    // Arrived 30 hours ago; its opener never went out and was never retried -
+    // the worker was down, or it predates this code. "You asked about health &
+    // wellness" a day and a half later reads as broken. Found in review,
+    // 2026-09-28: without the cap the first deploy would text every such lead.
+    const stale = await leadWithFailedOpener('+15550000911', { minutesAgo: 30 * 60, attempts: 1 });
+    const stats = await retryFailedOpeners();
+    check('is counted as too old', stats.tooOld, 1);
+    check('and is not texted', sent.length, 0);
+    check('no opener is recorded', await outboundCount(stale), 0);
   }
 
   console.log('\ngiving up');
@@ -159,6 +199,7 @@ async function main(): Promise<void> {
     const done = await leadWithFailedOpener('+15550000903', { minutesAgo: 1000, attempts: 5 });
     const stats = await retryFailedOpeners();
 
+    // Exactly 1: the too-old lead above is counted apart, as tooOld.
     check('is abandoned, not retried', stats.abandoned, 1);
     check('nothing is sent', sent.length, 0);
     check('and no opener is recorded', await outboundCount(done), 0);
@@ -236,11 +277,11 @@ async function main(): Promise<void> {
     check('the longest-waiting lead is contacted first', first, '15550000907');
     check('older got an opener', await outboundCount(older), 1);
     check('newer got an opener', await outboundCount(newer), 1);
-    // Not an exact count of `sent`: the lead from the failed-send section
-    // above has reached its next backoff step and is legitimately due in this
-    // same pass. Asserting 2 made this check fail for the right reason.
-    check('both of these two were sent', sent.filter((s) =>
-      ['15550000907', '15550000908'].includes(s.to[0])).length, 2);
+    // Exactly these two. The lead from the failed-send section above failed a
+    // moment ago, so its next retry is 30 minutes off. Until the review fix it
+    // was retried here too - counted from arrival, its wait had "passed" - and
+    // this check asserted that as correct.
+    check('exactly these two were sent', sent.map((s) => s.to[0]).sort(), ['15550000907', '15550000908']);
   }
 
   console.log(failures === 0 ? '\nall checks passed' : `\n${failures} check(s) FAILED`);

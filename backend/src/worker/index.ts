@@ -54,12 +54,17 @@ async function loop(): Promise<void> {
     // system - paid for, in the database, and silent.
     try {
       const retry = await retryFailedOpeners();
-      if (retry.due > 0 || retry.abandoned > 0) {
+      // Only when something was due. A lead past its last attempt or its age
+      // limit stays a candidate until its conversation expires - up to seven
+      // days - and logging it every minute would bury real events. The moment
+      // of giving up is logged once, as opener.gave_up, by the retry itself.
+      if (retry.due > 0) {
         log.info('opener.retry', {
           due: retry.due,
           sent: retry.sent,
           failed: retry.failed,
           abandoned: retry.abandoned,
+          tooOld: retry.tooOld,
           ms: retry.durationMs,
         });
       }

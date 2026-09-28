@@ -85,6 +85,8 @@ firing a real webhook: the number appears nowhere in the output.
 | `conversation.advanced` | `api/webhooks.ts` |
 | `dnc.blocked`, `dnc.released` | `api/webhooks.ts` |
 | `http.unhandled` | `api/http.ts` |
+| `opener.retry`, `opener.retry_failed` | `worker/index.ts` - one line per pass that had something due, with `due`, `sent`, `failed`, `abandoned`, `tooOld` |
+| `opener.gave_up` | `worker/retry-openers.ts` - once, at the failed attempt that reaches the limit. A warning: that lead will never get its first question |
 
 A new event belongs in this table as well as in the code, or whoever is querying
 the logs will never know to look for it.

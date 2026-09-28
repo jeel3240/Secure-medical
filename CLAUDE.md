@@ -470,6 +470,13 @@ Task 29 found nothing to fix in the app: all three bugs the end-to-end script
 surfaced were in the script itself. Two apparent failures were the app being
 right and the script being out of date with Jeel's changes.
 
+*(2026-09-28, in review before merging: the retry of task 27 had two faults its
+own check did not catch, both fixed on the branch. Its waits counted from the
+lead's arrival, so an older lead's four retries fired in four minutes; and
+nothing stopped a first question going out days late. The README also still
+described two things changed the same day. `POLLER.md`, "Retrying a failed
+opener".)*
+
 Two things found while building, neither fixed inside its task, both needing
 Jeel:
 

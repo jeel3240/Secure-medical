@@ -153,23 +153,40 @@ and no successful outbound message never had one go out. No new column was
 needed. The attempt count comes from the failed message rows
 `recordFailedSend` already writes, so it survives a restart.
 
-**The backoff,** measured from when the lead arrived:
+**The backoff,** each wait counted from the *last failed attempt*:
 
-| Attempt | After |
+| Attempt | When |
 |---|---|
-| 1 | 1 minute |
-| 2 | 5 minutes |
-| 3 | 30 minutes |
-| 4 | 2 hours |
-| 5 | 6 hours |
+| 1 | The poller's own, as the lead arrives |
+| 2 | 5 minutes after attempt 1 failed |
+| 3 | 30 minutes after attempt 2 failed |
+| 4 | 2 hours after attempt 3 failed |
+| 5 | 6 hours after attempt 4 failed |
 
-Then it stops. EZ Texting being down is usually minutes, not seconds, and a
+Then it stops, and logs `opener.gave_up` once. If attempt 1 never happened at
+all - no failed row, e.g. `question_1` was missing - the first retry is a
+minute after the lead arrived.
+
+**Changed in review, 2026-09-28 - two faults found by testing, not reading:**
+
+- **The waits counted from when the lead arrived.** For a lead already older
+  than its schedule every wait had "passed", so all four retries fired on four
+  consecutive ticks - four minutes - and a short outage burned them all. The
+  branch's own check asserted the extra retry as correct. Every failed attempt
+  is a message row with a `created_at` set by the database, so the wait now
+  counts from the newest one.
+- **Nothing stopped a late first question.** A lead whose opener failed three
+  days ago was texted as soon as EZ Texting answered - and on the first deploy,
+  every lead whose opener never went out would have been, however old. A lead
+  more than **24 hours** old is now never sent a first question (`tooOld` in
+  the pass's stats). The full schedule finishes about nine hours after the first
+  failure, so the cap only ever catches a lead that was never retried. EZ Texting being down is usually minutes, not seconds, and a
 lead whose opener is an hour late is still worth having - but past the last
 attempt the failure is not transient, and an endless queue of doomed sends would
 bury a real outage in noise. The lead keeps its failed rows, so an agent opening
 it sees the red "!" and can text by hand.
 
-**Two things it must never do,** both proved by
+**Three things it must never do,** all proved by
 `scripts/retry-openers-live-check.ts` against a real database:
 
 - **Text a blocked number.** A live `dnc_list` row excludes the lead from the
@@ -178,6 +195,8 @@ it sees the red "!" and can text by hand.
 - **Send a second opener.** A lead whose opener succeeded has `expires_at` set
   and a non-failed outbound row, so it is never picked up. Texting a lead twice
   is worse than not retrying at all.
+- **Send a first question days late.** A lead more than 24 hours old is left
+  alone - see "Changed in review" above.
 
 Oldest lead first: they have been silent the longest.
 
