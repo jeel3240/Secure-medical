@@ -190,11 +190,15 @@ you change something the docs describe, update the doc in the same commit.
     src/core/answers.ts     matches a reply to an option, pure
     src/api/reply-flow.ts   runs the state machine for an inbound reply
     src/worker/expiry.ts    marks stale open conversations expired
+    src/worker/retry-openers.ts  retries openers that never went out
+    scripts/retry-openers-live-check.ts  proves the backoff and the two must-nots
+    scripts/end-to-end.ts   the whole system in one run - npm run e2e
     src/db/leads.ts         Admin > Leads SQL
     src/db/lead-state.ts    closed and worked, shared by the queue and Admin > Leads
     src/db/holder.ts        who holds a lead - checked before every write on it
     src/db/failed-sends.ts  keeps a message EZ Texting refused, marked failed
     scripts/admin-leads-live-check.ts  proves the Admin > Leads statuses
+    src/lib/log.ts          structured JSON logging, with redaction enforced
     src/cli/                create-superadmin
     src/integrations/       EZ Texting client
     src/db/users.ts         user queries; src/db/pool.ts
@@ -397,7 +401,7 @@ onto them:
 |---|---|---|
 | 1 | Week 1 | Done |
 | 2 | Week 2 | Done, approved 2026-09-23 |
-| 3 | Week 3 **and all of Week 4 except Twilio** | Next |
+| 3 | Week 3 **and all of Week 4 except Twilio** | Done 2026-09-28, merged into `main` |
 | 4 | Week 4 items 1-4, Twilio calling | After Phase 3 |
 
 **Phase 3 is everything that is left except calling.** That means the Week 3
@@ -454,8 +458,37 @@ prove the SQL against a real Postgres.
 polling hook, the priority queue with the one-agent lock, the agent workspace
 (card, timeline, actions, SMS compose), the lead timeline page, My Callbacks,
 and the three admin pages. `docs/FRONTEND.md` is the record of what was built
-and why. The frontend gains its first test setup - Vitest, jsdom, 69 tests
-covering logic rather than buttons. Next: operations, tasks 26-30.
+and why. The frontend gains its first test setup - Vitest, jsdom, tests
+covering logic rather than buttons.
+
+**Operations done, 2026-09-28.** Tasks 26-30, on `feat/phase3-operations`:
+structured JSON logging with redaction enforced in the logger, the failed-opener
+retry, the end-to-end script, and a README with how to test and known limits.
+**Phase 3 is complete.** Next is Phase 4, Twilio calling.
+
+**Open when Phase 3 closed, 2026-09-28** - each written up where it lives:
+
+- **"Today" is UTC.** My Callbacks' Today tab and the Overview's Today count
+  from midnight UTC, so for a US call center "today" ends in the afternoon.
+  Needs a decision: each viewer's time zone, or one fixed call-center zone.
+  `README.md`, "Known limits".
+- **Force-release has no screen.** The API lets a superadmin release anyone's
+  claim; nothing on screen offers it. `FRONTEND.md`, "Not built".
+- **Source always reads "API" in production** - it is how the contact was
+  added to EZ Texting, not which partner sent it. Keep the column, or find the
+  partner elsewhere.
+- **Deploy:** `npm run migrate` applies 002, 003 and 004 on the server.
+
+Task 29 found nothing to fix in the app: all three bugs the end-to-end script
+surfaced were in the script itself. Two apparent failures were the app being
+right and the script being out of date with Jeel's changes.
+
+*(2026-09-28, in review before merging: the retry of task 27 had two faults its
+own check did not catch, both fixed on the branch. Its waits counted from the
+lead's arrival, so an older lead's four retries fired in four minutes; and
+nothing stopped a first question going out days late. The README also still
+described two things changed the same day. `POLLER.md`, "Retrying a failed
+opener".)*
 
 Two things found while building, neither fixed inside its task, both needing
 Jeel:
@@ -469,7 +502,8 @@ Jeel:
   `AGENT-WORKSPACE.md`, "Dispositions"; `ADMIN-LEADS.md`.)*
 - **The deep health endpoint cannot be polled by external monitoring,** because
   it is superadmin-only as `LOGGING.md` specified. If an uptime service is
-  wanted, it needs a separate unauthenticated route returning less.
+  wanted, it needs a separate unauthenticated route returning less. *(Still
+  open, 2026-09-28 - `README.md`, "Known limits".)*
 
 **Backend (`AGENT-WORKSPACE.md`, `ADMIN.md`, `LOGGING.md`)**
 

@@ -10,6 +10,7 @@ import {
   sendMessage,
   toE164,
 } from '../integrations/ezt-client';
+import { errText, log } from '../lib/log';
 
 const CHECKPOINT_KEY = 'ezt_poll_checkpoint';
 const PAGE_SIZE = 50;
@@ -181,7 +182,7 @@ async function sendOpener(leadId: number, phone: string, firstName: string | nul
   try {
     const template = await readSetting('question_1');
     if (!template) {
-      console.error('no question_1 in settings, opener not sent');
+      log.error('sms.no_template', { leadId, key: 'question_1' });
       return false;
     }
 
@@ -190,7 +191,7 @@ async function sendOpener(leadId: number, phone: string, firstName: string | nul
     const { text, nameDropped } = renderMessage(template, firstName);
     rendered = text;
     if (nameDropped) {
-      console.log(`opener for lead ${leadId}: name dropped to stay within one segment`);
+      log.info('sms.name_dropped', { leadId, key: 'question_1' });
     }
 
     const result = await sendMessage([phone], text);
@@ -212,13 +213,10 @@ async function sendOpener(leadId: number, phone: string, firstName: string | nul
       [leadId, days ?? '7']
     );
 
-    console.log(`opener sent to lead ${leadId}, ezt id ${result.id}`);
+    log.info('sms.sent', { leadId, key: 'question_1', eztMessageId: result.id });
     return true;
   } catch (err) {
-    const detail =
-      (err as { response?: { data?: unknown } })?.response?.data ??
-      (err instanceof Error ? err.message : err);
-    console.error(`opener failed for lead ${leadId}:`, JSON.stringify(detail));
+    log.error('sms.failed', { leadId, key: 'question_1', err: errText(err) });
     // A blocked number was never attempted, so there is no failed send to keep.
     if (rendered && !isBlocked(err)) await recordFailedSend(leadId, rendered);
     return false;

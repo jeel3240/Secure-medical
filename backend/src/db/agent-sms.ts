@@ -11,6 +11,7 @@
 
 import { pool } from './pool';
 import { SEGMENT_LIMIT } from '../core/messages';
+import { errText, log } from '../lib/log';
 
 export interface AgentMessage {
   id: number;
@@ -77,7 +78,7 @@ export async function sendAgentSms(
     const detail =
       (err as { response?: { data?: unknown } })?.response?.data ??
       (err instanceof Error ? err.message : String(err));
-    console.error(`agent sms to lead ${leadId} failed:`, JSON.stringify(detail));
+    log.error('sms.failed', { leadId, agentSms: true, err: errText(err) });
     // Kept as a failed message so the thread shows it with a red "!", the way
     // a phone does. It sets no take-over: nothing reached the lead.
     // eslint-disable-next-line @typescript-eslint/no-var-requires

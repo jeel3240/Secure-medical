@@ -65,7 +65,7 @@ errors. The lead is already committed by then, so throwing would abandon the
 rest of the page and leave the checkpoint behind, re-polling every later contact
 because one send failed. The refused opener is kept as a failed message
 (`db/failed-sends.ts`), so the lead's thread shows it with a red "!", and
-`openers` in the tick log will be lower than `inserted`. *(Until 2026-09-28 it
+`openers` in the `poll.tick` line will be lower than `inserted`. *(Until 2026-09-28 it
 was not kept, and a lead with no opener showed only as a conversation with no
 outbound message.)*
 
@@ -111,8 +111,11 @@ second line of defence for a contact that arrives with the flag anyway.
 ## Reading the log
 
 ```
-poll tick fetched=3 inserted=1 skipped=1 suppressed=0 openers=1 ms=352
+{"ts":"2026-09-28T23:50:24.426Z","level":"info","event":"poll.tick","svc":"worker","fetched":3,"inserted":1,"skipped":1,"suppressed":0,"openers":1,"ms":352}
 ```
+
+One JSON line per poll, event `poll.tick` - structured since 2026-09-28,
+`LOGGING.md`. The fields:
 
 | | |
 |---|---|
@@ -135,6 +138,81 @@ steady state `inserted=0` with a small `skipped` is normal and correct.
 | `EZT_SEND_GROUP` | Unset means `sendMessage` throws, so no opener goes out. |
 | `poll_interval_seconds` | In `settings`, read each tick, so it changes without a restart. |
 | `poll_overlap_minutes` | In `settings`. |
+
+## Retrying a failed opener
+
+Built 2026-09-28, Phase 3 task 27 - `worker/retry-openers.ts`, run from the
+worker loop beside the poll and the expiry sweep.
+
+**The problem it solves.** When EZ Texting refuses or is unreachable, the poller
+records the failure and moves on. Before this, nothing ever tried again: the
+lead sat in the database, scored nothing, and was never contacted. That is the
+worst failure in the system - a lead the client paid for, silent, with nothing
+on any screen to say so.
+
+**How a failed opener is recognised.** The poller sets `expires_at` only once
+the opener is accepted, so a conversation still `open` with `expires_at IS NULL`
+and no successful outbound message never had one go out. No new column was
+needed. The attempt count comes from the failed message rows
+`recordFailedSend` already writes, so it survives a restart.
+
+**The backoff,** each wait counted from the *last failed attempt*:
+
+| Attempt | When |
+|---|---|
+| 1 | The poller's own, as the lead arrives |
+| 2 | 5 minutes after attempt 1 failed |
+| 3 | 30 minutes after attempt 2 failed |
+| 4 | 2 hours after attempt 3 failed |
+| 5 | 6 hours after attempt 4 failed |
+
+Then it stops, and logs `opener.gave_up` once. If attempt 1 never happened at
+all - no failed row, e.g. `question_1` was missing - the first retry is a
+minute after the lead arrived.
+
+**Changed in review, 2026-09-28 - two faults found by testing, not reading:**
+
+- **The waits counted from when the lead arrived.** For a lead already older
+  than its schedule every wait had "passed", so all four retries fired on four
+  consecutive ticks - four minutes - and a short outage burned them all. The
+  branch's own check asserted the extra retry as correct. Every failed attempt
+  is a message row with a `created_at` set by the database, so the wait now
+  counts from the newest one.
+- **Nothing stopped a late first question.** A lead whose opener failed three
+  days ago was texted as soon as EZ Texting answered - and on the first deploy,
+  every lead whose opener never went out would have been, however old. A lead
+  more than **24 hours** old is now never sent a first question (`tooOld` in
+  the pass's stats). The full schedule finishes about nine hours after the first
+  failure, so the cap only ever catches a lead that was never retried. EZ Texting being down is usually minutes, not seconds, and a
+lead whose opener is an hour late is still worth having - but past the last
+attempt the failure is not transient, and an endless queue of doomed sends would
+bury a real outage in noise. The lead keeps its failed rows, so an agent opening
+it sees the red "!" and can text by hand.
+
+**Three things it must never do,** all proved by
+`scripts/retry-openers-live-check.ts` against a real database:
+
+- **Text a blocked number.** A live `dnc_list` row excludes the lead from the
+  query, and `sendMessage` checks again anyway. A retry loop is exactly where a
+  forgotten opt-out check would text someone who said STOP.
+- **Send a second opener.** A lead whose opener succeeded has `expires_at` set
+  and a non-failed outbound row, so it is never picked up. Texting a lead twice
+  is worse than not retrying at all.
+- **Send a first question days late.** A lead more than 24 hours old is left
+  alone - see "Changed in review" above.
+
+Oldest lead first: they have been silent the longest.
+
+## The other two failures in task 27
+
+**EZ Texting unreachable mid-poll** was already safe and stays as it is: the
+checkpoint advances only when the whole cycle succeeds, so a throw leaves it
+untouched and the next tick re-covers the same ground. Nothing is lost; the
+leads simply arrive a minute later.
+
+**Duplicate webhooks** were already handled - `WEBHOOKS.md`. EZ Texting retries,
+and the `(from_number, received_at)` unique index with `ON CONFLICT DO NOTHING`
+makes the second delivery a no-op that still answers 200, so the retries stop.
 
 ## Not done yet
 

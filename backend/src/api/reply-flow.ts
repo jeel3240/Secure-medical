@@ -17,6 +17,7 @@ import {
   type Rules,
   type StepResult,
 } from '../core/state-machine';
+import { errText, log } from '../lib/log';
 
 export interface ConversationRow extends Conversation {
   id: number;
@@ -217,14 +218,14 @@ async function sendFlowMessage(
     const { rows } = await pool.query(`SELECT value FROM settings WHERE key = $1`, [key]);
     const template: string | undefined = rows[0]?.value;
     if (!template) {
-      console.error(`no ${key} in settings, nothing sent to lead ${leadId}`);
+      log.error('sms.no_template', { leadId, key });
       return null;
     }
 
     const { text, nameDropped } = renderMessage(template, firstName);
     rendered = text;
     if (nameDropped) {
-      console.log(`${key} for lead ${leadId}: name dropped to stay within one segment`);
+      log.info('sms.name_dropped', { leadId, key });
     }
 
     const sent = await ezt.sendMessage([phone], text);
@@ -237,13 +238,10 @@ async function sendFlowMessage(
 
     await bumpExpiry(pool, conversationId);
 
-    console.log(`sent ${key} to lead ${leadId}, ezt id ${sent.id}`);
+    log.info('sms.sent', { leadId, key, eztMessageId: sent.id });
     return sent.id;
   } catch (err) {
-    const detail =
-      (err as { response?: { data?: unknown } })?.response?.data ??
-      (err instanceof Error ? err.message : err);
-    console.error(`sending ${key} to lead ${leadId} failed:`, JSON.stringify(detail));
+    log.error('sms.failed', { leadId, key, err: errText(err) });
     // A blocked number was never attempted, so there is no failed send to keep.
     if (rendered && !isBlocked(err)) await recordFailedSend(leadId, rendered);
     return null;
