@@ -74,6 +74,12 @@ scored. STOP and START still work. The rule and the reason are in
 `STATE-MACHINE.md`, "An agent has taken the conversation over" - that is the
 authority, not this file.
 
+**A text EZ Texting refuses stays in the thread, marked "not sent"** - Jeel,
+2026-09-28. The API still answers 502 `send_failed`, but the message is kept
+with `delivery_status = 'failed'` and shown with a red "!"; it does not take the
+conversation over, because nothing reached the lead. Before that nothing was
+kept and the agent retyped the text. `db/failed-sends.ts`; `FRONTEND.md`.
+
 **The DNC disposition blocks the number** for SMS and calls: it writes
 `dnc_list` with reason `agent_dnc` and suppresses any open conversation, the
 same end state as an SMS STOP. It is the only way a number reaches that list by

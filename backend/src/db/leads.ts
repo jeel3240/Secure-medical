@@ -80,7 +80,8 @@ const BASE = `
   LEFT JOIN LATERAL (
     SELECT m.created_at, m.received_at, m.direction
     FROM messages m
-    WHERE m.lead_id = l.id
+    -- A send EZ Texting refused is not activity: nothing reached anyone.
+    WHERE m.lead_id = l.id AND m.delivery_status IS DISTINCT FROM 'failed'
     ORDER BY COALESCE(m.received_at, m.created_at) DESC, m.id DESC
     LIMIT 1
   ) m ON true

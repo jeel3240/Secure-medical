@@ -205,19 +205,28 @@ header's Send SMS puts the cursor in it. The takeover warning appears once there
 is text and before the first send, as before; the 160-character limit and the
 blocked-number notice are unchanged.
 
-**A sent message gets a tick, not a banner - Jeel, 2026-09-28.** A green
-"Sent." box appeared under the composer after every send. It is gone: the
-message shows up in the thread with one tick in the bubble's bottom-right
-corner, as in WhatsApp, and a
-first send already adds "Agent took over - automated questions stopped" to the
-thread. A failed send still shows its red error above the composer.
+**Ticks and a red "!", not banners - Jeel, 2026-09-28.** The composer used to
+show a green "Sent." box after every send, and a red box when EZ Texting
+refused one. Both are gone. The thread now says it, the way a phone does:
 
-**One tick, not WhatsApp's two.** A message is in the thread only once EZ
-Texting has accepted it, so one tick is true. A second would mean "reached the
-phone", and nothing tells us that: we read no delivery reports from EZ Texting,
-and `messages.delivery_status` is empty on every row. Two ticks become possible
-only if delivery reports are wired up. A message marked failed shows "delivery
-failed" and no tick. `Conversation.render.test.tsx` pins all of this.
+| The message | In the thread |
+|---|---|
+| EZ Texting accepted it | Two ticks in the bubble's bottom-right corner |
+| EZ Texting refused it | A red "!" beside the bubble, and no ticks. Hover says "Not sent" |
+
+**Two ticks mean "EZ Texting accepted it", not "reached the phone".** That is
+Jeel's decision: acceptance is what the send call answers, and nothing tells us
+about the phone - we read no delivery reports. So there is no one-tick state.
+
+**A refused message is kept.** The server stores it marked failed
+(`db/failed-sends.ts`), for automated messages too - an opener or question 2
+that never went out now shows in the thread with its "!", where before it was
+only a line in the server log. The box is cleared, as it would be for a sent
+message. When nothing is kept - a blocked number, a lead no longer yours - the
+text stays in the box and the red error above it still explains why.
+
+A first send still adds "Agent took over - automated questions stopped" to the
+thread. `Conversation.render.test.tsx` pins the ticks and the "!".
 
 **The wrap-up is the old actions panel regrouped.** Outcomes are grouped
 Positive / No contact / Negative. *(2026-09-28, Jeel: replaced by two buttons,

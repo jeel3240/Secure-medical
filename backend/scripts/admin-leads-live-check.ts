@@ -113,6 +113,13 @@ async function main(): Promise<void> {
   const auto = await lead('Auto', COMPLETED);
   await pool.query(`INSERT INTO messages (lead_id, direction, body, ezt_message_id) VALUES ($1, 'outbound', 'Q1', 'auto-1')`, [auto]);
 
+  // A send EZ Texting refused is not activity.
+  const refused = await lead('Refused', { status: 'open' });
+  await pool.query(
+    `INSERT INTO messages (lead_id, direction, body, delivery_status) VALUES ($1, 'outbound', 'Q1', 'failed')`,
+    [refused]
+  );
+
   // Closed, and the ways out of it.
   const closed = await lead('Closed', COMPLETED);
   await disposition(closed, 'closed');
@@ -151,6 +158,10 @@ async function main(): Promise<void> {
   check('not a claim by a deactivated agent', status('Stale'), 'ready');
   check('not our automated messages', status('Auto'), 'ready');
 
+  console.log('\na refused send');
+  check('is not the last activity', by.Refused?.lastActivityAt, null);
+  check('and the lead is still awaiting a reply', status('Refused'), 'awaiting_reply');
+
   console.log('\nclosed');
   check('pressed Closed', status('Closed'), 'closed');
   check('a lead closed under a retired value stays closed', status('SoldBefore'), 'closed');
@@ -162,8 +173,8 @@ async function main(): Promise<void> {
   const closedTab = await listAdminLeads({ status: 'closed', pageSize: 200 });
   check('the closed tab lists exactly the closed leads', closedTab.leads.map((l) => l.firstName).sort(), ['Closed', 'SoldBefore']);
   check('the counts add up per status', all.counts, {
-    all: 20,
-    awaiting_reply: 1,
+    all: 21,
+    awaiting_reply: 2,
     answering: 1,
     ready: 3,
     working: 9,

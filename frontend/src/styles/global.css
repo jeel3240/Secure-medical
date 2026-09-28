@@ -2665,9 +2665,9 @@ a {
   background: var(--color-surface-hover);
 }
 
-/* Sent: one tick in the bubble's bottom-right corner - Conversation.tsx says
-   why one. `.convo__bubble--out` anchors it; the spacer keeps the last line of
-   text clear of it. */
+/* Sent: two ticks in the bubble's bottom-right corner - Conversation.tsx says
+   what they mean. `.convo__bubble--out` anchors them; the spacer keeps the last
+   line of text clear of them. */
 .convo__tick {
   position: absolute;
   right: var(--space-2);
@@ -2677,7 +2677,19 @@ a {
 
 .convo__tick-space {
   display: inline-block;
-  width: var(--space-4);
+  width: var(--space-5);
+}
+
+/* A bubble and, when EZ Texting refused it, the red "!" beside it. */
+.convo__line {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.convo__not-sent {
+  flex: none;
+  color: var(--color-danger);
 }
 
 .convo__choice {
@@ -2701,10 +2713,6 @@ a {
   margin: var(--space-1) var(--space-1) 0;
   color: var(--color-text-subtle);
   font-size: var(--text-small);
-}
-
-.convo__failed {
-  color: var(--color-danger);
 }
 
 .convo__system {

@@ -63,33 +63,52 @@ export function labelReplies(entries: TimelineEntry[], chips: AnswerChip[]): Map
 }
 
 /**
- * One tick on a message we sent - Jeel, 2026-09-28, in place of a "Sent."
+ * Two ticks on a message we sent - Jeel, 2026-09-28, in place of a "Sent."
  * banner under the composer. Pinned to the bubble's bottom-right corner, as in
- * WhatsApp, so it sits in the same place however the text wraps.
+ * WhatsApp, so they sit in the same place however the text wraps.
  *
- * One, not WhatsApp's two. A message is in the thread only once EZ Texting has
- * accepted it, so one tick is true. A second would mean "reached the phone",
- * and nothing tells us that: EZ Texting sends no delivery reports we read, and
- * `messages.delivery_status` is empty on every row. It becomes possible if
- * delivery reports are ever wired up - SCHEMA.md, `messages.delivery_status`.
+ * **They mean EZ Texting accepted the message**, not that it reached the
+ * phone. That is Jeel's decision: acceptance is what the send call tells us,
+ * and a message is in the thread as sent only once it has happened. Nothing
+ * tells us about the phone - EZ Texting sends no delivery reports we read.
  */
-function SentTick() {
+function SentTicks() {
   return (
     <svg
       className="convo__tick"
-      width="14"
-      height="14"
-      viewBox="0 0 24 24"
+      width="18"
+      height="12"
+      viewBox="0 0 27 18"
       fill="none"
       stroke="currentColor"
-      strokeWidth="2.5"
+      strokeWidth="2.2"
       strokeLinecap="round"
       strokeLinejoin="round"
       role="img"
       aria-label="Sent"
     >
-      <title>Sent</title>
-      <path d="M5 12.5l4.5 4.5L19 7.5" />
+      <title>Sent - EZ Texting accepted it</title>
+      {/* The second tick sits 7 units right of the first; its short stroke is
+          left out, so it reads as a pair, as on a phone. */}
+      <path d="M2 9.5l4.5 4.5L16 3.5" />
+      <path d="M11.5 14L23 3.5" />
+    </svg>
+  );
+}
+
+/**
+ * A red "!" beside a message EZ Texting refused - Jeel, 2026-09-28, as a
+ * phone shows it. The message never left, so it has no ticks. The server keeps
+ * these (`db/failed-sends.ts`); before that a refused send was only a line in
+ * the server log.
+ */
+function NotSentMark() {
+  return (
+    <svg className="convo__not-sent" width="18" height="18" viewBox="0 0 24 24" role="img" aria-label="Not sent">
+      <title>Not sent - EZ Texting did not accept it</title>
+      <circle cx="12" cy="12" r="11" fill="currentColor" />
+      <path d="M12 6.5v7" stroke="#fff" strokeWidth="2.5" strokeLinecap="round" />
+      <circle cx="12" cy="17.25" r="1.5" fill="#fff" />
     </svg>
   );
 }
@@ -160,22 +179,24 @@ export function Conversation({
           <div className="convo__row convo__row--out" key={`${entry.at}-${index}`}>
             <p className="convo__meta">
               {entry.kind === 'agent_sms' ? entry.author ?? 'Agent' : 'Auto'} · {time}
-              {failed && <span className="convo__failed"> · delivery failed</span>}
             </p>
-            <div
-              className={`convo__bubble convo__bubble--out${
-                entry.kind === 'agent_sms' ? ' convo__bubble--agent' : ''
-              }`}
-            >
-              {body}
-              {!failed && (
-                <>
-                  {/* Holds the tick's space on the last line, so text never
-                      runs underneath it. */}
-                  <span className="convo__tick-space" aria-hidden="true" />
-                  <SentTick />
-                </>
-              )}
+            <div className="convo__line">
+              {failed && <NotSentMark />}
+              <div
+                className={`convo__bubble convo__bubble--out${
+                  entry.kind === 'agent_sms' ? ' convo__bubble--agent' : ''
+                }`}
+              >
+                {body}
+                {!failed && (
+                  <>
+                    {/* Holds the ticks' space on the last line, so text never
+                        runs underneath them. */}
+                    <span className="convo__tick-space" aria-hidden="true" />
+                    <SentTicks />
+                  </>
+                )}
+              </div>
             </div>
           </div>
         );
