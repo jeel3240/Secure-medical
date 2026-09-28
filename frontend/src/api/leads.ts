@@ -19,8 +19,6 @@ export interface AdminLead {
   source: string | null;
   receivedAt: string | null;
   status: LeadStatus | null;
-  /** On a closed lead, the outcome that closed it. Null otherwise. */
-  outcome: string | null;
   stepReached: number | null;
   score: number | null;
   tier: string | null;

@@ -196,11 +196,12 @@ is text and before the first send, as before; the 160-character limit and the
 blocked-number notice are unchanged.
 
 **The wrap-up is the old actions panel regrouped.** Outcomes are grouped
-Positive / No contact / Negative. *(2026-09-28: Sold added, first under
-Positive. Sold, Not interested and Wrong number close the lead -
-`AGENT-WORKSPACE.md`.)* DNC is a separate red link, not one of the
+Positive / No contact / Negative. *(2026-09-28, Jeel: replaced by two buttons,
+**Closed** and **DNC** - DNC a button now, not a link, still behind the same
+confirm dialog. The groups, the Step N of 3 counter that tracked them and
+their styles are gone. `AGENT-WORKSPACE.md`, "Dispositions".)* DNC is a separate red link, not one of the
 buttons - it still opens the same confirm dialog. The quick callback chips gained
-"Pick time...", which reveals the date field. "Step N of 3" shows which section
+"Pick time...", which reveals the date field. "Step N of 3" (since removed) showed which section
 still wants something: outcome, then callback or note - the callback is optional,
 so it never holds the step back on its own. Save and the unsaved changes guard
 are untouched. *(Save & next was removed later the same day - "One button"

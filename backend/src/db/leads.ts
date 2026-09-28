@@ -1,4 +1,4 @@
-import { CLOSED_SQL, LATEST_DISPOSITION_SQL, WORKED_SQL } from './lead-state';
+import { CLOSED_SQL, WORKED_SQL } from './lead-state';
 import { pool } from './pool';
 
 /**
@@ -35,9 +35,6 @@ export interface AdminLeadRow {
   source: string | null;
   receivedAt: string | null;
   status: LeadStatus | null;
-  /** On a closed lead, the outcome that closed it: `sold`, `not_interested`
-   *  or `wrong_number`. Null otherwise. */
-  outcome: string | null;
   stepReached: number | null;
   score: number | null;
   tier: string | null;
@@ -94,7 +91,7 @@ const BASE = `
  * The first match wins, so the order is the rule:
  *
  * 1. opted_out - a blocked number overrides everything.
- * 2. closed - an agent recorded an outcome that finishes the lead.
+ * 2. closed - an agent pressed Closed.
  * 3. working - an agent has done something with it. This outranks every SMS
  *    status: once a person is on a lead, what the conversation says matters
  *    less than that someone is handling it - a needs-review or expired lead an
@@ -174,7 +171,6 @@ export async function listAdminLeads(query: AdminLeadQuery): Promise<AdminLeadPa
     `SELECT l.id, l.phone, l.first_name, l.last_name, l.source,
             COALESCE(l.ezt_added_at, l.created_at) AS received_at,
             ${STATUS_SQL} AS status,
-            ${LATEST_DISPOSITION_SQL} AS latest_disposition,
             ${STEP_SQL} AS step_reached,
             c.score, c.tier,
             COALESCE(m.received_at, m.created_at) AS last_activity_at,
@@ -213,7 +209,6 @@ export async function listAdminLeads(query: AdminLeadQuery): Promise<AdminLeadPa
       source: r.source,
       receivedAt: r.received_at?.toISOString() ?? null,
       status: r.status,
-      outcome: r.status === 'closed' ? r.latest_disposition : null,
       stepReached: r.step_reached,
       // The running score, not only the final one. Scoring starts at the first
       // reply, so a lead part-way through has a real score and tier worth

@@ -33,7 +33,7 @@ with Needs review, Expired and Opted out as the other ways the SMS part can end.
 | Status | Tab | Condition |
 |---|---|---|
 | `opted_out` | Opted out | On `dnc_list`, or newest conversation `suppressed` |
-| `closed` | Closed | Newest disposition is Sold, Not interested or Wrong number, and the lead has not texted since |
+| `closed` | Closed | An agent pressed Closed, and nothing has reopened it since: no unread text from the lead, no callback booked after it |
 | `working` | Working | An agent holds it, or has left any trace on it: a note, a callback, a disposition, a call, or an SMS of their own |
 | `needs_review` | Needs review | Conversation `review` |
 | `ready` | Ready | Conversation `completed` - answered all three - and no agent has touched it |
@@ -45,8 +45,8 @@ The first match wins, so the order is the rule:
 
 - **`opted_out` first**, so a blocked number wins over everything, checked
   against `dnc_list` as well as the conversation, because a phone can reach
-  that list without ever holding one. A lead sold and then blocked reads Opted
-  out.
+  that list without ever holding one. A lead closed and then blocked reads
+  Opted out.
 - **`closed` before `working`**, because a closed lead has always been worked.
 - **`working` before every SMS status.** Once a person is on a lead, that
   someone is handling it matters more than what the conversation says. A
@@ -61,8 +61,8 @@ and the two screens cannot disagree.
 
 Until then the status described the SMS conversation only. A lead that
 answered all three questions read **Completed** forever: untouched, called five
-times, or sold, all alike. And since nothing recorded a sale, a sold lead went
-back into the queue at the top for the next agent to call.
+times, or finished, all alike. And since nothing recorded that a lead was
+finished, it went back into the queue at the top for the next agent to call.
 
 Two renames came with it, so each word means one thing:
 
@@ -76,23 +76,24 @@ or `?status=completed` now falls back to All, as any unknown status does.
 
 ### Closed
 
-**One status for every ending.** Sold, Not interested and Wrong number all
-read **Closed**; the row says which - "Closed – Sold" - from the `outcome`
-field the API returns on a closed lead. The lead's timeline has the full story.
-`dnc` is not a closing outcome because it needs to be none: it blocks the
-number, which is Opted out.
-
-**The newest outcome decides.** Dispositions are append-only, so a lead marked
-Sold and later Interested by another agent is Working again.
+**One button, one status - Jeel, 2026-09-28.** An agent presses **Closed** in
+Wrap up; there is no reason to pick. For part of that day there were three -
+Sold, Not interested, Wrong number - shown as "Closed – Sold", but the
+requirement asks for no reason, so the note says why if anything does. Leads
+closed under those three still read Closed. `dnc` is not a closing outcome
+because it needs to be none: it blocks the number, which is Opted out.
 
 **A closed lead that texts us is Working again.** Its message needs a person,
 so it also returns to the queue as an Inbound reply (`QUEUE.md`). Once that is
-read, it is Closed once more, unless the agent records a new outcome.
+read, it is Closed once more.
+
+**A callback booked after closing makes it Working again**, until the callback
+is done. One booked before closing, or in the same Save, does not.
 
 ### Working
 
 **Starts at the first trace an agent leaves** - usually picking the lead. It
-lasts until an outcome closes it, across every call, voicemail and callback in
+lasts until an agent closes it, across every call, voicemail and callback in
 between. Those details are the timeline's, not the status's.
 
 **Picking a lead and putting it back untouched is not Working.** Releasing
@@ -125,9 +126,9 @@ Search matches name, or phone with punctuation stripped, so `(602) 620-3572`
 finds `+16026203572`.
 
 `scripts/admin-leads-live-check.ts` proves the statuses against a real
-database: every SMS status, each kind of agent trace on its own, each closing
-outcome, reopening by a newer outcome or a text, and the tab counts. Last run
-2026-09-28: 25 checks, all passing.
+database: every SMS status, each kind of agent trace on its own, Closed and a
+lead closed under a retired value, reopening by a later callback or a text,
+and the tab counts. Last run 2026-09-28: 22 checks, all passing.
 
 Score and tier are the running values, returned at every stage. Scoring starts
 at the first reply, so a lead part-way through has a real score - 10 for

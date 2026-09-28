@@ -114,22 +114,19 @@ async function main(): Promise<void> {
   await pool.query(`INSERT INTO messages (lead_id, direction, body, ezt_message_id) VALUES ($1, 'outbound', 'Q1', 'auto-1')`, [auto]);
 
   // Closed, and the ways out of it.
-  const sold = await lead('Sold', COMPLETED);
-  await disposition(sold, 'no_answer', 30);
-  await disposition(sold, 'sold', 5);
-  const notInterested = await lead('NotInterested', COMPLETED);
-  await disposition(notInterested, 'not_interested');
-  const wrong = await lead('Wrong', COMPLETED);
-  await disposition(wrong, 'wrong_number');
+  const closed = await lead('Closed', COMPLETED);
+  await disposition(closed, 'closed');
+  const soldBefore = await lead('SoldBefore', COMPLETED); // retired value, still closes
+  await disposition(soldBefore, 'sold');
   const reopened = await lead('Reopened', COMPLETED);
-  await disposition(reopened, 'sold', 30);
-  await disposition(reopened, 'interested', 5);
+  await disposition(reopened, 'closed', 30);
+  await pool.query(`INSERT INTO callbacks (lead_id, agent_id, scheduled_at) VALUES ($1, $2, now() + interval '1 day')`, [reopened, maya]);
   const wroteBack = await lead('WroteBack', COMPLETED);
-  await disposition(wroteBack, 'sold');
+  await disposition(wroteBack, 'closed');
   await pool.query(`UPDATE leads SET has_unread_inbound = true WHERE id = $1`, [wroteBack]);
-  const soldThenBlocked = await lead('SoldThenBlocked', COMPLETED);
-  await disposition(soldThenBlocked, 'sold');
-  await pool.query(`INSERT INTO dnc_list (phone, reason) SELECT phone, 'sms_stop' FROM leads WHERE id = $1`, [soldThenBlocked]);
+  const closedThenBlocked = await lead('ClosedThenBlocked', COMPLETED);
+  await disposition(closedThenBlocked, 'closed');
+  await pool.query(`INSERT INTO dnc_list (phone, reason) SELECT phone, 'sms_stop' FROM leads WHERE id = $1`, [closedThenBlocked]);
 
   const all = await listAdminLeads({ pageSize: 200 });
   const by = Object.fromEntries(all.leads.map((l) => [l.firstName, l]));
@@ -149,31 +146,28 @@ async function main(): Promise<void> {
   check('a callback', status('Booked'), 'working');
   check('a call', status('Called'), 'working');
   check('an agent\'s own SMS, even partway through the questions', status('Texted'), 'working');
-  check('a try-again outcome', status('Tried'), 'working');
+  check('an old try-again outcome (retired no_answer)', status('Tried'), 'working');
   check('outranks needs_review', status('ReviewWorked'), 'working');
   check('not a claim by a deactivated agent', status('Stale'), 'ready');
   check('not our automated messages', status('Auto'), 'ready');
 
   console.log('\nclosed');
-  check('sold, after an earlier no-answer', status('Sold'), 'closed');
-  check('carries the outcome', by.Sold?.outcome, 'sold');
-  check('not interested', status('NotInterested'), 'closed');
-  check('wrong number', status('Wrong'), 'closed');
-  check('the newest outcome decides: sold, then interested, is working', status('Reopened'), 'working');
-  check('and an open lead carries no outcome', by.Reopened?.outcome, null);
+  check('pressed Closed', status('Closed'), 'closed');
+  check('a lead closed under a retired value stays closed', status('SoldBefore'), 'closed');
+  check('a callback booked after closing makes it working again', status('Reopened'), 'working');
   check('a closed lead that texts us is working again', status('WroteBack'), 'working');
-  check('opted_out still outranks closed', status('SoldThenBlocked'), 'opted_out');
+  check('opted_out still outranks closed', status('ClosedThenBlocked'), 'opted_out');
 
   console.log('\ntabs');
   const closedTab = await listAdminLeads({ status: 'closed', pageSize: 200 });
-  check('the closed tab lists exactly the closed leads', closedTab.leads.map((l) => l.firstName).sort(), ['NotInterested', 'Sold', 'Wrong']);
+  check('the closed tab lists exactly the closed leads', closedTab.leads.map((l) => l.firstName).sort(), ['Closed', 'SoldBefore']);
   check('the counts add up per status', all.counts, {
-    all: 21,
+    all: 20,
     awaiting_reply: 1,
     answering: 1,
     ready: 3,
     working: 9,
-    closed: 3,
+    closed: 2,
     needs_review: 1,
     expired: 1,
     opted_out: 2,

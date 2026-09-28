@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { listAdminLeads, type AdminLead, type AdminLeadsResponse, type LeadStatus } from '../../api/leads';
-import { DISPOSITION_LABEL, type Disposition } from '../../api/workspace';
 import { usePolling } from '../../api/usePolling';
 import { Badge } from '../../components/Badge';
 import { Banner } from '../../components/Banner';
@@ -48,13 +47,6 @@ const STATUS_TONE: Record<LeadStatus, 'neutral' | 'navy' | 'success' | 'muted' |
   opted_out: 'muted',
   expired: 'muted',
 };
-
-/** "Closed – Sold": a closed lead says how it ended, so one status can cover all three. */
-function statusText(lead: AdminLead): string {
-  const label = lead.status ? STATUS_LABEL[lead.status] : '';
-  if (lead.status !== 'closed' || !lead.outcome) return label;
-  return `${label} – ${DISPOSITION_LABEL[lead.outcome as Disposition] ?? lead.outcome}`;
-}
 
 function leadName(lead: AdminLead): string {
   const first = lead.firstName?.trim();
@@ -240,7 +232,7 @@ export function LeadsPage() {
                   <td className="mono">{lead.source ?? '-'}</td>
                   <td>
                     {lead.status ? (
-                      <Badge tone={STATUS_TONE[lead.status]}>{statusText(lead)}</Badge>
+                      <Badge tone={STATUS_TONE[lead.status]}>{STATUS_LABEL[lead.status]}</Badge>
                     ) : (
                       '-'
                     )}

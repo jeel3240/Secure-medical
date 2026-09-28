@@ -81,86 +81,87 @@ async function main(): Promise<void> {
 
   const maya = await makeUser('Maya');
 
-  console.log('\nan ordinary disposition');
+  console.log('\nclosing a lead');
   {
     const lead = await makeQueuedLead('+15550000501', 'Ordinary');
-    const res = await setDisposition(lead, maya, 'not_interested');
+    const res = await setDisposition(lead, maya, 'closed');
 
-    check('is recorded', res.ok && res.disposition.value, 'not_interested');
+    check('is recorded', res.ok && res.disposition.value, 'closed');
     check('names the agent', res.ok && res.disposition.agentName, 'Maya');
     check('blocks nothing', res.ok && res.disposition.blockedNumber, false);
     check('writes no dnc row', await dncRow('+15550000501'), null);
 
     // Until 2026-09-28 the queue did not read dispositions, and this lead
     // stayed queued at full score for the next agent to call again.
-    check('and closes the lead: it leaves the queue', await inQueue(lead), false);
+    check('and the lead leaves the queue', await inQueue(lead), false);
   }
 
-  console.log('\nwhich outcomes close a lead');
+  console.log('\nretired values still close a lead they closed before');
   {
-    const cases: [string, boolean][] = [
-      ['sold', false],
-      ['not_interested', false],
-      ['wrong_number', false],
-      ['interested', true],
-      ['callback_set', true],
-      ['no_answer', true],
-      ['voicemail', true],
-    ];
     let n = 510;
-    for (const [value, stays] of cases) {
+    for (const value of ['sold', 'not_interested', 'wrong_number']) {
       const lead = await makeQueuedLead(`+15550000${n++}`, value);
-      await setDisposition(lead, maya, value as never);
-      check(`${value}: ${stays ? 'stays in' : 'leaves'} the queue`, await inQueue(lead), stays);
+      await pool.query(`INSERT INTO dispositions (lead_id, agent_id, value) VALUES ($1, $2, $3)`, [lead, maya, value]);
+      check(`${value}: out of the queue`, await inQueue(lead), false);
     }
+    const lead = await makeQueuedLead(`+15550000${n++}`, 'no_answer');
+    await pool.query(`INSERT INTO dispositions (lead_id, agent_id, value) VALUES ($1, $2, 'no_answer')`, [lead, maya]);
+    check('no_answer: never closed anything, still in', await inQueue(lead), true);
   }
 
   console.log('\nwhat keeps or brings a closed lead back');
   {
-    const reopened = await makeQueuedLead('+15550000520', 'Reopened');
-    await setDisposition(reopened, maya, 'sold');
-    await setDisposition(reopened, maya, 'interested');
-    check('a later non-closing outcome reopens it - the newest decides', await inQueue(reopened), true);
-
     const wrote = await makeQueuedLead('+15550000521', 'Wrote');
-    await setDisposition(wrote, maya, 'sold');
+    await setDisposition(wrote, maya, 'closed');
     await pool.query(`UPDATE leads SET has_unread_inbound = true WHERE id = $1`, [wrote]);
     check('texting us afterwards brings it back, for a person to read', await inQueue(wrote), true);
+    await pool.query(`UPDATE leads SET has_unread_inbound = false WHERE id = $1`, [wrote]);
+    check('and once read it is closed again', await inQueue(wrote), false);
 
     const held = await makeQueuedLead('+15550000522', 'Held');
     await pool.query(`UPDATE leads SET assigned_to = $2, assigned_at = now() WHERE id = $1`, [held, maya]);
-    await setDisposition(held, maya, 'sold');
+    await setDisposition(held, maya, 'closed');
     check('it stays while the agent still holds it', await inQueue(held), true);
     await pool.query(`UPDATE leads SET assigned_to = NULL, assigned_at = NULL WHERE id = $1`, [held]);
     check('and leaves once they release it', await inQueue(held), false);
 
-    const booked = await makeQueuedLead('+15550000523', 'Booked');
+    const before = await makeQueuedLead('+15550000523', 'Before');
     await pool.query(
-      `INSERT INTO callbacks (lead_id, agent_id, scheduled_at) VALUES ($1, $2, now() + interval '1 day')`,
-      [booked, maya]
+      `INSERT INTO callbacks (lead_id, agent_id, scheduled_at, created_at)
+       VALUES ($1, $2, now() + interval '1 day', now() - interval '1 hour')`,
+      [before, maya]
     );
-    await setDisposition(booked, maya, 'not_interested');
-    check('an open callback does not hold a closed lead', await inQueue(booked), false);
+    await setDisposition(before, maya, 'closed');
+    check('a callback booked before closing does not hold it', await inQueue(before), false);
+
+    const after = await makeQueuedLead('+15550000524', 'After');
+    await pool.query(
+      `INSERT INTO dispositions (lead_id, agent_id, value, created_at) VALUES ($1, $2, 'closed', now() - interval '1 hour')`,
+      [after, maya]
+    );
+    await pool.query(`INSERT INTO callbacks (lead_id, agent_id, scheduled_at) VALUES ($1, $2, now() + interval '1 day')`, [after, maya]);
+    check('a callback booked after closing reopens it', await inQueue(after), true);
+    await pool.query(`UPDATE callbacks SET done_at = now() WHERE lead_id = $1`, [after]);
+    check('and once that callback is done, it is closed again', await inQueue(after), false);
   }
 
   console.log('\nappend-only');
   {
     const lead = await makeQueuedLead('+15550000502', 'Repeat');
-    await setDisposition(lead, maya, 'no_answer');
-    await setDisposition(lead, maya, 'no_answer');
-    await setDisposition(lead, maya, 'interested');
+    await setDisposition(lead, maya, 'closed');
+    await setDisposition(lead, maya, 'closed');
 
     const { rows } = await pool.query(
       `SELECT value FROM dispositions WHERE lead_id = $1 ORDER BY id`,
       [lead]
     );
-    check('every one is kept', rows.map((r) => r.value), ['no_answer', 'no_answer', 'interested']);
+    check('every one is kept', rows.map((r) => r.value), ['closed', 'closed']);
 
     const timeline = await getTimeline(lead);
     const values = (timeline ?? [])
       .filter((e) => e.kind === 'disposition')
       .map((e) => e.detail.value);
-    check('and the timeline shows the sequence', values, ['no_answer', 'no_answer', 'interested']);
+    check('and the timeline shows the sequence', values, ['closed', 'closed']);
   }
 
   console.log('\nthe DNC disposition');
@@ -219,7 +220,7 @@ async function main(): Promise<void> {
 
   console.log('\nan unknown lead');
   {
-    const res = await setDisposition(999999, maya, 'interested');
+    const res = await setDisposition(999999, maya, 'closed');
     check('is rejected', res.ok === false && res.reason, 'lead_not_found');
 
     const { rows } = await pool.query(`SELECT count(*)::int AS n FROM dispositions WHERE lead_id = 999999`);

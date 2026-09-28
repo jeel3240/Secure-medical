@@ -5,12 +5,12 @@
  *
  * Jeel, 2026-09-28. Until then a lead's status described only its SMS
  * conversation. A lead that answered all three questions read "Completed"
- * forever - untouched, called five times or sold alike - and a sold lead went
- * back into the queue at the top. Two states were added, both computed from
- * what agents have already recorded, nothing stored:
+ * forever - untouched, called five times or finished alike - and a finished
+ * lead went back into the queue at the top. Two states were added, both
+ * computed from what agents have already recorded, nothing stored:
  *
  * - **Worked** - an agent has done something with the lead.
- * - **Closed** - an agent has recorded an outcome that finishes it.
+ * - **Closed** - an agent pressed Closed on it.
  *
  * Every fragment expects the lead as `l`. `ADMIN-LEADS.md` and `QUEUE.md` say
  * how each screen uses them.
@@ -27,30 +27,40 @@ const closingList = CLOSING_DISPOSITIONS.map((value) => {
   return `'${value}'`;
 }).join(', ');
 
-/** The lead's newest disposition, or NULL when it has none. */
-export const LATEST_DISPOSITION_SQL = `(
-  SELECT ld.value FROM dispositions ld
-  WHERE ld.lead_id = l.id
-  ORDER BY ld.created_at DESC, ld.id DESC
-  LIMIT 1
-)`;
-
 /**
- * Closed: the newest disposition is Sold, Not interested or Wrong number, and
- * the lead has not written to us since.
+ * Closed: the newest disposition is `closed` (or a retired value that meant
+ * the same - `core/dispositions.ts`), and nothing has reopened it since. Two
+ * things reopen a closed lead:
  *
- * The newest one decides, so a lead closed and later marked Interested by
- * another agent is open again. And a closed lead who texts back is no longer
- * closed: a person has to read what they sent, so it returns to the queue as
- * an inbound reply - `has_unread_inbound`, STATE-MACHINE.md rule 2.
+ * - **The lead writes to us.** A person has to read it, so it returns to the
+ *   queue as an inbound reply - `has_unread_inbound`, STATE-MACHINE.md rule 2.
+ *   Once read, it is closed again, without anyone pressing Closed twice.
+ * - **An agent books a callback after closing it** - and it is not done yet. A
+ *   closed lead who texts back "actually, call me Friday" has to stay in
+ *   reach, and a callback is the action that says "this is not finished".
+ *   Until 2026-09-28 an agent reopened a lead by marking it Interested; that
+ *   disposition was retired.
  *
- * The COALESCE matters. A lead with no disposition has a NULL newest one, and
- * `NULL IN (...)` is NULL, not false - so `NOT closed` was NULL too and the
- * queue silently dropped every lead nobody had dispositioned yet. The live
- * check caught it.
+ * Written as EXISTS rather than `latest IN (...)`: a lead with no disposition
+ * has a NULL newest one, `NULL IN (...)` is NULL rather than false, and an
+ * earlier version dropped every lead nobody had closed from the queue. The
+ * live check caught it.
  */
 export const CLOSED_SQL = `(
-  COALESCE(${LATEST_DISPOSITION_SQL} IN (${closingList}), false)
+  EXISTS (
+    SELECT 1
+    FROM (
+      SELECT cd.value, cd.created_at FROM dispositions cd
+      WHERE cd.lead_id = l.id
+      ORDER BY cd.created_at DESC, cd.id DESC
+      LIMIT 1
+    ) newest
+    WHERE newest.value IN (${closingList})
+      AND NOT EXISTS (
+        SELECT 1 FROM callbacks rc
+        WHERE rc.lead_id = l.id AND rc.done_at IS NULL AND rc.created_at > newest.created_at
+      )
+  )
   AND NOT l.has_unread_inbound
 )`;
 

@@ -40,7 +40,7 @@ const WRITES = [
   { name: 'adding a note', path: '/api/leads/7/notes', body: { body: 'Left a voicemail' }, write: addNote },
   { name: 'booking a callback', path: '/api/leads/7/callbacks', body: { scheduledAt: IN_AN_HOUR }, write: createCallback },
   { name: 'sending an SMS', path: '/api/leads/7/messages', body: { body: 'Hi' }, write: sendAgentSms },
-  { name: 'setting a disposition', path: '/api/leads/7/dispositions', body: { value: 'interested' }, write: setDisposition },
+  { name: 'setting a disposition', path: '/api/leads/7/dispositions', body: { value: 'closed' }, write: setDisposition },
   { name: 'marking the reply read', path: '/api/leads/7/read', body: {}, write: markLeadRead },
 ] as const;
 
