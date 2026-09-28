@@ -120,6 +120,7 @@ commit.
 | Doc | Covers | Update it when you change |
 |---|---|---|
 | `../CLAUDE.md` | Architecture decisions, four-week plan | An architectural decision |
+| `LEAD-FLOW.md` | A lead's whole life on one page: every status, the queue, Wrap up. Start here | Any status, the queue's contents, or Wrap up - alongside the doc that owns the rule |
 | `AUTH.md` | Sign-in, sessions, roles, account management | Auth routes, guards or the users table |
 | `SCHEMA.md` | Database tables and why | A migration |
 | `POLLER.md` | How leads are pulled in | The poller or worker loop |
