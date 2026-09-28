@@ -187,4 +187,14 @@ describe('the checkpoint', () => {
     await expect(pollOnce()).rejects.toThrow('EZ Texting down');
     expect(sqlOf()).not.toMatch(/INSERT INTO settings/i);
   });
+
+  it('is still written on a quiet poll, so its time says the worker polled', async () => {
+    // Nothing new: the value stays, updated_at moves. Without this a quiet
+    // account looked like a stopped worker - Jeel, 2026-09-28.
+    listContacts.mockResolvedValue({ content: [], last: true });
+
+    await pollOnce();
+
+    expect(sqlOf()).toMatch(/INSERT INTO settings/i);
+  });
 });

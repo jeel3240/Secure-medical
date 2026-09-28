@@ -26,10 +26,13 @@ export interface PollStats {
 
 async function readCheckpoint(): Promise<Date> {
   const { rows } = await pool.query('SELECT value FROM settings WHERE key = $1', [CHECKPOINT_KEY]);
-  if (rows.length === 0) {
+  const stored = rows.length > 0 ? new Date(rows[0].value) : null;
+  // Absent, or not a date: look back an hour. Every poll now writes the
+  // checkpoint back, so an unreadable one must not stop the poller cold.
+  if (!stored || Number.isNaN(stored.getTime())) {
     return new Date(Date.now() - DEFAULT_LOOKBACK_MS);
   }
-  return new Date(rows[0].value);
+  return stored;
 }
 
 async function writeCheckpoint(at: Date): Promise<void> {
@@ -311,9 +314,12 @@ export async function pollOnce(): Promise<PollStats> {
     page += 1;
   }
 
-  if (newest) {
-    await writeCheckpoint(newest);
-  }
+  // A quiet poll still writes the checkpoint - the same value, a fresh
+  // updated_at. That time is what Admin > Leads' "Synced" line and the health
+  // check read as "the worker last polled"; written only when a new contact
+  // arrived, it stood still on a quiet account and both reported a healthy
+  // worker as stopped. Jeel, 2026-09-28.
+  await writeCheckpoint(newest ?? checkpoint);
 
   stats.durationMs = Date.now() - startedAt;
   return stats;

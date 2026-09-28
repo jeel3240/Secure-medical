@@ -71,6 +71,11 @@ The value is the newest contact's `createdAt`, so on a quiet account it stands
 still while the worker polls happily every minute - reading it would report a
 healthy system as dead every time leads stop arriving. `updated_at` moves on
 every successful poll. Both are in the response, so the two are not confused.
+*(2026-09-28: that last sentence was not true until this date. The poller wrote
+the checkpoint only when a new contact arrived, so `updated_at` stood still on a
+quiet account too, and the poller check reported a healthy worker as degraded.
+It now writes the checkpoint - the same value when nothing arrived - on every
+successful poll. `POLLER.md`, step 7.)*
 `scripts/health-live-check.ts` pins exactly this, in both directions: a
 week-old value with a fresh poll is healthy, and a fresh value with a 15-minute
 -old poll is not.
