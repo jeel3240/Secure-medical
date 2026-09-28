@@ -8,18 +8,19 @@ import { pool } from './pool';
  *
  * A lead's whole life, in order - Jeel, 2026-09-28:
  *
- *   awaiting_reply -> answering -> ready_to_call -> working -> closed
+ *   awaiting_reply -> answering -> ready -> working -> closed
  *
  * with needs_review, expired and opted_out as the ways the SMS part can end
- * otherwise. `answering` was called `in_progress` and `ready_to_call` was
- * `completed`, renamed the same day: "In progress" also means an agent holding
+ * otherwise. `answering` was called `in_progress` and `ready` was
+ * `completed`, renamed the same day (briefly `ready_to_call`, which read as an
+ * instruction): "In progress" also means an agent holding
  * a lead on the queue, and "Completed" read as finished when the calling had
  * not started. ADMIN-LEADS.md, "Status".
  */
 export type LeadStatus =
   | 'awaiting_reply'
   | 'answering'
-  | 'ready_to_call'
+  | 'ready'
   | 'working'
   | 'closed'
   | 'needs_review'
@@ -98,7 +99,7 @@ const BASE = `
  *    status: once a person is on a lead, what the conversation says matters
  *    less than that someone is handling it - a needs-review or expired lead an
  *    agent is working reads Working.
- * 4. the conversation: needs_review, ready_to_call, expired, then an open one
+ * 4. the conversation: needs_review, ready, expired, then an open one
  *    split on whether any question has been answered.
  *
  * `db/lead-state.ts` defines closed and working, shared with the queue.
@@ -109,7 +110,7 @@ const STATUS_SQL = `
     WHEN ${CLOSED_SQL} THEN 'closed'
     WHEN ${WORKED_SQL} THEN 'working'
     WHEN c.status = 'review' THEN 'needs_review'
-    WHEN c.status = 'completed' THEN 'ready_to_call'
+    WHEN c.status = 'completed' THEN 'ready'
     WHEN c.status = 'expired' THEN 'expired'
     WHEN c.status = 'open' AND (c.q1 IS NOT NULL OR c.q2 IS NOT NULL OR c.q3 IS NOT NULL)
       THEN 'answering'

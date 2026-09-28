@@ -9,7 +9,7 @@ import { Spinner } from '../../components/Spinner';
 import { formatPhone, formatReceived, formatRelative } from '../../lib/format';
 
 /**
- * In the order a lead lives them - Awaiting reply, Answering, Ready to call,
+ * In the order a lead lives them - Awaiting reply, Answering, Ready,
  * Working, Closed - then the three other ways the SMS part can end. Working
  * and Closed were added, and In progress and Completed renamed, by Jeel on
  * 2026-09-28: ADMIN-LEADS.md, "Status".
@@ -18,7 +18,7 @@ const TABS: { key: string; label: string }[] = [
   { key: 'all', label: 'All' },
   { key: 'awaiting_reply', label: 'Awaiting reply' },
   { key: 'answering', label: 'Answering' },
-  { key: 'ready_to_call', label: 'Ready to call' },
+  { key: 'ready', label: 'Ready' },
   { key: 'working', label: 'Working' },
   { key: 'closed', label: 'Closed' },
   { key: 'needs_review', label: 'Needs review' },
@@ -41,7 +41,7 @@ const STATUS_LABEL: Record<LeadStatus, string> = Object.fromEntries(
 const STATUS_TONE: Record<LeadStatus, 'neutral' | 'navy' | 'success' | 'muted' | 'warning'> = {
   awaiting_reply: 'neutral',
   answering: 'neutral',
-  ready_to_call: 'success',
+  ready: 'success',
   working: 'navy',
   closed: 'muted',
   needs_review: 'warning',
