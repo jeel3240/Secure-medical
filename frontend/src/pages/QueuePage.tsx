@@ -85,11 +85,13 @@ export function QueuePage() {
   const actionFor = useCallback((lead: QueueLead) => rowAction(lead, me), [me]);
 
   /**
-   * Look without picking: the read-only timeline. Assigns nothing and does not
-   * mark a reply read - only the workspace does that, and only Pick gets you
-   * there. What a row click does, and what a superadmin's View button does.
+   * Look without picking. Opens the same workspace Pick opens - one page
+   * however you arrive, Jeel 2026-09-28 - but assigns nothing, so its actions
+   * stay switched off until you pick there. The workspace marks a reply read
+   * only for the lead's holder, so looking does not do it either. What a row
+   * click does, and what a superadmin's View button does.
    */
-  const view = (lead: QueueLead) => navigate(`/leads/${lead.id}/timeline`);
+  const view = (lead: QueueLead) => navigate(`/leads/${lead.id}`);
 
   /**
    * Pick, then open the workspace. Only the button calls this - Jeel,

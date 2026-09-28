@@ -6,6 +6,7 @@
 import request from 'supertest';
 import { buildApp, seedUser, signIn } from './helpers';
 import type { CallbackListResult, CreateResult, UpdateResult } from '../../db/callbacks';
+import type { Holding } from '../../db/holder';
 
 const createCallback = jest.fn<Promise<CreateResult>, [number, number, Date]>();
 const updateCallback = jest.fn<Promise<UpdateResult>, [number, number, boolean, any]>();
@@ -15,6 +16,18 @@ jest.mock('../../db/callbacks', () => ({
   updateCallback: (...a: [number, number, boolean, any]) => updateCallback(...a),
   listCallbacks: (o: any) => listCallbacks(o),
 }));
+
+// Every write on a lead now checks the caller holds it first. These tests are
+// about the route itself, so the caller holds the lead unless a test says
+// otherwise; holder-guard.test.ts covers the refusals.
+const holding = jest.fn<Promise<Holding>, [number, number]>();
+jest.mock('../../db/holder', () => ({
+  holding: (...a: [number, number]) => holding(...a),
+}));
+beforeEach(() => {
+  holding.mockReset();
+  holding.mockResolvedValue({ status: 'mine' });
+});
 
 const PASSWORD = 'correct-horse-battery';
 const AT = '2026-09-27T17:15:00.000Z';

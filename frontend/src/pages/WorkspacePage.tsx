@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
-import { listQueue, releaseLead } from '../api/leads';
+import { toApiError } from '../api/client';
+import { claimLead, listQueue, releaseLead } from '../api/leads';
 import { usePolling } from '../api/usePolling';
 import { getLead, getTimeline, markRead, type LeadDetail, type TimelineEntry } from '../api/workspace';
 import { useAuth } from '../auth/store';
@@ -21,6 +22,13 @@ import { formatAge, formatPhone, leadName } from '../lib/format';
  * The shape is a full-width header - who, score, age, source, flow state, and
  * the two contact actions - over three columns: what the lead told us, the
  * conversation, and the wrap-up. `FRONTEND.md` records what changed and why.
+ *
+ * **One page for every lead, picked or not - Jeel, 2026-09-28.** Opening a
+ * lead to look at it and picking it used to land on two different pages. Now
+ * both land here, and the only difference is whether the actions work: on a
+ * lead you hold they do; on any other they are switched off, with Pick right
+ * there. The server refuses a write from anyone who does not hold the lead, so
+ * the switched-off controls are a courtesy, not the lock - AGENT-WORKSPACE.md.
  *
  * **The Call button is here and disabled.** Twilio is Phase 4, and CLAUDE.md
  * §10 asks for it visible but inert so the screen does not change shape later.
@@ -75,6 +83,8 @@ export function WorkspacePage() {
   const me = useAuth((s) => s.user);
 
   const [releasing, setReleasing] = useState(false);
+  const [picking, setPicking] = useState(false);
+  const [pickError, setPickError] = useState<string | null>(null);
   const [focusCompose, setFocusCompose] = useState(0);
   const [place, setPlace] = useState<{ index: number; total: number } | null>(null);
 
@@ -113,22 +123,46 @@ export function WorkspacePage() {
     };
   }, [leadId, valid]);
 
+  const mine = Boolean(lead?.claimedBy && me && lead.claimedBy.id === me.id);
+
   /**
-   * Opening the lead is what clears the unread flag - CLAUDE.md §10. Fired once
-   * the lead loads and only while the flag is set, so a poll every five seconds
-   * does not post it again and again.
+   * Working the lead is what clears the unread flag - CLAUDE.md §10. Only once
+   * it is yours: looking at a lead is not handling it, and marking the reply
+   * read is what lets an expired lead leave the queue, so a glance must not do
+   * it. Fired only while the flag is set, so a poll every five seconds does not
+   * post it again and again.
    */
   useEffect(() => {
-    if (lead?.flags.unread) {
+    if (mine && lead?.flags.unread) {
       void markRead(lead.id).then(refresh);
     }
-  }, [lead?.id, lead?.flags.unread, refresh]);
+  }, [mine, lead?.id, lead?.flags.unread, refresh]);
 
-  /** Releases the claim on the way out, so the lead is not left locked. */
+  /** Pick from inside the page: the lead becomes yours and the actions wake up. */
+  const pick = async () => {
+    setPicking(true);
+    setPickError(null);
+    try {
+      await claimLead(leadId);
+    } catch (err) {
+      // Someone was first - their name is in the message, and the refresh
+      // below turns this page into their lead, read-only.
+      setPickError(toApiError(err).message);
+    } finally {
+      await refresh();
+      setPicking(false);
+    }
+  };
+
+  /**
+   * Releases the claim on the way out, so the lead is not left locked - but
+   * only a claim that is yours. A superadmin looking at someone else's lead
+   * would otherwise take it off them just by leaving.
+   */
   const backToQueue = async () => {
     setReleasing(true);
     try {
-      await releaseLead(leadId);
+      if (mine) await releaseLead(leadId);
     } catch {
       // A failed release must not trap the agent on the screen. The claim is
       // visible to a superadmin, who can force-release it.
@@ -162,7 +196,6 @@ export function WorkspacePage() {
   const score = lead.conversation?.score ?? 0;
   const tier = lead.conversation?.tier ?? null;
   const held = lead.claimedBy;
-  const heldByMe = Boolean(held && me && held.id === me.id);
   const messageCount = (entries ?? []).filter(
     (e) => e.kind === 'sms' || e.kind === 'inbound' || e.kind === 'agent_sms'
   ).length;
@@ -183,12 +216,28 @@ export function WorkspacePage() {
         {held && (
           <span className="workspace__held">
             <span className="workspace__held-dot" aria-hidden="true" />
-            Held by {heldByMe ? 'you' : held.name} · since {timeFormat.format(new Date(held.at))}
+            Held by {mine ? 'you' : held.name} · since {timeFormat.format(new Date(held.at))}
           </span>
         )}
       </div>
 
       {error && <Banner tone="warning">{error} Showing the last update.</Banner>}
+      {pickError && <Banner tone="error">{pickError}</Banner>}
+
+      {!mine && (
+        <div className={`workspace__viewing${held ? ' workspace__viewing--held' : ''}`}>
+          <span>
+            {held
+              ? `${held.name} is working this lead. You can look, but not act on it.`
+              : 'You are viewing this lead. Pick it to text them or record an outcome.'}
+          </span>
+          {!held && (
+            <Button loading={picking} onClick={() => void pick()}>
+              Pick
+            </Button>
+          )}
+        </div>
+      )}
 
       {/* A blocked number stops every action, not just SMS - the flag is what
           the disposition and compose controls read. */}
@@ -247,7 +296,7 @@ export function WorkspacePage() {
 
         <div className="lead-head__actions">
           <div className="lead-head__buttons">
-            {!lead.flags.dnc && (
+            {mine && !lead.flags.dnc && (
               <Button variant="secondary" onClick={() => setFocusCompose((n) => n + 1)}>
                 Send SMS
               </Button>
@@ -364,12 +413,12 @@ export function WorkspacePage() {
               )}
             </div>
 
-            <SmsCompose lead={lead} refresh={refresh} focusKey={focusCompose} />
+            <SmsCompose lead={lead} refresh={refresh} focusKey={focusCompose} canAct={mine} />
           </article>
         </div>
 
         <div className="workspace__col workspace__col--right">
-          <ActionsPanel lead={lead} refresh={refresh} />
+          <ActionsPanel lead={lead} refresh={refresh} canAct={mine} />
         </div>
       </div>
     </section>

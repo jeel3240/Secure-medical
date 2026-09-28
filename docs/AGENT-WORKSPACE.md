@@ -32,9 +32,35 @@ and still needs a control. `QUEUE.md`, "What the button offers".)*
 **A claim by a deactivated agent does not count.** The queue already ignores it
 (`QUEUE.md`); the claim endpoint treats such a lead as free.
 
-**Opening a lead marks it read,** clearing `leads.has_unread_inbound`. That flag
-is what brings an expired lead who texted back into the queue, and nothing
-cleared it until Phase 3 task 3, so the lead never left.
+**Every write needs the lead to be yours - Jeel, 2026-09-28.** A note, a new
+callback, an agent SMS, a disposition and marking a reply read are all refused
+unless the caller holds the lead. Reading it is not: the workspace shows any
+lead, and switches its actions off until you pick. `db/holder.ts` answers who
+holds it; `requireHolding` in `api/leads.ts` runs before each write, and before
+the body is validated, so a caller who may not act learns nothing from the
+shape of the request.
+
+| Caller | Response |
+|---|---|
+| Holds the lead | Goes ahead |
+| Nobody holds it | 409 `not_picked` - "Pick this lead before acting on it." |
+| Someone else holds it | 409 `already_claimed` - "{name} is working this lead." |
+| No such lead | 404 |
+
+Before this, claiming was the only place the lock was enforced. Every write was
+accepted from anyone signed in, on any lead: an agent who opened a colleague's
+lead by its address could text it or block its number, and the only guard was
+the screen hiding the controls. A claim held by a deactivated agent reads as
+free, matching the claim endpoint. Rescheduling or completing a callback from
+My Callbacks (`PATCH /api/callbacks/:id`) is not guarded - it is the agent's own
+callback, and they may not hold the lead at that moment.
+
+**Picking a lead marks it read,** clearing `leads.has_unread_inbound` - not
+opening it. *(2026-09-28: it used to be opening, and a superadmin glancing at a
+lead, or an agent looking before deciding, was enough to clear the flag and let
+an expired lead who texted back leave the queue unhandled.)* The flag is what
+brings that lead into the queue, and nothing cleared it until Phase 3 task 3,
+so the lead never left.
 
 *Changed 2026-09-26:* the clearing is `POST /api/leads/:id/read`, and the `GET`
 does **not** do it. The workspace polls the lead every few seconds, so a `GET`

@@ -83,9 +83,12 @@ function toLocalInput(date: Date): string {
 export function ActionsPanel({
   lead,
   refresh,
+  canAct,
 }: {
   lead: LeadDetail;
   refresh: () => Promise<void>;
+  /** False on a lead you have not picked: everything below is switched off. */
+  canAct: boolean;
 }) {
   const navigate = useNavigate();
   const me = useAuth((s) => s.user);
@@ -219,114 +222,120 @@ export function ActionsPanel({
         <span className="wrapup__step">Step {step} of 3</span>
       </header>
 
-      {problems.length > 0 && (
-        <Banner tone="error">
-          {problems.map((p) => (
-            <span key={p} className="actions-panel__problem">
-              {p}
-            </span>
-          ))}
-        </Banner>
-      )}
-      {saved && <Banner tone="success">{saved}</Banner>}
-
-      <section className="wrapup__section">
-        <h3 className="wrapup__legend">
-          <span className="wrapup__num">1</span> Outcome
-        </h3>
-
-        <div role="radiogroup" aria-label="Disposition">
-          {GROUPS.map((group) => (
-            <div className="wrapup__group" key={group.title}>
-              <span className="wrapup__group-title">{group.title}</span>
-              <div className="wrapup__choices">
-                {group.values.map((value) => (
-                  <button
-                    key={value}
-                    type="button"
-                    role="radio"
-                    aria-checked={disposition === value}
-                    className={`outcome outcome--${group.tone}${
-                      disposition === value ? ' outcome--on' : ''
-                    }`}
-                    onClick={() => choose(value)}
-                  >
-                    <span className="outcome__dot" aria-hidden="true" />
-                    {DISPOSITION_LABEL[value]}
-                  </button>
-                ))}
-              </div>
-            </div>
-          ))}
-        </div>
-
-        <button
-          type="button"
-          className={`wrapup__dnc${disposition === 'dnc' ? ' wrapup__dnc--on' : ''}`}
-          aria-checked={disposition === 'dnc'}
-          role="radio"
-          onClick={() => choose('dnc')}
-        >
-          {disposition === 'dnc' ? 'Will mark as Do Not Contact' : 'Mark as Do Not Contact...'}
-        </button>
-      </section>
-
-      <section className="wrapup__section">
-        <h3 className="wrapup__legend">
-          <span className="wrapup__num">2</span> Callback
-          <span className="wrapup__optional">Optional</span>
-        </h3>
-        <div className="wrapup__choices">
-          {QUICK.map((quick) => (
-            <button
-              key={quick.label}
-              type="button"
-              className="chip-button"
-              onClick={() => {
-                setCallbackAt(toLocalInput(quick.at()));
-                setPicking(false);
-              }}
-            >
-              {quick.label}
-            </button>
-          ))}
-          <button type="button" className="chip-button" onClick={() => setPicking(true)}>
-            Pick time...
-          </button>
-        </div>
-        {(picking || callbackAt !== '') && (
-          <input
-            type="datetime-local"
-            className="actions-panel__input"
-            value={callbackAt}
-            onChange={(e) => setCallbackAt(e.target.value)}
-            aria-label="Callback date and time"
-          />
+      {/* A disabled fieldset switches off every control inside it at once -
+          outcome, callback, note, both Save buttons - so nothing can be missed.
+          The server refuses the write anyway; this saves the agent the round
+          trip. */}
+      <fieldset className="wrapup__fieldset" disabled={!canAct}>
+        {problems.length > 0 && (
+          <Banner tone="error">
+            {problems.map((p) => (
+              <span key={p} className="actions-panel__problem">
+                {p}
+              </span>
+            ))}
+          </Banner>
         )}
-      </section>
+        {saved && <Banner tone="success">{saved}</Banner>}
 
-      <section className="wrapup__section">
-        <h3 className="wrapup__legend">
-          <span className="wrapup__num">3</span> Note
-        </h3>
-        <textarea
-          id="note"
-          className="actions-panel__textarea"
-          rows={4}
-          value={note}
-          placeholder={`What did ${lead.firstName ?? 'the lead'} say?`}
-          onChange={(e) => setNote(e.target.value)}
-        />
-      </section>
+        <section className="wrapup__section">
+          <h3 className="wrapup__legend">
+            <span className="wrapup__num">1</span> Outcome
+          </h3>
 
-      <div className="wrapup__save">
-        <Button variant="secondary" disabled={!dirty || saving} onClick={() => void onSave()}>
-          Save
-        </Button>
-        <Button loading={saving} onClick={() => void onSaveAndNext()}>
-          Save &amp; next lead &rarr;
-        </Button>
-      </div>
+          <div role="radiogroup" aria-label="Disposition">
+            {GROUPS.map((group) => (
+              <div className="wrapup__group" key={group.title}>
+                <span className="wrapup__group-title">{group.title}</span>
+                <div className="wrapup__choices">
+                  {group.values.map((value) => (
+                    <button
+                      key={value}
+                      type="button"
+                      role="radio"
+                      aria-checked={disposition === value}
+                      className={`outcome outcome--${group.tone}${
+                        disposition === value ? ' outcome--on' : ''
+                      }`}
+                      onClick={() => choose(value)}
+                    >
+                      <span className="outcome__dot" aria-hidden="true" />
+                      {DISPOSITION_LABEL[value]}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+
+          <button
+            type="button"
+            className={`wrapup__dnc${disposition === 'dnc' ? ' wrapup__dnc--on' : ''}`}
+            aria-checked={disposition === 'dnc'}
+            role="radio"
+            onClick={() => choose('dnc')}
+          >
+            {disposition === 'dnc' ? 'Will mark as Do Not Contact' : 'Mark as Do Not Contact...'}
+          </button>
+        </section>
+
+        <section className="wrapup__section">
+          <h3 className="wrapup__legend">
+            <span className="wrapup__num">2</span> Callback
+            <span className="wrapup__optional">Optional</span>
+          </h3>
+          <div className="wrapup__choices">
+            {QUICK.map((quick) => (
+              <button
+                key={quick.label}
+                type="button"
+                className="chip-button"
+                onClick={() => {
+                  setCallbackAt(toLocalInput(quick.at()));
+                  setPicking(false);
+                }}
+              >
+                {quick.label}
+              </button>
+            ))}
+            <button type="button" className="chip-button" onClick={() => setPicking(true)}>
+              Pick time...
+            </button>
+          </div>
+          {(picking || callbackAt !== '') && (
+            <input
+              type="datetime-local"
+              className="actions-panel__input"
+              value={callbackAt}
+              onChange={(e) => setCallbackAt(e.target.value)}
+              aria-label="Callback date and time"
+            />
+          )}
+        </section>
+
+        <section className="wrapup__section">
+          <h3 className="wrapup__legend">
+            <span className="wrapup__num">3</span> Note
+          </h3>
+          <textarea
+            id="note"
+            className="actions-panel__textarea"
+            rows={4}
+            value={note}
+            placeholder={`What did ${lead.firstName ?? 'the lead'} say?`}
+            onChange={(e) => setNote(e.target.value)}
+          />
+        </section>
+
+        <div className="wrapup__save">
+          <Button variant="secondary" disabled={!dirty || saving} onClick={() => void onSave()}>
+            Save
+          </Button>
+          <Button loading={saving} onClick={() => void onSaveAndNext()}>
+            Save &amp; next lead &rarr;
+          </Button>
+        </div>
+      </fieldset>
 
       {confirmingDnc && (
         <Modal
