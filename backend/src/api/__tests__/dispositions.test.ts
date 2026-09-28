@@ -71,6 +71,7 @@ describe('setting a disposition', () => {
   });
 
   it.each([
+    'sold',
     'interested',
     'callback_set',
     'no_answer',
@@ -93,7 +94,7 @@ describe('setting a disposition', () => {
   it.each([
     ['missing', {}],
     ['empty', { value: '' }],
-    ['not in the seven', { value: 'maybe_later' }],
+    ['not in the list', { value: 'maybe_later' }],
     ['not a string', { value: 3 }],
   ])('rejects a value that is %s', async (_label, payload) => {
     const { agent } = await setup();

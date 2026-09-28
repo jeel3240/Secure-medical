@@ -1,9 +1,12 @@
 import { api } from './client';
 
+/** Mirrors LeadStatus in backend/src/db/leads.ts. */
 export type LeadStatus =
   | 'awaiting_reply'
-  | 'in_progress'
-  | 'completed'
+  | 'answering'
+  | 'ready_to_call'
+  | 'working'
+  | 'closed'
   | 'needs_review'
   | 'opted_out'
   | 'expired';
@@ -16,6 +19,8 @@ export interface AdminLead {
   source: string | null;
   receivedAt: string | null;
   status: LeadStatus | null;
+  /** On a closed lead, the outcome that closed it. Null otherwise. */
+  outcome: string | null;
   stepReached: number | null;
   score: number | null;
   tier: string | null;

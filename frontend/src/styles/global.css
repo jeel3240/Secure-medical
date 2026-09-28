@@ -1139,7 +1139,7 @@ a {
 .leads__tabs {
   display: flex;
   flex-wrap: wrap;
-  gap: var(--space-1);
+  column-gap: 0;
   border-bottom: 1px solid var(--color-border);
   margin-bottom: var(--space-4);
 }
@@ -1147,8 +1147,10 @@ a {
 .leads__tab {
   display: inline-flex;
   align-items: center;
-  gap: var(--space-2);
-  padding: var(--space-3) var(--space-4);
+  gap: var(--space-1);
+  /* Nine tabs since Working and Closed were added - 2026-09-28. Tighter
+     sides keep them on one line down to a 1280px screen. */
+  padding: var(--space-3) var(--space-2);
   border: 0;
   border-bottom: 2px solid transparent;
   background: none;

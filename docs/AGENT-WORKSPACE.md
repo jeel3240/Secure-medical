@@ -94,7 +94,7 @@ the agent SMS box is disabled on a DNC lead rather than failing at send time.
 | `POST` | `/api/leads/:id/release` | Releases your own claim. A superadmin may release anyone's. |
 | `POST` | `/api/leads/:id/notes` | `{ body }`. |
 | `POST` | `/api/leads/:id/messages` | `{ body }` - agent SMS, one segment (160). Sets the take-over timestamp. 409 on a DNC number, 502 when EZ Texting refuses it. |
-| `POST` | `/api/leads/:id/dispositions` | `{ value, confirmDnc? }` - one of the seven in `DESIGN-PROMPT.md` section 3. `dnc` also blocks the number and needs `confirmDnc: true`. |
+| `POST` | `/api/leads/:id/dispositions` | `{ value, confirmDnc? }` - one of the eight in `core/dispositions.ts`, "Dispositions" below. `dnc` also blocks the number and needs `confirmDnc: true`. |
 | `POST` | `/api/leads/:id/callbacks` | `{ scheduledAt, agentId? }` - defaults to you; a superadmin may assign another agent. |
 | `PATCH` | `/api/callbacks/:id` | `{ scheduledAt }` to reschedule, or `{ done: true }` to complete. |
 | `GET` | `/api/callbacks?when=today\|upcoming\|overdue&agentId=` | My Callbacks. `agentId` is superadmin only. |
@@ -164,13 +164,15 @@ callback between tabs.
 
 ## Dispositions
 
-`db/dispositions.ts` for the write, `core/dispositions.ts` for the list of
-seven, `POST /api/leads/:id/dispositions`, 201 with the row.
+`db/dispositions.ts` for the write, `core/dispositions.ts` for the list,
+`POST /api/leads/:id/dispositions`, 201 with the row.
 
-The seven, as stored: `interested`, `callback_set`, `no_answer`, `voicemail`,
-`not_interested`, `wrong_number`, `dnc`. `dispositions.value` is plain TEXT with
-no check constraint, so `core/dispositions.ts` is the only thing keeping the
-column to a known set - an eighth value means editing that file. The route
+The eight, as stored: `sold`, `interested`, `callback_set`, `no_answer`,
+`voicemail`, `not_interested`, `wrong_number`, `dnc`. `sold` was added by Jeel
+on 2026-09-28 - there was no way to record a sale. `dispositions.value` is
+plain TEXT with no check constraint, so `core/dispositions.ts` is the only
+thing keeping the column to a known set - a new value means editing that file,
+and no migration. The route
 accepts any case and trims, so `  No_Answer ` stores `no_answer`.
 
 **Append-only, like notes.** An agent who changes their mind adds another and
@@ -182,7 +184,7 @@ different story from one `interested`.
 `confirm_required`. `DESIGN-PROMPT.md` 3 puts a confirm dialog in front of it
 on the screen; the same guard sits on the API, because the block is lifted only
 by a START from the lead and a mis-typed request should not be able to set it.
-The other six need no confirmation.
+The others need no confirmation.
 
 **The block and the disposition commit together,** in one transaction with the
 lead row locked. The alternative - write the row, then block - can leave a lead
@@ -197,24 +199,38 @@ like one blocked by a STOP: it leaves the queue, `sendMessage` refuses it with
 releases it (Jeel, 2026-09-22 - START releases an agent's block too). The reason
 is stored as `agent_disposition` so the DNC screen can tell the two apart.
 
-### What a disposition does not do
+### Which outcomes close a lead - 2026-09-28
 
-**It does not remove the lead from the queue** - except `dnc`, and that only
-because of the `dnc_list` row, not the disposition. `db/queue.ts` does not read
-the `dispositions` table at all. A lead dispositioned `not_interested` stays in
-the queue at full score and the next agent picks it up again.
+**Sold, Not interested and Wrong number close the lead.** It leaves the queue
+and reads Closed on Admin > Leads (`ADMIN-LEADS.md`, "Closed"). The rest -
+Interested, Callback set, No answer, Voicemail - mean "try again", and the lead
+stays. `CLOSING_DISPOSITIONS` in `core/dispositions.ts` is the list, and
+`db/lead-state.ts` the one SQL definition both screens use.
 
-That is worth a decision from Jeel rather than a quiet fix here: it could be
-that a closing disposition should drop the lead out, or that the queue should
-tag it `worked` and sort it below the rest, or that it is right as it is because
-the disposition screen is a record and the queue is a work list. Nothing is
-built either way. `scripts/dispositions-live-check.ts` pins the current
-behaviour so a change to it is deliberate.
+| After saving | The lead |
+|---|---|
+| Sold, Not interested, Wrong number | Leaves the queue once the agent moves on. While they still hold it - between Save and Back to queue - it stays, so it does not vanish from under them |
+| DNC | Leaves the queue, because the number is blocked - as before |
+| Any other outcome | Stays |
+
+**The newest outcome decides.** A closed lead marked Interested later is back.
+
+**A closed lead that texts us comes back** as an Inbound reply, because a
+person has to read it.
+
+**A booked callback does not hold a closed lead in.** It stays on My Callbacks
+until someone marks it done.
+
+Until this change the queue did not read `dispositions` at all, so a lead
+marked Not interested - or sold, had there been a way to say so - stayed at
+full score and the next agent picked it up again.
 
 `scripts/dispositions-live-check.ts` proves the parts that live in the database:
 the transaction, that blocking reuses the single row a number is allowed, that a
-blocked lead leaves the queue and a released one returns, and that re-blocking
-after a release clears the release columns.
+blocked lead leaves the queue and a released one returns, that re-blocking
+after a release clears the release columns - and which outcomes close a lead,
+and what keeps or brings a closed one back. Last run 2026-09-28: 34 checks, all
+passing.
 
 
 ## Agent SMS

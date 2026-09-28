@@ -3,8 +3,10 @@
  *
  * What mocks cannot show: that the disposition and the dnc_list block commit
  * together, that blocking reuses the one row a number is allowed, that a
- * blocked lead actually leaves the queue, and that a block set by an agent
- * looks to everything downstream exactly like one set by a STOP reply.
+ * blocked lead actually leaves the queue, that a block set by an agent looks
+ * to everything downstream exactly like one set by a STOP reply - and, since
+ * 2026-09-28, that a closing outcome takes a lead out of the queue and what
+ * brings it back.
  *
  * It writes rows, so it refuses to run against a database that holds any:
  *
@@ -89,10 +91,56 @@ async function main(): Promise<void> {
     check('blocks nothing', res.ok && res.disposition.blockedNumber, false);
     check('writes no dnc row', await dncRow('+15550000501'), null);
 
-    // Worth knowing: the queue does not read dispositions, so this lead is
-    // still queued at full score. See AGENT-WORKSPACE.md, "What a disposition
-    // does not do".
-    check('and the lead stays in the queue', await inQueue(lead), true);
+    // Until 2026-09-28 the queue did not read dispositions, and this lead
+    // stayed queued at full score for the next agent to call again.
+    check('and closes the lead: it leaves the queue', await inQueue(lead), false);
+  }
+
+  console.log('\nwhich outcomes close a lead');
+  {
+    const cases: [string, boolean][] = [
+      ['sold', false],
+      ['not_interested', false],
+      ['wrong_number', false],
+      ['interested', true],
+      ['callback_set', true],
+      ['no_answer', true],
+      ['voicemail', true],
+    ];
+    let n = 510;
+    for (const [value, stays] of cases) {
+      const lead = await makeQueuedLead(`+15550000${n++}`, value);
+      await setDisposition(lead, maya, value as never);
+      check(`${value}: ${stays ? 'stays in' : 'leaves'} the queue`, await inQueue(lead), stays);
+    }
+  }
+
+  console.log('\nwhat keeps or brings a closed lead back');
+  {
+    const reopened = await makeQueuedLead('+15550000520', 'Reopened');
+    await setDisposition(reopened, maya, 'sold');
+    await setDisposition(reopened, maya, 'interested');
+    check('a later non-closing outcome reopens it - the newest decides', await inQueue(reopened), true);
+
+    const wrote = await makeQueuedLead('+15550000521', 'Wrote');
+    await setDisposition(wrote, maya, 'sold');
+    await pool.query(`UPDATE leads SET has_unread_inbound = true WHERE id = $1`, [wrote]);
+    check('texting us afterwards brings it back, for a person to read', await inQueue(wrote), true);
+
+    const held = await makeQueuedLead('+15550000522', 'Held');
+    await pool.query(`UPDATE leads SET assigned_to = $2, assigned_at = now() WHERE id = $1`, [held, maya]);
+    await setDisposition(held, maya, 'sold');
+    check('it stays while the agent still holds it', await inQueue(held), true);
+    await pool.query(`UPDATE leads SET assigned_to = NULL, assigned_at = NULL WHERE id = $1`, [held]);
+    check('and leaves once they release it', await inQueue(held), false);
+
+    const booked = await makeQueuedLead('+15550000523', 'Booked');
+    await pool.query(
+      `INSERT INTO callbacks (lead_id, agent_id, scheduled_at) VALUES ($1, $2, now() + interval '1 day')`,
+      [booked, maya]
+    );
+    await setDisposition(booked, maya, 'not_interested');
+    check('an open callback does not hold a closed lead', await inQueue(booked), false);
   }
 
   console.log('\nappend-only');

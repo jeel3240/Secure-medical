@@ -1,14 +1,27 @@
+import { CLOSED_SQL, LATEST_DISPOSITION_SQL, WORKED_SQL } from './lead-state';
 import { pool } from './pool';
 
 /**
- * Status tabs on Admin > Leads, from DESIGN-PROMPT.md section 6g. Derived from
- * the lead's newest conversation rather than stored, so it stays true as the
- * state machine advances a conversation.
+ * Status tabs on Admin > Leads, from DESIGN-PROMPT.md section 6g. Derived, not
+ * stored, so a status stays true as the conversation advances and agents work
+ * the lead.
+ *
+ * A lead's whole life, in order - Jeel, 2026-09-28:
+ *
+ *   awaiting_reply -> answering -> ready_to_call -> working -> closed
+ *
+ * with needs_review, expired and opted_out as the ways the SMS part can end
+ * otherwise. `answering` was called `in_progress` and `ready_to_call` was
+ * `completed`, renamed the same day: "In progress" also means an agent holding
+ * a lead on the queue, and "Completed" read as finished when the calling had
+ * not started. ADMIN-LEADS.md, "Status".
  */
 export type LeadStatus =
   | 'awaiting_reply'
-  | 'in_progress'
-  | 'completed'
+  | 'answering'
+  | 'ready_to_call'
+  | 'working'
+  | 'closed'
   | 'needs_review'
   | 'opted_out'
   | 'expired';
@@ -21,6 +34,9 @@ export interface AdminLeadRow {
   source: string | null;
   receivedAt: string | null;
   status: LeadStatus | null;
+  /** On a closed lead, the outcome that closed it: `sold`, `not_interested`
+   *  or `wrong_number`. Null otherwise. */
+  outcome: string | null;
   stepReached: number | null;
   score: number | null;
   tier: string | null;
@@ -74,18 +90,29 @@ const BASE = `
 `;
 
 /**
- * Mirrors the tabs in the spec. Ordering matters: opted_out wins over
- * everything, and an open conversation splits on whether any question has been
- * answered.
+ * The first match wins, so the order is the rule:
+ *
+ * 1. opted_out - a blocked number overrides everything.
+ * 2. closed - an agent recorded an outcome that finishes the lead.
+ * 3. working - an agent has done something with it. This outranks every SMS
+ *    status: once a person is on a lead, what the conversation says matters
+ *    less than that someone is handling it - a needs-review or expired lead an
+ *    agent is working reads Working.
+ * 4. the conversation: needs_review, ready_to_call, expired, then an open one
+ *    split on whether any question has been answered.
+ *
+ * `db/lead-state.ts` defines closed and working, shared with the queue.
  */
 const STATUS_SQL = `
   CASE
     WHEN d.id IS NOT NULL OR c.status = 'suppressed' THEN 'opted_out'
+    WHEN ${CLOSED_SQL} THEN 'closed'
+    WHEN ${WORKED_SQL} THEN 'working'
     WHEN c.status = 'review' THEN 'needs_review'
-    WHEN c.status = 'completed' THEN 'completed'
+    WHEN c.status = 'completed' THEN 'ready_to_call'
     WHEN c.status = 'expired' THEN 'expired'
     WHEN c.status = 'open' AND (c.q1 IS NOT NULL OR c.q2 IS NOT NULL OR c.q3 IS NOT NULL)
-      THEN 'in_progress'
+      THEN 'answering'
     WHEN c.status = 'open' THEN 'awaiting_reply'
     ELSE NULL
   END
@@ -146,6 +173,7 @@ export async function listAdminLeads(query: AdminLeadQuery): Promise<AdminLeadPa
     `SELECT l.id, l.phone, l.first_name, l.last_name, l.source,
             COALESCE(l.ezt_added_at, l.created_at) AS received_at,
             ${STATUS_SQL} AS status,
+            ${LATEST_DISPOSITION_SQL} AS latest_disposition,
             ${STEP_SQL} AS step_reached,
             c.score, c.tier,
             COALESCE(m.received_at, m.created_at) AS last_activity_at,
@@ -184,6 +212,7 @@ export async function listAdminLeads(query: AdminLeadQuery): Promise<AdminLeadPa
       source: r.source,
       receivedAt: r.received_at?.toISOString() ?? null,
       status: r.status,
+      outcome: r.status === 'closed' ? r.latest_disposition : null,
       stepReached: r.step_reached,
       // The running score, not only the final one. Scoring starts at the first
       // reply, so a lead part-way through has a real score and tier worth
