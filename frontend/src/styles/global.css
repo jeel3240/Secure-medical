@@ -2654,6 +2654,7 @@ a {
 }
 
 .convo__bubble--out {
+  position: relative;
   border: 1px solid var(--color-border);
   background: var(--color-surface-muted);
   border-bottom-right-radius: var(--radius-sm);
@@ -2664,12 +2665,19 @@ a {
   background: var(--color-surface-hover);
 }
 
-/* Sent: one tick at the end of the bubble - Conversation.tsx says why one. */
+/* Sent: one tick in the bubble's bottom-right corner - Conversation.tsx says
+   why one. `.convo__bubble--out` anchors it; the spacer keeps the last line of
+   text clear of it. */
 .convo__tick {
-  display: inline-block;
-  margin-left: var(--space-2);
-  vertical-align: -2px;
+  position: absolute;
+  right: var(--space-2);
+  bottom: var(--space-2);
   color: var(--color-text-subtle);
+}
+
+.convo__tick-space {
+  display: inline-block;
+  width: var(--space-4);
 }
 
 .convo__choice {

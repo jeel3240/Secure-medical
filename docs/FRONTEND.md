@@ -207,7 +207,8 @@ blocked-number notice are unchanged.
 
 **A sent message gets a tick, not a banner - Jeel, 2026-09-28.** A green
 "Sent." box appeared under the composer after every send. It is gone: the
-message shows up in the thread with one tick at the end of the bubble, and a
+message shows up in the thread with one tick in the bubble's bottom-right
+corner, as in WhatsApp, and a
 first send already adds "Agent took over - automated questions stopped" to the
 thread. A failed send still shows its red error above the composer.
 

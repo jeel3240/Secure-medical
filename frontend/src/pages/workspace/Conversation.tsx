@@ -64,7 +64,8 @@ export function labelReplies(entries: TimelineEntry[], chips: AnswerChip[]): Map
 
 /**
  * One tick on a message we sent - Jeel, 2026-09-28, in place of a "Sent."
- * banner under the composer.
+ * banner under the composer. Pinned to the bubble's bottom-right corner, as in
+ * WhatsApp, so it sits in the same place however the text wraps.
  *
  * One, not WhatsApp's two. A message is in the thread only once EZ Texting has
  * accepted it, so one tick is true. A second would mean "reached the phone",
@@ -167,7 +168,14 @@ export function Conversation({
               }`}
             >
               {body}
-              {!failed && <SentTick />}
+              {!failed && (
+                <>
+                  {/* Holds the tick's space on the last line, so text never
+                      runs underneath it. */}
+                  <span className="convo__tick-space" aria-hidden="true" />
+                  <SentTick />
+                </>
+              )}
             </div>
           </div>
         );
