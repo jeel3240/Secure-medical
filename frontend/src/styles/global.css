@@ -886,6 +886,17 @@ a {
   margin-bottom: var(--space-4);
 }
 
+/* A quiet line at the foot of a card, for what the page cannot do and why -
+   in place of a coloured explainer box. */
+.card-note {
+  margin: 0;
+  padding: var(--space-3) var(--space-5);
+  border-top: 1px solid var(--color-border);
+  background: var(--color-surface-muted);
+  color: var(--color-text-subtle);
+  font-size: var(--text-small);
+}
+
 /* The Live label, and under it anything else about freshness - Admin >
    Leads' EZ Texting sync line. Right-aligned, one above the other. */
 .page-header__status {
@@ -2308,8 +2319,9 @@ a {
 }
 
 /* DNC */
-.dnc__row--released {
+.dnc__no-lead {
   color: var(--color-text-muted);
+  font-weight: var(--weight-regular);
 }
 
 .dnc__released {

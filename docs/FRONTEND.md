@@ -189,8 +189,9 @@ away from their numbers. `.table th.right` fixes both pages.
 underline tabs in the link blue (`--color-accent`). Jeel: blue means the brand
 navy, the header's colour. They are now `Segmented`, like the queue's tier
 switcher: the chosen status in navy, sliding between options. The underline
-tabs left on My Callbacks and the DNC list moved to navy as well, so no
-selected tab anywhere uses the link blue.
+tabs left on My Callbacks moved to navy as well, so no selected tab anywhere
+uses the link blue. *(Later the same day the DNC list was rebuilt the same way
+as Admin > Leads, switcher included - `ADMIN.md`, "DNC list".)*
 
 **Checked** at 1280, 1366, 1440 and 1920px: all nine statuses stay on one line,
 and nothing overflows the card. A row click opens the timeline; no console errors.

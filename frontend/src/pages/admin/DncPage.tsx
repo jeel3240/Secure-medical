@@ -1,10 +1,13 @@
 import { useCallback, useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { getDnc, type DncResult, type DncState } from '../../api/admin';
 import { usePolling } from '../../api/usePolling';
-import { Badge } from '../../components/Badge';
 import { Banner } from '../../components/Banner';
 import { Button } from '../../components/Button';
+import { LiveStatus } from '../../components/LiveStatus';
+import { Segmented } from '../../components/Segmented';
 import { Spinner } from '../../components/Spinner';
+import { StatusIcon } from '../../components/StatusIcon';
 import { formatPhone, formatReceived } from '../../lib/format';
 
 /**
@@ -19,6 +22,12 @@ import { formatPhone, formatReceived } from '../../lib/format';
  * **Released rows are shown as released, not hidden.** Hiding them would stop
  * the list matching who is actually blocked, and the dates are the record of
  * what happened.
+ *
+ * **Built like Admin > Leads - Jeel, 2026-09-28**, for consistency: one card
+ * with the queue's navy switcher, the same table, the phone under the name, the
+ * state as an icon and words, and "Live · updated" in the header. The blue
+ * explainer box became a quiet note at the foot of the card. A row with a lead
+ * opens that lead's timeline.
  */
 
 const TABS: { key: DncState; label: string }[] = [
@@ -39,6 +48,7 @@ const RELEASE_REASON: Record<string, string> = {
 };
 
 export function DncPage() {
+  const navigate = useNavigate();
   const [state, setState] = useState<DncState>('all');
   const [search, setSearch] = useState('');
   const [query, setQuery] = useState('');
@@ -56,7 +66,7 @@ export function DncPage() {
     () => getDnc({ state, q: query || undefined, page }),
     [state, query, page]
   );
-  const { data, loading, error } = usePolling<DncResult>(fetcher);
+  const { data, loading, error, updatedAt } = usePolling<DncResult>(fetcher);
 
   const counts = data?.counts ?? { all: 0, blocked: 0, released: 0 };
   const totalPages = data ? Math.max(1, Math.ceil(data.total / data.limit)) : 1;
@@ -70,111 +80,120 @@ export function DncPage() {
             Every number ever blocked, and whether the block is still live.
           </p>
         </div>
+        <LiveStatus updatedAt={updatedAt} paused={Boolean(error)} />
       </div>
 
       {error && <Banner tone="warning">{error} Showing the last update.</Banner>}
 
-      <Banner tone="info">
-        Numbers are added by a STOP reply, an EZ Texting opt-out, or an agent's DNC disposition, and
-        released only when the lead texts START. Nothing is added or deleted from this screen.
-      </Banner>
-
-      <div className="leads__tabs" role="tablist">
-        {TABS.map((tab) => (
-          <button
-            key={tab.key}
-            role="tab"
-            aria-selected={state === tab.key}
-            className={`leads__tab${state === tab.key ? ' leads__tab--active' : ''}`}
-            onClick={() => {
-              setState(tab.key);
+      <div className="card queue-card">
+        <div className="queue-card__toolbar">
+          <Segmented
+            label="State"
+            value={state}
+            onChange={(next) => {
+              setState(next);
               setPage(1);
             }}
-          >
-            {tab.label}
-            <span className="leads__tab-count">{counts[tab.key]}</span>
-          </button>
-        ))}
-      </div>
-
-      <div className="leads__filters">
-        <input
-          className="leads__search"
-          type="search"
-          placeholder="Search number or name"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          aria-label="Search the do-not-call list"
-        />
-        {data && <span className="leads__total">{data.total} numbers</span>}
-      </div>
-
-      {loading ? (
-        <div className="leads__loading">
-          <Spinner />
+            options={TABS.map((tab) => ({ value: tab.key, label: tab.label, count: counts[tab.key] }))}
+          />
+          <input
+            className="leads__search queue-card__search"
+            type="search"
+            placeholder="Search number or name"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            aria-label="Search the do-not-call list"
+          />
+          {data && <span className="leads__total">{data.total} numbers</span>}
         </div>
-      ) : !data || data.rows.length === 0 ? (
-        <p className="leads__empty">No numbers in this view.</p>
-      ) : (
-        <div className="table-wrap">
-          <table className="table">
-            <thead>
-              <tr>
-                <th>Number</th>
-                <th>Lead</th>
-                <th>Reason</th>
-                <th>Added</th>
-                <th>State</th>
-              </tr>
-            </thead>
-            <tbody>
-              {data.rows.map((row) => (
-                <tr key={row.phone} className={row.blocked ? undefined : 'dnc__row--released'}>
-                  <td className="tabular">{formatPhone(row.phone)}</td>
-                  <td>
-                    {/* A number can be blocked before we hold a lead for it -
-                        that is what protects a later partner delivery. */}
-                    {row.lead ? row.lead.name : <span className="summary__gap">No lead</span>}
-                  </td>
-                  <td>{REASON[row.reason] ?? row.reason}</td>
-                  <td>{formatReceived(row.addedAt)}</td>
-                  <td>
-                    {row.blocked ? (
-                      <Badge tone="muted">Blocked</Badge>
-                    ) : (
-                      <>
-                        <Badge tone="success">Released</Badge>
-                        <span className="dnc__released">
-                          {RELEASE_REASON[row.releasedReason ?? ''] ?? row.releasedReason}
-                          {row.releasedAt && ` · ${formatReceived(row.releasedAt)}`}
-                        </span>
-                      </>
-                    )}
-                  </td>
+
+        {loading ? (
+          <div className="leads__loading">
+            <Spinner />
+          </div>
+        ) : !data || data.rows.length === 0 ? (
+          <p className="leads__empty">No numbers in this view.</p>
+        ) : (
+          <div className="table-wrap">
+            <table className="table queue__table">
+              <thead>
+                <tr>
+                  <th>Lead</th>
+                  <th>Reason</th>
+                  <th>Added</th>
+                  <th>State</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
+              </thead>
+              <tbody>
+                {data.rows.map((row) => {
+                  const lead = row.lead;
+                  return (
+                    <tr
+                      key={row.phone}
+                      className={lead ? 'queue__row' : undefined}
+                      onClick={lead ? () => navigate(`/leads/${lead.id}/timeline`) : undefined}
+                      title={lead ? 'Open the timeline' : undefined}
+                    >
+                      <td>
+                        {/* A number can be blocked before we hold a lead for it -
+                            that is what protects a later partner delivery. */}
+                        <span className={`queue__name${lead ? '' : ' dnc__no-lead'}`}>
+                          {lead ? lead.name : 'No lead'}
+                        </span>
+                        <span className="queue__phone">{formatPhone(row.phone)}</span>
+                      </td>
+                      <td>{REASON[row.reason] ?? row.reason}</td>
+                      <td className="leads__when">{formatReceived(row.addedAt)}</td>
+                      <td>
+                        {row.blocked ? (
+                          <span className="status status--danger">
+                            <StatusIcon name="ban" />
+                            Blocked
+                          </span>
+                        ) : (
+                          <>
+                            <span className="status status--muted">
+                              <StatusIcon name="check" />
+                              Released
+                            </span>
+                            <span className="dnc__released">
+                              {RELEASE_REASON[row.releasedReason ?? ''] ?? row.releasedReason}
+                              {row.releasedAt && ` · ${formatReceived(row.releasedAt)}`}
+                            </span>
+                          </>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
 
-      {data && totalPages > 1 && (
-        <div className="leads__pager">
-          <Button variant="secondary" disabled={page <= 1} onClick={() => setPage((p) => p - 1)}>
-            Previous
-          </Button>
-          <span>
-            Page {page} of {totalPages}
-          </span>
-          <Button
-            variant="secondary"
-            disabled={page >= totalPages}
-            onClick={() => setPage((p) => p + 1)}
-          >
-            Next
-          </Button>
-        </div>
-      )}
+        {data && totalPages > 1 && (
+          <div className="leads__pager">
+            <Button variant="secondary" disabled={page <= 1} onClick={() => setPage((p) => p - 1)}>
+              Previous
+            </Button>
+            <span>
+              Page {page} of {totalPages}
+            </span>
+            <Button
+              variant="secondary"
+              disabled={page >= totalPages}
+              onClick={() => setPage((p) => p + 1)}
+            >
+              Next
+            </Button>
+          </div>
+        )}
+
+        <p className="card-note">
+          Numbers are added by a STOP reply, an EZ Texting opt-out, or an agent's DNC, and released
+          only when the lead texts START. Nothing is added or removed here.
+        </p>
+      </div>
     </section>
   );
 }
