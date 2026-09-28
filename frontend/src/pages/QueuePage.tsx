@@ -277,7 +277,13 @@ export function QueuePage() {
                           }}
                         >
                           {claiming === lead.id
-                            ? 'Picking...'
+                            ? // Resume sends the same claim as Pick, but it is not
+                              // picking anything - the lead is already yours and
+                              // the server keeps its original pick time. The
+                              // request only confirms nobody took it meanwhile.
+                              action === 'resume'
+                              ? 'Opening...'
+                              : 'Picking...'
                             : action === 'resume'
                               ? 'Resume'
                               : action === 'view'

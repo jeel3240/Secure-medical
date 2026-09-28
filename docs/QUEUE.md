@@ -221,9 +221,17 @@ question - what may this person actually do:
 | `rowAction` | When | Button | What it does |
 |---|---|---|---|
 | `pick` | Nobody holds it | **Pick** | Claims it, opens the workspace |
-| `resume` | You hold it | **Resume** | Back into your own lead. Re-claiming your own lead succeeds, but "Pick" implies taking something you already have |
+| `resume` | You hold it | **Resume** | Back into your own lead. Re-claiming your own lead succeeds, but "Pick" implies taking something you already have. While it checks, the button reads *Opening...*, not *Picking...* |
 | `view` | Someone else holds it, you are a superadmin | **View** | Opens the read-only timeline. Claims nothing, and the holder keeps the lead |
 | `locked` | Someone else holds it, you are an agent | *Locked* | No action |
+
+**Resume still asks the server, and changes nothing.** It sends the same claim
+as Pick. For a lead that is already yours, `db/claims.ts` keeps `assigned_to`
+and the original `assigned_at` - the pick time does not move - and only
+`updated_at` changes. It asks at all because the queue on screen can be up to
+five seconds old: in that gap a superadmin may have released the lead and
+someone else picked it, and the claim is what finds out. Checked against the
+database 2026-09-28.
 
 **Your own claim is tested before the superadmin rule.** Otherwise a superadmin
 working their own lead would be sent to the read-only page for a lead they are
