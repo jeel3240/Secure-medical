@@ -59,7 +59,10 @@ their old scores. Accepted - CLAUDE.md §10.
 `GET /api/admin/overview?period=today|7d|30d`
 
 KPI cards, a funnel, a per-agent table and a recent activity feed, all derived
-from the existing tables. Nothing here is stored as a running total; at 50-100
+from the existing tables. The funnel is Received, Responded, Completed, Called,
+Closed - it ended at Interested until that outcome was retired on 2026-09-28,
+and leads closed under the retired Sold, Not interested or Wrong number count
+as Closed (`AGENT-WORKSPACE.md`, "Dispositions"). Nothing here is stored as a running total; at 50-100
 leads a day the queries are cheap and a stale counter is worse than a slow one.
 
 **Live system status** - last poll, last inbound webhook, worker health - comes
