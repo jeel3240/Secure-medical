@@ -2,6 +2,7 @@ import '../config';
 import { pool } from '../db/pool';
 import { expireStaleConversations } from './expiry';
 import { pollOnce } from './poller';
+import { errText, log } from '../lib/log';
 
 const DEFAULT_POLL_INTERVAL_SECONDS = 60;
 
@@ -21,14 +22,17 @@ async function loop(): Promise<void> {
   for (;;) {
     try {
       const stats = await pollOnce();
-      console.log(
-        `poll tick fetched=${stats.fetched} inserted=${stats.inserted} ` +
-          `skipped=${stats.skipped} suppressed=${stats.suppressed} ` +
-          `openers=${stats.openersSent} ms=${stats.durationMs}`
-      );
+      log.info('poll.tick', {
+        fetched: stats.fetched,
+        inserted: stats.inserted,
+        skipped: stats.skipped,
+        suppressed: stats.suppressed,
+        openers: stats.openersSent,
+        ms: stats.durationMs,
+      });
     } catch (err) {
       // Checkpoint is left where it was, so the next tick retries this ground.
-      console.error('poll tick failed:', err instanceof Error ? err.message : err);
+      log.error('poll.failed', { err: errText(err) });
     }
 
     // Separate from the poll, and after it, so a failure on either side does
@@ -37,10 +41,10 @@ async function loop(): Promise<void> {
     try {
       const sweep = await expireStaleConversations();
       if (sweep.expired > 0) {
-        console.log(`expiry sweep: ${sweep.expired} conversation(s) expired ms=${sweep.durationMs}`);
+        log.info('conversation.expired', { expired: sweep.expired, ms: sweep.durationMs });
       }
     } catch (err) {
-      console.error('expiry sweep failed:', err instanceof Error ? err.message : err);
+      log.error('expiry.failed', { err: errText(err) });
     }
 
     let waitMs = DEFAULT_POLL_INTERVAL_SECONDS * 1000;
@@ -54,5 +58,5 @@ async function loop(): Promise<void> {
   }
 }
 
-console.log('worker started');
+log.info('worker.started');
 loop();

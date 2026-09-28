@@ -1,4 +1,5 @@
 import type { ErrorRequestHandler, NextFunction, Request, RequestHandler, Response } from 'express';
+import { errText, log } from '../lib/log';
 
 /** An error with a status and a stable machine-readable code the frontend can switch on. */
 export class HttpError extends Error {
@@ -29,6 +30,6 @@ export const errorHandler: ErrorRequestHandler = (err, req, res, _next) => {
     res.status(400).json({ error: 'invalid_json', message: 'Request body is not valid JSON.' });
     return;
   }
-  console.error('unhandled error', req.method, req.path, err);
+  log.error('http.unhandled', { method: req.method, path: req.path, err: errText(err) });
   res.status(500).json({ error: 'internal_error', message: 'Something went wrong.' });
 };

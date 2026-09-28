@@ -1,9 +1,8 @@
 # Logging and health
 
-Phase 3. **The health endpoint is built** (task 13, 2026-09-26);
-**structured logging is not** (task 26). Today the app logs readable single lines
-to stdout - `poll tick fetched=2 inserted=0 ...`, `webhook: lead 42 -> open
-step=1 ...` - so nothing can be queried by field yet.
+Phase 3. **Both are built**: the health endpoint (task 13, 2026-09-26) and
+structured logging (task 26, 2026-09-28). Every line the api and worker write is
+now one JSON object, queryable by field.
 
 Shipping those lines off the instance *is* configured, in
 `docker-compose.prod.yml`, and `WORKFLOW.md` says what that changes about reading
@@ -35,6 +34,67 @@ change only the shape.
 EZ Texting credentials.** Logs leave the machine and are kept for months. A lead
 id is enough to find the row; the row has the rest. This is the one rule in here
 that is not a preference.
+
+### As built - `src/lib/log.ts`
+
+```ts
+log.info('poll.tick', { fetched: 2, inserted: 1, ms: 336 });
+log.error('sms.failed', { leadId, key, err: errText(err) });
+```
+
+`ts`, `level`, `event` and `svc` are added to every line; anything else is the
+call site's. Undefined values are dropped, so optional fields do not fill each
+line with nulls.
+
+**`svc` is derived from the entry point,** not an env var - the worker always
+knows it is the worker, and a `SERVICE_NAME` that must be set in every compose
+file is one that will be missing from one of them. It was, on the first run:
+every worker line said `svc: "api"`, which is the one thing the field exists to
+prevent. `SERVICE_NAME` still wins when set.
+
+**`warn` and `error` go to stderr,** `info` to stdout, because most collectors
+alert on a container's stderr and `level=error` is meant to be the cheapest
+useful alarm there is.
+
+**`errText(err)` is how an error reaches a line.** It prefers an Axios
+`response.data`, which is where EZ Texting puts the reason, and falls back to
+the message. Never the stack - a stack can carry a message body inside an
+interpolated string.
+
+### Redaction is enforced, not trusted
+
+`redact()` strips forbidden fields before anything is written, one level deep
+into plain objects, and matches on suffixes too (`apiKey`, `accessToken`,
+`leadPhone`). A forbidden field is replaced with `[redacted]` rather than
+dropped: a field that vanishes is harder to debug than one obviously hidden.
+
+This is enforced in code rather than left to call sites because **six lines in
+`webhooks.ts` were logging raw phone numbers** before this task - into logs that
+ship off the instance and are kept for months. Verified after the change by
+firing a real webhook: the number appears nowhere in the output.
+
+### Events in use
+
+| Event | Where |
+|---|---|
+| `api.started`, `api.refused_start` | `api/index.ts` |
+| `worker.started`, `poll.tick`, `poll.failed` | `worker/index.ts` |
+| `conversation.expired`, `expiry.failed` | `worker/index.ts` |
+| `sms.sent`, `sms.failed`, `sms.no_template`, `sms.name_dropped`, `sms.record_failed` | `worker/poller.ts`, `api/reply-flow.ts`, `db/agent-sms.ts`, `db/failed-sends.ts` |
+| `webhook.rejected`, `webhook.ignored`, `webhook.failed` | `api/webhooks.ts` |
+| `conversation.advanced` | `api/webhooks.ts` |
+| `dnc.blocked`, `dnc.released` | `api/webhooks.ts` |
+| `http.unhandled` | `api/http.ts` |
+
+A new event belongs in this table as well as in the code, or whoever is querying
+the logs will never know to look for it.
+
+### What is deliberately not structured
+
+`src/cli/create-superadmin.ts` and `src/config.ts` still use `console`. The CLI
+prints a one-time password to a human's terminal - that must never become a
+shipped JSON log line - and `config.ts` runs before anything else exists, to say
+which env var is missing.
 
 ## Health endpoint
 

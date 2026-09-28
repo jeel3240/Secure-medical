@@ -195,6 +195,7 @@ you change something the docs describe, update the doc in the same commit.
     src/db/holder.ts        who holds a lead - checked before every write on it
     src/db/failed-sends.ts  keeps a message EZ Texting refused, marked failed
     scripts/admin-leads-live-check.ts  proves the Admin > Leads statuses
+    src/lib/log.ts          structured JSON logging, with redaction enforced
     src/cli/                create-superadmin
     src/integrations/       EZ Texting client
     src/db/users.ts         user queries; src/db/pool.ts

@@ -2,6 +2,7 @@ import { Request, Response, Router } from 'express';
 // Safe at module scope: db/dnc.ts imports nothing, taking its client as an
 // argument, so it does not drag in src/config the way db/pool does.
 import { blockNumber, DNC_REASONS, releaseNumber } from '../db/dnc';
+import { errText, log } from '../lib/log';
 
 export const webhooksRouter = Router();
 
@@ -99,7 +100,7 @@ function rejectBadToken(req: Request, res: Response): boolean {
   if (!expected) return false;
   if (supplied === expected) return false;
 
-  console.warn('webhook rejected: bad or missing path token');
+  log.warn('webhook.rejected', { reason: 'bad_token' });
   res.status(404).json({ error: 'not_found', message: 'No such endpoint.' });
   return true;
 }
@@ -112,12 +113,12 @@ const handleInbound = async (req: Request, res: Response) => {
   // Only inbound replies are handled. Anything else is acknowledged so EZ
   // Texting stops retrying it.
   if (payload?.type !== 'inbound_text.received') {
-    console.log(`webhook ignored: type=${payload?.type}`);
+    log.info('webhook.ignored', { reason: 'wrong_type', type: payload?.type });
     return res.sendStatus(200);
   }
 
   if (!payload.fromNumber || !payload.received || payload.message === undefined) {
-    console.warn('webhook missing fromNumber, received or message');
+    log.warn('webhook.ignored', { reason: 'missing_fields' });
     return res.sendStatus(200);
   }
 
@@ -145,11 +146,10 @@ const handleInbound = async (req: Request, res: Response) => {
       if (isOptIn(payload)) {
         const released = await releaseNumber(client, phone);
         await client.query('COMMIT');
-        console.log(
-          released
-            ? `webhook: ${phone} opted back in, block released (no lead)`
-            : `webhook: ignored reply from ${phone} - no lead for that number`
-        );
+        log.info(released ? 'dnc.released' : 'webhook.ignored', {
+          reason: released ? undefined : 'no_lead',
+          hasLead: false,
+        });
         return res.sendStatus(200);
       }
 
@@ -160,10 +160,10 @@ const handleInbound = async (req: Request, res: Response) => {
         await blockNumber(client, phone, STOP_REASON);
       }
       await client.query('COMMIT');
-      console.log(
-        `webhook: ignored reply from ${phone} - no lead for that number` +
-          (isOptOut(payload) ? ', added to dnc_list' : '')
-      );
+      log.info('webhook.ignored', {
+        reason: 'no_lead',
+        blocked: isOptOut(payload) || undefined,
+      });
       return res.sendStatus(200);
     }
 
@@ -184,7 +184,7 @@ const handleInbound = async (req: Request, res: Response) => {
 
     if (inserted.rowCount === 0) {
       await client.query('COMMIT');
-      console.log(`webhook: duplicate from ${phone} at ${payload.received}, ignored`);
+      log.info('webhook.ignored', { reason: 'duplicate', leadId });
       return res.sendStatus(200);
     }
 
@@ -197,7 +197,7 @@ const handleInbound = async (req: Request, res: Response) => {
     if (isOptIn(payload)) {
       const released = await releaseNumber(client, phone);
       if (released) {
-        console.log(`webhook: ${phone} opted back in, block released`);
+        log.info('dnc.released', { leadId });
       }
     }
 
@@ -229,11 +229,10 @@ const handleInbound = async (req: Request, res: Response) => {
     await client.query('COMMIT');
 
     if (optedOut) {
-      console.log(
-        pending?.result.conversation.status === 'suppressed'
-          ? `webhook: ${phone} opted out, open conversation suppressed`
-          : `webhook: ${phone} opted out, added to dnc_list (no open conversation)`
-      );
+      log.info('dnc.blocked', {
+        leadId,
+        suppressed: pending?.result.conversation.status === 'suppressed',
+      });
     }
 
     // After the commit, deliberately: a failed send must not roll back an
@@ -245,18 +244,24 @@ const handleInbound = async (req: Request, res: Response) => {
       // Says what actually happened: a send can be refused (dnc_list) or fail
       // while the conversation still advances, and a log line claiming it went
       // out would hide exactly the case worth noticing.
-      console.log(
-        `webhook: lead ${leadId} -> ${c.status} step=${c.step ?? '-'}` +
-          ` score=${c.score} tier=${c.tier ?? '-'}` +
-          (sentId ? ` sent=${pending.result.send}` : ` NOT sent=${pending.result.send}`)
-      );
+      log.info('conversation.advanced', {
+        leadId,
+        status: c.status,
+        step: c.step,
+        score: c.score,
+        tier: c.tier,
+        send: pending.result.send,
+        // A send can be refused (dnc_list) or fail while the conversation still
+        // advances; a line claiming it went out would hide the case worth seeing.
+        sent: Boolean(sentId),
+      });
     }
 
     return res.sendStatus(200);
   } catch (err) {
     await client.query('ROLLBACK');
     // 500 so EZ Texting retries; the dedupe makes that safe.
-    console.error('webhook failed:', err instanceof Error ? err.message : err);
+    log.error('webhook.failed', { err: errText(err) });
     return res.sendStatus(500);
   } finally {
     client.release();

@@ -18,6 +18,7 @@
  */
 
 import { pool } from './pool';
+import { errText, log } from '../lib/log';
 
 export async function recordFailedSend(
   leadId: number,
@@ -31,7 +32,7 @@ export async function recordFailedSend(
       [leadId, body, sentBy]
     );
   } catch (err) {
-    console.error(`could not record the failed send to lead ${leadId}:`, err instanceof Error ? err.message : err);
+    log.error('sms.record_failed', { leadId, err: errText(err) });
   }
 }
 
