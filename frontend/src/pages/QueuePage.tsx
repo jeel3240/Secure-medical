@@ -84,13 +84,18 @@ export function QueuePage() {
 
   const actionFor = useCallback((lead: QueueLead) => rowAction(lead, me), [me]);
 
-  /** A superadmin may look at a lead someone else holds, but not claim it. */
+  /**
+   * Look without picking: the read-only timeline. Assigns nothing and does not
+   * mark a reply read - only the workspace does that, and only Pick gets you
+   * there. What a row click does, and what a superadmin's View button does.
+   */
   const view = (lead: QueueLead) => navigate(`/leads/${lead.id}/timeline`);
 
   /**
-   * Claim, then open. Claiming from the queue rather than on arrival means the
-   * lock is taken at the moment of intent, so a row cannot sit locked because
-   * someone glanced at it.
+   * Pick, then open the workspace. Only the button calls this - Jeel,
+   * 2026-09-28: opening a lead to look at it must not assign it. A click on
+   * the row used to do this too, so an agent glancing at a lead took it and
+   * locked every colleague out without meaning to.
    */
   const open = async (lead: QueueLead) => {
     // Only a claim the server would allow: our own, or nobody's. A superadmin
@@ -233,10 +238,12 @@ export function QueuePage() {
                   <tr
                     key={lead.id}
                     className={`queue__row${locked ? ' queue__row--locked' : ''}`}
-                    // Locked rows are not clickable at all - the lock has to be
-                    // felt, not just seen.
-                    onClick={locked ? undefined : action === 'view' ? () => view(lead) : () => void open(lead)}
-                    title={locked ? `${locked} is working this lead` : undefined}
+                    // A row click only ever looks. Picking is the button's job
+                    // alone, so nothing is assigned by accident. Locked rows are
+                    // not clickable at all - the lock has to be felt, not just
+                    // seen.
+                    onClick={locked ? undefined : () => view(lead)}
+                    title={locked ? `${lead.tag.agentName} is working this lead` : undefined}
                     aria-disabled={locked ? true : undefined}
                   >
                     <td>

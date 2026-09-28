@@ -207,11 +207,15 @@ for up to five seconds at a time, and age is the queue's signal for how long
 someone has waited. Amber past 5 minutes, red past 15 for HOT - tighter for HOT
 because a HOT lead asked to be called now.
 
-**Clicking a queue row claims the lead, then opens it.** Claiming at the moment
-of intent means a row cannot sit locked because someone glanced at it. A 409
-shows the holder's name and refreshes, so the row mutes itself. Leaving the
-workspace releases the claim. *(2026-09-28: for a superadmin on a lead someone
-else holds, the row opens the read-only timeline instead and claims nothing.)*
+**Opening a lead never assigns it - Jeel, 2026-09-28.** A queue row click opens
+the read-only Lead Timeline, for everyone. Only the button assigns: **Pick**
+claims the lead and opens the workspace. The row click used to claim too, so an
+agent clicking a row to look at a lead took it and locked every colleague out
+without knowing. Looking also leaves an unread reply unread - only the workspace
+marks it read - so a lead like the expired one who texted back no longer drops
+out of the queue because someone glanced at it. A 409 on Pick still shows the
+holder's name and refreshes, so the row mutes itself. *Back to queue* and *Save
+& next* release the claim.
 
 **The button says what the click does to the database - Jeel, 2026-09-28.** It
 read "Open", which described where the click went rather than what it did: it

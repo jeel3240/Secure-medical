@@ -233,6 +233,11 @@ five seconds old: in that gap a superadmin may have released the lead and
 someone else picked it, and the claim is what finds out. Checked against the
 database 2026-09-28.
 
+**The row and the button do different things - 2026-09-28.** A row click only
+ever looks: it opens the read-only timeline, assigns nothing and leaves an
+unread reply unread. The button is the only thing that claims. Locked rows are
+still not clickable at all.
+
 **Your own claim is tested before the superadmin rule.** Otherwise a superadmin
 working their own lead would be sent to the read-only page for a lead they are
 in the middle of.

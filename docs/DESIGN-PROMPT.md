@@ -96,7 +96,7 @@ Role is set at login. Navigation adapts to role.
 11. **Actions** – "Open" button; on hover, quick "Call" and "SMS" icons. *(2026-09-28, Jeel: the button is **Pick**, not Open. Clicking it assigns the lead to the agent - `leads.assigned_to` - and "Open" said nothing about that, so an agent could take a lead without realising they had. It has four states, since "may click" and "may claim" are different questions: **Pick** when nobody holds it, **Resume** when you do, **View** when a superadmin looks at someone else's, and no button at all for an agent on someone else's. `QUEUE.md`, "What the button offers". Same wording on the My Callbacks row and the Lead Timeline header, which claim the same way.)*
 
 **Row behaviour**
-- Click row → opens Agent Workspace for that lead.
+- Click row → opens Agent Workspace for that lead. *(2026-09-28, Jeel: no - opening a lead must not assign it. A row click opens the read-only Lead Timeline; only the **Pick** button assigns the lead and opens the workspace. The row click used to pick, so an agent glancing at a lead took it and locked everyone else out without meaning to.)*
 - Locked rows (In progress by another agent) are visually muted and not clickable, with a tooltip.
 - New rows animate in at their sorted position.
 - Rows with `Inbound reply` show a small unread dot.
