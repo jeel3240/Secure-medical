@@ -57,9 +57,9 @@ describe('tier signal', () => {
     expect(container.textContent).toBe(word);
   });
 
-  it('shows a dash when there is no tier', () => {
+  it('shows a hyphen when there is no tier', () => {
     const { container } = render(<TierSignal tier={null} />);
-    expect(container.textContent).toBe('—');
+    expect(container.textContent).toBe('-');
     expect(container.querySelector('svg')).toBeNull();
   });
 });

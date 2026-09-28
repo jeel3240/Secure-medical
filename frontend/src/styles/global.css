@@ -1344,11 +1344,12 @@ a {
   text-align: center;
 }
 
-/* Hovering an action fills it with the accent blue - the Send button's blue,
-   the colour that means "you can do this" - and white text on top. */
+/* Hovering an action turns it into a primary button: the header's navy -
+   --color-primary is the same #0f2942 as --color-appbar - with white text.
+   Jeel, 2026-09-28. */
 .queue__action .btn--secondary:hover:not(:disabled) {
-  background: var(--color-accent);
-  border-color: var(--color-accent);
+  background: var(--color-primary);
+  border-color: var(--color-primary);
   color: var(--color-on-primary);
 }
 
@@ -1359,12 +1360,6 @@ a {
   font-size: var(--text-body);
   color: var(--color-text-subtle);
 }
-
-/* Waiting time. Overdue reads as weight rather than colour; the thresholds -
-   5 minutes for any lead, 15 for HOT - are in lib/format.ts. */
-.waiting--normal { color: var(--color-text-muted); }
-.waiting--warn { color: var(--color-text); }
-.waiting--urgent { color: var(--color-text); font-weight: var(--weight-bold); }
 
 /* Status: the mark's shape carries the meaning - filled for something
    happening, a ring for something waiting, a square for a past attempt. */

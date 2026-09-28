@@ -10,7 +10,7 @@ import { LockIcon } from '../components/LockIcon';
 import { QueueStatus } from '../components/QueueStatus';
 import { TierSignal } from '../components/TierSignal';
 import { Spinner } from '../components/Spinner';
-import { ageTone, answerLabel, formatAge, formatPhone, leadName } from '../lib/format';
+import { answerLabel, formatAge, formatPhone, leadName } from '../lib/format';
 import { rowAction } from '../lib/lock';
 
 /**
@@ -26,8 +26,9 @@ import { rowAction } from '../lib/lock';
  *
  * **Redesigned 2026-09-28 to Jeel's mockup.** One card holding the filters and
  * the table, a segmented tier switcher, tiers as signal bars, statuses as a
- * mark and words instead of coloured pills, and waiting time as weight rather
- * than colour. Colour is kept for what needs a person first. FRONTEND.md.
+ * mark and words instead of coloured pills, and every waiting time in the
+ * same weight and colour. Colour is kept for what needs a person first.
+ * FRONTEND.md.
  *
  * **No paging.** The endpoint truncates at 100 and says so; at 50-100 leads a
  * day that holds several days of queue. `total` drives the note when it bites.
@@ -41,8 +42,8 @@ const TIER_OPTIONS: { key: string; label: string }[] = [
   { key: 'LOW', label: 'Low' },
 ];
 
-/** Blank cells read as a dash, not a hyphen - "no answer yet", not a typo. */
-const EMPTY = '—';
+/** What a blank cell shows. A plain hyphen - Jeel, 2026-09-28. */
+const EMPTY = '-';
 
 const answer = (question: 1 | 2 | 3, choice: string | null) =>
   choice ? answerLabel(question, choice) : EMPTY;
@@ -252,7 +253,6 @@ export function QueuePage() {
                 {data.leads.map((lead) => {
                   const action = actionFor(lead);
                   const locked = action === 'locked';
-                  const tone = ageTone(lead.receivedAt, lead.tier, now);
 
                   return (
                     <tr
@@ -277,10 +277,10 @@ export function QueuePage() {
                       <td>{answer(2, lead.q2)}</td>
                       <td>{answer(3, lead.q3)}</td>
                       <td className="right tabular queue__score">{lead.score}</td>
-                      {/* Overdue reads as weight, not colour: bold past the
-                          brief's threshold for HOT (15 min), plain past it for
-                          any lead (5 min), muted before. lib/format.ts. */}
-                      <td className={`right mono waiting waiting--${tone}`}>
+                      {/* One style for every waiting time - Jeel, 2026-09-28.
+                          It used to turn bold for an overdue HOT lead, which
+                          left the column half dark, half light. */}
+                      <td className="right mono">
                         {formatAge(lead.receivedAt, now)}
                       </td>
                       <td className="mono queue__source">{lead.source ?? EMPTY}</td>

@@ -10,7 +10,7 @@ const FILLED: Record<string, number> = { HOT: 3, WARM: 2, LOW: 1 };
 const LABEL: Record<string, string> = { HOT: 'Hot', WARM: 'Warm', LOW: 'Low' };
 
 export function TierSignal({ tier }: { tier: string | null }) {
-  if (!tier) return <span className="tier-signal tier-signal--none">—</span>;
+  if (!tier) return <span className="tier-signal tier-signal--none">-</span>;
   const filled = FILLED[tier] ?? 0;
 
   return (

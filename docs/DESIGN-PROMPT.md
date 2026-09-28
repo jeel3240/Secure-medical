@@ -82,7 +82,7 @@ Role is set at login. Navigation adapts to role.
 5. **TIMING** – Today / This week / Researching / –
 6. **PREFERENCE** – Call me now / Text me / Contact me later / –
 7. **SCORE** – number, right-aligned, tabular
-8. **AGE** – `m:ss` since lead arrived, ticking live. Turns amber past 5 min, red past 15 min for HOT. *(2026-09-28: headed **WAITING**, monospace, and overdue shows as weight instead of colour - bold past 15 min for HOT, plain past 5 min, muted before. Same thresholds.)*
+8. **AGE** – `m:ss` since lead arrived, ticking live. Turns amber past 5 min, red past 15 min for HOT. *(2026-09-28, Jeel: headed **WAITING**, monospace, and no highlight at all - every waiting time is the same weight and colour. Neither amber and red nor bold; a column where some values stand out read as inconsistent.)*
 9. **SOURCE** – partner code, monospace
 10. **STATUS** – a tag with one of:
    - `New`
