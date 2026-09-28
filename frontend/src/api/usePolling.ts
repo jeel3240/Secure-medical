@@ -59,9 +59,10 @@ export interface PollingOptions {
    * way, instead of clearing it for a spinner. For a switch whose rows keep
    * the same shape - Overview's Today / 7 days / 30 days, Jeel 2026-09-28: the
    * whole page vanishing and coming back on every click read as broken, when
-   * only the numbers change. A filter that changes *which* rows are shown
-   * should not use it: showing the old rows under the new filter is wrong, not
-   * merely stale.
+   * only the numbers change. Also on the queue, Admin > Leads and the DNC
+   * list, where a switch changes *which* rows are shown: there the old rows
+   * must be faded and unclickable while `switching` - `.is-switching` - so no
+   * one acts on a row from the view they just left.
    */
   keepPreviousData?: boolean;
 }

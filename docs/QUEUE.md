@@ -227,7 +227,7 @@ a codebase ends up with five different refresh behaviours.
 | A stale response is discarded | A slow request from a filter the agent has already changed must not overwrite the current view |
 | The timer stops on unmount | Otherwise it polls forever and sets state on a dead component |
 | `refresh()` fetches now | So a claim or a note appears at once instead of up to 5s later |
-| `keepPreviousData` keeps the old data through a switch | Opt-in, 2026-09-28, for Admin > Overview's period switch: the numbers change but the page stays, faded while `switching` is true, instead of blanking for a spinner |
+| `keepPreviousData` keeps the old data through a switch | Opt-in, 2026-09-28: Overview's period, this queue's tier and search, Admin > Leads' status and the DNC list's state. The page stays and the old rows fade while `switching` is true, instead of blanking for a spinner. Faded rows are also unclickable (`.is-switching`), so nobody picks up a lead from the list they just switched away from |
 
 **The fetcher must be stable** - wrapped in `useCallback` with the filters as
 dependencies. When it changes that counts as a new view: the spinner returns and

@@ -96,7 +96,11 @@ export function QueuePage() {
     [tier, source, since, query]
   );
 
-  const { data, loading, error, refresh, updatedAt } = usePolling<QueueResponse>(fetcher);
+  const { data, loading, error, refresh, updatedAt, switching } = usePolling<QueueResponse>(fetcher, {
+    // The switcher and the search change rows, not the page: keep the old rows
+    // faded and unclickable until the new ones land - Jeel, 2026-09-28.
+    keepPreviousData: true,
+  });
 
   const actionFor = useCallback((lead: QueueLead) => rowAction(lead, me), [me]);
 
@@ -218,7 +222,7 @@ export function QueuePage() {
         ) : !data || data.leads.length === 0 ? (
           <p className="leads__empty">No leads in this view.</p>
         ) : (
-          <div className="table-wrap">
+          <div className={`table-wrap${switching ? ' is-switching' : ''}`}>
             <table className="table queue__table">
               <thead>
                 <tr>

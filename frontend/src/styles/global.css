@@ -1059,6 +1059,7 @@ a {
 
 .table-wrap {
   overflow-x: auto;
+  transition: opacity 120ms ease;
 }
 
 .table {
@@ -2319,11 +2320,14 @@ a {
   font-size: var(--text-small);
 }
 
-/* A card whose numbers are being replaced - Overview's period switch. The old
-   ones stay, a step back, until the new ones land; nothing blanks.
-   `.queue-card` carries the transition. */
+/* Content being replaced by a switch - Overview's period, the queue's tier,
+   Admin > Leads' status, the DNC list's state. The old stays, a step back,
+   until the new lands; nothing blanks. It cannot be clicked meanwhile: picking
+   up a lead from the list being replaced would act on the wrong view.
+   `.queue-card` and `.table-wrap` carry the transition. */
 .is-switching {
   opacity: 0.55;
+  pointer-events: none;
 }
 
 /* Agents beside System, then activity across the page. */

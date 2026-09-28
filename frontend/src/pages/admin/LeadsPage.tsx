@@ -91,7 +91,11 @@ export function LeadsPage() {
     [status, since, source, query, page]
   );
 
-  const { data, error, updatedAt } = usePolling<AdminLeadsResponse>(fetcher);
+  const { data, error, updatedAt, switching } = usePolling<AdminLeadsResponse>(fetcher, {
+    // The switcher and the search change rows, not the page: keep the old rows
+    // faded and unclickable until the new ones land - Jeel, 2026-09-28.
+    keepPreviousData: true,
+  });
 
   // Highlight rows that were not in the previous response. Driven off `data`
   // rather than the fetch, so it works the same whichever tick delivered them.
@@ -200,7 +204,7 @@ export function LeadsPage() {
         ) : data.leads.length === 0 ? (
           <p className="leads__empty">No leads in this view.</p>
         ) : (
-          <div className="table-wrap">
+          <div className={`table-wrap${switching ? ' is-switching' : ''}`}>
             <table className="table queue__table">
               <thead>
                 <tr>

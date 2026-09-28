@@ -66,7 +66,11 @@ export function DncPage() {
     () => getDnc({ state, q: query || undefined, page }),
     [state, query, page]
   );
-  const { data, loading, error, updatedAt } = usePolling<DncResult>(fetcher);
+  const { data, loading, error, updatedAt, switching } = usePolling<DncResult>(fetcher, {
+    // The switcher and the search change rows, not the page: keep the old rows
+    // faded and unclickable until the new ones land - Jeel, 2026-09-28.
+    keepPreviousData: true,
+  });
 
   const counts = data?.counts ?? { all: 0, blocked: 0, released: 0 };
   const totalPages = data ? Math.max(1, Math.ceil(data.total / data.limit)) : 1;
@@ -114,7 +118,7 @@ export function DncPage() {
         ) : !data || data.rows.length === 0 ? (
           <p className="leads__empty">No numbers in this view.</p>
         ) : (
-          <div className="table-wrap">
+          <div className={`table-wrap${switching ? ' is-switching' : ''}`}>
             <table className="table queue__table">
               <thead>
                 <tr>
