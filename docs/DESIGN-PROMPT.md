@@ -250,7 +250,7 @@ Left sub-navigation within the page: **Overview** · **Leads** · **Scoring** ·
   - `Opted out` – replied STOP, opted out in EZ Texting, or on the DNC list
   - `Expired` – no reply within the expiry window, or replaced by a newer delivery
 
-  *(2026-09-28, Jeel: two statuses added and two renamed, so the tabs follow a lead's whole life - **Awaiting reply · Answering · Ready to call · Working · Closed**, then Needs review, Opted out, Expired. Answering was In progress, Ready to call was Completed. **Working** is a lead an agent has picked or done anything with; **Closed** is one whose outcome was Sold, Not interested or Wrong number, shown as "Closed – Sold". `ADMIN-LEADS.md`, "Status is derived, never stored".)*
+  *(2026-09-28, Jeel: two statuses added and two renamed, so the tabs follow a lead's whole life - **Awaiting reply · Answering · Ready · Working · Closed**, then Needs review, Opted out, Expired. Answering was In progress, Ready was Completed. **Working** is a lead an agent has picked or done anything with; **Closed** is one whose outcome was Sold, Not interested or Wrong number, shown as "Closed – Sold". `ADMIN-LEADS.md`, "Status is derived, never stored".)*
 - **Filters:** Source (multi-select), Received (Last 1h / 24h / 7d / 30d / All). **Search:** name or phone.
 - **Table columns:** Received (date and time, tabular), Lead (first name + last initial), Phone (formatted), Source (monospace), Status (tag, as above), Step reached (`–`, `Q1`, `Q2`, `Q3`), Score and tier (only when completed, else `–`), Last activity (time of the most recent SMS in or out, with direction).
 - **Default sort:** newest received first.

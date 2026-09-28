@@ -138,7 +138,7 @@ async function main(): Promise<void> {
   console.log('\nthe SMS part');
   check('no reply yet: awaiting_reply', status('Waiting'), 'awaiting_reply');
   check('partway: answering (was in_progress)', status('Midway'), 'answering');
-  check('all three, nobody has touched it: ready_to_call (was completed)', status('Ready'), 'ready_to_call');
+  check('all three, nobody has touched it: ready (was completed)', status('Ready'), 'ready');
   check('unclear: needs_review', status('Unclear'), 'needs_review');
   check('went quiet: expired', status('Quiet'), 'expired');
   check('blocked: opted_out', status('Stopped'), 'opted_out');
@@ -151,8 +151,8 @@ async function main(): Promise<void> {
   check('an agent\'s own SMS, even partway through the questions', status('Texted'), 'working');
   check('a try-again outcome', status('Tried'), 'working');
   check('outranks needs_review', status('ReviewWorked'), 'working');
-  check('not a claim by a deactivated agent', status('Stale'), 'ready_to_call');
-  check('not our automated messages', status('Auto'), 'ready_to_call');
+  check('not a claim by a deactivated agent', status('Stale'), 'ready');
+  check('not our automated messages', status('Auto'), 'ready');
 
   console.log('\nclosed');
   check('sold, after an earlier no-answer', status('Sold'), 'closed');
@@ -171,7 +171,7 @@ async function main(): Promise<void> {
     all: 21,
     awaiting_reply: 1,
     answering: 1,
-    ready_to_call: 3,
+    ready: 3,
     working: 9,
     closed: 3,
     needs_review: 1,

@@ -25,7 +25,7 @@ correct as the state machine and the agents move things on.
 **A lead's whole life, in order - Jeel, 2026-09-28:**
 
 ```
-Awaiting reply -> Answering -> Ready to call -> Working -> Closed
+Awaiting reply -> Answering -> Ready -> Working -> Closed
 ```
 
 with Needs review, Expired and Opted out as the other ways the SMS part can end.
@@ -36,7 +36,7 @@ with Needs review, Expired and Opted out as the other ways the SMS part can end.
 | `closed` | Closed | Newest disposition is Sold, Not interested or Wrong number, and the lead has not texted since |
 | `working` | Working | An agent holds it, or has left any trace on it: a note, a callback, a disposition, a call, or an SMS of their own |
 | `needs_review` | Needs review | Conversation `review` |
-| `ready_to_call` | Ready to call | Conversation `completed` - answered all three - and no agent has touched it |
+| `ready` | Ready | Conversation `completed` - answered all three - and no agent has touched it |
 | `expired` | Expired | Conversation `expired` |
 | `answering` | Answering | Conversation `open` and at least one of q1-q3 answered |
 | `awaiting_reply` | Awaiting reply | Conversation `open`, nothing answered |
@@ -69,7 +69,7 @@ Two renames came with it, so each word means one thing:
 | Was | Is | Why |
 |---|---|---|
 | `in_progress`, In progress | `answering`, Answering | The queue's "In progress – karm" means an agent holds the lead. Two meanings for one phrase |
-| `completed`, Completed | `ready_to_call`, Ready to call | "Completed" read as finished when the calling had not started |
+| `completed`, Completed | `ready`, Ready | "Completed" read as finished when the calling had not started. Briefly "Ready to call" the same day - Jeel: that reads as an instruction to call, so just Ready |
 
 The API values changed with the labels. A saved link with `?status=in_progress`
 or `?status=completed` now falls back to All, as any unknown status does.
@@ -97,13 +97,13 @@ between. Those details are the timeline's, not the status's.
 
 **Picking a lead and putting it back untouched is not Working.** Releasing
 clears `assigned_to` and `assigned_at`, so no trace is left and the lead is
-Ready to call again. That is deliberate: nothing happened to it.
+Ready again. That is deliberate: nothing happened to it.
 
 **Not Working:** a claim by a deactivated agent (the queue ignores it too), and
 our own automated messages - only an SMS with `sent_by` set is an agent's.
 
 **The status follows the conversation, not the message log.** A lead who has
-answered moves to `answering` or `ready_to_call` because the state machine
+answered moves to `answering` or `ready` because the state machine
 wrote `q1`, not because a message arrived.
 
 Until 2026-09-21 nothing advanced the conversation, so a lead who had replied
@@ -133,7 +133,7 @@ Score and tier are the running values, returned at every stage. Scoring starts
 at the first reply, so a lead part-way through has a real score - 10 for
 responding, 25 once question 1 is answered - and a tier that follows it.
 
-They were hidden until `completed` (now Ready to call) until 2026-09-22, on the reasoning that a
+They were hidden until `completed` (now Ready) until 2026-09-22, on the reasoning that a
 partial score next to a final one invites comparing them. That cost more than
 it saved: a superadmin watching the flow could not see a lead accumulating
 points, which is the thing the page is for.

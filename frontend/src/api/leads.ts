@@ -4,7 +4,7 @@ import { api } from './client';
 export type LeadStatus =
   | 'awaiting_reply'
   | 'answering'
-  | 'ready_to_call'
+  | 'ready'
   | 'working'
   | 'closed'
   | 'needs_review'

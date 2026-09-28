@@ -7,7 +7,7 @@ import type { LeadStatus } from '../../db/leads';
 const STATUSES: LeadStatus[] = [
   'awaiting_reply',
   'answering',
-  'ready_to_call',
+  'ready',
   'working',
   'closed',
   'needs_review',
