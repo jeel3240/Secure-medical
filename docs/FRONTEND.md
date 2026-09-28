@@ -99,6 +99,7 @@ Rebuilt to a mockup Jeel supplied. What changed and why:
 | Status column | Coloured pills | A mark and the words, `components/QueueStatus.tsx` |
 | Button | Pick | **Pick up** - on every screen that picks, so the action has one name |
 | Someone else's lead | "Locked" | A padlock and "Locked", `components/LockIcon.tsx` |
+| Action column | Right-aligned | Centred - buttons and Locked on one axis |
 | Empty cells | `-` | `—` |
 | Live label | Live | Live · updated just now |
 

@@ -1336,6 +1336,14 @@ a {
   color: var(--color-text-muted);
 }
 
+/* The action column is centred, buttons and Locked alike, so they share one
+   axis down the table instead of Locked sitting apart from the buttons. Its
+   left padding matches the right one, so the centre is the cell's centre. */
+.queue__table .queue__action {
+  padding-left: var(--space-5);
+  text-align: center;
+}
+
 .queue__locked {
   display: inline-flex;
   align-items: center;
