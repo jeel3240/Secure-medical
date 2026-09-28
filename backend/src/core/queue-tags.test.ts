@@ -35,7 +35,7 @@ describe('what an agent sees against a lead', () => {
 });
 
 describe('when several could apply, the most urgent wins', () => {
-  it('a lead someone is working is In progress, whatever else is true', () => {
+  it('a lead someone is working says so, whatever else is true', () => {
     expect(
       queueTag(facts({ assignedAgentName: 'Michael', hasUnreadInbound: true, conversationStatus: 'review' }))
     ).toMatchObject({ kind: 'in_progress' });

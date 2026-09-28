@@ -109,8 +109,8 @@ Rebuilt to a mockup Jeel supplied. What changed and why:
 | Empty cells | `-` | `-` - an em dash was tried and reverted |
 | Live label | Live | Live · updated just now |
 
-**Only three statuses, and most rows have none - Jeel, 2026-09-28.** In
-progress – name, Inbound reply and Needs review, each a dot and the words; any
+**Only three statuses, and most rows have none - Jeel, 2026-09-28.**
+Working – name (was In progress – name), Inbound reply and Needs review, each a dot and the words; any
 other row shows a hyphen, like any other empty cell. New, Attempted 2x and
 Callback 3:00 PM are gone: that history belongs to the agent working the lead
 (My Callbacks, the timeline), and on the home page it gave every row something
