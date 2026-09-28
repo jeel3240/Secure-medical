@@ -7,6 +7,7 @@ import { Button } from '../../components/Button';
 import { Drawer } from '../../components/Drawer';
 import { OneTimeSecret } from '../../components/OneTimeSecret';
 import { TextField } from '../../components/TextField';
+import { Segmented } from '../../components/Segmented';
 
 interface Props {
   onClose: () => void;
@@ -100,20 +101,7 @@ export function AddAgentDrawer({ onClose, onCreated }: Props) {
           <span className="field__label" id="add-agent-role">
             Role
           </span>
-          <div className="segmented" role="radiogroup" aria-labelledby="add-agent-role">
-            {ROLE_OPTIONS.map((option) => (
-              <button
-                key={option.value}
-                type="button"
-                role="radio"
-                aria-checked={role === option.value}
-                className="segmented__option"
-                onClick={() => setRole(option.value)}
-              >
-                {option.label}
-              </button>
-            ))}
-          </div>
+          <Segmented labelledBy="add-agent-role" value={role} onChange={setRole} options={ROLE_OPTIONS} />
           <span className="field__hint">
             {role === 'superadmin'
               ? 'Full access, including Admin and every agent’s activity.'

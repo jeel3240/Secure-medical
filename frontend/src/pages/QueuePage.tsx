@@ -8,6 +8,7 @@ import { Banner } from '../components/Banner';
 import { Button } from '../components/Button';
 import { LockIcon } from '../components/LockIcon';
 import { QueueStatus } from '../components/QueueStatus';
+import { Segmented } from '../components/Segmented';
 import { TierSignal } from '../components/TierSignal';
 import { Spinner } from '../components/Spinner';
 import { answerLabel, formatAge, formatPhone, leadName } from '../lib/format';
@@ -172,23 +173,16 @@ export function QueuePage() {
 
       <div className="card queue-card">
         <div className="queue-card__toolbar">
-          <div className="segmented" role="radiogroup" aria-label="Tier">
-            {TIER_OPTIONS.map((option) => (
-              <button
-                key={option.key || 'all'}
-                type="button"
-                role="radio"
-                aria-checked={tier === option.key}
-                className="segmented__option"
-                onClick={() => setTier(option.key)}
-              >
-                {option.label}
-                <span className="segmented__count tabular">
-                  {(option.key ? counts[option.key] : counts.all) ?? 0}
-                </span>
-              </button>
-            ))}
-          </div>
+          <Segmented
+            label="Tier"
+            value={tier}
+            onChange={setTier}
+            options={TIER_OPTIONS.map((option) => ({
+              value: option.key,
+              label: option.label,
+              count: (option.key ? counts[option.key] : counts.all) ?? 0,
+            }))}
+          />
 
           <input
             className="leads__search queue-card__search"
