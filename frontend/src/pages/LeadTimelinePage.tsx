@@ -184,7 +184,7 @@ export function LeadTimelinePage() {
             <Badge tone="muted">Held by {lead.claimedBy?.name}</Badge>
           ) : (
             <Button variant="secondary" loading={opening} onClick={() => void openWorkspace()}>
-              {mine ? 'Resume' : 'Pick lead'}
+              {mine ? 'Resume' : 'Pick up'}
             </Button>
           )}
         </div>

@@ -213,14 +213,14 @@ felt, not only seen.
 ### What the button offers - 2026-09-28
 
 Not locked is not the same as claimable, and for a while the screen treated them
-as the same thing: every unlocked row said **Pick**, including rows where the
+as the same thing: every unlocked row said **Pick** (now **Pick up**), including rows where the
 server would refuse the claim. A superadmin looking at a lead another agent held
 got a button that always returned 409. `rowAction()` now answers the narrower
 question - what may this person actually do:
 
 | `rowAction` | When | Button | What it does |
 |---|---|---|---|
-| `pick` | Nobody holds it | **Pick** | Claims it, opens the workspace |
+| `pick` | Nobody holds it | **Pick up** | Claims it, opens the workspace |
 | `resume` | You hold it | **Resume** | Back into your own lead. Re-claiming your own lead succeeds, but "Pick" implies taking something you already have. While it checks, the button reads *Opening...*, not *Picking...* |
 | `view` | Someone else holds it, you are a superadmin | **View** | Opens the read-only timeline. Claims nothing, and the holder keeps the lead |
 | `locked` | Someone else holds it, you are an agent | *Locked* | No action |

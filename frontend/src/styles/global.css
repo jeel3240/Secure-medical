@@ -1243,60 +1243,54 @@ a {
   background: var(--color-warning);
 }
 
-/* Tier pills double as filters - DESIGN-PROMPT.md 2, "pill-buttons that also
-   act as filters". */
-.queue__pills {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  margin-bottom: var(--space-4);
-}
+/* ---------- Priority queue, redesigned 2026-09-28 to Jeel's mockup ----------
+   One card holding the filters and the table. Calm and mostly monochrome: the
+   tier is signal bars, the status a small mark, overdue waiting a heavier
+   weight. Colour is left for what needs a person first. */
 
-.pill {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-2);
-  padding: 6px 12px;
-  border: 1px solid var(--color-border);
-  border-radius: 999px;
+.queue-card {
+  overflow: hidden;
   background: var(--color-surface);
-  font: inherit;
-  font-size: var(--text-body);
-  font-weight: var(--weight-semibold);
-  letter-spacing: 0.02em;
-  cursor: pointer;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
 }
 
-.pill:hover {
-  border-color: var(--color-border-strong);
+.queue-card__toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-4) var(--space-5);
+  border-bottom: 1px solid var(--color-border);
 }
 
-.pill__count {
-  font-weight: var(--weight-bold);
+.queue-card__search {
+  flex: 1;
+  min-width: 200px;
 }
 
-.pill--hot { color: var(--color-hot); }
-.pill--warm { color: var(--color-warm); }
-.pill--low { color: var(--color-low); }
+.segmented__count {
+  margin-left: var(--space-2);
+  color: var(--color-text-subtle);
+}
 
-/* Selected state has to survive being one of three: the border and the tinted
-   background together read as "on" without relying on colour alone. */
-.pill--hot.pill--on { background: var(--color-hot-soft); border-color: var(--color-hot); }
-.pill--warm.pill--on { background: var(--color-warm-soft); border-color: var(--color-warm); }
-.pill--low.pill--on { background: var(--color-low-soft); border-color: var(--color-low); }
+.queue__table thead th {
+  background: var(--color-surface-muted);
+}
 
-.queue__clear {
-  border: none;
-  background: none;
-  padding: 0 var(--space-2);
-  font: inherit;
-  font-size: var(--text-body);
-  color: var(--color-text-muted);
-  text-decoration: underline;
-  cursor: pointer;
+.queue__table th:first-child,
+.queue__table td:first-child {
+  padding-left: var(--space-5);
+}
+
+.queue__table th:last-child,
+.queue__table td:last-child {
+  padding-right: var(--space-5);
 }
 
 .queue__table td {
+  height: 64px;
   vertical-align: middle;
 }
 
@@ -1304,30 +1298,105 @@ a {
   cursor: pointer;
 }
 
-.queue__row:hover {
-  background: var(--color-surface-alt);
-}
-
 /* The one-agent lock, task 16. Muted and not clickable: another agent is
    working this lead, and the row should not invite a click it will refuse. */
 .queue__row--locked {
   cursor: not-allowed;
   color: var(--color-text-muted);
-  background: var(--color-surface-alt);
+  background: var(--color-surface-muted);
 }
 
-.queue__row--locked:hover {
-  background: var(--color-surface-alt);
-}
-
-.queue__row--locked strong {
+.queue__row--locked .queue__name,
+.queue__row--locked .tier-signal,
+.queue__row--locked .queue__score,
+.queue__row--locked .status {
+  color: var(--color-text-muted);
   font-weight: var(--weight-regular);
+}
+
+.queue__name {
+  display: block;
+  font-weight: var(--weight-semibold);
 }
 
 .queue__phone {
   display: block;
+  margin-top: 2px;
+  font-family: var(--font-mono);
   font-size: var(--text-small);
   color: var(--color-text-muted);
+}
+
+.queue__score {
+  font-weight: var(--weight-semibold);
+}
+
+.queue__source {
+  font-size: var(--text-small);
+  color: var(--color-text-muted);
+}
+
+.queue__locked {
+  font-size: var(--text-small);
+  color: var(--color-text-subtle);
+}
+
+/* Waiting time. Overdue reads as weight rather than colour; the thresholds -
+   5 minutes for any lead, 15 for HOT - are in lib/format.ts. */
+.waiting--normal { color: var(--color-text-muted); }
+.waiting--warn { color: var(--color-text); }
+.waiting--urgent { color: var(--color-text); font-weight: var(--weight-bold); }
+
+/* Status: the mark's shape carries the meaning - filled for something
+   happening, a ring for something waiting, a square for a past attempt. */
+.status {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.status__mark {
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+.status__mark--ring {
+  background: transparent;
+  border: 1.5px solid currentColor;
+}
+
+.status__mark--square {
+  border-radius: 2px;
+}
+
+.status--normal { color: var(--color-text); }
+.status--strong { color: var(--color-text); font-weight: var(--weight-semibold); }
+.status--muted { color: var(--color-text-muted); }
+.status--alert { color: var(--color-text); }
+.status--alert .status__mark { background: var(--color-warm); }
+
+/* Tier as signal bars: three for Hot, two for Warm, one for Low. */
+.tier-signal {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-weight: var(--weight-semibold);
+}
+
+.tier-signal--none {
+  color: var(--color-text-subtle);
+  font-weight: var(--weight-regular);
+}
+
+.tier-signal__bar {
+  fill: var(--color-border-strong);
+}
+
+.tier-signal__bar--on {
+  fill: var(--color-primary);
 }
 
 .tier {
@@ -1345,11 +1414,6 @@ a {
 .tier--hot { background: var(--color-hot-soft); color: var(--color-hot); }
 .tier--warm { background: var(--color-warm-soft); color: var(--color-warm); }
 .tier--low { background: var(--color-low-soft); color: var(--color-low); }
-
-/* Age turns amber past 5 minutes and red past 15 for HOT - the thresholds are
-   in lib/format.ts, which is where the reasoning lives. */
-.age--warn { color: var(--color-warm); font-weight: var(--weight-semibold); }
-.age--urgent { color: var(--color-hot); font-weight: var(--weight-bold); }
 
 .queue__truncated {
   margin-top: var(--space-3);
@@ -1468,7 +1532,7 @@ a {
   padding: 6px 10px;
   border: 1px solid var(--color-border);
   border-radius: var(--radius-sm);
-  background: var(--color-surface-alt);
+  background: var(--color-surface-hover);
 }
 
 .chip--empty {
@@ -1678,7 +1742,7 @@ a {
 
 .chip-button:hover {
   border-color: var(--color-border-strong);
-  background: var(--color-surface-alt);
+  background: var(--color-surface-hover);
 }
 
 /* Segmented control: seven options, so they wrap rather than squeeze. */
@@ -2003,7 +2067,7 @@ a {
 .config__body {
   margin: var(--space-2) 0 0;
   padding: var(--space-2) var(--space-3);
-  background: var(--color-surface-alt);
+  background: var(--color-surface-hover);
   border-radius: var(--radius-sm);
   font-family: var(--font-mono);
   font-size: var(--text-small);
@@ -2130,7 +2194,7 @@ a {
 }
 
 .funnel__bar-wrap {
-  background: var(--color-surface-alt);
+  background: var(--color-surface-hover);
   border-radius: var(--radius-sm);
   height: 18px;
   overflow: hidden;

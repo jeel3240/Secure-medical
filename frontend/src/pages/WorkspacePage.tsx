@@ -229,11 +229,11 @@ export function WorkspacePage() {
           <span>
             {held
               ? `${held.name} is working this lead. You can look, but not act on it.`
-              : 'You are viewing this lead. Pick it to text them or record an outcome.'}
+              : 'You are viewing this lead. Pick it up to text them or record an outcome.'}
           </span>
           {!held && (
             <Button loading={picking} onClick={() => void pick()}>
-              Pick
+              Pick up
             </Button>
           )}
         </div>
