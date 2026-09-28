@@ -458,8 +458,17 @@ prove the SQL against a real Postgres.
 polling hook, the priority queue with the one-agent lock, the agent workspace
 (card, timeline, actions, SMS compose), the lead timeline page, My Callbacks,
 and the three admin pages. `docs/FRONTEND.md` is the record of what was built
-and why. The frontend gains its first test setup - Vitest, jsdom, 69 tests
-covering logic rather than buttons. Next: operations, tasks 26-30.
+and why. The frontend gains its first test setup - Vitest, jsdom, tests
+covering logic rather than buttons.
+
+**Operations done, 2026-09-28.** Tasks 26-30, on `feat/phase3-operations`:
+structured JSON logging with redaction enforced in the logger, the failed-opener
+retry, the end-to-end script, and a README with how to test and known limits.
+**Phase 3 is complete.** Next is Phase 4, Twilio calling.
+
+Task 29 found nothing to fix in the app: all three bugs the end-to-end script
+surfaced were in the script itself. Two apparent failures were the app being
+right and the script being out of date with Jeel's changes.
 
 Two things found while building, neither fixed inside its task, both needing
 Jeel:
