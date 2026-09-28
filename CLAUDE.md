@@ -204,7 +204,9 @@ you change something the docs describe, update the doc in the same commit.
     src/lib/format.ts       phone, age, tier tone, answer labels
     src/lib/lock.ts         which queue rows an agent may open
     src/components/Timeline.tsx      shared by the workspace and the timeline page
-    src/components/QueueTagBadge.tsx the STATUS column's tag, in words
+    src/components/QueueStatus.tsx   the STATUS column's tag, in words
+    src/components/TierSignal.tsx    the TIER column's bars
+    src/components/Segmented.tsx     the sliding segmented control
     src/pages/QueuePage.tsx          the priority queue
     src/pages/WorkspacePage.tsx      the agent workspace shell
     src/pages/workspace/             actions panel, SMS compose
@@ -569,7 +571,7 @@ Build:
 1. React app scaffold, login page, role-based routing
 2. Priority queue screen (mockup p.5): HOT/WARM/LOW counts, table, filters, live age ticking, refresh on new data
 3. One-agent lock: claiming a lead sets `assigned_to`; other agents see "In progress – name" *(2026-09-28: now "Working – name")*
-4. Agent workspace (mockup p.6) minus the call button: lead card, score breakdown, SMS send, note, callback scheduling, disposition, save & next
+4. Agent workspace (mockup p.6) minus the call button: lead card, score breakdown, SMS send, note, callback scheduling, disposition, save & next *(2026-09-28: Save only; the outcomes are Closed and DNC)*
 5. Lead timeline (mockup p.7): merged view of messages, calls, notes, callbacks, dispositions
 6. My Callbacks page
 7. Admin (mockup p.8): ~~edit scoring rules and tier thresholds, recalculate existing, edit question copy / clarification / STOP text / expiry days~~, manage agents. *(2026-09-23: all of it read-only except managing agents - see "Phases, and what Phase 3 is" above. The screen shows the questions, the clarifications, the thanks message, the score table and the tier bands; nothing is editable and Recalculate is dropped.)*
