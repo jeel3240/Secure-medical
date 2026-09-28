@@ -68,7 +68,6 @@ export function SmsCompose({
   const [templatesOpen, setTemplatesOpen] = useState(false);
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [sent, setSent] = useState<string | null>(null);
   const box = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
@@ -84,10 +83,12 @@ export function SmsCompose({
     setSending(true);
     setError(null);
     try {
-      const message = await sendAgentSms(lead.id, body.trim());
+      // No "Sent." banner - Jeel, 2026-09-28. The message appears in the thread
+      // with a tick, and a first send adds the "automated questions stopped"
+      // marker there too, so a box saying so again was noise.
+      await sendAgentSms(lead.id, body.trim());
       setBody('');
       setTemplatesOpen(false);
-      setSent(message.tookOver ? 'Sent. The automated questions have stopped for this lead.' : 'Sent.');
       await refresh();
     } catch (err) {
       setError(toApiError(err).message);
@@ -105,7 +106,6 @@ export function SmsCompose({
   return (
     <fieldset className="composer" disabled={!canAct}>
         {error && <Banner tone="error">{error}</Banner>}
-        {sent && <Banner tone="success">{sent}</Banner>}
 
         {/* Shown once there is something to send, and only before the first
             send: it cannot be undone. */}

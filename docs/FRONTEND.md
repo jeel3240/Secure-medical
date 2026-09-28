@@ -205,6 +205,19 @@ header's Send SMS puts the cursor in it. The takeover warning appears once there
 is text and before the first send, as before; the 160-character limit and the
 blocked-number notice are unchanged.
 
+**A sent message gets a tick, not a banner - Jeel, 2026-09-28.** A green
+"Sent." box appeared under the composer after every send. It is gone: the
+message shows up in the thread with one tick at the end of the bubble, and a
+first send already adds "Agent took over - automated questions stopped" to the
+thread. A failed send still shows its red error above the composer.
+
+**One tick, not WhatsApp's two.** A message is in the thread only once EZ
+Texting has accepted it, so one tick is true. A second would mean "reached the
+phone", and nothing tells us that: we read no delivery reports from EZ Texting,
+and `messages.delivery_status` is empty on every row. Two ticks become possible
+only if delivery reports are wired up. A message marked failed shows "delivery
+failed" and no tick. `Conversation.render.test.tsx` pins all of this.
+
 **The wrap-up is the old actions panel regrouped.** Outcomes are grouped
 Positive / No contact / Negative. *(2026-09-28, Jeel: replaced by two buttons,
 **Closed** and **DNC** - DNC a button now, not a link, still behind the same
