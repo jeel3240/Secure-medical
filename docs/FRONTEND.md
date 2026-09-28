@@ -24,6 +24,68 @@ the brief now exists except calling, which is Phase 4.
 | `/admin/config` | Configuration, read-only | `ADMIN.md`, `DESIGN-PROMPT.md` 6b/6c |
 | `/admin/dnc` | Do-not-call list, read-only | `ADMIN.md`, `DESIGN-PROMPT.md` 6e |
 
+## Type system - 2026-09-28
+
+Measured before this change: **ten font sizes across nine screens**, where five
+would do. Three were fractions - 11.9, 12.48 and 13.6px - from `0.85em` and
+`0.85rem` resolving against whatever they sat inside. And 12, 13 and 14px were
+all in heavy use, one pixel apart: too close to read as deliberate levels, too
+far to look the same, so text meant to match looked slightly off. Card titles
+came in two styles - 14px on the workspace, a 12px uppercase caption on
+Overview, Config and the timeline sidebar - because those pages borrowed a class
+designed as a label.
+
+Now there are five sizes and three weights, named by role in `tokens.css`:
+
+| Role | Size | Weight | For |
+|---|---|---|---|
+| heading | 20 | semibold | page titles, the lead's name |
+| title | 16 | semibold | card titles |
+| section | 14 | semibold | a heading inside a card |
+| body | 14 | regular | cells, buttons, forms, messages |
+| label | 12 | semibold, uppercase, tracked | column heads, captions, badges |
+| meta | 12 | regular | timestamps, hints, counts |
+| display | 24 | bold | scores and KPI figures |
+
+**Pick the role, not the size.** The tokens are `--text-small`, `--text-body`,
+`--text-title`, `--text-heading` and `--text-display`, plus `--weight-regular`,
+`--weight-semibold`, `--weight-bold` and `--tracking-label`. There is no token
+for 13px, deliberately.
+
+**Badges are labels.** HOT / WARM / LOW were 12px bold (700) directly under a
+TIER heading at 12px semibold (600) - same size, same capitals, different
+weight, which is the almost-match this change exists to remove.
+
+**Headings default to semibold,** in a base rule, so a rule that forgets its
+weight gets the heading weight rather than the browser's bold.
+
+**Enforced, not hoped for.** `src/styles/type-system.test.ts` reads both
+stylesheets and fails on a size, weight or caption style the tokens do not
+name, on sizes closer than 2px apart, on a property declared twice in one rule,
+and on the same selector defined twice at the top level - a second `.avatar`,
+added for the workspace, had silently restyled the app bar on every page. Each
+check was proven by breaking the stylesheet on purpose and watching it fail.
+
+Two things worth knowing about that test. It imports the stylesheets with
+`?raw`, not `node:fs` - this is a browser app with no Node types, so `node:fs`
+fails `tsc` and with it `npm run build` - and Vitest replaces CSS with an empty
+string unless told otherwise, `?raw` included, so `vite.config.ts` opts these
+two files in. An earlier version read an empty string and passed four checks
+over nothing; the "really loaded" check now fails if that ever happens again.
+
+**Layout fixes found while measuring.** Checked for horizontal overflow on all
+nine screens at 1280, 1366, 1440 and 1920px. Two screens already overflowed on
+`dev`, before this change: Config (the scoring options sat side by side in a
+nowrap cell, 240px past the window) and Agents (three row actions side by side,
+past a 1366px laptop). Scoring options now stack; row actions and Config's row
+labels wrap. None overflow now. The shared table rules also lost two bugs: the
+last row's divider and the hover highlight applied to data cells but not row
+labels, leaving half a line under "Maximum possible".
+
+**Removed:** the admin sidebar's greyed "Soon" links - Overview, Scoring,
+Messages, DNC list, Settings. Two duplicated live links; the rest were folded
+into Configuration on 2026-09-23.
+
 ## The workspace - redesigned 2026-09-28
 
 Rebuilt to a mockup Jeel supplied. Every action behaves as before - checked by

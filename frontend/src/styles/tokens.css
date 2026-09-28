@@ -47,15 +47,41 @@
   --color-warning-soft: #fffbeb;
   --color-warning-border: #fde68a;
 
-  /* Type */
+  /* Type
+   *
+   * Five sizes and three weights, and nothing in between. Pick by role, never
+   * by eye - the role is the decision, the pixels follow from it:
+   *
+   *   Role          Size             Weight     Used for
+   *   heading       --text-heading   semibold   page titles, the lead's name
+   *   title         --text-title     semibold   card titles
+   *   section       --text-body      semibold   a heading inside a card
+   *   body          --text-body      regular    table cells, buttons, forms, messages
+   *   label         --text-small     semibold   uppercase column heads, captions and
+   *                                             badges, with --tracking-label
+   *   meta          --text-small     regular    timestamps, hints, counts
+   *   display       --text-display   bold       scores and KPI figures
+   *
+   * Why so few. The old scale had 12, 13 and 14px, all in heavy use: one
+   * pixel apart, too close to read as deliberate levels and too far apart to
+   * look the same, so text that should have matched looked slightly off. Every
+   * step here is at least 2px from the next, so a difference in size is always
+   * a difference in meaning.
+   *
+   * src/styles/type-system.test.ts fails the build if a rule in global.css
+   * uses any size or weight not listed here.
+   */
   --font-sans: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
   --font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-  --text-xs: 12px;
-  --text-sm: 13px;
-  --text-md: 14px;
-  --text-lg: 16px;
-  --text-xl: 20px;
-  --text-2xl: 24px;
+  --text-small: 12px;
+  --text-body: 14px;
+  --text-title: 16px;
+  --text-heading: 20px;
+  --text-display: 24px;
+  --weight-regular: 400;
+  --weight-semibold: 600;
+  --weight-bold: 700;
+  --tracking-label: 0.06em;
 
   /* Space, radius, elevation */
   --space-1: 4px;

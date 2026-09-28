@@ -31,7 +31,7 @@ Role is set at login. Navigation adapts to role.
   - Success (delivered, completed) – green
   - Danger (DNC, suppressed) – deep red
   - Live/active (call in progress, ticking timers) – a single accent, e.g. teal or blue
-- **Typography:** one sans family (Inter or similar). Tabular numerals for scores, timers, phone numbers. 13–14px body in tables, 16px in forms.
+- **Typography:** one sans family (Inter or similar). Tabular numerals for scores, timers, phone numbers. 13–14px body in tables, 16px in forms. *(2026-09-28: superseded by the type system in `frontend/src/styles/tokens.css` - five sizes, 12/14/16/20/24, chosen by role. Body is 14px everywhere, forms included: they already were, and a field in larger type than the text around it read as a different app. 13px is gone - one pixel from 12 and 14, it made matching text look slightly off. `FRONTEND.md`, "Type system".)*
 - **Iconography:** one consistent line-icon set (Lucide or Phosphor). Icons always paired with a label unless in a dense table.
 - **Motion:** minimal. Row highlight on new lead arrival (fade in over 600ms), timer tick, call-state transitions. No decorative animation.
 - **Light mode only** for v1. Design tokens should make dark mode possible later.

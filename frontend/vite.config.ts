@@ -15,6 +15,10 @@ export default defineConfig({
     environment: 'jsdom',
     globals: true,
     include: ['src/**/*.test.{ts,tsx}'],
+    // Vitest replaces CSS with an empty string unless told otherwise, `?raw`
+    // imports included. The type-system test reads the stylesheets as text,
+    // so it needs these two files for real; nothing else is processed.
+    css: { include: [/src\/styles\/(tokens|global)\.css/] },
   },
   server: {
     port: 5173,
