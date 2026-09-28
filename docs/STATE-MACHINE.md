@@ -386,8 +386,8 @@ left it `expired`, set `has_unread_inbound`, and sent nothing.
   `16026203572` against a stored `+16026203572` would match nothing and send to
   a blocked phone.
   The conversation still advances when a send is refused: the lead's answer is
-  recorded, and only the message is withheld. The tick log says `NOT sent=`
-  rather than `sent=`, so the case is visible.
+  recorded, and only the message is withheld. Its `conversation.advanced` log
+  line says `"sent": false`, so the case is visible.
 - Every automated send uses the copy in `settings`, rendered by
   `core/messages.ts` (`{first_name}`, one-segment limit), and is recorded in
   `messages` with the id EZ Texting returns - that id is what links the lead's

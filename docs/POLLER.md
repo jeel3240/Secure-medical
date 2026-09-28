@@ -65,7 +65,7 @@ errors. The lead is already committed by then, so throwing would abandon the
 rest of the page and leave the checkpoint behind, re-polling every later contact
 because one send failed. The refused opener is kept as a failed message
 (`db/failed-sends.ts`), so the lead's thread shows it with a red "!", and
-`openers` in the tick log will be lower than `inserted`. *(Until 2026-09-28 it
+`openers` in the `poll.tick` line will be lower than `inserted`. *(Until 2026-09-28 it
 was not kept, and a lead with no opener showed only as a conversation with no
 outbound message.)*
 
@@ -111,8 +111,11 @@ second line of defence for a contact that arrives with the flag anyway.
 ## Reading the log
 
 ```
-poll tick fetched=3 inserted=1 skipped=1 suppressed=0 openers=1 ms=352
+{"ts":"2026-09-28T23:50:24.426Z","level":"info","event":"poll.tick","svc":"worker","fetched":3,"inserted":1,"skipped":1,"suppressed":0,"openers":1,"ms":352}
 ```
+
+One JSON line per poll, event `poll.tick` - structured since 2026-09-28,
+`LOGGING.md`. The fields:
 
 | | |
 |---|---|

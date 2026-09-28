@@ -38,10 +38,10 @@ runs postgres, redis, api and worker only; Caddy is used in production.
 frontend with Ctrl+C. On Colima, `colima stop` frees the VM's memory. Next time:
 `colima start`, `docker compose up -d`, `cd frontend && npm run dev`.
 
-The worker logs a line each minute:
+The worker logs a line each minute, as JSON - `LOGGING.md` lists every event:
 
 ```
-poll tick fetched=2 inserted=0 skipped=2 suppressed=0 openers=0 ms=336
+{"ts":"2026-09-28T23:50:24.426Z","level":"info","event":"poll.tick","svc":"worker","fetched":2,"inserted":0,"skipped":2,"suppressed":0,"openers":0,"ms":336}
 ```
 
 **Locally, `docker compose logs` is how you read that.** On the server it
@@ -100,7 +100,7 @@ opted out is refused however the send was triggered.
 **Update 2026-09-15:** sending is live. The poller now sends question 1 when it
 creates a lead and records it in `messages`, so with `EZT_SEND_GROUP` set, a new
 contact in the group gets a text within a poll interval. The `openers` count in
-the tick log says how many went out. POLLER.md has the detail.
+the `poll.tick` line's `openers` says how many went out. POLLER.md has the detail.
 
 ## How to test
 

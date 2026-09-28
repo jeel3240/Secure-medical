@@ -145,7 +145,7 @@ decision of what counts as an opt-out stay here.
 
 A send to a number on `dnc_list` is refused inside `sendMessage`, so a reply
 arriving after a STOP from elsewhere advances the conversation but sends
-nothing. The log line reads `NOT sent=` in that case.
+nothing. The `conversation.advanced` log line says `"sent": false` in that case.
 
 ## Not done yet
 

@@ -401,7 +401,7 @@ onto them:
 |---|---|---|
 | 1 | Week 1 | Done |
 | 2 | Week 2 | Done, approved 2026-09-23 |
-| 3 | Week 3 **and all of Week 4 except Twilio** | Next |
+| 3 | Week 3 **and all of Week 4 except Twilio** | Done 2026-09-28, merged into `main` |
 | 4 | Week 4 items 1-4, Twilio calling | After Phase 3 |
 
 **Phase 3 is everything that is left except calling.** That means the Week 3
@@ -466,6 +466,19 @@ structured JSON logging with redaction enforced in the logger, the failed-opener
 retry, the end-to-end script, and a README with how to test and known limits.
 **Phase 3 is complete.** Next is Phase 4, Twilio calling.
 
+**Open when Phase 3 closed, 2026-09-28** - each written up where it lives:
+
+- **"Today" is UTC.** My Callbacks' Today tab and the Overview's Today count
+  from midnight UTC, so for a US call center "today" ends in the afternoon.
+  Needs a decision: each viewer's time zone, or one fixed call-center zone.
+  `README.md`, "Known limits".
+- **Force-release has no screen.** The API lets a superadmin release anyone's
+  claim; nothing on screen offers it. `FRONTEND.md`, "Not built".
+- **Source always reads "API" in production** - it is how the contact was
+  added to EZ Texting, not which partner sent it. Keep the column, or find the
+  partner elsewhere.
+- **Deploy:** `npm run migrate` applies 002, 003 and 004 on the server.
+
 Task 29 found nothing to fix in the app: all three bugs the end-to-end script
 surfaced were in the script itself. Two apparent failures were the app being
 right and the script being out of date with Jeel's changes.
@@ -489,7 +502,8 @@ Jeel:
   `AGENT-WORKSPACE.md`, "Dispositions"; `ADMIN-LEADS.md`.)*
 - **The deep health endpoint cannot be polled by external monitoring,** because
   it is superadmin-only as `LOGGING.md` specified. If an uptime service is
-  wanted, it needs a separate unauthenticated route returning less.
+  wanted, it needs a separate unauthenticated route returning less. *(Still
+  open, 2026-09-28 - `README.md`, "Known limits".)*
 
 **Backend (`AGENT-WORKSPACE.md`, `ADMIN.md`, `LOGGING.md`)**
 
