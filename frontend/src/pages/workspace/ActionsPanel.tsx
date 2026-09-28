@@ -1,7 +1,5 @@
 import { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { toApiError } from '../../api/client';
-import { listQueue, releaseLead } from '../../api/leads';
 import {
   addNote,
   createCallback,
@@ -13,13 +11,17 @@ import {
 import { Banner } from '../../components/Banner';
 import { Button } from '../../components/Button';
 import { Modal } from '../../components/Modal';
-import { lockHolder } from '../../lib/lock';
-import { useAuth } from '../../auth/store';
 
 /**
- * The workspace's right column: note, callback, disposition, Save and next.
+ * The workspace's right column: note, callback, disposition, Save.
  *
  * DESIGN-PROMPT.md 3, "Right column". Phase 3 task 19.
+ *
+ * **One button, Save - Jeel, 2026-09-28.** There was also "Save & next lead",
+ * which saved, released the lead and opened the top of the queue. It was
+ * dropped: the agent stays on the lead after saving, and leaves with Back to
+ * queue, which releases it. One way out, and nothing moves them on to a lead
+ * they did not choose.
  *
  * **One Save, three writes.** The brief has a single Save for all three
  * controls, so this posts whichever the agent filled in. They are separate
@@ -93,9 +95,6 @@ export function ActionsPanel({
   /** False on a lead you have not picked: everything below is switched off. */
   canAct: boolean;
 }) {
-  const navigate = useNavigate();
-  const me = useAuth((s) => s.user);
-
   const [note, setNote] = useState('');
   const [callbackAt, setCallbackAt] = useState('');
   const [disposition, setDispositionValue] = useState<Disposition | null>(null);
@@ -111,8 +110,7 @@ export function ActionsPanel({
   /**
    * The unsaved-changes guard the brief asks for, for the case that actually
    * loses work: closing the tab or hitting back. An in-app navigation cannot be
-   * intercepted without a router data API this app does not use, and Save &
-   * next - the usual way out - saves first anyway.
+   * intercepted without a router data API this app does not use.
    */
   useEffect(() => {
     if (!dirty) return;
@@ -123,9 +121,9 @@ export function ActionsPanel({
 
   /**
    * Posts whatever the agent filled in, collecting failures rather than
-   * stopping at the first. Returns true when everything asked for succeeded.
+   * stopping at the first.
    */
-  const save = async (): Promise<boolean> => {
+  const save = async (): Promise<void> => {
     const failures: string[] = [];
     const done: string[] = [];
 
@@ -163,42 +161,12 @@ export function ActionsPanel({
     setProblems(failures);
     setSaved(failures.length === 0 && done.length > 0 ? `Saved ${done.join(', ')}.` : null);
     await refresh();
-    return failures.length === 0;
   };
 
   const onSave = async () => {
     setSaving(true);
     try {
       await save();
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  /**
-   * Save, release this lead, and open the next one the agent may work.
-   *
-   * The next lead is the top of the queue that is not locked - the same rule
-   * the queue screen uses, so "next" means what the agent would have clicked.
-   * If the save failed, nothing moves: losing a note on the way to the next
-   * lead is worse than an extra click.
-   */
-  const onSaveAndNext = async () => {
-    setSaving(true);
-    try {
-      if (!(await save())) return;
-
-      await releaseLead(lead.id).catch(() => {
-        // Not fatal: a superadmin can force-release, and the agent should still
-        // get their next lead.
-      });
-
-      const queue = await listQueue();
-      const next = queue.leads.find((l) => l.id !== lead.id && !lockHolder(l, me));
-
-      navigate(next ? `/leads/${next.id}` : '/queue');
-    } catch (err) {
-      setProblems([toApiError(err).message]);
     } finally {
       setSaving(false);
     }
@@ -331,11 +299,8 @@ export function ActionsPanel({
         </section>
 
         <div className="wrapup__save">
-          <Button variant="secondary" disabled={!dirty || saving} onClick={() => void onSave()}>
+          <Button loading={saving} disabled={!dirty} onClick={() => void onSave()}>
             Save
-          </Button>
-          <Button loading={saving} onClick={() => void onSaveAndNext()}>
-            Save &amp; next lead &rarr;
           </Button>
         </div>
       </fieldset>

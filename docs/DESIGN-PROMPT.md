@@ -150,7 +150,7 @@ Role is set at login. Navigation adapts to role.
 - **Note** – textarea, auto-saves draft, "Add note".
 - **Callback** – date + time picker, quick chips (In 1h / Tomorrow 10am / Tomorrow 3pm), "Assign to" (defaults to me; superadmin can pick any agent).
 - **Disposition** – single-select as a segmented/radio group: `Interested` · `Callback set` · `No answer` · `Voicemail` · `Not interested` · `Wrong number` · `DNC`. DNC requires confirm dialog and shows a red warning ("Suppresses this number for SMS and calls everywhere"). *(2026-09-28, Jeel: **Sold** added, first in the Positive group. Sold, Not interested and Wrong number close the lead - it leaves the queue. `AGENT-WORKSPACE.md`, "Which outcomes close a lead".)*
-- **Save** and **Save & next lead** (primary). Save & next loads the next highest lead automatically.
+- **Save** and **Save & next lead** (primary). Save & next loads the next highest lead automatically. *(2026-09-28, Jeel: Save & next is dropped - Save only, and the agent leaves with Back to queue. `FRONTEND.md`, "One button".)*
 - Unsaved-changes guard when navigating away.
 
 ### 4. Lead Timeline (read-only detail)
@@ -286,7 +286,7 @@ Left sub-navigation within the page: **Overview** · **Leads** · **Scoring** ·
 ## Interaction details that matter
 
 - Every table row is keyboard-navigable (↑ ↓ Enter).
-- In the workspace: `C` = call, `S` = SMS, `N` = note, `1–7` = disposition, `Cmd/Ctrl+Enter` = Save & next.
+- In the workspace: `C` = call, `S` = SMS, `N` = note, `1–7` = disposition, `Cmd/Ctrl+Enter` = Save & next *(dropped with the button, 2026-09-28)*.
 - Ticking timers must not cause layout shift – fixed-width tabular numbers.
 - When a lead gets locked by another agent while you're viewing the queue, its row updates in place with the tag – no full refresh.
 - Toasts never cover the Call button.
