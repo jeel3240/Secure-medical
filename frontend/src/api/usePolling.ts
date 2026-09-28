@@ -41,6 +41,12 @@ export interface Polled<T> {
   refresh: () => Promise<void>;
   /** When the last successful fetch landed, for the "Live" indicator. */
   updatedAt: number | null;
+  /**
+   * With `keepPreviousData`: true from a filter change until the new data
+   * lands, while the old data is still on screen. A screen fades what it shows
+   * rather than blanking it.
+   */
+  switching: boolean;
 }
 
 export interface PollingOptions {
@@ -48,6 +54,16 @@ export interface PollingOptions {
   intervalMs?: number;
   /** When false, no polling and no fetch. For a screen that is not ready yet. */
   enabled?: boolean;
+  /**
+   * Keep showing the old data while a new fetcher's first answer is on its
+   * way, instead of clearing it for a spinner. For a switch whose rows keep
+   * the same shape - Overview's Today / 7 days / 30 days, Jeel 2026-09-28: the
+   * whole page vanishing and coming back on every click read as broken, when
+   * only the numbers change. A filter that changes *which* rows are shown
+   * should not use it: showing the old rows under the new filter is wrong, not
+   * merely stale.
+   */
+  keepPreviousData?: boolean;
 }
 
 /**
@@ -57,9 +73,10 @@ export interface PollingOptions {
  *                 what a filter change should look like.
  */
 export function usePolling<T>(fetcher: () => Promise<T>, options: PollingOptions = {}): Polled<T> {
-  const { intervalMs = POLL_MS, enabled = true } = options;
+  const { intervalMs = POLL_MS, enabled = true, keepPreviousData = false } = options;
 
   const [data, setData] = useState<T | null>(null);
+  const [switching, setSwitching] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [updatedAt, setUpdatedAt] = useState<number | null>(null);
 
@@ -80,10 +97,22 @@ export function usePolling<T>(fetcher: () => Promise<T>, options: PollingOptions
   // A new fetcher means new filters, so the old rows no longer belong to this
   // view. Cleared here rather than inside the fetch, so the spinner shows
   // immediately rather than after the round trip.
+  //
+  // With keepPreviousData the rows stay, marked as switching, until the new
+  // answer lands. The first render is skipped: there is nothing to switch from.
+  const firstFetcher = useRef(true);
   useEffect(() => {
-    setData(null);
+    if (firstFetcher.current) {
+      firstFetcher.current = false;
+      return;
+    }
     setError(null);
-  }, [fetcher]);
+    if (keepPreviousData) {
+      setSwitching(true);
+    } else {
+      setData(null);
+    }
+  }, [fetcher, keepPreviousData]);
 
   const run = useCallback(async () => {
     const id = ++requestId.current;
@@ -92,6 +121,7 @@ export function usePolling<T>(fetcher: () => Promise<T>, options: PollingOptions
       if (!alive.current || id !== requestId.current) return;
       setData(next);
       setError(null);
+      setSwitching(false);
       setUpdatedAt(Date.now());
     } catch (err) {
       if (!alive.current || id !== requestId.current) return;
@@ -115,5 +145,6 @@ export function usePolling<T>(fetcher: () => Promise<T>, options: PollingOptions
     error,
     refresh: run,
     updatedAt,
+    switching,
   };
 }

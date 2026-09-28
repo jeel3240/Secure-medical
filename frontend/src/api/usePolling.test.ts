@@ -187,6 +187,30 @@ describe('changing the filters', () => {
     await waitFor(() => expect(result.current.data).toBe('warm'));
   });
 
+  it('with keepPreviousData, keeps the old data on screen, marked switching, until the new lands', async () => {
+    // Overview's period switch - Jeel, 2026-09-28. Same shape, new numbers.
+    const answer = deferred<string>();
+    const fetcher = vi.fn().mockResolvedValue('today');
+    const { result, rerender } = renderHook(({ f }) => usePolling(f, { keepPreviousData: true }), {
+      initialProps: { f: fetcher },
+    });
+    await waitFor(() => expect(result.current.data).toBe('today'));
+    expect(result.current.switching).toBe(false);
+
+    rerender({ f: vi.fn().mockReturnValue(answer.promise) });
+
+    expect(result.current.data).toBe('today');
+    expect(result.current.loading).toBe(false);
+    expect(result.current.switching).toBe(true);
+
+    await act(async () => {
+      answer.resolve('7 days');
+      await answer.promise;
+    });
+    expect(result.current.data).toBe('7 days');
+    expect(result.current.switching).toBe(false);
+  });
+
   it('ignores a slow response from the filter that was replaced', async () => {
     const slow = deferred<string>();
     const first = vi.fn().mockReturnValue(slow.promise);

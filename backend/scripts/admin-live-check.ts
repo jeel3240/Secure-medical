@@ -58,6 +58,10 @@ interface LeadSpec {
   tier?: string | null;
   /** Days ago the lead arrived. 0 is today. */
   daysAgo?: number;
+  /** Days ago their first reply came. Defaults to when they arrived, if they scored. */
+  repliedDaysAgo?: number;
+  /** Days ago they answered all three. Defaults to when they arrived, if completed. */
+  completedDaysAgo?: number;
 }
 
 async function makeLead(spec: LeadSpec): Promise<number> {
@@ -68,10 +72,18 @@ async function makeLead(spec: LeadSpec): Promise<number> {
   );
   const id = rows[0].id;
   if (spec.status) {
+    const completedAgo = spec.status === 'completed' ? String(spec.completedDaysAgo ?? spec.daysAgo ?? 0) : null;
     await pool.query(
-      `INSERT INTO conversations (lead_id, status, step, score, tier)
-       VALUES ($1, $2, 3, $3, $4)`,
-      [id, spec.status, spec.score ?? 0, spec.tier ?? null]
+      `INSERT INTO conversations (lead_id, status, step, score, tier, completed_at)
+       VALUES ($1, $2, 3, $3, $4, CASE WHEN $5::text IS NULL THEN NULL ELSE now() - ($5 || ' days')::interval END)`,
+      [id, spec.status, spec.score ?? 0, spec.tier ?? null, completedAgo]
+    );
+  }
+  if ((spec.score ?? 0) > 0) {
+    await pool.query(
+      `INSERT INTO messages (lead_id, direction, body, created_at)
+       VALUES ($1, 'inbound', '1', now() - ($2 || ' days')::interval)`,
+      [id, String(spec.repliedDaysAgo ?? spec.daysAgo ?? 0)]
     );
   }
   return id;
@@ -146,24 +158,36 @@ async function main(): Promise<void> {
     // +15550000701 from the section above has no conversation, so it counts as
     // received but not responded.
     check('received today', today.kpis.leadsReceived, 4);
-    check('responded is score > 0', today.kpis.responded, 2);
-    check('completed', today.kpis.completed, 1);
-    check('responded percentage', today.kpis.respondedPct, 50);
+    check('replied: first replies today', today.kpis.responded, 2);
+    check('answered all 3 today', today.kpis.completed, 1);
+
+    // Counted by when it happened, not when the lead arrived - Jeel,
+    // 2026-09-28. Arrived three days ago, replied and finished today.
+    await makeLead({
+      phone: '+15550000707', status: 'completed', score: 90, tier: 'HOT',
+      daysAgo: 3, repliedDaysAgo: 0, completedDaysAgo: 0,
+    });
+    const later = await getOverview('today');
+    check('an older lead is not a lead in today', later.kpis.leadsReceived, 4);
+    check('but its first reply today counts today', later.kpis.responded, 3);
+    check('and so does finishing today', later.kpis.completed, 2);
 
     const thirty = await getOverview('30d');
-    check('30d reaches further back', thirty.kpis.leadsReceived, 5);
-    check('and finds the older completion', thirty.kpis.completed, 2);
+    check('30d reaches further back', thirty.kpis.leadsReceived, 6);
+    check('and finds the older completion', thirty.kpis.completed, 3);
 
     const sevenDay = await getOverview('7d');
-    check('7d excludes the 10-day-old lead', sevenDay.kpis.leadsReceived, 4);
+    check('7d takes the 3-day-old lead and leaves the 10-day-old one', sevenDay.kpis.leadsReceived, 5);
 
     console.log('\nthe totals and the per-agent table');
     const lead = await makeLead({ phone: '+15550000706', status: 'completed', score: 80, tier: 'HOT' });
     await pool.query(`INSERT INTO dispositions (lead_id, agent_id, value) VALUES ($1, $2, 'closed')`, [lead, maya]);
     await pool.query(`INSERT INTO dispositions (lead_id, agent_id, value) VALUES ($1, $2, 'no_answer')`, [lead, maya]);
+    // Closed a second time - reopened by a text, closed again. One lead.
+    await pool.query(`INSERT INTO dispositions (lead_id, agent_id, value) VALUES ($1, $2, 'closed')`, [lead, maya]);
     await pool.query(`INSERT INTO notes (lead_id, agent_id, body) VALUES ($1, $2, 'spoke briefly')`, [lead, sam]);
     await pool.query(
-      `INSERT INTO callbacks (lead_id, agent_id, scheduled_at) VALUES ($1, $2, now() + interval '1 hour')`,
+      `INSERT INTO callbacks (lead_id, agent_id, scheduled_at) VALUES ($1, $2, now() + interval '1 hour'), ($1, $2, now() - interval '1 hour')`,
       [lead, sam]
     );
 
@@ -171,12 +195,12 @@ async function main(): Promise<void> {
     const mayaRow = after.agents.find((a) => a.name === 'Maya');
     const samRow = after.agents.find((a) => a.name === 'Sam');
 
-    check("Sam's pending callback is counted", samRow?.callbacksPending, 1);
-    check('and Maya has none pending', mayaRow?.callbacksPending, 0);
+    check("Sam's overdue callback is due; the one in an hour is not yet", samRow?.callbacksDue, 1);
+    check('and Maya has none due', mayaRow?.callbacksDue, 0);
 
     // The funnel went on 2026-09-28; Closed is a total of its own now.
-    check('closed is counted for the period', after.kpis.closed, 1);
-    check("and against the agent who closed it", mayaRow?.closed, 1);
+    check('closed counts leads, not presses: closed twice is one', after.kpis.closed, 1);
+    check("and against the agent who closed it, once", mayaRow?.closed, 1);
     check('an agent holding nothing holds 0', samRow?.holding, 0);
     await pool.query(`UPDATE leads SET assigned_to = $2 WHERE id = $1`, [lead, sam]);
     const held = (await getOverview('today')).agents.find((a) => a.name === 'Sam');
@@ -188,7 +212,7 @@ async function main(): Promise<void> {
 
     console.log('\nthe activity feed');
     const kinds = after.activity.map((a) => a.kind).sort();
-    check('covers every agent action', kinds, ['callback', 'disposition', 'disposition', 'note']);
+    check('covers every agent action', kinds, ['callback', 'callback', 'disposition', 'disposition', 'disposition', 'note']);
     check('newest first', after.activity[0].at >= after.activity[1].at, true);
     check('and names the lead', after.activity[0].leadName, 'Jordan');
   }

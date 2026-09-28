@@ -22,9 +22,17 @@ import { config } from '../config';
 
 export type HealthStatus = 'ok' | 'degraded';
 
+/**
+ * `info` is for a check with no verdict - Incoming replies, where a quiet night
+ * is not a failure. It used to report `ok`, and an OK that can never be
+ * anything else says nothing (Jeel, 2026-09-28). It never makes the whole
+ * report degraded.
+ */
+export type CheckStatus = HealthStatus | 'info';
+
 export interface HealthCheck {
   name: string;
-  status: HealthStatus;
+  status: CheckStatus;
   /** Why it is degraded. Null when it is fine. */
   message: string | null;
   detail: Record<string, unknown>;
@@ -44,6 +52,13 @@ export interface Health {
  * noticed within the same working hour.
  */
 const POLL_STALE_MS = 6 * 60 * 1000;
+
+/**
+ * How long past its `expires_at` an open conversation may sit before the expiry
+ * sweep counts as stuck. The worker sweeps on every poll, about once a minute,
+ * so ten minutes is several missed sweeps rather than one slow one.
+ */
+const EXPIRY_GRACE = `interval '10 minutes'`;
 
 const ageMs = (at: Date | null): number | null => (at ? Date.now() - at.getTime() : null);
 const iso = (at: Date | null): string | null => at?.toISOString() ?? null;
@@ -82,17 +97,31 @@ export async function getHealth(): Promise<Health> {
     };
   }
 
-  const [checkpointRows, webhookRows, expiryRows] = await Promise.all([
+  const [checkpointRows, webhookRows, expiryRows, sendRows] = await Promise.all([
     pool.query(`SELECT value, updated_at FROM settings WHERE key = 'ezt_poll_checkpoint'`),
     pool.query(
       `SELECT max(COALESCE(received_at, created_at)) AS at FROM messages WHERE direction = 'inbound'`
     ),
-    // Conversations past their expiry that the sweep has not closed. A handful
-    // is normal between sweeps; a growing number means the worker is not
-    // running the expiry pass.
+    // Conversations the sweep should have closed by now. One past its expiry
+    // by less than the grace is normal between sweeps; one past it by more
+    // means the sweep is not running.
     pool.query(
       `SELECT count(*)::int AS n FROM conversations
-       WHERE status = 'open' AND expires_at IS NOT NULL AND expires_at < now()`
+       WHERE status = 'open' AND expires_at IS NOT NULL AND expires_at < now() - ${EXPIRY_GRACE}`
+    ),
+    // The newest send attempt of the last day, and how many failed. A refused
+    // send is kept marked failed - db/failed-sends.ts - which is what makes
+    // this check possible.
+    pool.query(
+      `SELECT
+         (SELECT delivery_status FROM messages
+          WHERE direction = 'outbound' AND created_at > now() - interval '1 day'
+          ORDER BY created_at DESC, id DESC LIMIT 1) AS last_status,
+         (SELECT max(created_at) FROM messages
+          WHERE direction = 'outbound' AND delivery_status IS DISTINCT FROM 'failed') AS last_sent_at,
+         (SELECT count(*)::int FROM messages
+          WHERE direction = 'outbound' AND delivery_status = 'failed'
+            AND created_at > now() - interval '1 day') AS failed_last_day`
     ),
   ]);
 
@@ -125,7 +154,7 @@ export async function getHealth(): Promise<Health> {
   const lastWebhookAt: Date | null = webhookRows.rows[0]?.at ?? null;
   checks.push({
     name: 'webhook',
-    status: 'ok',
+    status: 'info',
     message: null,
     detail: {
       lastInboundAt: iso(lastWebhookAt),
@@ -133,22 +162,38 @@ export async function getHealth(): Promise<Health> {
     },
   });
 
+  // It always said ok until 2026-09-28, even with conversations weeks overdue.
   const overdue: number = expiryRows.rows[0].n;
   checks.push({
     name: 'expiry',
-    status: 'ok',
-    message: null,
+    status: overdue > 0 ? 'degraded' : 'ok',
+    message:
+      overdue > 0
+        ? `${overdue} conversation(s) are past their reply window and still open. The expiry sweep may not be running.`
+        : null,
     detail: { conversationsPastExpiry: overdue },
   });
 
-  // Without it sendMessage refuses every send - a configuration mistake that
-  // otherwise shows up only as failed sends in the logs.
+  // Two ways texts stop going out: sending is switched off
+  // (EZT_SEND_GROUP unset, so sendMessage refuses everything), or EZ Texting is
+  // refusing what we send. The second is judged by the newest attempt of the
+  // last day - it said ok for both until 2026-09-28, checking only the first.
   const sendGroupSet = Boolean(config.ezt.sendGroup);
+  const send = sendRows.rows[0];
+  const lastFailed = send.last_status === 'failed';
   checks.push({
     name: 'sending',
-    status: sendGroupSet ? 'ok' : 'degraded',
-    message: sendGroupSet ? null : 'EZT_SEND_GROUP is not set, so every outbound SMS is refused.',
-    detail: { sendGroupSet },
+    status: !sendGroupSet || lastFailed ? 'degraded' : 'ok',
+    message: !sendGroupSet
+      ? 'EZT_SEND_GROUP is not set, so every outbound SMS is refused.'
+      : lastFailed
+        ? 'The most recent text was refused by EZ Texting. Check the account and the server log.'
+        : null,
+    detail: {
+      sendGroupSet,
+      lastSentAt: iso(send.last_sent_at ?? null),
+      failedLastDay: send.failed_last_day,
+    },
   });
 
   return {

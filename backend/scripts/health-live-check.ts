@@ -119,8 +119,9 @@ async function main(): Promise<void> {
   {
     const before = named((await getHealth()).checks, 'webhook');
     check('is null before any reply', before?.detail.lastInboundAt, null);
-    // A quiet night is not a broken webhook, so this never sets the verdict.
-    check('and never degrades the report', before?.status, 'ok');
+    // A quiet night is not a broken webhook, so this has no verdict: `info`,
+    // not an ok that could never be anything else (2026-09-28).
+    check('is information, not a pass or fail', before?.status, 'info');
 
     const lead = await pool.query(
       `INSERT INTO leads (phone, first_name, source) VALUES ('+15550000801', 'Jordan', 'API') RETURNING id`
@@ -151,6 +152,13 @@ async function main(): Promise<void> {
 
     const expiry = named((await getHealth()).checks, 'expiry');
     check('an unswept one is counted', expiry?.detail.conversationsPastExpiry, 1);
+    // It said ok regardless until 2026-09-28.
+    check('and the sweep is reported as not running', expiry?.status, 'degraded');
+
+    // Just past its expiry is normal between sweeps.
+    await pool.query(`UPDATE conversations SET expires_at = now() - interval '2 minutes' WHERE lead_id = $1`, [id]);
+    check('two minutes over is still ok', named((await getHealth()).checks, 'expiry')?.status, 'ok');
+    await pool.query(`UPDATE conversations SET expires_at = now() - interval '1 day' WHERE lead_id = $1`, [id]);
 
     // A conversation the sweep has already closed is not counted again.
     await pool.query(`UPDATE conversations SET status = 'expired' WHERE lead_id = $1`, [id]);
@@ -167,7 +175,31 @@ async function main(): Promise<void> {
     // EZT_SEND_GROUP is set in the command above; without it every send is
     // refused, which otherwise shows up only as failures in the log.
     check('is reported', sending?.detail.sendGroupSet, true);
-    check('and is healthy when set', sending?.status, 'ok');
+    check('and is healthy when set and nothing has failed', sending?.status, 'ok');
+
+    // Until 2026-09-28 this checked only the setting, and said ok while EZ
+    // Texting refused every text. The newest attempt now decides.
+    const lead = await pool.query(
+      `INSERT INTO leads (phone, first_name, source) VALUES ('+15550000803', 'Ava', 'API') RETURNING id`
+    );
+    const leadId = lead.rows[0].id;
+    await pool.query(
+      `INSERT INTO messages (lead_id, direction, body, ezt_message_id, created_at) VALUES ($1, 'outbound', 'Q1', 'ok-1', now() - interval '10 minutes')`,
+      [leadId]
+    );
+    await pool.query(
+      `INSERT INTO messages (lead_id, direction, body, delivery_status) VALUES ($1, 'outbound', 'Q2', 'failed')`,
+      [leadId]
+    );
+    const failing = named((await getHealth()).checks, 'sending');
+    check('the newest text refused: degraded', failing?.status, 'degraded');
+    check('and it counts the day\'s failures', failing?.detail.failedLastDay, 1);
+
+    await pool.query(
+      `INSERT INTO messages (lead_id, direction, body, ezt_message_id) VALUES ($1, 'outbound', 'Q2 again', 'ok-2')`,
+      [leadId]
+    );
+    check('a later text going out: ok again', named((await getHealth()).checks, 'sending')?.status, 'ok');
   }
 
   console.log(failures === 0 ? '\nall checks passed' : `\n${failures} check(s) FAILED`);

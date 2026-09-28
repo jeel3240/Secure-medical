@@ -227,6 +227,7 @@ a codebase ends up with five different refresh behaviours.
 | A stale response is discarded | A slow request from a filter the agent has already changed must not overwrite the current view |
 | The timer stops on unmount | Otherwise it polls forever and sets state on a dead component |
 | `refresh()` fetches now | So a claim or a note appears at once instead of up to 5s later |
+| `keepPreviousData` keeps the old data through a switch | Opt-in, 2026-09-28, for Admin > Overview's period switch: the numbers change but the page stays, faded while `switching` is true, instead of blanking for a spinner |
 
 **The fetcher must be stable** - wrapped in `useCallback` with the filters as
 dependencies. When it changes that counts as a new view: the spinner returns and
@@ -234,7 +235,7 @@ the old rows are cleared, because rows fetched under the old filter do not
 belong under the new one. A fetcher rebuilt on every render would clear the data
 on every render.
 
-`frontend/src/api/usePolling.test.ts` covers all six rows above. None of them is
+`frontend/src/api/usePolling.test.ts` covers all seven rows above. None of them is
 visible in a browser, which is why they are tested at all - the screens
 themselves are judged by eye.
 

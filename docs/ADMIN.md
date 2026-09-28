@@ -88,9 +88,31 @@ complex".** The page and the API now hold only what a superadmin acts on:
 
 | Part | Shows |
 |---|---|
-| Totals | Leads in · Replied (and % of leads) · Answered all 3 (and %) · Closed - for Today, 7 days or 30 days, chosen on the navy switcher |
+| Totals | Leads in · Replied · Answered all 3 · Closed - for Today, 7 days or 30 days, chosen on the navy switcher |
 | Agents | Per active agent: **Working now** (leads they hold), **Closed** in the period, **Callbacks due**, **Last active** (their newest note, callback, outcome, call or SMS) |
-| System | Database, EZ Texting sync, incoming replies, the expiry sweep, sending - each OK or Degraded, from the health endpoint |
+| System | Database, EZ Texting sync, the expiry sweep, sending - each OK or Degraded - and incoming replies, which shows its last reply with no verdict. From the health endpoint |
+
+**Every number counts what happened in the period - Jeel, 2026-09-28, "i want
+all real":**
+
+| Number | Counts |
+|---|---|
+| Leads in | Leads that arrived from EZ Texting in the period |
+| Replied | Leads whose **first** reply came in the period. A lead from yesterday who first replies today is today's; one writing again weeks later is not counted twice |
+| Answered all 3 | Leads whose third answer came in the period - `conversations.completed_at`, migration 004 |
+| Closed | **Leads** closed in the period, not presses of Closed: a lead closed, reopened by a text and closed again is one |
+| Working now | Leads the agent holds right now, whatever the period |
+| Callbacks due | The agent's open callbacks due **now or overdue** - one booked for next week is not due |
+
+Until that day Replied and Answered all 3 counted leads that *arrived* in the
+period, Closed counted presses, and Callbacks due counted every open callback;
+the percentages under Replied and Answered all 3 went with the first fix, since
+a share of "leads that arrived" no longer applies.
+
+**Switching period is smooth.** The page stays and its numbers fade until the
+new ones land - `usePolling`'s `keepPreviousData`, QUEUE.md - rather than
+blanking for a spinner. Checked by sampling the page every 20ms through a
+switch: it never went blank.
 | Recent activity | "karm closed Omar Haddad", newest first, the lead's name linking to its timeline |
 
 **Removed:** the funnel, which drew the same numbers as the cards as bars; the

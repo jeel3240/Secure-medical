@@ -86,7 +86,11 @@ export function OverviewPage() {
   const [period, setPeriod] = useState<OverviewPeriod>('today');
 
   const fetcher = useCallback(() => getOverview(period), [period]);
-  const { data, loading, error, updatedAt } = usePolling<Overview>(fetcher);
+  // Switching period keeps the page and fades the numbers until the new ones
+  // land, rather than blanking it for a spinner - Jeel, 2026-09-28.
+  const { data, loading, error, updatedAt, switching } = usePolling<Overview>(fetcher, {
+    keepPreviousData: true,
+  });
 
   const healthFetcher = useCallback(() => getHealth(), []);
   const { data: health } = usePolling<Health>(healthFetcher);
@@ -102,11 +106,13 @@ export function OverviewPage() {
   if (!data) return <Banner tone="error">{error ?? 'The overview could not be loaded.'}</Banner>;
 
   const { kpis } = data;
+  // Each counts what *happened* in the period, not what arrived in it - a lead
+  // from yesterday who replies today is today's reply. ADMIN.md, "Overview".
   const stats = [
-    { label: 'Leads in', value: kpis.leadsReceived, sub: null },
-    { label: 'Replied', value: kpis.responded, sub: `${kpis.respondedPct}% of leads` },
-    { label: 'Answered all 3', value: kpis.completed, sub: `${kpis.completedPct}% of leads` },
-    { label: 'Closed', value: kpis.closed, sub: null },
+    { label: 'Leads in', value: kpis.leadsReceived, sub: 'Arrived from EZ Texting' },
+    { label: 'Replied', value: kpis.responded, sub: 'First reply' },
+    { label: 'Answered all 3', value: kpis.completed, sub: 'Finished the questions' },
+    { label: 'Closed', value: kpis.closed, sub: 'Leads, not presses' },
   ];
 
   return (
@@ -135,18 +141,18 @@ export function OverviewPage() {
         </Banner>
       )}
 
-      <div className="card queue-card stats">
+      <div className={`card queue-card stats${switching ? ' is-switching' : ''}`}>
         {stats.map((stat) => (
           <div key={stat.label} className="stats__item">
             <span className="stats__label">{stat.label}</span>
             <span className="stats__value tabular">{stat.value}</span>
-            <span className="stats__sub">{stat.sub ?? ' '}</span>
+            <span className="stats__sub">{stat.sub}</span>
           </div>
         ))}
       </div>
 
       <div className="overview">
-        <section className="card queue-card">
+        <section className={`card queue-card${switching ? ' is-switching' : ''}`}>
           <header className="card-head">
             <h2 className="card-head__title">Agents</h2>
             <span className="card-head__meta">Closed in this period</span>
@@ -158,7 +164,7 @@ export function OverviewPage() {
                   <th>Agent</th>
                   <th className="right">Working now</th>
                   <th className="right">Closed</th>
-                  <th className="right">Callbacks due</th>
+                  <th className="right" title="Due now or overdue">Callbacks due</th>
                   <th>Last active</th>
                 </tr>
               </thead>
@@ -170,7 +176,7 @@ export function OverviewPage() {
                     </td>
                     <td className="right tabular">{agent.holding || '-'}</td>
                     <td className="right tabular queue__score">{agent.closed || '-'}</td>
-                    <td className="right tabular">{agent.callbacksPending || '-'}</td>
+                    <td className="right tabular">{agent.callbacksDue || '-'}</td>
                     <td className="leads__when">
                       {agent.lastActiveAt ? formatRelative(agent.lastActiveAt) : 'No activity yet'}
                     </td>
@@ -206,10 +212,15 @@ export function OverviewPage() {
                       {detail && <span className="overview__detail">{detail}</span>}
                     </dt>
                     <dd>
-                      <span className={`status${ok ? '' : ' status--warning'}`}>
-                        <StatusIcon name={ok ? 'check' : 'warning'} />
-                        {ok ? 'OK' : 'Degraded'}
-                      </span>
+                      {/* Incoming replies has no verdict - a quiet night is
+                          not a failure - so it shows no OK it could never
+                          lose. db/health.ts, `info`. */}
+                      {check.status === 'info' ? null : (
+                        <span className={`status${ok ? '' : ' status--warning'}`}>
+                          <StatusIcon name={ok ? 'check' : 'warning'} />
+                          {ok ? 'OK' : 'Degraded'}
+                        </span>
+                      )}
                     </dd>
                   </div>
                 );
@@ -219,7 +230,7 @@ export function OverviewPage() {
         </section>
       </div>
 
-      <section className="card queue-card">
+      <section className={`card queue-card${switching ? ' is-switching' : ''}`}>
         <header className="card-head">
           <h2 className="card-head__title">Recent activity</h2>
           <span className="card-head__meta">Agent actions, newest first</span>
