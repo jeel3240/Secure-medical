@@ -318,7 +318,9 @@ left sitting unseen:
   agent follows up by hand;
 - the conversation stays `expired` - no questions restart;
 - once an agent opens the lead, the flag clears and it leaves the queue again,
-  unless it now has a callback or other reason to be there.
+  unless it now has a callback or other reason to be there. *(2026-09-28:
+  once an agent **picks** it, not opens it - looking at a lead no longer clears
+  the flag. `AGENT-WORKSPACE.md`, "Rules".)*
 
 *(2026-09-22: the last bullet is not built. `api/webhooks.ts` sets
 `has_unread_inbound` and nothing anywhere unsets it, so such a lead stays in

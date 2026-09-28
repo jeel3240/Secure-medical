@@ -5,11 +5,24 @@
 import request from 'supertest';
 import { buildApp, seedUser, signIn } from './helpers';
 import type { AddNoteResult } from '../../db/notes';
+import type { Holding } from '../../db/holder';
 
 const addNote = jest.fn<Promise<AddNoteResult>, [number, number, string]>();
 jest.mock('../../db/notes', () => ({
   addNote: (...a: [number, number, string]) => addNote(...a),
 }));
+
+// Every write on a lead now checks the caller holds it first. These tests are
+// about the route itself, so the caller holds the lead unless a test says
+// otherwise; holder-guard.test.ts covers the refusals.
+const holding = jest.fn<Promise<Holding>, [number, number]>();
+jest.mock('../../db/holder', () => ({
+  holding: (...a: [number, number]) => holding(...a),
+}));
+beforeEach(() => {
+  holding.mockReset();
+  holding.mockResolvedValue({ status: 'mine' });
+});
 
 const PASSWORD = 'correct-horse-battery';
 

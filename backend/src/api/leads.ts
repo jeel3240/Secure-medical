@@ -65,6 +65,36 @@ function parseLeadId(raw: string): number {
   return id;
 }
 
+/**
+ * Refuses a write on a lead the caller has not picked - Jeel, 2026-09-28.
+ *
+ * Runs before anything that changes a lead: a note, a callback, an agent SMS,
+ * a disposition, marking a reply read. Reading a lead needs no claim, so the
+ * workspace can show one before it is picked; acting on it does. Without this
+ * the lock was the screen's alone, and anyone signed in could text or block a
+ * lead a colleague was working.
+ *
+ * Before the body is validated, deliberately: someone who may not act on the
+ * lead learns nothing from how the request was shaped.
+ */
+async function requireHolding(leadId: number, userId: number): Promise<void> {
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  const db = require('../db/holder') as typeof import('../db/holder');
+
+  const held = await db.holding(leadId, userId);
+  switch (held.status) {
+    case 'mine':
+      return;
+    case 'not_found':
+      throw new HttpError(404, 'not_found', 'No such lead.');
+    case 'free':
+      throw new HttpError(409, 'not_picked', 'Pick this lead before acting on it.');
+    case 'other':
+      // The same code the claim endpoint uses when someone was first.
+      throw new HttpError(409, 'already_claimed', `${held.holder} is working this lead.`);
+  }
+}
+
 /** Page size. Out of range is clamped by the query, not rejected. */
 function parseLimit(raw: unknown): number | undefined {
   if (raw === undefined || raw === '') return undefined;
@@ -167,8 +197,11 @@ export function queueRouter(deps: AppDeps): Router {
       // eslint-disable-next-line @typescript-eslint/no-var-requires
       const db = require('../db/notes') as typeof import('../db/notes');
 
+      const leadId = parseLeadId(req.params.id);
+      await requireHolding(leadId, req.user!.id);
+
       const result = await db.addNote(
-        parseLeadId(req.params.id),
+        leadId,
         req.user!.id,
         parseBody((req.body ?? {}).body)
       );
@@ -189,6 +222,9 @@ export function queueRouter(deps: AppDeps): Router {
       // eslint-disable-next-line @typescript-eslint/no-var-requires
       const parse = require('./callbacks') as typeof import('./callbacks');
 
+      const leadId = parseLeadId(req.params.id);
+      await requireHolding(leadId, req.user!.id);
+
       const body = (req.body ?? {}) as { scheduledAt?: unknown; agentId?: unknown };
 
       // Defaults to the caller. A superadmin may book one for another agent -
@@ -206,7 +242,7 @@ export function queueRouter(deps: AppDeps): Router {
       }
 
       const result = await db.createCallback(
-        parseLeadId(req.params.id),
+        leadId,
         agentId,
         parse.parseScheduledAt(body.scheduledAt)
       );
@@ -227,11 +263,14 @@ export function queueRouter(deps: AppDeps): Router {
       // eslint-disable-next-line @typescript-eslint/no-var-requires
       const db = require('../db/agent-sms') as typeof import('../db/agent-sms');
 
+      const leadId = parseLeadId(req.params.id);
+      await requireHolding(leadId, req.user!.id);
+
       // One segment. Longer costs a second segment on every send, and the
       // compose box counts down to the same number - DESIGN-PROMPT.md 3.
       const body = parseBody((req.body ?? {}).body, 'body', db.AGENT_SMS_LIMIT);
 
-      const result = await db.sendAgentSms(parseLeadId(req.params.id), req.user!.id, body);
+      const result = await db.sendAgentSms(leadId, req.user!.id, body);
 
       if (!result.ok) {
         if (result.reason === 'lead_not_found') {
@@ -260,6 +299,9 @@ export function queueRouter(deps: AppDeps): Router {
       // eslint-disable-next-line @typescript-eslint/no-var-requires
       const db = require('../db/dispositions') as typeof import('../db/dispositions');
 
+      const leadId = parseLeadId(req.params.id);
+      await requireHolding(leadId, req.user!.id);
+
       const body = (req.body ?? {}) as { value?: unknown; confirmDnc?: unknown };
 
       const value = typeof body.value === 'string' ? body.value.trim().toLowerCase() : '';
@@ -283,7 +325,7 @@ export function queueRouter(deps: AppDeps): Router {
         );
       }
 
-      const result = await db.setDisposition(parseLeadId(req.params.id), req.user!.id, value);
+      const result = await db.setDisposition(leadId, req.user!.id, value);
 
       if (!result.ok) {
         throw new HttpError(404, 'not_found', 'No such lead.');
@@ -299,7 +341,13 @@ export function queueRouter(deps: AppDeps): Router {
       // eslint-disable-next-line @typescript-eslint/no-var-requires
       const db = require('../db/read-flag') as typeof import('../db/read-flag');
 
-      const result = await db.markLeadRead(parseLeadId(req.params.id));
+      // Reading a reply is handling it, and only the holder handles a lead. A
+      // superadmin looking at someone else's lead must not be what makes it
+      // leave the queue.
+      const leadId = parseLeadId(req.params.id);
+      await requireHolding(leadId, req.user!.id);
+
+      const result = await db.markLeadRead(leadId);
       if (!result.ok) {
         throw new HttpError(404, 'not_found', 'No such lead.');
       }
