@@ -2664,6 +2664,14 @@ a {
   background: var(--color-surface-hover);
 }
 
+/* Sent: one tick at the end of the bubble - Conversation.tsx says why one. */
+.convo__tick {
+  display: inline-block;
+  margin-left: var(--space-2);
+  vertical-align: -2px;
+  color: var(--color-text-subtle);
+}
+
 .convo__choice {
   display: grid;
   place-items: center;

@@ -62,6 +62,37 @@ export function labelReplies(entries: TimelineEntry[], chips: AnswerChip[]): Map
   return labels;
 }
 
+/**
+ * One tick on a message we sent - Jeel, 2026-09-28, in place of a "Sent."
+ * banner under the composer.
+ *
+ * One, not WhatsApp's two. A message is in the thread only once EZ Texting has
+ * accepted it, so one tick is true. A second would mean "reached the phone",
+ * and nothing tells us that: EZ Texting sends no delivery reports we read, and
+ * `messages.delivery_status` is empty on every row. It becomes possible if
+ * delivery reports are ever wired up - SCHEMA.md, `messages.delivery_status`.
+ */
+function SentTick() {
+  return (
+    <svg
+      className="convo__tick"
+      width="14"
+      height="14"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2.5"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      role="img"
+      aria-label="Sent"
+    >
+      <title>Sent</title>
+      <path d="M5 12.5l4.5 4.5L19 7.5" />
+    </svg>
+  );
+}
+
 export function Conversation({
   entries,
   chips,
@@ -136,6 +167,7 @@ export function Conversation({
               }`}
             >
               {body}
+              {!failed && <SentTick />}
             </div>
           </div>
         );
