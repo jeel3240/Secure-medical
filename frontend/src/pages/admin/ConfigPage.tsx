@@ -1,9 +1,10 @@
-import { useCallback } from 'react';
+import { Fragment, useCallback, type ReactNode } from 'react';
 import { getConfig, type AdminConfig } from '../../api/admin';
 import { usePolling } from '../../api/usePolling';
-import { Badge } from '../../components/Badge';
 import { Banner } from '../../components/Banner';
+import { LiveStatus } from '../../components/LiveStatus';
 import { Spinner } from '../../components/Spinner';
+import { TierSignal } from '../../components/TierSignal';
 
 /**
  * Admin > Configuration: what we ask, and what each answer is worth.
@@ -20,23 +21,48 @@ import { Spinner } from '../../components/Spinner';
  * The page's value is that it reads the live rows every few seconds: it shows
  * what the state machine is *actually* using, not what a document says it
  * should be.
+ *
+ * **Laid out like the other admin pages - Jeel, 2026-09-28:** "too messy". The
+ * blue box, the copy in a code font on grey, the upper-case labels, the
+ * coloured tier pills and three paragraphs of notes are gone. Four cards with
+ * plain rows; each card's one caveat is a quiet line at its foot; the tiers use
+ * the queue's signal bars.
  */
 
-/** The message keys in the order a lead meets them, with a human heading. */
-const MESSAGE_HEADING: Record<string, string> = {
-  question_1: 'Question 1 - the opener',
-  question_2: 'Question 2',
-  question_3: 'Question 3',
-  message_clarify_1: 'Clarification after Q1',
-  message_clarify_2: 'Clarification after Q2',
-  message_clarify_3: 'Clarification after Q3',
-  message_thanks: 'Thanks - sent on completion',
+/** The message keys in the order a lead meets them: a name, and when it goes. */
+const MESSAGE_HEADING: Record<string, { name: string; when: string }> = {
+  question_1: { name: 'Question 1', when: 'The opener' },
+  question_2: { name: 'Question 2', when: 'After answer 1' },
+  question_3: { name: 'Question 3', when: 'After answer 2' },
+  message_clarify_1: { name: 'Clarify Q1', when: 'Unclear answer 1' },
+  message_clarify_2: { name: 'Clarify Q2', when: 'Unclear answer 2' },
+  message_clarify_3: { name: 'Clarify Q3', when: 'Unclear answer 3' },
+  message_thanks: { name: 'Thanks', when: 'After answer 3' },
 };
+
+/** `{first_name}` marked where it sits, so the personalised part is visible. */
+function withPlaceholders(body: string): ReactNode {
+  return body.split(/(\{first_name\})/).map((part, i) =>
+    part === '{first_name}' ? (
+      <mark key={i} className="config-msg__var">
+        first name
+      </mark>
+    ) : (
+      <Fragment key={i}>{part}</Fragment>
+    )
+  );
+}
 
 const QUESTION_HEADING: Record<number, string> = {
   1: 'Q1 · Interest',
   2: 'Q2 · Timing',
   3: 'Q3 · Preference',
+};
+
+/** "Responded at all" and "Completed all questions", as plain sentences. */
+const AWARD_LABEL: Record<string, string> = {
+  responded: 'Replied at all',
+  completed: 'Answered all three',
 };
 
 /**
@@ -51,7 +77,7 @@ function choiceLabel(label: string | null, choice: string): string {
 
 export function ConfigPage() {
   const fetcher = useCallback(() => getConfig(), []);
-  const { data, loading, error } = usePolling<AdminConfig>(fetcher);
+  const { data, loading, error, updatedAt } = usePolling<AdminConfig>(fetcher);
 
   if (loading) {
     return (
@@ -69,140 +95,129 @@ export function ConfigPage() {
         <div>
           <h1 className="page-title">Configuration</h1>
           <p className="page-subtitle">
-            The live values the conversation engine is using. Read-only.
+            The live values the conversation engine is using. Read-only - changes go through a pull
+            request.
           </p>
         </div>
+        <LiveStatus updatedAt={updatedAt} paused={Boolean(error)} />
       </div>
 
       {error && <Banner tone="warning">{error} Showing the last update.</Banner>}
 
-      <Banner tone="info">
-        These are changed through a migration and a pull request, not from this screen - so every
-        change has a review and a history. Ask Jeel.
-      </Banner>
-
       <div className="config">
-        <section className="card config__card">
-          <h2 className="config__title">Message copy</h2>
-          <p className="config__note">
-            Segment counts are worked out against the longest first name on file (
-            <strong>{data.longestFirstName}</strong>), because a message holding{' '}
-            <code>{'{first_name}'}</code> is a different length for every lead. Over{' '}
-            {data.settings.segmentLimit} characters costs a second segment on every send.
-          </p>
+        <section className="card queue-card">
+          <header className="card-head">
+            <h2 className="card-head__title">Messages</h2>
+            <span className="card-head__meta">In the order a lead receives them</span>
+          </header>
 
-          <ul className="config__messages">
-            {data.messages.map((message) => (
-              <li key={message.key} className="config__message">
-                <div className="config__message-head">
-                  <span className="config__message-heading">
-                    {MESSAGE_HEADING[message.key] ?? message.key}
-                  </span>
-                  <span className="config__counts tabular">
-                    {message.length} chars
-                    {message.personalised && ` · up to ${message.worstCaseLength}`}
-                    {' · '}
-                    {message.segments} segment{message.segments === 1 ? '' : 's'}
-                  </span>
-                </div>
-                <p className="config__body">{message.body}</p>
-                {message.costsExtraSegment && (
-                  <Badge tone="warning">Costs a second segment for some leads</Badge>
-                )}
-              </li>
-            ))}
-          </ul>
+          <ol className="config-msgs">
+            {data.messages.map((message) => {
+              const heading = MESSAGE_HEADING[message.key] ?? { name: message.key, when: '' };
+              return (
+                <li key={message.key} className="config-msg">
+                  <div className="config-msg__label">
+                    <span className="config-msg__name">{heading.name}</span>
+                    <span className="config-msg__when">{heading.when}</span>
+                  </div>
+                  <div>
+                    <p className="config-msg__body">{withPlaceholders(message.body)}</p>
+                    <p className={`config-msg__meta${message.costsExtraSegment ? ' config-msg__meta--warn' : ''}`}>
+                      <span className="tabular">
+                        {message.personalised ? `Up to ${message.worstCaseLength}` : message.length} characters
+                      </span>
+                      {' · '}
+                      {message.segments} segment{message.segments === 1 ? '' : 's'}
+                      {message.costsExtraSegment && ' - a second segment for some leads'}
+                    </p>
+                  </div>
+                </li>
+              );
+            })}
+          </ol>
 
-          <p className="config__note">
-            The STOP confirmation is not listed: EZ Texting sends it itself and this app never does,
-            so showing it among our copy would misrepresent what goes out.
+          <p className="card-note">
+            Lengths assume the longest first name on file ({data.longestFirstName}); over{' '}
+            {data.settings.segmentLimit} characters costs a second segment. The STOP confirmation is
+            sent by EZ Texting, not by us, so it is not listed.
           </p>
         </section>
 
         <div className="config__column">
-          <section className="card config__card">
-            <h2 className="config__title">Scoring</h2>
-            <table className="table config__table">
-              <tbody>
-                {data.scoring.awards.map((award) => (
-                  <tr key={award.code}>
-                    <th scope="row">{award.label ?? award.code}</th>
-                    <td className="right tabular">+{award.points}</td>
-                  </tr>
-                ))}
-                {data.scoring.questions.map((question) => (
-                  <tr key={question.question} className="config__question-row">
-                    <th scope="row">{QUESTION_HEADING[question.question]}</th>
-                    <td className="right">
-                      {/* One option per line. Side by side they cannot wrap -
-                          table cells are nowrap - and ran the table 240px past
-                          the window at 1440px. */}
-                      <span className="config__choices">
-                        {question.choices.map((choice) => (
-                          <span key={choice.choice} className="config__choice">
-                            {choiceLabel(choice.label, choice.choice)}{' '}
-                            <strong className="tabular">+{choice.points}</strong>
-                          </span>
-                        ))}
-                      </span>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-              <tfoot>
-                <tr>
-                  <th scope="row">Maximum possible</th>
-                  <td className="right tabular">
-                    <strong>{data.scoring.maxScore}</strong>
-                  </td>
-                </tr>
-              </tfoot>
-            </table>
+          <section className="card queue-card">
+            <header className="card-head">
+              <h2 className="card-head__title">Scoring</h2>
+              <span className="card-head__meta">Points per answer</span>
+            </header>
+            <dl className="kv">
+              {data.scoring.awards.map((award) => (
+                <div key={award.code} className="kv__row">
+                  <dt>{AWARD_LABEL[award.code] ?? award.label ?? award.code}</dt>
+                  <dd className="tabular">+{award.points}</dd>
+                </div>
+              ))}
+              {data.scoring.questions.map((question) => (
+                <div key={question.question} className="kv__group">
+                  <dt className="kv__group-title">{QUESTION_HEADING[question.question]}</dt>
+                  {question.choices.map((choice) => (
+                    <div key={choice.choice} className="kv__row kv__row--sub">
+                      <dt>{choiceLabel(choice.label, choice.choice)}</dt>
+                      <dd className="tabular">+{choice.points}</dd>
+                    </div>
+                  ))}
+                </div>
+              ))}
+              <div className="kv__row kv__row--total">
+                <dt>Maximum</dt>
+                <dd className="tabular">{data.scoring.maxScore}</dd>
+              </div>
+            </dl>
           </section>
 
-          <section className="card config__card">
-            <h2 className="config__title">Tiers</h2>
-            <table className="table config__table">
-              <tbody>
-                {data.tiers.map((tier) => (
-                  <tr key={tier.name}>
-                    <th scope="row">
-                      <span className={`tier tier--${tier.name.toLowerCase()}`}>{tier.name}</span>
-                    </th>
-                    <td className="right tabular">
-                      {tier.minScore} - {tier.maxScore}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+          <section className="card queue-card">
+            <header className="card-head">
+              <h2 className="card-head__title">Tiers</h2>
+              <span className="card-head__meta">Score bands</span>
+            </header>
+            <dl className="kv">
+              {data.tiers.map((tier) => (
+                <div key={tier.name} className="kv__row">
+                  <dt>
+                    <TierSignal tier={tier.name} />
+                  </dt>
+                  <dd className="tabular">
+                    {tier.minScore} - {tier.maxScore}
+                  </dd>
+                </div>
+              ))}
+            </dl>
             {/* Leads keep the score they were given; nothing rescores on its
-                own - CLAUDE.md §10. Worth saying on the screen that shows the
-                bands, or a superadmin would reasonably assume otherwise. */}
-            <p className="config__note">
-              Changing a rule does not rescore leads already scored. A one-off script can be run
-              deliberately if it ever matters.
-            </p>
+                own - CLAUDE.md §10. */}
+            <p className="card-note">A rule change does not rescore leads already scored.</p>
           </section>
 
-          <section className="card config__card">
-            <h2 className="config__title">Settings</h2>
-            <table className="table config__table">
-              <tbody>
-                <tr>
-                  <th scope="row">Conversation expiry</th>
-                  <td className="right tabular">{data.settings.expiryDays} days</td>
-                </tr>
-                <tr>
-                  <th scope="row">Unclear replies before review</th>
-                  <td className="right tabular">{data.settings.maxInvalidBeforeReview}</td>
-                </tr>
-                <tr>
-                  <th scope="row">Segment limit</th>
-                  <td className="right tabular">{data.settings.segmentLimit}</td>
-                </tr>
-              </tbody>
-            </table>
+          <section className="card queue-card">
+            <header className="card-head">
+              <h2 className="card-head__title">Settings</h2>
+            </header>
+            <dl className="kv">
+              <div className="kv__row">
+                <dt>Conversation expires after</dt>
+                <dd className="tabular">{data.settings.expiryDays} days</dd>
+              </div>
+              <div className="kv__row">
+                {/* The setting counts clarifications, not unclear replies: at 1,
+                    the first unclear reply is clarified and the second goes to
+                    review. "Unclear replies before review: 1" read as the
+                    opposite. STATE-MACHINE.md, rule 4. */}
+                <dt>Clarifications before review</dt>
+                <dd className="tabular">{data.settings.maxInvalidBeforeReview}</dd>
+              </div>
+              <div className="kv__row">
+                <dt>Segment limit</dt>
+                <dd className="tabular">{data.settings.segmentLimit} characters</dd>
+              </div>
+            </dl>
           </section>
         </div>
       </div>
