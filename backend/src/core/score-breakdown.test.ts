@@ -114,18 +114,18 @@ describe('answerChips', () => {
   it('names each question and the answer given', () => {
     const chips = answerChips(conversation({ q1: '3', q2: '1', q3: '1', score: 90 }), RULES);
     expect(chips).toEqual([
-      { question: 1, heading: 'Interest', answer: 'Both' },
-      { question: 2, heading: 'Timing', answer: 'Today' },
-      { question: 3, heading: 'Prefers', answer: 'Call me now' },
+      { question: 1, heading: 'Interest', answer: 'Both', choice: '3' },
+      { question: 2, heading: 'Timing', answer: 'Today', choice: '1' },
+      { question: 3, heading: 'Prefers', answer: 'Call me now', choice: '1' },
     ]);
   });
 
   it('returns all three even when unanswered, so the card keeps its shape', () => {
     const chips = answerChips(conversation({ q1: '1', score: 15 }), RULES);
     expect(chips).toEqual([
-      { question: 1, heading: 'Interest', answer: 'Supplements' },
-      { question: 2, heading: 'Timing', answer: null },
-      { question: 3, heading: 'Prefers', answer: null },
+      { question: 1, heading: 'Interest', answer: 'Supplements', choice: '1' },
+      { question: 2, heading: 'Timing', answer: null, choice: null },
+      { question: 3, heading: 'Prefers', answer: null, choice: null },
     ]);
   });
 

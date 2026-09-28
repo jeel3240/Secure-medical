@@ -2124,3 +2124,723 @@ a {
   font-size: var(--text-xs);
   color: var(--color-text-muted);
 }
+
+/* ==========================================================================
+   Agent workspace, redesigned 2026-09-28
+   --------------------------------------------------------------------------
+   A full-width header over three columns: what the lead told us, the
+   conversation, and the wrap-up. The older .lead-card and .timeline-card rules
+   above still serve the Lead Timeline page, which keeps the log view.
+   ========================================================================== */
+
+.workspace__top-left {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.workspace__place {
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+  border-left: 1px solid var(--color-border);
+  padding-left: var(--space-3);
+}
+
+.workspace__held {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-1) var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  background: var(--color-surface);
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+}
+
+.workspace__held-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--color-success);
+}
+
+.workspace__flags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin: var(--space-3) 0;
+}
+
+.workspace__flags:empty {
+  display: none;
+}
+
+/* --- header card --- */
+
+.lead-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-5);
+  padding: var(--space-4) var(--space-5);
+}
+
+.lead-head__who {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+.avatar {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  flex: none;
+  border-radius: 50%;
+  background: var(--color-surface-hover);
+  color: var(--color-text-muted);
+  font-size: var(--text-md);
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+.lead-head__name {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin: 0;
+  font-size: var(--text-xl);
+  line-height: 1.2;
+}
+
+.lead-head__phone {
+  margin: 2px 0 0;
+  color: var(--color-text-muted);
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+}
+
+.lead-head__stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-5);
+  margin: 0;
+  padding-left: var(--space-5);
+  border-left: 1px solid var(--color-border);
+}
+
+.lead-head__stats dt {
+  color: var(--color-text-subtle);
+  font-size: var(--text-xs);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.lead-head__stats dd {
+  display: flex;
+  align-items: baseline;
+  gap: 2px;
+  margin: var(--space-1) 0 0;
+  font-size: var(--text-md);
+  font-weight: 500;
+}
+
+.lead-head__score {
+  font-size: var(--text-xl);
+  font-weight: 700;
+}
+
+.lead-head__score--hot { color: var(--color-hot); }
+.lead-head__score--warm { color: var(--color-warm); }
+.lead-head__score--low { color: var(--color-low); }
+
+.lead-head__of {
+  color: var(--color-text-subtle);
+  font-size: var(--text-sm);
+}
+
+.flow {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.flow::before {
+  content: '';
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--color-text-subtle);
+}
+
+.flow--completed::before { background: var(--color-success); }
+.flow--open::before { background: var(--color-accent); }
+.flow--review::before { background: var(--color-warning); }
+.flow--expired::before,
+.flow--suppressed::before { background: var(--color-text-subtle); }
+
+.lead-head__actions {
+  margin-left: auto;
+  text-align: right;
+}
+
+.lead-head__buttons {
+  display: flex;
+  gap: var(--space-2);
+  justify-content: flex-end;
+}
+
+.lead-head__call-note {
+  margin: var(--space-2) 0 0;
+  color: var(--color-text-subtle);
+  font-size: var(--text-xs);
+}
+
+/* --- left column --- */
+
+.card__title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  margin: 0 0 var(--space-3);
+  font-size: var(--text-md);
+  font-weight: 600;
+}
+
+.told-us__list {
+  display: grid;
+  gap: var(--space-3);
+  margin: 0;
+}
+
+.told-us__list > div {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.told-us__list dt {
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+}
+
+.told-us__list dd {
+  margin: 0;
+  text-align: right;
+}
+
+.answer {
+  display: inline-block;
+  padding: var(--space-1) var(--space-2);
+  border-radius: var(--radius-sm);
+  font-size: var(--text-sm);
+  font-weight: 500;
+  background: var(--color-surface-hover);
+}
+
+.answer--q1 { background: #eef2ff; color: #3730a3; }
+.answer--q2 { background: var(--color-warm-soft); color: var(--color-warm); }
+.answer--q3 { background: var(--color-success-soft); color: var(--color-success); }
+
+.answer--empty {
+  background: transparent;
+  color: var(--color-text-subtle);
+}
+
+.breakdown__total {
+  font-size: var(--text-lg);
+  font-weight: 700;
+}
+
+.breakdown__total--hot { color: var(--color-hot); }
+.breakdown__total--warm { color: var(--color-warm); }
+.breakdown__total--low { color: var(--color-low); }
+
+.breakdown__bar {
+  display: flex;
+  gap: 3px;
+  height: 8px;
+  margin-bottom: var(--space-3);
+}
+
+.breakdown__seg {
+  border-radius: 2px;
+  background: var(--color-hot);
+}
+
+.breakdown__list {
+  display: grid;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.breakdown__list li {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--text-sm);
+}
+
+.breakdown__swatch {
+  width: 9px;
+  height: 9px;
+  flex: none;
+  border-radius: 2px;
+  background: var(--color-hot);
+}
+
+.breakdown__label {
+  color: var(--color-text-muted);
+}
+
+.breakdown__points {
+  margin-left: auto;
+  font-weight: 600;
+}
+
+/* --- conversation --- */
+
+.convo-card {
+  display: flex;
+  flex-direction: column;
+  padding: 0;
+}
+
+.convo-card__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-4) var(--space-5);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.convo-card__head .card__title {
+  margin: 0;
+  gap: var(--space-3);
+}
+
+.convo-card__count {
+  color: var(--color-text-subtle);
+  font-size: var(--text-sm);
+  font-weight: 400;
+}
+
+.convo-card__link {
+  font-size: var(--text-sm);
+  white-space: nowrap;
+}
+
+.convo-card__body {
+  flex: 1;
+  overflow-y: auto;
+  max-height: 60vh;
+  padding: var(--space-4) var(--space-5);
+}
+
+.convo {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.convo__empty {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+}
+
+.convo__row {
+  display: flex;
+  flex-direction: column;
+  max-width: 78%;
+}
+
+.convo__row--in {
+  align-self: flex-start;
+  align-items: flex-start;
+}
+
+.convo__row--out {
+  align-self: flex-end;
+  align-items: flex-end;
+}
+
+.convo__bubble {
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-lg);
+  font-size: var(--text-md);
+  line-height: 1.45;
+}
+
+.convo__bubble--in {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  border: 1px solid #bfdbfe;
+  background: var(--color-accent-soft);
+  color: var(--color-text);
+  border-bottom-left-radius: var(--radius-sm);
+}
+
+.convo__bubble--out {
+  border: 1px solid var(--color-border);
+  background: var(--color-surface-muted);
+  border-bottom-right-radius: var(--radius-sm);
+}
+
+.convo__bubble--agent {
+  border-color: var(--color-border-strong);
+  background: var(--color-surface-hover);
+}
+
+.convo__choice {
+  display: grid;
+  place-items: center;
+  min-width: 24px;
+  height: 24px;
+  padding: 0 var(--space-1);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface);
+  border: 1px solid #bfdbfe;
+  font-weight: 700;
+  font-size: var(--text-sm);
+}
+
+.convo__choice-label {
+  font-weight: 500;
+}
+
+.convo__meta {
+  margin: var(--space-1) var(--space-1) 0;
+  color: var(--color-text-subtle);
+  font-size: var(--text-xs);
+}
+
+.convo__failed {
+  color: var(--color-danger);
+}
+
+.convo__system {
+  align-self: center;
+  margin: var(--space-2) 0;
+  padding: var(--space-1) var(--space-3);
+  border-radius: 999px;
+  background: var(--color-surface-hover);
+  color: var(--color-text-muted);
+  font-size: var(--text-xs);
+  text-align: center;
+}
+
+/* --- composer --- */
+
+.composer {
+  border-top: 1px solid var(--color-border);
+  padding: var(--space-3) var(--space-4);
+}
+
+.composer__blocked {
+  margin: 0;
+  border-top: 1px solid var(--color-border);
+  padding: var(--space-4);
+  color: var(--color-danger);
+  font-size: var(--text-sm);
+}
+
+.composer__warning {
+  margin: 0 0 var(--space-2);
+  color: var(--color-warning);
+  font-size: var(--text-xs);
+}
+
+.composer__templates {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin-bottom: var(--space-2);
+}
+
+.composer__row {
+  display: flex;
+  align-items: flex-end;
+  gap: var(--space-2);
+}
+
+.composer__templates-toggle {
+  flex: none;
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+  cursor: pointer;
+}
+
+.composer__templates-toggle:hover,
+.composer__templates-toggle[aria-expanded='true'] {
+  background: var(--color-surface-hover);
+  color: var(--color-text);
+}
+
+.composer__box {
+  flex: 1;
+  min-height: 40px;
+  max-height: 120px;
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  font: inherit;
+  font-size: var(--text-md);
+  resize: vertical;
+}
+
+.composer__box:focus {
+  outline: none;
+  border-color: var(--color-primary);
+  box-shadow: var(--focus-ring-field);
+}
+
+.composer__count {
+  color: var(--color-text-subtle);
+  font-size: var(--text-xs);
+  padding-bottom: var(--space-3);
+}
+
+.composer__count--low {
+  color: var(--color-warning);
+}
+
+/* --- wrap up --- */
+
+.wrapup__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  margin-bottom: var(--space-4);
+}
+
+.wrapup__title {
+  margin: 0;
+  font-size: var(--text-md);
+  font-weight: 600;
+}
+
+.wrapup__step {
+  color: var(--color-text-subtle);
+  font-size: var(--text-xs);
+}
+
+.wrapup__section + .wrapup__section {
+  margin-top: var(--space-5);
+  padding-top: var(--space-4);
+  border-top: 1px solid var(--color-border);
+}
+
+.wrapup__legend {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin: 0 0 var(--space-3);
+  font-size: var(--text-sm);
+  font-weight: 600;
+}
+
+.wrapup__num {
+  display: grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--color-surface-hover);
+  color: var(--color-text-muted);
+  font-size: var(--text-xs);
+}
+
+.wrapup__optional {
+  margin-left: var(--space-1);
+  padding: 1px var(--space-2);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface-hover);
+  color: var(--color-text-subtle);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.wrapup__group + .wrapup__group {
+  margin-top: var(--space-3);
+}
+
+.wrapup__group-title {
+  display: block;
+  margin-bottom: var(--space-2);
+  color: var(--color-text-subtle);
+  font-size: var(--text-xs);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.wrapup__choices {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.outcome {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  font: inherit;
+  font-size: var(--text-sm);
+  cursor: pointer;
+}
+
+.outcome:hover {
+  background: var(--color-surface-hover);
+}
+
+.outcome__dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--color-text-subtle);
+}
+
+.outcome--good .outcome__dot { background: var(--color-success); }
+.outcome--warn .outcome__dot { background: #d97706; }
+.outcome--bad .outcome__dot { background: var(--color-text-muted); }
+
+.outcome--on {
+  border-color: var(--color-primary);
+  background: var(--color-surface-hover);
+  font-weight: 600;
+  box-shadow: inset 0 0 0 1px var(--color-primary);
+}
+
+.wrapup__dnc {
+  display: block;
+  margin-top: var(--space-3);
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--color-danger);
+  font: inherit;
+  font-size: var(--text-sm);
+  text-align: left;
+  cursor: pointer;
+}
+
+.wrapup__dnc:hover {
+  text-decoration: underline;
+}
+
+.wrapup__dnc--on {
+  font-weight: 700;
+}
+
+.wrapup__save {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-2);
+  margin-top: var(--space-5);
+  padding-top: var(--space-4);
+  border-top: 1px solid var(--color-border);
+}
+
+/* --- workspace refinements: cards, as drawn in the mockup ---
+   Scoped to the workspace. `.card` has no global rule - the admin and
+   timeline pages use the class too and currently render flat - so a global
+   rule would restyle screens nobody asked to change. */
+
+.workspace .card {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
+  padding: var(--space-4) var(--space-5);
+}
+
+.workspace .convo-card {
+  padding: 0;
+}
+
+.workspace .lead-head {
+  margin-bottom: var(--space-4);
+}
+
+.workspace__top {
+  margin-bottom: var(--space-4);
+}
+
+.avatar {
+  background: var(--color-accent-soft);
+  color: var(--color-accent);
+}
+
+/* One divider between every stat, not just before the first. */
+.lead-head__stats {
+  gap: 0;
+}
+
+.lead-head__stats > div {
+  padding: 0 var(--space-5);
+  border-left: 1px solid var(--color-border);
+}
+
+.lead-head__stats > div:first-child {
+  border-left: 0;
+  padding-left: 0;
+}
+
+.lead-head__stats {
+  padding-left: var(--space-5);
+}
+
+/* Disabled, and looks it: dashed rather than a solid grey block that reads as
+   a button that ought to work. */
+.btn.lead-head__call:disabled {
+  border-style: dashed;
+  background: var(--color-surface-muted);
+  color: var(--color-text-subtle);
+  opacity: 1;
+}
+
+.convo__bubble--in .convo__choice {
+  border: 0;
+  background: transparent;
+  min-width: 0;
+  padding: 0;
+}
+
+.convo__divider {
+  width: 1px;
+  align-self: stretch;
+  background: #bfdbfe;
+}
+
+.btn.composer__send:not(:disabled) {
+  background: var(--color-accent);
+  border-color: var(--color-accent);
+}
+
+.btn.composer__send:not(:disabled):hover {
+  background: #1e40af;
+}
+
+/* Page-level banners (DNC, needs review) sat flush against the header card. */
+.workspace > .banner {
+  margin-bottom: var(--space-3);
+}

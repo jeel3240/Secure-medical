@@ -1,19 +1,20 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { toApiError } from '../../api/client';
 import { sendAgentSms, SMS_LIMIT, type LeadDetail } from '../../api/workspace';
 import { Banner } from '../../components/Banner';
 import { Button } from '../../components/Button';
 
 /**
- * Inline SMS compose, under the actions panel. DESIGN-PROMPT.md 3, "SMS
- * button". Phase 3 task 20.
+ * The composer at the foot of the conversation. DESIGN-PROMPT.md 3, "SMS
+ * button"; redesigned 2026-09-28 from a collapsed panel into a message box,
+ * because the centre column now reads as a thread and a thread ends in one.
  *
  * **Sending stops the automated questions, for good.** STATE-MACHINE.md rule
  * 2b: once an agent texts, the lead is talking to a person, and an automated
  * "Question 2 of 3" landing on top of that reads as a broken system. The
- * warning below says so before the first send rather than after, because it
- * cannot be undone - and the response's `tookOver` says whether this send was
- * the one that did it.
+ * warning appears as soon as there is something to send and before the first
+ * send, never after, because it cannot be undone - and the response's
+ * `tookOver` says whether this send was the one that did it.
  *
  * **160 characters.** One segment. Longer costs a second segment on every send,
  * so the count is a hard limit here rather than a suggestion - the API rejects
@@ -50,12 +51,26 @@ const TEMPLATES: { label: string; body: (lead: LeadDetail) => string }[] = [
   },
 ];
 
-export function SmsCompose({ lead, refresh }: { lead: LeadDetail; refresh: () => Promise<void> }) {
-  const [open, setOpen] = useState(false);
+export function SmsCompose({
+  lead,
+  refresh,
+  focusKey = 0,
+}: {
+  lead: LeadDetail;
+  refresh: () => Promise<void>;
+  /** Bumped by the header's Send SMS button to put the cursor in the box. */
+  focusKey?: number;
+}) {
   const [body, setBody] = useState('');
+  const [templatesOpen, setTemplatesOpen] = useState(false);
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [sent, setSent] = useState<string | null>(null);
+  const box = useRef<HTMLTextAreaElement>(null);
+
+  useEffect(() => {
+    if (focusKey > 0) box.current?.focus();
+  }, [focusKey]);
 
   const blocked = lead.flags.dnc;
   const remaining = SMS_LIMIT - body.length;
@@ -68,12 +83,8 @@ export function SmsCompose({ lead, refresh }: { lead: LeadDetail; refresh: () =>
     try {
       const message = await sendAgentSms(lead.id, body.trim());
       setBody('');
-      setOpen(false);
-      setSent(
-        message.tookOver
-          ? 'Sent. The automated questions have stopped for this lead.'
-          : 'Sent.'
-      );
+      setTemplatesOpen(false);
+      setSent(message.tookOver ? 'Sent. The automated questions have stopped for this lead.' : 'Sent.');
       await refresh();
     } catch (err) {
       setError(toApiError(err).message);
@@ -85,73 +96,86 @@ export function SmsCompose({ lead, refresh }: { lead: LeadDetail; refresh: () =>
   if (blocked) {
     // Not merely disabled: there is nothing to compose. sendMessage refuses a
     // blocked number anyway, so a form here would only produce a 409.
-    return <p className="sms__blocked">Texting is blocked - this number is on the do-not-call list.</p>;
-  }
-
-  if (!open) {
-    return (
-      <>
-        {sent && <Banner tone="success">{sent}</Banner>}
-        <Button variant="secondary" block onClick={() => setOpen(true)}>
-          Send SMS
-        </Button>
-      </>
-    );
+    return <p className="composer__blocked">Texting is blocked - this number is on the do-not-call list.</p>;
   }
 
   return (
-    <div className="sms">
+    <div className="composer">
       {error && <Banner tone="error">{error}</Banner>}
+      {sent && <Banner tone="success">{sent}</Banner>}
 
-      {/* Shown before the first send, not after: it cannot be undone. */}
-      {!alreadyTakenOver && (
-        <p className="sms__warning">
+      {/* Shown once there is something to send, and only before the first
+          send: it cannot be undone. */}
+      {!alreadyTakenOver && body.trim() !== '' && (
+        <p className="composer__warning">
           Sending stops the automated questions for this lead. You will be handling the
           conversation from here.
         </p>
       )}
 
-      <div className="sms__templates">
-        {TEMPLATES.map((template) => (
-          <button
-            key={template.label}
-            type="button"
-            className="chip-button"
-            onClick={() => setBody(template.body(lead))}
-          >
-            {template.label}
-          </button>
-        ))}
-      </div>
-
-      <textarea
-        className="actions-panel__textarea"
-        rows={4}
-        value={body}
-        maxLength={SMS_LIMIT}
-        placeholder="Type a message"
-        aria-label="Message"
-        onChange={(e) => setBody(e.target.value)}
-      />
-
-      <div className="sms__foot">
-        <span className={`sms__count tabular${remaining <= 20 ? ' sms__count--low' : ''}`}>
-          {remaining} left
-        </span>
-        <div className="sms__buttons">
-          <Button
-            variant="secondary"
-            onClick={() => {
-              setOpen(false);
-              setError(null);
-            }}
-          >
-            Cancel
-          </Button>
-          <Button loading={sending} disabled={!body.trim() || tooLong} onClick={() => void send()}>
-            Send
-          </Button>
+      {templatesOpen && (
+        <div className="composer__templates">
+          {TEMPLATES.map((template) => (
+            <button
+              key={template.label}
+              type="button"
+              className="chip-button"
+              onClick={() => {
+                setBody(template.body(lead));
+                setTemplatesOpen(false);
+                box.current?.focus();
+              }}
+            >
+              {template.label}
+            </button>
+          ))}
         </div>
+      )}
+
+      <div className="composer__row">
+        <button
+          type="button"
+          className="composer__templates-toggle"
+          aria-expanded={templatesOpen}
+          onClick={() => setTemplatesOpen((v) => !v)}
+          title="Canned messages"
+        >
+          Templates
+        </button>
+
+        <textarea
+          ref={box}
+          className="composer__box"
+          rows={1}
+          value={body}
+          maxLength={SMS_LIMIT}
+          placeholder={`Write a message to ${lead.firstName ?? 'this lead'}...`}
+          aria-label="Message"
+          onChange={(e) => setBody(e.target.value)}
+          onKeyDown={(e) => {
+            // Enter sends, Shift+Enter makes a new line - a thread's usual
+            // shortcut. The button stays for anyone who does not know it.
+            if (e.key === 'Enter' && !e.shiftKey && body.trim() && !sending) {
+              e.preventDefault();
+              void send();
+            }
+          }}
+        />
+
+        {body.length > 0 && (
+          <span className={`composer__count tabular${remaining <= 20 ? ' composer__count--low' : ''}`}>
+            {remaining}
+          </span>
+        )}
+
+        <Button
+          className="composer__send"
+          loading={sending}
+          disabled={!body.trim() || tooLong}
+          onClick={() => void send()}
+        >
+          Send
+        </Button>
       </div>
     </div>
   );

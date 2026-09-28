@@ -32,9 +32,9 @@ const A_LEAD: LeadDetail = {
     agentTookOverAt: null,
   },
   chips: [
-    { question: 1, heading: 'Interest', answer: 'Both' },
-    { question: 2, heading: 'Timing', answer: 'Today' },
-    { question: 3, heading: 'Prefers', answer: 'Call me now' },
+    { question: 1, heading: 'Interest', answer: 'Both', choice: '3' },
+    { question: 2, heading: 'Timing', answer: 'Today', choice: '1' },
+    { question: 3, heading: 'Prefers', answer: 'Call me now', choice: '1' },
   ],
   breakdown: [
     { code: 'responded', label: 'Responded', points: 10 },

@@ -24,6 +24,71 @@ the brief now exists except calling, which is Phase 4.
 | `/admin/config` | Configuration, read-only | `ADMIN.md`, `DESIGN-PROMPT.md` 6b/6c |
 | `/admin/dnc` | Do-not-call list, read-only | `ADMIN.md`, `DESIGN-PROMPT.md` 6e |
 
+## The workspace - redesigned 2026-09-28
+
+Rebuilt to a mockup Jeel supplied. Every action behaves as before - checked by
+driving each one through the browser, listed at the end of this section.
+
+**Layout.** A full-width header card - avatar, name and tier, score out of 100,
+ticking lead age, source, SMS flow state, and the Send SMS and Call buttons -
+over three cards: what the lead told us and the score breakdown; the
+conversation; and the wrap-up.
+
+**The centre column is a conversation, not a log.** `workspace/Conversation.tsx`
+shows the SMS thread and the system markers only - inbound on the left, ours on
+the right, automated sends marked `Auto` and an agent's own send carrying their
+name, so the rule 2b handoff is visible in the thread itself.
+
+That is a real change and worth knowing: **notes, callbacks, dispositions and
+calls are no longer in the workspace centre.** They are on the Lead Timeline,
+which the conversation header links to, and which still uses `Timeline.tsx`
+unchanged. An agent on a call wants what the lead said; the full audit trail is
+one click away.
+
+**An inbound digit is labelled only when it provably matches.** `3` becomes
+"3 | Both" when the conversation's recorded answer to that question is 3. The
+matching walks the stored choices in order and advances only on a match, so an
+unclear reply cannot shift every later label by one, and a worded answer like
+"today please" stays plain text. `labelReplies()` has tests for each of those.
+This needed the raw `choice` on each answer chip - `AGENT-WORKSPACE.md`.
+
+**The composer is a message box.** Always present at the foot of the thread,
+Enter to send and Shift+Enter for a new line, templates behind a button. The
+header's Send SMS puts the cursor in it. The takeover warning appears once there
+is text and before the first send, as before; the 160-character limit and the
+blocked-number notice are unchanged.
+
+**The wrap-up is the old actions panel regrouped.** Outcomes are grouped
+Positive / No contact / Negative. DNC is a separate red link, not one of the
+buttons - it still opens the same confirm dialog. The quick callback chips gained
+"Pick time...", which reveals the date field. "Step N of 3" shows which section
+still wants something: outcome, then callback or note - the callback is optional,
+so it never holds the step back on its own. Save, Save & next and the unsaved
+changes guard are untouched.
+
+**"Lead N of M"** is fetched once when the workspace opens, not polled. It is
+orientation, and a number shuffling under the reader would be worse than a stale
+one. It is absent when the lead is not in the queue, which is normal - opening
+a lead can be what takes it out.
+
+**`.card` has no global style.** It is used on the admin and timeline pages too,
+which render flat. The workspace scopes its card rule to `.workspace .card`, so
+this redesign changes no other screen. A global rule would give those pages
+cards too - a separate decision.
+
+**Not in the mockup, deliberately:** its "Browser calling is off · Enable" link.
+Calling is Phase 4; a link that goes nowhere is the kind of dead control this
+phase already removed once. The note says calling is off until Phase 4.
+
+**Checked in the browser, 2026-09-28** - Send SMS focuses the composer;
+templates fill it and the takeover warning shows; Send enables and disables with
+the text; Pick time reveals the picker; a quick chip sets the callback; choosing
+an outcome advances the step; DNC opens the confirm and Cancel leaves the
+outcome alone; Save posts note, callback and disposition and clears the form;
+Save & next releases and opens the next lead; the timeline page still shows all
+three; unclear replies stay unlabelled; a blocked number hides the composer and
+Send SMS; Back to queue releases the claim. No console errors.
+
 Agents land on `/queue`; `/admin` lands on Overview. The admin section is behind
 `RequireRole`, and every admin endpoint refuses an agent independently - the
 guard on the screen is convenience, not security.

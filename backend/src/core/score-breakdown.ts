@@ -103,6 +103,16 @@ export interface AnswerChip {
   heading: string;
   /** Null when the lead has not answered that question yet. */
   answer: string | null;
+  /**
+   * The raw choice the lead sent - `1`, `2` or `3` - or null when unanswered.
+   *
+   * The label alone is not enough for the conversation view, which wants to
+   * write an inbound `3` as "3 Both". Pairing a reply with a question by
+   * counting inbound messages is wrong the moment one of them was unclear, so
+   * the screen matches the digit against this instead and labels nothing it
+   * cannot prove.
+   */
+  choice: string | null;
 }
 
 export function answerChips(conversation: AnsweredConversation, rules: ScoringRule[]): AnswerChip[] {
@@ -119,6 +129,7 @@ export function answerChips(conversation: AnsweredConversation, rules: ScoringRu
       question,
       heading: CHIP_HEADINGS[question],
       answer: rule ? answerLabel(rule.label) : null,
+      choice: choice ?? null,
     };
   });
 }
