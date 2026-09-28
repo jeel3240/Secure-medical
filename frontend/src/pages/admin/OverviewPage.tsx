@@ -130,17 +130,6 @@ export function OverviewPage() {
 
       {error && <Banner tone="warning">{error} Showing the last update.</Banner>}
 
-      {/* Only when something is wrong: if the poller has stopped, every number
-          below is stale, and that matters more than any of them. */}
-      {health && health.status === 'degraded' && (
-        <Banner tone="error">
-          {health.checks
-            .filter((c) => c.status === 'degraded')
-            .map((c) => c.message ?? `${CHECK_LABEL[c.name] ?? c.name} is not working.`)
-            .join(' ')}
-        </Banner>
-      )}
-
       <div className={`card queue-card stats${switching ? ' is-switching' : ''}`}>
         {stats.map((stat) => (
           <div key={stat.label} className="stats__item">
@@ -191,7 +180,9 @@ export function OverviewPage() {
           <header className="card-head">
             <h2 className="card-head__title">System</h2>
             {health && (
-              <span className="card-head__meta">
+              // A problem is said here and under its own row, not in a red box
+              // across the page - Jeel, 2026-09-28.
+              <span className={`card-head__meta${health.status === 'ok' ? '' : ' card-head__meta--warn'}`}>
                 {health.status === 'ok' ? 'All working' : 'Needs attention'}
               </span>
             )}
@@ -210,6 +201,9 @@ export function OverviewPage() {
                     <dt>
                       {CHECK_LABEL[check.name] ?? check.name}
                       {detail && <span className="overview__detail">{detail}</span>}
+                      {!ok && check.message && (
+                        <span className="overview__detail overview__detail--warn">{check.message}</span>
+                      )}
                     </dt>
                     <dd>
                       {/* Incoming replies has no verdict - a quiet night is

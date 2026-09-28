@@ -109,6 +109,12 @@ period, Closed counted presses, and Callbacks due counted every open callback;
 the percentages under Replied and Answered all 3 went with the first fix, since
 a share of "leads that arrived" no longer applies.
 
+**A failing check is shown in the System card, not across the page** - Jeel,
+2026-09-28. The card's header turns amber ("Needs attention") and the failing
+row says why in one amber line under its name - "The last text was refused by
+EZ Texting." There is no red box above the page any more: it repeated the
+card, louder, and looked generated.
+
 **Switching period is smooth.** The page stays and its numbers fade until the
 new ones land - `usePolling`'s `keepPreviousData`, QUEUE.md - rather than
 blanking for a spinner. Checked by sampling the page every 20ms through a
