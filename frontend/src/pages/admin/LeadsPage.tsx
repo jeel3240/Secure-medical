@@ -8,6 +8,7 @@ import { LeadStatus } from '../../components/LeadStatus';
 import { LiveStatus } from '../../components/LiveStatus';
 import { Segmented } from '../../components/Segmented';
 import { Spinner } from '../../components/Spinner';
+import { SyncStatus } from '../../components/SyncStatus';
 import { TierSignal } from '../../components/TierSignal';
 import { formatPhone, formatReceived, formatRelative } from '../../lib/format';
 
@@ -59,12 +60,6 @@ function leadName(lead: AdminLead): string {
   const last = lead.lastName?.trim();
   if (!first && !last) return 'Unknown';
   return [first, last ? `${last[0].toUpperCase()}.` : null].filter(Boolean).join(' ');
-}
-
-/** Warn when the poller looks stopped: the spec's threshold is three intervals. */
-function pollIsStale(poll: AdminLeadsResponse['poll']): boolean {
-  if (!poll.at) return false;
-  return Date.now() - new Date(poll.at).getTime() > poll.intervalSeconds * 3000;
 }
 
 export function LeadsPage() {
@@ -131,15 +126,13 @@ export function LeadsPage() {
             Every lead pulled from EZ Texting, including those who never replied.
           </p>
         </div>
-        <LiveStatus updatedAt={updatedAt} paused={Boolean(error)} />
+        <div className="page-header__status">
+          <LiveStatus updatedAt={updatedAt} paused={Boolean(error)} />
+          {data && <SyncStatus at={data.poll.at} intervalSeconds={data.poll.intervalSeconds} />}
+        </div>
       </div>
 
       {error && <Banner tone="error">{error}</Banner>}
-      {data && pollIsStale(data.poll) && (
-        <Banner tone="warning">
-          No new leads pulled since {formatReceived(data.poll.at)} - check the worker.
-        </Banner>
-      )}
 
       <div className="card queue-card">
         {/* The queue's tier switcher, so the chosen status is the brand navy

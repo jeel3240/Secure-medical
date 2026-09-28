@@ -258,7 +258,7 @@ Left sub-navigation within the page: **Overview** · **Leads** · **Scoring** ·
 - **Read-only.** No Call or SMS buttons here; working a lead happens in the Agent Workspace. `Opted out` rows are tinted with the Danger colour and say so.
 - **Pagination:** 50 rows per page, page controls at the bottom, total count at the top. At 50–100 leads a day the list passes 30,000 rows within a year.
 - **Live:** new leads appear at the top without a refresh, with the same 600ms row highlight as the queue.
-- **States:** loading skeleton; empty ("No leads in this view"); a warning banner when the last successful poll is older than three poll intervals ("No new leads pulled since 2:14 PM – check the worker").
+- **States:** loading skeleton; empty ("No leads in this view"); a warning banner *(2026-09-28, Jeel: not a banner - a quiet "Synced with EZ Texting 1m ago" line under the Live label, amber when stale. `ADMIN-LEADS.md`)* when the last successful poll is older than three poll intervals ("No new leads pulled since 2:14 PM – check the worker").
 
 ---
 

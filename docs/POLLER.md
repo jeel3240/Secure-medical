@@ -38,7 +38,11 @@ filter would have done server-side.
    - otherwise insert the lead with an `open` conversation at step 1, then send
      question 1 and record it as an outbound message
 6. If the page was not the last, request the next one.
-7. Write the checkpoint to the newest `createdAt` actually seen.
+7. Write the checkpoint to the newest `createdAt` actually seen - or, when
+   nothing new arrived, write the same value again. *(2026-09-28: every
+   successful poll now writes it, so `settings.updated_at` is the time of the
+   last poll. Before, a quiet account left it standing still and the health
+   check and Admin > Leads reported a healthy worker as stopped.)*
 
 ## Why each piece is there
 

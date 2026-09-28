@@ -176,8 +176,20 @@ whole table flashes on arrival.
 A row opens the lead's timeline, read-only (2026-09-28 - it waited on that page
 existing).
 
-A banner appears when the poller's checkpoint has not moved in three poll
-intervals, which is the spec's signal that the worker has stopped.
+**The EZ Texting sync line - Jeel, 2026-09-28.** Under "Live · updated just
+now" sits "Synced with EZ Texting 1m ago": the last time the worker polled for
+new leads. After three poll intervals without a poll - the spec's signal that
+the worker has stopped - it turns amber and reads "Last synced with EZ Texting
+2h ago - check the worker". Hovering shows the exact time.
+`components/SyncStatus.tsx`.
+
+It replaces a full-width yellow box, "No new leads pulled since ... - check the
+worker". That looked generated and dominated the page, and it was also wrong: it
+read the checkpoint's `updated_at`, which the poller wrote only when a new
+contact arrived. On a quiet account it said "check the worker" about a worker
+polling every minute - locally it had said so for six days. The poller now
+writes the checkpoint on every successful poll (`POLLER.md`, step 7), so the
+time is the last poll.
 
 ## Not done yet
 
