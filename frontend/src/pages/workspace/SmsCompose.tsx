@@ -91,7 +91,19 @@ export function SmsCompose({
       setTemplatesOpen(false);
       await refresh();
     } catch (err) {
-      setError(toApiError(err).message);
+      const problem = toApiError(err);
+      if (problem.code === 'send_failed') {
+        // EZ Texting refused it. The server kept it as a failed message, so it
+        // is in the thread with a red "!" - the way a phone shows it - and an
+        // error box here would say the same thing twice.
+        setBody('');
+        setTemplatesOpen(false);
+        await refresh();
+      } else {
+        // Nothing was kept - a blocked number, a lead no longer yours - so the
+        // text stays in the box and the reason is shown.
+        setError(problem.message);
+      }
     } finally {
       setSending(false);
     }

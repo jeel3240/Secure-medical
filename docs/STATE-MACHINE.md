@@ -396,6 +396,11 @@ left it `expired`, set `has_unread_inbound`, and sent nothing.
   logged and leaves the conversation where it is; it does not roll the answer
   back. The lead has answered, and losing that would be worse than a missing
   follow-up.
+- **A message EZ Texting refuses is kept, marked failed** - 2026-09-28,
+  `db/failed-sends.ts`. It has `delivery_status = 'failed'` and no
+  `ezt_message_id`, so no reply can link to it, and it does not restart the
+  reply window. The thread shows it with a red "!". A send refused because the
+  number is blocked is not kept: it was never attempted.
 
 ### When the opener is sent - Decided by Jeel, 2026-09-19
 

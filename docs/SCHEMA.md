@@ -175,7 +175,7 @@ a CHECK; these do not, because their permitted values are not settled yet:
 | `dispositions.value` | Agent, Phase 3 | The seven values are listed in `DESIGN-PROMPT.md` section 3: Interested, Callback set, No answer, Voicemail, Not interested, Wrong number, DNC. *(2026-09-23: they did not have to come from Jeel after all - the design brief already had them.)* *(2026-09-28: new rows are `closed` or `dnc` only; the seven above are retired, and old rows keep them - `core/dispositions.ts`. No migration: the column has no constraint to change.)* |
 | `calls.outcome` | Twilio callback, Week 4 | Depends on Twilio's own status values. |
 | `dnc_list.reason` | Poller and webhook | Poller writes `ezt_opt_out` for a contact already opted out in EZ Texting; the webhook writes `sms_stop` for a STOP reply. An agent DNC disposition adds `agent_dnc` in Phase 3 - `AGENT-WORKSPACE.md`. |
-| `messages.delivery_status` | Send path | Whatever EZ Texting returns. Unverified - we have never read a delivery status back. |
+| `messages.delivery_status` | Send path | Whatever EZ Texting returns. Unverified - we have never read a delivery status back. *(2026-09-28: the one value we write is `failed`, for a send EZ Texting refused - `db/failed-sends.ts`. Those rows have no `ezt_message_id`. Everything else is NULL.)* |
 
 Each should get a CHECK once its values are known. Until then anything is
 accepted, including typos, and nothing will complain.

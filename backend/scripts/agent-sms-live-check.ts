@@ -221,8 +221,14 @@ async function main(): Promise<void> {
     const res = await sendAgentSms(leadId, maya, 'Hello');
 
     check('is reported', res.ok === false && res.reason, 'send_failed');
-    // Nothing written, so the agent can retry the same text.
-    check('nothing is stored', (await getTimeline(leadId))?.some((e) => e.kind === 'agent_sms'), false);
+    // Kept, marked failed, so the thread shows it with a red "!" - Jeel,
+    // 2026-09-28. Before that nothing was stored at all.
+    const kept = (await getTimeline(leadId))?.filter((e) => e.kind === 'agent_sms') ?? [];
+    check('is kept in the thread', kept.map((e) => e.detail.body), ['Hello']);
+    check('marked failed', kept.map((e) => e.detail.deliveryStatus), ['failed']);
+    check('with no EZ Texting id - nothing was accepted', (
+      await pool.query(`SELECT ezt_message_id FROM messages WHERE lead_id = $1`, [leadId])
+    ).rows.map((r) => r.ezt_message_id), [null]);
     check('and no take-over is recorded', await tookOverAt(conversationId), null);
   }
 

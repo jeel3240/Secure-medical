@@ -285,8 +285,9 @@ export function queueRouter(deps: AppDeps): Router {
             'This number is on the do-not-call list. Nothing was sent.'
           );
         }
-        // Nothing was written, so the agent can retry the same text.
-        throw new HttpError(502, 'send_failed', 'EZ Texting did not accept the message. Nothing was sent.');
+        // Kept in the thread as a failed message, with a red "!" - the screen
+        // shows that rather than an error box. Nothing reached the lead.
+        throw new HttpError(502, 'send_failed', 'EZ Texting did not accept the message. It was not sent.');
       }
 
       res.status(201).json({ message: result.message });

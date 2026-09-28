@@ -59,8 +59,11 @@ untouched, so the next cycle re-covers the same ground rather than skipping it.
 **A failed opener does not fail the cycle.** `sendOpener` catches its own
 errors. The lead is already committed by then, so throwing would abandon the
 rest of the page and leave the checkpoint behind, re-polling every later contact
-because one send failed. A lead with no opener shows as a conversation with no
-outbound message, and `openers` in the tick log will be lower than `inserted`.
+because one send failed. The refused opener is kept as a failed message
+(`db/failed-sends.ts`), so the lead's thread shows it with a red "!", and
+`openers` in the tick log will be lower than `inserted`. *(Until 2026-09-28 it
+was not kept, and a lead with no opener showed only as a conversation with no
+outbound message.)*
 
 **The opener is rendered before it is sent.** `question_1` in `settings` holds
 the copy, including `{first_name}`. `core/messages.ts` substitutes the lead's

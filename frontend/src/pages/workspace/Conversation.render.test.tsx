@@ -1,7 +1,7 @@
 /**
- * The sent tick - Jeel, 2026-09-28. One tick on every message we sent that did
- * not fail; none on the lead's own messages. One rather than two because
- * nothing tells us a text reached the phone - Conversation.tsx, SentTick.
+ * The sent ticks and the not-sent mark - Jeel, 2026-09-28. Two ticks on every
+ * message EZ Texting accepted; a red "!" beside one it refused; neither on the
+ * lead's own messages. Conversation.tsx says what the ticks mean.
  */
 import { render, screen } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
@@ -17,7 +17,7 @@ const entry = (kind: TimelineEntry['kind'], body: string, deliveryStatus?: strin
 const renderThread = (entries: TimelineEntry[]) =>
   render(<Conversation entries={entries} chips={[]} leadFirstName="Ruby" />);
 
-describe('the sent tick', () => {
+describe('the sent ticks', () => {
   it('marks an automated message and an agent message as sent', () => {
     renderThread([entry('sms', 'Question 1'), entry('agent_sms', 'Hi Ruby')]);
     expect(screen.getAllByRole('img', { name: 'Sent' })).toHaveLength(2);
@@ -28,14 +28,26 @@ describe('the sent tick', () => {
     expect(screen.queryByRole('img', { name: 'Sent' })).toBeNull();
   });
 
-  it('is not on a message that failed - that says "delivery failed" instead', () => {
+  it('are two ticks', () => {
+    const { container } = renderThread([entry('agent_sms', 'Hi Ruby')]);
+    expect(container.querySelectorAll('.convo__tick path')).toHaveLength(2);
+  });
+});
+
+describe('a message EZ Texting refused', () => {
+  it('has a red "!" beside it and no ticks', () => {
     renderThread([entry('agent_sms', 'Hi Ruby', 'failed')]);
+    expect(screen.getByRole('img', { name: 'Not sent' })).toBeTruthy();
     expect(screen.queryByRole('img', { name: 'Sent' })).toBeNull();
-    expect(screen.getByText(/delivery failed/)).toBeTruthy();
   });
 
-  it('is one tick, not two', () => {
-    const { container } = renderThread([entry('agent_sms', 'Hi Ruby')]);
-    expect(container.querySelectorAll('.convo__tick path')).toHaveLength(1);
+  it('is marked the same way when it was an automated message', () => {
+    renderThread([entry('sms', 'Question 2', 'failed')]);
+    expect(screen.getByRole('img', { name: 'Not sent' })).toBeTruthy();
+  });
+
+  it('leaves messages that went out unmarked', () => {
+    renderThread([entry('sms', 'Question 1')]);
+    expect(screen.queryByRole('img', { name: 'Not sent' })).toBeNull();
   });
 });

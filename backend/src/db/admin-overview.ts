@@ -174,7 +174,8 @@ export async function getOverview(period: OverviewPeriod): Promise<Overview> {
         FROM messages m
         JOIN leads l ON l.id = m.lead_id
         LEFT JOIN users u ON u.id = m.sent_by
-        WHERE m.sent_by IS NOT NULL AND m.created_at >= ${since}
+        WHERE m.sent_by IS NOT NULL AND m.delivery_status IS DISTINCT FROM 'failed'
+          AND m.created_at >= ${since}
       ) feed
       ORDER BY at DESC
       LIMIT 50

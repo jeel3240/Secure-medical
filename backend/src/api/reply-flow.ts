@@ -186,8 +186,8 @@ async function bumpExpiry(q: Querier, conversationId: number): Promise<void> {
  *
  * A failure is logged and swallowed. The conversation has already advanced, and
  * rolling that back would mean re-asking a question the lead has answered; a
- * missing follow-up is the lesser problem. It is visible as a conversation
- * whose newest message is inbound.
+ * missing follow-up is the lesser problem. The refused message is kept as a
+ * failed one, so the thread shows it with a red "!" - `db/failed-sends.ts`.
  *
  * A failure also leaves `expires_at` where it was, so a lead who was never
  * actually messaged expires on schedule rather than a week late.
@@ -203,7 +203,11 @@ async function sendFlowMessage(
   const { pool } = require('../db/pool') as typeof import('../db/pool');
   // eslint-disable-next-line @typescript-eslint/no-var-requires
   const ezt = require('../integrations/ezt-client') as typeof import('../integrations/ezt-client');
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  const { isBlocked, recordFailedSend } = require('../db/failed-sends') as typeof import('../db/failed-sends');
 
+  // Rendered before the send, so a refused message can be kept with its text.
+  let rendered: string | null = null;
   try {
     const { rows } = await pool.query(`SELECT value FROM settings WHERE key = $1`, [key]);
     const template: string | undefined = rows[0]?.value;
@@ -213,6 +217,7 @@ async function sendFlowMessage(
     }
 
     const { text, nameDropped } = renderMessage(template, firstName);
+    rendered = text;
     if (nameDropped) {
       console.log(`${key} for lead ${leadId}: name dropped to stay within one segment`);
     }
@@ -234,6 +239,8 @@ async function sendFlowMessage(
       (err as { response?: { data?: unknown } })?.response?.data ??
       (err instanceof Error ? err.message : err);
     console.error(`sending ${key} to lead ${leadId} failed:`, JSON.stringify(detail));
+    // A blocked number was never attempted, so there is no failed send to keep.
+    if (rendered && !isBlocked(err)) await recordFailedSend(leadId, rendered);
     return null;
   }
 }

@@ -1,3 +1,4 @@
+import { isBlocked, recordFailedSend } from '../db/failed-sends';
 import { pool } from '../db/pool';
 import { config } from '../config';
 import { renderMessage } from '../core/messages';
@@ -167,11 +168,13 @@ async function insertLead(
  *
  * A failure here is logged and swallowed: the lead is already committed, and
  * throwing would abandon the rest of the page and leave the checkpoint behind,
- * so every later contact would be re-polled because one send failed. The lead
- * simply has no opener, which is visible as a conversation with no outbound
- * message.
+ * so every later contact would be re-polled because one send failed. The
+ * refused opener is kept as a failed message, so the lead's thread shows it
+ * with a red "!" - `db/failed-sends.ts`.
  */
 async function sendOpener(leadId: number, phone: string, firstName: string | null): Promise<boolean> {
+  // Rendered before the send, so a refused opener can be kept with its text.
+  let rendered: string | null = null;
   try {
     const template = await readSetting('question_1');
     if (!template) {
@@ -182,6 +185,7 @@ async function sendOpener(leadId: number, phone: string, firstName: string | nul
     // The stored copy carries {first_name}; what goes out, and what is recorded
     // in messages.body, is the rendered text.
     const { text, nameDropped } = renderMessage(template, firstName);
+    rendered = text;
     if (nameDropped) {
       console.log(`opener for lead ${leadId}: name dropped to stay within one segment`);
     }
@@ -212,6 +216,8 @@ async function sendOpener(leadId: number, phone: string, firstName: string | nul
       (err as { response?: { data?: unknown } })?.response?.data ??
       (err instanceof Error ? err.message : err);
     console.error(`opener failed for lead ${leadId}:`, JSON.stringify(detail));
+    // A blocked number was never attempted, so there is no failed send to keep.
+    if (rendered && !isBlocked(err)) await recordFailedSend(leadId, rendered);
     return false;
   }
 }

@@ -42,7 +42,8 @@ export const AGENT_SMS_LIMIT = SEGMENT_LIMIT;
  * have silenced the automated flow on the strength of a message nobody
  * received. Sending first means the worst case is a delivered text we failed to
  * record - visible in EZ Texting, recoverable - rather than a silent lie in the
- * timeline.
+ * timeline. A send EZ Texting refuses is kept too, but marked failed, and it
+ * does not take the conversation over - `db/failed-sends.ts`.
  *
  * **A blocked number is refused by `sendMessage` itself,** which checks
  * `dnc_list` immediately before every send. Nothing is written when it throws,
@@ -77,6 +78,11 @@ export async function sendAgentSms(
       (err as { response?: { data?: unknown } })?.response?.data ??
       (err instanceof Error ? err.message : String(err));
     console.error(`agent sms to lead ${leadId} failed:`, JSON.stringify(detail));
+    // Kept as a failed message so the thread shows it with a red "!", the way
+    // a phone does. It sets no take-over: nothing reached the lead.
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const { recordFailedSend } = require('./failed-sends') as typeof import('./failed-sends');
+    await recordFailedSend(leadId, body, agentId);
     return { ok: false, reason: 'send_failed', detail: typeof detail === 'string' ? detail : 'send failed' };
   }
 
