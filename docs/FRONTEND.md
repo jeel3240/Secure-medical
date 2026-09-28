@@ -82,6 +82,10 @@ labels wrap. None overflow now. The shared table rules also lost two bugs: the
 last row's divider and the hover highlight applied to data cells but not row
 labels, leaving half a line under "Maximum possible".
 
+**Admin > Leads tabs are tighter - 2026-09-28.** Working and Closed made nine
+tabs, and the ninth wrapped onto a second line below 1366px. Narrower tab sides
+keep all nine on one line down to 1280px, measured.
+
 **Removed:** the admin sidebar's greyed "Soon" links - Overview, Scoring,
 Messages, DNC list, Settings. Two duplicated live links; the rest were folded
 into Configuration on 2026-09-23.
@@ -192,7 +196,9 @@ is text and before the first send, as before; the 160-character limit and the
 blocked-number notice are unchanged.
 
 **The wrap-up is the old actions panel regrouped.** Outcomes are grouped
-Positive / No contact / Negative. DNC is a separate red link, not one of the
+Positive / No contact / Negative. *(2026-09-28: Sold added, first under
+Positive. Sold, Not interested and Wrong number close the lead -
+`AGENT-WORKSPACE.md`.)* DNC is a separate red link, not one of the
 buttons - it still opens the same confirm dialog. The quick callback chips gained
 "Pick time...", which reveals the date field. "Step N of 3" shows which section
 still wants something: outcome, then callback or note - the callback is optional,
