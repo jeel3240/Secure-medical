@@ -101,7 +101,7 @@ Rebuilt to a mockup Jeel supplied. What changed and why:
 | Someone else's lead | "Locked" | A padlock and "Locked", `components/LockIcon.tsx` |
 | Action column | Right-aligned | Centred - buttons and Locked on one axis |
 | Button hover | Light grey | Fills with the header's navy, white text - Pick up, Resume and View alike |
-| Chosen tier | White on grey | The header's navy, white text - the same look as a hovered action. Shared with the Add agent drawer's role choice, so the control keeps one look |
+| Chosen tier | White on grey | The header's navy, white text - the same look as a hovered action - on a thumb that slides to the chosen option. `components/Segmented.tsx`, shared with the Add agent drawer's role choice |
 | Empty cells | `-` | `-` - an em dash was tried and reverted |
 | Live label | Live | Live · updated just now |
 
@@ -118,6 +118,17 @@ it half dark and half light, and the bold even showed on a greyed-out locked
 row. Now every value has the same weight and colour, and a locked row is grey
 all the way across. `ageTone` in `lib/format.ts`, which held the thresholds, had
 no other caller and is gone with its tests. The age still ticks every second.
+
+**The segmented control is one component, and its navy slides** - Jeel,
+2026-09-28, "not smooth". `components/Segmented.tsx` replaces the markup the
+queue and the Add agent drawer each wrote by hand. The navy is a thumb behind
+the options that glides to the chosen one in 220ms, fast in the middle and
+easing to a stop. Its position is measured, because options differ in width
+and the queue's counts change them. It is placed before the first paint and
+only animates after, so a page never opens with it sweeping in; until it is
+placed the chosen option carries the navy itself, so white text never sits on
+the grey track; and `prefers-reduced-motion` switches instantly. Measured: the
+thumb passed 20, 159, 204 and 219px on its way from 2px to 228px.
 
 **The tier switcher is one choice at a time.** The old pills allowed Hot and
 Warm together; the segmented control, as drawn, does not. The API still accepts
