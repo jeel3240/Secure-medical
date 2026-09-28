@@ -205,7 +205,7 @@ export function WorkspacePage() {
 
       <article className="card lead-head">
         <div className="lead-head__who">
-          <span className="avatar" aria-hidden="true">
+          <span className="lead-head__avatar" aria-hidden="true">
             {initials(lead)}
           </span>
           <div>

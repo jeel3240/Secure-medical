@@ -251,7 +251,7 @@ export function LeadTimelinePage() {
             <dd className="summary__gap">This number has not been seen before</dd>
           </dl>
 
-          <h3 className="timeline-page__side-title">Dispositions</h3>
+          <h3 className="timeline-page__side-subtitle">Dispositions</h3>
           {summary.dispositions.length === 0 ? (
             <p className="summary__empty">None set.</p>
           ) : (

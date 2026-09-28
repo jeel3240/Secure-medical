@@ -134,12 +134,17 @@ export function ConfigPage() {
                   <tr key={question.question} className="config__question-row">
                     <th scope="row">{QUESTION_HEADING[question.question]}</th>
                     <td className="right">
-                      {question.choices.map((choice) => (
-                        <span key={choice.choice} className="config__choice">
-                          {choiceLabel(choice.label, choice.choice)}{' '}
-                          <strong className="tabular">+{choice.points}</strong>
-                        </span>
-                      ))}
+                      {/* One option per line. Side by side they cannot wrap -
+                          table cells are nowrap - and ran the table 240px past
+                          the window at 1440px. */}
+                      <span className="config__choices">
+                        {question.choices.map((choice) => (
+                          <span key={choice.choice} className="config__choice">
+                            {choiceLabel(choice.label, choice.choice)}{' '}
+                            <strong className="tabular">+{choice.points}</strong>
+                          </span>
+                        ))}
+                      </span>
                     </td>
                   </tr>
                 ))}
