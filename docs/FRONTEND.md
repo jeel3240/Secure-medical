@@ -202,8 +202,9 @@ Positive. Sold, Not interested and Wrong number close the lead -
 buttons - it still opens the same confirm dialog. The quick callback chips gained
 "Pick time...", which reveals the date field. "Step N of 3" shows which section
 still wants something: outcome, then callback or note - the callback is optional,
-so it never holds the step back on its own. Save, Save & next and the unsaved
-changes guard are untouched.
+so it never holds the step back on its own. Save and the unsaved changes guard
+are untouched. *(Save & next was removed later the same day - "One button"
+below.)*
 
 **"Lead N of M"** is fetched once when the workspace opens, not polled. It is
 orientation, and a number shuffling under the reader would be worse than a stale
@@ -224,7 +225,7 @@ templates fill it and the takeover warning shows; Send enables and disables with
 the text; Pick time reveals the picker; a quick chip sets the callback; choosing
 an outcome advances the step; DNC opens the confirm and Cancel leaves the
 outcome alone; Save posts note, callback and disposition and clears the form;
-Save & next releases and opens the next lead; the timeline page still shows all
+Save & next released and opened the next lead (since removed); the timeline page still shows all
 three; unclear replies stay unlabelled; a blocked number hides the composer and
 Send SMS; Back to queue releases the claim. No console errors.
 
@@ -291,7 +292,7 @@ actions switched off, a strip saying whose it is, and Pick right there if nobody
 holds it. Looking also leaves an unread reply unread: the workspace marks it
 read only for the holder, so a glance no longer lets a lead who texted back drop
 out of the queue. A 409 on Pick still shows the holder's name and refreshes.
-*Back to queue* and *Save & next* release the claim - and only a claim that is
+*Back to queue* releases the claim - and only a claim that is
 yours, so a superadmin leaving someone else's lead no longer takes it off them.
 
 (For an hour earlier the same day, a row click opened the Lead Timeline instead.
@@ -319,10 +320,13 @@ and a disposition to three separate endpoints. Each is append-only, so a partial
 failure leaves whatever succeeded; the panel names the part that failed rather
 than claiming the whole save went wrong.
 
-**Save & next** saves, releases, and opens the top unlocked lead using the same
-`lockHolder` rule the queue uses - so "next" means what the agent would have
-clicked. A failed save stops the move: losing a note on the way to the next lead
-is worse than an extra click.
+**One button: Save - Jeel, 2026-09-28.** Wrap up had a second button, *Save &
+next lead*, which saved, released the lead and opened the top unlocked lead in
+the queue. It was dropped. The agent stays on the lead after Save - so they can
+still text or add a note - and leaves with *Back to queue*, which releases it.
+One way out, and nothing moves an agent on to a lead they did not choose. Save
+is now the primary button, and a closed lead leaves the queue when the agent
+goes back (`QUEUE.md`).
 
 **DNC asks twice,** and the dialog says the block can only be lifted by the lead
 texting START. The API refuses the value without `confirmDnc: true` regardless.

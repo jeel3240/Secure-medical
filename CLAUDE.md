@@ -487,7 +487,7 @@ Jeel:
 | 16 | One-agent lock in the queue: claimed rows muted and unclickable | `DESIGN-PROMPT.md` 2 | 2, 15 |
 | 17 | Agent Workspace shell: lead card, three columns, Call button disabled | `DESIGN-PROMPT.md` 3 | 4 |
 | 18 | Timeline component | `DESIGN-PROMPT.md` 3 | 5 |
-| 19 | Workspace right column: note, callback, disposition, Save and next | `DESIGN-PROMPT.md` 3 | 6, 7, 8 |
+| 19 | Workspace right column: note, callback, disposition, Save and next *(2026-09-28: Save only)* | `DESIGN-PROMPT.md` 3 | 6, 7, 8 |
 | 20 | Workspace SMS compose, with templates | `DESIGN-PROMPT.md` 3 | 9 |
 | 21 | Lead Timeline page, full width with summary sidebar | `DESIGN-PROMPT.md` 4 | 18 |
 | 22 | My Callbacks page | `DESIGN-PROMPT.md` 5 | 7 |
