@@ -28,12 +28,38 @@ import type { PublicUser } from '../api/types';
  * duplicate names ever happen; not worth a schema change before they do.
  */
 export function lockHolder(lead: QueueLead, me: PublicUser | null): string | null {
-  if (lead.tag.kind !== 'in_progress') return null;
+  return rowAction(lead, me) === 'locked' ? lead.tag.agentName ?? null : null;
+}
+
+/**
+ * What the row's action button may actually do, which is not the same question
+ * as whether the row is locked.
+ *
+ * `Pick` claims the lead. On a lead someone already holds, the server refuses
+ * that claim, so offering it would be a button that always fails - which is
+ * what happened when one label covered every row:
+ *
+ * - **pick** - nobody holds it. Claim it and work it.
+ * - **resume** - you hold it. Re-claiming your own lead succeeds, but calling
+ *   it "Pick" implies taking something you already have.
+ * - **view** - someone else holds it and you are a superadmin. You may look -
+ *   that is why the row is not muted - but you may not claim it, so the action
+ *   opens the read-only timeline rather than the workspace. Taking it off the
+ *   agent is a release, a separate and deliberate act.
+ * - **locked** - someone else holds it and you are an agent. No action at all.
+ *
+ * Your own claim is checked before the superadmin rule, so a superadmin working
+ * their own lead is offered `resume`, not `view`.
+ */
+export type RowAction = 'pick' | 'resume' | 'view' | 'locked';
+
+export function rowAction(lead: QueueLead, me: PublicUser | null): RowAction {
+  if (lead.tag.kind !== 'in_progress') return 'pick';
 
   const holder = lead.tag.agentName ?? null;
-  if (!holder) return null;
-  if (me?.role === 'superadmin') return null;
-  if (me?.name && holder === me.name) return null;
+  if (!holder) return 'pick';
+  if (me?.name && holder === me.name) return 'resume';
+  if (me?.role === 'superadmin') return 'view';
 
-  return holder;
+  return 'locked';
 }
