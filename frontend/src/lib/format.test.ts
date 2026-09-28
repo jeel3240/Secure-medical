@@ -6,7 +6,7 @@
  * screen. The rest is cheap to cover once the file has a test.
  */
 import { describe, expect, it } from 'vitest';
-import { ageTone, answerLabel, formatAge, formatPhone, formatRelative, leadName } from './format';
+import { answerLabel, formatAge, formatPhone, formatRelative, leadName } from './format';
 
 const NOW = new Date('2026-09-26T12:00:00.000Z');
 const ago = (seconds: number) => new Date(NOW.getTime() - seconds * 1000).toISOString();
@@ -37,30 +37,6 @@ describe('formatAge', () => {
 
   it('handles a lead with no received time', () => {
     expect(formatAge(null, NOW)).toBe('-');
-  });
-});
-
-describe('ageTone', () => {
-  it('is normal under five minutes', () => {
-    expect(ageTone(ago(299), 'HOT', NOW)).toBe('normal');
-    expect(ageTone(ago(299), 'LOW', NOW)).toBe('normal');
-  });
-
-  it('warns at five minutes, whatever the tier', () => {
-    expect(ageTone(ago(300), 'HOT', NOW)).toBe('warn');
-    expect(ageTone(ago(300), 'LOW', NOW)).toBe('warn');
-  });
-
-  it('turns urgent at fifteen minutes, but only for HOT', () => {
-    // A HOT lead said "call me now"; fifteen minutes of silence is a lost sale.
-    // The same wait on a LOW lead is unremarkable.
-    expect(ageTone(ago(900), 'HOT', NOW)).toBe('urgent');
-    expect(ageTone(ago(900), 'WARM', NOW)).toBe('warn');
-    expect(ageTone(ago(900), 'LOW', NOW)).toBe('warn');
-  });
-
-  it('is normal with no received time', () => {
-    expect(ageTone(null, 'HOT', NOW)).toBe('normal');
   });
 });
 

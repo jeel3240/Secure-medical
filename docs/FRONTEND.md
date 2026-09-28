@@ -95,13 +95,13 @@ Rebuilt to a mockup Jeel supplied. What changed and why:
 | Layout | Filters and table loose on the page | One card holding both, the table head a light grey band |
 | Tier filter | Three pills, several at once | One segmented switcher - All, Hot, Warm, Low with counts - one at a time |
 | Tier column | Coloured badge | Signal bars and the word, `components/TierSignal.tsx` |
-| Age column | "AGE", amber and red | "WAITING", monospace; overdue is weight, not colour |
+| Age column | "AGE", amber and red | "WAITING", monospace, one weight and colour for every lead |
 | Status column | Coloured pills | A mark and the words, `components/QueueStatus.tsx` |
 | Button | Pick | **Pick up** - on every screen that picks, so the action has one name |
 | Someone else's lead | "Locked" | A padlock and "Locked", `components/LockIcon.tsx` |
 | Action column | Right-aligned | Centred - buttons and Locked on one axis |
-| Button hover | Light grey | Fills with the accent blue, white text - Pick up, Resume and View alike |
-| Empty cells | `-` | `—` |
+| Button hover | Light grey | Fills with the header's navy, white text - Pick up, Resume and View alike |
+| Empty cells | `-` | `-` - an em dash was tried and reverted |
 | Live label | Live | Live · updated just now |
 
 **Status marks carry meaning in their shape.** A filled dot is something
@@ -111,10 +111,12 @@ statuses raise their voice: Inbound reply in bold and Needs review in colour -
 the two a person must get to first. A column of coloured pills made every row
 shout, so none of them stood out. `QueueStatus.test.tsx` pins each mark.
 
-**Waiting keeps the brief's thresholds** - 5 minutes for any lead, 15 for HOT,
-`lib/format.ts` - but shows them as muted, plain and bold instead of grey, amber
-and red. In practice almost every lead in the queue is past 5 minutes, so the
-old amber coloured nearly every row and signalled nothing.
+**Every waiting time looks the same - Jeel, 2026-09-28.** The column first kept
+the brief's thresholds as weight - bold past 15 minutes for HOT - but that left
+it half dark and half light, and the bold even showed on a greyed-out locked
+row. Now every value has the same weight and colour, and a locked row is grey
+all the way across. `ageTone` in `lib/format.ts`, which held the thresholds, had
+no other caller and is gone with its tests. The age still ticks every second.
 
 **The tier switcher is one choice at a time.** The old pills allowed Hot and
 Warm together; the segmented control, as drawn, does not. The API still accepts

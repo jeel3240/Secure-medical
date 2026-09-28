@@ -66,22 +66,6 @@ export function formatAge(iso: string | null, now = new Date()): string {
   return `${Math.floor(hours / 24)}d ${hours % 24}h`;
 }
 
-/**
- * How urgent the age looks: amber past 5 minutes, red past 15 for HOT.
- *
- * DESIGN-PROMPT.md 2. The thresholds are tighter for HOT deliberately - a HOT
- * lead said "call me now", so fifteen minutes of silence is a lost sale, while
- * the same wait on a LOW lead is unremarkable.
- */
-export function ageTone(iso: string | null, tier: string | null, now = new Date()): 'normal' | 'warn' | 'urgent' {
-  if (!iso) return 'normal';
-  const minutes = (now.getTime() - new Date(iso).getTime()) / 60000;
-
-  if (tier === 'HOT' && minutes >= 15) return 'urgent';
-  if (minutes >= 5) return 'warn';
-  return 'normal';
-}
-
 /** First name plus last initial, as every lead-facing screen shows it. */
 export function leadName(lead: { firstName: string | null; lastName: string | null }): string {
   const first = lead.firstName?.trim();
