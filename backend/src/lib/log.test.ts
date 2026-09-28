@@ -116,6 +116,17 @@ describe('redaction', () => {
     expect(out.lead.phone).toBe('[redacted]');
   });
 
+  it('keeps the settings key an SMS came from', () => {
+    // `key` holds question_1 / message_clarify_2 - the field sms.* events are
+    // grouped by. The endsWith('key') rule hid it, which cost nothing in
+    // safety and most of the value of those lines.
+    expect(redact({ key: 'question_1' }).key).toBe('question_1');
+  });
+
+  it('still hides a real key', () => {
+    expect(redact({ apiKey: 'secret-value' }).apiKey).toBe('[redacted]');
+  });
+
   it('keeps the identifiers a line is useful for', () => {
     // A leadId is enough to find the row, and the row has the rest.
     const out = redact({ leadId: 42, conversationId: 7, score: 100, tier: 'HOT' });

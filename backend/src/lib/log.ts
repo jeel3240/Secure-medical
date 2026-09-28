@@ -73,9 +73,21 @@ const FORBIDDEN = new Set([
   'eztpassword',
 ]);
 
+/**
+ * Names that are always allowed, whatever the suffix rules below would say.
+ *
+ * `key` is the settings key an SMS was rendered from - `question_1`,
+ * `message_clarify_2` - and it is the field the sms.* events group by. The
+ * `endsWith('key')` rule below redacted it, which cost nothing in safety and
+ * most of the value of those lines. Found by reading real output rather than
+ * the code.
+ */
+const ALLOWED = new Set(['key', 'eventkey', 'settingkey']);
+
 /** Catches `apiKey`, `accessToken`, `jwtSecret` and the like without listing each. */
-function looksSensitive(key: string): boolean {
-  const k = key.toLowerCase();
+function looksSensitive(name: string): boolean {
+  const k = name.toLowerCase();
+  if (ALLOWED.has(k)) return false;
   if (FORBIDDEN.has(k)) return true;
   return (
     k.endsWith('password') ||

@@ -190,6 +190,8 @@ you change something the docs describe, update the doc in the same commit.
     src/core/answers.ts     matches a reply to an option, pure
     src/api/reply-flow.ts   runs the state machine for an inbound reply
     src/worker/expiry.ts    marks stale open conversations expired
+    src/worker/retry-openers.ts  retries openers that never went out
+    scripts/retry-openers-live-check.ts  proves the backoff and the two must-nots
     src/db/leads.ts         Admin > Leads SQL
     src/db/lead-state.ts    closed and worked, shared by the queue and Admin > Leads
     src/db/holder.ts        who holds a lead - checked before every write on it

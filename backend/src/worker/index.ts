@@ -3,6 +3,7 @@ import { pool } from '../db/pool';
 import { expireStaleConversations } from './expiry';
 import { pollOnce } from './poller';
 import { errText, log } from '../lib/log';
+import { retryFailedOpeners } from './retry-openers';
 
 const DEFAULT_POLL_INTERVAL_SECONDS = 60;
 
@@ -45,6 +46,25 @@ async function loop(): Promise<void> {
       }
     } catch (err) {
       log.error('expiry.failed', { err: errText(err) });
+    }
+
+    // Separate again, for the same reason: retrying an opener must not be
+    // skipped because the poll threw, and a failure here must not stop the
+    // next poll. A lead whose opener never went out is the worst state in the
+    // system - paid for, in the database, and silent.
+    try {
+      const retry = await retryFailedOpeners();
+      if (retry.due > 0 || retry.abandoned > 0) {
+        log.info('opener.retry', {
+          due: retry.due,
+          sent: retry.sent,
+          failed: retry.failed,
+          abandoned: retry.abandoned,
+          ms: retry.durationMs,
+        });
+      }
+    } catch (err) {
+      log.error('opener.retry_failed', { err: errText(err) });
     }
 
     let waitMs = DEFAULT_POLL_INTERVAL_SECONDS * 1000;
