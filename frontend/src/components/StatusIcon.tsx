@@ -1,8 +1,9 @@
 import type { ReactNode } from 'react';
 
 /**
- * The status icons, one set for every screen that shows a lead's status - the
- * queue (`QueueStatus.tsx`) and Admin > Leads (`LeadStatus.tsx`). Shared so the
+ * The status icons, one set for every screen that shows a status - the queue
+ * (`QueueStatus.tsx`), Admin > Leads (`LeadStatus.tsx`), the DNC list and
+ * Admin > Agents. Shared so the
  * same state never has two pictures: Working is the half-filled circle and
  * Needs review the triangle wherever they appear.
  *
@@ -19,7 +20,9 @@ export type StatusIconName =
   | 'inbound'
   | 'warning'
   | 'ban'
-  | 'hourglass';
+  | 'hourglass'
+  | 'shield'
+  | 'person';
 
 const PATHS: Record<StatusIconName, ReactNode> = {
   // Waiting on them.
@@ -71,6 +74,15 @@ const PATHS: Record<StatusIconName, ReactNode> = {
     <>
       <circle cx="12" cy="12" r="9" />
       <path d="M5.6 5.6l12.8 12.8" />
+    </>
+  ),
+  // An account that can manage the others - Admin > Agents.
+  shield: <path d="M12 3l7 3v5c0 4.5-3 8.2-7 10-4-1.8-7-5.5-7-10V6z" />,
+  // An agent's account.
+  person: (
+    <>
+      <circle cx="12" cy="8" r="4" />
+      <path d="M4 21a8 8 0 0 1 16 0" />
     </>
   ),
   // Ran out of time.

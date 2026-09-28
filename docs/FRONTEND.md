@@ -196,6 +196,26 @@ as Admin > Leads, switcher included - `ADMIN.md`, "DNC list".)*
 **Checked** at 1280, 1366, 1440 and 1920px: all nine statuses stay on one line,
 and nothing overflows the card. A row click opens the timeline; no console errors.
 
+## Admin > Agents - redesigned 2026-09-28
+
+Laid out like the other admin pages: one card, the grey header band, the
+email under the name, role and status as an icon and words - Superadmin a
+shield, Agent a person; Active a tick, Pending first sign-in a clock in amber,
+Inactive a barred circle, muted.
+
+**Row actions behind one "⋯" menu** - `components/RowMenu.tsx`. Three text
+buttons on every row were most of what made the table busy. The button goes
+navy on hover like every other action; Deactivate is red in the menu. Your own
+row has no menu: you cannot change your own role or deactivate yourself, and
+your password is changed from the user menu.
+
+The menu's panel is `position: fixed`, placed from the button when it opens,
+because `.table-wrap` scrolls sideways and clips anything positioned inside it -
+the last row's menu would be cut off. It closes on Escape, an outside click, a
+scroll or a resize. Checked in the browser, with Reset password opening its
+dialog from the menu. `.table__actions` and `.table__name`, used only here, are
+gone.
+
 ## The workspace - redesigned 2026-09-28
 
 Rebuilt to a mockup Jeel supplied. Every action behaves as before - checked by
