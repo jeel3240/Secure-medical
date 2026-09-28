@@ -187,7 +187,7 @@ export async function getHealth(): Promise<Health> {
     message: !sendGroupSet
       ? 'EZT_SEND_GROUP is not set, so every outbound SMS is refused.'
       : lastFailed
-        ? 'The most recent text was refused by EZ Texting. Check the account and the server log.'
+        ? 'The last text was refused by EZ Texting.'
         : null,
     detail: {
       sendGroupSet,

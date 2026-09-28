@@ -2348,6 +2348,13 @@ a {
   font-size: var(--text-small);
 }
 
+/* A failing check says why under its own row, in the same amber as its
+   Degraded - not in a red box across the page. */
+.overview__detail--warn,
+.card-head__meta--warn {
+  color: var(--color-warning);
+}
+
 .activity {
   margin: 0;
   padding: 0;
