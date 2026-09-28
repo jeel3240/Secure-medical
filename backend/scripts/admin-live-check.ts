@@ -148,7 +148,6 @@ async function main(): Promise<void> {
     check('received today', today.kpis.leadsReceived, 4);
     check('responded is score > 0', today.kpis.responded, 2);
     check('completed', today.kpis.completed, 1);
-    check('HOT', today.kpis.hot, 1);
     check('responded percentage', today.kpis.respondedPct, 50);
 
     const thirty = await getOverview('30d');
@@ -158,7 +157,7 @@ async function main(): Promise<void> {
     const sevenDay = await getOverview('7d');
     check('7d excludes the 10-day-old lead', sevenDay.kpis.leadsReceived, 4);
 
-    console.log('\nthe funnel and the per-agent table');
+    console.log('\nthe totals and the per-agent table');
     const lead = await makeLead({ phone: '+15550000706', status: 'completed', score: 80, tier: 'HOT' });
     await pool.query(`INSERT INTO dispositions (lead_id, agent_id, value) VALUES ($1, $2, 'closed')`, [lead, maya]);
     await pool.query(`INSERT INTO dispositions (lead_id, agent_id, value) VALUES ($1, $2, 'no_answer')`, [lead, maya]);
@@ -172,22 +171,20 @@ async function main(): Promise<void> {
     const mayaRow = after.agents.find((a) => a.name === 'Maya');
     const samRow = after.agents.find((a) => a.name === 'Sam');
 
-    // Sorted: jsonb_object_agg promises no key order, and check() compares
-    // through JSON.stringify, which would make that order significant.
-    const sortedEntries = (o: Record<string, number> | undefined) =>
-      Object.entries(o ?? {}).sort(([a], [b]) => a.localeCompare(b));
-    check("Maya's dispositions are counted by value", sortedEntries(mayaRow?.dispositions), [
-      ['closed', 1],
-      ['no_answer', 1],
-    ]);
-    check('Sam has none', sortedEntries(samRow?.dispositions), []);
     check("Sam's pending callback is counted", samRow?.callbacksPending, 1);
     check('and Maya has none pending', mayaRow?.callbacksPending, 0);
 
-    check('the funnel narrows', after.funnel.map((f) => f.count), [5, 3, 2, 0, 1]);
-    // Twilio is Phase 4, so every call figure is structurally zero.
-    check('calls are zero', after.kpis.callsMade, 0);
-    check('and the screen is told why', after.callsBuilt, false);
+    // The funnel went on 2026-09-28; Closed is a total of its own now.
+    check('closed is counted for the period', after.kpis.closed, 1);
+    check("and against the agent who closed it", mayaRow?.closed, 1);
+    check('an agent holding nothing holds 0', samRow?.holding, 0);
+    await pool.query(`UPDATE leads SET assigned_to = $2 WHERE id = $1`, [lead, sam]);
+    const held = (await getOverview('today')).agents.find((a) => a.name === 'Sam');
+    check('a held lead is counted against its holder', held?.holding, 1);
+    await pool.query(`UPDATE leads SET assigned_to = NULL WHERE id = $1`, [lead]);
+    check("last active is the agent's newest action", Boolean(samRow?.lastActiveAt), true);
+    // Removed 2026-09-28 - Jeel: the page does not show them.
+    check('no call figures are returned', 'callsMade' in after.kpis || 'callsBuilt' in after, false);
 
     console.log('\nthe activity feed');
     const kinds = after.activity.map((a) => a.kind).sort();

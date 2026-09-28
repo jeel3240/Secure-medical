@@ -78,12 +78,32 @@ being enough.
 
 `GET /api/admin/overview?period=today|7d|30d`
 
-KPI cards, a funnel, a per-agent table and a recent activity feed, all derived
-from the existing tables. The funnel is Received, Responded, Completed, Called,
-Closed - it ended at Interested until that outcome was retired on 2026-09-28,
-and leads closed under the retired Sold, Not interested or Wrong number count
-as Closed (`AGENT-WORKSPACE.md`, "Dispositions"). Nothing here is stored as a running total; at 50-100
-leads a day the queries are cheap and a stale counter is worse than a slow one.
+Four totals, a per-agent table, the system checks and a recent activity feed,
+all derived from the existing tables. Nothing here is stored as a running
+total; at 50-100 leads a day the queries are cheap and a stale counter is worse
+than a slow one.
+
+**Rebuilt, and made smaller - Jeel, 2026-09-28: "we are making the system
+complex".** The page and the API now hold only what a superadmin acts on:
+
+| Part | Shows |
+|---|---|
+| Totals | Leads in · Replied (and % of leads) · Answered all 3 (and %) · Closed - for Today, 7 days or 30 days, chosen on the navy switcher |
+| Agents | Per active agent: **Working now** (leads they hold), **Closed** in the period, **Callbacks due**, **Last active** (their newest note, callback, outcome, call or SMS) |
+| System | Database, EZ Texting sync, incoming replies, the expiry sweep, sending - each OK or Degraded, from the health endpoint |
+| Recent activity | "karm closed Omar Haddad", newest first, the lead's name linking to its timeline |
+
+**Removed:** the funnel, which drew the same numbers as the cards as bars; the
+HOT, Callbacks set and DNC added cards; and every call figure - Calls made,
+Reached, average call length - with `callsBuilt`, which only said they were
+zero. The per-agent outcome breakdown ("Callback set 1Closed 2No answer 3")
+went too: outcomes are Closed and DNC now, and Closed has its own column. None
+of it is computed any more. Phase 4 can add call figures back if the client
+wants them.
+
+Closed counts `closed` and the retired `sold`, `not_interested` and
+`wrong_number`, so leads closed under the old list still count
+(`AGENT-WORKSPACE.md`, "Dispositions").
 
 **Live system status** - last poll, last inbound webhook, worker health - comes
 from the health endpoint in `LOGGING.md` rather than this route, so that
@@ -95,15 +115,8 @@ visible to anyone but themselves. Agents cannot reach this page: `AUTH.md`.
 **As built.** `period` defaults to `today`, which means since midnight rather
 than the last 24 hours. Leads are counted by when they reached us
 (`ezt_added_at`, falling back to `created_at`) - the same expression the queue
-uses for a lead's age - while calls, notes, callbacks and dispositions are
-counted by when they happened, so a call made today about last week's lead
-lands in today's figures.
-
-**Every call figure is zero until Phase 4,** because nothing writes `calls`
-yet. They are counted the way they will be once Twilio lands, so the screen
-does not change shape later, and `callsBuilt: false` comes back with them - a
-superadmin should not have to wonder whether nobody is calling or nothing is
-recording it. `reachedPct` is 0 rather than NaN while the base is 0.
+uses for a lead's age - while closings are counted by when they happened, so a
+lead closed today about last week's lead lands in today's figures.
 
 The activity feed is a four-way UNION over `dispositions`, `notes`, `callbacks`
 and agent-sent `messages`, newest first, capped at 50. Agent actions only: the

@@ -186,7 +186,7 @@ Left sub-navigation within the page: **Overview** · **Leads** · **Scoring** ·
 
 **6a. Overview**
 - KPI cards for the selected period (Today / 7d / 30d): Leads received, Responded %, Completed %, HOT count, Calls made, Reached %, Callbacks set, DNC added.
-- Funnel bar: Received → Responded → Completed → Called → Interested. *(2026-09-28: the last step is Closed - Interested is no longer recorded.)*
+- Funnel bar: Received → Responded → Completed → Called → Interested. *(2026-09-28, Jeel: the funnel, the call figures and most KPI cards are gone - four totals, an agents table, system checks and activity. `ADMIN.md`, "Overview".)*
 - Per-agent table: Agent, Calls, Reached, Avg call length, Dispositions breakdown (mini bar), Callbacks pending.
 - Recent activity feed (all agents): "Michael set Interested on Jordan M.", etc.
 - Live system status: last poll time, last inbound webhook, worker health.

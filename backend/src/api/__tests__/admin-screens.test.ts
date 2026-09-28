@@ -21,7 +21,7 @@ const PASSWORD = 'correct-horse-battery';
 
 beforeEach(() => {
   getAdminConfig.mockReset().mockResolvedValue({ messages: [], scoring: {}, tiers: [] });
-  getOverview.mockReset().mockResolvedValue({ period: 'today', kpis: {}, callsBuilt: false });
+  getOverview.mockReset().mockResolvedValue({ period: 'today', kpis: {}, agents: [], activity: [] });
   listDnc.mockReset().mockResolvedValue({
     rows: [],
     total: 0,
@@ -115,12 +115,13 @@ describe('Overview', () => {
     expect(getOverview).not.toHaveBeenCalled();
   });
 
-  it('says the call figures are not built yet', async () => {
+  it('returns what the page shows and no call figures - removed 2026-09-28', async () => {
     const { boss } = await setup();
     const res = await boss.get('/api/admin/overview');
 
-    // So a superadmin can tell "nobody is calling" from "nothing records it".
-    expect(res.body.callsBuilt).toBe(false);
+    expect(res.status).toBe(200);
+    expect(res.body).not.toHaveProperty('callsBuilt');
+    expect(res.body).not.toHaveProperty('funnel');
   });
 });
 

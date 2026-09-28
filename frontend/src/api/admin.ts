@@ -50,22 +50,15 @@ export interface Overview {
     respondedPct: number;
     completed: number;
     completedPct: number;
-    hot: number;
-    callsMade: number;
-    reached: number;
-    reachedPct: number;
-    callbacksSet: number;
-    dncAdded: number;
+    closed: number;
   };
-  funnel: { stage: string; count: number }[];
   agents: {
     agentId: number;
     name: string;
-    calls: number;
-    reached: number;
-    avgCallSeconds: number | null;
-    dispositions: Record<string, number>;
     callbacksPending: number;
+    holding: number;
+    closed: number;
+    lastActiveAt: string | null;
   }[];
   activity: {
     kind: 'disposition' | 'note' | 'callback' | 'agent_sms';
@@ -75,8 +68,6 @@ export interface Overview {
     leadName: string;
     detail: Record<string, unknown>;
   }[];
-  /** False until Twilio lands: every call figure above is structurally zero. */
-  callsBuilt: boolean;
 }
 
 export async function getOverview(period: OverviewPeriod): Promise<Overview> {

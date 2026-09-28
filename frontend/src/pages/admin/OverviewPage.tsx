@@ -8,10 +8,12 @@ import {
   type OverviewPeriod,
 } from '../../api/admin';
 import { usePolling } from '../../api/usePolling';
-import { DISPOSITION_LABEL, type Disposition } from '../../api/workspace';
-import { Badge } from '../../components/Badge';
+import { DISPOSITION_LABEL } from '../../api/workspace';
 import { Banner } from '../../components/Banner';
+import { LiveStatus } from '../../components/LiveStatus';
+import { Segmented } from '../../components/Segmented';
 import { Spinner } from '../../components/Spinner';
+import { StatusIcon } from '../../components/StatusIcon';
 import { formatRelative } from '../../lib/format';
 
 /**
@@ -19,58 +21,72 @@ import { formatRelative } from '../../lib/format';
  *
  * DESIGN-PROMPT.md 6a; ADMIN.md. Phase 3 task 24.
  *
+ * **Rebuilt in the admin card style - Jeel, 2026-09-28.** The funnel drew the
+ * same numbers as the cards above it and is gone. Eight cards became four -
+ * leads in, replied, answered all three, closed - because Calls made and
+ * Reached are zero until Twilio (Phase 4) and HOT and DNC added are not what a
+ * superadmin acts on. The agent table shows what they check each morning: who
+ * is holding leads, who closed what, whose callbacks are due, and who has gone
+ * quiet.
+ *
  * **System status comes from the health endpoint, not from this route** -
  * ADMIN.md - so anything monitoring from outside reads exactly what this screen
  * does. It is fetched separately here for the same reason.
- *
- * **Every call figure is zero until Twilio lands in Phase 4.** The API says so
- * with `callsBuilt: false`, and the page repeats it rather than showing a row
- * of zeros that reads like nobody is calling.
  */
 
-const PERIODS: { key: OverviewPeriod; label: string }[] = [
-  { key: 'today', label: 'Today' },
-  { key: '7d', label: 'Last 7 days' },
-  { key: '30d', label: 'Last 30 days' },
+const PERIODS: { value: OverviewPeriod; label: string }[] = [
+  { value: 'today', label: 'Today' },
+  { value: '7d', label: '7 days' },
+  { value: '30d', label: '30 days' },
 ];
 
-const STAGE_LABEL: Record<string, string> = {
-  received: 'Received',
-  responded: 'Responded',
-  completed: 'Completed',
-  called: 'Called',
-  closed: 'Closed',
+/** The health endpoint's check names, as a superadmin would say them. */
+const CHECK_LABEL: Record<string, string> = {
+  database: 'Database',
+  poller: 'EZ Texting sync',
+  webhook: 'Incoming replies',
+  expiry: 'Expiry sweep',
+  sending: 'Sending',
 };
 
+/** "karm closed Omar Haddad". */
 function activityText(entry: Overview['activity'][number]): string {
   switch (entry.kind) {
     case 'disposition': {
-      const value = entry.detail.value as Disposition;
+      const value = String(entry.detail.value);
+      if (value === 'closed') return 'closed';
+      if (value === 'dnc') return 'marked DNC';
+      // An outcome retired on 2026-09-28, still in older rows.
       return `set ${DISPOSITION_LABEL[value] ?? value} on`;
     }
     case 'note':
-      return 'noted on';
+      return 'added a note on';
     case 'callback':
-      return 'scheduled a callback for';
+      return 'booked a callback with';
     case 'agent_sms':
       return 'texted';
     default:
-      return 'acted on';
+      return 'worked on';
   }
 }
 
-/** `2m 14s` - how an average call length reads. */
-function callLength(seconds: number | null): string {
-  if (seconds === null) return '-';
-  if (seconds < 60) return `${seconds}s`;
-  return `${Math.floor(seconds / 60)}m ${seconds % 60}s`;
+function checkDetail(check: Health['checks'][number]): string | null {
+  if (check.name === 'poller' && typeof check.detail.ageSeconds === 'number') {
+    return `last poll ${formatRelative(new Date(Date.now() - check.detail.ageSeconds * 1000).toISOString())}`;
+  }
+  if (check.name === 'webhook') {
+    return typeof check.detail.lastInboundAt === 'string'
+      ? `last reply ${formatRelative(check.detail.lastInboundAt)}`
+      : 'no replies yet';
+  }
+  return null;
 }
 
 export function OverviewPage() {
   const [period, setPeriod] = useState<OverviewPeriod>('today');
 
   const fetcher = useCallback(() => getOverview(period), [period]);
-  const { data, loading, error } = usePolling<Overview>(fetcher);
+  const { data, loading, error, updatedAt } = usePolling<Overview>(fetcher);
 
   const healthFetcher = useCallback(() => getHealth(), []);
   const { data: health } = usePolling<Health>(healthFetcher);
@@ -86,197 +102,146 @@ export function OverviewPage() {
   if (!data) return <Banner tone="error">{error ?? 'The overview could not be loaded.'}</Banner>;
 
   const { kpis } = data;
-  const biggestStage = Math.max(1, ...data.funnel.map((f) => f.count));
+  const stats = [
+    { label: 'Leads in', value: kpis.leadsReceived, sub: null },
+    { label: 'Replied', value: kpis.responded, sub: `${kpis.respondedPct}% of leads` },
+    { label: 'Answered all 3', value: kpis.completed, sub: `${kpis.completedPct}% of leads` },
+    { label: 'Closed', value: kpis.closed, sub: null },
+  ];
 
   return (
     <section>
       <div className="page-header">
         <div>
           <h1 className="page-title">Overview</h1>
-          <p className="page-subtitle">Everything across every agent.</p>
+          <p className="page-subtitle">How the system and every agent are doing.</p>
         </div>
-        <div className="leads__filters">
-          <select
-            className="leads__select"
-            value={period}
-            onChange={(e) => setPeriod(e.target.value as OverviewPeriod)}
-            aria-label="Period"
-          >
-            {PERIODS.map((p) => (
-              <option key={p.key} value={p.key}>
-                {p.label}
-              </option>
-            ))}
-          </select>
+        <div className="page-header__status">
+          <Segmented label="Period" value={period} onChange={setPeriod} options={PERIODS} />
+          <LiveStatus updatedAt={updatedAt} paused={Boolean(error)} />
         </div>
       </div>
 
       {error && <Banner tone="warning">{error} Showing the last update.</Banner>}
 
-      {/* Health first: if the poller has stopped, every number below is stale
-          and that matters more than any of them. */}
+      {/* Only when something is wrong: if the poller has stopped, every number
+          below is stale, and that matters more than any of them. */}
       {health && health.status === 'degraded' && (
         <Banner tone="error">
           {health.checks
             .filter((c) => c.status === 'degraded')
-            .map((c) => c.message ?? `${c.name} is degraded.`)
+            .map((c) => c.message ?? `${CHECK_LABEL[c.name] ?? c.name} is not working.`)
             .join(' ')}
         </Banner>
       )}
 
-      <div className="kpis">
-        <Kpi label="Leads received" value={kpis.leadsReceived} />
-        <Kpi label="Responded" value={kpis.responded} sub={`${kpis.respondedPct}%`} />
-        <Kpi label="Completed" value={kpis.completed} sub={`${kpis.completedPct}%`} />
-        <Kpi label="HOT" value={kpis.hot} />
-        <Kpi label="Calls made" value={kpis.callsMade} muted={!data.callsBuilt} />
-        <Kpi label="Reached" value={kpis.reached} sub={`${kpis.reachedPct}%`} muted={!data.callsBuilt} />
-        <Kpi label="Callbacks set" value={kpis.callbacksSet} />
-        <Kpi label="DNC added" value={kpis.dncAdded} />
+      <div className="card queue-card stats">
+        {stats.map((stat) => (
+          <div key={stat.label} className="stats__item">
+            <span className="stats__label">{stat.label}</span>
+            <span className="stats__value tabular">{stat.value}</span>
+            <span className="stats__sub">{stat.sub ?? ' '}</span>
+          </div>
+        ))}
       </div>
 
-      {!data.callsBuilt && (
-        <p className="overview__note">
-          Call figures stay at zero until browser calling is switched on in Phase 4 - nothing
-          records calls yet.
-        </p>
-      )}
-
-      <div className="overview__grid">
-        <section className="card overview__card">
-          <h2 className="config__title">Funnel</h2>
-          <ul className="funnel">
-            {data.funnel.map((stage) => (
-              <li key={stage.stage} className="funnel__row">
-                <span className="funnel__label">{STAGE_LABEL[stage.stage] ?? stage.stage}</span>
-                <span className="funnel__bar-wrap">
-                  <span
-                    className="funnel__bar"
-                    style={{ width: `${(stage.count / biggestStage) * 100}%` }}
-                  />
-                </span>
-                <span className="funnel__count tabular">{stage.count}</span>
-              </li>
-            ))}
-          </ul>
+      <div className="overview">
+        <section className="card queue-card">
+          <header className="card-head">
+            <h2 className="card-head__title">Agents</h2>
+            <span className="card-head__meta">Closed in this period</span>
+          </header>
+          <div className="table-wrap">
+            <table className="table queue__table">
+              <thead>
+                <tr>
+                  <th>Agent</th>
+                  <th className="right">Working now</th>
+                  <th className="right">Closed</th>
+                  <th className="right">Callbacks due</th>
+                  <th>Last active</th>
+                </tr>
+              </thead>
+              <tbody>
+                {data.agents.map((agent) => (
+                  <tr key={agent.agentId}>
+                    <td>
+                      <span className="queue__name">{agent.name}</span>
+                    </td>
+                    <td className="right tabular">{agent.holding || '-'}</td>
+                    <td className="right tabular queue__score">{agent.closed || '-'}</td>
+                    <td className="right tabular">{agent.callbacksPending || '-'}</td>
+                    <td className="leads__when">
+                      {agent.lastActiveAt ? formatRelative(agent.lastActiveAt) : 'No activity yet'}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </section>
 
-        <section className="card overview__card">
-          <h2 className="config__title">System</h2>
+        <section className="card queue-card">
+          <header className="card-head">
+            <h2 className="card-head__title">System</h2>
+            {health && (
+              <span className="card-head__meta">
+                {health.status === 'ok' ? 'All working' : 'Needs attention'}
+              </span>
+            )}
+          </header>
           {!health ? (
-            <Spinner />
+            <div className="leads__loading">
+              <Spinner />
+            </div>
           ) : (
-            <dl className="summary">
-              {health.checks.map((check) => (
-                <div key={check.name} className="overview__check">
-                  <dt>{check.name}</dt>
-                  <dd>
-                    {check.status === 'ok' ? (
-                      <Badge tone="success">ok</Badge>
-                    ) : (
-                      <Badge tone="warning">degraded</Badge>
-                    )}
-                    {check.name === 'poller' && typeof check.detail.ageSeconds === 'number' && (
-                      <span className="overview__check-detail">
-                        last poll {check.detail.ageSeconds}s ago
+            <dl className="kv">
+              {health.checks.map((check) => {
+                const detail = checkDetail(check);
+                const ok = check.status === 'ok';
+                return (
+                  <div key={check.name} className="kv__row">
+                    <dt>
+                      {CHECK_LABEL[check.name] ?? check.name}
+                      {detail && <span className="overview__detail">{detail}</span>}
+                    </dt>
+                    <dd>
+                      <span className={`status${ok ? '' : ' status--warning'}`}>
+                        <StatusIcon name={ok ? 'check' : 'warning'} />
+                        {ok ? 'OK' : 'Degraded'}
                       </span>
-                    )}
-                    {check.name === 'webhook' && (
-                      <span className="overview__check-detail">
-                        {typeof check.detail.lastInboundAt === 'string'
-                          ? `last reply ${formatRelative(check.detail.lastInboundAt)}`
-                          : 'no replies yet'}
-                      </span>
-                    )}
-                  </dd>
-                </div>
-              ))}
+                    </dd>
+                  </div>
+                );
+              })}
             </dl>
           )}
         </section>
       </div>
 
-      <section className="card overview__card">
-        <h2 className="config__title">Agents</h2>
-        <div className="table-wrap">
-          <table className="table">
-            <thead>
-              <tr>
-                <th>Agent</th>
-                <th className="right">Calls</th>
-                <th className="right">Reached</th>
-                <th className="right">Avg call</th>
-                <th>Dispositions</th>
-                <th className="right">Callbacks pending</th>
-              </tr>
-            </thead>
-            <tbody>
-              {data.agents.map((agent) => (
-                <tr key={agent.agentId}>
-                  <td>
-                    <strong>{agent.name}</strong>
-                  </td>
-                  <td className="right tabular">{agent.calls}</td>
-                  <td className="right tabular">{agent.reached}</td>
-                  <td className="right tabular">{callLength(agent.avgCallSeconds)}</td>
-                  <td>
-                    {Object.keys(agent.dispositions).length === 0
-                      ? '-'
-                      : Object.entries(agent.dispositions)
-                          .sort(([a], [b]) => a.localeCompare(b))
-                          .map(([value, n]) => (
-                            <span key={value} className="config__choice">
-                              {DISPOSITION_LABEL[value as Disposition] ?? value}{' '}
-                              <strong className="tabular">{n}</strong>
-                            </span>
-                          ))}
-                  </td>
-                  <td className="right tabular">{agent.callbacksPending}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </section>
-
-      <section className="card overview__card">
-        <h2 className="config__title">Recent activity</h2>
+      <section className="card queue-card">
+        <header className="card-head">
+          <h2 className="card-head__title">Recent activity</h2>
+          <span className="card-head__meta">Agent actions, newest first</span>
+        </header>
         {data.activity.length === 0 ? (
-          <p className="summary__empty">Nothing in this period.</p>
+          <p className="leads__empty">Nothing in this period.</p>
         ) : (
-          <ul className="summary__list">
+          <ul className="activity">
             {data.activity.map((entry, i) => (
-              <li key={`${entry.at}-${i}`}>
-                <span className="summary__list-when">{formatRelative(entry.at)}</span>
+              <li key={`${entry.at}-${i}`} className="activity__row">
                 <span>
                   <strong>{entry.agentName ?? 'Someone'}</strong> {activityText(entry)}{' '}
-                  <Link to={`/leads/${entry.leadId}/timeline`}>{entry.leadName}</Link>
+                  <Link className="activity__lead" to={`/leads/${entry.leadId}/timeline`}>
+                    {entry.leadName}
+                  </Link>
                 </span>
+                <span className="activity__when">{formatRelative(entry.at)}</span>
               </li>
             ))}
           </ul>
         )}
       </section>
     </section>
-  );
-}
-
-function Kpi({
-  label,
-  value,
-  sub,
-  muted,
-}: {
-  label: string;
-  value: number;
-  sub?: string;
-  muted?: boolean;
-}) {
-  return (
-    <div className={`kpi${muted ? ' kpi--muted' : ''}`}>
-      <span className="kpi__label">{label}</span>
-      <span className="kpi__value tabular">{value}</span>
-      {sub && <span className="kpi__sub tabular">{sub}</span>}
-    </div>
   );
 }
