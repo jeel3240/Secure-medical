@@ -1,7 +1,7 @@
 /**
- * The queue's statuses: only three, each a dot and the words - Jeel,
- * 2026-09-28. Two raise their voice: Inbound reply in bold, Needs review with a
- * warm dot. Those are the ones a person must get to first.
+ * The queue's statuses: only three, each an icon and the words - Jeel,
+ * 2026-09-28. The icon says which status it is; Inbound reply is also bold,
+ * because a lead has written to us and nobody has read it.
  */
 import { render } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
@@ -12,19 +12,26 @@ import { TierSignal } from './TierSignal';
 const renderTag = (tag: QueueTag) => {
   const { container } = render(<QueueStatus tag={tag} />);
   const status = container.querySelector('.status')!;
+  const icon = container.querySelector('svg.status__icon');
   return {
     text: status.textContent,
-    tone: [...status.classList].find((c) => c.startsWith('status--'))?.replace('status--', ''),
+    icon: [...(icon?.classList ?? [])].find((c) => c.startsWith('status__icon--'))?.replace('status__icon--', ''),
+    bold: status.classList.contains('status--strong'),
   };
 };
 
 describe('statuses', () => {
-  it.each<[string, QueueTag, string, string]>([
-    ['someone working it', { kind: 'in_progress', agentName: 'karm' }, 'Working – karm', 'normal'],
-    ['an unread reply', { kind: 'inbound_reply' }, 'Inbound reply', 'strong'],
-    ['replies nobody understood', { kind: 'needs_review' }, 'Needs review', 'alert'],
-  ])('%s', (_, tag, text, tone) => {
-    expect(renderTag(tag)).toEqual({ text, tone });
+  it.each<[string, QueueTag, string, boolean]>([
+    ['someone working it', { kind: 'in_progress', agentName: 'karm' }, 'Working – karm', false],
+    ['an unread reply', { kind: 'inbound_reply' }, 'Inbound reply', true],
+    ['replies nobody understood', { kind: 'needs_review' }, 'Needs review', false],
+  ])('%s: its own icon, and the words', (_, tag, text, bold) => {
+    expect(renderTag(tag)).toEqual({ text, icon: tag.kind, bold });
+  });
+
+  it('draws no dot any more', () => {
+    const { container } = render(<QueueStatus tag={{ kind: 'needs_review' }} />);
+    expect(container.querySelector('.status__mark')).toBeNull();
   });
 
   it('names the holder with an en dash, as drawn', () => {
