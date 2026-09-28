@@ -104,8 +104,9 @@ export async function addNote(id: number, body: string): Promise<Note> {
   return data.note;
 }
 
-/** The seven from core/dispositions.ts, in the order the control shows them. */
+/** Mirrors core/dispositions.ts, in the order the control shows them. */
 export const DISPOSITIONS = [
+  'sold',
   'interested',
   'callback_set',
   'no_answer',
@@ -118,6 +119,7 @@ export const DISPOSITIONS = [
 export type Disposition = (typeof DISPOSITIONS)[number];
 
 export const DISPOSITION_LABEL: Record<Disposition, string> = {
+  sold: 'Sold',
   interested: 'Interested',
   callback_set: 'Callback set',
   no_answer: 'No answer',

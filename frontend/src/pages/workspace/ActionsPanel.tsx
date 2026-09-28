@@ -59,15 +59,18 @@ const QUICK: { label: string; at: () => Date }[] = [
 ];
 
 /**
- * The mockup groups the six ordinary dispositions by what they mean for the
- * lead, so an agent reaching for "no answer" is not reading past "interested".
- * The list itself still lives in `core/dispositions.ts`; this only arranges it.
+ * The mockup groups the ordinary dispositions by what they mean for the lead,
+ * so an agent reaching for "no answer" is not reading past "interested". The
+ * list itself still lives in `core/dispositions.ts`; this only arranges it.
+ *
+ * Sold, Not interested and Wrong number close the lead: it leaves the queue
+ * once the agent moves on - Jeel, 2026-09-28, `QUEUE.md`.
  *
  * `dnc` is deliberately outside the groups: it blocks the number for good and
  * belongs nowhere near a row of one-click buttons.
  */
 const GROUPS: { title: string; tone: string; values: Disposition[] }[] = [
-  { title: 'Positive', tone: 'good', values: ['interested', 'callback_set'] },
+  { title: 'Positive', tone: 'good', values: ['sold', 'interested', 'callback_set'] },
   { title: 'No contact', tone: 'warn', values: ['no_answer', 'voicemail'] },
   { title: 'Negative', tone: 'bad', values: ['not_interested', 'wrong_number'] },
 ];

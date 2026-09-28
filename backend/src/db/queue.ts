@@ -9,6 +9,7 @@
  */
 
 import { queueTag, type QueueTag } from '../core/queue-tags';
+import { CLOSED_SQL } from './lead-state';
 import { pool } from './pool';
 
 export interface QueueRow {
@@ -90,6 +91,12 @@ const BASE = `
  *   lead must never vanish from under the agent working it, whatever its
  *   conversation says.
  *
+ * **A closed lead leaves** - Jeel, 2026-09-28. Once its newest outcome is Sold,
+ * Not interested or Wrong number (`db/lead-state.ts`), completing the
+ * questions, needing review or having a callback no longer keeps it here. Two
+ * things still do: an agent holding it, so it does not vanish while they save
+ * and move on; and a new message from the lead, which a person must read.
+ *
  * A lead partway through the questions is on Admin > Leads only.
  */
 const INCLUDED = `
@@ -98,11 +105,16 @@ const INCLUDED = `
     SELECT 1 FROM dnc_list d WHERE d.phone = l.phone AND d.released_at IS NULL
   )
   AND (
-    c.status IN ('completed', 'review')
+    u.id IS NOT NULL
     OR l.has_unread_inbound
-    OR u.id IS NOT NULL
-    OR EXISTS (
-      SELECT 1 FROM callbacks cb WHERE cb.lead_id = l.id AND cb.done_at IS NULL
+    OR (
+      NOT ${CLOSED_SQL}
+      AND (
+        c.status IN ('completed', 'review')
+        OR EXISTS (
+          SELECT 1 FROM callbacks cb WHERE cb.lead_id = l.id AND cb.done_at IS NULL
+        )
+      )
     )
   )
 `;

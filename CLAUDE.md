@@ -191,6 +191,8 @@ you change something the docs describe, update the doc in the same commit.
     src/api/reply-flow.ts   runs the state machine for an inbound reply
     src/worker/expiry.ts    marks stale open conversations expired
     src/db/leads.ts         Admin > Leads SQL
+    src/db/lead-state.ts    closed and worked, shared by the queue and Admin > Leads
+    scripts/admin-leads-live-check.ts  proves the Admin > Leads statuses
     src/cli/                create-superadmin
     src/integrations/       EZ Texting client
     src/db/users.ts         user queries; src/db/pool.ts
@@ -450,8 +452,10 @@ Jeel:
 - **A disposition does not remove a lead from the queue.** `db/queue.ts` does
   not read `dispositions` at all, so a lead dispositioned `not_interested`
   stays in the queue at full score and the next agent picks it up again. Only
-  `dnc` removes one, and only through `dnc_list`. `AGENT-WORKSPACE.md`, "What
-  a disposition does not do".
+  `dnc` removes one, and only through `dnc_list`. *(2026-09-28, Jeel: fixed.
+  Sold - a new outcome - Not interested and Wrong number close a lead: it
+  leaves the queue and reads Closed on Admin > Leads, next to a new Working
+  status. `AGENT-WORKSPACE.md`, "Which outcomes close a lead"; `ADMIN-LEADS.md`.)*
 - **The deep health endpoint cannot be polled by external monitoring,** because
   it is superadmin-only as `LOGGING.md` specified. If an uptime service is
   wanted, it needs a separate unauthenticated route returning less.

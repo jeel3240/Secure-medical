@@ -12,32 +12,99 @@ The Priority Queue shows only leads who need a person - completed, needs
 review, an inbound reply, or one being worked - because agents should spend
 their time on people who have given them a reason to. *(2026-09-28: a lead
 partway through the questions is no longer in the queue, so this page, under
-In progress, is the only place it appears.)* This page shows everyone, so a superadmin
+Answering, is the only place it appears.)* This page shows everyone, so a superadmin
 can confirm leads are arriving and see where they drop off, without
 non-responders burying HOT leads in the agents' view. That list is `QUEUE.md`.
 
 ## Status is derived, never stored
 
 There is no status column on `leads`. Each row's status is computed from the
-lead's newest conversation, so it stays correct as the state machine advances
-things later.
+lead's newest conversation and from what agents have recorded, so it stays
+correct as the state machine and the agents move things on.
 
-| Status | Condition |
-|---|---|
-| `opted_out` | On `dnc_list`, or newest conversation `suppressed` |
-| `needs_review` | Conversation `review` |
-| `completed` | Conversation `completed` |
-| `expired` | Conversation `expired` |
-| `in_progress` | Conversation `open` and at least one of q1-q3 answered |
-| `awaiting_reply` | Conversation `open`, nothing answered |
+**A lead's whole life, in order - Jeel, 2026-09-28:**
 
-Order matters. `opted_out` is checked first so it wins over any conversation
-state, and against `dnc_list` as well as the conversation, because a phone can
-reach that list without ever holding one.
+```
+Awaiting reply -> Answering -> Ready to call -> Working -> Closed
+```
+
+with Needs review, Expired and Opted out as the other ways the SMS part can end.
+
+| Status | Tab | Condition |
+|---|---|---|
+| `opted_out` | Opted out | On `dnc_list`, or newest conversation `suppressed` |
+| `closed` | Closed | Newest disposition is Sold, Not interested or Wrong number, and the lead has not texted since |
+| `working` | Working | An agent holds it, or has left any trace on it: a note, a callback, a disposition, a call, or an SMS of their own |
+| `needs_review` | Needs review | Conversation `review` |
+| `ready_to_call` | Ready to call | Conversation `completed` - answered all three - and no agent has touched it |
+| `expired` | Expired | Conversation `expired` |
+| `answering` | Answering | Conversation `open` and at least one of q1-q3 answered |
+| `awaiting_reply` | Awaiting reply | Conversation `open`, nothing answered |
+
+The first match wins, so the order is the rule:
+
+- **`opted_out` first**, so a blocked number wins over everything, checked
+  against `dnc_list` as well as the conversation, because a phone can reach
+  that list without ever holding one. A lead sold and then blocked reads Opted
+  out.
+- **`closed` before `working`**, because a closed lead has always been worked.
+- **`working` before every SMS status.** Once a person is on a lead, that
+  someone is handling it matters more than what the conversation says. A
+  needs-review lead an agent has noted, or an expired lead that texted back and
+  was picked, reads Working.
+
+Closed and worked are defined once, in `backend/src/db/lead-state.ts`, and the
+queue uses the same definitions - so a lead Closed here is never in the queue,
+and the two screens cannot disagree.
+
+### Why Working and Closed were added - 2026-09-28
+
+Until then the status described the SMS conversation only. A lead that
+answered all three questions read **Completed** forever: untouched, called five
+times, or sold, all alike. And since nothing recorded a sale, a sold lead went
+back into the queue at the top for the next agent to call.
+
+Two renames came with it, so each word means one thing:
+
+| Was | Is | Why |
+|---|---|---|
+| `in_progress`, In progress | `answering`, Answering | The queue's "In progress – karm" means an agent holds the lead. Two meanings for one phrase |
+| `completed`, Completed | `ready_to_call`, Ready to call | "Completed" read as finished when the calling had not started |
+
+The API values changed with the labels. A saved link with `?status=in_progress`
+or `?status=completed` now falls back to All, as any unknown status does.
+
+### Closed
+
+**One status for every ending.** Sold, Not interested and Wrong number all
+read **Closed**; the row says which - "Closed – Sold" - from the `outcome`
+field the API returns on a closed lead. The lead's timeline has the full story.
+`dnc` is not a closing outcome because it needs to be none: it blocks the
+number, which is Opted out.
+
+**The newest outcome decides.** Dispositions are append-only, so a lead marked
+Sold and later Interested by another agent is Working again.
+
+**A closed lead that texts us is Working again.** Its message needs a person,
+so it also returns to the queue as an Inbound reply (`QUEUE.md`). Once that is
+read, it is Closed once more, unless the agent records a new outcome.
+
+### Working
+
+**Starts at the first trace an agent leaves** - usually picking the lead. It
+lasts until an outcome closes it, across every call, voicemail and callback in
+between. Those details are the timeline's, not the status's.
+
+**Picking a lead and putting it back untouched is not Working.** Releasing
+clears `assigned_to` and `assigned_at`, so no trace is left and the lead is
+Ready to call again. That is deliberate: nothing happened to it.
+
+**Not Working:** a claim by a deactivated agent (the queue ignores it too), and
+our own automated messages - only an SMS with `sent_by` set is an agent's.
 
 **The status follows the conversation, not the message log.** A lead who has
-answered moves to `in_progress` or `completed` because the state machine wrote
-`q1`, not because a message arrived.
+answered moves to `answering` or `ready_to_call` because the state machine
+wrote `q1`, not because a message arrived.
 
 Until 2026-09-21 nothing advanced the conversation, so a lead who had replied
 still read as `awaiting_reply` and only the inbound arrow in Last activity
@@ -57,11 +124,16 @@ change the numbers beside them.
 Search matches name, or phone with punctuation stripped, so `(602) 620-3572`
 finds `+16026203572`.
 
+`scripts/admin-leads-live-check.ts` proves the statuses against a real
+database: every SMS status, each kind of agent trace on its own, each closing
+outcome, reopening by a newer outcome or a text, and the tab counts. Last run
+2026-09-28: 25 checks, all passing.
+
 Score and tier are the running values, returned at every stage. Scoring starts
 at the first reply, so a lead part-way through has a real score - 10 for
 responding, 25 once question 1 is answered - and a tier that follows it.
 
-They were hidden until `completed` until 2026-09-22, on the reasoning that a
+They were hidden until `completed` (now Ready to call) until 2026-09-22, on the reasoning that a
 partial score next to a final one invites comparing them. That cost more than
 it saved: a superadmin watching the flow could not see a lead accumulating
 points, which is the thing the page is for.

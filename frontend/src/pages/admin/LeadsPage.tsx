@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { listAdminLeads, type AdminLead, type AdminLeadsResponse } from '../../api/leads';
+import { listAdminLeads, type AdminLead, type AdminLeadsResponse, type LeadStatus } from '../../api/leads';
+import { DISPOSITION_LABEL, type Disposition } from '../../api/workspace';
 import { usePolling } from '../../api/usePolling';
 import { Badge } from '../../components/Badge';
 import { Banner } from '../../components/Banner';
@@ -7,11 +8,19 @@ import { Button } from '../../components/Button';
 import { Spinner } from '../../components/Spinner';
 import { formatPhone, formatReceived, formatRelative } from '../../lib/format';
 
+/**
+ * In the order a lead lives them - Awaiting reply, Answering, Ready to call,
+ * Working, Closed - then the three other ways the SMS part can end. Working
+ * and Closed were added, and In progress and Completed renamed, by Jeel on
+ * 2026-09-28: ADMIN-LEADS.md, "Status".
+ */
 const TABS: { key: string; label: string }[] = [
   { key: 'all', label: 'All' },
   { key: 'awaiting_reply', label: 'Awaiting reply' },
-  { key: 'in_progress', label: 'In progress' },
-  { key: 'completed', label: 'Completed' },
+  { key: 'answering', label: 'Answering' },
+  { key: 'ready_to_call', label: 'Ready to call' },
+  { key: 'working', label: 'Working' },
+  { key: 'closed', label: 'Closed' },
   { key: 'needs_review', label: 'Needs review' },
   { key: 'opted_out', label: 'Opted out' },
   { key: 'expired', label: 'Expired' },
@@ -25,23 +34,27 @@ const SINCE: { key: string; label: string }[] = [
   { key: 'all', label: 'All time' },
 ];
 
-const STATUS_LABEL: Record<string, string> = {
-  awaiting_reply: 'Awaiting reply',
-  in_progress: 'In progress',
-  completed: 'Completed',
-  needs_review: 'Needs review',
-  opted_out: 'Opted out',
-  expired: 'Expired',
-};
+const STATUS_LABEL: Record<LeadStatus, string> = Object.fromEntries(
+  TABS.filter((t) => t.key !== 'all').map((t) => [t.key, t.label])
+) as Record<LeadStatus, string>;
 
-const STATUS_TONE: Record<string, 'neutral' | 'navy' | 'success' | 'muted' | 'warning'> = {
+const STATUS_TONE: Record<LeadStatus, 'neutral' | 'navy' | 'success' | 'muted' | 'warning'> = {
   awaiting_reply: 'neutral',
-  in_progress: 'navy',
-  completed: 'success',
+  answering: 'neutral',
+  ready_to_call: 'success',
+  working: 'navy',
+  closed: 'muted',
   needs_review: 'warning',
   opted_out: 'muted',
   expired: 'muted',
 };
+
+/** "Closed – Sold": a closed lead says how it ended, so one status can cover all three. */
+function statusText(lead: AdminLead): string {
+  const label = lead.status ? STATUS_LABEL[lead.status] : '';
+  if (lead.status !== 'closed' || !lead.outcome) return label;
+  return `${label} – ${DISPOSITION_LABEL[lead.outcome as Disposition] ?? lead.outcome}`;
+}
 
 function leadName(lead: AdminLead): string {
   const first = lead.firstName?.trim();
@@ -227,7 +240,7 @@ export function LeadsPage() {
                   <td className="mono">{lead.source ?? '-'}</td>
                   <td>
                     {lead.status ? (
-                      <Badge tone={STATUS_TONE[lead.status]}>{STATUS_LABEL[lead.status]}</Badge>
+                      <Badge tone={STATUS_TONE[lead.status]}>{statusText(lead)}</Badge>
                     ) : (
                       '-'
                     )}
