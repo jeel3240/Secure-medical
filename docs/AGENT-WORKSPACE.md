@@ -18,7 +18,7 @@ user unless it says superadmin. See `AUTH.md`.
 ## Rules
 
 **One agent at a time.** Claiming sets `assigned_to` and `assigned_at`. A second
-agent claiming the same lead gets a 409 and sees the row as "In progress -
+agent claiming the same lead gets a 409 and sees the row as "Working -
 {name}" in the queue. Claims never expire - `SCHEMA.md` says why - so a
 superadmin can force a release.
 

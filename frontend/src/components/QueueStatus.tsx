@@ -21,7 +21,10 @@ export function tagText(tag: QueueTag): string {
   switch (tag.kind) {
     case 'in_progress':
       // Naming the holder is what stops two agents racing for the same lead.
-      return tag.agentName ? `In progress – ${tag.agentName}` : 'In progress';
+      // "Working", not "In progress" - Jeel, 2026-09-28: the same word as
+      // Admin > Leads, and "In progress" no longer means two things. The
+      // `kind` keeps its name; it is the API's, and never shown.
+      return tag.agentName ? `Working – ${tag.agentName}` : 'Working';
     case 'inbound_reply':
       return 'Inbound reply';
     case 'needs_review':

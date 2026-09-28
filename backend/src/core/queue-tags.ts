@@ -5,7 +5,7 @@
  * never stored, so they stay true as conversations advance - CLAUDE.md §6.
  *
  * The shape is structured rather than a finished string: the API returns what
- * is true, the screen decides how to word it ("In progress – Michael"). That
+ * is true, the screen decides how to word it ("Working – Michael"). That
  * keeps wording changes out of the backend.
  *
  * **Only three, and most rows have none** - Jeel, 2026-09-28. The queue once

@@ -66,7 +66,14 @@ freshness". Id last so the order never wobbles between two identical rows.
 
 At most one tag per row - the STATUS column - computed, never stored. The API
 returns what is true and the screen words it: `{ kind: 'in_progress',
-agentName: 'Michael' }` becomes "In progress – Michael".
+agentName: 'Michael' }` becomes "Working – Michael".
+
+*(It read "In progress – Michael" until later on 2026-09-28. Jeel: Working, the
+same word Admin > Leads uses for a lead an agent is on, so "In progress" no
+longer means two things. Only the words changed; the `kind` is still
+`in_progress`, because it is the API's and never shown. The two are not quite
+the same: the queue says Working only while someone holds the lead, while
+Admin > Leads keeps saying Working after it is released - `ADMIN-LEADS.md`.)*
 
 **Only three, and most rows have none - Jeel, 2026-09-28.** A tag answers the
 two questions an agent scanning the queue has: is somebody already on this, and

@@ -20,7 +20,7 @@ const renderTag = (tag: QueueTag) => {
 
 describe('statuses', () => {
   it.each<[string, QueueTag, string, string]>([
-    ['someone working it', { kind: 'in_progress', agentName: 'karm' }, 'In progress – karm', 'normal'],
+    ['someone working it', { kind: 'in_progress', agentName: 'karm' }, 'Working – karm', 'normal'],
     ['an unread reply', { kind: 'inbound_reply' }, 'Inbound reply', 'strong'],
     ['replies nobody understood', { kind: 'needs_review' }, 'Needs review', 'alert'],
   ])('%s', (_, tag, text, tone) => {
@@ -28,7 +28,7 @@ describe('statuses', () => {
   });
 
   it('names the holder with an en dash, as drawn', () => {
-    expect(tagText({ kind: 'in_progress', agentName: 'karm' })).toBe('In progress – karm');
+    expect(tagText({ kind: 'in_progress', agentName: 'karm' })).toBe('Working – karm');
   });
 });
 
