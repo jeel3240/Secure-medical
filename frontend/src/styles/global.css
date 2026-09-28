@@ -281,9 +281,13 @@ a {
   cursor: pointer;
 }
 
+/* The chosen option in the header's navy, white text - the same look an action
+   button takes on hover, so "selected" and "about to act" read alike. Jeel,
+   2026-09-28. Shared by the queue's tier switcher and the Add agent drawer's
+   role choice, so the one control keeps one look. */
 .segmented__option[aria-checked='true'] {
-  background: var(--color-surface);
-  color: var(--color-text);
+  background: var(--color-primary);
+  color: var(--color-on-primary);
   box-shadow: var(--shadow-sm);
 }
 
@@ -1273,6 +1277,13 @@ a {
 .segmented__count {
   margin-left: var(--space-2);
   color: var(--color-text-subtle);
+}
+
+/* On navy the grey count would all but vanish; it follows the white label,
+   a step quieter. */
+.segmented__option[aria-checked='true'] .segmented__count {
+  color: inherit;
+  opacity: 0.7;
 }
 
 .queue__table thead th {
