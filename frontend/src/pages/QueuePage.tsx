@@ -6,6 +6,7 @@ import { usePolling } from '../api/usePolling';
 import { useAuth } from '../auth/store';
 import { Banner } from '../components/Banner';
 import { Button } from '../components/Button';
+import { LockIcon } from '../components/LockIcon';
 import { QueueStatus } from '../components/QueueStatus';
 import { TierSignal } from '../components/TierSignal';
 import { Spinner } from '../components/Spinner';
@@ -288,7 +289,10 @@ export function QueuePage() {
                       </td>
                       <td className="right">
                         {locked ? (
-                          <span className="queue__locked">Locked</span>
+                          <span className="queue__locked">
+                            <LockIcon />
+                            Locked
+                          </span>
                         ) : (
                           <Button
                             variant="secondary"

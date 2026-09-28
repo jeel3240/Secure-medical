@@ -98,6 +98,7 @@ Rebuilt to a mockup Jeel supplied. What changed and why:
 | Age column | "AGE", amber and red | "WAITING", monospace; overdue is weight, not colour |
 | Status column | Coloured pills | A mark and the words, `components/QueueStatus.tsx` |
 | Button | Pick | **Pick up** - on every screen that picks, so the action has one name |
+| Someone else's lead | "Locked" | A padlock and "Locked", `components/LockIcon.tsx` |
 | Empty cells | `-` | `—` |
 | Live label | Live | Live · updated just now |
 
