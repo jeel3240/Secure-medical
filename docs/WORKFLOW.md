@@ -82,6 +82,15 @@ widening one, adding an index, seeding a settings row, correcting a value: each
 one is a file. `002_dnc_release.sql` exists because two columns had to be added
 to `dnc_list` after 001 had shipped - that is the pattern, not an exception.
 
+**Files that have not reached `main` can still be combined - with care.** On
+2026-09-28 Jeel merged 004 into 003: neither had run on production, because
+production runs only what is on `main`, and `main` stopped at 002. Check that
+with `git ls-tree origin/main backend/src/db/migrations/` before combining
+anything. Keep the earlier file's name, so a database that already ran it does
+not run it again - the runner remembers files by name. A local database that
+ran the old 003 but never 004 misses the second part; rebuild it, or run the
+second part's SQL there once.
+
 Run migrations through `npm run migrate`, not by piping SQL into psql.
 Piping applies the schema without recording it, so the runner will try to apply
 the same file again later and fail.

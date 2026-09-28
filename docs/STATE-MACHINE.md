@@ -164,7 +164,7 @@ and an opt-out.
 
 **Why.** The flag is the queue's *Inbound reply*, and it decides who is in the
 queue. It used to be set on every reply, so a lead simply answering "1" read as
-an inbound reply - every responder did. Migration 004 cleared the flags that
+an inbound reply - every responder did. Migration 003 (part 2) cleared the flags that
 rule left behind: `SCHEMA.md`.
 
 ### 2b. An agent has taken the conversation over - Decided by Jeel, 2026-09-23
