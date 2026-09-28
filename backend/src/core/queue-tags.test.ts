@@ -2,7 +2,6 @@ import { queueTag, type QueueFacts } from './queue-tags';
 
 const facts = (over: Partial<QueueFacts> = {}): QueueFacts => ({
   conversationStatus: 'completed',
-  answers: ['3', '1', '1'],
   assignedAgentName: null,
   hasUnreadInbound: false,
   callCount: 0,
@@ -38,32 +37,17 @@ describe('what an agent sees against a lead', () => {
   });
 
   it('flags replies nobody could parse', () => {
-    expect(queueTag(facts({ conversationStatus: 'review', answers: [null, null, null] }))).toEqual({
-      kind: 'needs_review',
-    });
+    expect(queueTag(facts({ conversationStatus: 'review' }))).toEqual({ kind: 'needs_review' });
   });
 
-  it.each([
-    [['1', null, null] as [string | null, string | null, string | null], 1],
-    [['1', '2', null] as [string | null, string | null, string | null], 2],
-  ])('says where a partial responder stopped: %j', (answers, step) => {
-    expect(queueTag(facts({ conversationStatus: 'open', answers }))).toEqual({ kind: 'stalled', step });
+  it('has no stalled tag - a lead partway through is not in the queue at all', () => {
+    // db/queue.ts keeps an open conversation out unless someone is working it,
+    // so whatever brought it in outranks being partway: Jeel, 2026-09-28.
+    expect(queueTag(facts({ conversationStatus: 'open' }))).toEqual({ kind: 'new' });
   });
 
-  it('does not call an expired conversation stalled - it is closed, not waiting', () => {
-    expect(queueTag(facts({ conversationStatus: 'expired', answers: ['1', null, null] }))).toEqual({
-      kind: 'new',
-    });
-  });
-
-  it('does not call a completed lead stalled', () => {
+  it('calls a completed lead New when nothing has happened', () => {
     expect(queueTag(facts({ conversationStatus: 'completed' }))).toEqual({ kind: 'new' });
-  });
-
-  it('does not call a lead with no answers stalled', () => {
-    expect(queueTag(facts({ conversationStatus: 'open', answers: [null, null, null] }))).toEqual({
-      kind: 'new',
-    });
   });
 });
 
@@ -94,15 +78,9 @@ describe('when several could apply, the most urgent wins', () => {
     ).toMatchObject({ kind: 'inbound_reply' });
   });
 
-  it('needing review outranks being stalled', () => {
-    expect(
-      queueTag(facts({ conversationStatus: 'review', answers: ['1', null, null] }))
-    ).toMatchObject({ kind: 'needs_review' });
-  });
-
-  it('being stalled outranks having been called', () => {
-    expect(
-      queueTag(facts({ conversationStatus: 'open', answers: ['1', null, null], callCount: 1 }))
-    ).toMatchObject({ kind: 'stalled' });
+  it('needing review outranks having been called', () => {
+    expect(queueTag(facts({ conversationStatus: 'review', callCount: 2 }))).toMatchObject({
+      kind: 'needs_review',
+    });
   });
 });

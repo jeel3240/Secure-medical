@@ -59,7 +59,6 @@ export type QueueTagKind =
   | 'callback'
   | 'inbound_reply'
   | 'needs_review'
-  | 'stalled'
   | 'attempted'
   | 'new';
 
@@ -71,8 +70,6 @@ export interface QueueTag {
   callbackAt?: string;
   /** `attempted`: how many calls have been made. */
   attempts?: number;
-  /** `stalled`: how many questions they answered, so 1 or 2. */
-  step?: number;
 }
 
 /** Mirrors QueueRow in backend/src/db/queue.ts. */

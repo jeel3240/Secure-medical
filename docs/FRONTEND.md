@@ -107,7 +107,7 @@ Rebuilt to a mockup Jeel supplied. What changed and why:
 
 **Status marks carry meaning in their shape.** A filled dot is something
 happening (in progress, inbound reply, needs review), a ring is something
-waiting (callback, stalled, new), a square is a past attempt. Only two
+waiting (callback, new), a square is a past attempt. Only two
 statuses raise their voice: Inbound reply in bold and Needs review in colour -
 the two a person must get to first. A column of coloured pills made every row
 shout, so none of them stood out. `QueueStatus.test.tsx` pins each mark.

@@ -8,8 +8,11 @@ Spec: `DESIGN-PROMPT.md` section 6g. Code: `frontend/src/pages/admin/LeadsPage.t
 
 ## Why it is separate from the queue
 
-The Priority Queue shows only leads who replied, because agents should spend
-their time on people who texted back. This page shows everyone, so a superadmin
+The Priority Queue shows only leads who need a person - completed, needs
+review, an inbound reply, or one being worked - because agents should spend
+their time on people who have given them a reason to. *(2026-09-28: a lead
+partway through the questions is no longer in the queue, so this page, under
+In progress, is the only place it appears.)* This page shows everyone, so a superadmin
 can confirm leads are arriving and see where they drop off, without
 non-responders burying HOT leads in the agents' view. That list is `QUEUE.md`.
 

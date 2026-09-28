@@ -46,7 +46,6 @@ describe('a lead nobody holds', () => {
     { kind: 'new' },
     { kind: 'inbound_reply' },
     { kind: 'needs_review' },
-    { kind: 'stalled', step: 2 },
     { kind: 'attempted', attempts: 1 },
     { kind: 'callback', callbackAt: '2026-09-26T15:00:00.000Z' },
   ])('is open to anyone ($kind)', (tag) => {

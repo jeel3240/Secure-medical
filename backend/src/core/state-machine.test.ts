@@ -446,3 +446,47 @@ describe('purity', () => {
     expect(before).toEqual(snapshot);
   });
 });
+
+describe('whether a person must read the reply', () => {
+  // Only a reply the questions cannot handle needs a person - that is what
+  // Inbound reply means in the queue. Flagging every reply made every
+  // responder, even one simply answering "1", read as an inbound reply.
+  it('does not for a valid answer mid-flow', () => {
+    expect(step(fresh({ step: 1 }), answer('3'), RULES).needsPerson).toBe(false);
+  });
+
+  it('does not for the answer that completes the conversation', () => {
+    const before = fresh({ step: 3, q1: '3', q2: '1', score: 55, tier: 'WARM' });
+    const result = step(before, answer('1'), RULES);
+    expect(result.conversation.status).toBe('completed');
+    expect(result.needsPerson).toBe(false);
+  });
+
+  it('does not for an unclear reply that earns a clarification', () => {
+    expect(step(fresh({ step: 1 }), answer('who is this?'), RULES).needsPerson).toBe(false);
+  });
+
+  it('does not when a second unclear reply moves the lead to review', () => {
+    // Needs review is how that lead reaches a person; Inbound reply would
+    // outrank it and hide why.
+    const result = step(fresh({ step: 1, invalidCount: 1 }), answer('???'), RULES);
+    expect(result.conversation.status).toBe('review');
+    expect(result.needsPerson).toBe(false);
+  });
+
+  it('does not for an opt-out', () => {
+    expect(step(fresh({ step: 2 }), { text: 'STOP', optOut: true }, RULES).needsPerson).toBe(false);
+  });
+
+  it.each(['completed', 'expired', 'review', 'suppressed'] as const)(
+    'does for a message after the conversation ended (%s)',
+    (status) => {
+      expect(step(fresh({ status }), answer('can someone call me?'), RULES).needsPerson).toBe(true);
+    }
+  );
+
+  it('does for a reply to an agent who took the conversation over', () => {
+    const before = fresh({ step: 2, q1: '3', score: 25, agentTookOverAt: new Date('2026-09-28T10:00:00Z') });
+    expect(step(before, answer('1'), RULES).needsPerson).toBe(true);
+  });
+});

@@ -136,6 +136,19 @@ question carry the same value. A single unique column across both directions
 would reject the second reply. `in_reply_to_ezt_id` is deliberately not unique.
 EZTEXTING-API.md has the evidence.
 
+**`leads.has_unread_inbound` means a person has to read a reply** - since
+2026-09-28. The webhook sets it only when the questions cannot handle a message:
+after the conversation ended, or to an agent who took it over
+(`STATE-MACHINE.md`, "Which replies need a person"). Picking the lead clears it.
+It decides who is in the queue, as *Inbound reply*.
+
+It used to be set on every inbound message, answers included. Migration 004
+cleared the flags that rule left behind, by one test: a lead's message waits for
+a person only if nothing was sent to them after it. Answered "1" and got
+question 2 - cleared. Finished, then texted again - kept. An answer whose next
+question failed to send is kept on purpose: the flow never answered it. Checked
+on seeded old-style flags before it shipped.
+
 **Leads are claimed and released explicitly.** An agent claims a lead, which
 sets `assigned_to` and `assigned_at`. Everyone else sees it as in progress. The
 agent releases it by clearing both, and it returns to the queue. A superadmin

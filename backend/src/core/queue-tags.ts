@@ -15,7 +15,6 @@ export type QueueTagKind =
   | 'callback'
   | 'inbound_reply'
   | 'needs_review'
-  | 'stalled'
   | 'attempted'
   | 'new';
 
@@ -27,15 +26,10 @@ export interface QueueTag {
   callbackAt?: string;
   /** `attempted`: how many calls have been made. */
   attempts?: number;
-  /** `stalled`: how many questions they answered before going quiet, so 1 or 2
-   *  - the screen writes it as "Stalled at Q1" / "Stalled at Q2". */
-  step?: number;
 }
 
 export interface QueueFacts {
   conversationStatus: 'open' | 'completed' | 'review' | 'expired';
-  /** The lead's answers so far; null where unanswered. */
-  answers: [string | null, string | null, string | null];
   assignedAgentName: string | null;
   hasUnreadInbound: boolean;
   callCount: number;
@@ -51,9 +45,12 @@ export interface QueueFacts {
  * 2. a callback is booked - that commitment outranks anything else;
  * 3. the lead has texted and nobody has read it;
  * 4. their replies could not be understood, so a human must read them;
- * 5. they answered some questions and went quiet;
- * 6. we have called and not reached them;
- * 7. nothing has happened yet.
+ * 5. we have called and not reached them;
+ * 6. nothing has happened yet.
+ *
+ * There is no "stalled" tag. A lead partway through the questions is no longer
+ * in the queue at all - Jeel, 2026-09-28, `db/queue.ts` - so a tag for one
+ * could never be shown.
  */
 export function queueTag(facts: QueueFacts): QueueTag {
   if (facts.assignedAgentName) {
@@ -70,14 +67,6 @@ export function queueTag(facts: QueueFacts): QueueTag {
 
   if (facts.conversationStatus === 'review') {
     return { kind: 'needs_review' };
-  }
-
-  // Partway through and still waiting on them. Only `open` counts: an expired
-  // conversation is closed and its lead has left the queue, so "stalled"
-  // applies to live conversations only - STATE-MACHINE.md, "Expiry".
-  const answered = facts.answers.filter((a) => a !== null).length;
-  if (facts.conversationStatus === 'open' && answered > 0 && answered < 3) {
-    return { kind: 'stalled', step: answered };
   }
 
   if (facts.callCount > 0) {
