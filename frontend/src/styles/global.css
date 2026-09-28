@@ -1413,26 +1413,20 @@ a {
   color: var(--color-text-subtle);
 }
 
-/* Status: a dot and the words. Only three statuses exist, and a lead with
+/* Status: an icon and the words. Only three statuses exist, and a lead with
    none shows a hyphen - QueueStatus.tsx. */
 .status {
   display: inline-flex;
   align-items: center;
   gap: var(--space-2);
+  color: var(--color-text);
 }
 
-.status__mark {
+.status__icon {
   flex: none;
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: currentColor;
 }
 
-.status--normal { color: var(--color-text); }
-.status--strong { color: var(--color-text); font-weight: var(--weight-semibold); }
-.status--alert { color: var(--color-text); }
-.status--alert .status__mark { background: var(--color-warm); }
+.status--strong { font-weight: var(--weight-semibold); }
 
 /* Tier as signal bars: three for Hot, two for Warm, one for Low. */
 .tier-signal {

@@ -100,7 +100,7 @@ Rebuilt to a mockup Jeel supplied. What changed and why:
 | Tier filter | Three pills, several at once | One segmented switcher - All, Hot, Warm, Low with counts - one at a time |
 | Tier column | Coloured badge | Signal bars and the word, `components/TierSignal.tsx` |
 | Age column | "AGE", amber and red | "WAITING", monospace, one weight and colour for every lead |
-| Status column | Coloured pills, six statuses | A dot and the words, three statuses, a hyphen otherwise - `components/QueueStatus.tsx` |
+| Status column | Coloured pills, six statuses | An icon and the words, three statuses, a hyphen otherwise - `components/QueueStatus.tsx` |
 | Button | Pick | **Pick up** - on every screen that picks, so the action has one name |
 | Someone else's lead | "Locked" | A padlock and "Locked", `components/LockIcon.tsx` |
 | Action column | Right-aligned | Centred - buttons and Locked on one axis |
@@ -110,17 +110,27 @@ Rebuilt to a mockup Jeel supplied. What changed and why:
 | Live label | Live | Live · updated just now |
 
 **Only three statuses, and most rows have none - Jeel, 2026-09-28.**
-Working – name (was In progress – name), Inbound reply and Needs review, each a dot and the words; any
+Working – name (was In progress – name), Inbound reply and Needs review, each an icon and the words; any
 other row shows a hyphen, like any other empty cell. New, Attempted 2x and
 Callback 3:00 PM are gone: that history belongs to the agent working the lead
 (My Callbacks, the timeline), and on the home page it gave every row something
 to say. Which status wins, and why New went too, is in `QUEUE.md`, "The tag".
-Two raise their voice: Inbound reply in bold, Needs review with a warm dot - the
-two a person must get to first. `QueueStatus.test.tsx` pins each one.
+**Each status has its own icon - Jeel's mockup, 2026-09-28:**
 
-*(Earlier the same day the mark's shape carried meaning - a ring for waiting, a
-square for a past attempt. With only three statuses, all of them live, the
-shapes had nothing left to tell apart.)*
+| Status | Icon | Why |
+|---|---|---|
+| Working – name | Half-filled circle | Started, not finished |
+| Inbound reply | Message box with an arrow pointing in | A text has come to us. The words are bold too: nobody has read it |
+| Needs review | Warning triangle | A person has to look at the replies |
+
+The icons are inline SVG outlines on a 24-unit grid, drawn in the text colour
+like the padlock, so a locked row greys its icon with its words.
+`QueueStatus.test.tsx` checks that each status has its own icon and that no dot
+is drawn.
+
+*(Earlier the same day each status had a dot - first a filled dot, a ring or a
+square, then a plain dot, with Needs review's in a warm colour. Jeel: a dot
+said only "something"; an icon says which.)*
 
 **Every waiting time looks the same - Jeel, 2026-09-28.** The column first kept
 the brief's thresholds as weight - bold past 15 minutes for HOT - but that left
