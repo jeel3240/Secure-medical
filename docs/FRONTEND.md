@@ -438,12 +438,22 @@ page forgot them.
 
 ## Tests
 
-`npm test` in `frontend/`. Vitest with jsdom, 69 tests.
+`npm test` in `frontend/`. Vitest with jsdom, 113 tests (2026-09-28).
 
-Logic only, by agreement: the polling hook's race guard, the formatting and age
-thresholds, the lock rule, the timeline's wording, and the timeline page's
-summary derivation. Not every button - a screen is easy to judge by eye, and a
-dropped response or an off-by-one age threshold is not.
+Logic first, by agreement - a screen is easy to judge by eye, and a dropped
+response or an off-by-one age threshold is not:
+
+| File | Covers |
+|---|---|
+| `api/usePolling.test.ts` | The polling hook's guarantees, the race guard included |
+| `lib/format.test.ts`, `lib/lock.test.ts` | Formatting, and which row action and lock a lead gets |
+| `components/Timeline.test.tsx`, `pages/LeadTimelinePage.test.ts` | The timeline's wording, and the summary sidebar |
+| `pages/workspace/Conversation.test.ts` | Labelling a reply with the answer it was recorded as |
+| `pages/workspace/Conversation.render.test.tsx` | The sent ticks and the red "!" on a refused message |
+| `components/QueueStatus.test.tsx` | The queue's three statuses, their icons, and the tier bars |
+| `components/SyncStatus.test.tsx` | The EZ Texting sync line, quiet and amber |
+| `components/Segmented.test.tsx` | The sliding switcher |
+| `styles/type-system.test.ts` | The type scale, duplicate selectors, undefined tokens - "Type system" above |
 
 ```bash
 cd frontend

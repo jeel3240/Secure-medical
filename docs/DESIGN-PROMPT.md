@@ -224,7 +224,7 @@ Left sub-navigation within the page: **Overview** · **Leads** · **Scoring** ·
 
 *(2026-09-23, Jeel: read-only - no manual add. A number is blocked by an agent's DNC disposition, an SMS STOP or an EZ Texting opt-out. The list must show rows released by START as released, not hide them.)*
 - Table: Phone, Reason (SMS STOP / Agent DNC / Imported), Added by, Date.
-- Search by phone. Add manually. Export CSV.
+- Search by phone. Add manually. Export CSV. *(2026-09-28: the page is built in the other admin pages' card style, with the navy All / Blocked / Released switcher - `ADMIN.md`, "DNC list".)*
 - No delete in v1 (compliance) – show a note explaining this.
 
 **6f. Settings**

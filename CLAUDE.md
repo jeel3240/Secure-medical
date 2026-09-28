@@ -192,6 +192,8 @@ you change something the docs describe, update the doc in the same commit.
     src/worker/expiry.ts    marks stale open conversations expired
     src/db/leads.ts         Admin > Leads SQL
     src/db/lead-state.ts    closed and worked, shared by the queue and Admin > Leads
+    src/db/holder.ts        who holds a lead - checked before every write on it
+    src/db/failed-sends.ts  keeps a message EZ Texting refused, marked failed
     scripts/admin-leads-live-check.ts  proves the Admin > Leads statuses
     src/cli/                create-superadmin
     src/integrations/       EZ Texting client
@@ -201,15 +203,21 @@ you change something the docs describe, update the doc in the same commit.
     src/api/usePolling.ts   the one place every live screen fetches from
     src/api/workspace.ts    lead card, timeline, notes, callbacks, dispositions, SMS
     src/api/admin.ts        config, overview, DNC, health
-    src/lib/format.ts       phone, age, tier tone, answer labels
+    src/lib/format.ts       phone, dates, age, answer labels
     src/lib/lock.ts         which queue rows an agent may open
     src/components/Timeline.tsx      shared by the workspace and the timeline page
-    src/components/QueueStatus.tsx   the STATUS column's tag, in words
+    src/components/QueueStatus.tsx   the queue's STATUS column: icon and words
+    src/components/LeadStatus.tsx    an Admin > Leads status: icon and words
+    src/components/StatusIcon.tsx    every status icon, one set for all screens
     src/components/TierSignal.tsx    the TIER column's bars
-    src/components/Segmented.tsx     the sliding segmented control
+    src/components/Segmented.tsx     the sliding navy switcher
+    src/components/LiveStatus.tsx    "Live · updated just now"
+    src/components/SyncStatus.tsx    "Synced with EZ Texting 1m ago"
+    src/components/RowMenu.tsx       a row's "⋯" actions menu
+    src/components/LockIcon.tsx      the padlock on a locked queue row
     src/pages/QueuePage.tsx          the priority queue
     src/pages/WorkspacePage.tsx      the agent workspace shell
-    src/pages/workspace/             actions panel, SMS compose
+    src/pages/workspace/             Wrap up, SMS compose, the conversation
     src/pages/LeadTimelinePage.tsx   read-only history with a summary sidebar
     src/pages/CallbacksPage.tsx      My Callbacks
     src/pages/admin/                 overview, leads, agents, config, dnc

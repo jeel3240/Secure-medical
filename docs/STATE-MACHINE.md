@@ -23,8 +23,8 @@ expiry). Related: WEBHOOKS.md, POLLER.md, SCHEMA.md, the plan's §6.
 | `core/state-machine.ts` | `step()` and `tierFor()` - every branch below, and scoring |
 | `core/answers.ts` | `matchAnswer()` - the numbers and the word lists |
 | `api/reply-flow.ts` | Loads the conversation and rules, runs `step`, saves, sends |
-| `core/state-machine.test.ts` | 34 tests, one per case in "Tests the state machine needs" |
-| `api/__tests__/webhooks.test.ts` | 36, including the flow advancing through the webhook |
+| `core/state-machine.test.ts` | 54 tests, one per case in "Tests the state machine needs", plus which replies need a person |
+| `api/__tests__/webhooks.test.ts` | 41, including the flow advancing through the webhook and flagging a reply for a person |
 
 A reply now advances the conversation. Verified against the live account on
 2026-09-21: replies of 3, 1, 1 walked a lead from step 1 to `completed`, score

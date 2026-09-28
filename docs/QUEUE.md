@@ -144,7 +144,7 @@ reaches `LIKE`: a `%` in the search box is the character, not a wildcard.
 }
 ```
 
-`counts` feeds the header pills, which are also the tier filter, so it is
+`counts` feeds the tier switcher (All, Hot, Warm, Low with their counts), which is also the tier filter, so it is
 counted **without** the tier filter - otherwise picking HOT would zero the other
 two and the agent would lose sight of what is waiting. `sources` is the dropdown
 and is counted without the source filter, for the same reason: picking one
