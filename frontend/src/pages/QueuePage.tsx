@@ -257,7 +257,7 @@ export function QueuePage() {
                       // not clickable at all - the lock has to be felt, not just
                       // seen.
                       onClick={locked ? undefined : () => view(lead)}
-                      title={locked ? `${lead.tag.agentName} is working this lead` : undefined}
+                      title={locked ? `${lead.tag?.agentName} is working this lead` : undefined}
                       aria-disabled={locked ? true : undefined}
                     >
                       <td>
@@ -278,9 +278,7 @@ export function QueuePage() {
                         {formatAge(lead.receivedAt, now)}
                       </td>
                       <td className="mono queue__source">{lead.source ?? EMPTY}</td>
-                      <td>
-                        <QueueStatus tag={lead.tag} />
-                      </td>
+                      <td>{lead.tag ? <QueueStatus tag={lead.tag} /> : EMPTY}</td>
                       <td className="queue__action">
                         {locked ? (
                           <span className="queue__locked">

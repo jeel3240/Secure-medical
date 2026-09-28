@@ -14,7 +14,7 @@
  *     EZT_USERNAME=x EZT_PASSWORD=x EZT_GROUP=x npx ts-node --transpile-only scripts/queue-live-check.ts
  *
  * Re-running needs a fresh database: DROP and re-migrate. Last run 2026-09-28,
- * 40 checks, all passing.
+ * 39 checks, all passing.
  */
 import { pool } from '../src/db/pool';
 import { listQueue } from '../src/db/queue';
@@ -124,20 +124,19 @@ async function main() {
   check('one row per lead despite two conversations', all.leads.filter((l) => l.id === hot).length, 1);
   check('newest conversation wins', all.leads.find((l) => l.id === hot)?.conversationStatus, 'completed');
 
+  // Jeel, 2026-09-28: only In progress, Inbound reply and Needs review. A
+  // callback or past calls keep a lead in the queue but show no status.
   const tags: Record<string, any> = Object.fromEntries(all.leads.map((l) => [l.firstName, l.tag]));
-  check('tag: nothing yet', tags.Hot, { kind: 'new' });
+  check('tag: nothing to say', tags.Hot, null);
   check('tag: held by an agent', tags.Held, { kind: 'in_progress', agentName: 'Michael' });
-  check('tag: stale claim by a deactivated agent is ignored', tags.Stale, { kind: 'new' });
-  check('tag: soonest undone callback', tags.Released?.kind, 'callback');
+  check('tag: stale claim by a deactivated agent is ignored', tags.Stale, null);
+  check('tag: a booked callback shows no status', tags.Released, null);
   check('tag: unread reply', tags.Back, { kind: 'inbound_reply' });
   check('tag: unreadable replies need a human', tags.Low, { kind: 'needs_review' });
-  check('tag: two call attempts', tags.Called, { kind: 'attempted', attempts: 2 });
+  check('tag: call attempts show no status', tags.Called, null);
   check('partway, but an agent holds it: stays, In progress', tags.Busy, { kind: 'in_progress', agentName: 'Michael' });
-  check('partway, but a callback is booked: stays, Callback', tags.Booked?.kind, 'callback');
+  check('partway, but a callback is booked: stays, no status', tags.Booked, null);
   check('partway, taken over, lead replied: stays, Inbound reply', tags.Handover, { kind: 'inbound_reply' });
-
-  const soonest = new Date(tags.Released?.callbackAt ?? 0).getTime() - Date.now();
-  check('callback is the soonest, not the first', soonest < 2 * 3600_000, true);
 
   const hotOnly = await listQueue({ tier: ['HOT'] });
   check('tier filter narrows the rows', hotOnly.leads.map((l) => l.firstName), ['Hot', 'Held']);

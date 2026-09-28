@@ -26,7 +26,8 @@ export interface QueueRow {
   q2: string | null;
   q3: string | null;
   conversationStatus: 'open' | 'completed' | 'review' | 'expired';
-  tag: QueueTag;
+  /** `null` when there is nothing to say: the lead is waiting to be picked up. */
+  tag: QueueTag | null;
 }
 
 export interface QueueQuery {
@@ -54,9 +55,8 @@ const DEFAULT_LIMIT = 100;
 const MAX_LIMIT = 500;
 
 /**
- * One row per lead: the newest conversation, the agent holding it, how many
- * calls have been made, and the soonest callback still to be done. Lateral
- * joins rather than group-bys, so history cannot multiply rows.
+ * One row per lead: the newest conversation and the agent holding it. A
+ * lateral join rather than a group-by, so history cannot multiply rows.
  */
 const BASE = `
   FROM leads l
@@ -68,16 +68,6 @@ const BASE = `
     LIMIT 1
   ) c ON true
   LEFT JOIN users u ON u.id = l.assigned_to AND u.is_active
-  LEFT JOIN LATERAL (
-    SELECT count(*)::int AS calls FROM calls ca WHERE ca.lead_id = l.id
-  ) ca ON true
-  LEFT JOIN LATERAL (
-    SELECT cb.scheduled_at
-    FROM callbacks cb
-    WHERE cb.lead_id = l.id AND cb.done_at IS NULL
-    ORDER BY cb.scheduled_at
-    LIMIT 1
-  ) cb ON true
 `;
 
 /**
@@ -111,7 +101,9 @@ const INCLUDED = `
     c.status IN ('completed', 'review')
     OR l.has_unread_inbound
     OR u.id IS NOT NULL
-    OR cb.scheduled_at IS NOT NULL
+    OR EXISTS (
+      SELECT 1 FROM callbacks cb WHERE cb.lead_id = l.id AND cb.done_at IS NULL
+    )
   )
 `;
 
@@ -174,8 +166,6 @@ interface QueueDbRow {
   q3: string | null;
   agent_name: string | null;
   has_unread_inbound: boolean;
-  calls: number | null;
-  next_callback_at: Date | null;
 }
 
 /**
@@ -196,8 +186,7 @@ export async function listQueue(query: QueueQuery = {}): Promise<QueuePage> {
     `SELECT l.id, l.phone, l.first_name, l.last_name, l.source,
             ${RECEIVED} AS received_at,
             c.score, c.tier, c.status, c.q1, c.q2, c.q3,
-            u.name AS agent_name, l.has_unread_inbound,
-            ca.calls, cb.scheduled_at AS next_callback_at
+            u.name AS agent_name, l.has_unread_inbound
      ${BASE}
      ${where}
      ORDER BY c.score DESC, ${RECEIVED} DESC, l.id DESC
@@ -253,8 +242,6 @@ export async function listQueue(query: QueueQuery = {}): Promise<QueuePage> {
         conversationStatus: r.status,
         assignedAgentName: r.agent_name,
         hasUnreadInbound: r.has_unread_inbound,
-        callCount: r.calls ?? 0,
-        nextCallbackAt: r.next_callback_at?.toISOString() ?? null,
       }),
     })),
     counts: byTier,

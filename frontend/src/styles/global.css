@@ -1411,8 +1411,8 @@ a {
   color: var(--color-text-subtle);
 }
 
-/* Status: the mark's shape carries the meaning - filled for something
-   happening, a ring for something waiting, a square for a past attempt. */
+/* Status: a dot and the words. Only three statuses exist, and a lead with
+   none shows a hyphen - QueueStatus.tsx. */
 .status {
   display: inline-flex;
   align-items: center;
@@ -1427,18 +1427,8 @@ a {
   background: currentColor;
 }
 
-.status__mark--ring {
-  background: transparent;
-  border: 1.5px solid currentColor;
-}
-
-.status__mark--square {
-  border-radius: 2px;
-}
-
 .status--normal { color: var(--color-text); }
 .status--strong { color: var(--color-text); font-weight: var(--weight-semibold); }
-.status--muted { color: var(--color-text-muted); }
 .status--alert { color: var(--color-text); }
 .status--alert .status__mark { background: var(--color-warm); }
 

@@ -28,7 +28,7 @@ import type { PublicUser } from '../api/types';
  * duplicate names ever happen; not worth a schema change before they do.
  */
 export function lockHolder(lead: QueueLead, me: PublicUser | null): string | null {
-  return rowAction(lead, me) === 'locked' ? lead.tag.agentName ?? null : null;
+  return rowAction(lead, me) === 'locked' ? lead.tag?.agentName ?? null : null;
 }
 
 /**
@@ -54,7 +54,7 @@ export function lockHolder(lead: QueueLead, me: PublicUser | null): string | nul
 export type RowAction = 'pick' | 'resume' | 'view' | 'locked';
 
 export function rowAction(lead: QueueLead, me: PublicUser | null): RowAction {
-  if (lead.tag.kind !== 'in_progress') return 'pick';
+  if (lead.tag?.kind !== 'in_progress') return 'pick';
 
   const holder = lead.tag.agentName ?? null;
   if (!holder) return 'pick';

@@ -10,7 +10,7 @@ import type { QueueLead, QueueTag } from '../api/leads';
 import type { PublicUser } from '../api/types';
 import { lockHolder, rowAction } from './lock';
 
-const lead = (tag: QueueTag): QueueLead => ({
+const lead = (tag: QueueTag | null): QueueLead => ({
   id: 1,
   phone: '+15551000001',
   firstName: 'Jordan',
@@ -42,13 +42,11 @@ const RAE = user('Rae Whitfield');
 const BOSS = user('Boss Admin', 'superadmin');
 
 describe('a lead nobody holds', () => {
-  it.each<QueueTag>([
-    { kind: 'new' },
-    { kind: 'inbound_reply' },
-    { kind: 'needs_review' },
-    { kind: 'attempted', attempts: 1 },
-    { kind: 'callback', callbackAt: '2026-09-26T15:00:00.000Z' },
-  ])('is open to anyone ($kind)', (tag) => {
+  it.each<[string, QueueTag | null]>([
+    ['no status', null],
+    ['inbound_reply', { kind: 'inbound_reply' }],
+    ['needs_review', { kind: 'needs_review' }],
+  ])('is open to anyone (%s)', (_, tag) => {
     expect(lockHolder(lead(tag), MAYA)).toBeNull();
   });
 });
@@ -90,7 +88,7 @@ describe('what the row action offers', () => {
   const boss = { id: 1, name: 'Jeel Kakadiya', role: 'superadmin' } as PublicUser;
 
   it('offers Pick on a lead nobody holds', () => {
-    expect(rowAction(lead({ kind: 'new' }), agent)).toBe('pick');
+    expect(rowAction(lead(null), agent)).toBe('pick');
   });
 
   it('offers Resume on your own lead, not Pick', () => {

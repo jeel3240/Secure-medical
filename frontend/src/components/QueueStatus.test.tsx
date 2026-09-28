@@ -1,8 +1,7 @@
 /**
- * The queue's status marks. Shape carries the meaning - filled for something
- * happening, a ring for something waiting, a square for a past attempt - and
- * only two statuses raise their voice: Inbound reply in bold, Needs review in
- * colour. Those are the ones a person must get to first.
+ * The queue's statuses: only three, each a dot and the words - Jeel,
+ * 2026-09-28. Two raise their voice: Inbound reply in bold, Needs review with a
+ * warm dot. Those are the ones a person must get to first.
  */
 import { render } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
@@ -13,30 +12,19 @@ import { TierSignal } from './TierSignal';
 const renderTag = (tag: QueueTag) => {
   const { container } = render(<QueueStatus tag={tag} />);
   const status = container.querySelector('.status')!;
-  const mark = container.querySelector('.status__mark')!;
   return {
     text: status.textContent,
     tone: [...status.classList].find((c) => c.startsWith('status--'))?.replace('status--', ''),
-    mark: [...mark.classList].find((c) => c.startsWith('status__mark--'))?.replace('status__mark--', ''),
   };
 };
 
-describe('status marks', () => {
-  it.each<[string, QueueTag, string, string, string]>([
-    ['someone working it', { kind: 'in_progress', agentName: 'karm' }, 'In progress – karm', 'dot', 'normal'],
-    ['a callback booked', { kind: 'callback' }, 'Callback', 'ring', 'normal'],
-    ['an unread reply', { kind: 'inbound_reply' }, 'Inbound reply', 'dot', 'strong'],
-    ['replies nobody understood', { kind: 'needs_review' }, 'Needs review', 'dot', 'alert'],
-    ['called and not reached', { kind: 'attempted', attempts: 2 }, 'Attempted 2x', 'square', 'muted'],
-    ['nothing yet', { kind: 'new' }, 'New', 'ring', 'muted'],
-  ])('%s', (_, tag, text, mark, tone) => {
-    expect(renderTag(tag)).toEqual({ text, mark, tone });
-  });
-
-  it('only the two statuses that need a person first stand out', () => {
-    const loud = (['in_progress', 'callback', 'inbound_reply', 'needs_review', 'attempted', 'new'] as const)
-      .filter((kind) => ['strong', 'alert'].includes(renderTag({ kind } as QueueTag).tone!));
-    expect(loud).toEqual(['inbound_reply', 'needs_review']);
+describe('statuses', () => {
+  it.each<[string, QueueTag, string, string]>([
+    ['someone working it', { kind: 'in_progress', agentName: 'karm' }, 'In progress – karm', 'normal'],
+    ['an unread reply', { kind: 'inbound_reply' }, 'Inbound reply', 'strong'],
+    ['replies nobody understood', { kind: 'needs_review' }, 'Needs review', 'alert'],
+  ])('%s', (_, tag, text, tone) => {
+    expect(renderTag(tag)).toEqual({ text, tone });
   });
 
   it('names the holder with an en dash, as drawn', () => {
