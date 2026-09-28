@@ -100,6 +100,7 @@ Rebuilt to a mockup Jeel supplied. What changed and why:
 | Button | Pick | **Pick up** - on every screen that picks, so the action has one name |
 | Someone else's lead | "Locked" | A padlock and "Locked", `components/LockIcon.tsx` |
 | Action column | Right-aligned | Centred - buttons and Locked on one axis |
+| Button hover | Light grey | Fills with the accent blue, white text - Pick up, Resume and View alike |
 | Empty cells | `-` | `—` |
 | Live label | Live | Live · updated just now |
 

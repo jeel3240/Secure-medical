@@ -1344,6 +1344,14 @@ a {
   text-align: center;
 }
 
+/* Hovering an action fills it with the accent blue - the Send button's blue,
+   the colour that means "you can do this" - and white text on top. */
+.queue__action .btn--secondary:hover:not(:disabled) {
+  background: var(--color-accent);
+  border-color: var(--color-accent);
+  color: var(--color-on-primary);
+}
+
 .queue__locked {
   display: inline-flex;
   align-items: center;
