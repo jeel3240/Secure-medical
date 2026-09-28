@@ -104,21 +104,17 @@ export async function addNote(id: number, body: string): Promise<Note> {
   return data.note;
 }
 
-/** Mirrors core/dispositions.ts, in the order the control shows them. */
-export const DISPOSITIONS = [
-  'sold',
-  'interested',
-  'callback_set',
-  'no_answer',
-  'voicemail',
-  'not_interested',
-  'wrong_number',
-  'dnc',
-] as const;
+/** Mirrors core/dispositions.ts: the two an agent can record. */
+export const DISPOSITIONS = ['closed', 'dnc'] as const;
 
 export type Disposition = (typeof DISPOSITIONS)[number];
 
-export const DISPOSITION_LABEL: Record<Disposition, string> = {
+/**
+ * Words for every value a timeline may hold - the two recorded now, and the
+ * ones retired on 2026-09-28, which stay in old rows.
+ */
+export const DISPOSITION_LABEL: Record<string, string> = {
+  closed: 'Closed',
   sold: 'Sold',
   interested: 'Interested',
   callback_set: 'Callback set',

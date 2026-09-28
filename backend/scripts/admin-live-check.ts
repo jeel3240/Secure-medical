@@ -160,7 +160,7 @@ async function main(): Promise<void> {
 
     console.log('\nthe funnel and the per-agent table');
     const lead = await makeLead({ phone: '+15550000706', status: 'completed', score: 80, tier: 'HOT' });
-    await pool.query(`INSERT INTO dispositions (lead_id, agent_id, value) VALUES ($1, $2, 'interested')`, [lead, maya]);
+    await pool.query(`INSERT INTO dispositions (lead_id, agent_id, value) VALUES ($1, $2, 'closed')`, [lead, maya]);
     await pool.query(`INSERT INTO dispositions (lead_id, agent_id, value) VALUES ($1, $2, 'no_answer')`, [lead, maya]);
     await pool.query(`INSERT INTO notes (lead_id, agent_id, body) VALUES ($1, $2, 'spoke briefly')`, [lead, sam]);
     await pool.query(
@@ -177,7 +177,7 @@ async function main(): Promise<void> {
     const sortedEntries = (o: Record<string, number> | undefined) =>
       Object.entries(o ?? {}).sort(([a], [b]) => a.localeCompare(b));
     check("Maya's dispositions are counted by value", sortedEntries(mayaRow?.dispositions), [
-      ['interested', 1],
+      ['closed', 1],
       ['no_answer', 1],
     ]);
     check('Sam has none', sortedEntries(samRow?.dispositions), []);

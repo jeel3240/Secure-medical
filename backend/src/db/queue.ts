@@ -91,11 +91,12 @@ const BASE = `
  *   lead must never vanish from under the agent working it, whatever its
  *   conversation says.
  *
- * **A closed lead leaves** - Jeel, 2026-09-28. Once its newest outcome is Sold,
- * Not interested or Wrong number (`db/lead-state.ts`), completing the
- * questions, needing review or having a callback no longer keeps it here. Two
- * things still do: an agent holding it, so it does not vanish while they save
- * and move on; and a new message from the lead, which a person must read.
+ * **A closed lead leaves** - Jeel, 2026-09-28. Once an agent has pressed
+ * Closed (`db/lead-state.ts`), completing the questions, needing review or an
+ * older callback no longer keeps it here. Two things still do: an agent
+ * holding it, so it does not vanish while they save and move on; and a new
+ * message from the lead, which a person must read. A callback booked after
+ * closing reopens the lead altogether.
  *
  * A lead partway through the questions is on Admin > Leads only.
  */

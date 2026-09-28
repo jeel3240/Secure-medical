@@ -30,8 +30,8 @@ export type SetDispositionResult =
  * **Append-only, like notes.** Nothing updates or deletes a disposition; an
  * agent who changes their mind adds another and the newest wins wherever one
  * value is needed. The timeline shows the sequence, which is the point: a lead
- * dispositioned "no answer" three times and then "interested" is a different
- * story from one dispositioned "interested" once.
+ * closed, reopened by a callback and closed again is a different story from
+ * one closed once.
  *
  * **The DNC path is one transaction.** The row and the block commit together,
  * or neither does. Writing the disposition first and blocking after would leave

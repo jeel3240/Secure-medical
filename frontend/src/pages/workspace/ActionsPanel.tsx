@@ -4,7 +4,6 @@ import {
   addNote,
   createCallback,
   setDisposition,
-  DISPOSITION_LABEL,
   type Disposition,
   type LeadDetail,
 } from '../../api/workspace';
@@ -13,7 +12,7 @@ import { Button } from '../../components/Button';
 import { Modal } from '../../components/Modal';
 
 /**
- * The workspace's right column: note, callback, disposition, Save.
+ * The workspace's right column: outcome, callback, note, Save.
  *
  * DESIGN-PROMPT.md 3, "Right column". Phase 3 task 19.
  *
@@ -61,20 +60,15 @@ const QUICK: { label: string; at: () => Date }[] = [
 ];
 
 /**
- * The mockup groups the ordinary dispositions by what they mean for the lead,
- * so an agent reaching for "no answer" is not reading past "interested". The
- * list itself still lives in `core/dispositions.ts`; this only arranges it.
- *
- * Sold, Not interested and Wrong number close the lead: it leaves the queue
- * once the agent moves on - Jeel, 2026-09-28, `QUEUE.md`.
- *
- * `dnc` is deliberately outside the groups: it blocks the number for good and
- * belongs nowhere near a row of one-click buttons.
+ * The two outcomes - Jeel, 2026-09-28. **Closed** finishes the lead: it leaves
+ * the queue once the agent goes back. **DNC** blocks the number for good, so it
+ * asks first. There were eight, grouped Positive / No contact / Negative; the
+ * requirement asks for none of them, and "no answer" or "call back Friday" is
+ * what the callback and the note are for. `AGENT-WORKSPACE.md`, "Dispositions".
  */
-const GROUPS: { title: string; tone: string; values: Disposition[] }[] = [
-  { title: 'Positive', tone: 'good', values: ['sold', 'interested', 'callback_set'] },
-  { title: 'No contact', tone: 'warn', values: ['no_answer', 'voicemail'] },
-  { title: 'Negative', tone: 'bad', values: ['not_interested', 'wrong_number'] },
+const OUTCOMES: { value: Disposition; tone: 'good' | 'danger'; label: string }[] = [
+  { value: 'closed', tone: 'good', label: 'Closed' },
+  { value: 'dnc', tone: 'danger', label: 'DNC' },
 ];
 
 /** `<input type="datetime-local">` wants local time with no zone, not an ISO string. */
@@ -151,10 +145,10 @@ export function ActionsPanel({
     if (disposition) {
       try {
         await setDisposition(lead.id, disposition, disposition === 'dnc');
-        done.push('disposition');
+        done.push('outcome');
         setDispositionValue(null);
       } catch (err) {
-        failures.push(`Disposition: ${toApiError(err).message}`);
+        failures.push(`Outcome: ${toApiError(err).message}`);
       }
     }
 
@@ -182,19 +176,14 @@ export function ActionsPanel({
     setDispositionValue((current) => (current === value ? null : value));
   };
 
-  // Which of the three numbered sections still wants something. The callback is
-  // optional, so it does not hold the step back on its own.
-  const step = !disposition ? 1 : note.trim() === '' && callbackAt === '' ? 2 : 3;
-
   return (
     <div className="card wrapup">
       <header className="wrapup__head">
         <h2 className="wrapup__title">Wrap up</h2>
-        <span className="wrapup__step">Step {step} of 3</span>
       </header>
 
       {/* A disabled fieldset switches off every control inside it at once -
-          outcome, callback, note, both Save buttons - so nothing can be missed.
+          outcome, callback, note, Save - so nothing can be missed.
           The server refuses the write anyway; this saves the agent the round
           trip. */}
       <fieldset className="wrapup__fieldset" disabled={!canAct}>
@@ -214,40 +203,21 @@ export function ActionsPanel({
             <span className="wrapup__num">1</span> Outcome
           </h3>
 
-          <div role="radiogroup" aria-label="Disposition">
-            {GROUPS.map((group) => (
-              <div className="wrapup__group" key={group.title}>
-                <span className="wrapup__group-title">{group.title}</span>
-                <div className="wrapup__choices">
-                  {group.values.map((value) => (
-                    <button
-                      key={value}
-                      type="button"
-                      role="radio"
-                      aria-checked={disposition === value}
-                      className={`outcome outcome--${group.tone}${
-                        disposition === value ? ' outcome--on' : ''
-                      }`}
-                      onClick={() => choose(value)}
-                    >
-                      <span className="outcome__dot" aria-hidden="true" />
-                      {DISPOSITION_LABEL[value]}
-                    </button>
-                  ))}
-                </div>
-              </div>
+          <div className="wrapup__choices" role="radiogroup" aria-label="Outcome">
+            {OUTCOMES.map((outcome) => (
+              <button
+                key={outcome.value}
+                type="button"
+                role="radio"
+                aria-checked={disposition === outcome.value}
+                className={`outcome outcome--${outcome.tone}${disposition === outcome.value ? ' outcome--on' : ''}`}
+                onClick={() => choose(outcome.value)}
+              >
+                <span className="outcome__dot" aria-hidden="true" />
+                {outcome.label}
+              </button>
             ))}
           </div>
-
-          <button
-            type="button"
-            className={`wrapup__dnc${disposition === 'dnc' ? ' wrapup__dnc--on' : ''}`}
-            aria-checked={disposition === 'dnc'}
-            role="radio"
-            onClick={() => choose('dnc')}
-          >
-            {disposition === 'dnc' ? 'Will mark as Do Not Contact' : 'Mark as Do Not Contact...'}
-          </button>
         </section>
 
         <section className="wrapup__section">

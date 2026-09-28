@@ -39,7 +39,7 @@ const STAGE_LABEL: Record<string, string> = {
   responded: 'Responded',
   completed: 'Completed',
   called: 'Called',
-  interested: 'Interested',
+  closed: 'Closed',
 };
 
 function activityText(entry: Overview['activity'][number]): string {

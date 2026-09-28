@@ -30,20 +30,20 @@ of the four reasons below holds:
 | `has_unread_inbound` | Texted something the questions cannot handle - after the conversation ended, or to an agent who took it over. `STATE-MACHINE.md`, "Which replies need a person" |
 | An active agent holds it, or a callback is booked | Being worked. A lead must never vanish from under the agent working it, whatever its conversation says - this is also what keeps an expired lead with a callback, as the 2026-09-19 rule intended |
 
-**A closed lead leaves - Jeel, 2026-09-28.** When the newest outcome is Sold,
-Not interested or Wrong number, the lead is Closed and none of the four reasons
-above keeps it - not completing, not needing review, not a booked callback. Two
-things still do:
+**A closed lead leaves - Jeel, 2026-09-28.** Once an agent presses Closed,
+none of the four reasons above keeps the lead - not completing, not needing
+review, not a callback booked before it was closed. Three things still do:
 
 | Keeps a closed lead in | Why |
 |---|---|
 | An active agent holds it | So it does not vanish between Save and Back to queue |
 | `has_unread_inbound` | The lead texted after closing, and a person has to read it. It shows as Inbound reply |
+| A callback booked after closing, not yet done | It is not finished after all - "call me Friday". That reopens the lead altogether |
 
 "Closed" is defined once, in `backend/src/db/lead-state.ts`, and Admin > Leads
 uses the same definition (`ADMIN-LEADS.md`, "Closed"). Before this, the queue
-did not read `dispositions` at all, so a sold or not-interested lead stayed at
-the top for the next agent to call again.
+did not read `dispositions` at all, so a finished lead stayed at the top for
+the next agent to call again.
 
 A lead partway through the questions is on Admin > Leads, under *Answering*,
 and nowhere an agent works from. Someone who stops for good expires after the

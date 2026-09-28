@@ -17,6 +17,7 @@
  * recording.
  */
 
+import { CLOSING_DISPOSITIONS } from '../core/dispositions';
 import { pool } from './pool';
 
 export type OverviewPeriod = 'today' | '7d' | '30d';
@@ -183,12 +184,13 @@ export async function getOverview(period: OverviewPeriod): Promise<Overview> {
   const leads = leadRows.rows[0];
   const calls = callRows.rows[0];
 
-  // Funnel stages, each a subset of the one before. "Interested" is the
-  // disposition, which is the only signal an agent judged the lead worth it.
-  const interested = agentRows.rows.reduce(
-    (total, r) => total + Number((r.dispositions as Record<string, number>).interested ?? 0),
-    0
-  );
+  // Funnel stages, each a subset of the one before. The last is Closed - it
+  // was Interested until that disposition was retired on 2026-09-28. Retired
+  // values that also closed a lead are counted with it.
+  const closed = agentRows.rows.reduce((total, r) => {
+    const counts = r.dispositions as Record<string, number>;
+    return total + CLOSING_DISPOSITIONS.reduce((n, value) => n + Number(counts[value] ?? 0), 0);
+  }, 0);
 
   return {
     period,
@@ -211,7 +213,7 @@ export async function getOverview(period: OverviewPeriod): Promise<Overview> {
       { stage: 'responded', count: leads.responded },
       { stage: 'completed', count: leads.completed },
       { stage: 'called', count: calls.calls_made },
-      { stage: 'interested', count: interested },
+      { stage: 'closed', count: closed },
     ],
     agents: agentRows.rows.map((r) => ({
       agentId: r.agent_id,

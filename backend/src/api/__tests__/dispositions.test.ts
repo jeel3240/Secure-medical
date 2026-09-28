@@ -33,7 +33,7 @@ const A_DISPOSITION = {
   leadId: 7,
   agentId: 1,
   agentName: 'Maya',
-  value: 'interested' as const,
+  value: 'closed' as const,
   createdAt: '2026-09-26T10:00:00.000Z',
   blockedNumber: false,
 };
@@ -53,7 +53,7 @@ async function setup() {
 describe('setting a disposition', () => {
   it('turns away anyone not signed in', async () => {
     const { app } = await setup();
-    const res = await request(app).post('/api/leads/7/dispositions').send({ value: 'interested' });
+    const res = await request(app).post('/api/leads/7/dispositions').send({ value: 'closed' });
 
     expect(res.status).toBe(401);
     expect(setDisposition).not.toHaveBeenCalled();
@@ -61,40 +61,36 @@ describe('setting a disposition', () => {
 
   it('records it against the caller', async () => {
     const { agent } = await setup();
-    const res = await agent.post('/api/leads/7/dispositions').send({ value: 'interested' });
+    const res = await agent.post('/api/leads/7/dispositions').send({ value: 'closed' });
 
     expect(res.status).toBe(201);
     expect(res.body.disposition).toEqual(A_DISPOSITION);
     const [leadId, , value] = setDisposition.mock.calls[0];
     expect(leadId).toBe(7);
-    expect(value).toBe('interested');
+    expect(value).toBe('closed');
   });
 
-  it.each([
-    'sold',
-    'interested',
-    'callback_set',
-    'no_answer',
-    'voicemail',
-    'not_interested',
-    'wrong_number',
-  ])('accepts %s without a confirmation', async (value) => {
+  it('accepts closed without a confirmation', async () => {
     const { agent } = await setup();
-    expect((await agent.post('/api/leads/7/dispositions').send({ value })).status).toBe(201);
+    expect((await agent.post('/api/leads/7/dispositions').send({ value: 'closed' })).status).toBe(201);
   });
 
   it('accepts a value in any case, with padding', async () => {
     const { agent } = await setup();
-    const res = await agent.post('/api/leads/7/dispositions').send({ value: '  No_Answer ' });
+    const res = await agent.post('/api/leads/7/dispositions').send({ value: '  Closed ' });
 
     expect(res.status).toBe(201);
-    expect(setDisposition.mock.calls[0][2]).toBe('no_answer');
+    expect(setDisposition.mock.calls[0][2]).toBe('closed');
   });
 
   it.each([
     ['missing', {}],
     ['empty', { value: '' }],
     ['not in the list', { value: 'maybe_later' }],
+    // Retired 2026-09-28: old rows keep them, new writes may not.
+    ...['sold', 'interested', 'callback_set', 'no_answer', 'voicemail', 'not_interested', 'wrong_number'].map(
+      (value) => [`retired: ${value}`, { value }] as [string, object]
+    ),
     ['not a string', { value: 3 }],
   ])('rejects a value that is %s', async (_label, payload) => {
     const { agent } = await setup();
@@ -109,14 +105,14 @@ describe('setting a disposition', () => {
     const { agent } = await setup();
     setDisposition.mockResolvedValue({ ok: false, reason: 'lead_not_found' });
 
-    expect((await agent.post('/api/leads/999/dispositions').send({ value: 'voicemail' })).status).toBe(404);
+    expect((await agent.post('/api/leads/999/dispositions').send({ value: 'closed' })).status).toBe(404);
   });
 
   it('is append-only: the same value twice is two rows, not an error', async () => {
     const { agent } = await setup();
 
-    expect((await agent.post('/api/leads/7/dispositions').send({ value: 'no_answer' })).status).toBe(201);
-    expect((await agent.post('/api/leads/7/dispositions').send({ value: 'no_answer' })).status).toBe(201);
+    expect((await agent.post('/api/leads/7/dispositions').send({ value: 'closed' })).status).toBe(201);
+    expect((await agent.post('/api/leads/7/dispositions').send({ value: 'closed' })).status).toBe(201);
     expect(setDisposition).toHaveBeenCalledTimes(2);
   });
 });
@@ -158,9 +154,9 @@ describe('the DNC disposition', () => {
     expect(res.body.disposition.blockedNumber).toBe(true);
   });
 
-  it('needs no confirmation for the other six', async () => {
+  it('needs no confirmation for Closed', async () => {
     const { agent } = await setup();
-    const res = await agent.post('/api/leads/7/dispositions').send({ value: 'not_interested' });
+    const res = await agent.post('/api/leads/7/dispositions').send({ value: 'closed' });
 
     expect(res.status).toBe(201);
   });

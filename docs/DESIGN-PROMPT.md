@@ -149,7 +149,7 @@ Role is set at login. Navigation adapts to role.
 **Right column**
 - **Note** – textarea, auto-saves draft, "Add note".
 - **Callback** – date + time picker, quick chips (In 1h / Tomorrow 10am / Tomorrow 3pm), "Assign to" (defaults to me; superadmin can pick any agent).
-- **Disposition** – single-select as a segmented/radio group: `Interested` · `Callback set` · `No answer` · `Voicemail` · `Not interested` · `Wrong number` · `DNC`. DNC requires confirm dialog and shows a red warning ("Suppresses this number for SMS and calls everywhere"). *(2026-09-28, Jeel: **Sold** added, first in the Positive group. Sold, Not interested and Wrong number close the lead - it leaves the queue. `AGENT-WORKSPACE.md`, "Which outcomes close a lead".)*
+- **Disposition** – single-select as a segmented/radio group: `Interested` · `Callback set` · `No answer` · `Voicemail` · `Not interested` · `Wrong number` · `DNC`. DNC requires confirm dialog and shows a red warning ("Suppresses this number for SMS and calls everywhere"). *(2026-09-28, Jeel: two outcomes only - **Closed** and **DNC** - then the callback and the note. Closed takes the lead out of the queue; "no answer" or "call back Friday" goes in the note or a callback. `AGENT-WORKSPACE.md`, "Dispositions".)*
 - **Save** and **Save & next lead** (primary). Save & next loads the next highest lead automatically. *(2026-09-28, Jeel: Save & next is dropped - Save only, and the agent leaves with Back to queue. `FRONTEND.md`, "One button".)*
 - Unsaved-changes guard when navigating away.
 
@@ -186,7 +186,7 @@ Left sub-navigation within the page: **Overview** · **Leads** · **Scoring** ·
 
 **6a. Overview**
 - KPI cards for the selected period (Today / 7d / 30d): Leads received, Responded %, Completed %, HOT count, Calls made, Reached %, Callbacks set, DNC added.
-- Funnel bar: Received → Responded → Completed → Called → Interested.
+- Funnel bar: Received → Responded → Completed → Called → Interested. *(2026-09-28: the last step is Closed - Interested is no longer recorded.)*
 - Per-agent table: Agent, Calls, Reached, Avg call length, Dispositions breakdown (mini bar), Callbacks pending.
 - Recent activity feed (all agents): "Michael set Interested on Jordan M.", etc.
 - Live system status: last poll time, last inbound webhook, worker health.
@@ -250,7 +250,7 @@ Left sub-navigation within the page: **Overview** · **Leads** · **Scoring** ·
   - `Opted out` – replied STOP, opted out in EZ Texting, or on the DNC list
   - `Expired` – no reply within the expiry window, or replaced by a newer delivery
 
-  *(2026-09-28, Jeel: two statuses added and two renamed, so the tabs follow a lead's whole life - **Awaiting reply · Answering · Ready · Working · Closed**, then Needs review, Opted out, Expired. Answering was In progress, Ready was Completed. **Working** is a lead an agent has picked or done anything with; **Closed** is one whose outcome was Sold, Not interested or Wrong number, shown as "Closed – Sold". `ADMIN-LEADS.md`, "Status is derived, never stored".)*
+  *(2026-09-28, Jeel: two statuses added and two renamed, so the tabs follow a lead's whole life - **Awaiting reply · Answering · Ready · Working · Closed**, then Needs review, Opted out, Expired. Answering was In progress, Ready was Completed. **Working** is a lead an agent has picked or done anything with; **Closed** is one an agent pressed Closed on. `ADMIN-LEADS.md`, "Status is derived, never stored".)*
 - **Filters:** Source (multi-select), Received (Last 1h / 24h / 7d / 30d / All). **Search:** name or phone.
 - **Table columns:** Received (date and time, tabular), Lead (first name + last initial), Phone (formatted), Source (monospace), Status (tag, as above), Step reached (`–`, `Q1`, `Q2`, `Q3`), Score and tier (only when completed, else `–`), Last activity (time of the most recent SMS in or out, with direction).
 - **Default sort:** newest received first.

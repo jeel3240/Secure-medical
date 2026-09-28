@@ -168,7 +168,7 @@ you change something the docs describe, update the doc in the same commit.
     src/api/callbacks.ts    My Callbacks: list, reschedule, mark done
     src/db/callbacks.ts     callbacks, and the today/upcoming/overdue windows
     src/db/dispositions.ts  setting a disposition, and the DNC block
-    src/core/dispositions.ts  the seven values, pure
+    src/core/dispositions.ts  Closed and DNC, pure
     src/db/dnc.ts           blocking and releasing a number - every path uses it
     src/db/agent-sms.ts     agent SMS, and the rule 2b take-over timestamp
     src/core/score-breakdown.ts  answer chips and the score breakdown, pure
@@ -453,9 +453,9 @@ Jeel:
   not read `dispositions` at all, so a lead dispositioned `not_interested`
   stays in the queue at full score and the next agent picks it up again. Only
   `dnc` removes one, and only through `dnc_list`. *(2026-09-28, Jeel: fixed.
-  Sold - a new outcome - Not interested and Wrong number close a lead: it
-  leaves the queue and reads Closed on Admin > Leads, next to a new Working
-  status. `AGENT-WORKSPACE.md`, "Which outcomes close a lead"; `ADMIN-LEADS.md`.)*
+  Wrap up now has two outcomes, Closed and DNC. Closed takes a lead out of the
+  queue and reads Closed on Admin > Leads, next to a new Working status.
+  `AGENT-WORKSPACE.md`, "Dispositions"; `ADMIN-LEADS.md`.)*
 - **The deep health endpoint cannot be polled by external monitoring,** because
   it is superadmin-only as `LOGGING.md` specified. If an uptime service is
   wanted, it needs a separate unauthenticated route returning less.
