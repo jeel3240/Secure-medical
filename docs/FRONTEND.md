@@ -196,6 +196,19 @@ as Admin > Leads, switcher included - `ADMIN.md`, "DNC list".)*
 **Checked** at 1280, 1366, 1440 and 1920px: all nine statuses stay on one line,
 and nothing overflows the card. A row click opens the timeline; no console errors.
 
+## Switching is smooth everywhere - 2026-09-28
+
+Jeel, after the Overview's period switch: "really smooth, can we add same on
+other tab". Every page with the navy switcher now keeps its table on screen
+through a switch - the queue (tier, and the search), Admin > Leads (status),
+the DNC list (state) and Overview (period). The old rows fade and cannot be
+clicked until the new ones land; only the table fades, so the switcher itself
+stays sharp. `usePolling`'s `keepPreviousData` - QUEUE.md, "The polling hook".
+
+Checked with every API answer slowed by 400ms: on all three table pages the
+table never blanked, stayed faded for the wait, and was never clickable while
+faded. My Callbacks still uses the older underline tabs and a spinner.
+
 ## Admin > Overview - rebuilt 2026-09-28
 
 Now in the same card style as every other admin page: the navy period switcher
