@@ -93,7 +93,7 @@ Role is set at login. Navigation adapts to role.
    - `Stalled at Q2` / `Stalled at Q1` (partial responder)
    - `Inbound reply` (lead texted after conversation ended – unread indicator)
    - `Seen before, stopped at Q2` (resold lead with history) - *2026-09-19: does not occur until repeat-lead handling is built, a future item.*
-11. **Actions** – "Open" button; on hover, quick "Call" and "SMS" icons.
+11. **Actions** – "Open" button; on hover, quick "Call" and "SMS" icons. *(2026-09-28, Jeel: the button is **Pick**, not Open. Clicking it assigns the lead to the agent - `leads.assigned_to` - and "Open" said nothing about that, so an agent could take a lead without realising they had. Same word on the My Callbacks row and the Lead Timeline header, which claim the same way.)*
 
 **Row behaviour**
 - Click row → opens Agent Workspace for that lead.

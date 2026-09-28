@@ -234,7 +234,7 @@ export function CallbacksPage() {
                       ) : (
                         <div className="callbacks__actions">
                           <Button size="sm" variant="secondary" onClick={() => void open(row)}>
-                            Open
+                            Pick
                           </Button>
                           <Button
                             size="sm"
