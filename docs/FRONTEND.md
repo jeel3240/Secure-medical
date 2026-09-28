@@ -91,6 +91,13 @@ into Configuration on 2026-09-23.
 Rebuilt to a mockup Jeel supplied. Every action behaves as before - checked by
 driving each one through the browser, listed at the end of this section.
 
+**One page for every lead, picked or not.** On a lead you hold, everything
+works. On any other, the page is identical, but the wrap-up and the message box
+are each a disabled `<fieldset>` - one attribute switches off every control
+inside, so none can be missed - and a strip above the header says why. The
+server refuses the write regardless (`AGENT-WORKSPACE.md`, "Rules"), so the
+disabled controls save a round trip rather than enforce anything.
+
 **Layout.** A full-width header card - avatar, name and tier, score out of 100,
 ticking lead age, source, SMS flow state, and the Send SMS and Call buttons -
 over three cards: what the lead told us and the score breakdown; the
@@ -207,15 +214,19 @@ for up to five seconds at a time, and age is the queue's signal for how long
 someone has waited. Amber past 5 minutes, red past 15 for HOT - tighter for HOT
 because a HOT lead asked to be called now.
 
-**Opening a lead never assigns it - Jeel, 2026-09-28.** A queue row click opens
-the read-only Lead Timeline, for everyone. Only the button assigns: **Pick**
-claims the lead and opens the workspace. The row click used to claim too, so an
-agent clicking a row to look at a lead took it and locked every colleague out
-without knowing. Looking also leaves an unread reply unread - only the workspace
-marks it read - so a lead like the expired one who texted back no longer drops
-out of the queue because someone glanced at it. A 409 on Pick still shows the
-holder's name and refreshes, so the row mutes itself. *Back to queue* and *Save
-& next* release the claim.
+**Opening a lead never assigns it - Jeel, 2026-09-28.** A queue row click, a
+superadmin's View and the Pick button all open the same workspace. Only Pick
+assigns the lead; opened any other way, the workspace shows the lead read-only -
+actions switched off, a strip saying whose it is, and Pick right there if nobody
+holds it. Looking also leaves an unread reply unread: the workspace marks it
+read only for the holder, so a glance no longer lets a lead who texted back drop
+out of the queue. A 409 on Pick still shows the holder's name and refreshes.
+*Back to queue* and *Save & next* release the claim - and only a claim that is
+yours, so a superadmin leaving someone else's lead no longer takes it off them.
+
+(For an hour earlier the same day, a row click opened the Lead Timeline instead.
+Two different pages for the same lead read as two different things, so both now
+land on the workspace.)
 
 **The button says what the click does to the database - Jeel, 2026-09-28.** It
 read "Open", which described where the click went rather than what it did: it

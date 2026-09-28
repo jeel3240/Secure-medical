@@ -55,11 +55,14 @@ export function SmsCompose({
   lead,
   refresh,
   focusKey = 0,
+  canAct,
 }: {
   lead: LeadDetail;
   refresh: () => Promise<void>;
   /** Bumped by the header's Send SMS button to put the cursor in the box. */
   focusKey?: number;
+  /** False on a lead you have not picked. */
+  canAct: boolean;
 }) {
   const [body, setBody] = useState('');
   const [templatesOpen, setTemplatesOpen] = useState(false);
@@ -100,83 +103,83 @@ export function SmsCompose({
   }
 
   return (
-    <div className="composer">
-      {error && <Banner tone="error">{error}</Banner>}
-      {sent && <Banner tone="success">{sent}</Banner>}
+    <fieldset className="composer" disabled={!canAct}>
+        {error && <Banner tone="error">{error}</Banner>}
+        {sent && <Banner tone="success">{sent}</Banner>}
 
-      {/* Shown once there is something to send, and only before the first
-          send: it cannot be undone. */}
-      {!alreadyTakenOver && body.trim() !== '' && (
-        <p className="composer__warning">
-          Sending stops the automated questions for this lead. You will be handling the
-          conversation from here.
-        </p>
-      )}
-
-      {templatesOpen && (
-        <div className="composer__templates">
-          {TEMPLATES.map((template) => (
-            <button
-              key={template.label}
-              type="button"
-              className="chip-button"
-              onClick={() => {
-                setBody(template.body(lead));
-                setTemplatesOpen(false);
-                box.current?.focus();
-              }}
-            >
-              {template.label}
-            </button>
-          ))}
-        </div>
-      )}
-
-      <div className="composer__row">
-        <button
-          type="button"
-          className="composer__templates-toggle"
-          aria-expanded={templatesOpen}
-          onClick={() => setTemplatesOpen((v) => !v)}
-          title="Canned messages"
-        >
-          Templates
-        </button>
-
-        <textarea
-          ref={box}
-          className="composer__box"
-          rows={1}
-          value={body}
-          maxLength={SMS_LIMIT}
-          placeholder={`Write a message to ${lead.firstName ?? 'this lead'}...`}
-          aria-label="Message"
-          onChange={(e) => setBody(e.target.value)}
-          onKeyDown={(e) => {
-            // Enter sends, Shift+Enter makes a new line - a thread's usual
-            // shortcut. The button stays for anyone who does not know it.
-            if (e.key === 'Enter' && !e.shiftKey && body.trim() && !sending) {
-              e.preventDefault();
-              void send();
-            }
-          }}
-        />
-
-        {body.length > 0 && (
-          <span className={`composer__count tabular${remaining <= 20 ? ' composer__count--low' : ''}`}>
-            {remaining}
-          </span>
+        {/* Shown once there is something to send, and only before the first
+            send: it cannot be undone. */}
+        {!alreadyTakenOver && body.trim() !== '' && (
+          <p className="composer__warning">
+            Sending stops the automated questions for this lead. You will be handling the
+            conversation from here.
+          </p>
         )}
 
-        <Button
-          className="composer__send"
-          loading={sending}
-          disabled={!body.trim() || tooLong}
-          onClick={() => void send()}
-        >
-          Send
-        </Button>
-      </div>
-    </div>
+        {templatesOpen && (
+          <div className="composer__templates">
+            {TEMPLATES.map((template) => (
+              <button
+                key={template.label}
+                type="button"
+                className="chip-button"
+                onClick={() => {
+                  setBody(template.body(lead));
+                  setTemplatesOpen(false);
+                  box.current?.focus();
+                }}
+              >
+                {template.label}
+              </button>
+            ))}
+          </div>
+        )}
+
+        <div className="composer__row">
+          <button
+            type="button"
+            className="composer__templates-toggle"
+            aria-expanded={templatesOpen}
+            onClick={() => setTemplatesOpen((v) => !v)}
+            title="Canned messages"
+          >
+            Templates
+          </button>
+
+          <textarea
+            ref={box}
+            className="composer__box"
+            rows={1}
+            value={body}
+            maxLength={SMS_LIMIT}
+            placeholder={`Write a message to ${lead.firstName ?? 'this lead'}...`}
+            aria-label="Message"
+            onChange={(e) => setBody(e.target.value)}
+            onKeyDown={(e) => {
+              // Enter sends, Shift+Enter makes a new line - a thread's usual
+              // shortcut. The button stays for anyone who does not know it.
+              if (e.key === 'Enter' && !e.shiftKey && body.trim() && !sending) {
+                e.preventDefault();
+                void send();
+              }
+            }}
+          />
+
+          {body.length > 0 && (
+            <span className={`composer__count tabular${remaining <= 20 ? ' composer__count--low' : ''}`}>
+              {remaining}
+            </span>
+          )}
+
+          <Button
+            className="composer__send"
+            loading={sending}
+            disabled={!body.trim() || tooLong}
+            onClick={() => void send()}
+          >
+            Send
+          </Button>
+        </div>
+    </fieldset>
   );
 }
