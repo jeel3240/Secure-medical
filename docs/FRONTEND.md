@@ -101,6 +101,7 @@ Rebuilt to a mockup Jeel supplied. What changed and why:
 | Someone else's lead | "Locked" | A padlock and "Locked", `components/LockIcon.tsx` |
 | Action column | Right-aligned | Centred - buttons and Locked on one axis |
 | Button hover | Light grey | Fills with the header's navy, white text - Pick up, Resume and View alike |
+| Chosen tier | White on grey | The header's navy, white text - the same look as a hovered action. Shared with the Add agent drawer's role choice, so the control keeps one look |
 | Empty cells | `-` | `-` - an em dash was tried and reverted |
 | Live label | Live | Live · updated just now |
 
