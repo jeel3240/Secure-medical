@@ -6,7 +6,6 @@ import {
   addNote,
   createCallback,
   setDisposition,
-  DISPOSITIONS,
   DISPOSITION_LABEL,
   type Disposition,
   type LeadDetail,
@@ -40,7 +39,7 @@ const QUICK: { label: string; at: () => Date }[] = [
     at: () => new Date(Date.now() + 3600_000),
   },
   {
-    label: 'Tomorrow 10am',
+    label: 'Tomorrow 10 AM',
     at: () => {
       const d = new Date();
       d.setDate(d.getDate() + 1);
@@ -49,7 +48,7 @@ const QUICK: { label: string; at: () => Date }[] = [
     },
   },
   {
-    label: 'Tomorrow 3pm',
+    label: 'Tomorrow 3 PM',
     at: () => {
       const d = new Date();
       d.setDate(d.getDate() + 1);
@@ -57,6 +56,20 @@ const QUICK: { label: string; at: () => Date }[] = [
       return d;
     },
   },
+];
+
+/**
+ * The mockup groups the six ordinary dispositions by what they mean for the
+ * lead, so an agent reaching for "no answer" is not reading past "interested".
+ * The list itself still lives in `core/dispositions.ts`; this only arranges it.
+ *
+ * `dnc` is deliberately outside the groups: it blocks the number for good and
+ * belongs nowhere near a row of one-click buttons.
+ */
+const GROUPS: { title: string; tone: string; values: Disposition[] }[] = [
+  { title: 'Positive', tone: 'good', values: ['interested', 'callback_set'] },
+  { title: 'No contact', tone: 'warn', values: ['no_answer', 'voicemail'] },
+  { title: 'Negative', tone: 'bad', values: ['not_interested', 'wrong_number'] },
 ];
 
 /** `<input type="datetime-local">` wants local time with no zone, not an ISO string. */
@@ -81,6 +94,7 @@ export function ActionsPanel({
   const [callbackAt, setCallbackAt] = useState('');
   const [disposition, setDispositionValue] = useState<Disposition | null>(null);
   const [confirmingDnc, setConfirmingDnc] = useState(false);
+  const [picking, setPicking] = useState(false);
 
   const [saving, setSaving] = useState(false);
   const [problems, setProblems] = useState<string[]>([]);
@@ -194,8 +208,17 @@ export function ActionsPanel({
     setDispositionValue((current) => (current === value ? null : value));
   };
 
+  // Which of the three numbered sections still wants something. The callback is
+  // optional, so it does not hold the step back on its own.
+  const step = !disposition ? 1 : note.trim() === '' && callbackAt === '' ? 2 : 3;
+
   return (
-    <div className="card actions-panel">
+    <div className="card wrapup">
+      <header className="wrapup__head">
+        <h2 className="wrapup__title">Wrap up</h2>
+        <span className="wrapup__step">Step {step} of 3</span>
+      </header>
+
       {problems.length > 0 && (
         <Banner tone="error">
           {problems.map((p) => (
@@ -207,69 +230,101 @@ export function ActionsPanel({
       )}
       {saved && <Banner tone="success">{saved}</Banner>}
 
-      <section className="actions-panel__section">
-        <label className="actions-panel__label" htmlFor="note">
-          Note
-        </label>
-        <textarea
-          id="note"
-          className="actions-panel__textarea"
-          rows={4}
-          value={note}
-          placeholder="What did the lead say?"
-          onChange={(e) => setNote(e.target.value)}
-        />
+      <section className="wrapup__section">
+        <h3 className="wrapup__legend">
+          <span className="wrapup__num">1</span> Outcome
+        </h3>
+
+        <div role="radiogroup" aria-label="Disposition">
+          {GROUPS.map((group) => (
+            <div className="wrapup__group" key={group.title}>
+              <span className="wrapup__group-title">{group.title}</span>
+              <div className="wrapup__choices">
+                {group.values.map((value) => (
+                  <button
+                    key={value}
+                    type="button"
+                    role="radio"
+                    aria-checked={disposition === value}
+                    className={`outcome outcome--${group.tone}${
+                      disposition === value ? ' outcome--on' : ''
+                    }`}
+                    onClick={() => choose(value)}
+                  >
+                    <span className="outcome__dot" aria-hidden="true" />
+                    {DISPOSITION_LABEL[value]}
+                  </button>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+
+        <button
+          type="button"
+          className={`wrapup__dnc${disposition === 'dnc' ? ' wrapup__dnc--on' : ''}`}
+          aria-checked={disposition === 'dnc'}
+          role="radio"
+          onClick={() => choose('dnc')}
+        >
+          {disposition === 'dnc' ? 'Will mark as Do Not Contact' : 'Mark as Do Not Contact...'}
+        </button>
       </section>
 
-      <section className="actions-panel__section">
-        <span className="actions-panel__label">Callback</span>
-        <div className="actions-panel__chips">
+      <section className="wrapup__section">
+        <h3 className="wrapup__legend">
+          <span className="wrapup__num">2</span> Callback
+          <span className="wrapup__optional">Optional</span>
+        </h3>
+        <div className="wrapup__choices">
           {QUICK.map((quick) => (
             <button
               key={quick.label}
               type="button"
               className="chip-button"
-              onClick={() => setCallbackAt(toLocalInput(quick.at()))}
+              onClick={() => {
+                setCallbackAt(toLocalInput(quick.at()));
+                setPicking(false);
+              }}
             >
               {quick.label}
             </button>
           ))}
+          <button type="button" className="chip-button" onClick={() => setPicking(true)}>
+            Pick time...
+          </button>
         </div>
-        <input
-          type="datetime-local"
-          className="actions-panel__input"
-          value={callbackAt}
-          onChange={(e) => setCallbackAt(e.target.value)}
-          aria-label="Callback date and time"
+        {(picking || callbackAt !== '') && (
+          <input
+            type="datetime-local"
+            className="actions-panel__input"
+            value={callbackAt}
+            onChange={(e) => setCallbackAt(e.target.value)}
+            aria-label="Callback date and time"
+          />
+        )}
+      </section>
+
+      <section className="wrapup__section">
+        <h3 className="wrapup__legend">
+          <span className="wrapup__num">3</span> Note
+        </h3>
+        <textarea
+          id="note"
+          className="actions-panel__textarea"
+          rows={4}
+          value={note}
+          placeholder={`What did ${lead.firstName ?? 'the lead'} say?`}
+          onChange={(e) => setNote(e.target.value)}
         />
       </section>
 
-      <section className="actions-panel__section">
-        <span className="actions-panel__label">Disposition</span>
-        <div className="actions-panel__dispositions" role="radiogroup" aria-label="Disposition">
-          {DISPOSITIONS.map((value) => (
-            <button
-              key={value}
-              type="button"
-              role="radio"
-              aria-checked={disposition === value}
-              className={`disposition${disposition === value ? ' disposition--on' : ''}${
-                value === 'dnc' ? ' disposition--danger' : ''
-              }`}
-              onClick={() => choose(value)}
-            >
-              {DISPOSITION_LABEL[value]}
-            </button>
-          ))}
-        </div>
-      </section>
-
-      <div className="actions-panel__save">
+      <div className="wrapup__save">
         <Button variant="secondary" disabled={!dirty || saving} onClick={() => void onSave()}>
           Save
         </Button>
         <Button loading={saving} onClick={() => void onSaveAndNext()}>
-          Save &amp; next lead
+          Save &amp; next lead &rarr;
         </Button>
       </div>
 

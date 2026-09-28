@@ -107,6 +107,8 @@ Role is set at login. Navigation adapts to role.
 
 **Purpose:** one screen. See who the lead is, what they said, and call, text, note, schedule and disposition without leaving the page.
 
+*(2026-09-28, Jeel: redesigned to a mockup he supplied. The layout below is superseded where they differ - a full-width header card over three columns: "What {name} told us" and the score breakdown on the left, the SMS thread as a conversation in the centre, and a numbered "Wrap up" on the right. The behaviour is unchanged. `FRONTEND.md`, "The workspace", records what moved and why.)*
+
 **Layout:** three columns on ≥1280px.
 - **Left (30%)** – Lead card + actions
 - **Center (40%)** – Timeline

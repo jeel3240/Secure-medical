@@ -244,6 +244,13 @@ contactable again - migration 002 - and the row is kept only as the record.
 queue and the claim endpoint. All three have to agree or the card would show a
 lead as held by someone who cannot work it.
 
+**Each answer chip carries the raw `choice` as well as its words** - `1`, `2`
+or `3`, null while unanswered. Added 2026-09-28 for the workspace's conversation
+view, which writes an inbound `3` as "3 | Both". The words alone cannot do that
+honestly: pairing replies with questions by counting inbound messages is wrong
+the moment one of them was unclear, so the screen matches the digit against the
+stored choice instead and labels nothing it cannot prove.
+
 **The breakdown shows only what was earned.** A lead who stopped after question
 1 gets two lines, not five with zeros: the card records what happened rather
 than scoring what was possible. A rule missing from `scoring_rules` contributes

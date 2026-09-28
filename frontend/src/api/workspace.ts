@@ -13,6 +13,8 @@ export interface AnswerChip {
   heading: string;
   /** Null when the lead has not answered that question yet. */
   answer: string | null;
+  /** The raw `1`/`2`/`3` the lead sent, for labelling the conversation view. */
+  choice: string | null;
 }
 
 /** Mirrors BreakdownLine in backend/src/core/score-breakdown.ts. */
