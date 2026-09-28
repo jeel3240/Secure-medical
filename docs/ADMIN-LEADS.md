@@ -144,6 +144,27 @@ no reply yet, and printing it looks like a judgement rather than an absence.
 
 ## The page
 
+**Redesigned to match the queue - Jeel, 2026-09-28.** One card holds the
+status tabs, the search and filters, and the table, under the same grey header
+band as the queue. Built from the queue's own parts, so the two cannot drift:
+
+| Part | Was | Is |
+|---|---|---|
+| Layout | Tabs, filters and table loose on the page | One card, tabs as its top row |
+| Columns | Received, Lead, Phone, Source, Status, Step, Score, Last activity | Tier, Lead (phone under the name), Status, Step, Score, Source, Received, Last activity |
+| Tier | A HOT / WARM / LOW pill beside the score | Signal bars and the word - `TierSignal` |
+| Score | Coloured number | A plain bold number, right-aligned |
+| Status | Coloured pills | An icon and the words - `LeadStatus`, on the queue's `StatusIcon` set |
+| Opted out | Whole row tinted red | Its status in red; the row is plain |
+| Header | Title only | "Live · updated just now", as on the queue - `LiveStatus` |
+| Row | Not clickable | Opens the lead's timeline |
+
+The status icons follow a lead's life: a clock for Awaiting reply, a chat
+bubble for Answering, then an empty circle (Ready), a half-filled one (Working,
+the same as the queue) and a ticked one (Closed). Needs review is the queue's
+warning triangle, Opted out a barred circle in red, Expired an hourglass.
+Closed and Expired are muted: those leads are finished.
+
 Refreshes every 5 seconds. The timer refetches in place rather than showing a
 spinner, so the table does not blank out; only a filter change clears it.
 
@@ -151,15 +172,14 @@ Rows that are new since the previous fetch get a 600ms highlight. Everything is
 new on the first load, so that case is deliberately excluded - otherwise the
 whole table flashes on arrival.
 
-Rows are not clickable yet. The spec has them opening the Lead Timeline, which
-does not exist.
+A row opens the lead's timeline, read-only (2026-09-28 - it waited on that page
+existing).
 
 A banner appears when the poller's checkpoint has not moved in three poll
 intervals, which is the spec's signal that the worker has stopped.
 
 ## Not done yet
 
-- **No row click.** Waiting on the Lead Timeline page.
 - **Source filter is single-select.** The spec asks for multi-select; the API
   already accepts a comma-separated list.
 - **Polling, not push.** Five seconds is frequent enough at 50-100 leads a day,

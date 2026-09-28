@@ -1,10 +1,11 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { toApiError } from '../api/client';
 import { claimLead, listQueue, type QueueLead, type QueueResponse } from '../api/leads';
 import { usePolling } from '../api/usePolling';
 import { useAuth } from '../auth/store';
 import { Banner } from '../components/Banner';
+import { LiveStatus } from '../components/LiveStatus';
 import { Button } from '../components/Button';
 import { LockIcon } from '../components/LockIcon';
 import { QueueStatus } from '../components/QueueStatus';
@@ -147,13 +148,6 @@ export function QueuePage() {
   // Polls every 5s, so this normally reads "just now". When it does not, the
   // queue on screen is going stale - which is exactly when an agent should
   // notice.
-  const liveLabel = useMemo(() => {
-    if (!updatedAt) return 'Connecting';
-    const seconds = Math.round((now.getTime() - updatedAt) / 1000);
-    if (seconds < 10) return 'Live · updated just now';
-    if (seconds < 60) return `Live · updated ${seconds}s ago`;
-    return `Live · updated ${Math.floor(seconds / 60)}m ago`;
-  }, [updatedAt, now]);
 
   return (
     <section>
@@ -162,10 +156,7 @@ export function QueuePage() {
           <h1 className="page-title">Priority queue</h1>
           <p className="page-subtitle">Highest score first, then longest waiting.</p>
         </div>
-        <span className={`live${error ? ' live--paused' : ''}`}>
-          <span className="live__dot" aria-hidden="true" />
-          {error ? 'Live updates paused' : liveLabel}
-        </span>
+        <LiveStatus updatedAt={updatedAt} paused={Boolean(error)} />
       </div>
 
       {error && <Banner tone="warning">{error} Showing the last update.</Banner>}

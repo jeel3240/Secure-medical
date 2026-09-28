@@ -1144,6 +1144,20 @@ a {
   margin-bottom: var(--space-4);
 }
 
+/* Inside the page's card, as on the queue: the tabs are its top row, flush
+   with the card's edges rather than a line of their own above it. */
+.leads__tabs--in-card {
+  margin-bottom: 0;
+  padding: var(--space-1) var(--space-3) 0;
+}
+
+/* Received and Last activity: when things happened, a step quieter than the
+   lead and its status. */
+.leads__when {
+  color: var(--color-text-muted);
+  white-space: nowrap;
+}
+
 .leads__tab {
   display: inline-flex;
   align-items: center;
@@ -1230,11 +1244,6 @@ a {
   color: var(--color-text-muted);
 }
 
-/* Opted-out rows are tinted so they read as excluded at a glance. */
-.leads__row--danger td {
-  background: var(--color-danger-soft);
-}
-
 /* Matches the 600ms highlight the queue uses for newly arrived rows. */
 @keyframes leads-row-in {
   from { background: var(--color-accent-soft); }
@@ -1250,7 +1259,8 @@ a {
   align-items: center;
   justify-content: center;
   gap: var(--space-4);
-  margin-top: var(--space-4);
+  padding: var(--space-4);
+  border-top: 1px solid var(--color-border);
   color: var(--color-text-muted);
   font-size: var(--text-body);
 }
@@ -1427,6 +1437,8 @@ a {
 }
 
 .status--strong { font-weight: var(--weight-semibold); }
+.status--muted { color: var(--color-text-muted); }
+.status--danger { color: var(--color-danger); }
 
 /* Tier as signal bars: three for Hot, two for Warm, one for Low. */
 .tier-signal {
@@ -1472,6 +1484,13 @@ a {
 }
 
 .right {
+  text-align: right;
+}
+
+/* `.table th` sets text-align: left and outranks `.right`, so a right-aligned
+   column's heading stayed left above its numbers - SCORE and WAITING on the
+   queue, SCORE on Admin > Leads. */
+.table th.right {
   text-align: right;
 }
 
