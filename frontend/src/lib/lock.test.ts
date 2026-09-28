@@ -8,7 +8,7 @@
 import { describe, expect, it } from 'vitest';
 import type { QueueLead, QueueTag } from '../api/leads';
 import type { PublicUser } from '../api/types';
-import { lockHolder } from './lock';
+import { lockHolder, rowAction } from './lock';
 
 const lead = (tag: QueueTag): QueueLead => ({
   id: 1,
@@ -83,5 +83,42 @@ describe('an in_progress tag with no name', () => {
     // and db/claims.ts lets anyone take over such a lead. Muting the row would
     // strand it: nobody could ever open it.
     expect(lockHolder(lead({ kind: 'in_progress' }), MAYA)).toBeNull();
+  });
+});
+
+describe('what the row action offers', () => {
+  const agent = { id: 2, name: 'karm', role: 'agent' } as PublicUser;
+  const boss = { id: 1, name: 'Jeel Kakadiya', role: 'superadmin' } as PublicUser;
+
+  it('offers Pick on a lead nobody holds', () => {
+    expect(rowAction(lead({ kind: 'new' }), agent)).toBe('pick');
+  });
+
+  it('offers Resume on your own lead, not Pick', () => {
+    // You cannot "pick" something you already hold.
+    expect(rowAction(lead({ kind: 'in_progress', agentName: 'karm' }), agent)).toBe('resume');
+  });
+
+  it('offers Resume to a superadmin on their own lead', () => {
+    // The mine check runs before the superadmin one, or a superadmin would be
+    // sent to the read-only page for a lead they are working.
+    expect(rowAction(lead({ kind: 'in_progress', agentName: 'Jeel Kakadiya' }), boss)).toBe('resume');
+  });
+
+  it('offers a superadmin View, never Pick, on someone else`s lead', () => {
+    // The server refuses that claim with 409, so Pick would always fail.
+    expect(rowAction(lead({ kind: 'in_progress', agentName: 'karm' }), boss)).toBe('view');
+  });
+
+  it('offers an agent nothing on someone else`s lead', () => {
+    expect(rowAction(lead({ kind: 'in_progress', agentName: 'Jeel Kakadiya' }), agent)).toBe('locked');
+  });
+
+  it('offers Pick when the tag names no holder', () => {
+    expect(rowAction(lead({ kind: 'in_progress' }), agent)).toBe('pick');
+  });
+
+  it('locks a signed-out view of a held lead', () => {
+    expect(rowAction(lead({ kind: 'in_progress', agentName: 'karm' }), null)).toBe('locked');
   });
 });

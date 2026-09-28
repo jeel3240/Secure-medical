@@ -2,6 +2,7 @@ import { useCallback, useMemo, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { claimLead } from '../api/leads';
 import { usePolling } from '../api/usePolling';
+import { useAuth } from '../auth/store';
 import {
   getLead,
   getTimeline,
@@ -110,6 +111,7 @@ export function LeadTimelinePage() {
   const { id } = useParams<{ id: string }>();
   const leadId = Number(id);
   const navigate = useNavigate();
+  const me = useAuth((s) => s.user);
   const valid = Number.isInteger(leadId) && leadId > 0;
 
   const [opening, setOpening] = useState(false);
@@ -122,6 +124,12 @@ export function LeadTimelinePage() {
   const { data: entries } = usePolling<TimelineEntry[]>(timelineFetcher, { enabled: valid });
 
   const summary = useMemo(() => summarise(entries ?? []), [entries]);
+
+  // The same three states as a queue row, decided by id here because the lead
+  // endpoint returns the holder's id - lib/lock.ts explains why the queue has
+  // to match on name instead.
+  const mine = Boolean(lead?.claimedBy && me && lead.claimedBy.id === me.id);
+  const heldByOther = Boolean(lead?.claimedBy) && !mine;
 
   /** Opening the workspace from here means claiming, exactly as the queue does. */
   const openWorkspace = async () => {
@@ -172,9 +180,13 @@ export function LeadTimelinePage() {
         <div className="timeline-page__head-actions">
           {tier && <span className={`tier tier--${tier.toLowerCase()}`}>{tier}</span>}
           <span className="lead-card__score-value tabular">{lead.conversation?.score ?? 0}</span>
-          <Button variant="secondary" loading={opening} onClick={() => void openWorkspace()}>
-            Pick lead
-          </Button>
+          {heldByOther ? (
+            <Badge tone="muted">Held by {lead.claimedBy?.name}</Badge>
+          ) : (
+            <Button variant="secondary" loading={opening} onClick={() => void openWorkspace()}>
+              {mine ? 'Resume' : 'Pick lead'}
+            </Button>
+          )}
         </div>
       </div>
 

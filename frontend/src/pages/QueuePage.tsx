@@ -10,7 +10,7 @@ import { Button } from '../components/Button';
 import { QueueTagBadge } from '../components/QueueTagBadge';
 import { Spinner } from '../components/Spinner';
 import { ageTone, answerLabel, formatAge, formatPhone, leadName } from '../lib/format';
-import { lockHolder } from '../lib/lock';
+import { rowAction } from '../lib/lock';
 
 /**
  * The agents' landing screen: every responder, highest score first.
@@ -82,7 +82,10 @@ export function QueuePage() {
       current.includes(tier) ? current.filter((t) => t !== tier) : [...current, tier]
     );
 
-  const lockedBy = useCallback((lead: QueueLead) => lockHolder(lead, me), [me]);
+  const actionFor = useCallback((lead: QueueLead) => rowAction(lead, me), [me]);
+
+  /** A superadmin may look at a lead someone else holds, but not claim it. */
+  const view = (lead: QueueLead) => navigate(`/leads/${lead.id}/timeline`);
 
   /**
    * Claim, then open. Claiming from the queue rather than on arrival means the
@@ -90,7 +93,10 @@ export function QueuePage() {
    * someone glanced at it.
    */
   const open = async (lead: QueueLead) => {
-    if (lockedBy(lead)) return;
+    // Only a claim the server would allow: our own, or nobody's. A superadmin
+    // looking at someone else's lead goes through view() instead.
+    const allowed = actionFor(lead);
+    if (allowed !== 'pick' && allowed !== 'resume') return;
 
     setClaiming(lead.id);
     setClaimError(null);
@@ -219,7 +225,8 @@ export function QueuePage() {
             </thead>
             <tbody>
               {data.leads.map((lead) => {
-                const locked = lockedBy(lead);
+                const action = actionFor(lead);
+                const locked = action === 'locked';
                 const tone = ageTone(lead.receivedAt, lead.tier, now);
 
                 return (
@@ -228,7 +235,7 @@ export function QueuePage() {
                     className={`queue__row${locked ? ' queue__row--locked' : ''}`}
                     // Locked rows are not clickable at all - the lock has to be
                     // felt, not just seen.
-                    onClick={locked ? undefined : () => void open(lead)}
+                    onClick={locked ? undefined : action === 'view' ? () => view(lead) : () => void open(lead)}
                     title={locked ? `${locked} is working this lead` : undefined}
                     aria-disabled={locked ? true : undefined}
                   >
@@ -265,10 +272,17 @@ export function QueuePage() {
                           disabled={claiming === lead.id}
                           onClick={(e) => {
                             e.stopPropagation();
-                            void open(lead);
+                            if (action === 'view') view(lead);
+                            else void open(lead);
                           }}
                         >
-                          {claiming === lead.id ? 'Picking...' : 'Pick'}
+                          {claiming === lead.id
+                            ? 'Picking...'
+                            : action === 'resume'
+                              ? 'Resume'
+                              : action === 'view'
+                                ? 'View'
+                                : 'Pick'}
                         </Button>
                       )}
                     </td>
