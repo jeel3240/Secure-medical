@@ -287,7 +287,7 @@ export function QueuePage() {
                       <td>
                         <QueueStatus tag={lead.tag} />
                       </td>
-                      <td className="right">
+                      <td className="queue__action">
                         {locked ? (
                           <span className="queue__locked">
                             <LockIcon />
