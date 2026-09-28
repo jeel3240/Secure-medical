@@ -1144,13 +1144,6 @@ a {
   margin-bottom: var(--space-4);
 }
 
-/* Inside the page's card, as on the queue: the tabs are its top row, flush
-   with the card's edges rather than a line of their own above it. */
-.leads__tabs--in-card {
-  margin-bottom: 0;
-  padding: var(--space-1) var(--space-3) 0;
-}
-
 /* Received and Last activity: when things happened, a step quieter than the
    lead and its status. */
 .leads__when {
@@ -1181,7 +1174,9 @@ a {
 
 .leads__tab--active {
   color: var(--color-text);
-  border-bottom-color: var(--color-accent);
+  /* The brand navy, as on the header and the Segmented thumb - never the link
+     blue. Jeel, 2026-09-28. */
+  border-bottom-color: var(--color-primary);
 }
 
 .leads__tab-count {
@@ -1196,8 +1191,8 @@ a {
 }
 
 .leads__tab--active .leads__tab-count {
-  background: var(--color-accent-soft);
-  color: var(--color-accent);
+  background: var(--color-primary);
+  color: var(--color-on-primary);
 }
 
 .leads__filters {

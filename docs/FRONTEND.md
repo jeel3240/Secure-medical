@@ -185,8 +185,15 @@ same.
 left - `.table th` outranked `.right` - so SCORE and WAITING on the queue sat
 away from their numbers. `.table th.right` fixes both pages.
 
-**Checked** at 1280, 1366, 1440 and 1920px: the nine tabs stay on one line, and
-nothing overflows the card. A row click opens the timeline; no console errors.
+**The status tabs are the queue's switcher - Jeel, 2026-09-28.** They were
+underline tabs in the link blue (`--color-accent`). Jeel: blue means the brand
+navy, the header's colour. They are now `Segmented`, like the queue's tier
+switcher: the chosen status in navy, sliding between options. The underline
+tabs left on My Callbacks and the DNC list moved to navy as well, so no
+selected tab anywhere uses the link blue.
+
+**Checked** at 1280, 1366, 1440 and 1920px: all nine statuses stay on one line,
+and nothing overflows the card. A row click opens the timeline; no console errors.
 
 ## The workspace - redesigned 2026-09-28
 
