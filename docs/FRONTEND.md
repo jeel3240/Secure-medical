@@ -196,6 +196,16 @@ as Admin > Leads, switcher included - `ADMIN.md`, "DNC list".)*
 **Checked** at 1280, 1366, 1440 and 1920px: all nine statuses stay on one line,
 and nothing overflows the card. A row click opens the timeline; no console errors.
 
+## Admin > Overview - rebuilt 2026-09-28
+
+Now in the same card style as every other admin page: the navy period switcher
+and "Live · updated" at the top right; four totals in one card split by thin
+rules (`.stats`); the Agents table and the System checks side by side; Recent
+activity across the page, the lead names in the brand navy. What each part
+shows, and what was removed and why, is in `ADMIN.md`, "Overview". The old
+`.kpi`, `.funnel`, `.overview__*` rules, and `.config__title` and
+`.config__choice` which only it still used, are gone.
+
 ## Admin > Agents - redesigned 2026-09-28
 
 Laid out like the other admin pages: one card, the grey header band, the

@@ -1,6 +1,11 @@
 /**
- * Admin > Overview: KPI cards, the funnel, the per-agent table and the recent
+ * Admin > Overview: the period's numbers, the per-agent table and the recent
  * activity feed. ADMIN.md, "Overview"; DESIGN-PROMPT.md 6a.
+ *
+ * **No funnel since 2026-09-28** - Jeel: it drew the same numbers as the cards
+ * above it, as bars. The per-agent rows gained what a superadmin checks each
+ * morning instead: how many leads each agent is holding now, how many they
+ * closed, and when they last did anything.
  *
  * Everything is derived on the read. Nothing here is stored as a running total:
  * at 50-100 leads a day the queries are cheap, and a stale counter is worse
@@ -10,11 +15,11 @@
  * come from the health endpoint - `LOGGING.md` - so that anything monitoring
  * the system from outside reads exactly what this screen does.
  *
- * **Call figures are all zero until Phase 4.** `calls` is never written to yet;
- * the columns are counted the same way they will be once Twilio lands, so the
- * screen does not change shape later. `callsBuilt: false` says so, rather than
- * leaving a superadmin to wonder whether nobody is calling or nothing is
- * recording.
+ * **Only what the page shows - Jeel, 2026-09-28: "we are making the system
+ * complex".** Calls made, reached, average call length, HOT, callbacks set, DNC
+ * added and the per-agent outcome breakdown were all computed here and are
+ * gone. The call figures were zero until Twilio anyway (Phase 4 adds them back
+ * if the client wants them); the rest were numbers nobody acted on.
  */
 
 import { CLOSING_DISPOSITIONS } from '../core/dispositions';
@@ -32,11 +37,13 @@ const SINCE_SQL: Record<OverviewPeriod, string> = {
 export interface AgentRow {
   agentId: number;
   name: string;
-  calls: number;
-  reached: number;
-  avgCallSeconds: number | null;
-  dispositions: Record<string, number>;
   callbacksPending: number;
+  /** Leads this agent holds right now, whatever the period. */
+  holding: number;
+  /** Leads this agent closed in the period - `closed`, and the retired values that meant the same. */
+  closed: number;
+  /** This agent's newest action of any kind - a note, callback, outcome, call or SMS. Null if none. */
+  lastActiveAt: string | null;
 }
 
 export interface ActivityEntry {
@@ -57,18 +64,11 @@ export interface Overview {
     respondedPct: number;
     completed: number;
     completedPct: number;
-    hot: number;
-    callsMade: number;
-    reached: number;
-    reachedPct: number;
-    callbacksSet: number;
-    dncAdded: number;
+    /** Closed in the period - `closed`, and the retired values that meant the same. */
+    closed: number;
   };
-  funnel: { stage: string; count: number }[];
   agents: AgentRow[];
   activity: ActivityEntry[];
-  /** False until Twilio lands: every call figure above is structurally zero. */
-  callsBuilt: boolean;
 }
 
 /** Percentage of a base, rounded, and 0 rather than NaN when the base is 0. */
@@ -82,13 +82,20 @@ export async function getOverview(period: OverviewPeriod): Promise<Overview> {
   // a lead's age.
   const received = `COALESCE(l.ezt_added_at, l.created_at)`;
 
-  const [leadRows, callRows, callbackRows, dncRows, agentRows, activityRows] = await Promise.all([
+  // `closed` and the retired values that meant the same, so leads closed under
+  // the old list still count. Constants from core/dispositions.ts, never input.
+  const closing = CLOSING_DISPOSITIONS.map((v) => `'${v.replace(/[^a-z_]/g, '')}'`).join(', ');
+
+  const [leadRows, agentRows, activityRows] = await Promise.all([
     pool.query(`
       SELECT
         count(*)::int AS leads_received,
         count(*) FILTER (WHERE c.score > 0)::int AS responded,
         count(*) FILTER (WHERE c.status = 'completed')::int AS completed,
-        count(*) FILTER (WHERE c.tier = 'HOT')::int AS hot
+        (
+          SELECT count(*)::int FROM dispositions d
+          WHERE d.value IN (${closing}) AND d.created_at >= ${since}
+        ) AS closed
       FROM leads l
       LEFT JOIN LATERAL (
         SELECT status, score, tier FROM conversations
@@ -97,45 +104,31 @@ export async function getOverview(period: OverviewPeriod): Promise<Overview> {
       WHERE ${received} >= ${since}
     `),
 
-    // Counted by when the call started, not when its lead arrived: a call made
-    // today about a lead from last week belongs in today's figures.
-    pool.query(`
-      SELECT
-        count(*)::int AS calls_made,
-        count(*) FILTER (WHERE duration_sec > 0)::int AS reached
-      FROM calls WHERE started_at >= ${since}
-    `),
-
-    pool.query(`SELECT count(*)::int AS n FROM callbacks WHERE created_at >= ${since}`),
-
-    // Blocks added in the window, whether or not they have since been released:
-    // the KPI is "DNC added", an event, not a current total.
-    pool.query(`SELECT count(*)::int AS n FROM dnc_list WHERE added_at >= ${since}`),
-
     pool.query(`
       SELECT
         u.id AS agent_id,
         u.name,
-        count(DISTINCT ca.id)::int AS calls,
-        count(DISTINCT ca.id) FILTER (WHERE ca.duration_sec > 0)::int AS reached,
-        avg(ca.duration_sec) FILTER (WHERE ca.duration_sec > 0) AS avg_call_seconds,
-        COALESCE(
-          (SELECT jsonb_object_agg(value, n) FROM (
-            SELECT d.value, count(*)::int AS n
-            FROM dispositions d
-            WHERE d.agent_id = u.id AND d.created_at >= ${since}
-            GROUP BY d.value
-          ) x),
-          '{}'::jsonb
-        ) AS dispositions,
+        (
+          SELECT count(*)::int FROM dispositions d
+          WHERE d.agent_id = u.id AND d.value IN (${closing}) AND d.created_at >= ${since}
+        ) AS closed,
         (
           SELECT count(*)::int FROM callbacks cb
           WHERE cb.agent_id = u.id AND cb.done_at IS NULL
-        ) AS callbacks_pending
+        ) AS callbacks_pending,
+        (SELECT count(*)::int FROM leads hl WHERE hl.assigned_to = u.id) AS holding,
+        (
+          SELECT max(at) FROM (
+            SELECT max(created_at) AS at FROM dispositions WHERE agent_id = u.id
+            UNION ALL SELECT max(created_at) FROM notes WHERE agent_id = u.id
+            UNION ALL SELECT max(created_at) FROM callbacks WHERE agent_id = u.id
+            UNION ALL SELECT max(started_at) FROM calls WHERE agent_id = u.id
+            UNION ALL SELECT max(created_at) FROM messages
+              WHERE sent_by = u.id AND delivery_status IS DISTINCT FROM 'failed'
+          ) acts
+        ) AS last_active_at
       FROM users u
-      LEFT JOIN calls ca ON ca.agent_id = u.id AND ca.started_at >= ${since}
       WHERE u.is_active
-      GROUP BY u.id, u.name
       ORDER BY u.name
     `),
 
@@ -183,15 +176,6 @@ export async function getOverview(period: OverviewPeriod): Promise<Overview> {
   ]);
 
   const leads = leadRows.rows[0];
-  const calls = callRows.rows[0];
-
-  // Funnel stages, each a subset of the one before. The last is Closed - it
-  // was Interested until that disposition was retired on 2026-09-28. Retired
-  // values that also closed a lead are counted with it.
-  const closed = agentRows.rows.reduce((total, r) => {
-    const counts = r.dispositions as Record<string, number>;
-    return total + CLOSING_DISPOSITIONS.reduce((n, value) => n + Number(counts[value] ?? 0), 0);
-  }, 0);
 
   return {
     period,
@@ -202,28 +186,15 @@ export async function getOverview(period: OverviewPeriod): Promise<Overview> {
       respondedPct: pct(leads.responded, leads.leads_received),
       completed: leads.completed,
       completedPct: pct(leads.completed, leads.leads_received),
-      hot: leads.hot,
-      callsMade: calls.calls_made,
-      reached: calls.reached,
-      reachedPct: pct(calls.reached, calls.calls_made),
-      callbacksSet: callbackRows.rows[0].n,
-      dncAdded: dncRows.rows[0].n,
+      closed: leads.closed,
     },
-    funnel: [
-      { stage: 'received', count: leads.leads_received },
-      { stage: 'responded', count: leads.responded },
-      { stage: 'completed', count: leads.completed },
-      { stage: 'called', count: calls.calls_made },
-      { stage: 'closed', count: closed },
-    ],
     agents: agentRows.rows.map((r) => ({
       agentId: r.agent_id,
       name: r.name,
-      calls: r.calls,
-      reached: r.reached,
-      avgCallSeconds: r.avg_call_seconds === null ? null : Math.round(Number(r.avg_call_seconds)),
-      dispositions: r.dispositions,
       callbacksPending: r.callbacks_pending,
+      holding: r.holding,
+      closed: r.closed,
+      lastActiveAt: r.last_active_at?.toISOString() ?? null,
     })),
     activity: activityRows.rows.map((r) => ({
       kind: r.kind,
@@ -233,6 +204,5 @@ export async function getOverview(period: OverviewPeriod): Promise<Overview> {
       leadName: [r.first_name, r.last_name].filter(Boolean).join(' ') || 'Unknown',
       detail: r.detail,
     })),
-    callsBuilt: false,
   };
 }
