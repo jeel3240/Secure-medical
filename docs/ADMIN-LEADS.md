@@ -150,7 +150,8 @@ band as the queue. Built from the queue's own parts, so the two cannot drift:
 
 | Part | Was | Is |
 |---|---|---|
-| Layout | Tabs, filters and table loose on the page | One card, tabs as its top row |
+| Layout | Tabs, filters and table loose on the page | One card: the status switcher, then search and filters, then the table |
+| Status tabs | Underline tabs in the link blue | The queue's segmented switcher - the chosen status in the brand navy, sliding between options, with its count |
 | Columns | Received, Lead, Phone, Source, Status, Step, Score, Last activity | Tier, Lead (phone under the name), Status, Step, Score, Source, Received, Last activity |
 | Tier | A HOT / WARM / LOW pill beside the score | Signal bars and the word - `TierSignal` |
 | Score | Coloured number | A plain bold number, right-aligned |

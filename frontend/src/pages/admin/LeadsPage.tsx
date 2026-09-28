@@ -6,6 +6,7 @@ import { Banner } from '../../components/Banner';
 import { Button } from '../../components/Button';
 import { LeadStatus } from '../../components/LeadStatus';
 import { LiveStatus } from '../../components/LiveStatus';
+import { Segmented } from '../../components/Segmented';
 import { Spinner } from '../../components/Spinner';
 import { TierSignal } from '../../components/TierSignal';
 import { formatPhone, formatReceived, formatRelative } from '../../lib/format';
@@ -141,22 +142,19 @@ export function LeadsPage() {
       )}
 
       <div className="card queue-card">
-        <div className="leads__tabs leads__tabs--in-card" role="tablist">
-          {TABS.map((tab) => (
-            <button
-              key={tab.key}
-              role="tab"
-              aria-selected={status === tab.key}
-              className={`leads__tab${status === tab.key ? ' leads__tab--active' : ''}`}
-              onClick={() => {
-                setStatus(tab.key);
-                setPage(1);
-              }}
-            >
-              {tab.label}
-              <span className="leads__tab-count">{counts[tab.key] ?? 0}</span>
-            </button>
-          ))}
+        {/* The queue's tier switcher, so the chosen status is the brand navy
+            and slides the same way - Jeel, 2026-09-28. The underline tabs it
+            replaces used the brighter link blue. */}
+        <div className="queue-card__toolbar">
+          <Segmented
+            label="Status"
+            value={status}
+            onChange={(next) => {
+              setStatus(next);
+              setPage(1);
+            }}
+            options={TABS.map((tab) => ({ value: tab.key, label: tab.label, count: counts[tab.key] ?? 0 }))}
+          />
         </div>
 
         <div className="queue-card__toolbar">
