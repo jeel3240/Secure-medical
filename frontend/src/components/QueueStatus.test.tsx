@@ -21,12 +21,12 @@ const renderTag = (tag: QueueTag) => {
 };
 
 describe('statuses', () => {
-  it.each<[string, QueueTag, string, boolean]>([
-    ['someone working it', { kind: 'in_progress', agentName: 'karm' }, 'Working – karm', false],
-    ['an unread reply', { kind: 'inbound_reply' }, 'Inbound reply', true],
-    ['replies nobody understood', { kind: 'needs_review' }, 'Needs review', false],
-  ])('%s: its own icon, and the words', (_, tag, text, bold) => {
-    expect(renderTag(tag)).toEqual({ text, icon: tag.kind, bold });
+  it.each<[string, QueueTag, string, string, boolean]>([
+    ['someone working it', { kind: 'in_progress', agentName: 'karm' }, 'Working – karm', 'half', false],
+    ['an unread reply', { kind: 'inbound_reply' }, 'Inbound reply', 'inbound', true],
+    ['replies nobody understood', { kind: 'needs_review' }, 'Needs review', 'warning', false],
+  ])('%s: its own icon, and the words', (_, tag, text, icon, bold) => {
+    expect(renderTag(tag)).toEqual({ text, icon, bold });
   });
 
   it('draws no dot any more', () => {

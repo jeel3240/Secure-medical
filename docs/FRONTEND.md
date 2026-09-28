@@ -164,6 +164,30 @@ now, and `type-system.test.ts` fails on any `var()` that is not defined.
 fits its card at every width, and the switcher shows the right rows with its
 counts unchanged.
 
+## Admin > Leads - redesigned 2026-09-28
+
+Rebuilt in the queue's style, from the queue's own parts, so the two screens
+cannot drift apart. `ADMIN-LEADS.md`, "The page", has the before-and-after.
+
+**Shared, not copied.** Three pieces moved out of the queue so both pages use
+them:
+
+| Component | Does |
+|---|---|
+| `components/StatusIcon.tsx` | Every status icon, one set. Working is the half-filled circle and Needs review the triangle on both pages |
+| `components/LiveStatus.tsx` | "Live · updated just now", with its own one-second clock |
+| `components/LeadStatus.tsx` | An Admin > Leads status as an icon and words |
+
+`QueueStatus.tsx` now draws its icons from `StatusIcon`; the queue looks the
+same.
+
+**Fixed while building it:** a right-aligned column's heading stayed on the
+left - `.table th` outranked `.right` - so SCORE and WAITING on the queue sat
+away from their numbers. `.table th.right` fixes both pages.
+
+**Checked** at 1280, 1366, 1440 and 1920px: the nine tabs stay on one line, and
+nothing overflows the card. A row click opens the timeline; no console errors.
+
 ## The workspace - redesigned 2026-09-28
 
 Rebuilt to a mockup Jeel supplied. Every action behaves as before - checked by

@@ -1,11 +1,31 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { listAdminLeads, type AdminLead, type AdminLeadsResponse, type LeadStatus } from '../../api/leads';
+import { useNavigate } from 'react-router-dom';
+import { listAdminLeads, type AdminLead, type AdminLeadsResponse } from '../../api/leads';
 import { usePolling } from '../../api/usePolling';
-import { Badge } from '../../components/Badge';
 import { Banner } from '../../components/Banner';
 import { Button } from '../../components/Button';
+import { LeadStatus } from '../../components/LeadStatus';
+import { LiveStatus } from '../../components/LiveStatus';
 import { Spinner } from '../../components/Spinner';
+import { TierSignal } from '../../components/TierSignal';
 import { formatPhone, formatReceived, formatRelative } from '../../lib/format';
+
+/**
+ * Admin > Leads: every lead the poller has pulled in, replied or not.
+ * `ADMIN-LEADS.md` is the page's doc.
+ *
+ * **Redesigned to match the queue - Jeel, 2026-09-28.** One card holding the
+ * status tabs, the filters and the table, under a grey header band; the tier
+ * as signal bars, the score a plain number, each status an icon and words; the
+ * phone under the name. The pieces are the queue's own - `TierSignal`,
+ * `StatusIcon`, `LiveStatus` - so the two screens cannot drift apart.
+ *
+ * A row opens the lead's timeline, read-only - the brief always asked for it,
+ * and it waited on that page existing.
+ */
+
+/** A hyphen for an empty cell, as on the queue. */
+const EMPTY = '-';
 
 /**
  * In the order a lead lives them - Awaiting reply, Answering, Ready,
@@ -33,21 +53,6 @@ const SINCE: { key: string; label: string }[] = [
   { key: 'all', label: 'All time' },
 ];
 
-const STATUS_LABEL: Record<LeadStatus, string> = Object.fromEntries(
-  TABS.filter((t) => t.key !== 'all').map((t) => [t.key, t.label])
-) as Record<LeadStatus, string>;
-
-const STATUS_TONE: Record<LeadStatus, 'neutral' | 'navy' | 'success' | 'muted' | 'warning'> = {
-  awaiting_reply: 'neutral',
-  answering: 'neutral',
-  ready: 'success',
-  working: 'navy',
-  closed: 'muted',
-  needs_review: 'warning',
-  opted_out: 'muted',
-  expired: 'muted',
-};
-
 function leadName(lead: AdminLead): string {
   const first = lead.firstName?.trim();
   const last = lead.lastName?.trim();
@@ -62,6 +67,7 @@ function pollIsStale(poll: AdminLeadsResponse['poll']): boolean {
 }
 
 export function LeadsPage() {
+  const navigate = useNavigate();
   const [status, setStatus] = useState('all');
   const [since, setSince] = useState('all');
   const [source, setSource] = useState<string>('');
@@ -89,7 +95,7 @@ export function LeadsPage() {
     [status, since, source, query, page]
   );
 
-  const { data, error } = usePolling<AdminLeadsResponse>(fetcher);
+  const { data, error, updatedAt } = usePolling<AdminLeadsResponse>(fetcher);
 
   // Highlight rows that were not in the previous response. Driven off `data`
   // rather than the fetch, so it works the same whichever tick delivered them.
@@ -124,6 +130,7 @@ export function LeadsPage() {
             Every lead pulled from EZ Texting, including those who never replied.
           </p>
         </div>
+        <LiveStatus updatedAt={updatedAt} paused={Boolean(error)} />
       </div>
 
       {error && <Banner tone="error">{error}</Banner>}
@@ -133,151 +140,144 @@ export function LeadsPage() {
         </Banner>
       )}
 
-      <div className="leads__tabs" role="tablist">
-        {TABS.map((tab) => (
-          <button
-            key={tab.key}
-            role="tab"
-            aria-selected={status === tab.key}
-            className={`leads__tab${status === tab.key ? ' leads__tab--active' : ''}`}
-            onClick={() => {
-              setStatus(tab.key);
+      <div className="card queue-card">
+        <div className="leads__tabs leads__tabs--in-card" role="tablist">
+          {TABS.map((tab) => (
+            <button
+              key={tab.key}
+              role="tab"
+              aria-selected={status === tab.key}
+              className={`leads__tab${status === tab.key ? ' leads__tab--active' : ''}`}
+              onClick={() => {
+                setStatus(tab.key);
+                setPage(1);
+              }}
+            >
+              {tab.label}
+              <span className="leads__tab-count">{counts[tab.key] ?? 0}</span>
+            </button>
+          ))}
+        </div>
+
+        <div className="queue-card__toolbar">
+          <input
+            className="leads__search queue-card__search"
+            type="search"
+            placeholder="Search name or phone"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            aria-label="Search leads"
+          />
+          <select
+            className="leads__select"
+            value={source}
+            onChange={(e) => {
+              setSource(e.target.value);
               setPage(1);
             }}
+            aria-label="Source"
           >
-            {tab.label}
-            <span className="leads__tab-count">{counts[tab.key] ?? 0}</span>
-          </button>
-        ))}
-      </div>
-
-      <div className="leads__filters">
-        <input
-          className="leads__search"
-          type="search"
-          placeholder="Search name or phone"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          aria-label="Search leads"
-        />
-        <select
-          className="leads__select"
-          value={source}
-          onChange={(e) => {
-            setSource(e.target.value);
-            setPage(1);
-          }}
-          aria-label="Source"
-        >
-          <option value="">All sources</option>
-          {(data?.sources ?? []).map((s) => (
-            <option key={s} value={s}>
-              {s}
-            </option>
-          ))}
-        </select>
-        <select
-          className="leads__select"
-          value={since}
-          onChange={(e) => {
-            setSince(e.target.value);
-            setPage(1);
-          }}
-          aria-label="Received"
-        >
-          {SINCE.map((s) => (
-            <option key={s.key} value={s.key}>
-              {s.label}
-            </option>
-          ))}
-        </select>
-        {data && <span className="leads__total">{data.total} leads</span>}
-      </div>
-
-      {!data ? (
-        <div className="leads__loading">
-          <Spinner />
+            <option value="">All sources</option>
+            {(data?.sources ?? []).map((s) => (
+              <option key={s} value={s}>
+                {s}
+              </option>
+            ))}
+          </select>
+          <select
+            className="leads__select"
+            value={since}
+            onChange={(e) => {
+              setSince(e.target.value);
+              setPage(1);
+            }}
+            aria-label="Received"
+          >
+            {SINCE.map((s) => (
+              <option key={s.key} value={s.key}>
+                {s.label}
+              </option>
+            ))}
+          </select>
+          {data && <span className="leads__total">{data.total} leads</span>}
         </div>
-      ) : data.leads.length === 0 ? (
-        <p className="leads__empty">No leads in this view.</p>
-      ) : (
-        <div className="table-wrap">
-          <table className="table">
-            <thead>
-              <tr>
-                <th>Received</th>
-                <th>Lead</th>
-                <th>Phone</th>
-                <th>Source</th>
-                <th>Status</th>
-                <th>Step</th>
-                <th>Score</th>
-                <th>Last activity</th>
-              </tr>
-            </thead>
-            <tbody>
-              {data.leads.map((lead) => (
-                <tr
-                  key={lead.id}
-                  className={
-                    (lead.status === 'opted_out' ? 'leads__row--danger ' : '') +
-                    (fresh.has(lead.id) ? 'leads__row--new' : '')
-                  }
-                >
-                  <td className="tabular">{formatReceived(lead.receivedAt)}</td>
-                  <td>
-                    <strong>{leadName(lead)}</strong>
-                  </td>
-                  <td className="tabular">{formatPhone(lead.phone)}</td>
-                  <td className="mono">{lead.source ?? '-'}</td>
-                  <td>
-                    {lead.status ? (
-                      <Badge tone={STATUS_TONE[lead.status]}>{STATUS_LABEL[lead.status]}</Badge>
-                    ) : (
-                      '-'
-                    )}
-                  </td>
-                  <td>{lead.stepReached ? `Q${lead.stepReached}` : '-'}</td>
-                  <td>
-                    {lead.score !== null ? (
-                      <span className={`score${lead.tier ? ` score--${lead.tier.toLowerCase()}` : ''}`}>
-                        <span className="score__value tabular">{lead.score}</span>
-                        {lead.tier ? <span className="score__tier">{lead.tier}</span> : null}
-                      </span>
-                    ) : (
-                      '-'
-                    )}
-                  </td>
-                  <td>
-                    {lead.lastActivityAt ? (
-                      <>
-                        {lead.lastActivityDirection === 'inbound' ? '← ' : '→ '}
-                        {formatRelative(lead.lastActivityAt)}
-                      </>
-                    ) : (
-                      '-'
-                    )}
-                  </td>
+
+        {!data ? (
+          <div className="leads__loading">
+            <Spinner />
+          </div>
+        ) : data.leads.length === 0 ? (
+          <p className="leads__empty">No leads in this view.</p>
+        ) : (
+          <div className="table-wrap">
+            <table className="table queue__table">
+              <thead>
+                <tr>
+                  <th>Tier</th>
+                  <th>Lead</th>
+                  <th>Status</th>
+                  <th>Step</th>
+                  <th className="right">Score</th>
+                  <th>Source</th>
+                  <th>Received</th>
+                  <th>Last activity</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
+              </thead>
+              <tbody>
+                {data.leads.map((lead) => (
+                  <tr
+                    key={lead.id}
+                    className={`queue__row${fresh.has(lead.id) ? ' leads__row--new' : ''}`}
+                    onClick={() => navigate(`/leads/${lead.id}/timeline`)}
+                    title="Open the timeline"
+                  >
+                    <td>
+                      <TierSignal tier={lead.tier} />
+                    </td>
+                    <td>
+                      <span className="queue__name">{leadName(lead)}</span>
+                      <span className="queue__phone">{formatPhone(lead.phone)}</span>
+                    </td>
+                    <td>{lead.status ? <LeadStatus status={lead.status} /> : EMPTY}</td>
+                    <td className={lead.stepReached ? 'mono' : undefined}>
+                      {lead.stepReached ? `Q${lead.stepReached}` : EMPTY}
+                    </td>
+                    <td className="right tabular queue__score">{lead.score ?? EMPTY}</td>
+                    <td className="mono queue__source">{lead.source ?? EMPTY}</td>
+                    <td className="leads__when">{formatReceived(lead.receivedAt)}</td>
+                    <td className="leads__when">
+                      {lead.lastActivityAt ? (
+                        <>
+                          <span aria-label={lead.lastActivityDirection === 'inbound' ? 'From the lead' : 'To the lead'}>
+                            {lead.lastActivityDirection === 'inbound' ? '← ' : '→ '}
+                          </span>
+                          {formatRelative(lead.lastActivityAt)}
+                        </>
+                      ) : (
+                        EMPTY
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
 
-      {data && totalPages > 1 && (
-        <div className="leads__pager">
-          <Button variant="secondary" disabled={page <= 1} onClick={() => setPage((p) => p - 1)}>
-            Previous
-          </Button>
-          <span>
-            Page {page} of {totalPages}
-          </span>
-          <Button variant="secondary" disabled={page >= totalPages} onClick={() => setPage((p) => p + 1)}>
-            Next
-          </Button>
-        </div>
-      )}
+        {data && totalPages > 1 && (
+          <div className="leads__pager">
+            <Button variant="secondary" disabled={page <= 1} onClick={() => setPage((p) => p - 1)}>
+              Previous
+            </Button>
+            <span>
+              Page {page} of {totalPages}
+            </span>
+            <Button variant="secondary" disabled={page >= totalPages} onClick={() => setPage((p) => p + 1)}>
+              Next
+            </Button>
+          </div>
+        )}
+      </div>
     </section>
   );
 }

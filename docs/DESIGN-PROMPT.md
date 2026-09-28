@@ -254,7 +254,7 @@ Left sub-navigation within the page: **Overview** · **Leads** · **Scoring** ·
 - **Filters:** Source (multi-select), Received (Last 1h / 24h / 7d / 30d / All). **Search:** name or phone.
 - **Table columns:** Received (date and time, tabular), Lead (first name + last initial), Phone (formatted), Source (monospace), Status (tag, as above), Step reached (`–`, `Q1`, `Q2`, `Q3`), Score and tier (only when completed, else `–`), Last activity (time of the most recent SMS in or out, with direction).
 - **Default sort:** newest received first.
-- **Row click** opens the Lead Timeline (page 4) for that lead.
+- **Row click** opens the Lead Timeline (page 4) for that lead. *(2026-09-28: built, with the page redesigned in the queue's style - one card, tier bars, status icons. `ADMIN-LEADS.md`, "The page".)*
 - **Read-only.** No Call or SMS buttons here; working a lead happens in the Agent Workspace. `Opted out` rows are tinted with the Danger colour and say so.
 - **Pagination:** 50 rows per page, page controls at the bottom, total count at the top. At 50–100 leads a day the list passes 30,000 rows within a year.
 - **Live:** new leads appear at the top without a refresh, with the same 600ms row highlight as the queue.
