@@ -303,12 +303,12 @@ it, which is what a log line keys on.
 looking at a lead an agent holds has still read it, and the flag is about
 whether a human has seen the message, not about who owns the work.
 
-**What it is for.** An expired conversation is closed, so the only thing keeping
-such a lead in the queue is this flag - `db/queue.ts`,
-`c.status = 'expired' AND l.has_unread_inbound`. Nothing cleared it before, so
-the lead never left. `scripts/read-flag-live-check.ts` proves the effect against
-a real database: the lead leaves the queue once read, while one whose
-conversation is still open stays, because the flag was never what held it there.
+**What it is for.** For an expired conversation, or a partway one an agent took
+over, the only thing keeping the lead in the queue is this flag - `db/queue.ts`.
+Nothing cleared it before, so such a lead never left.
+`scripts/read-flag-live-check.ts` proves the effect against a real database: a
+taken-over lead leaves the queue once read, while a completed one stays, because
+the flag was never what held it there.
 
 ## How claim and release are built
 

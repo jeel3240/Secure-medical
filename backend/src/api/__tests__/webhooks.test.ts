@@ -61,6 +61,7 @@ interface ConversationSeed {
   invalid_count?: number;
   score?: number;
   tier?: string | null;
+  agent_took_over_at?: string | null;
 }
 
 function fakeClient(opts: {
@@ -282,7 +283,7 @@ describe('START, a lead asking to hear from us again', () => {
 });
 
 describe('a reply from a lead we hold', () => {
-  it('is stored and flagged unread', async () => {
+  it('is stored, and flagged for a person when it has no conversation to handle it', async () => {
     const { client, calls } = fakeClient({ leadId: 42 });
     connect.mockReturnValue(client);
 
@@ -293,6 +294,61 @@ describe('a reply from a lead we hold', () => {
     expect(insert?.values).toEqual([42, '1', '309451030003', '15551230000', '2026-09-16T10:00:00.000+00:00']);
     expect(sqlOf(calls)).toMatch(/UPDATE leads SET has_unread_inbound/i);
     expect(sqlOf(calls)).toMatch(/COMMIT/);
+  });
+
+  describe('flagging a reply for a person', () => {
+    // The flag is the queue's Inbound reply. It is set only for a reply the
+    // questions do not handle - never for an answer - Jeel, 2026-09-28.
+    const flagged = (calls: Recorded[]) => /UPDATE leads SET has_unread_inbound/i.test(sqlOf(calls));
+
+    it('does not flag an answer to the question in progress', async () => {
+      const { client, calls } = fakeClient({ leadId: 42, conversation: {} });
+      connect.mockReturnValue(client);
+
+      await request(buildApp()).post('/api/webhooks/eztexting').send(reply({ message: '1' }));
+
+      expect(flagged(calls)).toBe(false);
+    });
+
+    it('does not flag the answer that completes the conversation', async () => {
+      const conversation = { step: 3, q1: '3', q2: '1', score: 55, tier: 'WARM' };
+      const { client, calls } = fakeClient({ leadId: 42, conversation });
+      connect.mockReturnValue(client);
+
+      await request(buildApp()).post('/api/webhooks/eztexting').send(reply({ message: '1' }));
+
+      expect(flagged(calls)).toBe(false);
+    });
+
+    it('flags a message after the conversation ended', async () => {
+      const { client, calls } = fakeClient({ leadId: 42, conversation: { status: 'completed', score: 100 } });
+      connect.mockReturnValue(client);
+
+      await request(buildApp())
+        .post('/api/webhooks/eztexting')
+        .send(reply({ message: 'can you call me at 3?' }));
+
+      expect(flagged(calls)).toBe(true);
+    });
+
+    it('flags a reply to an agent who took the conversation over', async () => {
+      const conversation = { step: 2, q1: '3', score: 25, agent_took_over_at: '2026-09-28T10:00:00.000Z' };
+      const { client, calls } = fakeClient({ leadId: 42, conversation });
+      connect.mockReturnValue(client);
+
+      await request(buildApp()).post('/api/webhooks/eztexting').send(reply({ message: '1' }));
+
+      expect(flagged(calls)).toBe(true);
+    });
+
+    it('does not flag an opt-out', async () => {
+      const { client, calls } = fakeClient({ leadId: 42, conversation: {} });
+      connect.mockReturnValue(client);
+
+      await request(buildApp()).post('/api/webhooks/eztexting').send(reply({ message: 'STOP' }));
+
+      expect(flagged(calls)).toBe(false);
+    });
   });
 
   it('ignores a duplicate without flagging it unread again', async () => {

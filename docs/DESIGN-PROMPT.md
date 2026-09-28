@@ -64,7 +64,7 @@ Role is set at login. Navigation adapts to role.
 
 ### 2. Priority Queue (default landing for agents)
 
-**Purpose:** show every responder, sorted by score then freshness, so the newest high-intent lead is always at the top. Updates live as replies arrive.
+**Purpose:** show every responder *(2026-09-28, Jeel: no - only leads that need a person: completed, needs review, an inbound reply, or one being worked. A lead partway through the questions is on Admin > Leads. `QUEUE.md`)*, sorted by score then freshness, so the newest high-intent lead is always at the top. Updates live as replies arrive.
 
 *(2026-09-22: the API behind this screen is built - `QUEUE.md` says what it returns, which leads are in it and which status tag wins when several apply. Two things it does not give the screen: **STATE** has no data behind it, because EZ Texting sends no state with a contact (`EZTEXTING-API.md`), and there is no live channel yet, so "updates live" is still a design intent.)*
 
@@ -90,7 +90,7 @@ Role is set at login. Navigation adapts to role.
    - `In progress – {agent name}` (lead is locked)
    - `Callback {time}`
    - `Needs review` (invalid replies, agent must read raw text)
-   - `Stalled at Q2` / `Stalled at Q1` (partial responder)
+   - `Stalled at Q2` / `Stalled at Q1` (partial responder) *(2026-09-28: removed - partway leads are not in the queue)*
    - `Inbound reply` (lead texted after conversation ended – unread indicator)
    - `Seen before, stopped at Q2` (resold lead with history) - *2026-09-19: does not occur until repeat-lead handling is built, a future item.*
 11. **Actions** – "Open" button; on hover, quick "Call" and "SMS" icons. *(2026-09-28, Jeel: the button is **Pick**, not Open. Clicking it assigns the lead to the agent - `leads.assigned_to` - and "Open" said nothing about that, so an agent could take a lead without realising they had. It has four states, since "may click" and "may claim" are different questions: **Pick** when nobody holds it, **Resume** when you do, **View** when a superadmin looks at someone else's, and no button at all for an agent on someone else's. `QUEUE.md`, "What the button offers". Same wording on the My Callbacks row and the Lead Timeline header, which claim the same way.)*

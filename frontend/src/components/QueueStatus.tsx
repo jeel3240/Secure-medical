@@ -42,8 +42,6 @@ export function tagText(tag: QueueTag): string {
       return 'Inbound reply';
     case 'needs_review':
       return 'Needs review';
-    case 'stalled':
-      return tag.step ? `Stalled at Q${tag.step}` : 'Stalled';
     case 'attempted':
       return `Attempted ${tag.attempts ?? 1}x`;
     case 'new':
@@ -61,7 +59,6 @@ const LOOK: Record<QueueTag['kind'], { mark: Mark; tone: Tone }> = {
   callback: { mark: 'ring', tone: 'normal' },
   inbound_reply: { mark: 'dot', tone: 'strong' },
   needs_review: { mark: 'dot', tone: 'alert' },
-  stalled: { mark: 'ring', tone: 'muted' },
   attempted: { mark: 'square', tone: 'muted' },
   new: { mark: 'ring', tone: 'muted' },
 };

@@ -13,8 +13,8 @@
  *   DATABASE_URL=postgres://app:app@localhost:5433/queue_check REDIS_URL=x JWT_SECRET=x \
  *     EZT_USERNAME=x EZT_PASSWORD=x EZT_GROUP=x npx ts-node --transpile-only scripts/queue-live-check.ts
  *
- * Re-running needs a fresh database: DROP and re-migrate. Last run 2026-09-22,
- * 36 checks, all passing.
+ * Re-running needs a fresh database: DROP and re-migrate. Last run 2026-09-28,
+ * 40 checks, all passing.
  */
 import { pool } from '../src/db/pool';
 import { listQueue } from '../src/db/queue';
@@ -96,6 +96,13 @@ async function main() {
 
   await lead({ phone: '+15550000009', first: 'Tie-older', source: 'CORE-G-27', ageMin: 120, status: 'completed', q1: '1', q2: '1', q3: '1', score: 55, tier: 'WARM' });
   await lead({ phone: '+15550000010', first: 'Tie-newer', source: 'CORE-G-27', ageMin: 2, status: 'completed', q1: '1', q2: '1', q3: '1', score: 55, tier: 'WARM' });
+  // Partway through the questions but being worked - these must stay in.
+  await lead({ phone: '+15550000011', first: 'Busy', source: 'CORE-G-31', ageMin: 28, status: 'open', q1: '3', score: 25, tier: 'LOW', assignedTo: michael });
+  const booked = await lead({ phone: '+15550000012', first: 'Booked', source: 'CORE-G-27', ageMin: 35, status: 'open', q1: '1', score: 15, tier: 'LOW' });
+  await pool.query(`INSERT INTO callbacks (lead_id, agent_id, scheduled_at) VALUES ($1,$2, now() + interval '5 hours')`, [booked, michael]);
+  const handover = await lead({ phone: '+15550000013', first: 'Handover', source: 'CORE-G-27', ageMin: 45, status: 'open', q1: '2', score: 20, tier: 'LOW', unread: true });
+  await pool.query(`UPDATE conversations SET agent_took_over_at = now() - interval '30 minutes' WHERE lead_id = $1`, [handover]);
+
   const called = await lead({ phone: '+15550000008', first: 'Called', source: 'CORE-G-27', ageMin: 15, status: 'completed', q1: '2', q2: '2', q3: '2', score: 50, tier: 'WARM' });
 
   // history that must not multiply rows
@@ -106,10 +113,13 @@ async function main() {
   await pool.query(`INSERT INTO callbacks (lead_id, agent_id, scheduled_at, done_at) VALUES ($1,$2, now(), now())`, [stale, michael]);
 
   const all = await listQueue();
-  check('order: score desc then freshest', all.leads.map((l) => l.firstName), ['Hot', 'Held', 'Released', 'Stale', 'Tie-newer', 'Tie-older', 'Called', 'Warm', 'Back', 'Low']);
+  check('order: score desc then freshest', all.leads.map((l) => l.firstName), ['Hot', 'Held', 'Released', 'Stale', 'Tie-newer', 'Tie-older', 'Called', 'Busy', 'Back', 'Handover', 'Booked', 'Low']);
+  // Jeel, 2026-09-28: only leads that need a person. Warm answered one question
+  // and is still open - not asked for a call yet, so not here.
+  check('a lead partway through the questions is not in the queue', all.leads.some((l) => l.firstName === 'Warm'), false);
   check('same score: the fresher lead is on top', all.leads.filter((l) => l.score === 55).map((l) => l.firstName), ['Tie-newer', 'Tie-older']);
-  check('excluded the rest', all.total, 10);
-  check('tier counts', all.counts, { all: 10, HOT: 2, WARM: 6, LOW: 2 });
+  check('excluded the rest', all.total, 12);
+  check('tier counts', all.counts, { all: 12, HOT: 2, WARM: 5, LOW: 5 });
   check('sources', all.sources, ['CORE-G-27', 'CORE-G-31']);
   check('one row per lead despite two conversations', all.leads.filter((l) => l.id === hot).length, 1);
   check('newest conversation wins', all.leads.find((l) => l.id === hot)?.conversationStatus, 'completed');
@@ -122,27 +132,30 @@ async function main() {
   check('tag: unread reply', tags.Back, { kind: 'inbound_reply' });
   check('tag: unreadable replies need a human', tags.Low, { kind: 'needs_review' });
   check('tag: two call attempts', tags.Called, { kind: 'attempted', attempts: 2 });
-  check('tag: stalled after one answer', tags.Warm, { kind: 'stalled', step: 1 });
+  check('partway, but an agent holds it: stays, In progress', tags.Busy, { kind: 'in_progress', agentName: 'Michael' });
+  check('partway, but a callback is booked: stays, Callback', tags.Booked?.kind, 'callback');
+  check('partway, taken over, lead replied: stays, Inbound reply', tags.Handover, { kind: 'inbound_reply' });
 
   const soonest = new Date(tags.Released?.callbackAt ?? 0).getTime() - Date.now();
   check('callback is the soonest, not the first', soonest < 2 * 3600_000, true);
 
   const hotOnly = await listQueue({ tier: ['HOT'] });
   check('tier filter narrows the rows', hotOnly.leads.map((l) => l.firstName), ['Hot', 'Held']);
-  check('tier filter does not change the pills', hotOnly.counts, { all: 10, HOT: 2, WARM: 6, LOW: 2 });
+  check('tier filter does not change the pills', hotOnly.counts, { all: 12, HOT: 2, WARM: 5, LOW: 5 });
   check('tier filter changes the total', hotOnly.total, 2);
 
   const oneSource = await listQueue({ source: ['CORE-G-31'] });
-  check('source filter narrows the rows', oneSource.leads.map((l) => l.firstName), ['Warm']);
+  check('source filter narrows the rows', oneSource.leads.map((l) => l.firstName), ['Busy']);
   check('source filter leaves the dropdown whole', oneSource.sources, ['CORE-G-27', 'CORE-G-31']);
-  check('source filter narrows the pills', oneSource.counts, { all: 1, WARM: 1 });
+  check('source filter narrows the pills', oneSource.counts, { all: 1, LOW: 1 });
 
   const recent = await listQueue({ since: new Date(Date.now() - 25 * 60_000) });
   check('since keeps only fresh leads', recent.leads.map((l) => l.firstName), ['Hot', 'Held', 'Tie-newer', 'Called', 'Back']);
 
-  check('search by name', (await listQueue({ q: 'warm' })).leads.map((l) => l.firstName), ['Warm']);
-  check('search by last name', (await listQueue({ q: 'Test' })).total, 10);
-  check('search by formatted phone', (await listQueue({ q: '(555) 000-0002' })).leads.map((l) => l.firstName), ['Warm']);
+  check('search by name', (await listQueue({ q: 'busy' })).leads.map((l) => l.firstName), ['Busy']);
+  check('search cannot find a lead that is not in the queue', (await listQueue({ q: 'warm' })).leads.length, 0);
+  check('search by last name', (await listQueue({ q: 'Test' })).total, 12);
+  check('search by formatted phone', (await listQueue({ q: '(555) 000-0011' })).leads.map((l) => l.firstName), ['Busy']);
   check('search by phone fragment', (await listQueue({ q: '0000003' })).leads.map((l) => l.firstName), ['Low']);
   check('search with no match', (await listQueue({ q: 'nobody' })).leads.length, 0);
   check("a typed % is text, not a wildcard", (await listQueue({ q: '%' })).leads.length, 0);
@@ -151,7 +164,7 @@ async function main() {
 
   const two = await listQueue({ limit: 2 });
   check('limit cuts the rows', two.leads.map((l) => l.firstName), ['Hot', 'Held']);
-  check('limit does not hide the total', two.total, 10);
+  check('limit does not hide the total', two.total, 12);
   check('limit is reported back', two.limit, 2);
   check('limit is clamped, never rejected', (await listQueue({ limit: 9999 })).limit, 500);
 

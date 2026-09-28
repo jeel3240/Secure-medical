@@ -188,8 +188,6 @@ const handleInbound = async (req: Request, res: Response) => {
       return res.sendStatus(200);
     }
 
-    await client.query('UPDATE leads SET has_unread_inbound = true WHERE id = $1', [leadId]);
-
     const optedOut = isOptOut(payload);
 
     // START lifts the block first, so anything else in this reply is handled
@@ -215,6 +213,17 @@ const handleInbound = async (req: Request, res: Response) => {
     // one place. A lead with no conversation at all still gets blocked.
     if (pending?.result.blockNumber ?? optedOut) {
       await blockNumber(client, phone, STOP_REASON);
+    }
+
+    // Flag the lead only when a person has to read this - Jeel, 2026-09-28.
+    // The flag is the queue's Inbound reply, and it used to be set on every
+    // reply, so a lead simply answering "1" read as one. The state machine
+    // decides: a message after the conversation ended, or to an agent who took
+    // it over. A lead with no conversation has nothing handling their message
+    // either. An opt-out never needs one - the block is the whole response.
+    const needsPerson = !optedOut && (pending === null || pending.result.needsPerson);
+    if (needsPerson) {
+      await client.query('UPDATE leads SET has_unread_inbound = true WHERE id = $1', [leadId]);
     }
 
     await client.query('COMMIT');

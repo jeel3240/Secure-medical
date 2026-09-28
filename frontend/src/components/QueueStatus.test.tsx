@@ -27,7 +27,6 @@ describe('status marks', () => {
     ['a callback booked', { kind: 'callback' }, 'Callback', 'ring', 'normal'],
     ['an unread reply', { kind: 'inbound_reply' }, 'Inbound reply', 'dot', 'strong'],
     ['replies nobody understood', { kind: 'needs_review' }, 'Needs review', 'dot', 'alert'],
-    ['answered some and stopped', { kind: 'stalled', step: 2 }, 'Stalled at Q2', 'ring', 'muted'],
     ['called and not reached', { kind: 'attempted', attempts: 2 }, 'Attempted 2x', 'square', 'muted'],
     ['nothing yet', { kind: 'new' }, 'New', 'ring', 'muted'],
   ])('%s', (_, tag, text, mark, tone) => {
@@ -35,7 +34,7 @@ describe('status marks', () => {
   });
 
   it('only the two statuses that need a person first stand out', () => {
-    const loud = (['in_progress', 'callback', 'inbound_reply', 'needs_review', 'stalled', 'attempted', 'new'] as const)
+    const loud = (['in_progress', 'callback', 'inbound_reply', 'needs_review', 'attempted', 'new'] as const)
       .filter((kind) => ['strong', 'alert'].includes(renderTag({ kind } as QueueTag).tone!));
     expect(loud).toEqual(['inbound_reply', 'needs_review']);
   });

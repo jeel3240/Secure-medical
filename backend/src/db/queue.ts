@@ -81,17 +81,26 @@ const BASE = `
 `;
 
 /**
- * Who belongs in the queue.
+ * Who belongs in the queue: only leads that need a person - Jeel, 2026-09-28.
  *
- * - **Responders only.** A score above 0 means they have replied at least once;
- *   the queue is for people who showed interest, not everyone the partner sent.
- * - **Never a blocked number**, whatever its conversation says. An opt-out is
- *   absolute, and a live `dnc_list` row is the record of one.
- * - **Not suppressed**, which is the same lead from the conversation's side.
- * - **Not expired** - a conversation that timed out is closed, Jeel's decision
- *   2026-09-19 - *unless* the lead has texted since. That reply is unread and
- *   needs a human, so the lead comes back tagged `inbound_reply` until an agent
- *   opens it. STATE-MACHINE.md, "Expiry".
+ * It used to hold every responder, including a lead halfway through the
+ * questions. But question 3 asks how they want to be contacted, so a lead who
+ * has not reached it has not asked for a call - and one still answering would
+ * be interrupted by it. A lead is in when it has replied (a score above 0), its
+ * number is not blocked (a live `dnc_list` row, whatever the conversation
+ * says), and one of these holds:
+ *
+ * - **Completed** - answered all three, including how to contact them.
+ * - **Needs review** - replied, and we could not understand it.
+ * - **Inbound reply** - texted something the questions cannot handle: after
+ *   the conversation ended, or to an agent who took it over. Since the same day
+ *   that is exactly what `has_unread_inbound` means - STATE-MACHINE.md, rules 2
+ *   and 2b - so the flag can stand on its own here.
+ * - **Being worked** - an active agent holds it, or a callback is booked. A
+ *   lead must never vanish from under the agent working it, whatever its
+ *   conversation says.
+ *
+ * A lead partway through the questions is on Admin > Leads only.
  */
 const INCLUDED = `
   c.score > 0
@@ -99,8 +108,10 @@ const INCLUDED = `
     SELECT 1 FROM dnc_list d WHERE d.phone = l.phone AND d.released_at IS NULL
   )
   AND (
-    c.status IN ('open', 'completed', 'review')
-    OR (c.status = 'expired' AND l.has_unread_inbound)
+    c.status IN ('completed', 'review')
+    OR l.has_unread_inbound
+    OR u.id IS NOT NULL
+    OR cb.scheduled_at IS NOT NULL
   )
 `;
 
@@ -240,7 +251,6 @@ export async function listQueue(query: QueueQuery = {}): Promise<QueuePage> {
       conversationStatus: r.status,
       tag: queueTag({
         conversationStatus: r.status,
-        answers: [r.q1, r.q2, r.q3],
         assignedAgentName: r.agent_name,
         hasUnreadInbound: r.has_unread_inbound,
         callCount: r.calls ?? 0,

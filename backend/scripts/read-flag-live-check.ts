@@ -106,7 +106,7 @@ async function main(): Promise<void> {
     check('succeeds without changing anything', result.ok && result.changed, false);
   }
 
-  console.log('\nan open conversation');
+  console.log('\na completed conversation');
   {
     const { rows } = await pool.query(
       `INSERT INTO leads (phone, has_unread_inbound, ezt_added_at)
@@ -114,16 +114,36 @@ async function main(): Promise<void> {
     );
     const lead: number = rows[0].id;
     await pool.query(
-      `INSERT INTO conversations (lead_id, status, step, q1, score, tier)
-       VALUES ($1, 'open', 2, '3', 25, 'LOW')`,
+      `INSERT INTO conversations (lead_id, status, step, q1, q2, q3, score, tier)
+       VALUES ($1, 'completed', 3, '3', '1', '1', 100, 'HOT')`,
       [lead]
     );
 
     check('is queued before', await isQueued(lead), true);
     await markLeadRead(lead);
-    // Still open, so it belongs in the queue on its own merits - the flag was
+    // Completed, so it belongs in the queue on its own merits - the flag was
     // never what was holding it there.
     check('stays queued after being read', await isQueued(lead), true);
+  }
+
+  console.log('\na reply to an agent who took over, partway through');
+  {
+    const { rows } = await pool.query(
+      `INSERT INTO leads (phone, has_unread_inbound, ezt_added_at)
+       VALUES ('+15550000105', true, now()) RETURNING id`
+    );
+    const lead: number = rows[0].id;
+    await pool.query(
+      `INSERT INTO conversations (lead_id, status, step, q1, score, tier, agent_took_over_at)
+       VALUES ($1, 'open', 2, '3', 25, 'LOW', now() - interval '10 minutes')`,
+      [lead]
+    );
+
+    check('is queued while the reply is unread', await isQueued(lead), true);
+    await markLeadRead(lead);
+    // Partway leads are not in the queue - Jeel, 2026-09-28 - so once the
+    // reply is read and nobody holds it, nothing keeps it there.
+    check('leaves once read', await isQueued(lead), false);
   }
 
   console.log('\na lead that does not exist');

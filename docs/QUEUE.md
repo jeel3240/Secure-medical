@@ -9,18 +9,31 @@ tag). Flow rules it depends on: `STATE-MACHINE.md`.
 
 ## Who is in it
 
-Responders only. Someone the partner sent who never texted back is not an
-agent's problem, and burying HOT leads under them is the reason this list and
-Admin > Leads are separate pages - `ADMIN-LEADS.md`.
+**Only leads that need a person - Jeel, 2026-09-28.** It used to hold every
+responder, a lead halfway through the questions included. But question 3 asks
+how they want to be contacted: a lead who has not reached it has not asked for
+a call, and one still answering would be interrupted by it. Agents contact
+people who have given them a reason to.
 
-A lead is in the queue when all of these hold:
+A lead is in the queue when it has replied, its number is not blocked, and one
+of the four reasons below holds:
 
-| Rule | Why |
+| Always | Why |
 |---|---|
-| Score above 0 | Scoring starts at the first reply, so a score is the mark of a responder. Nothing else on the row proves a reply as cheaply. |
+| Score above 0 | Scoring starts at the first reply, so a score is the mark of a responder. |
 | No live `dnc_list` row for the phone | An opt-out is absolute. A row released by START (`released_at` set) does not count - `STATE-MACHINE.md`, "Opting back in". |
-| Newest conversation is `open`, `completed` or `review` | `suppressed` is an opt-out from the conversation's side. |
-| …or `expired` **and** the lead has an unread inbound | Expired leads leave the queue - Jeel, 2026-09-19 - but a lead who texts us afterwards comes back until an agent reads it. |
+
+| And one of | Why a person is needed |
+|---|---|
+| Newest conversation `completed` | Answered all three, including how to contact them |
+| Newest conversation `review` | Replied, and we could not understand it |
+| `has_unread_inbound` | Texted something the questions cannot handle - after the conversation ended, or to an agent who took it over. `STATE-MACHINE.md`, "Which replies need a person" |
+| An active agent holds it, or a callback is booked | Being worked. A lead must never vanish from under the agent working it, whatever its conversation says - this is also what keeps an expired lead with a callback, as the 2026-09-19 rule intended |
+
+A lead partway through the questions is on Admin > Leads, under *In progress*,
+and nowhere an agent works from. Someone who stops for good expires after the
+reply window and never reaches the queue - accepted: they never said how, or
+whether, they wanted to be contacted.
 
 Only the newest conversation counts. Older ones are history and are not
 consulted, so a lead who completed a second conversation is not dragged back by
@@ -49,17 +62,15 @@ know:
 | 2 | `callback` | A callback is booked and not done | `callbackAt` - the soonest |
 | 3 | `inbound_reply` | The lead has texted and nobody has read it | |
 | 4 | `needs_review` | Conversation `review`: replies we could not read | |
-| 5 | `stalled` | Conversation `open`, one or two answers in | `step` - the number of answers |
-| 6 | `attempted` | Calls have been made and none connected | `attempts` |
-| 7 | `new` | Nothing has happened yet | |
+| 5 | `attempted` | Calls have been made and none connected | `attempts` |
+| 6 | `new` | Nothing has happened yet | |
 
-Two things worth knowing:
+*(2026-09-28: there was a `stalled` tag - "Stalled at Q1 / Q2" - for a lead
+partway through. Partway leads are no longer in the queue, so it could never be
+shown and is gone.)*
 
-- **`stalled` counts answers, not the pending question.** `step: 2` is a lead
-  who answered Q1 and Q2 and went quiet, and the screen writes it "Stalled at
-  Q2". `step` is therefore only ever 1 or 2 - a third answer completes the
-  conversation. It is never set for an `expired` conversation, which is closed
-  rather than waiting: `STATE-MACHINE.md`, "Expiry".
+One thing worth knowing:
+
 - **A claim by a deactivated agent is ignored.** `assigned_to` is joined through
   `users.is_active`, so deactivating an agent hands their held leads back to the
   floor instead of parking them behind a name nobody can sign in as.
@@ -152,7 +163,9 @@ where most of the rules above actually live, so
 `backend/scripts/queue-live-check.ts` seeds one lead per case in a scratch
 database and asserts what comes back - inclusion, exclusion, order, every tag,
 each filter, the counts. The header of that file says how to run it. Last run
-2026-09-22: 36 checks, all passing.
+2026-09-28: 40 checks, all passing - including a partway lead kept out, and
+three partway leads kept in because they are held, booked, or taken over and
+replied to. Removing any one of the four reasons fails it.
 
 ## The polling hook
 
