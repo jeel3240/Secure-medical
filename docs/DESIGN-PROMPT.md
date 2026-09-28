@@ -69,20 +69,20 @@ Role is set at login. Navigation adapts to role.
 *(2026-09-22: the API behind this screen is built - `QUEUE.md` says what it returns, which leads are in it and which status tag wins when several apply. Two things it does not give the screen: **STATE** has no data behind it, because EZ Texting sends no state with a contact (`EZTEXTING-API.md`), and there is no live channel yet, so "updates live" is still a design intent.)*
 
 **Header row**
-- Three tier counters as pill-buttons that also act as filters: `HOT 4`, `WARM 7`, `LOW 12`. Selected state shows which tiers are visible.
+- Three tier counters as pill-buttons that also act as filters: `HOT 4`, `WARM 7`, `LOW 12`. Selected state shows which tiers are visible. *(2026-09-28, Jeel's mockup: one segmented switcher - **All · Hot · Warm · Low**, each with its count - and one choice at a time, not several. The filters and the table sit together in one card.)*
 - Filters: **Source** (multi-select dropdown: e.g. CORE-G-27, CORE-G-31), **Time window** (Last 1h / 24h / 7d / All).
 - Search box: name or phone.
 - "Live" indicator with last-updated timestamp.
 
 **Table columns** (in this order)
-1. **TIER** – coloured badge (HOT / WARM / LOW)
+1. **TIER** – coloured badge (HOT / WARM / LOW) *(2026-09-28: signal bars plus the word - three bars Hot, two Warm, one Low. `components/TierSignal.tsx`.)*
 2. **LEAD** – first name + last initial, bold
 3. **STATE** – 2-letter US state or "–"
 4. **INTEREST** – Supplements / Telehealth/Rx / Both / –
 5. **TIMING** – Today / This week / Researching / –
 6. **PREFERENCE** – Call me now / Text me / Contact me later / –
 7. **SCORE** – number, right-aligned, tabular
-8. **AGE** – `m:ss` since lead arrived, ticking live. Turns amber past 5 min, red past 15 min for HOT.
+8. **AGE** – `m:ss` since lead arrived, ticking live. Turns amber past 5 min, red past 15 min for HOT. *(2026-09-28: headed **WAITING**, monospace, and overdue shows as weight instead of colour - bold past 15 min for HOT, plain past 5 min, muted before. Same thresholds.)*
 9. **SOURCE** – partner code, monospace
 10. **STATUS** – a tag with one of:
    - `New`

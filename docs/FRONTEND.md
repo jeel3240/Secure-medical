@@ -86,6 +86,47 @@ labels, leaving half a line under "Maximum possible".
 Messages, DNC list, Settings. Two duplicated live links; the rest were folded
 into Configuration on 2026-09-23.
 
+## The queue - redesigned 2026-09-28
+
+Rebuilt to a mockup Jeel supplied. What changed and why:
+
+| Part | Was | Is |
+|---|---|---|
+| Layout | Filters and table loose on the page | One card holding both, the table head a light grey band |
+| Tier filter | Three pills, several at once | One segmented switcher - All, Hot, Warm, Low with counts - one at a time |
+| Tier column | Coloured badge | Signal bars and the word, `components/TierSignal.tsx` |
+| Age column | "AGE", amber and red | "WAITING", monospace; overdue is weight, not colour |
+| Status column | Coloured pills | A mark and the words, `components/QueueStatus.tsx` |
+| Button | Pick | **Pick up** - on every screen that picks, so the action has one name |
+| Empty cells | `-` | `—` |
+| Live label | Live | Live · updated just now |
+
+**Status marks carry meaning in their shape.** A filled dot is something
+happening (in progress, inbound reply, needs review), a ring is something
+waiting (callback, stalled, new), a square is a past attempt. Only two
+statuses raise their voice: Inbound reply in bold and Needs review in colour -
+the two a person must get to first. A column of coloured pills made every row
+shout, so none of them stood out. `QueueStatus.test.tsx` pins each mark.
+
+**Waiting keeps the brief's thresholds** - 5 minutes for any lead, 15 for HOT,
+`lib/format.ts` - but shows them as muted, plain and bold instead of grey, amber
+and red. In practice almost every lead in the queue is past 5 minutes, so the
+old amber coloured nearly every row and signalled nothing.
+
+**The tier switcher is one choice at a time.** The old pills allowed Hot and
+Warm together; the segmented control, as drawn, does not. The API still accepts
+several tiers if a screen ever wants them again.
+
+**Fixed while building it:** `--color-surface-alt` was used in seven places and
+defined nowhere, so the browser dropped every one - queue row hover, the grey
+of a locked row, the quick-callback chips' hover, Config's message boxes and
+the Overview funnel track had never rendered. They use `--color-surface-hover`
+now, and `type-system.test.ts` fails on any `var()` that is not defined.
+
+**Checked** on a separate dev server at 1280, 1366, 1440 and 1920px: the table
+fits its card at every width, and the switcher shows the right rows with its
+counts unchanged.
+
 ## The workspace - redesigned 2026-09-28
 
 Rebuilt to a mockup Jeel supplied. Every action behaves as before - checked by
@@ -231,7 +272,7 @@ land on the workspace.)
 **The button says what the click does to the database - Jeel, 2026-09-28.** It
 read "Open", which described where the click went rather than what it did: it
 writes `leads.assigned_to` and locks every colleague out. An agent could take a
-lead believing they had only looked at it. It is now **Pick**, and two further
+lead believing they had only looked at it. It is now **Pick up**, and two further
 states follow from the same rule - **Resume** on your own lead, **View** on
 someone else's when you are a superadmin. `QUEUE.md`, "What the button offers",
 is the table. The same wording is on the My Callbacks row and the Lead Timeline

@@ -133,3 +133,18 @@ describe('every rule in global.css', () => {
     expect(base && declared(base.body, 'font-weight')).toEqual(['var(--weight-semibold)']);
   });
 });
+
+describe('every token global.css uses', () => {
+  it('is defined somewhere - an unknown var() is silently dropped by the browser', () => {
+    // --color-surface-alt was used in seven places and defined in none, so
+    // queue row hover, the locked-row shading, the callback chips' hover, the
+    // Config message boxes and the Overview funnel track never rendered at all,
+    // and nothing said so.
+    const defined = new Set(
+      [...tokens.matchAll(/(--[\w-]+)\s*:/g), ...global.matchAll(/(--[\w-]+)\s*:/g)].map((m) => m[1])
+    );
+    const used = [...new Set([...global.matchAll(/var\((--[\w-]+)/g)].map((m) => m[1]))];
+
+    expect(used.filter((name) => !defined.has(name))).toEqual([]);
+  });
+});
