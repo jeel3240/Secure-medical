@@ -200,7 +200,8 @@ export async function createCallback(
 
 export async function listCallbacks(
   when: CallbackWhen = 'today',
-  agentId?: number
+  /** Another agent's id, or 'all' for everyone's - superadmin only. Omit for your own. */
+  agentId?: number | 'all'
 ): Promise<CallbackList> {
   const params: Record<string, string | number> = { when };
   if (agentId) params.agentId = agentId;

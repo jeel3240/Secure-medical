@@ -171,6 +171,22 @@ describe('listing callbacks', () => {
     expect(listCallbacks.mock.calls[0][0].agentId).toBe(42);
   });
 
+  it("lets a superadmin read every agent's at once", async () => {
+    const { boss } = await setup();
+    const res = await boss.get('/api/callbacks?agentId=all');
+
+    expect(res.status).toBe(200);
+    expect(listCallbacks.mock.calls[0][0].agentId).toBe('all');
+  });
+
+  it("refuses an agent asking for everyone's", async () => {
+    const { agent } = await setup();
+    const res = await agent.get('/api/callbacks?agentId=all');
+
+    expect(res.status).toBe(403);
+    expect(listCallbacks).not.toHaveBeenCalled();
+  });
+
   it('refuses an agent asking for someone else', async () => {
     const { agent } = await setup();
     const res = await agent.get('/api/callbacks?agentId=42');

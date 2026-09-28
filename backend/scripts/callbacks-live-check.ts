@@ -101,6 +101,11 @@ async function main(): Promise<void> {
 
     check('sees only their own', theirs.callbacks.length, 1);
     check("and not the other agent's", mine.callbacks.every((c) => c.agentId === maya), true);
+
+    // A superadmin's "All agents" - 2026-09-28.
+    const everyone = await listCallbacks({ agentId: 'all', when: 'all' });
+    check('all agents is both lists together', everyone.callbacks.length, mine.callbacks.length + theirs.callbacks.length);
+    check('and its counts add up too', everyone.counts.all, mine.counts.all + theirs.counts.all);
   }
 
   console.log('\nmarking done');

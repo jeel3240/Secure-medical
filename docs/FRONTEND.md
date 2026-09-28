@@ -196,6 +196,24 @@ as Admin > Leads, switcher included - `ADMIN.md`, "DNC list".)*
 **Checked** at 1280, 1366, 1440 and 1920px: all nine statuses stay on one line,
 and nothing overflows the card. A row click opens the timeline; no console errors.
 
+## My Callbacks - rebuilt 2026-09-28
+
+In the other pages' style: one card with the navy Today · Upcoming · Overdue ·
+All switcher and its counts, the smooth switch, the phone under the lead's name
+and the tier as bars. **Pick up** sits beside a "⋯" holding Reschedule and Mark
+done. An overdue callback says so in amber under its time rather than turning
+the row red; a done one (on All) says Done.
+
+**A superadmin's picker is labelled and complete** - Jeel: "what is this
+dropdown?". It was an unlabelled select reading "My callbacks" that listed
+other agents but had no way to see everyone's, and the title stayed "My
+callbacks" whatever it showed. Now it reads **Agent: Me · All agents · karm…**,
+the title follows it ("All callbacks", "karm's callbacks"), and All agents adds
+an Agent column. The API took `agentId=all` for it (`AGENT-WORKSPACE.md`).
+Agents see no picker.
+
+The underline tabs were the last of their kind; their styles are gone.
+
 ## Switching is smooth everywhere - 2026-09-28
 
 Jeel, after the Overview's period switch: "really smooth, can we add same on
@@ -207,7 +225,7 @@ stays sharp. `usePolling`'s `keepPreviousData` - QUEUE.md, "The polling hook".
 
 Checked with every API answer slowed by 400ms: on all three table pages the
 table never blanked, stayed faded for the wait, and was never clickable while
-faded. My Callbacks still uses the older underline tabs and a spinner.
+faded. My Callbacks joined them the same day.
 
 ## Admin > Overview - rebuilt 2026-09-28
 

@@ -150,11 +150,18 @@ export interface CallbackListResult {
   counts: Record<string, number>;
 }
 
+/**
+ * `agentId: 'all'` lists every agent's callbacks - a superadmin's "All agents",
+ * Jeel 2026-09-28. The route allows it only for a superadmin.
+ */
 export async function listCallbacks(opts: {
-  agentId: number;
+  agentId: number | 'all';
   when: CallbackWhen;
 }): Promise<CallbackListResult> {
   const where = opts.when === 'all' ? 'true' : WHEN_SQL[opts.when];
+  const everyone = opts.agentId === 'all';
+  const whose = everyone ? 'true' : 'cb.agent_id = $1';
+  const params = everyone ? [] : [opts.agentId];
 
   const { rows } = await pool.query(
     `SELECT cb.id, cb.lead_id, cb.agent_id, cb.scheduled_at, cb.done_at,
@@ -173,9 +180,9 @@ export async function listCallbacks(opts: {
        SELECT n.body FROM notes n
        WHERE n.lead_id = l.id ORDER BY n.created_at DESC, n.id DESC LIMIT 1
      ) n ON true
-     WHERE cb.agent_id = $1 AND ${where}
+     WHERE ${whose} AND ${where}
      ORDER BY cb.scheduled_at`,
-    [opts.agentId]
+    params
   );
 
   const countRows = await pool.query(
@@ -185,8 +192,8 @@ export async function listCallbacks(opts: {
        count(*) FILTER (WHERE ${WHEN_SQL.overdue})::int  AS overdue,
        count(*)::int AS all
      FROM callbacks cb
-     WHERE cb.agent_id = $1`,
-    [opts.agentId]
+     WHERE ${whose}`,
+    params
   );
 
   return {
