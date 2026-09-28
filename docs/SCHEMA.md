@@ -142,8 +142,8 @@ after the conversation ended, or to an agent who took it over
 (`STATE-MACHINE.md`, "Which replies need a person"). Picking the lead clears it.
 It decides who is in the queue, as *Inbound reply*.
 
-It used to be set on every inbound message, answers included. Migration 004
-cleared the flags that rule left behind, by one test: a lead's message waits for
+It used to be set on every inbound message, answers included. Migration 003
+(its second part - it was 004 until the two were merged) cleared the flags that rule left behind, by one test: a lead's message waits for
 a person only if nothing was sent to them after it. Answered "1" and got
 question 2 - cleared. Finished, then texted again - kept. An answer whose next
 question failed to send is kept on purpose: the flow never answered it. Checked
