@@ -1104,29 +1104,6 @@ a {
   color: var(--color-text-subtle);
 }
 
-/* Row actions wrap onto a second line rather than widen the table. Three
-   actions side by side ("Make superadmin", "Reset password", "Deactivate")
-   made Admin > Agents wider than a 1366px laptop screen. The group wraps; each
-   button keeps its label on one line. */
-.table__actions {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: flex-end;
-  gap: var(--space-1);
-  white-space: normal;
-}
-
-.table__actions .btn {
-  white-space: nowrap;
-}
-
-.table__name {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  font-weight: var(--weight-semibold);
-}
-
 .skeleton {
   display: block;
   height: 12px;
@@ -1466,6 +1443,72 @@ a {
 .status--strong { font-weight: var(--weight-semibold); }
 .status--muted { color: var(--color-text-muted); }
 .status--danger { color: var(--color-danger); }
+.status--warning { color: var(--color-warning); }
+
+/* Admin > Agents: the email under the name, the way a phone sits under a
+   lead's name elsewhere. */
+.agents__name {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.agents__you {
+  padding: 0 var(--space-2);
+  border-radius: 999px;
+  background: var(--color-surface-hover);
+  color: var(--color-text-muted);
+  font-size: var(--text-small);
+  font-weight: var(--weight-regular);
+}
+
+.agents__email {
+  display: block;
+  margin-top: 2px;
+  color: var(--color-text-muted);
+  font-size: var(--text-small);
+}
+
+.agents__actions {
+  width: 1%;
+  text-align: right;
+}
+
+/* A row's "⋯" - RowMenu.tsx. Quiet until hovered, then the header navy like
+   every other action. */
+.row-menu__trigger {
+  display: inline-grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--color-text-muted);
+  cursor: pointer;
+}
+
+.row-menu__trigger:hover,
+.row-menu__trigger[aria-expanded='true'] {
+  border-color: var(--color-primary);
+  background: var(--color-primary);
+  color: var(--color-on-primary);
+}
+
+.row-menu__trigger:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
+.row-menu__panel {
+  position: fixed;
+  z-index: 20;
+  min-width: 180px;
+}
+
+.row-menu__item--danger {
+  color: var(--color-danger);
+}
 
 /* Tier as signal bars: three for Hot, two for Warm, one for Low. */
 .tier-signal {

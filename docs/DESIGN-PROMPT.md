@@ -218,7 +218,7 @@ Left sub-navigation within the page: **Overview** · **Leads** · **Scoring** ·
 **6d. Agents**
 - Table: Name, Email, Role, Status (Active / Inactive), Last login, Actions.
 - "Add agent" drawer: name, email, role, generates a temporary password shown once.
-- Row actions: Reset password (shows temp password once), Deactivate / Reactivate, Change role.
+- Row actions: Reset password (shows temp password once), Deactivate / Reactivate, Change role. *(2026-09-28, Jeel: behind one "⋯" menu per row, and the page in the other admin pages' card style. `FRONTEND.md`, "Admin > Agents".)*
 
 **6e. DNC list**
 
