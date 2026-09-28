@@ -268,7 +268,7 @@ export function QueuePage() {
                             void open(lead);
                           }}
                         >
-                          {claiming === lead.id ? 'Opening...' : 'Open'}
+                          {claiming === lead.id ? 'Picking...' : 'Pick'}
                         </Button>
                       )}
                     </td>

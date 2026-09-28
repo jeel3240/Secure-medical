@@ -173,7 +173,7 @@ export function LeadTimelinePage() {
           {tier && <span className={`tier tier--${tier.toLowerCase()}`}>{tier}</span>}
           <span className="lead-card__score-value tabular">{lead.conversation?.score ?? 0}</span>
           <Button variant="secondary" loading={opening} onClick={() => void openWorkspace()}>
-            Open workspace
+            Pick lead
           </Button>
         </div>
       </div>
