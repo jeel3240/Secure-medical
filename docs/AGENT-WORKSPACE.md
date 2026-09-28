@@ -22,6 +22,13 @@ agent claiming the same lead gets a 409 and sees the row as "In progress -
 {name}" in the queue. Claims never expire - `SCHEMA.md` says why - so a
 superadmin can force a release.
 
+*(2026-09-28: the release endpoint accepts a superadmin releasing anyone's
+claim, but no screen calls it that way, so force-release is not reachable. In
+practice a claim clears when the agent leaves the workspace. A superadmin's
+button on someone else's lead is **View**, which opens the read-only timeline
+and claims nothing - taking a lead off an agent is a separate, deliberate act
+and still needs a control. `QUEUE.md`, "What the button offers".)*
+
 **A claim by a deactivated agent does not count.** The queue already ignores it
 (`QUEUE.md`); the claim endpoint treats such a lead as free.
 

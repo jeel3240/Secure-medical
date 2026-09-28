@@ -83,13 +83,24 @@ because a HOT lead asked to be called now.
 **Clicking a queue row claims the lead, then opens it.** Claiming at the moment
 of intent means a row cannot sit locked because someone glanced at it. A 409
 shows the holder's name and refreshes, so the row mutes itself. Leaving the
-workspace releases the claim.
+workspace releases the claim. *(2026-09-28: for a superadmin on a lead someone
+else holds, the row opens the read-only timeline instead and claims nothing.)*
+
+**The button says what the click does to the database - Jeel, 2026-09-28.** It
+read "Open", which described where the click went rather than what it did: it
+writes `leads.assigned_to` and locks every colleague out. An agent could take a
+lead believing they had only looked at it. It is now **Pick**, and two further
+states follow from the same rule - **Resume** on your own lead, **View** on
+someone else's when you are a superadmin. `QUEUE.md`, "What the button offers",
+is the table. The same wording is on the My Callbacks row and the Lead Timeline
+header, which claim the same way.
 
 **The lock is decided in `lib/lock.ts`.** The server enforces it; the screen has
-to decide which rows to mute before anyone clicks. Not locked: nobody holds it,
-you hold it, or you are a superadmin. `QUEUE.md`, "The one-agent lock on
-screen", has the reasoning and the known weakness - the holder is matched by
-name because the endpoint returns no id.
+to decide which rows to mute before anyone clicks. `lockHolder()` answers
+"is this row muted", `rowAction()` answers "what may this person do" - and the
+first is derived from the second so they cannot disagree. `QUEUE.md`, "The
+one-agent lock on screen", has both tables and the known weakness: the holder is
+matched by name because the queue endpoint returns no id.
 
 **One Save, three writes.** The workspace right column posts a note, a callback
 and a disposition to three separate endpoints. Each is append-only, so a partial
@@ -163,3 +174,6 @@ every route lives under `/api`.
   numbers to a browser, so it needs Jeel to ask for it.
 - **Previous-lead history** on the timeline. Repeat-lead handling is a future
   item (CLAUDE.md §10), so there is never an earlier lead to show.
+- **Force-release.** `POST /api/leads/:id/release` already lets a superadmin
+  release anyone's claim, and `AGENT-WORKSPACE.md` promises it, but no screen
+  offers it. Today a claim clears only when the agent leaves the workspace.

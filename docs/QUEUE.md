@@ -204,11 +204,36 @@ ways it is not:
 |---|---|
 | Nobody holds it | The usual case |
 | You hold it | Reopening your own claim is the normal way back into a lead; locking an agent out of it would strand them |
-| You are a superadmin | They can force-release, and need to see what an agent is stuck on |
+| You are a superadmin | They need to see what an agent is stuck on |
 
-A locked row is muted, carries a `Locked` badge instead of an Open button, has a
+A locked row is muted, carries a `Locked` badge instead of a button, has a
 tooltip naming the holder, and has no click handler at all - the lock has to be
 felt, not only seen.
+
+### What the button offers - 2026-09-28
+
+Not locked is not the same as claimable, and for a while the screen treated them
+as the same thing: every unlocked row said **Pick**, including rows where the
+server would refuse the claim. A superadmin looking at a lead another agent held
+got a button that always returned 409. `rowAction()` now answers the narrower
+question - what may this person actually do:
+
+| `rowAction` | When | Button | What it does |
+|---|---|---|---|
+| `pick` | Nobody holds it | **Pick** | Claims it, opens the workspace |
+| `resume` | You hold it | **Resume** | Back into your own lead. Re-claiming your own lead succeeds, but "Pick" implies taking something you already have |
+| `view` | Someone else holds it, you are a superadmin | **View** | Opens the read-only timeline. Claims nothing, and the holder keeps the lead |
+| `locked` | Someone else holds it, you are an agent | *Locked* | No action |
+
+**Your own claim is tested before the superadmin rule.** Otherwise a superadmin
+working their own lead would be sent to the read-only page for a lead they are
+in the middle of.
+
+**`lockHolder()` is derived from `rowAction()`** rather than repeating the rule,
+so the muting and the button cannot drift apart.
+
+The same three states are on the Lead Timeline header, decided there by holder
+id because `GET /api/leads/:id` returns one.
 
 **An `in_progress` tag with no name counts as unlocked.** The queue joins
 `users` on `is_active`, so a deactivated agent's claim returns no name, and
