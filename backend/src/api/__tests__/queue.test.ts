@@ -90,7 +90,7 @@ describe('the page it hands back', () => {
           q2: '1',
           q3: '1',
           conversationStatus: 'completed',
-          tag: { kind: 'new' },
+          tag: null,
         },
       ],
       counts: { all: 3, HOT: 1, WARM: 2 },

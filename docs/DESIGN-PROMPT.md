@@ -93,6 +93,8 @@ Role is set at login. Navigation adapts to role.
    - `Stalled at Q2` / `Stalled at Q1` (partial responder) *(2026-09-28: removed - partway leads are not in the queue)*
    - `Inbound reply` (lead texted after conversation ended – unread indicator)
    - `Seen before, stopped at Q2` (resold lead with history) - *2026-09-19: does not occur until repeat-lead handling is built, a future item.*
+
+   *(2026-09-28, Jeel: only three of these are shown - `In progress – {agent name}`, `Inbound reply` and `Needs review`. Any other row shows `-`. `New`, `Attempted` and `Callback` are dropped: that history is the working agent's to remember, on My Callbacks and the lead's timeline, and on the home page it made every row say something. `QUEUE.md`, "The tag".)*
 11. **Actions** – "Open" button; on hover, quick "Call" and "SMS" icons. *(2026-09-28, Jeel: the button is **Pick**, not Open. Clicking it assigns the lead to the agent - `leads.assigned_to` - and "Open" said nothing about that, so an agent could take a lead without realising they had. It has four states, since "may click" and "may claim" are different questions: **Pick** when nobody holds it, **Resume** when you do, **View** when a superadmin looks at someone else's, and no button at all for an agent on someone else's. `QUEUE.md`, "What the button offers". Same wording on the My Callbacks row and the Lead Timeline header, which claim the same way.)*
 
 **Row behaviour**

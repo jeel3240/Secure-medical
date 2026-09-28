@@ -96,7 +96,7 @@ Rebuilt to a mockup Jeel supplied. What changed and why:
 | Tier filter | Three pills, several at once | One segmented switcher - All, Hot, Warm, Low with counts - one at a time |
 | Tier column | Coloured badge | Signal bars and the word, `components/TierSignal.tsx` |
 | Age column | "AGE", amber and red | "WAITING", monospace, one weight and colour for every lead |
-| Status column | Coloured pills | A mark and the words, `components/QueueStatus.tsx` |
+| Status column | Coloured pills, six statuses | A dot and the words, three statuses, a hyphen otherwise - `components/QueueStatus.tsx` |
 | Button | Pick | **Pick up** - on every screen that picks, so the action has one name |
 | Someone else's lead | "Locked" | A padlock and "Locked", `components/LockIcon.tsx` |
 | Action column | Right-aligned | Centred - buttons and Locked on one axis |
@@ -105,12 +105,18 @@ Rebuilt to a mockup Jeel supplied. What changed and why:
 | Empty cells | `-` | `-` - an em dash was tried and reverted |
 | Live label | Live | Live · updated just now |
 
-**Status marks carry meaning in their shape.** A filled dot is something
-happening (in progress, inbound reply, needs review), a ring is something
-waiting (callback, new), a square is a past attempt. Only two
-statuses raise their voice: Inbound reply in bold and Needs review in colour -
-the two a person must get to first. A column of coloured pills made every row
-shout, so none of them stood out. `QueueStatus.test.tsx` pins each mark.
+**Only three statuses, and most rows have none - Jeel, 2026-09-28.** In
+progress – name, Inbound reply and Needs review, each a dot and the words; any
+other row shows a hyphen, like any other empty cell. New, Attempted 2x and
+Callback 3:00 PM are gone: that history belongs to the agent working the lead
+(My Callbacks, the timeline), and on the home page it gave every row something
+to say. Which status wins, and why New went too, is in `QUEUE.md`, "The tag".
+Two raise their voice: Inbound reply in bold, Needs review with a warm dot - the
+two a person must get to first. `QueueStatus.test.tsx` pins each one.
+
+*(Earlier the same day the mark's shape carried meaning - a ring for waiting, a
+square for a past attempt. With only three statuses, all of them live, the
+shapes had nothing left to tell apart.)*
 
 **Every waiting time looks the same - Jeel, 2026-09-28.** The column first kept
 the brief's thresholds as weight - bold past 15 minutes for HOT - but that left

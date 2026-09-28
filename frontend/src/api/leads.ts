@@ -54,22 +54,12 @@ export async function listAdminLeads(query: AdminLeadsQuery): Promise<AdminLeads
 }
 
 /** Mirrors QueueTag in backend/src/core/queue-tags.ts. */
-export type QueueTagKind =
-  | 'in_progress'
-  | 'callback'
-  | 'inbound_reply'
-  | 'needs_review'
-  | 'attempted'
-  | 'new';
+export type QueueTagKind = 'in_progress' | 'inbound_reply' | 'needs_review';
 
 export interface QueueTag {
   kind: QueueTagKind;
   /** `in_progress`: who holds it. */
   agentName?: string;
-  /** `callback`: when it is due. */
-  callbackAt?: string;
-  /** `attempted`: how many calls have been made. */
-  attempts?: number;
 }
 
 /** Mirrors QueueRow in backend/src/db/queue.ts. */
@@ -86,7 +76,8 @@ export interface QueueLead {
   q2: string | null;
   q3: string | null;
   conversationStatus: 'open' | 'completed' | 'review' | 'expired';
-  tag: QueueTag;
+  /** `null` when there is nothing to say: the lead is waiting to be picked up. */
+  tag: QueueTag | null;
 }
 
 export interface QueueResponse {

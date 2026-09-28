@@ -49,25 +49,35 @@ freshness". Id last so the order never wobbles between two identical rows.
 
 ## The tag
 
-One tag per row, computed, never stored, so it stays true as calls and
-callbacks happen. The API returns what is true and the screen words it: `{ kind:
-'in_progress', agentName: 'Michael' }` becomes "In progress - Michael".
+At most one tag per row - the STATUS column - computed, never stored. The API
+returns what is true and the screen words it: `{ kind: 'in_progress',
+agentName: 'Michael' }` becomes "In progress – Michael".
 
-Several can apply at once, so they are ranked by what an agent most needs to
-know:
+**Only three, and most rows have none - Jeel, 2026-09-28.** A tag answers the
+two questions an agent scanning the queue has: is somebody already on this, and
+why is it here? When several apply, the first wins:
 
 | # | `kind` | Shown when | Carries |
 |---|---|---|---|
 | 1 | `in_progress` | An **active** agent holds the lead | `agentName` |
-| 2 | `callback` | A callback is booked and not done | `callbackAt` - the soonest |
-| 3 | `inbound_reply` | The lead has texted and nobody has read it | |
-| 4 | `needs_review` | Conversation `review`: replies we could not read | |
-| 5 | `attempted` | Calls have been made and none connected | `attempts` |
-| 6 | `new` | Nothing has happened yet | |
+| 2 | `inbound_reply` | The lead has texted and nobody has read it | |
+| 3 | `needs_review` | Conversation `review`: replies we could not read | |
+| - | `null` | None of those: the lead is waiting to be picked up. The screen shows a hyphen | |
 
-*(2026-09-28: there was a `stalled` tag - "Stalled at Q1 / Q2" - for a lead
-partway through. Partway leads are no longer in the queue, so it could never be
-shown and is gone.)*
+**What was dropped, and why.** There were three more: `new` ("New"),
+`attempted` ("Attempted 2x") and `callback` ("Callback 3:00 PM"). Call history
+and callback times belong to the agent working the lead - their callbacks are on
+My Callbacks, every call is in the lead's timeline - and on the home page they
+gave every row something to say, so nothing stood out. `new` went with them:
+without the other two, a lead called twice by nobody currently holding it would
+have read "New" again.
+
+A booked callback still keeps a lead **in** the queue ("Who is in it" above).
+It no longer changes what the row says.
+
+*(Earlier the same day there was also a `stalled` tag - "Stalled at Q1 / Q2" -
+for a lead partway through. Partway leads are no longer in the queue, so it
+could never be shown and is gone.)*
 
 One thing worth knowing:
 
@@ -104,7 +114,7 @@ reaches `LIKE`: a `%` in the search box is the character, not a wildcard.
   "leads": [ { "id": 7, "phone": "+1…", "firstName": "…", "lastName": "…",
                "source": "CORE-G-27", "receivedAt": "…", "score": 90,
                "tier": "HOT", "q1": "3", "q2": "1", "q3": "1",
-               "conversationStatus": "completed", "tag": { "kind": "new" } } ],
+               "conversationStatus": "completed", "tag": null } ],
   "counts":  { "all": 12, "HOT": 4, "WARM": 5, "LOW": 3 },
   "sources": ["CORE-G-27", "CORE-G-31"],
   "total":   12,
@@ -158,14 +168,16 @@ question copy in `settings`, which a superadmin can edit.
 ## Proving it
 
 The tag rules and the route have unit tests (`queue-tags.test.ts`,
-`api/__tests__/queue.test.ts`, 41 tests). Neither touches the SQL, which is
+`api/__tests__/queue.test.ts`). Neither touches the SQL, which is
 where most of the rules above actually live, so
 `backend/scripts/queue-live-check.ts` seeds one lead per case in a scratch
 database and asserts what comes back - inclusion, exclusion, order, every tag,
 each filter, the counts. The header of that file says how to run it. Last run
-2026-09-28: 40 checks, all passing - including a partway lead kept out, and
+2026-09-28: 39 checks, all passing - including a partway lead kept out, and
 three partway leads kept in because they are held, booked, or taken over and
-replied to. Removing any one of the four reasons fails it.
+replied to; and a booked callback and two call attempts that keep or leave a
+lead in the queue but show no tag. Removing any one of the four reasons fails
+it.
 
 ## The polling hook
 
@@ -261,10 +273,11 @@ so the muting and the button cannot drift apart.
 The same three states are on the Lead Timeline header, decided there by holder
 id because `GET /api/leads/:id` returns one.
 
-**An `in_progress` tag with no name counts as unlocked.** The queue joins
-`users` on `is_active`, so a deactivated agent's claim returns no name, and
-`db/claims.ts` lets anyone take such a lead over. Muting it would strand the
-lead where nobody could open it.
+**A deactivated agent's claim counts as unlocked.** The queue joins `users` on
+`is_active`, so such a claim returns no holder and no `in_progress` tag, and
+`db/claims.ts` lets anyone take the lead over. Muting it would strand the lead
+where nobody could open it. `rowAction()` also treats an `in_progress` tag
+without a name as unlocked, for the same reason.
 
 **The holder is matched by name, not id,** because the endpoint returns
 `agentName` and no id. Two agents with the same name would each see the other's
