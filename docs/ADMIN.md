@@ -54,6 +54,26 @@ up on the page instead of quietly disagreeing with the tier bands beneath it.
 **No Save, no Recalculate.** A rule change therefore leaves existing leads on
 their old scores. Accepted - CLAUDE.md §10.
 
+**The page, redesigned - Jeel, 2026-09-28: "too messy".** Four cards in the
+style of the other admin pages, each with a title row:
+
+| Card | Shows |
+|---|---|
+| Messages | One row per message: its name and when it is sent on the left ("Question 2 · After answer 1"), the copy in normal type on the right, and "88 characters · 1 segment" under it. `{first_name}` shows as a small "first name" chip. A message that costs a second segment for some leads says so in amber |
+| Scoring | Plain rows - "Replied at all +10", then each question's options grouped under it - and a shaded Maximum row |
+| Tiers | The queue's signal bars and each band |
+| Settings | Expiry, clarifications before review, the segment limit |
+
+Gone: the blue "changed through a migration" box (now one clause of the
+subtitle), the copy in a code font on grey, the upper-case row labels, the
+coloured tier pills, and three paragraphs of notes - each card's one caveat is
+a quiet line at its foot. The header has "Live · updated just now".
+
+**"Clarifications before review", not "Unclear replies before review".** The
+setting is 1, and it counts clarifications: the first unclear reply is
+clarified, the second goes to review. The old label read as one unclear reply
+being enough.
+
 ## Overview (6a)
 
 `GET /api/admin/overview?period=today|7d|30d`
