@@ -8,7 +8,7 @@
  * is true, the screen decides how to word it ("Working – Michael"). That
  * keeps wording changes out of the backend.
  *
- * **Only three, and most rows have none** - Jeel, 2026-09-28. The queue once
+ * **Few, and most rows have none** - Jeel, 2026-09-28. The queue once
  * also said New, Attempted 2x and Callback 3:00 PM. That history belongs to the
  * agent working the lead - their callbacks are on My Callbacks, every call is
  * in the lead's timeline - and on the home page it made every row say

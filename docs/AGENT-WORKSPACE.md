@@ -266,9 +266,16 @@ test pressed Closed twice. `scripts/dispositions-live-check.ts` proves it.
   to read it. Read and left alone, it is closed again - nobody presses Closed
   twice. Picked up, it is Working until the agent saves an outcome or lets go.
 - **An agent books a callback after closing it.** "Actually, call me Friday"
-  keeps the lead in reach until that callback is done. A callback booked
-  *before* closing - or in the same Save - does not hold it in; it stays on My
-  Callbacks until someone marks it done.
+  keeps the lead in reach until that callback is done.
+
+**Closing finishes the lead's callbacks - Jeel, 2026-09-29.** Closed and DNC
+mark every callback still open as done, in the same transaction, so a finished
+lead leaves My Callbacks and loses its queue Callback status too; until then
+each had to be marked done by hand. Because of that, Wrap up switches the
+callback choices off while an outcome is chosen, and drops one already picked,
+with the line "Closing a lead finishes its callbacks." - one booked in the same
+Save would be done the moment it was made. A callback booked *after* closing is
+untouched: that is still how a lead reopens.
 
 Until this change the queue did not read `dispositions` at all, so a finished
 lead stayed at full score and the next agent picked it up again.
