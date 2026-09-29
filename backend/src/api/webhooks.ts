@@ -16,11 +16,11 @@ export const webhooksRouter = Router();
  * pool directly.
  */
 function deps() {
-  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
   const { pool } = require('../db/pool') as typeof import('../db/pool');
-  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
   const { toE164 } = require('../integrations/ezt-client') as typeof import('../integrations/ezt-client');
-  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
   const { applyReply } = require('./reply-flow') as typeof import('./reply-flow');
   return { pool, toE164, applyReply };
 }
@@ -93,7 +93,7 @@ function isOptIn(payload: InboundText): boolean {
  * curl testing simple - production should always set it.
  */
 function rejectBadToken(req: Request, res: Response): boolean {
-  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
   const { config } = require('../config') as typeof import('../config');
   const expected = config.ezt.webhookToken;
   const supplied = req.params.token ?? '';

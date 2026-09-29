@@ -26,7 +26,7 @@ export function adminHealthRouter(deps: AppDeps): Router {
   router.get(
     '/',
     asyncHandler(async (_req, res) => {
-      // eslint-disable-next-line @typescript-eslint/no-var-requires
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
       const db = require('../../db/health') as typeof import('../../db/health');
 
       const health = await db.getHealth();

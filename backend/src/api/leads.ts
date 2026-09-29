@@ -78,7 +78,7 @@ function parseLeadId(raw: string): number {
  * lead learns nothing from how the request was shaped.
  */
 async function requireHolding(leadId: number, userId: number): Promise<void> {
-  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
   const db = require('../db/holder') as typeof import('../db/holder');
 
   const held = await db.holding(leadId, userId);
@@ -121,7 +121,7 @@ export function queueRouter(deps: AppDeps): Router {
       // Loaded lazily: ../db/queue pulls in the pool, which pulls in config,
       // which exits the process when an env var is missing - that would break
       // the tests, which build the app without a full environment.
-      // eslint-disable-next-line @typescript-eslint/no-var-requires
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
       const db = require('../db/queue') as typeof import('../db/queue');
 
       const result = await db.listQueue({
@@ -139,7 +139,7 @@ export function queueRouter(deps: AppDeps): Router {
   router.post(
     '/:id/claim',
     asyncHandler(async (req, res) => {
-      // eslint-disable-next-line @typescript-eslint/no-var-requires
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
       const db = require('../db/claims') as typeof import('../db/claims');
 
       const result = await db.claimLead(parseLeadId(req.params.id), req.user!.id);
@@ -164,7 +164,7 @@ export function queueRouter(deps: AppDeps): Router {
   router.get(
     '/:id',
     asyncHandler(async (req, res) => {
-      // eslint-disable-next-line @typescript-eslint/no-var-requires
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
       const db = require('../db/lead-detail') as typeof import('../db/lead-detail');
 
       const lead = await db.getLeadDetail(parseLeadId(req.params.id));
@@ -179,7 +179,7 @@ export function queueRouter(deps: AppDeps): Router {
   router.get(
     '/:id/timeline',
     asyncHandler(async (req, res) => {
-      // eslint-disable-next-line @typescript-eslint/no-var-requires
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
       const db = require('../db/timeline') as typeof import('../db/timeline');
 
       const entries = await db.getTimeline(parseLeadId(req.params.id));
@@ -194,7 +194,7 @@ export function queueRouter(deps: AppDeps): Router {
   router.post(
     '/:id/notes',
     asyncHandler(async (req, res) => {
-      // eslint-disable-next-line @typescript-eslint/no-var-requires
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
       const db = require('../db/notes') as typeof import('../db/notes');
 
       const leadId = parseLeadId(req.params.id);
@@ -217,9 +217,9 @@ export function queueRouter(deps: AppDeps): Router {
   router.post(
     '/:id/callbacks',
     asyncHandler(async (req, res) => {
-      // eslint-disable-next-line @typescript-eslint/no-var-requires
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
       const db = require('../db/callbacks') as typeof import('../db/callbacks');
-      // eslint-disable-next-line @typescript-eslint/no-var-requires
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
       const parse = require('./callbacks') as typeof import('./callbacks');
 
       const leadId = parseLeadId(req.params.id);
@@ -260,7 +260,7 @@ export function queueRouter(deps: AppDeps): Router {
   router.post(
     '/:id/messages',
     asyncHandler(async (req, res) => {
-      // eslint-disable-next-line @typescript-eslint/no-var-requires
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
       const db = require('../db/agent-sms') as typeof import('../db/agent-sms');
 
       const leadId = parseLeadId(req.params.id);
@@ -297,7 +297,7 @@ export function queueRouter(deps: AppDeps): Router {
   router.post(
     '/:id/dispositions',
     asyncHandler(async (req, res) => {
-      // eslint-disable-next-line @typescript-eslint/no-var-requires
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
       const db = require('../db/dispositions') as typeof import('../db/dispositions');
 
       const leadId = parseLeadId(req.params.id);
@@ -339,7 +339,7 @@ export function queueRouter(deps: AppDeps): Router {
   router.post(
     '/:id/read',
     asyncHandler(async (req, res) => {
-      // eslint-disable-next-line @typescript-eslint/no-var-requires
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
       const db = require('../db/read-flag') as typeof import('../db/read-flag');
 
       // Reading a reply is handling it, and only the holder handles a lead. A
@@ -360,7 +360,7 @@ export function queueRouter(deps: AppDeps): Router {
   router.post(
     '/:id/release',
     asyncHandler(async (req, res) => {
-      // eslint-disable-next-line @typescript-eslint/no-var-requires
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
       const db = require('../db/claims') as typeof import('../db/claims');
 
       const result = await db.releaseLead(

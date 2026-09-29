@@ -41,7 +41,7 @@ export function adminDncRouter(deps: AppDeps): Router {
   router.get(
     '/',
     asyncHandler(async (req, res) => {
-      // eslint-disable-next-line @typescript-eslint/no-var-requires
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
       const db = require('../../db/admin-dnc') as typeof import('../../db/admin-dnc');
 
       res.json(

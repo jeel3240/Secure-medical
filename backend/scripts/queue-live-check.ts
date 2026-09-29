@@ -78,10 +78,10 @@ async function main() {
 
   // --- included ---
   const hot = await lead({ phone: '+15550000001', first: 'Hot', source: 'CORE-G-27', ageMin: 5, status: 'completed', q1: '3', q2: '1', q3: '1', score: 90, tier: 'HOT' });
-  const warm = await lead({ phone: '+15550000002', first: 'Warm', source: 'CORE-G-31', ageMin: 60, status: 'open', q1: '1', score: 45, tier: 'WARM' });
-  const low = await lead({ phone: '+15550000003', first: 'Low', source: 'CORE-G-27', ageMin: 3000, status: 'review', score: 10, tier: 'LOW' });
-  const held = await lead({ phone: '+15550000004', first: 'Held', source: 'CORE-G-27', ageMin: 10, status: 'completed', q1: '1', q2: '1', q3: '1', score: 80, tier: 'HOT', assignedTo: michael });
-  const back = await lead({ phone: '+15550000005', first: 'Back', source: 'CORE-G-27', ageMin: 20, status: 'expired', q1: '1', score: 20, tier: 'LOW', unread: true });
+  await lead({ phone: '+15550000002', first: 'Warm', source: 'CORE-G-31', ageMin: 60, status: 'open', q1: '1', score: 45, tier: 'WARM' });
+  await lead({ phone: '+15550000003', first: 'Low', source: 'CORE-G-27', ageMin: 3000, status: 'review', score: 10, tier: 'LOW' });
+  await lead({ phone: '+15550000004', first: 'Held', source: 'CORE-G-27', ageMin: 10, status: 'completed', q1: '1', q2: '1', q3: '1', score: 80, tier: 'HOT', assignedTo: michael });
+  await lead({ phone: '+15550000005', first: 'Back', source: 'CORE-G-27', ageMin: 20, status: 'expired', q1: '1', score: 20, tier: 'LOW', unread: true });
   const released = await lead({ phone: '+15550000006', first: 'Released', source: 'CORE-G-27', ageMin: 30, status: 'completed', q1: '1', q2: '1', q3: '1', score: 70, tier: 'WARM' });
   await pool.query(`INSERT INTO dnc_list (phone, reason, released_at, released_reason) VALUES ('+15550000006','sms_stop', now(), 'sms_start')`);
   // held by a deactivated agent: the claim is stale, the lead must stay workable

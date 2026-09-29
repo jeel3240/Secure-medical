@@ -172,7 +172,26 @@ async function systemEvents(leadId: number): Promise<TimelineEntry[]> {
   return events;
 }
 
-function toEntry(kind: TimelineKind, row: Record<string, any>): TimelineEntry {
+/**
+ * A row from any of the five timeline queries. Each fills the columns it has;
+ * `at` is always there.
+ */
+interface TimelineRow {
+  at: Date;
+  /** Every query selects it: the agent, or null for our own and the lead's. */
+  author: string | null;
+  direction?: 'inbound' | 'outbound';
+  sent_by?: number | null;
+  body?: string;
+  delivery_status?: string | null;
+  outcome?: string | null;
+  duration_sec?: number | null;
+  scheduled_at?: Date | null;
+  done_at?: Date | null;
+  value?: string;
+}
+
+function toEntry(kind: TimelineKind, row: TimelineRow): TimelineEntry {
   const at: string = row.at.toISOString();
 
   switch (kind) {
@@ -227,7 +246,7 @@ async function buildTimeline(leadId: number): Promise<TimelineEntry[]> {
   const [system, ...tables] = await Promise.all([
     systemEvents(leadId),
     ...QUERIES.map(async ({ kind, sql }) => {
-      const { rows } = await pool.query(sql, [leadId]);
+      const { rows } = await pool.query<TimelineRow>(sql, [leadId]);
       return rows.map((r) => toEntry(kind, r));
     }),
   ]);

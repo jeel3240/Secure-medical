@@ -34,7 +34,7 @@ export function adminOverviewRouter(deps: AppDeps): Router {
   router.get(
     '/',
     asyncHandler(async (req, res) => {
-      // eslint-disable-next-line @typescript-eslint/no-var-requires
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
       const db = require('../../db/admin-overview') as typeof import('../../db/admin-overview');
 
       res.json(await db.getOverview(parsePeriod(req.query.period), parseTimeZone(req.query.tz)));

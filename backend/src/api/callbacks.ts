@@ -50,7 +50,7 @@ export function callbacksRouter(deps: AppDeps): Router {
   router.get(
     '/',
     asyncHandler(async (req, res) => {
-      // eslint-disable-next-line @typescript-eslint/no-var-requires
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
       const db = require('../db/callbacks') as typeof import('../db/callbacks');
 
       // An agent sees only their own. A superadmin may ask for another's, or
@@ -74,7 +74,7 @@ export function callbacksRouter(deps: AppDeps): Router {
   router.patch(
     '/:id',
     asyncHandler(async (req, res) => {
-      // eslint-disable-next-line @typescript-eslint/no-var-requires
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
       const db = require('../db/callbacks') as typeof import('../db/callbacks');
 
       const body = (req.body ?? {}) as { scheduledAt?: unknown; done?: unknown };

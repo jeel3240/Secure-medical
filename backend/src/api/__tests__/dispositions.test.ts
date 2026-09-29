@@ -9,9 +9,10 @@ import { buildApp, seedUser, signIn } from './helpers';
 import type { SetDispositionResult } from '../../db/dispositions';
 import type { Holding } from '../../db/holder';
 
-const setDisposition = jest.fn<Promise<SetDispositionResult>, [number, number, any]>();
+type SetArgs = Parameters<typeof import('../../db/dispositions').setDisposition>;
+const setDisposition = jest.fn<Promise<SetDispositionResult>, SetArgs>();
 jest.mock('../../db/dispositions', () => ({
-  setDisposition: (...a: [number, number, any]) => setDisposition(...a),
+  setDisposition: (...a: SetArgs) => setDisposition(...a),
 }));
 
 // Every write on a lead now checks the caller holds it first. These tests are

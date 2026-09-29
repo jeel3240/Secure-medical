@@ -19,7 +19,7 @@
 
 /** Anything with a `query` method: the pool, or a client inside a transaction. */
 export interface Queryable {
-  query: (q: string, v?: unknown[]) => Promise<{ rows: any[]; rowCount: number | null }>;
+  query: (q: string, v?: unknown[]) => Promise<{ rows: unknown[]; rowCount: number | null }>;
 }
 
 /** Why a number is blocked. Stored as `dnc_list.reason`. */

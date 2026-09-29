@@ -9,12 +9,14 @@ import type { CallbackListResult, CreateResult, UpdateResult } from '../../db/ca
 import type { Holding } from '../../db/holder';
 
 const createCallback = jest.fn<Promise<CreateResult>, [number, number, Date]>();
-const updateCallback = jest.fn<Promise<UpdateResult>, [number, number, boolean, any]>();
-const listCallbacks = jest.fn<Promise<CallbackListResult>, [any]>();
+type UpdateArgs = Parameters<typeof import('../../db/callbacks').updateCallback>;
+type ListArgs = Parameters<typeof import('../../db/callbacks').listCallbacks>;
+const updateCallback = jest.fn<Promise<UpdateResult>, UpdateArgs>();
+const listCallbacks = jest.fn<Promise<CallbackListResult>, ListArgs>();
 jest.mock('../../db/callbacks', () => ({
   createCallback: (...a: [number, number, Date]) => createCallback(...a),
-  updateCallback: (...a: [number, number, boolean, any]) => updateCallback(...a),
-  listCallbacks: (o: any) => listCallbacks(o),
+  updateCallback: (...a: UpdateArgs) => updateCallback(...a),
+  listCallbacks: (...a: ListArgs) => listCallbacks(...a),
 }));
 
 // Every write on a lead now checks the caller holds it first. These tests are
@@ -229,7 +231,7 @@ describe('changing a callback', () => {
     const res = await agent.patch('/api/callbacks/1').send({ scheduledAt: AT });
 
     expect(res.status).toBe(200);
-    expect(updateCallback.mock.calls[0][3].scheduledAt.toISOString()).toBe(AT);
+    expect(updateCallback.mock.calls[0][3].scheduledAt?.toISOString()).toBe(AT);
   });
 
   it('marks it done', async () => {
