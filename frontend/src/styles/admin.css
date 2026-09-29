@@ -1,0 +1,281 @@
+/* Admin: Configuration, Overview, DNC.
+   Loaded by global.css, in its order: a later file can override an earlier one. */
+
+/* ---------------------------------------------------------------------------
+   Admin: Configuration, Overview, DNC - DESIGN-PROMPT.md 6. Tasks 23-25.
+   --------------------------------------------------------------------------- */
+
+.config {
+  display: grid;
+  gap: var(--space-4);
+  grid-template-columns: 1fr;
+  align-items: start;
+}
+
+@media (min-width: 1100px) {
+  .config {
+    grid-template-columns: 1fr 380px;
+  }
+}
+
+.config__column {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+/* A card's title row: the title, and a quiet word on what the card holds. */
+.card-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-4) var(--space-5);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.card-head__title {
+  margin: 0;
+  font-size: var(--text-title);
+  font-weight: var(--weight-semibold);
+}
+
+.card-head__meta {
+  color: var(--color-text-subtle);
+  font-size: var(--text-small);
+}
+
+/* Configuration's messages: the name and when it is sent on the left, the
+   copy as it reads on the right. Jeel, 2026-09-28. */
+.config-msgs {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.config-msg {
+  display: grid;
+  grid-template-columns: 150px 1fr;
+  gap: var(--space-4);
+  padding: var(--space-4) var(--space-5);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.config-msg:last-child {
+  border-bottom: none;
+}
+
+.config-msg__name {
+  display: block;
+  font-weight: var(--weight-semibold);
+}
+
+.config-msg__when {
+  display: block;
+  margin-top: 2px;
+  color: var(--color-text-subtle);
+  font-size: var(--text-small);
+}
+
+.config-msg__body {
+  margin: 0;
+  line-height: 1.55;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+/* Where {first_name} goes: a soft chip rather than the raw placeholder. */
+.config-msg__var {
+  padding: 0 var(--space-1);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface-hover);
+  color: var(--color-primary);
+  font-weight: var(--weight-semibold);
+}
+
+.config-msg__meta {
+  margin: var(--space-1) 0 0;
+  color: var(--color-text-subtle);
+  font-size: var(--text-small);
+}
+
+.config-msg__meta--warn {
+  color: var(--color-warning);
+}
+
+/* Label-and-value rows: Scoring, Tiers, Settings. */
+.kv {
+  margin: 0;
+}
+
+.kv__row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-5);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.kv__row dt,
+.kv__row dd {
+  margin: 0;
+}
+
+.kv__row dd {
+  font-weight: var(--weight-semibold);
+}
+
+.kv__group {
+  border-bottom: 1px solid var(--color-border);
+}
+
+.kv__group-title {
+  padding: var(--space-3) var(--space-5) var(--space-1);
+  color: var(--color-text-muted);
+  font-size: var(--text-small);
+  font-weight: var(--weight-semibold);
+}
+
+.kv__row--sub {
+  padding-top: var(--space-1);
+  padding-bottom: var(--space-1);
+  border-bottom: none;
+}
+
+.kv__group .kv__row--sub:last-child {
+  padding-bottom: var(--space-3);
+}
+
+.kv__row--total {
+  background: var(--color-surface-muted);
+  font-weight: var(--weight-semibold);
+}
+
+.kv > .kv__row:last-child,
+.kv > .kv__group:last-child {
+  border-bottom: none;
+}
+
+/* Overview */
+/* Overview's four totals: one card, split by thin rules. */
+.stats {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  margin-bottom: var(--space-4);
+}
+
+.stats__item {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  padding: var(--space-4) var(--space-5);
+}
+
+.stats__item + .stats__item {
+  border-left: 1px solid var(--color-border);
+}
+
+.stats__label {
+  color: var(--color-text-muted);
+  font-size: var(--text-small);
+}
+
+.stats__value {
+  font-size: var(--text-display);
+  font-weight: var(--weight-bold);
+  line-height: 1.1;
+}
+
+.stats__sub {
+  color: var(--color-text-subtle);
+  font-size: var(--text-small);
+}
+
+/* Content being replaced by a switch - Overview's period, the queue's tier,
+   Admin > Leads' status, the DNC list's state. The old stays, a step back,
+   until the new lands; nothing blanks. It cannot be clicked meanwhile: picking
+   up a lead from the list being replaced would act on the wrong view.
+   `.table-card` and `.table-wrap` carry the transition. */
+.is-switching {
+  opacity: 0.55;
+  pointer-events: none;
+}
+
+/* Agents beside System, then activity across the page. */
+.overview {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: var(--space-4);
+  align-items: start;
+  margin-bottom: var(--space-4);
+}
+
+@media (min-width: 1100px) {
+  .overview {
+    grid-template-columns: 1fr 360px;
+  }
+}
+
+.overview__detail {
+  display: block;
+  margin-top: 2px;
+  color: var(--color-text-subtle);
+  font-size: var(--text-small);
+}
+
+/* A failing check says why under its own row, in the same amber as its
+   Degraded - not in a red box across the page. */
+.overview__detail--warn,
+.card-head__meta--warn {
+  color: var(--color-warning);
+}
+
+.activity {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.activity__row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-4);
+  padding: var(--space-3) var(--space-5);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.activity__row:last-child {
+  border-bottom: none;
+}
+
+/* The brand navy, not the link blue. */
+.activity__lead {
+  color: var(--color-primary);
+  font-weight: var(--weight-semibold);
+  text-decoration: none;
+}
+
+.activity__lead:hover {
+  text-decoration: underline;
+}
+
+.activity__when {
+  flex: none;
+  color: var(--color-text-subtle);
+  font-size: var(--text-small);
+}
+
+/* DNC */
+.dnc__no-lead {
+  color: var(--color-text-muted);
+  font-weight: var(--weight-regular);
+}
+
+.dnc__released {
+  display: block;
+  margin-top: 2px;
+  font-size: var(--text-small);
+  color: var(--color-text-muted);
+}

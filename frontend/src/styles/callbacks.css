@@ -1,0 +1,50 @@
+/* My Callbacks.
+   Loaded by global.css, in its order: a later file can override an earlier one. */
+
+/* My Callbacks - DESIGN-PROMPT.md 5, rebuilt 2026-09-28 in the other pages'
+   style: an overdue callback says so in amber under its time, not with a red
+   row. */
+.callbacks__due {
+  white-space: nowrap;
+}
+
+.callbacks__flag {
+  display: flex;
+  margin-top: 2px;
+  font-size: var(--text-small);
+}
+
+.callbacks__note {
+  max-width: 280px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--color-text-muted);
+}
+
+.callbacks__actions {
+  width: 1%;
+}
+
+.callbacks__reschedule {
+  display: flex;
+  gap: var(--space-2);
+  justify-content: flex-end;
+  align-items: center;
+}
+
+/* A labelled control in a card's toolbar - My Callbacks' Agent picker. */
+.toolbar-field {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.toolbar-field__label {
+  color: var(--color-text-muted);
+  font-size: var(--text-small);
+}
+
+.toolbar-end {
+  margin-left: auto;
+}
