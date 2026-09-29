@@ -223,7 +223,7 @@ you change something the docs describe, update the doc in the same commit.
     src/components/LockIcon.tsx      the padlock on a locked queue row
     src/pages/QueuePage.tsx          the priority queue
     src/pages/WorkspacePage.tsx      the agent workspace shell
-    src/pages/workspace/             Wrap up, SMS compose, the conversation
+    src/pages/workspace/             header card, answers and score, conversation, SMS compose, Wrap up
     src/pages/LeadTimelinePage.tsx   read-only history with a summary sidebar
     src/pages/CallbacksPage.tsx      My Callbacks
     src/pages/admin/                 overview, leads, agents, config, dnc

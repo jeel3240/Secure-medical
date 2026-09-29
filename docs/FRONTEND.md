@@ -274,6 +274,13 @@ ticking lead age, source, SMS flow state, and the Send SMS and Call buttons -
 over three cards: what the lead told us and the score breakdown; the
 conversation; and the wrap-up.
 
+**Files.** `WorkspacePage.tsx` holds the data, picking and releasing, and the
+layout. Each card is its own component in `pages/workspace/`: `LeadHeader`,
+`LeadAnswers` (the left column), `Conversation` with `SmsCompose` under it, and
+`ActionsPanel` (Wrap up). The first two were split out of the page on
+2026-09-28, when it had reached 420 lines; the rendered page was checked
+identical before and after, HTML and every computed style, on six leads.
+
 **The centre column is a conversation, not a log.** `workspace/Conversation.tsx`
 shows the SMS thread and the system markers only - inbound on the left, ours on
 the right, automated sends marked `Auto` and an agent's own send carrying their
