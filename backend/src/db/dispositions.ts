@@ -57,6 +57,12 @@ export type SetDispositionResult =
  * it, and an unread reply would otherwise keep a closed lead in the queue
  * (`db/lead-state.ts`). A text that arrives *after* closing sets it again and
  * brings the lead back, as before.
+ *
+ * **And both finish any callback still open - Jeel, 2026-09-29.** A lead that
+ * is finished has no call left to make; until then its callback stayed on the
+ * agent's My Callbacks, and in the queue's Callback status, until marked done
+ * by hand. A callback booked *after* closing is untouched - that is how "call
+ * me Friday" reopens a lead.
  */
 export async function setDisposition(
   leadId: number,
@@ -90,6 +96,11 @@ export async function setDisposition(
     await client.query(
       `UPDATE leads SET assigned_to = NULL, assigned_at = NULL, has_unread_inbound = false
        WHERE id = $1`,
+      [leadId]
+    );
+
+    await client.query(
+      `UPDATE callbacks SET done_at = now() WHERE lead_id = $1 AND done_at IS NULL`,
       [leadId]
     );
 

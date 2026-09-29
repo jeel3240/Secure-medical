@@ -9,8 +9,8 @@ import { StatusIcon, type StatusIconName } from './StatusIcon';
  * `QUEUE.md` says which one wins when several apply. This file only turns that
  * decision into words and an icon.
  *
- * Only three exist - Jeel, 2026-09-28. New, Attempted 2x and Callback 3:00 PM
- * are gone: that history is the working agent's to remember, on My Callbacks
+ * Few exist - Jeel, 2026-09-28. New and Attempted 2x are gone (Callback came
+ * back the next day, below): that history is the working agent's to remember, on My Callbacks
  * and the lead's timeline, and on the home page it gave every row something to
  * say, so nothing stood out. A lead with no status gets a hyphen from the queue
  * page, like any other empty cell.

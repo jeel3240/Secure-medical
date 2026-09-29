@@ -169,11 +169,17 @@
   cursor: pointer;
 }
 
-.chip-button:hover {
+.chip-button:hover:not(:disabled) {
   border-color: var(--color-border-strong);
   background: var(--color-surface-hover);
 }
 
+/* Off while an outcome is chosen: closing finishes callbacks. */
+.chip-button:disabled {
+  color: var(--color-text-muted);
+  opacity: 0.5;
+  cursor: not-allowed;
+}
 
 /* Lead Timeline page - DESIGN-PROMPT.md 4. Phase 3 task 21. */
 .timeline-page {

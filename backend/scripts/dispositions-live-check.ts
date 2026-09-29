@@ -161,6 +161,9 @@ async function main(): Promise<void> {
     );
     await setDisposition(before, maya, 'closed');
     check('a callback booked before closing does not hold it', await inQueue(before), false);
+    // And closing finishes it, so it leaves My Callbacks too - 2026-09-29.
+    const open = await pool.query(`SELECT count(*)::int AS n FROM callbacks WHERE lead_id = $1 AND done_at IS NULL`, [before]);
+    check('closing marks it done', open.rows[0].n, 0);
 
     const after = await makeQueuedLead('+15550000524', 'After');
     await pool.query(

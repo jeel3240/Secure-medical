@@ -194,6 +194,14 @@ export function ActionsPanel({
       return;
     }
     setDispositionValue((current) => (current === value ? null : value));
+    dropCallback();
+  };
+
+  // An outcome finishes the lead's callbacks, so a callback chosen alongside it
+  // would be done the moment it was saved: drop it.
+  const dropCallback = () => {
+    setCallbackAt('');
+    setPicking(false);
   };
 
   return (
@@ -245,6 +253,7 @@ export function ActionsPanel({
               <button
                 key={quick.label}
                 type="button"
+                disabled={disposition !== null}
                 className="chip-button"
                 onClick={() => {
                   setCallbackAt(toLocalInput(quick.at()));
@@ -254,11 +263,21 @@ export function ActionsPanel({
                 {quick.label}
               </button>
             ))}
-            <button type="button" className="chip-button" onClick={() => setPicking(true)}>
+            <button
+              type="button"
+              className="chip-button"
+              disabled={disposition !== null}
+              onClick={() => setPicking(true)}
+            >
               Pick time...
             </button>
           </div>
-          {(picking || callbackAt !== '') && (
+          {/* Closing finishes every open callback, so one booked in the same
+              Save would be done the moment it was made - 2026-09-29. */}
+          {disposition !== null && (
+            <p className="wrapup__state">Closing a lead finishes its callbacks.</p>
+          )}
+          {disposition === null && (picking || callbackAt !== '') && (
             <input
               type="datetime-local"
               className="actions-panel__input"
@@ -320,6 +339,7 @@ export function ActionsPanel({
                 variant="danger"
                 onClick={() => {
                   setDispositionValue('dnc');
+                  dropCallback();
                   setConfirmingDnc(false);
                 }}
               >

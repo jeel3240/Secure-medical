@@ -95,7 +95,8 @@ that day it read Closed the moment its reply was read, while the queue showed
 (`db/lead-state.ts`); saving an outcome releases it, and it reads Closed again.
 
 **A callback booked after closing makes it Working again**, until the callback
-is done. One booked before closing, or in the same Save, does not.
+is done. One booked before closing is marked done by the close itself
+(2026-09-29), and Wrap up does not allow one in the same Save.
 
 ### Working
 
