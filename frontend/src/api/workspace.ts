@@ -180,6 +180,8 @@ export interface CallbackRow extends Callback {
   };
   /** The most recent note on the lead, for the excerpt column. */
   latestNote: string | null;
+  /** Who holds the lead right now, if anyone. */
+  holder: { id: number; name: string } | null;
 }
 
 export type CallbackWhen = 'today' | 'upcoming' | 'overdue' | 'all';

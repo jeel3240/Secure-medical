@@ -30,6 +30,12 @@ export interface CallbackListRow extends Callback {
   };
   /** The most recent note on the lead, for the excerpt column. */
   latestNote: string | null;
+  /**
+   * Who holds the lead right now, if anyone active - so the row can say Resume
+   * to its holder instead of Pick up, and not offer a claim that would fail to
+   * anyone else. Added 2026-09-29.
+   */
+  holder: { id: number; name: string } | null;
 }
 
 export type CreateResult =
@@ -177,10 +183,12 @@ export async function listCallbacks(opts: {
             u.name AS agent_name,
             l.phone, l.first_name, l.last_name, l.source,
             c.tier,
-            n.body AS latest_note
+            n.body AS latest_note,
+            h.id AS holder_id, h.name AS holder_name
      FROM callbacks cb
      JOIN leads l ON l.id = cb.lead_id
      LEFT JOIN users u ON u.id = cb.agent_id
+     LEFT JOIN users h ON h.id = l.assigned_to AND h.is_active
      LEFT JOIN LATERAL (
        SELECT c.tier FROM conversations c
        WHERE c.lead_id = l.id ORDER BY c.created_at DESC, c.id DESC LIMIT 1
@@ -221,6 +229,7 @@ export async function listCallbacks(opts: {
         tier: r.tier,
       },
       latestNote: r.latest_note,
+      holder: r.holder_id ? { id: r.holder_id, name: r.holder_name } : null,
     })),
     counts: countRows.rows[0],
   };
