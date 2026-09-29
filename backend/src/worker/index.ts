@@ -5,7 +5,8 @@ import { pollOnce } from './poller';
 import { errText, log } from '../lib/log';
 import { retryFailedOpeners } from './retry-openers';
 
-const DEFAULT_POLL_INTERVAL_SECONDS = 60;
+// The same as migration 005 sets; used only if the setting is missing.
+const DEFAULT_POLL_INTERVAL_SECONDS = 30;
 
 // Re-read each tick so an admin changing the setting takes effect without a
 // worker restart.

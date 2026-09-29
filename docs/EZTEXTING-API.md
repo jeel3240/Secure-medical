@@ -154,7 +154,7 @@ Rules:
 
 *As implemented, 2026-09-14* - `docs/POLLER.md` describes the real code. It
 differs from the sketch above in three ways: the interval is 60 seconds by
-default and read from `settings` each tick; there is no job queue, and the
+default (30 since migration 005, 2026-09-29) and read from `settings` each tick; there is no job queue, and the
 opener is not sent yet; and the source filter comes from `EZT_SOURCE` rather
 than being fixed to `API`.
 

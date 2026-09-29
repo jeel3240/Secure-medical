@@ -148,7 +148,7 @@ successful poll. `POLLER.md`, step 7.)*
 week-old value with a fresh poll is healthy, and a fresh value with a 15-minute
 -old poll is not.
 
-The 6-minute threshold is six times the default 60s interval: long enough that
+The 6-minute threshold is six times the old 60s interval (twelve of the 30s one since migration 005): long enough that
 a slow EZ Texting page or a restart is not a false alarm, short enough that a
 dead worker is noticed within the working hour.
 
