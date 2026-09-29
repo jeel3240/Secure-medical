@@ -60,13 +60,14 @@ docker compose exec postgres psql -U app -d leads \
 
 | Variable | Notes |
 |---|---|
-| `DATABASE_URL`, `REDIS_URL`, `JWT_SECRET` | Required. In production `JWT_SECRET` must be at least 32 characters and not a placeholder, or the API refuses to start - see AUTH.md. |
+| `DATABASE_URL`, `JWT_SECRET` | Required. In production `JWT_SECRET` must be at least 32 characters and not a placeholder, or the API refuses to start - see AUTH.md. |
 | `EZT_USERNAME`, `EZT_PASSWORD` | EZ Texting account login. Basic auth, no API key. |
 | `EZT_GROUP` | Contact group the poller reads. Required - the account holds ~120k real contacts, so every query is scoped to one group. |
 | `EZT_SOURCE` | Defaults to `API`, which is how partner leads arrive. Set to `WebInterface` to test with a contact added by hand in the dashboard. |
 | `EZT_SEND_GROUP` | Leave unset. `sendMessage` refuses to send without it - see below. |
 | `EZT_WEBHOOK_TOKEN` | Optional random string forming the last segment of the inbound webhook path. Unset accepts the plain path, which is fine locally; always set it in production. See WEBHOOKS.md. |
 | | *Update 2026-09-14:* the account is a test account and `weightloss` is the test group. Set this to `weightloss` and sending is unlocked. See below. |
+| `REDIS_URL` | Not read by any code (2026-09-28). Redis runs in the compose files for a planned job queue; the `bull` and `redis` packages were removed as unused. |
 | `NODE_ENV` | `production` turns on the Secure cookie flag, RDS SSL, and the `JWT_SECRET` strength check. Set by the compose files; no need to change it in `.env`. |
 | `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_PHONE_NUMBER` | Not read by any code yet. Week 4. |
 | `CADDY_DOMAIN` | Not read by anything. The production `Caddyfile` names `dailyleadhub.com` directly. |
@@ -175,9 +176,10 @@ is open but only proves the process is alive.
 (`frontend/src/api/usePolling.ts`). Not a push. At 50-100 leads a day nobody can
 tell, and replacing it later means rewriting that one file.
 
-**Redis runs but nothing uses it.** It is in the compose file and in
-`package.json`; no code reads or writes it. The worker is a plain loop, not a
-job queue.
+**Redis runs but nothing uses it.** It is in the compose files, planned for a
+job queue (CLAUDE.md §2); no code reads or writes it, and since 2026-09-28 the
+`bull` and `redis` packages are gone and `REDIS_URL` is no longer required. The
+worker is a plain loop, not a job queue.
 
 **State and Consent ref have no data behind them.** EZ Texting sends neither, so
 both are shown as "-" or a note rather than left off the screen.
