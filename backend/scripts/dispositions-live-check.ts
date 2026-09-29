@@ -20,6 +20,7 @@ import { setDisposition } from '../src/db/dispositions';
 import { blockNumber, DNC_REASONS, releaseNumber } from '../src/db/dnc';
 import { listQueue } from '../src/db/queue';
 import { getTimeline } from '../src/db/timeline';
+import { getLeadDetail } from '../src/db/lead-detail';
 
 let failures = 0;
 
@@ -118,12 +119,39 @@ async function main(): Promise<void> {
     await pool.query(`UPDATE leads SET has_unread_inbound = false WHERE id = $1`, [wrote]);
     check('and once read it is closed again', await inQueue(wrote), false);
 
+    // Until 2026-09-29 a held lead stayed in the queue as "Working - Maya"
+    // after she closed it, until she pressed Back to queue. Closing now lets go
+    // of it, so it leaves at once.
     const held = await makeQueuedLead('+15550000522', 'Held');
     await pool.query(`UPDATE leads SET assigned_to = $2, assigned_at = now() WHERE id = $1`, [held, maya]);
-    await setDisposition(held, maya, 'closed');
-    check('it stays while the agent still holds it', await inQueue(held), true);
-    await pool.query(`UPDATE leads SET assigned_to = NULL, assigned_at = NULL WHERE id = $1`, [held]);
-    check('and leaves once they release it', await inQueue(held), false);
+    check('a held lead is in the queue', await inQueue(held), true);
+    const closedHeld = await setDisposition(held, maya, 'closed');
+    check('closing it reports the release', closedHeld.ok && closedHeld.disposition.released, true);
+    const claim = (await pool.query(`SELECT assigned_to, assigned_at FROM leads WHERE id = $1`, [held])).rows[0];
+    check('the claim is cleared', [claim.assigned_to, claim.assigned_at], [null, null]);
+    check('and it leaves the queue at once', await inQueue(held), false);
+
+    const card = await getLeadDetail(held);
+    check('the card says it is closed, and by whom', card?.closed?.by, 'Maya');
+    check('and when', typeof card?.closed?.at === 'string' && card.closed.at.length > 0, true);
+
+    // An unread reply the closing agent was looking at does not hold it in.
+    const unread = await makeQueuedLead('+15550000527', 'Unread');
+    await pool.query(
+      `UPDATE leads SET assigned_to = $2, assigned_at = now(), has_unread_inbound = true WHERE id = $1`,
+      [unread, maya]
+    );
+    await setDisposition(unread, maya, 'closed');
+    check('closing clears an unread reply too', await inQueue(unread), false);
+
+    await pool.query(`UPDATE leads SET has_unread_inbound = true WHERE id = $1`, [held]);
+    check('a text after closing reopens it on the card', (await getLeadDetail(held))?.closed, null);
+    await pool.query(`UPDATE leads SET has_unread_inbound = false WHERE id = $1`, [held]);
+
+    const dncHeld = await makeQueuedLead('+15550000528', 'DncHeld');
+    await pool.query(`UPDATE leads SET assigned_to = $2, assigned_at = now() WHERE id = $1`, [dncHeld, maya]);
+    await setDisposition(dncHeld, maya, 'dnc');
+    check('DNC releases it too', (await pool.query(`SELECT assigned_to FROM leads WHERE id = $1`, [dncHeld])).rows[0].assigned_to, null);
 
     const before = await makeQueuedLead('+15550000523', 'Before');
     await pool.query(

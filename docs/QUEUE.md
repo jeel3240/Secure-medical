@@ -32,11 +32,14 @@ of the four reasons below holds:
 
 **A closed lead leaves - Jeel, 2026-09-28.** Once an agent presses Closed,
 none of the four reasons above keeps the lead - not completing, not needing
-review, not a callback booked before it was closed. Three things still do:
+review, not a callback booked before it was closed. Saving the outcome also
+releases the lead, so it leaves the moment Closed is saved (Jeel, 2026-09-29;
+until then it stayed as "Working – name" until the agent pressed Back to
+queue, though nobody needed to pick it up). Three things still keep one in:
 
 | Keeps a closed lead in | Why |
 |---|---|
-| An active agent holds it | So it does not vanish between Save and Back to queue |
+| An agent picks it up again | Someone is deliberately working it again |
 | `has_unread_inbound` | The lead texted after closing, and a person has to read it. It shows as Inbound reply |
 | A callback booked after closing, not yet done | It is not finished after all - "call me Friday". That reopens the lead altogether |
 

@@ -46,6 +46,8 @@ export interface LeadDetail {
   chips: AnswerChip[];
   breakdown: BreakdownLine[];
   claimedBy: { id: number; name: string; at: string } | null;
+  /** Set while the lead is closed: who closed it and when. */
+  closed: { by: string | null; at: string } | null;
   flags: {
     /** A live dnc_list row: blocks every action, not just SMS. */
     dnc: boolean;
@@ -134,6 +136,8 @@ export interface DispositionRow {
   createdAt: string;
   /** True when this disposition blocked the number. Only ever for `dnc`. */
   blockedNumber: boolean;
+  /** Saving an outcome lets go of the lead - both values do. */
+  released: boolean;
 }
 
 /**

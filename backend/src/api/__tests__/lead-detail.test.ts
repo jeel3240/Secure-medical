@@ -41,6 +41,7 @@ const A_LEAD: LeadDetail = {
     { code: 'q1_3', label: 'Both', points: 15 },
   ],
   claimedBy: null,
+  closed: null,
   flags: { dnc: false, needsReview: false, unread: false, expired: false },
 };
 

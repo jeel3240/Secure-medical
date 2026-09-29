@@ -237,9 +237,19 @@ closed - and `db/lead-state.ts` is the one SQL definition both screens use.
 
 | After saving | The lead |
 |---|---|
-| Closed | Leaves the queue once the agent goes back. While they still hold it - between Save and Back to queue - it stays, so it does not vanish from under them |
-| DNC | Leaves the queue, because the number is blocked - as before |
+| Closed | Released and out of the queue at once, and the agent is taken back to the queue. Until 2026-09-29 it stayed held - and in the queue as "Working – name" - until the agent pressed Back to queue; nobody needed to pick it up, so that was only confusing |
+| DNC | Leaves the queue, because the number is blocked; released too, from 2026-09-29 |
 | No outcome, just a callback or a note | Stays |
+
+**How it is done.** `setDisposition` (`db/dispositions.ts`) clears
+`assigned_to`, `assigned_at` and `has_unread_inbound` in the same transaction as
+the disposition row, and returns `released: true`. The unread flag goes too
+because the agent closing the lead was reading it; a text that arrives later
+sets it again. The lead card carries `closed: { by, at }` while the lead is
+closed, by the same rule as the queue, so the workspace shows Closed as the
+selected outcome, "Closed by Maya · 7:01 PM" under it, and a Closed badge. Before
+that nothing on screen said a lead was closed, and an agent in the 2026-09-29
+test pressed Closed twice. `scripts/dispositions-live-check.ts` proves it.
 
 **What brings a closed lead back:**
 

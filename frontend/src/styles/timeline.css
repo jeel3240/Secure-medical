@@ -174,9 +174,6 @@
   background: var(--color-surface-hover);
 }
 
-.actions-panel__problem {
-  display: block;
-}
 
 /* Lead Timeline page - DESIGN-PROMPT.md 4. Phase 3 task 21. */
 .timeline-page {

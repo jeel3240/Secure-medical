@@ -7,6 +7,7 @@
  */
 
 import { pool } from './pool';
+import { CLOSED_SQL } from './lead-state';
 import { answerChips, scoreBreakdown, type ScoringRule } from '../core/score-breakdown';
 import type { AnswerChip, BreakdownLine } from '../core/score-breakdown';
 
@@ -36,6 +37,13 @@ export interface LeadDetail {
 
   /** Who is working it, if anyone active. */
   claimedBy: { id: number; name: string; at: string } | null;
+  /**
+   * Set while the lead is closed - by the same rule the queue and Admin > Leads
+   * use, `db/lead-state.ts` - with who closed it and when. Null once a text or
+   * a later callback reopens it. Added 2026-09-29: without it the screen could
+   * not say a lead was closed, and an agent pressed Closed twice.
+   */
+  closed: { by: string | null; at: string } | null;
 
   flags: {
     /** A live dnc_list row: blocks every action, not just SMS. */
@@ -66,7 +74,10 @@ const SQL = `
     u.id   AS holder_id,
     u.name AS holder_name,
     l.assigned_at,
-    (d.id IS NOT NULL) AS on_dnc
+    (d.id IS NOT NULL) AS on_dnc,
+    ${CLOSED_SQL} AS is_closed,
+    od.created_at AS outcome_at,
+    ou.name AS outcome_by
   FROM leads l
   LEFT JOIN LATERAL (
     SELECT c.id, c.status, c.step, c.q1, c.q2, c.q3, c.score, c.tier,
@@ -78,6 +89,13 @@ const SQL = `
   ) c ON true
   LEFT JOIN users u ON u.id = l.assigned_to AND u.is_active
   LEFT JOIN dnc_list d ON d.phone = l.phone AND d.released_at IS NULL
+  LEFT JOIN LATERAL (
+    SELECT od.agent_id, od.created_at FROM dispositions od
+    WHERE od.lead_id = l.id
+    ORDER BY od.created_at DESC, od.id DESC
+    LIMIT 1
+  ) od ON true
+  LEFT JOIN users ou ON ou.id = od.agent_id
   WHERE l.id = $1
 `;
 
@@ -134,6 +152,10 @@ export async function getLeadDetail(leadId: number): Promise<LeadDetail | null> 
 
     claimedBy: r.holder_id
       ? { id: r.holder_id, name: r.holder_name, at: r.assigned_at?.toISOString() ?? '' }
+      : null,
+
+    closed: r.is_closed
+      ? { by: r.outcome_by ?? null, at: r.outcome_at?.toISOString() ?? '' }
       : null,
 
     flags: {
