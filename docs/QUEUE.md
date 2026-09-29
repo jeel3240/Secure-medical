@@ -30,6 +30,13 @@ of the four reasons below holds:
 | `has_unread_inbound` | Texted something the questions cannot handle - after the conversation ended, or to an agent who took it over. `STATE-MACHINE.md`, "Which replies need a person" |
 | An active agent holds it, or a callback is booked | Being worked. A lead must never vanish from under the agent working it, whatever its conversation says - this is also what keeps an expired lead with a callback, as the 2026-09-19 rule intended |
 
+**Holding a lead needs no score - Jeel, 2026-09-29.** Everything else in the
+queue has replied (score above 0) or has an unread message. A held lead did
+too, until a test picked one up from Admin > Leads before it answered: it read
+Working there but was missing from the queue, even for the admin holding it.
+Holding now stands on its own (`db/queue.ts`, `INCLUDED`); once let go, such a
+lead leaves until it replies.
+
 **A closed lead leaves - Jeel, 2026-09-28.** Once an agent presses Closed,
 none of the four reasons above keeps the lead - not completing, not needing
 review, not a callback booked before it was closed. Saving the outcome also

@@ -106,17 +106,23 @@ const BASE = `
  * call me" on day 9 - or STOPs, STARTs, then writes - was flagged for a person
  * and then kept out of the queue by `score > 0`, where no person would ever see
  * it.
+ *
+ * **A lead someone holds is always here** - Jeel, 2026-09-29. `score > 0` used
+ * to come first, so a lead picked up before it answered anything - possible
+ * from Admin > Leads - read Working there but was missing from the queue,
+ * including for the person holding it. Holding now stands on its own; the
+ * score test applies to everything else.
  */
 const INCLUDED = `
-  (c.score > 0 OR l.has_unread_inbound)
-  AND NOT EXISTS (
+  NOT EXISTS (
     SELECT 1 FROM dnc_list d WHERE d.phone = l.phone AND d.released_at IS NULL
   )
   AND (
     u.id IS NOT NULL
     OR l.has_unread_inbound
     OR (
-      NOT ${CLOSED_SQL}
+      c.score > 0
+      AND NOT ${CLOSED_SQL}
       AND (
         c.status IN ('completed', 'review')
         OR EXISTS (
