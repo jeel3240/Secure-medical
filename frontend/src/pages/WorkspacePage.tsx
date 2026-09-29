@@ -12,7 +12,8 @@ import { Spinner } from '../components/Spinner';
 import { ActionsPanel } from './workspace/ActionsPanel';
 import { Conversation } from './workspace/Conversation';
 import { SmsCompose } from './workspace/SmsCompose';
-import { formatAge, formatPhone, leadName } from '../lib/format';
+import { formatAge, formatPhone, formatTime, leadName } from '../lib/format';
+import { useSecond } from '../lib/useSecond';
 
 /**
  * One lead, one screen: who they are, what they said, and every action an agent
@@ -35,16 +36,6 @@ import { formatAge, formatPhone, leadName } from '../lib/format';
  * It says why it is off rather than sitting there dead.
  */
 
-/** Ticks the age in the header, the same way the queue does. */
-function useSecond(): Date {
-  const [now, setNow] = useState(() => new Date());
-  useEffect(() => {
-    const id = setInterval(() => setNow(new Date()), 1000);
-    return () => clearInterval(id);
-  }, []);
-  return now;
-}
-
 /** `Maria Reyes` -> `MR`, `Maria` -> `M`. */
 function initials(lead: LeadDetail): string {
   return [lead.firstName, lead.lastName]
@@ -54,7 +45,6 @@ function initials(lead: LeadDetail): string {
     .slice(0, 2);
 }
 
-const timeFormat = new Intl.DateTimeFormat(undefined, { hour: 'numeric', minute: '2-digit' });
 
 /**
  * The breakdown in the mockup's words. The API's labels are the bare answer -
@@ -134,7 +124,11 @@ export function WorkspacePage() {
    */
   useEffect(() => {
     if (mine && lead?.flags.unread) {
-      void markRead(lead.id).then(refresh);
+      // A failure is left to the next poll, which fires this again while the
+      // flag is still set; it must not surface as an uncaught error.
+      markRead(lead.id)
+        .then(refresh)
+        .catch(() => undefined);
     }
   }, [mine, lead?.id, lead?.flags.unread, refresh]);
 
@@ -216,7 +210,7 @@ export function WorkspacePage() {
         {held && (
           <span className="workspace__held">
             <span className="workspace__held-dot" aria-hidden="true" />
-            Held by {mine ? 'you' : held.name} · since {timeFormat.format(new Date(held.at))}
+            Held by {mine ? 'you' : held.name} · since {formatTime(new Date(held.at))}
           </span>
         )}
       </div>

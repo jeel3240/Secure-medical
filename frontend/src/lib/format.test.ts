@@ -6,7 +6,7 @@
  * screen. The rest is cheap to cover once the file has a test.
  */
 import { describe, expect, it } from 'vitest';
-import { answerLabel, formatAge, formatPhone, formatRelative, leadName } from './format';
+import { answerLabel, formatAge, formatPhone, formatRelative, leadName, toLocalInput } from './format';
 
 const NOW = new Date('2026-09-26T12:00:00.000Z');
 const ago = (seconds: number) => new Date(NOW.getTime() - seconds * 1000).toISOString();
@@ -88,5 +88,14 @@ describe('formatRelative', () => {
     expect(formatRelative(ago(120), NOW)).toBe('2m ago');
     expect(formatRelative(ago(7200), NOW)).toBe('2h ago');
     expect(formatRelative(ago(3 * 86400), NOW)).toBe('3d ago');
+  });
+});
+
+describe('toLocalInput', () => {
+  // The one copy since 2026-09-28; Wrap up passes a Date, My Callbacks an ISO string.
+  it('gives local time with no zone, from a Date or an ISO string alike', () => {
+    const d = new Date(2026, 8, 28, 9, 5);
+    expect(toLocalInput(d)).toBe('2026-09-28T09:05');
+    expect(toLocalInput(d.toISOString())).toBe('2026-09-28T09:05');
   });
 });

@@ -10,6 +10,7 @@
 
 import { queueTag, type QueueTag } from '../core/queue-tags';
 import { CLOSED_SQL } from './lead-state';
+import { likeLiteral } from './sql';
 import { pool } from './pool';
 
 export interface QueueRow {
@@ -121,15 +122,6 @@ const INCLUDED = `
 `;
 
 const RECEIVED = `COALESCE(l.ezt_added_at, l.created_at)`;
-
-/**
- * Escapes what the agent typed for LIKE. Without this a search box holding "%"
- * or "_" is a wildcard and matches leads it has nothing to do with.
- * Backslash is LIKE's own default escape character, so no ESCAPE clause.
- */
-function likeLiteral(text: string): string {
-  return text.replace(/[\\%_]/g, (c) => `\\${c}`);
-}
 
 function buildFilters(query: QueueQuery, values: unknown[]): string {
   const clauses: string[] = [INCLUDED];

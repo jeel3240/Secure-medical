@@ -6,6 +6,30 @@ const dateTimeFormat = new Intl.DateTimeFormat(undefined, {
   minute: '2-digit',
 });
 
+/**
+ * "3:45 PM" - the one clock format. Five screens each built their own
+ * identical formatter until 2026-09-28.
+ */
+export function formatTime(date: Date): string {
+  return timeFormat.format(date);
+}
+
+/** "Sep 28, 3:45 PM". */
+export function formatDateTime(date: Date): string {
+  return dateTimeFormat.format(date);
+}
+
+/**
+ * The value an `<input type="datetime-local">` wants: local time with no zone,
+ * `2026-09-28T15:45` - not an ISO string, which is UTC. Wrap up and My
+ * Callbacks each had their own copy until 2026-09-28.
+ */
+export function toLocalInput(value: Date | string): string {
+  const d = typeof value === 'string' ? new Date(value) : value;
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
 /** US 10-digit numbers read better grouped; anything else is shown as stored. */
 export function formatPhone(phone: string): string {
   const m = /^\+1(\d{3})(\d{3})(\d{4})$/.exec(phone);

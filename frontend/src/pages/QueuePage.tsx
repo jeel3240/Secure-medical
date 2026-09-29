@@ -13,6 +13,7 @@ import { Segmented } from '../components/Segmented';
 import { TierSignal } from '../components/TierSignal';
 import { Spinner } from '../components/Spinner';
 import { answerLabel, formatAge, formatPhone, leadName } from '../lib/format';
+import { useSecond } from '../lib/useSecond';
 import { rowAction } from '../lib/lock';
 
 /**
@@ -56,16 +57,6 @@ const SINCE: { key: string; label: string }[] = [
   { key: '7d', label: 'Last 7 days' },
   { key: 'all', label: 'All time' },
 ];
-
-/** Ticks once a second so the age column counts up between polls. */
-function useSecond(): Date {
-  const [now, setNow] = useState(() => new Date());
-  useEffect(() => {
-    const id = setInterval(() => setNow(new Date()), 1000);
-    return () => clearInterval(id);
-  }, []);
-  return now;
-}
 
 export function QueuePage() {
   const navigate = useNavigate();

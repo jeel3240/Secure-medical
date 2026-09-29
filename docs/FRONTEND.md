@@ -479,7 +479,7 @@ page forgot them.
 
 ## Tests
 
-`npm test` in `frontend/`. Vitest with jsdom, 113 tests (2026-09-28).
+`npm test` in `frontend/`. Vitest with jsdom, 115 tests (2026-09-28).
 
 Logic first, by agreement - a screen is easy to judge by eye, and a dropped
 response or an off-by-one age threshold is not:

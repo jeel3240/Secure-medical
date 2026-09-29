@@ -1,5 +1,6 @@
 import { isBlocked, recordFailedSend } from '../db/failed-sends';
 import { pool } from '../db/pool';
+import { readExpiryDays } from '../db/sql';
 import { config } from '../config';
 import { renderMessage } from '../core/messages';
 import {
@@ -205,12 +206,12 @@ async function sendOpener(leadId: number, phone: string, firstName: string | nul
     // The reply window starts when the opener actually goes out. Set here
     // rather than at creation so a conversation whose opener failed has no
     // deadline it never earned; the sweep falls back to created_at for those.
-    const days = await readSetting('expiry_days');
+    const days = await readExpiryDays(pool);
     await pool.query(
       `UPDATE conversations
        SET expires_at = now() + ($2 || ' days')::interval, updated_at = now()
        WHERE lead_id = $1 AND status = 'open'`,
-      [leadId, days ?? '7']
+      [leadId, String(days)]
     );
 
     log.info('sms.sent', { leadId, key: 'question_1', eztMessageId: result.id });

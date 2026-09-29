@@ -122,6 +122,10 @@ stays one row per lead however much history accumulates. Tab counts come from a
 second query that applies every filter except status, so switching tabs does not
 change the numbers beside them.
 
+What is typed is escaped before it reaches `LIKE`, so a `%` or `_` is that
+character, not a wildcard - `db/sql.ts`, 2026-09-28; until then this page did
+not escape at all, and `%` matched every lead.
+
 Search matches name, or phone with punctuation stripped, so `(602) 620-3572`
 finds `+16026203572`.
 

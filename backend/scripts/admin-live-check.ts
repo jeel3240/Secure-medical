@@ -17,6 +17,7 @@
 import { pool } from '../src/db/pool';
 import { getAdminConfig } from '../src/db/admin-config';
 import { getOverview } from '../src/db/admin-overview';
+import { listAdminLeads } from '../src/db/leads';
 import { listDnc } from '../src/db/admin-dnc';
 import { blockNumber, DNC_REASONS, releaseNumber } from '../src/db/dnc';
 
@@ -253,6 +254,23 @@ async function main(): Promise<void> {
     const wildcard = await listDnc({ q: '%' });
     // Without escaping, "%" would match every row.
     check('a wildcard is not a wildcard', wildcard.rows.length, 0);
+
+    // A search holding "_" must find that character. The check above alone
+    // could not catch the DNC copy's broken escaping - it produced the text
+    // "${c}", which also matched nothing - so this one finds a row. 2026-09-28.
+    await makeLead({ phone: '+15550000708', first: 'Ann_Marie' });
+    await makeLead({ phone: '+15550000709', first: 'AnnXMarie' });
+    await blockNumber(pool, '+15550000708', DNC_REASONS.smsStop);
+    await blockNumber(pool, '+15550000709', DNC_REASONS.smsStop);
+    check('"_" finds the name with an underscore, and only it', (await listDnc({ q: 'n_M' })).rows.map((r) => r.lead?.name), ['Ann_Marie']);
+
+    // Admin > Leads did not escape at all.
+    check('Admin > Leads: "%" is not a wildcard', (await listAdminLeads({ q: '%' })).total, 0);
+    check('Admin > Leads: "_" finds only the underscore', (await listAdminLeads({ q: 'n_m' })).leads.map((l) => l.firstName), ['Ann_Marie']);
+
+    // The digits clean-up read 'D' for '\D' - template literal - and so
+    // stripped the letter D rather than every non-digit.
+    check('a number typed with a leading +1 still matches', (await listDnc({ q: '+1 555 000 0708' })).rows.length, 1);
   }
 
   console.log(failures === 0 ? '\nall checks passed' : `\n${failures} check(s) FAILED`);

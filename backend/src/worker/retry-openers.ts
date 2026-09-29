@@ -47,6 +47,7 @@
  */
 
 import { pool } from '../db/pool';
+import { readExpiryDays } from '../db/sql';
 import { isBlocked, recordFailedSend } from '../db/failed-sends';
 import { renderMessage } from '../core/messages';
 import { sendMessage } from '../integrations/ezt-client';
@@ -187,15 +188,13 @@ export async function retryFailedOpeners(): Promise<RetryStats> {
 
       // The reply window starts now, not when the lead arrived: they are only
       // being asked at this point, so the seven days run from here.
-      const days = (
-        await pool.query(`SELECT value FROM settings WHERE key = 'expiry_days'`)
-      ).rows[0]?.value;
+      const days = await readExpiryDays(pool);
 
       await pool.query(
         `UPDATE conversations
          SET expires_at = now() + ($2 || ' days')::interval, updated_at = now()
          WHERE lead_id = $1 AND status = 'open'`,
-        [row.id, days ?? '7']
+        [row.id, String(days)]
       );
 
       stats.sent++;

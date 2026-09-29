@@ -10,6 +10,7 @@
  * matching who is actually blocked.
  */
 
+import { likeLiteral } from './sql';
 import { pool } from './pool';
 
 const DEFAULT_PAGE_SIZE = 50;
@@ -43,14 +44,6 @@ export interface DncResult {
   counts: { all: number; blocked: number; released: number };
 }
 
-/**
- * Escapes what the admin typed for LIKE. Without this a search box holding "%"
- * or "_" is a wildcard and matches numbers it has nothing to do with.
- */
-function likeLiteral(text: string): string {
-  return text.replace(/[\%_]/g, (c) => `\${c}`);
-}
-
 export async function listDnc(query: DncQuery = {}): Promise<DncResult> {
   const limit = Math.min(Math.max(query.limit ?? DEFAULT_PAGE_SIZE, 1), MAX_PAGE_SIZE);
   const page = Math.max(query.page ?? 1, 1);
@@ -64,7 +57,7 @@ export async function listDnc(query: DncQuery = {}): Promise<DncResult> {
     const digits = query.q.replace(/\D/g, '');
     if (digits) {
       values.push(`%${likeLiteral(digits)}%`);
-      where.push(`regexp_replace(d.phone, '\D', '', 'g') LIKE $${values.length}`);
+      where.push(`regexp_replace(d.phone, '\\D', '', 'g') LIKE $${values.length}`);
     } else {
       // Not a number: match the lead's name instead.
       values.push(`%${likeLiteral(query.q.trim())}%`);

@@ -21,7 +21,7 @@ import { Spinner } from '../components/Spinner';
 import { StatusIcon } from '../components/StatusIcon';
 import { TierSignal } from '../components/TierSignal';
 import { useAuth } from '../auth/store';
-import { formatPhone, leadName } from '../lib/format';
+import { formatDateTime, formatPhone, formatTime, leadName, toLocalInput } from '../lib/format';
 
 /**
  * The agent's scheduled callbacks. DESIGN-PROMPT.md 5. Phase 3 task 22.
@@ -49,23 +49,6 @@ const TABS: { value: CallbackWhen; label: string }[] = [
   { value: 'overdue', label: 'Overdue' },
   { value: 'all', label: 'All' },
 ];
-
-const timeFormat = new Intl.DateTimeFormat(undefined, { hour: 'numeric', minute: '2-digit' });
-const dayTimeFormat = new Intl.DateTimeFormat(undefined, {
-  month: 'short',
-  day: 'numeric',
-  hour: 'numeric',
-  minute: '2-digit',
-});
-
-/** `<input type="datetime-local">` wants local time with no zone. */
-function toLocalInput(iso: string): string {
-  const d = new Date(iso);
-  const pad = (n: number) => String(n).padStart(2, '0');
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(
-    d.getMinutes()
-  )}`;
-}
 
 /** Whose callbacks: '' for your own, 'all' for everyone's, or an agent's id. */
 type Whose = '' | 'all' | number;
@@ -225,7 +208,7 @@ export function CallbacksPage() {
                     <tr key={row.id}>
                       <td className="callbacks__due">
                         <span className="tabular">
-                          {when === 'today' ? timeFormat.format(scheduled) : dayTimeFormat.format(scheduled)}
+                          {when === 'today' ? formatTime(scheduled) : formatDateTime(scheduled)}
                         </span>
                         {late && (
                           <span className="status status--warning callbacks__flag">

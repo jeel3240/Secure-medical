@@ -3,6 +3,7 @@ import { Request, Response, Router } from 'express';
 // argument, so it does not drag in src/config the way db/pool does.
 import { blockNumber, DNC_REASONS, releaseNumber } from '../db/dnc';
 import { errText, log } from '../lib/log';
+import { asyncHandler } from './http';
 
 export const webhooksRouter = Router();
 
@@ -268,5 +269,9 @@ const handleInbound = async (req: Request, res: Response) => {
   }
 };
 
-webhooksRouter.post('/eztexting', handleInbound);
-webhooksRouter.post('/eztexting/:token', handleInbound);
+// Wrapped like every other route. `pool.connect()` runs before the handler's own
+// try, so a database blip used to be an unhandled rejection - which in Node 20
+// takes the whole API process down. Now it is a 500, which EZ Texting retries,
+// and the dedupe makes the retry safe. Found 2026-09-28.
+webhooksRouter.post('/eztexting', asyncHandler(handleInbound));
+webhooksRouter.post('/eztexting/:token', asyncHandler(handleInbound));
