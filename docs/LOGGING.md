@@ -77,7 +77,7 @@ firing a real webhook: the number appears nowhere in the output.
 
 | Event | Where |
 |---|---|
-| `api.started`, `api.refused_start` | `api/index.ts` |
+| `api.started`, `api.refused_start` | `api/index.ts`. `refused_start` carries `reason`: `weak_jwt_secret` or `no_webhook_token` (`api/startup-checks.ts`) |
 | `worker.started`, `poll.tick`, `poll.failed` | `worker/index.ts` |
 | `conversation.expired`, `expiry.failed` | `worker/index.ts` |
 | `sms.sent`, `sms.failed`, `sms.no_template`, `sms.name_dropped`, `sms.record_failed` | `worker/poller.ts`, `worker/retry-openers.ts`, `worker/opener.ts` (`sms.name_dropped`), `api/reply-flow.ts`, `db/agent-sms.ts`, `db/outbound.ts` (`sms.record_failed`) |

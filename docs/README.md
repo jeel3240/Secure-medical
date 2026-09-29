@@ -65,7 +65,7 @@ docker compose exec postgres psql -U app -d leads \
 | `EZT_GROUP` | Contact group the poller reads. Required - the account holds ~120k real contacts, so every query is scoped to one group. |
 | `EZT_SOURCE` | Defaults to `API`, which is how partner leads arrive. Set to `WebInterface` to test with a contact added by hand in the dashboard. |
 | `EZT_SEND_GROUP` | Leave unset. `sendMessage` refuses to send without it - see below. |
-| `EZT_WEBHOOK_TOKEN` | Optional random string forming the last segment of the inbound webhook path. Unset accepts the plain path, which is fine locally; always set it in production. See WEBHOOKS.md. |
+| `EZT_WEBHOOK_TOKEN` | Random string forming the last segment of the inbound webhook path. Optional locally, where unset accepts the plain path. **Required in production**: the API refuses to start without one of at least 16 characters (2026-09-29). See WEBHOOKS.md. |
 | | *Update 2026-09-14:* the account is a test account and `weightloss` is the test group. Set this to `weightloss` and sending is unlocked. See below. |
 | `REDIS_URL` | Not read by any code (2026-09-28). Redis runs in the compose files for a planned job queue; the `bull` and `redis` packages were removed as unused. |
 | `NODE_ENV` | `production` turns on the Secure cookie flag, RDS SSL, and the `JWT_SECRET` strength check. Set by the compose files; no need to change it in `.env`. |
