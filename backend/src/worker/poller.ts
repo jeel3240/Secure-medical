@@ -1,17 +1,14 @@
-import { sendAndRecord } from '../db/outbound';
 import { pool } from '../db/pool';
-import { readExpiryDays } from '../db/sql';
 import { config } from '../config';
-import { renderMessage } from '../core/messages';
 import {
   EztContact,
   findGroup,
   isInGroup,
   listContacts,
-  sendMessage,
   toE164,
 } from '../integrations/ezt-client';
 import { errText, log } from '../lib/log';
+import { sendOpener } from './opener';
 
 const CHECKPOINT_KEY = 'ezt_poll_checkpoint';
 const PAGE_SIZE = 50;
@@ -102,7 +99,7 @@ async function isOnDnc(phone: string): Promise<boolean> {
  * existing one, since that decides whether createdAt moves and the poller sees
  * it at all. Wire it with the state machine.
  *
- * expires_at is set by sendOpener rather than here, because it is the window
+ * expires_at is set by sendOpener (worker/opener.ts) rather than here, because it is the window
  * the lead has to reply to a message - a conversation whose opener failed has
  * not started one. The expiry sweep falls back to created_at for those.
  */
@@ -165,7 +162,7 @@ async function insertLead(
 }
 
 /**
- * Sends question 1 to a newly created lead and records it.
+ * Sends question 1 to a newly created lead and records it - `worker/opener.ts`.
  *
  * The returned id goes in messages.ezt_message_id, which is what an inbound
  * reply's `id` field points back at - that is how a reply is tied to the
@@ -177,7 +174,7 @@ async function insertLead(
  * refused opener is kept as a failed message, so the lead's thread shows it
  * with a red "!" - `db/failed-sends.ts`.
  */
-async function sendOpener(leadId: number, phone: string, firstName: string | null): Promise<boolean> {
+async function openLead(leadId: number, phone: string, firstName: string | null): Promise<boolean> {
   try {
     const template = await readSetting('question_1');
     if (!template) {
@@ -185,32 +182,11 @@ async function sendOpener(leadId: number, phone: string, firstName: string | nul
       return false;
     }
 
-    // The stored copy carries {first_name}; what goes out, and what is recorded
-    // in messages.body, is the rendered text.
-    const { text, nameDropped } = renderMessage(template, firstName);
-    if (nameDropped) {
-      log.info('sms.name_dropped', { leadId, key: 'question_1' });
-    }
-
-    // Recorded around the send, so a refused opener is kept (the red "!", and
-    // the retry's attempt count) and a delivered one is never sent again -
-    // db/outbound.ts.
-    const result = await sendAndRecord(pool, { leadId, body: text, send: () => sendMessage([phone], text) });
+    const result = await sendOpener({ id: leadId, phone, firstName }, template);
     if (!result.sent) {
       log.error('sms.failed', { leadId, key: 'question_1', blocked: result.blocked, err: errText(result.err) });
       return false;
     }
-
-    // The reply window starts when the opener actually goes out. Set here
-    // rather than at creation so a conversation whose opener failed has no
-    // deadline it never earned; the sweep falls back to created_at for those.
-    const days = await readExpiryDays(pool);
-    await pool.query(
-      `UPDATE conversations
-       SET expires_at = now() + ($2 || ' days')::interval, updated_at = now()
-       WHERE lead_id = $1 AND status = 'open'`,
-      [leadId, String(days)]
-    );
 
     log.info('sms.sent', { leadId, key: 'question_1', eztMessageId: result.eztMessageId });
     return true;
@@ -301,7 +277,7 @@ export async function pollOnce(): Promise<PollStats> {
         stats.skipped += 1;
       } else {
         stats.inserted += 1;
-        if (await sendOpener(leadId, phone, contact.firstName ?? null)) {
+        if (await openLead(leadId, phone, contact.firstName ?? null)) {
           stats.openersSent += 1;
         }
       }

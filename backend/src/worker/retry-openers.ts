@@ -47,11 +47,8 @@
  */
 
 import { pool } from '../db/pool';
-import { readExpiryDays } from '../db/sql';
-import { sendAndRecord } from '../db/outbound';
-import { renderMessage } from '../core/messages';
-import { sendMessage } from '../integrations/ezt-client';
 import { errText, log } from '../lib/log';
+import { sendOpener } from './opener';
 
 /**
  * Minutes to wait after the Nth failed attempt before trying again: after the
@@ -189,15 +186,9 @@ export async function retryFailedOpeners(): Promise<RetryStats> {
     stats.due++;
 
     try {
-      const { text } = renderMessage(template, row.first_name);
-
       // Recorded around the send - db/outbound.ts - so a text that went out is
       // never retried because a write after it failed.
-      const result = await sendAndRecord(pool, {
-        leadId: row.id,
-        body: text,
-        send: () => sendMessage([row.phone], text),
-      });
+      const result = await sendOpener({ id: row.id, phone: row.phone, firstName: row.first_name }, template);
 
       if (!result.sent) {
         stats.failed++;
@@ -216,17 +207,6 @@ export async function retryFailedOpeners(): Promise<RetryStats> {
         }
         continue;
       }
-
-      // The reply window starts now, not when the lead arrived: they are only
-      // being asked at this point, so the seven days run from here.
-      const days = await readExpiryDays(pool);
-
-      await pool.query(
-        `UPDATE conversations
-         SET expires_at = now() + ($2 || ' days')::interval, updated_at = now()
-         WHERE lead_id = $1 AND status = 'open'`,
-        [row.id, String(days)]
-      );
 
       stats.sent++;
       log.info('sms.sent', {

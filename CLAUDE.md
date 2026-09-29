@@ -193,6 +193,7 @@ you change something the docs describe, update the doc in the same commit.
     src/api/reply-flow.ts   runs the state machine for an inbound reply
     src/worker/expiry.ts    marks stale open conversations expired
     src/worker/retry-openers.ts  retries openers that never went out
+    src/worker/opener.ts    sends question 1: shared by the poller and the retry
     scripts/retry-openers-live-check.ts  proves the backoff and the two must-nots
     scripts/end-to-end.ts   the whole system in one run - npm run e2e
     src/db/leads.ts         Admin > Leads SQL

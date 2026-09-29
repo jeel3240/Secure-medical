@@ -357,7 +357,7 @@ while EZ Texting is unreachable.
 
 `expires_at` is set once a message has actually gone out, not when the
 conversation is created and not when a send is merely attempted - by
-`sendOpener` in the poller and by `bumpExpiry` in `reply-flow.ts`, both after
+`sendOpener` in `worker/opener.ts` (the poller and the opener retry) and by `bumpExpiry` in `reply-flow.ts`, both after
 the send returns. It is the window the lead has to reply to *that message*, so
 a conversation whose opener or follow-up failed has not started one. Those, and
 any created before this existed, fall back to `created_at + expiry_days` in the
