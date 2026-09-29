@@ -224,7 +224,7 @@ object to in a first message.
 `001_init.sql` seeds `settings`, `scoring_rules` and `tiers` with the defaults
 from the mockup: Responded +10, Completed +10, Q1 5/10/15, Q2 30/20/5,
 Q3 35/25/10, and HOT 75-100 / WARM 45-74 / LOW 1-44. It also seeds the question
-and reply copy, the 60s poll interval and the 5 minute poll overlap.
+and reply copy, the 60s poll interval (30s since migration 005) and the 5 minute poll overlap.
 
 All three tables are meant to be edited by a superadmin at runtime, so treat
 the seeds as starting values rather than constants.

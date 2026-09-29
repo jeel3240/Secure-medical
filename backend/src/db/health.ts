@@ -47,7 +47,7 @@ export interface Health {
 /**
  * How long without a poll before the worker is assumed to be in trouble.
  *
- * Six times the default 60s interval: long enough that a slow EZ Texting page
+ * Six times the old 60s interval, twelve of today's 30s (migration 005): long enough that a slow EZ Texting page
  * or a restart does not raise a false alarm, short enough that a dead worker is
  * noticed within the same working hour.
  */

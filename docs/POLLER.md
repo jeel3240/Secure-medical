@@ -1,7 +1,16 @@
 # Poller
 
 Pulls new leads out of EZ Texting into `leads`. Runs in the worker process,
-one cycle at a time, every 60 seconds.
+one cycle at a time, every 30 seconds.
+
+**Every 30 seconds, not 60 - Jeel, 2026-09-29, migration 005.** A test with a
+real lead took 108 seconds from adding the contact in EZ Texting to question 1
+going out. Two things add up: EZ Texting lists a new contact some time after
+creating it - that one was not visible 47 seconds in, and was 107 seconds in -
+and the next check can be a whole interval away. Nothing on our side shortens
+the first; halving the interval halves the second. The overlap window already
+means a contact that shows up late is never missed, only picked up a round
+later.
 
 Code: `backend/src/worker/poller.ts` and `backend/src/worker/index.ts`. Sending
 question 1 is `backend/src/worker/opener.ts`, shared with the opener retry
@@ -138,7 +147,7 @@ steady state `inserted=0` with a small `skipped` is normal and correct.
 | `EZT_GROUP` | Group to read. Required. |
 | `EZT_SOURCE` | Defaults to `API`, how partner leads arrive. `WebInterface` for contacts added by hand. |
 | `EZT_SEND_GROUP` | Unset means `sendMessage` throws, so no opener goes out. |
-| `poll_interval_seconds` | In `settings`, read each tick, so it changes without a restart. |
+| `poll_interval_seconds` | In `settings`, read each tick, so it changes without a restart. 30 since migration 005; 60 before. |
 | `poll_overlap_minutes` | In `settings`. |
 
 ## Retrying a failed opener
