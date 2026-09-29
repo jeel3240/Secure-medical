@@ -80,7 +80,14 @@ URL, so only EZ Texting and we know it.
 
 A wrong or missing token gets 404 rather than 401, so probing the base path
 gives nothing away. When the variable is unset the plain path is accepted,
-which keeps local `curl` testing simple - production should always set it.
+which keeps local `curl` testing simple.
+
+**Production will not start without it - Jeel, 2026-09-29.** Unset, or shorter
+than 16 characters, and the API logs `api.refused_start` with reason
+`no_webhook_token` and exits, alongside the existing check on a weak
+`JWT_SECRET` - `api/startup-checks.ts`. Before this it was only a line in
+`.env.example`, and forgetting it left the webhook open to anyone who found the
+URL: a fake reply could answer a lead's questions or opt them out.
 
 Generate one with:
 
