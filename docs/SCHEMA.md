@@ -185,7 +185,7 @@ fails later at the point of use. Acceptable at this scale, but it is a deliberat
 trade rather than an oversight.
 
 **`conversations.expires_at` is set when a message is sent,** not when the
-conversation is created - by `sendOpener` in the poller and by `reply-flow.ts`
+conversation is created - by `sendOpener` (`worker/opener.ts`, for the poller and the opener retry) and by `reply-flow.ts`
 for every send in the flow. It is the window the lead has to reply to *that
 message*, so a conversation whose opener failed has not started one. The expiry
 sweep falls back to `created_at + expiry_days` for those, which is what stops

@@ -8,6 +8,15 @@ import { describe, expect, it } from 'vitest';
 import tokens from './tokens.css?raw';
 import globalRaw from './global.css?raw';
 
+// global.css is only @imports since the 2026-09-28 split; the rules are in the
+// files it lists. A test below fails if a stylesheet here is not imported by it.
+const sheets = import.meta.glob('./*.css', { as: 'raw', eager: true }) as Record<string, string>;
+const onDisk = Object.keys(sheets)
+  .map((k) => k.slice(2, -4))
+  .filter((f) => f !== 'tokens' && f !== 'global')
+  .sort();
+const imported = [...globalRaw.matchAll(/@import '\.\/([\w-]+)\.css';/g)].map((m) => m[1]);
+
 /**
  * Keeps the type system in tokens.css the only type system.
  *
@@ -19,7 +28,7 @@ import globalRaw from './global.css?raw';
  * slow drift.
  */
 
-const global = globalRaw.replace(/\/\*[\s\S]*?\*\//g, '');
+const global = imported.map((f) => sheets[`./${f}.css`] ?? '').join('\n').replace(/\/\*[\s\S]*?\*\//g, '');
 
 /** Every `selector { body }` block, innermost first - media queries included. */
 const rules = [...global.matchAll(/([^{}]+)\{([^{}]*)\}/g)].map(([, selector, body]) => ({
@@ -33,6 +42,11 @@ const declared = (body: string, prop: string) =>
 describe('the stylesheets under test', () => {
   // Guards against the checks below passing vacuously on a file that did not
   // load: every "no strays" assertion is trivially true over zero rules.
+  it('are every stylesheet, each imported once', () => {
+    expect([...imported].sort()).toEqual(onDisk);
+    expect(new Set(imported).size).toBe(imported.length);
+  });
+
   it('really loaded', () => {
     expect(tokens).toContain(':root');
     expect(global).toContain('font-size');

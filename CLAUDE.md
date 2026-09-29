@@ -160,6 +160,8 @@ you change something the docs describe, update the doc in the same commit.
     src/db/admin-overview.ts  KPIs, funnel, per-agent table, activity feed
     src/db/admin-dnc.ts     the DNC list, released rows included
     src/api/leads.ts        the agents' priority queue, and claim/release
+    src/api/lead-workspace.ts  every route on one lead: card, timeline, notes, callbacks, SMS, dispositions, read
+    src/api/filters.ts      request parsing shared by several routes: since, tz, lists, lead id
     src/db/claims.ts        claiming and releasing a lead
     src/db/read-flag.ts     clears has_unread_inbound
     src/db/lead-detail.ts   the lead card
@@ -191,6 +193,7 @@ you change something the docs describe, update the doc in the same commit.
     src/api/reply-flow.ts   runs the state machine for an inbound reply
     src/worker/expiry.ts    marks stale open conversations expired
     src/worker/retry-openers.ts  retries openers that never went out
+    src/worker/opener.ts    sends question 1: shared by the poller and the retry
     scripts/retry-openers-live-check.ts  proves the backoff and the two must-nots
     scripts/end-to-end.ts   the whole system in one run - npm run e2e
     src/db/leads.ts         Admin > Leads SQL
@@ -223,7 +226,7 @@ you change something the docs describe, update the doc in the same commit.
     src/components/LockIcon.tsx      the padlock on a locked queue row
     src/pages/QueuePage.tsx          the priority queue
     src/pages/WorkspacePage.tsx      the agent workspace shell
-    src/pages/workspace/             Wrap up, SMS compose, the conversation
+    src/pages/workspace/             header card, answers and score, conversation, SMS compose, Wrap up
     src/pages/LeadTimelinePage.tsx   read-only history with a summary sidebar
     src/pages/CallbacksPage.tsx      My Callbacks
     src/pages/admin/                 overview, leads, agents, config, dnc

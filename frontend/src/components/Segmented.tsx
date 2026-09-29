@@ -19,7 +19,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from 'react';
  * - Until it has been placed, the chosen option carries the navy itself, so
  *   white text is never left on the grey track.
  * - People who ask their system for reduced motion get the switch without the
- *   slide - `global.css`, `prefers-reduced-motion`.
+ *   slide - `styles/controls.css`, `prefers-reduced-motion`.
  */
 
 export interface SegmentedOption<T extends string> {

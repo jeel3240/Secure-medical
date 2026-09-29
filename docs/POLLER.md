@@ -3,7 +3,9 @@
 Pulls new leads out of EZ Texting into `leads`. Runs in the worker process,
 one cycle at a time, every 60 seconds.
 
-Code: `backend/src/worker/poller.ts` and `backend/src/worker/index.ts`.
+Code: `backend/src/worker/poller.ts` and `backend/src/worker/index.ts`. Sending
+question 1 is `backend/src/worker/opener.ts`, shared with the opener retry
+(2026-09-28; each had its own copy until then).
 API behaviour it depends on: `docs/EZTEXTING-API.md`.
 
 The worker tick does two things: this poll, then the expiry sweep in
@@ -60,8 +62,8 @@ verified against `groups[]` rather than trusted from the filter.
 **Checkpoint written last, and only on success.** A throw anywhere leaves it
 untouched, so the next cycle re-covers the same ground rather than skipping it.
 
-**A failed opener does not fail the cycle.** `sendOpener` catches its own
-errors. The lead is already committed by then, so throwing would abandon the
+**A failed opener does not fail the cycle.** The poller's `openLead` catches
+every error from `sendOpener`. The lead is already committed by then, so throwing would abandon the
 rest of the page and leave the checkpoint behind, re-polling every later contact
 because one send failed. The refused opener is kept as a failed message
 (`db/failed-sends.ts`), so the lead's thread shows it with a red "!", and

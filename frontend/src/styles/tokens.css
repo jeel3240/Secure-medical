@@ -68,7 +68,7 @@
    * step here is at least 2px from the next, so a difference in size is always
    * a difference in meaning.
    *
-   * src/styles/type-system.test.ts fails the build if a rule in global.css
+   * src/styles/type-system.test.ts fails the build if a rule in any stylesheet
    * uses any size or weight not listed here.
    */
   --font-sans: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;

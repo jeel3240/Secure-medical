@@ -80,7 +80,7 @@ firing a real webhook: the number appears nowhere in the output.
 | `api.started`, `api.refused_start` | `api/index.ts` |
 | `worker.started`, `poll.tick`, `poll.failed` | `worker/index.ts` |
 | `conversation.expired`, `expiry.failed` | `worker/index.ts` |
-| `sms.sent`, `sms.failed`, `sms.no_template`, `sms.name_dropped`, `sms.record_failed` | `worker/poller.ts`, `api/reply-flow.ts`, `db/agent-sms.ts`, `db/failed-sends.ts` |
+| `sms.sent`, `sms.failed`, `sms.no_template`, `sms.name_dropped`, `sms.record_failed` | `worker/poller.ts`, `worker/retry-openers.ts`, `worker/opener.ts` (`sms.name_dropped`), `api/reply-flow.ts`, `db/agent-sms.ts`, `db/outbound.ts` (`sms.record_failed`) |
 | `webhook.rejected`, `webhook.ignored`, `webhook.failed` | `api/webhooks.ts` |
 | `conversation.advanced` | `api/webhooks.ts` |
 | `dnc.blocked`, `dnc.released` | `api/webhooks.ts` |
