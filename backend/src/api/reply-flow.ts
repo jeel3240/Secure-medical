@@ -201,10 +201,8 @@ async function sendFlowMessage(
   // eslint-disable-next-line @typescript-eslint/no-var-requires
   const ezt = require('../integrations/ezt-client') as typeof import('../integrations/ezt-client');
   // eslint-disable-next-line @typescript-eslint/no-var-requires
-  const { isBlocked, recordFailedSend } = require('../db/failed-sends') as typeof import('../db/failed-sends');
+  const { sendAndRecord } = require('../db/outbound') as typeof import('../db/outbound');
 
-  // Rendered before the send, so a refused message can be kept with its text.
-  let rendered: string | null = null;
   try {
     const { rows } = await pool.query(`SELECT value FROM settings WHERE key = $1`, [key]);
     const template: string | undefined = rows[0]?.value;
@@ -214,27 +212,30 @@ async function sendFlowMessage(
     }
 
     const { text, nameDropped } = renderMessage(template, firstName);
-    rendered = text;
     if (nameDropped) {
       log.info('sms.name_dropped', { leadId, key });
     }
 
-    const sent = await ezt.sendMessage([phone], text);
-
-    await pool.query(
-      `INSERT INTO messages (lead_id, direction, body, ezt_message_id)
-       VALUES ($1, 'outbound', $2, $3)`,
-      [leadId, text, sent.id]
-    );
+    // Recorded around the send so it is never sent twice nor marked refused
+    // after it went out - db/outbound.ts.
+    const result = await sendAndRecord(pool, {
+      leadId,
+      body: text,
+      send: () => ezt.sendMessage([phone], text),
+    });
+    if (!result.sent) {
+      log.error('sms.failed', { leadId, key, blocked: result.blocked, err: errText(result.err) });
+      return null;
+    }
 
     await bumpExpiry(pool, conversationId);
 
-    log.info('sms.sent', { leadId, key, eztMessageId: sent.id });
-    return sent.id;
+    log.info('sms.sent', { leadId, key, eztMessageId: result.eztMessageId });
+    return result.eztMessageId;
   } catch (err) {
+    // Before the send: the template, or the database refusing the row. Nothing
+    // went out.
     log.error('sms.failed', { leadId, key, err: errText(err) });
-    // A blocked number was never attempted, so there is no failed send to keep.
-    if (rendered && !isBlocked(err)) await recordFailedSend(leadId, rendered);
     return null;
   }
 }

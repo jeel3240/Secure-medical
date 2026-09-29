@@ -24,15 +24,18 @@
 
 import { CLOSING_DISPOSITIONS } from '../core/dispositions';
 import { pool } from './pool';
+import { startOfTodaySql } from './sql';
 
 export type OverviewPeriod = 'today' | '7d' | '30d';
 
-/** Start of the window. `today` is midnight, not the last 24 hours. */
-const SINCE_SQL: Record<OverviewPeriod, string> = {
-  today: `date_trunc('day', now())`,
-  '7d': `now() - interval '7 days'`,
-  '30d': `now() - interval '30 days'`,
-};
+/**
+ * Start of the window. `today` is midnight in the viewer's zone, not the last
+ * 24 hours and not midnight UTC - `db/sql.ts`, `startOfTodaySql`.
+ */
+function sinceSql(period: OverviewPeriod, timeZone?: string): string {
+  if (period === 'today') return startOfTodaySql(timeZone);
+  return period === '7d' ? `now() - interval '7 days'` : `now() - interval '30 days'`;
+}
 
 export interface AgentRow {
   agentId: number;
@@ -72,8 +75,8 @@ export interface Overview {
   activity: ActivityEntry[];
 }
 
-export async function getOverview(period: OverviewPeriod): Promise<Overview> {
-  const since = SINCE_SQL[period];
+export async function getOverview(period: OverviewPeriod, timeZone?: string): Promise<Overview> {
+  const since = sinceSql(period, timeZone);
 
   // Leads are counted by when they reached us - ezt_added_at where EZ Texting
   // gave us one, created_at otherwise - the same expression the queue uses for

@@ -17,17 +17,23 @@
  * is it here? A lead with no status is simply waiting to be picked up.
  */
 
-export type QueueTagKind = 'in_progress' | 'inbound_reply' | 'needs_review';
+/**
+ * `working` was `in_progress` until 2026-09-28: the screen says "Working –
+ * name", and one state with two names was one more thing to translate.
+ */
+export type QueueTagKind = 'working' | 'inbound_reply' | 'needs_review';
 
 export interface QueueTag {
   kind: QueueTagKind;
-  /** `in_progress`: who holds it. */
+  /** `working`: who holds it - the id to compare with, the name to show. */
+  agentId?: number;
   agentName?: string;
 }
 
 export interface QueueFacts {
   conversationStatus: 'open' | 'completed' | 'review' | 'expired';
-  assignedAgentName: string | null;
+  /** The active agent holding the lead, if any. */
+  holder: { id: number; name: string } | null;
   hasUnreadInbound: boolean;
 }
 
@@ -41,8 +47,8 @@ export interface QueueFacts {
  * Otherwise `null`: nothing to say, the lead is waiting.
  */
 export function queueTag(facts: QueueFacts): QueueTag | null {
-  if (facts.assignedAgentName) {
-    return { kind: 'in_progress', agentName: facts.assignedAgentName };
+  if (facts.holder) {
+    return { kind: 'working', agentId: facts.holder.id, agentName: facts.holder.name };
   }
 
   if (facts.hasUnreadInbound) {

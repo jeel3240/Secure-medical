@@ -26,8 +26,8 @@ const lead = (tag: QueueTag | null): QueueLead => ({
   tag,
 });
 
-const user = (name: string, role: PublicUser['role'] = 'agent'): PublicUser => ({
-  id: 1,
+const user = (id: number, name: string, role: PublicUser['role'] = 'agent'): PublicUser => ({
+  id,
   email: `${name.toLowerCase()}@example.com`,
   name,
   role,
@@ -37,9 +37,9 @@ const user = (name: string, role: PublicUser['role'] = 'agent'): PublicUser => (
   createdAt: '2026-09-01T00:00:00.000Z',
 });
 
-const MAYA = user('Maya Chen');
-const RAE = user('Rae Whitfield');
-const BOSS = user('Boss Admin', 'superadmin');
+const MAYA = user(11, 'Maya Chen');
+const RAE = user(12, 'Rae Whitfield');
+const BOSS = user(13, 'Boss Admin', 'superadmin');
 
 describe('a lead nobody holds', () => {
   it.each<[string, QueueTag | null]>([
@@ -52,7 +52,7 @@ describe('a lead nobody holds', () => {
 });
 
 describe('a lead another agent holds', () => {
-  const held = lead({ kind: 'in_progress', agentName: 'Rae Whitfield' });
+  const held = lead({ kind: 'working', agentId: RAE.id, agentName: 'Rae Whitfield' });
 
   it('is locked, and names the holder', () => {
     expect(lockHolder(held, MAYA)).toBe('Rae Whitfield');
@@ -74,12 +74,24 @@ describe('a lead another agent holds', () => {
   });
 });
 
-describe('an in_progress tag with no name', () => {
+describe('two agents with the same name', () => {
+  it('are told apart by id - one sees Resume, the other Locked', () => {
+    // Matched by name until 2026-09-28: each saw the other's lead as their own.
+    const samA = user(21, 'Sam Okonjo');
+    const samB = user(22, 'Sam Okonjo');
+    const held = lead({ kind: 'working', agentId: samA.id, agentName: 'Sam Okonjo' });
+
+    expect(rowAction(held, samA)).toBe('resume');
+    expect(rowAction(held, samB)).toBe('locked');
+  });
+});
+
+describe('a working tag with no holder id', () => {
   it('is treated as unlocked', () => {
     // The queue endpoint only omits the name when the holder is deactivated,
     // and db/claims.ts lets anyone take over such a lead. Muting the row would
     // strand it: nobody could ever open it.
-    expect(lockHolder(lead({ kind: 'in_progress' }), MAYA)).toBeNull();
+    expect(lockHolder(lead({ kind: 'working' }), MAYA)).toBeNull();
   });
 });
 
@@ -93,29 +105,29 @@ describe('what the row action offers', () => {
 
   it('offers Resume on your own lead, not Pick', () => {
     // You cannot "pick" something you already hold.
-    expect(rowAction(lead({ kind: 'in_progress', agentName: 'karm' }), agent)).toBe('resume');
+    expect(rowAction(lead({ kind: 'working', agentId: 2, agentName: 'karm' }), agent)).toBe('resume');
   });
 
   it('offers Resume to a superadmin on their own lead', () => {
     // The mine check runs before the superadmin one, or a superadmin would be
     // sent to the read-only page for a lead they are working.
-    expect(rowAction(lead({ kind: 'in_progress', agentName: 'Jeel Kakadiya' }), boss)).toBe('resume');
+    expect(rowAction(lead({ kind: 'working', agentId: 1, agentName: 'Jeel Kakadiya' }), boss)).toBe('resume');
   });
 
   it('offers a superadmin View, never Pick, on someone else`s lead', () => {
     // The server refuses that claim with 409, so Pick would always fail.
-    expect(rowAction(lead({ kind: 'in_progress', agentName: 'karm' }), boss)).toBe('view');
+    expect(rowAction(lead({ kind: 'working', agentId: 2, agentName: 'karm' }), boss)).toBe('view');
   });
 
   it('offers an agent nothing on someone else`s lead', () => {
-    expect(rowAction(lead({ kind: 'in_progress', agentName: 'Jeel Kakadiya' }), agent)).toBe('locked');
+    expect(rowAction(lead({ kind: 'working', agentId: 1, agentName: 'Jeel Kakadiya' }), agent)).toBe('locked');
   });
 
   it('offers Pick when the tag names no holder', () => {
-    expect(rowAction(lead({ kind: 'in_progress' }), agent)).toBe('pick');
+    expect(rowAction(lead({ kind: 'working' }), agent)).toBe('pick');
   });
 
   it('locks a signed-out view of a held lead', () => {
-    expect(rowAction(lead({ kind: 'in_progress', agentName: 'karm' }), null)).toBe('locked');
+    expect(rowAction(lead({ kind: 'working', agentId: 2, agentName: 'karm' }), null)).toBe('locked');
   });
 });

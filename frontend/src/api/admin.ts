@@ -1,4 +1,4 @@
-import { api } from './client';
+import { api, viewerTimeZone } from './client';
 
 /**
  * The three read-only admin screens: Configuration, Overview and the DNC list.
@@ -73,7 +73,7 @@ export interface Overview {
 }
 
 export async function getOverview(period: OverviewPeriod): Promise<Overview> {
-  const { data } = await api.get<Overview>('/admin/overview', { params: { period } });
+  const { data } = await api.get<Overview>('/admin/overview', { params: { period, tz: viewerTimeZone() } });
   return data;
 }
 

@@ -192,6 +192,52 @@ async function main(): Promise<void> {
     check('no opener is recorded', await outboundCount(stale), 0);
   }
 
+  console.log('\nfrom review, 2026-09-28');
+  {
+    const { rows: u } = await pool.query(
+      `INSERT INTO users (email, password_hash, name, role) VALUES ('agent@x.test', 'x', 'Agent', 'agent') RETURNING id`
+    );
+    const agent = u[0].id;
+
+    // An agent's own refused texts are not opener attempts. Before the fix
+    // three of them plus the poller's own attempt made four, and the lead
+    // was one step from being given up on.
+    sent = [];
+    const texted = await leadWithFailedOpener('+15550000912', { minutesAgo: 10, attempts: 1 });
+    for (let i = 0; i < 3; i++) {
+      await pool.query(
+        `INSERT INTO messages (lead_id, direction, body, delivery_status, sent_by, created_at)
+         VALUES ($1, 'outbound', 'agent text', 'failed', $2, now() - interval '1 minute')`,
+        [texted, agent]
+      );
+    }
+    const s1 = await retryFailedOpeners();
+    check("an agent's failed texts do not count as attempts: still retried", sent.map((x) => x.to[0]), ['15550000912']);
+    check('and not abandoned', s1.abandoned, 0);
+
+    // A lead who replied anyway has moved on; question 1 again would be scored
+    // as the answer to question 2.
+    sent = [];
+    const replied = await leadWithFailedOpener('+15550000913', { minutesAgo: 10, attempts: 1 });
+    await pool.query(
+      `INSERT INTO messages (lead_id, direction, body, from_number, received_at) VALUES ($1, 'inbound', 'hi', '+15550000913', now())`,
+      [replied]
+    );
+    await retryFailedOpeners();
+    check('a lead who replied is never sent question 1 again', sent.length, 0);
+
+    // A text that may have gone out - its row still 'sending' because the
+    // write after the send failed - is never sent again.
+    sent = [];
+    const maybe = await leadWithFailedOpener('+15550000914', { minutesAgo: 10, attempts: 1 });
+    await pool.query(
+      `INSERT INTO messages (lead_id, direction, body, delivery_status) VALUES ($1, 'outbound', 'opener', 'sending')`,
+      [maybe]
+    );
+    await retryFailedOpeners();
+    check('a text still marked sending is not retried', sent.length, 0);
+  }
+
   console.log('\ngiving up');
   {
     sent = [];

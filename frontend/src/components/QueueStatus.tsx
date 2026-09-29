@@ -26,11 +26,10 @@ import { StatusIcon, type StatusIconName } from './StatusIcon';
 
 export function tagText(tag: QueueTag): string {
   switch (tag.kind) {
-    case 'in_progress':
+    case 'working':
       // Naming the holder is what stops two agents racing for the same lead.
       // "Working", not "In progress" - Jeel, 2026-09-28: the same word as
-      // Admin > Leads, and "In progress" no longer means two things. The
-      // `kind` keeps its name; it is the API's, and never shown.
+      // Admin > Leads. The API's `kind` was renamed to match the same day.
       return tag.agentName ? `Working – ${tag.agentName}` : 'Working';
     case 'inbound_reply':
       return 'Inbound reply';
@@ -41,7 +40,7 @@ export function tagText(tag: QueueTag): string {
 
 /** The shared icon for each status - `StatusIcon.tsx`. */
 const ICON: Record<QueueTag['kind'], StatusIconName> = {
-  in_progress: 'half',
+  working: 'half',
   inbound_reply: 'inbound',
   needs_review: 'warning',
 };

@@ -19,13 +19,10 @@ import type { PublicUser } from '../api/types';
  * - **You are a superadmin.** They can force-release a claim, and they need to
  *   see what an agent is stuck on. `AGENT-WORKSPACE.md`.
  *
- * Matched by name rather than id because the queue endpoint returns the
- * holder's name and not their id - `QueueTag.agentName`. That is a real
- * weakness: two agents called "Sam Okonjo" would each see the other's leads as
- * their own and be allowed to click. The server still refuses the claim, so the
- * failure is a 409 rather than two agents on one lead, but the row would look
- * wrong until then. Worth returning the holder's id from the queue endpoint if
- * duplicate names ever happen; not worth a schema change before they do.
+ * Matched by the holder's **id**, `QueueTag.agentId`. Until 2026-09-28 the
+ * queue returned only the name and this compared names, so two agents called
+ * "Sam Okonjo" each saw the other's lead as their own "Resume" row and got a
+ * 409 on clicking it. Found in review.
  */
 export function lockHolder(lead: QueueLead, me: PublicUser | null): string | null {
   return rowAction(lead, me) === 'locked' ? lead.tag?.agentName ?? null : null;
@@ -54,11 +51,11 @@ export function lockHolder(lead: QueueLead, me: PublicUser | null): string | nul
 export type RowAction = 'pick' | 'resume' | 'view' | 'locked';
 
 export function rowAction(lead: QueueLead, me: PublicUser | null): RowAction {
-  if (lead.tag?.kind !== 'in_progress') return 'pick';
+  if (lead.tag?.kind !== 'working') return 'pick';
 
-  const holder = lead.tag.agentName ?? null;
-  if (!holder) return 'pick';
-  if (me?.name && holder === me.name) return 'resume';
+  const holderId = lead.tag.agentId ?? null;
+  if (holderId === null) return 'pick';
+  if (me && holderId === me.id) return 'resume';
   if (me?.role === 'superadmin') return 'view';
 
   return 'locked';

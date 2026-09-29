@@ -187,6 +187,20 @@ describe('listing callbacks', () => {
     expect(listCallbacks).not.toHaveBeenCalled();
   });
 
+  it("passes the viewer's time zone through, for where today ends", async () => {
+    const { agent } = await setup();
+    await agent.get('/api/callbacks?tz=America/Los_Angeles');
+    expect(listCallbacks.mock.calls[0][0].timeZone).toBe('America/Los_Angeles');
+  });
+
+  it('refuses a time zone that is not one', async () => {
+    const { agent } = await setup();
+    const res = await agent.get('/api/callbacks?tz=Mars/Olympus');
+    expect(res.status).toBe(400);
+    expect(res.body.error).toBe('invalid_tz');
+    expect(listCallbacks).not.toHaveBeenCalled();
+  });
+
   it('refuses an agent asking for someone else', async () => {
     const { agent } = await setup();
     const res = await agent.get('/api/callbacks?agentId=42');

@@ -161,12 +161,6 @@ a lead the partner delivers twice never starts a second conversation. Whether a
 re-delivery is even detectable is unverified - CLAUDE.md §10, "Future: repeat
 leads", has the one API call that settles it.
 
-**"Today" is the server's day, in UTC.** My Callbacks' Today tab and the
-Overview's Today count from midnight UTC, not the viewer's midnight. For a call
-center on US time, "today" ends in the afternoon: a callback due at 9 PM Pacific
-shows under Upcoming, not Today. Waiting on a decision - each viewer's time zone,
-or one fixed call-center zone.
-
 **A first question more than a day late is not sent.** If a lead's opener
 fails and still has not gone out 24 hours after they arrived, it is never sent
 - a first question days late reads as broken. The lead shows a red "!" on its

@@ -6,6 +6,7 @@
  * `POST /api/leads/:id/callbacks`.
  */
 
+import { parseTimeZone } from './time-zone';
 import { Router } from 'express';
 import { requireAuth, requirePasswordChanged } from './auth/middleware';
 import type { AppDeps } from './deps';
@@ -64,7 +65,9 @@ export function callbacksRouter(deps: AppDeps): Router {
       const agentId: number | 'all' =
         asked === undefined ? req.user!.id : asked === 'all' ? 'all' : parseId(String(asked), 'agentId');
 
-      res.json(await db.listCallbacks({ agentId, when: parseWhen(req.query.when) }));
+      res.json(
+        await db.listCallbacks({ agentId, when: parseWhen(req.query.when), timeZone: parseTimeZone(req.query.tz) })
+      );
     })
   );
 

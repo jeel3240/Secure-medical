@@ -57,3 +57,12 @@ api.interceptors.response.use(
     return Promise.reject(error);
   }
 );
+
+/**
+ * The browser's IANA time zone, sent as `?tz=` wherever the server decides what
+ * "today" is - My Callbacks and the Overview. Each viewer's day is their own
+ * (Jeel, 2026-09-28); before this "today" ended at midnight UTC.
+ */
+export function viewerTimeZone(): string {
+  return Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
+}

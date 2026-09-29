@@ -10,6 +10,7 @@
  * ADMIN.md.
  */
 
+import { parseTimeZone } from '../time-zone';
 import { Router } from 'express';
 import { requireAuth, requirePasswordChanged, requireRole } from '../auth/middleware';
 import type { AppDeps } from '../deps';
@@ -36,7 +37,7 @@ export function adminOverviewRouter(deps: AppDeps): Router {
       // eslint-disable-next-line @typescript-eslint/no-var-requires
       const db = require('../../db/admin-overview') as typeof import('../../db/admin-overview');
 
-      res.json(await db.getOverview(parsePeriod(req.query.period)));
+      res.json(await db.getOverview(parsePeriod(req.query.period), parseTimeZone(req.query.tz)));
     })
   );
 

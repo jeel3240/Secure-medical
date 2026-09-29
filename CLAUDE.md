@@ -470,10 +470,8 @@ retry, the end-to-end script, and a README with how to test and known limits.
 
 **Open when Phase 3 closed, 2026-09-28** - each written up where it lives:
 
-- **"Today" is UTC.** My Callbacks' Today tab and the Overview's Today count
-  from midnight UTC, so for a US call center "today" ends in the afternoon.
-  Needs a decision: each viewer's time zone, or one fixed call-center zone.
-  `README.md`, "Known limits".
+- ~~**"Today" is UTC.**~~ Fixed 2026-09-28: each viewer's own time zone, sent
+  by the browser as `?tz=` - `db/sql.ts`, `startOfTodaySql`.
 - **Force-release has no screen.** The API lets a superadmin release anyone's
   claim; nothing on screen offers it. `FRONTEND.md`, "Not built".
 - **Source always reads "API" in production** - it is how the contact was

@@ -140,6 +140,11 @@ anything monitoring the system from outside reads exactly what the screen does.
 The per-agent table and the activity feed are the only place one agent's work is
 visible to anyone but themselves. Agents cannot reach this page: `AUTH.md`.
 
+**"Today" is the viewer's day** - since 2026-09-28 the browser sends its time
+zone as `?tz=`, and today starts at the viewer's midnight, not the database's
+UTC one (`db/sql.ts`, `startOfTodaySql`). An invalid zone is a 400; none means
+UTC.
+
 **As built.** `period` defaults to `today`, which means since midnight rather
 than the last 24 hours. Leads are counted by when they reached us
 (`ezt_added_at`, falling back to `created_at`) - the same expression the queue

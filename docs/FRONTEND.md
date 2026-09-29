@@ -439,8 +439,8 @@ header, which claim the same way.
 to decide which rows to mute before anyone clicks. `lockHolder()` answers
 "is this row muted", `rowAction()` answers "what may this person do" - and the
 first is derived from the second so they cannot disagree. `QUEUE.md`, "The
-one-agent lock on screen", has both tables and the known weakness: the holder is
-matched by name because the queue endpoint returns no id.
+one-agent lock on screen", has both tables. The holder is matched by id since
+2026-09-28; before, by name, which two agents sharing a name would break.
 
 **One Save, three writes.** The workspace right column posts a note, a callback
 and a disposition to three separate endpoints. Each is append-only, so a partial

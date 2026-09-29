@@ -108,6 +108,25 @@ async function main(): Promise<void> {
     check('and its counts add up too', everyone.counts.all, mine.counts.all + theirs.counts.all);
   }
 
+  console.log("\nthe viewer's day, not the database's - 2026-09-28");
+  {
+    // 11:59 PM tonight and 12:01 AM tomorrow, in a zone far from UTC.
+    const tz = 'Pacific/Honolulu';
+    const at = async (sql: string) => (await pool.query(`SELECT ${sql} AS t`)).rows[0].t as Date;
+    const tonight = await at(`date_trunc('day', now() AT TIME ZONE '${tz}') AT TIME ZONE '${tz}' + interval '1 day' - interval '1 minute'`);
+    const tomorrow = await at(`date_trunc('day', now() AT TIME ZONE '${tz}') AT TIME ZONE '${tz}' + interval '1 day' + interval '1 minute'`);
+    const hon = await makeUser('Honolulu');
+    const late = await createCallback(lead, hon, tonight);
+    const early = await createCallback(lead, hon, tomorrow);
+
+    const today = await listCallbacks({ agentId: hon, when: 'today', timeZone: tz });
+    const upcoming = await listCallbacks({ agentId: hon, when: 'upcoming', timeZone: tz });
+    const lateId = late.ok ? late.callback.id : -1;
+    const earlyId = early.ok ? early.callback.id : -1;
+    check('11:59 PM local is today', today.callbacks.map((c) => c.id), [lateId]);
+    check('12:01 AM local tomorrow is upcoming', upcoming.callbacks.map((c) => c.id), [earlyId]);
+  }
+
   console.log('\nmarking done');
   {
     const made = await createCallback(lead, maya, inMinutes(-10));

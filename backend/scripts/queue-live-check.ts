@@ -128,13 +128,13 @@ async function main() {
   // callback or past calls keep a lead in the queue but show no status.
   const tags: Record<string, any> = Object.fromEntries(all.leads.map((l) => [l.firstName, l.tag]));
   check('tag: nothing to say', tags.Hot, null);
-  check('tag: held by an agent', tags.Held, { kind: 'in_progress', agentName: 'Michael' });
+  check('tag: held by an agent, with their id', tags.Held, { kind: 'working', agentId: michael, agentName: 'Michael' });
   check('tag: stale claim by a deactivated agent is ignored', tags.Stale, null);
   check('tag: a booked callback shows no status', tags.Released, null);
   check('tag: unread reply', tags.Back, { kind: 'inbound_reply' });
   check('tag: unreadable replies need a human', tags.Low, { kind: 'needs_review' });
   check('tag: call attempts show no status', tags.Called, null);
-  check('partway, but an agent holds it: stays, In progress', tags.Busy, { kind: 'in_progress', agentName: 'Michael' });
+  check('partway, but an agent holds it: stays, Working', tags.Busy, { kind: 'working', agentId: michael, agentName: 'Michael' });
   check('partway, but a callback is booked: stays, no status', tags.Booked, null);
   check('partway, taken over, lead replied: stays, Inbound reply', tags.Handover, { kind: 'inbound_reply' });
 
@@ -169,6 +169,15 @@ async function main() {
 
   const combined = await listQueue({ tier: ['HOT', 'WARM'], source: ['CORE-G-27'], q: 'e' });
   check('filters combine', combined.leads.map((l) => l.firstName), ['Hot', 'Held', 'Released', 'Stale', 'Tie-newer', 'Tie-older', 'Called']);
+
+  // Never answered a question - score 0 - then texted after the conversation
+  // ended. Flagged for a person, and until 2026-09-28 kept out by score > 0,
+  // where nobody would ever see it.
+  const wrote = await lead({ phone: '+15550000199', first: 'Wrote', source: 'CORE-G-27', ageMin: 9 * 1440, status: 'expired', score: 0, tier: null, unread: true });
+  const withWrote = await listQueue({ limit: 500 });
+  check('a lead with no score who texted us is in the queue', withWrote.leads.some((l) => l.id === wrote), true);
+  check('as an inbound reply', withWrote.leads.find((l) => l.id === wrote)?.tag, { kind: 'inbound_reply' });
+  await pool.query(`DELETE FROM leads WHERE id = $1`, [wrote]);
 
   console.log(failures ? `\n${failures} FAILED` : '\nall checks passed');
   await pool.end();

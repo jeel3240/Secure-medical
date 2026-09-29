@@ -123,6 +123,13 @@ a runaway client cannot fill the column, not to ration what an agent can say.
 
 ## Callbacks
 
+**Today and Upcoming split at the viewer's midnight** - 2026-09-28, from review.
+They split at the database's (UTC), so for a call center on US time a 9 PM
+callback was already "Upcoming", and after 5 PM Pacific the Today tab showed
+tomorrow's. The browser now sends its IANA zone as `?tz=`; an invalid one is a
+400, none means UTC. `scripts/callbacks-live-check.ts` proves 11:59 PM local
+is today and 12:01 AM local is upcoming.
+
 `db/callbacks.ts`, `api/callbacks.ts`, and `POST /api/leads/:id/callbacks` on
 the leads router - creating one belongs to a lead, the rest belong to the agent.
 Backs My Callbacks, `DESIGN-PROMPT.md` section 5.

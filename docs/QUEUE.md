@@ -20,7 +20,7 @@ of the four reasons below holds:
 
 | Always | Why |
 |---|---|
-| Score above 0 | Scoring starts at the first reply, so a score is the mark of a responder. |
+| Score above 0, **or an unread message** | Scoring starts at the first reply, so a score is the mark of a responder. An unread message counts too (2026-09-28, from review): a lead who never answered a question has a score of 0, so one who texts "please call me" on day 9 - or STOPs, STARTs, then writes - was flagged for a person and then kept out of the queue, where nobody would see it |
 | No live `dnc_list` row for the phone | An opt-out is absolute. A row released by START (`released_at` set) does not count - `STATE-MACHINE.md`, "Opting back in". |
 
 | And one of | Why a person is needed |
@@ -65,15 +65,16 @@ freshness". Id last so the order never wobbles between two identical rows.
 ## The tag
 
 At most one tag per row - the STATUS column - computed, never stored. The API
-returns what is true and the screen words it: `{ kind: 'in_progress',
+returns what is true and the screen words it: `{ kind: 'working', agentId: 7,
 agentName: 'Michael' }` becomes "Working – Michael".
 
 *(It read "In progress – Michael" until later on 2026-09-28. Jeel: Working, the
 same word Admin > Leads uses for a lead an agent is on, so "In progress" no
-longer means two things. Only the words changed; the `kind` is still
-`in_progress`, because it is the API's and never shown. The two are not quite
-the same: the queue says Working only while someone holds the lead, while
-Admin > Leads keeps saying Working after it is released - `ADMIN-LEADS.md`.)*
+longer means two things. The API's `kind` followed in the code-quality pass the
+same day - `in_progress` became `working` - and gained `agentId`, so the lock
+matches the holder by id. The queue says Working only while someone holds the
+lead, while Admin > Leads keeps saying Working after it is released -
+`ADMIN-LEADS.md`.)*
 
 **Only three, and most rows have none - Jeel, 2026-09-28.** A tag answers the
 two questions an agent scanning the queue has: is somebody already on this, and
@@ -81,7 +82,7 @@ why is it here? When several apply, the first wins:
 
 | # | `kind` | Shown when | Carries |
 |---|---|---|---|
-| 1 | `in_progress` | An **active** agent holds the lead | `agentName` |
+| 1 | `working` | An **active** agent holds the lead | `agentId`, `agentName` |
 | 2 | `inbound_reply` | The lead has texted and nobody has read it | |
 | 3 | `needs_review` | Conversation `review`: replies we could not read | |
 | - | `null` | None of those: the lead is waiting to be picked up. The screen shows a hyphen | |
@@ -245,7 +246,7 @@ themselves are judged by eye.
 server - `db/claims.ts`, and no screen is trusted with it - but the queue has to
 decide which rows to mute before anyone clicks.
 
-A row is locked when its tag is `in_progress` and someone else holds it. Three
+A row is locked when its tag is `working` and someone else holds it. Three
 ways it is not:
 
 | Case | Why |
@@ -297,14 +298,13 @@ The same three states are on the Lead Timeline header, decided there by holder
 id because `GET /api/leads/:id` returns one.
 
 **A deactivated agent's claim counts as unlocked.** The queue joins `users` on
-`is_active`, so such a claim returns no holder and no `in_progress` tag, and
+`is_active`, so such a claim returns no holder and no `working` tag, and
 `db/claims.ts` lets anyone take the lead over. Muting it would strand the lead
-where nobody could open it. `rowAction()` also treats an `in_progress` tag
-without a name as unlocked, for the same reason.
+where nobody could open it. `rowAction()` also treats a `working` tag without a
+holder id as unlocked, for the same reason.
 
-**The holder is matched by name, not id,** because the endpoint returns
-`agentName` and no id. Two agents with the same name would each see the other's
-leads as their own; the server still refuses the claim, so the worst case is a
-409 rather than two agents on one lead, but the row would look wrong until then.
-Worth adding the holder's id to the endpoint if duplicate names ever happen -
-not worth a change before they do.
+**The holder is matched by id** - `agentId` on the tag, against the signed-in
+user's id. Until 2026-09-28 the endpoint returned only the name and the lock
+compared names, so two agents with the same name each saw the other's lead as
+their own "Resume" row and got a 409 on clicking it. Found in review;
+`lock.test.ts` covers two agents called "Sam Okonjo".
