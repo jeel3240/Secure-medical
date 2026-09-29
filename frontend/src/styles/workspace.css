@@ -1,0 +1,762 @@
+/* The agent workspace.
+   Loaded by global.css, in its order: a later file can override an earlier one. */
+
+/* ==========================================================================
+   Agent workspace, redesigned 2026-09-28
+   --------------------------------------------------------------------------
+   A full-width header over three columns: what the lead told us, the
+   conversation, and the wrap-up. The older .lead-card and .timeline-card rules
+   above still serve the Lead Timeline page, which keeps the log view.
+   ========================================================================== */
+
+.workspace__top-left {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.workspace__place {
+  color: var(--color-text-muted);
+  font-size: var(--text-small);
+  border-left: 1px solid var(--color-border);
+  padding-left: var(--space-3);
+}
+
+.workspace__held {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-1) var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  background: var(--color-surface);
+  color: var(--color-text-muted);
+  font-size: var(--text-small);
+}
+
+.workspace__held-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--color-success);
+}
+
+.workspace__flags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin: var(--space-3) 0;
+}
+
+.workspace__flags:empty {
+  display: none;
+}
+
+/* --- header card --- */
+
+.lead-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-5);
+  padding: var(--space-4) var(--space-5);
+}
+
+.lead-head__who {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+/* Its own name, not .avatar: that is the app bar's user menu, and styling it
+   here restyled the app bar on every page. */
+.lead-head__avatar {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  flex: none;
+  border-radius: 50%;
+  background: var(--color-accent-soft);
+  color: var(--color-accent);
+  font-size: var(--text-body);
+  font-weight: var(--weight-semibold);
+}
+
+.lead-head__name {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin: 0;
+  font-size: var(--text-heading);
+  line-height: 1.2;
+  font-weight: var(--weight-semibold);
+}
+
+.lead-head__phone {
+  margin: 2px 0 0;
+  color: var(--color-text-muted);
+  font-family: var(--font-mono);
+  font-size: var(--text-body);
+}
+
+.lead-head__stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0;
+  margin: 0;
+  padding-left: var(--space-5);
+  border-left: 1px solid var(--color-border);
+}
+
+.lead-head__stats dt {
+  color: var(--color-text-subtle);
+  font-size: var(--text-small);
+  letter-spacing: var(--tracking-label);
+  text-transform: uppercase;
+  font-weight: var(--weight-semibold);
+}
+
+.lead-head__stats dd {
+  display: flex;
+  align-items: baseline;
+  gap: 2px;
+  margin: var(--space-1) 0 0;
+  font-size: var(--text-body);
+  font-weight: var(--weight-semibold);
+}
+
+.lead-head__score {
+  font-size: var(--text-display);
+  font-weight: var(--weight-bold);
+}
+
+.lead-head__score--hot { color: var(--color-hot); }
+.lead-head__score--warm { color: var(--color-warm); }
+.lead-head__score--low { color: var(--color-low); }
+
+.lead-head__of {
+  color: var(--color-text-subtle);
+  font-size: var(--text-small);
+}
+
+.flow {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.flow::before {
+  content: '';
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--color-text-subtle);
+}
+
+.flow--completed::before { background: var(--color-success); }
+.flow--open::before { background: var(--color-accent); }
+.flow--review::before { background: var(--color-warning); }
+.flow--expired::before,
+.flow--suppressed::before { background: var(--color-text-subtle); }
+
+.lead-head__actions {
+  margin-left: auto;
+  text-align: right;
+}
+
+.lead-head__buttons {
+  display: flex;
+  gap: var(--space-2);
+  justify-content: flex-end;
+}
+
+.lead-head__call-note {
+  margin: var(--space-2) 0 0;
+  color: var(--color-text-subtle);
+  font-size: var(--text-small);
+}
+
+/* --- left column --- */
+
+.card__title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  margin: 0 0 var(--space-3);
+  font-size: var(--text-title);
+  font-weight: var(--weight-semibold);
+  color: var(--color-text);
+}
+
+.told-us__list {
+  display: grid;
+  gap: var(--space-3);
+  margin: 0;
+}
+
+.told-us__list > div {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.told-us__list dt {
+  color: var(--color-text-muted);
+  font-size: var(--text-body);
+}
+
+.told-us__list dd {
+  margin: 0;
+  text-align: right;
+}
+
+.answer {
+  display: inline-block;
+  padding: var(--space-1) var(--space-2);
+  border-radius: var(--radius-sm);
+  font-size: var(--text-body);
+  font-weight: var(--weight-semibold);
+  background: var(--color-surface-hover);
+}
+
+.answer--q1 { background: #eef2ff; color: #3730a3; }
+.answer--q2 { background: var(--color-warm-soft); color: var(--color-warm); }
+.answer--q3 { background: var(--color-success-soft); color: var(--color-success); }
+
+.answer--empty {
+  background: transparent;
+  color: var(--color-text-subtle);
+}
+
+.breakdown__total {
+  font-size: var(--text-title);
+  font-weight: var(--weight-bold);
+}
+
+.breakdown__total--hot { color: var(--color-hot); }
+.breakdown__total--warm { color: var(--color-warm); }
+.breakdown__total--low { color: var(--color-low); }
+
+.breakdown__bar {
+  display: flex;
+  gap: 3px;
+  height: 8px;
+  margin-bottom: var(--space-3);
+}
+
+.breakdown__seg {
+  border-radius: 2px;
+  background: var(--color-hot);
+}
+
+.breakdown__list {
+  display: grid;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.breakdown__list li {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--text-body);
+}
+
+.breakdown__swatch {
+  width: 9px;
+  height: 9px;
+  flex: none;
+  border-radius: 2px;
+  background: var(--color-hot);
+}
+
+.breakdown__label {
+  color: var(--color-text-muted);
+}
+
+.breakdown__points {
+  margin-left: auto;
+  font-weight: var(--weight-semibold);
+}
+
+/* --- conversation --- */
+
+.convo-card {
+  display: flex;
+  flex-direction: column;
+  padding: 0;
+}
+
+.convo-card__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-4) var(--space-5);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.convo-card__head .card__title {
+  margin: 0;
+  gap: var(--space-3);
+}
+
+.convo-card__count {
+  color: var(--color-text-subtle);
+  font-size: var(--text-small);
+  font-weight: var(--weight-regular);
+}
+
+.convo-card__link {
+  font-size: var(--text-body);
+  white-space: nowrap;
+}
+
+.convo-card__body {
+  flex: 1;
+  overflow-y: auto;
+  max-height: 60vh;
+  padding: var(--space-4) var(--space-5);
+}
+
+.convo {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.convo__empty {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: var(--text-body);
+}
+
+.convo__row {
+  display: flex;
+  flex-direction: column;
+  max-width: 78%;
+}
+
+.convo__row--in {
+  align-self: flex-start;
+  align-items: flex-start;
+}
+
+.convo__row--out {
+  align-self: flex-end;
+  align-items: flex-end;
+}
+
+.convo__bubble {
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-lg);
+  font-size: var(--text-body);
+  line-height: 1.45;
+}
+
+.convo__bubble--in {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  border: 1px solid #bfdbfe;
+  background: var(--color-accent-soft);
+  color: var(--color-text);
+  border-bottom-left-radius: var(--radius-sm);
+}
+
+.convo__bubble--out {
+  position: relative;
+  border: 1px solid var(--color-border);
+  background: var(--color-surface-muted);
+  border-bottom-right-radius: var(--radius-sm);
+}
+
+.convo__bubble--agent {
+  border-color: var(--color-border-strong);
+  background: var(--color-surface-hover);
+}
+
+/* Sent: two ticks in the bubble's bottom-right corner - Conversation.tsx says
+   what they mean. `.convo__bubble--out` anchors them; the spacer keeps the last
+   line of text clear of them. */
+.convo__tick {
+  position: absolute;
+  right: var(--space-2);
+  bottom: var(--space-2);
+  color: var(--color-text-subtle);
+}
+
+.convo__tick-space {
+  display: inline-block;
+  width: var(--space-5);
+}
+
+/* A bubble and, when EZ Texting refused it, the red "!" beside it. */
+.convo__line {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.convo__not-sent {
+  flex: none;
+  color: var(--color-danger);
+}
+
+.convo__choice {
+  display: grid;
+  place-items: center;
+  min-width: 24px;
+  height: 24px;
+  padding: 0 var(--space-1);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface);
+  border: 1px solid #bfdbfe;
+  font-weight: var(--weight-bold);
+  font-size: var(--text-body);
+}
+
+.convo__choice-label {
+  font-weight: var(--weight-regular);
+}
+
+.convo__meta {
+  margin: var(--space-1) var(--space-1) 0;
+  color: var(--color-text-subtle);
+  font-size: var(--text-small);
+}
+
+.convo__system {
+  align-self: center;
+  margin: var(--space-2) 0;
+  padding: var(--space-1) var(--space-3);
+  border-radius: 999px;
+  background: var(--color-surface-hover);
+  color: var(--color-text-muted);
+  font-size: var(--text-small);
+  text-align: center;
+}
+
+/* --- composer --- */
+
+.composer {
+  margin: 0;
+  min-width: 0;
+  border: 0;
+  border-top: 1px solid var(--color-border);
+  padding: var(--space-3) var(--space-4);
+}
+
+.composer__blocked {
+  margin: 0;
+  border-top: 1px solid var(--color-border);
+  padding: var(--space-4);
+  color: var(--color-danger);
+  font-size: var(--text-body);
+}
+
+.composer__warning {
+  margin: 0 0 var(--space-2);
+  color: var(--color-warning);
+  font-size: var(--text-small);
+}
+
+.composer__templates {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin-bottom: var(--space-2);
+}
+
+.composer__row {
+  display: flex;
+  align-items: flex-end;
+  gap: var(--space-2);
+}
+
+.composer__templates-toggle {
+  flex: none;
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  color: var(--color-text-muted);
+  font-size: var(--text-body);
+  cursor: pointer;
+}
+
+.composer__templates-toggle:hover,
+.composer__templates-toggle[aria-expanded='true'] {
+  background: var(--color-surface-hover);
+  color: var(--color-text);
+}
+
+.composer__box {
+  flex: 1;
+  min-height: 40px;
+  max-height: 120px;
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  font: inherit;
+  font-size: var(--text-body);
+  resize: vertical;
+}
+
+.composer__box:focus {
+  outline: none;
+  border-color: var(--color-primary);
+  box-shadow: var(--focus-ring-field);
+}
+
+.composer__count {
+  color: var(--color-text-subtle);
+  font-size: var(--text-small);
+  padding-bottom: var(--space-3);
+}
+
+.composer__count--low {
+  color: var(--color-warning);
+}
+
+/* --- wrap up --- */
+
+.wrapup__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  margin-bottom: var(--space-4);
+}
+
+.wrapup__title {
+  margin: 0;
+  font-size: var(--text-title);
+  font-weight: var(--weight-semibold);
+}
+
+.wrapup__section + .wrapup__section {
+  margin-top: var(--space-5);
+  padding-top: var(--space-4);
+  border-top: 1px solid var(--color-border);
+}
+
+.wrapup__legend {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin: 0 0 var(--space-3);
+  font-size: var(--text-body);
+  font-weight: var(--weight-semibold);
+}
+
+.wrapup__num {
+  display: grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--color-surface-hover);
+  color: var(--color-text-muted);
+  font-size: var(--text-small);
+}
+
+.wrapup__optional {
+  margin-left: var(--space-1);
+  padding: 1px var(--space-2);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface-hover);
+  color: var(--color-text-subtle);
+  font-size: var(--text-small);
+  font-weight: var(--weight-semibold);
+  letter-spacing: var(--tracking-label);
+  text-transform: uppercase;
+}
+
+.wrapup__choices {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.outcome {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  font: inherit;
+  font-size: var(--text-body);
+  cursor: pointer;
+}
+
+.outcome:hover {
+  background: var(--color-surface-hover);
+}
+
+.outcome__dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--color-text-subtle);
+}
+
+.outcome--good .outcome__dot { background: var(--color-success); }
+.outcome--danger .outcome__dot { background: var(--color-danger); }
+.outcome--danger { color: var(--color-danger); }
+
+.outcome--on {
+  border-color: var(--color-primary);
+  background: var(--color-surface-hover);
+  font-weight: var(--weight-semibold);
+  box-shadow: inset 0 0 0 1px var(--color-primary);
+}
+
+.wrapup__save {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: var(--space-3);
+  margin-top: var(--space-5);
+  padding-top: var(--space-4);
+  border-top: 1px solid var(--color-border);
+}
+
+/* --- workspace refinements: cards, as drawn in the mockup ---
+   Scoped to the workspace. `.card` has no global rule - the admin and
+   timeline pages use the class too and currently render flat - so a global
+   rule would restyle screens nobody asked to change. */
+
+.workspace .card {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
+  padding: var(--space-4) var(--space-5);
+}
+
+.workspace .convo-card {
+  padding: 0;
+}
+
+.workspace .lead-head {
+  margin-bottom: var(--space-4);
+}
+
+/* One divider between every stat, not just before the first. */
+
+.lead-head__stats > div {
+  padding: 0 var(--space-5);
+  border-left: 1px solid var(--color-border);
+}
+
+.lead-head__stats > div:first-child {
+  border-left: 0;
+  padding-left: 0;
+}
+
+/* Disabled, and looks it: dashed rather than a solid grey block that reads as
+   a button that ought to work. */
+.btn.lead-head__call:disabled {
+  border-style: dashed;
+  background: var(--color-surface-muted);
+  color: var(--color-text-subtle);
+  opacity: 1;
+}
+
+.convo__bubble--in .convo__choice {
+  border: 0;
+  background: transparent;
+  min-width: 0;
+  padding: 0;
+}
+
+.convo__divider {
+  width: 1px;
+  align-self: stretch;
+  background: #bfdbfe;
+}
+
+.btn.composer__send:not(:disabled) {
+  background: var(--color-accent);
+  border-color: var(--color-accent);
+}
+
+.btn.composer__send:not(:disabled):hover {
+  background: #1e40af;
+}
+
+/* Page-level banners (DNC, needs review) sat flush against the header card. */
+.workspace > .banner {
+  margin-bottom: var(--space-3);
+}
+
+/* --- the workspace on a lead that is not yours ---
+   Same page as a picked lead; the strip says why the actions are off and
+   offers Pick. */
+
+.workspace__viewing {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+  margin-bottom: var(--space-4);
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid #bfdbfe;
+  border-radius: var(--radius-lg);
+  background: var(--color-accent-soft);
+  color: var(--color-text);
+  font-size: var(--text-body);
+}
+
+.workspace__viewing--held {
+  border-color: var(--color-border-strong);
+  background: var(--color-surface-muted);
+  color: var(--color-text-muted);
+}
+
+/* Fieldsets arrive with a border, padding and a min-width that breaks flex
+   layouts; these are only here to switch controls off together. */
+.wrapup__fieldset {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  min-width: 0;
+}
+
+.wrapup__fieldset:disabled,
+.composer:disabled {
+  opacity: 0.55;
+}
+
+/* What Save did, beside it: a muted tick and the time, like a sent message's
+   ticks; a failure in red, in the same place. Replaced a green banner over the
+   panel - Jeel, 2026-09-29. */
+.wrapup__status {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  margin-right: auto;
+  color: var(--color-text-muted);
+  font-size: var(--text-small);
+}
+
+.wrapup__status--error {
+  flex-direction: column;
+  align-items: flex-start;
+  color: var(--color-danger);
+}
+
+/* Under the outcome buttons: who closed the lead and when. */
+.wrapup__state {
+  margin: var(--space-2) 0 0;
+  color: var(--color-text-muted);
+  font-size: var(--text-small);
+}

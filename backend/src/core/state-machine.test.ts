@@ -132,7 +132,7 @@ describe('the happy path', () => {
   });
 
   it('sends each next question in turn', () => {
-    let c = fresh();
+    const c = fresh();
     let r = step(c, answer('3'), RULES);
     expect(r.send).toBe('question_2');
     expect(r.conversation.step).toBe(2);
@@ -306,6 +306,87 @@ describe('a conversation that is not open', () => {
   });
 });
 
+describe('an agent has taken the conversation over - rule 2b', () => {
+  const TOOK_OVER = new Date('2026-09-26T10:00:00.000Z');
+
+  it('asks no further question, whatever the lead replies', () => {
+    const before = fresh({ step: 2, q1: '3', score: 25, tier: 'LOW', agentTookOverAt: TOOK_OVER });
+    const result = step(before, answer('1'), RULES);
+
+    // The lead is answering the agent, not us.
+    expect(result.send).toBeNull();
+    expect(result.conversation).toEqual(before);
+  });
+
+  it('scores nothing, even for a valid answer', () => {
+    const before = fresh({ step: 2, q1: '3', score: 25, tier: 'LOW', agentTookOverAt: TOOK_OVER });
+    const result = step(before, answer('1'), RULES);
+
+    // 25 + q2_1 30 would be 55 without the rule; responded was earned already.
+    expect(result.conversation.score).toBe(25);
+    expect(result.conversation.q2).toBeNull();
+    expect(result.conversation.step).toBe(2);
+  });
+
+  it('keeps the score and tier the lead had earned', () => {
+    const before = fresh({ step: 3, q1: '3', q2: '1', score: 55, tier: 'WARM', agentTookOverAt: TOOK_OVER });
+    const result = step(before, answer('2'), RULES);
+
+    expect(result.conversation.score).toBe(55);
+    expect(result.conversation.tier).toBe('WARM');
+    // Never reaches the completion award.
+    expect(result.conversation.status).toBe('open');
+  });
+
+  it('sends no clarification for an unclear reply either', () => {
+    const before = fresh({ step: 1, agentTookOverAt: TOOK_OVER });
+    const result = step(before, answer('what is this about?'), RULES);
+
+    expect(result.send).toBeNull();
+    expect(result.conversation.invalidCount).toBe(0);
+    expect(result.conversation.status).toBe('open');
+  });
+
+  it('never sends the lead to review, however many unclear replies arrive', () => {
+    const before = fresh({ step: 1, invalidCount: 5, agentTookOverAt: TOOK_OVER });
+    const result = step(before, answer('???'), RULES);
+
+    expect(result.conversation.status).toBe('open');
+    expect(result.send).toBeNull();
+  });
+
+  it('still blocks the number on an opt-out', () => {
+    const before = fresh({ step: 2, q1: '3', score: 25, agentTookOverAt: TOOK_OVER });
+    const result = step(before, { text: 'STOP', optOut: true }, RULES);
+
+    // Rule 1 is checked first and stays first: an opt-out can never depend on
+    // whether an agent happened to text first.
+    expect(result.blockNumber).toBe(true);
+    expect(result.conversation.status).toBe('suppressed');
+  });
+
+  it('does nothing when the timestamp is absent', () => {
+    // The ordinary path, to prove the rule is what changed the behaviour above.
+    const before = fresh({ step: 2, q1: '3', score: 25, tier: 'LOW' });
+    const result = step(before, answer('1'), RULES);
+
+    expect(result.send).toBe('question_3');
+    // 25 + q2_1 30. No responded award: q1 is already answered, so it was
+    // earned on an earlier reply and is only ever given once.
+    expect(result.conversation.score).toBe(55);
+  });
+
+  it.each([null, undefined])('treats %s as not taken over', (value) => {
+    const before = fresh({ step: 1, agentTookOverAt: value });
+    expect(step(before, answer('1'), RULES).send).toBe('question_2');
+  });
+
+  it('accepts the timestamp as the string a driver may return', () => {
+    const before = fresh({ step: 1, agentTookOverAt: '2026-09-26T10:00:00.000Z' });
+    expect(step(before, answer('1'), RULES).send).toBeNull();
+  });
+});
+
 describe('admin-editable rules are honoured', () => {
   it('uses changed point values', () => {
     const doubled: Rules = {
@@ -363,5 +444,49 @@ describe('purity', () => {
     const snapshot = { ...before };
     step(before, answer('3'), RULES);
     expect(before).toEqual(snapshot);
+  });
+});
+
+describe('whether a person must read the reply', () => {
+  // Only a reply the questions cannot handle needs a person - that is what
+  // Inbound reply means in the queue. Flagging every reply made every
+  // responder, even one simply answering "1", read as an inbound reply.
+  it('does not for a valid answer mid-flow', () => {
+    expect(step(fresh({ step: 1 }), answer('3'), RULES).needsPerson).toBe(false);
+  });
+
+  it('does not for the answer that completes the conversation', () => {
+    const before = fresh({ step: 3, q1: '3', q2: '1', score: 55, tier: 'WARM' });
+    const result = step(before, answer('1'), RULES);
+    expect(result.conversation.status).toBe('completed');
+    expect(result.needsPerson).toBe(false);
+  });
+
+  it('does not for an unclear reply that earns a clarification', () => {
+    expect(step(fresh({ step: 1 }), answer('who is this?'), RULES).needsPerson).toBe(false);
+  });
+
+  it('does not when a second unclear reply moves the lead to review', () => {
+    // Needs review is how that lead reaches a person; Inbound reply would
+    // outrank it and hide why.
+    const result = step(fresh({ step: 1, invalidCount: 1 }), answer('???'), RULES);
+    expect(result.conversation.status).toBe('review');
+    expect(result.needsPerson).toBe(false);
+  });
+
+  it('does not for an opt-out', () => {
+    expect(step(fresh({ step: 2 }), { text: 'STOP', optOut: true }, RULES).needsPerson).toBe(false);
+  });
+
+  it.each(['completed', 'expired', 'review', 'suppressed'] as const)(
+    'does for a message after the conversation ended (%s)',
+    (status) => {
+      expect(step(fresh({ status }), answer('can someone call me?'), RULES).needsPerson).toBe(true);
+    }
+  );
+
+  it('does for a reply to an agent who took the conversation over', () => {
+    const before = fresh({ step: 2, q1: '3', score: 25, agentTookOverAt: new Date('2026-09-28T10:00:00Z') });
+    expect(step(before, answer('1'), RULES).needsPerson).toBe(true);
   });
 });

@@ -1,88 +1,82 @@
 /**
- * The tag an agent sees against a lead in the queue.
+ * The status an agent sees against a lead in the queue.
  *
- * Pure: the caller passes the facts, this decides. Tags are computed, never
- * stored, so they stay true as conversations advance, calls happen and
- * callbacks are set - CLAUDE.md §6.
+ * Pure: the caller passes the facts, this decides. Statuses are computed,
+ * never stored, so they stay true as conversations advance - CLAUDE.md §6.
  *
  * The shape is structured rather than a finished string: the API returns what
- * is true, the screen decides how to word it ("In progress - Michael",
- * "Callback 3:00 PM"). That keeps wording changes out of the backend.
+ * is true, the screen decides how to word it ("Working – Michael"). That
+ * keeps wording changes out of the backend.
+ *
+ * **Few, and most rows have none** - Jeel, 2026-09-28. The queue once
+ * also said New, Attempted 2x and Callback 3:00 PM. That history belongs to the
+ * agent working the lead - their callbacks are on My Callbacks, every call is
+ * in the lead's timeline - and on the home page it made every row say
+ * something, so nothing stood out. What is left answers the two questions an
+ * agent scanning the queue actually has: is somebody already on this, and why
+ * is it here? A lead with no status is simply waiting to be picked up.
+ *
+ * **Callback came back, naming whose it is - Jeel, 2026-09-29.** A lead
+ * waiting on a callback sat in the queue saying nothing, so another agent could
+ * pick it up and call first, not knowing Maya had promised to at 8:13. It now
+ * says "Callback – Maya Chen · 8:13 PM": whose call it is, answering the same
+ * question as Working - is somebody already on this?
  */
 
-export type QueueTagKind =
-  | 'in_progress'
-  | 'callback'
-  | 'inbound_reply'
-  | 'needs_review'
-  | 'stalled'
-  | 'attempted'
-  | 'new';
+/**
+ * `working` was `in_progress` until 2026-09-28: the screen says "Working –
+ * name", and one state with two names was one more thing to translate.
+ */
+export type QueueTagKind = 'working' | 'inbound_reply' | 'callback' | 'needs_review';
 
 export interface QueueTag {
   kind: QueueTagKind;
-  /** `in_progress`: who holds it. */
+  /**
+   * `working`: who holds it - the id to compare with, the name to show.
+   * `callback`: whose callback it is.
+   */
+  agentId?: number;
   agentName?: string;
-  /** `callback`: when it is due. */
-  callbackAt?: string;
-  /** `attempted`: how many calls have been made. */
-  attempts?: number;
-  /** `stalled`: how many questions they answered before going quiet, so 1 or 2
-   *  - the screen writes it as "Stalled at Q1" / "Stalled at Q2". */
-  step?: number;
+  /** `callback`: when it is due, ISO. */
+  at?: string;
 }
 
 export interface QueueFacts {
   conversationStatus: 'open' | 'completed' | 'review' | 'expired';
-  /** The lead's answers so far; null where unanswered. */
-  answers: [string | null, string | null, string | null];
-  assignedAgentName: string | null;
+  /** The active agent holding the lead, if any. */
+  holder: { id: number; name: string } | null;
   hasUnreadInbound: boolean;
-  callCount: number;
-  /** The soonest callback still to be done, if any. */
-  nextCallbackAt: string | null;
+  /** The earliest callback not yet done, if any. */
+  nextCallback?: { agentId: number; agentName: string; at: string } | null;
 }
 
 /**
- * Only one tag is shown per row, so the order here is the order of urgency to
- * an agent scanning the queue:
+ * Only one status is shown per row, so the order here is the order of urgency:
  *
  * 1. someone already has it - nobody else should call;
- * 2. a callback is booked - that commitment outranks anything else;
- * 3. the lead has texted and nobody has read it;
- * 4. their replies could not be understood, so a human must read them;
- * 5. they answered some questions and went quiet;
- * 6. we have called and not reached them;
- * 7. nothing has happened yet.
+ * 2. the lead has texted and nobody has read it;
+ * 3. an agent has promised to call - it is theirs;
+ * 4. their replies could not be understood, so a person must read them.
+ *
+ * Otherwise `null`: nothing to say, the lead is waiting.
  */
-export function queueTag(facts: QueueFacts): QueueTag {
-  if (facts.assignedAgentName) {
-    return { kind: 'in_progress', agentName: facts.assignedAgentName };
-  }
-
-  if (facts.nextCallbackAt) {
-    return { kind: 'callback', callbackAt: facts.nextCallbackAt };
+export function queueTag(facts: QueueFacts): QueueTag | null {
+  if (facts.holder) {
+    return { kind: 'working', agentId: facts.holder.id, agentName: facts.holder.name };
   }
 
   if (facts.hasUnreadInbound) {
     return { kind: 'inbound_reply' };
   }
 
+  if (facts.nextCallback) {
+    const { agentId, agentName, at } = facts.nextCallback;
+    return { kind: 'callback', agentId, agentName, at };
+  }
+
   if (facts.conversationStatus === 'review') {
     return { kind: 'needs_review' };
   }
 
-  // Partway through and still waiting on them. Only `open` counts: an expired
-  // conversation is closed and its lead has left the queue, so "stalled"
-  // applies to live conversations only - STATE-MACHINE.md, "Expiry".
-  const answered = facts.answers.filter((a) => a !== null).length;
-  if (facts.conversationStatus === 'open' && answered > 0 && answered < 3) {
-    return { kind: 'stalled', step: answered };
-  }
-
-  if (facts.callCount > 0) {
-    return { kind: 'attempted', attempts: facts.callCount };
-  }
-
-  return { kind: 'new' };
+  return null;
 }

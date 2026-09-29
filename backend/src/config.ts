@@ -1,4 +1,8 @@
-const required = ['DATABASE_URL', 'REDIS_URL', 'JWT_SECRET', 'EZT_USERNAME', 'EZT_PASSWORD', 'EZT_GROUP'];
+// REDIS_URL left this list on 2026-09-28: nothing reads it. Redis still runs in
+// the compose files - CLAUDE.md §2 plans it for a job queue - but the code has
+// never used it, and a required setting nothing reads only stops the app
+// starting.
+const required = ['DATABASE_URL', 'JWT_SECRET', 'EZT_USERNAME', 'EZT_PASSWORD', 'EZT_GROUP'];
 for (const key of required) {
   if (!process.env[key]) {
     console.error(`Missing required env var: ${key}`);
@@ -8,7 +12,6 @@ for (const key of required) {
 
 export const config = {
   databaseUrl: process.env.DATABASE_URL!,
-  redisUrl: process.env.REDIS_URL!,
   jwtSecret: process.env.JWT_SECRET!,
   ezt: {
     username: process.env.EZT_USERNAME!,

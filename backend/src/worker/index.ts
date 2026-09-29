@@ -2,8 +2,11 @@ import '../config';
 import { pool } from '../db/pool';
 import { expireStaleConversations } from './expiry';
 import { pollOnce } from './poller';
+import { errText, log } from '../lib/log';
+import { retryFailedOpeners } from './retry-openers';
 
-const DEFAULT_POLL_INTERVAL_SECONDS = 60;
+// The same as migration 005 sets; used only if the setting is missing.
+const DEFAULT_POLL_INTERVAL_SECONDS = 30;
 
 // Re-read each tick so an admin changing the setting takes effect without a
 // worker restart.
@@ -21,14 +24,17 @@ async function loop(): Promise<void> {
   for (;;) {
     try {
       const stats = await pollOnce();
-      console.log(
-        `poll tick fetched=${stats.fetched} inserted=${stats.inserted} ` +
-          `skipped=${stats.skipped} suppressed=${stats.suppressed} ` +
-          `openers=${stats.openersSent} ms=${stats.durationMs}`
-      );
+      log.info('poll.tick', {
+        fetched: stats.fetched,
+        inserted: stats.inserted,
+        skipped: stats.skipped,
+        suppressed: stats.suppressed,
+        openers: stats.openersSent,
+        ms: stats.durationMs,
+      });
     } catch (err) {
       // Checkpoint is left where it was, so the next tick retries this ground.
-      console.error('poll tick failed:', err instanceof Error ? err.message : err);
+      log.error('poll.failed', { err: errText(err) });
     }
 
     // Separate from the poll, and after it, so a failure on either side does
@@ -37,10 +43,34 @@ async function loop(): Promise<void> {
     try {
       const sweep = await expireStaleConversations();
       if (sweep.expired > 0) {
-        console.log(`expiry sweep: ${sweep.expired} conversation(s) expired ms=${sweep.durationMs}`);
+        log.info('conversation.expired', { expired: sweep.expired, ms: sweep.durationMs });
       }
     } catch (err) {
-      console.error('expiry sweep failed:', err instanceof Error ? err.message : err);
+      log.error('expiry.failed', { err: errText(err) });
+    }
+
+    // Separate again, for the same reason: retrying an opener must not be
+    // skipped because the poll threw, and a failure here must not stop the
+    // next poll. A lead whose opener never went out is the worst state in the
+    // system - paid for, in the database, and silent.
+    try {
+      const retry = await retryFailedOpeners();
+      // Only when something was due. A lead past its last attempt or its age
+      // limit stays a candidate until its conversation expires - up to seven
+      // days - and logging it every minute would bury real events. The moment
+      // of giving up is logged once, as opener.gave_up, by the retry itself.
+      if (retry.due > 0) {
+        log.info('opener.retry', {
+          due: retry.due,
+          sent: retry.sent,
+          failed: retry.failed,
+          abandoned: retry.abandoned,
+          tooOld: retry.tooOld,
+          ms: retry.durationMs,
+        });
+      }
+    } catch (err) {
+      log.error('opener.retry_failed', { err: errText(err) });
     }
 
     let waitMs = DEFAULT_POLL_INTERVAL_SECONDS * 1000;
@@ -54,5 +84,5 @@ async function loop(): Promise<void> {
   }
 }
 
-console.log('worker started');
+log.info('worker.started');
 loop();

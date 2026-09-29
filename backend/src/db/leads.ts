@@ -1,14 +1,29 @@
+import { CLOSED_SQL, WORKED_SQL } from './lead-state';
+import { likeLiteral } from './sql';
 import { pool } from './pool';
 
 /**
- * Status tabs on Admin > Leads, from DESIGN-PROMPT.md section 6g. Derived from
- * the lead's newest conversation rather than stored, so it stays true as the
- * state machine advances a conversation.
+ * Status tabs on Admin > Leads, from DESIGN-PROMPT.md section 6g. Derived, not
+ * stored, so a status stays true as the conversation advances and agents work
+ * the lead.
+ *
+ * A lead's whole life, in order - Jeel, 2026-09-28:
+ *
+ *   awaiting_reply -> answering -> ready -> working -> closed
+ *
+ * with needs_review, expired and opted_out as the ways the SMS part can end
+ * otherwise. `answering` was called `in_progress` and `ready` was
+ * `completed`, renamed the same day (briefly `ready_to_call`, which read as an
+ * instruction): "In progress" also means an agent holding
+ * a lead on the queue, and "Completed" read as finished when the calling had
+ * not started. ADMIN-LEADS.md, "Status".
  */
 export type LeadStatus =
   | 'awaiting_reply'
-  | 'in_progress'
-  | 'completed'
+  | 'answering'
+  | 'ready'
+  | 'working'
+  | 'closed'
   | 'needs_review'
   | 'opted_out'
   | 'expired';
@@ -66,7 +81,8 @@ const BASE = `
   LEFT JOIN LATERAL (
     SELECT m.created_at, m.received_at, m.direction
     FROM messages m
-    WHERE m.lead_id = l.id
+    -- A send EZ Texting refused is not activity: nothing reached anyone.
+    WHERE m.lead_id = l.id AND m.delivery_status IS DISTINCT FROM 'failed'
     ORDER BY COALESCE(m.received_at, m.created_at) DESC, m.id DESC
     LIMIT 1
   ) m ON true
@@ -74,18 +90,29 @@ const BASE = `
 `;
 
 /**
- * Mirrors the tabs in the spec. Ordering matters: opted_out wins over
- * everything, and an open conversation splits on whether any question has been
- * answered.
+ * The first match wins, so the order is the rule:
+ *
+ * 1. opted_out - a blocked number overrides everything.
+ * 2. closed - an agent pressed Closed.
+ * 3. working - an agent has done something with it. This outranks every SMS
+ *    status: once a person is on a lead, what the conversation says matters
+ *    less than that someone is handling it - a needs-review or expired lead an
+ *    agent is working reads Working.
+ * 4. the conversation: needs_review, ready, expired, then an open one
+ *    split on whether any question has been answered.
+ *
+ * `db/lead-state.ts` defines closed and working, shared with the queue.
  */
 const STATUS_SQL = `
   CASE
     WHEN d.id IS NOT NULL OR c.status = 'suppressed' THEN 'opted_out'
+    WHEN ${CLOSED_SQL} THEN 'closed'
+    WHEN ${WORKED_SQL} THEN 'working'
     WHEN c.status = 'review' THEN 'needs_review'
-    WHEN c.status = 'completed' THEN 'completed'
+    WHEN c.status = 'completed' THEN 'ready'
     WHEN c.status = 'expired' THEN 'expired'
     WHEN c.status = 'open' AND (c.q1 IS NOT NULL OR c.q2 IS NOT NULL OR c.q3 IS NOT NULL)
-      THEN 'in_progress'
+      THEN 'answering'
     WHEN c.status = 'open' THEN 'awaiting_reply'
     ELSE NULL
   END
@@ -123,7 +150,8 @@ function buildFilters(query: AdminLeadQuery): { sql: string; values: unknown[] }
   if (query.q) {
     // Phone is searched with punctuation stripped, so "(602) 620-3572" matches
     // the stored +16026203572.
-    values.push(`%${query.q.toLowerCase()}%`);
+    // Escaped, so a "%" or "_" in the box is that character, not a wildcard.
+    values.push(`%${likeLiteral(query.q.toLowerCase())}%`);
     const like = `$${values.length}`;
     values.push(`%${query.q.replace(/\D/g, '')}%`);
     const digits = `$${values.length}`;

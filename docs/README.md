@@ -38,10 +38,10 @@ runs postgres, redis, api and worker only; Caddy is used in production.
 frontend with Ctrl+C. On Colima, `colima stop` frees the VM's memory. Next time:
 `colima start`, `docker compose up -d`, `cd frontend && npm run dev`.
 
-The worker logs a line each minute:
+The worker logs a line each minute, as JSON - `LOGGING.md` lists every event:
 
 ```
-poll tick fetched=2 inserted=0 skipped=2 suppressed=0 openers=0 ms=336
+{"ts":"2026-09-28T23:50:24.426Z","level":"info","event":"poll.tick","svc":"worker","fetched":2,"inserted":0,"skipped":2,"suppressed":0,"openers":0,"ms":336}
 ```
 
 **Locally, `docker compose logs` is how you read that.** On the server it
@@ -60,13 +60,14 @@ docker compose exec postgres psql -U app -d leads \
 
 | Variable | Notes |
 |---|---|
-| `DATABASE_URL`, `REDIS_URL`, `JWT_SECRET` | Required. In production `JWT_SECRET` must be at least 32 characters and not a placeholder, or the API refuses to start - see AUTH.md. |
+| `DATABASE_URL`, `JWT_SECRET` | Required. In production `JWT_SECRET` must be at least 32 characters and not a placeholder, or the API refuses to start - see AUTH.md. |
 | `EZT_USERNAME`, `EZT_PASSWORD` | EZ Texting account login. Basic auth, no API key. |
 | `EZT_GROUP` | Contact group the poller reads. Required - the account holds ~120k real contacts, so every query is scoped to one group. |
 | `EZT_SOURCE` | Defaults to `API`, which is how partner leads arrive. Set to `WebInterface` to test with a contact added by hand in the dashboard. |
 | `EZT_SEND_GROUP` | Leave unset. `sendMessage` refuses to send without it - see below. |
-| `EZT_WEBHOOK_TOKEN` | Optional random string forming the last segment of the inbound webhook path. Unset accepts the plain path, which is fine locally; always set it in production. See WEBHOOKS.md. |
+| `EZT_WEBHOOK_TOKEN` | Random string forming the last segment of the inbound webhook path. Optional locally, where unset accepts the plain path. **Required in production**: the API refuses to start without one of at least 16 characters (2026-09-29). See WEBHOOKS.md. |
 | | *Update 2026-09-14:* the account is a test account and `weightloss` is the test group. Set this to `weightloss` and sending is unlocked. See below. |
+| `REDIS_URL` | Not read by any code (2026-09-28). Redis runs in the compose files for a planned job queue; the `bull` and `redis` packages were removed as unused. |
 | `NODE_ENV` | `production` turns on the Secure cookie flag, RDS SSL, and the `JWT_SECRET` strength check. Set by the compose files; no need to change it in `.env`. |
 | `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_PHONE_NUMBER` | Not read by any code yet. Week 4. |
 | `CADDY_DOMAIN` | Not read by anything. The production `Caddyfile` names `dailyleadhub.com` directly. |
@@ -93,13 +94,95 @@ kept for history. To unlock sending:
    `EZT_SEND_GROUP=weightloss`.
 3. `docker compose up -d worker api` so the new values are picked up.
 
-`EZT_SEND_GROUP` is only the on/off switch for `sendMessage`. Wiring the opener
-send into the poller is separate work and is not done yet.
+`EZT_SEND_GROUP` is only the on/off switch for `sendMessage`. It is checked
+again immediately before every send, together with `dnc_list`, so a number that
+opted out is refused however the send was triggered.
 
 **Update 2026-09-15:** sending is live. The poller now sends question 1 when it
 creates a lead and records it in `messages`, so with `EZT_SEND_GROUP` set, a new
 contact in the group gets a text within a poll interval. The `openers` count in
-the tick log says how many went out. POLLER.md has the detail.
+the `poll.tick` line's `openers` says how many went out. POLLER.md has the detail.
+
+## How to test
+
+```bash
+cd backend  && npm test && npm run lint    # 455 tests
+cd frontend && npm test && npm run lint    # 116 tests
+```
+
+**Unit and route tests** mock the database and cover behaviour in isolation.
+
+**Live checks** prove the SQL against a real Postgres, because a mocked pool
+says nothing about aggregates, date windows, transactions or races. Each one
+refuses to run against a database that holds leads, and its header comment
+gives the exact command:
+
+```bash
+docker compose exec postgres psql -U app -d postgres -c 'CREATE DATABASE scratch'
+docker compose cp backend/scripts/queue-live-check.ts api:/app/scripts/
+docker compose exec -e DATABASE_URL=postgres://app:app@postgres:5432/scratch api   node scripts/migrate.js
+docker compose exec -e DATABASE_URL=postgres://app:app@postgres:5432/scratch api   npx ts-node --transpile-only scripts/queue-live-check.ts
+```
+
+There are twelve, covering the queue, claims, the read flag, the lead card, the
+timeline, callbacks, dispositions, agent SMS, the admin read models, health and
+the opener retry.
+
+**The end-to-end script** runs the whole system in one go - a lead arrives,
+answers three questions through the real webhook, is scored, reaches the queue,
+is claimed, worked, dispositioned, and finally blocked:
+
+```bash
+docker compose exec postgres psql -U app -d postgres -c 'CREATE DATABASE e2e'
+docker compose cp backend/scripts/end-to-end.ts api:/app/scripts/
+docker compose exec -e DATABASE_URL=postgres://app:app@postgres:5432/e2e api   node scripts/migrate.js
+docker compose exec -e DATABASE_URL=postgres://app:app@postgres:5432/e2e   -e EZT_SEND_GROUP=stub api npm run e2e
+```
+
+Fifty checks. EZ Texting is stubbed at the HTTP boundary, so it proves
+everything up to the moment a text would leave the building - and nothing about
+whether a real phone buzzes. For that, set the real `EZT_*` values and add your
+own number to the test group, as "Sending" above describes.
+
+## Known limits
+
+Things that are true today and will surprise someone who assumes otherwise.
+
+**Calling is not built.** Twilio is Phase 4. The Call button is visible and
+disabled and call entries render on the timeline, but nothing writes the
+`calls` table, and Admin > Overview shows no call figures at all - they were
+removed on 2026-09-28 rather than shown as zeros (`ADMIN.md`, "Overview").
+
+**The message copy is the mockup's placeholder.** It has never been approved for
+real leads. Nothing has been sent to anyone outside the test group, and the
+end-to-end script deliberately stops short of a real send.
+
+**A returning lead is skipped.** The poller ignores a phone it already holds, so
+a lead the partner delivers twice never starts a second conversation. Whether a
+re-delivery is even detectable is unverified - CLAUDE.md §10, "Future: repeat
+leads", has the one API call that settles it.
+
+**A first question more than a day late is not sent.** If a lead's opener
+fails and still has not gone out 24 hours after they arrived, it is never sent
+- a first question days late reads as broken. The lead shows a red "!" on its
+failed message, and an agent can text by hand. `POLLER.md`, "Retrying a failed
+opener".
+
+**The deep health endpoint needs a session.** It is superadmin-only, as
+`LOGGING.md` specified, so an uptime service cannot poll it. `GET /api/health`
+is open but only proves the process is alive.
+
+**Live updates are polling,** every 5 seconds, from one hook
+(`frontend/src/api/usePolling.ts`). Not a push. At 50-100 leads a day nobody can
+tell, and replacing it later means rewriting that one file.
+
+**Redis runs but nothing uses it.** It is in the compose files, planned for a
+job queue (CLAUDE.md §2); no code reads or writes it, and since 2026-09-28 the
+`bull` and `redis` packages are gone and `REDIS_URL` is no longer required. The
+worker is a plain loop, not a job queue.
+
+**State and Consent ref have no data behind them.** EZ Texting sends neither, so
+both are shown as "-" or a note rather than left off the screen.
 
 ## Architecture
 
@@ -120,6 +203,7 @@ commit.
 | Doc | Covers | Update it when you change |
 |---|---|---|
 | `../CLAUDE.md` | Architecture decisions, four-week plan | An architectural decision |
+| `LEAD-FLOW.md` | A lead's whole life on one page: every status, the queue, Wrap up. Start here | Any status, the queue's contents, or Wrap up - alongside the doc that owns the rule |
 | `AUTH.md` | Sign-in, sessions, roles, account management | Auth routes, guards or the users table |
 | `SCHEMA.md` | Database tables and why | A migration |
 | `POLLER.md` | How leads are pulled in | The poller or worker loop |
@@ -132,6 +216,7 @@ commit.
 | `STATE-MACHINE.md` | The SMS flow: replies, scoring, expiry, sending, repeat leads. Overrides the mockup | The state machine, or any flow decision |
 | `EZTEXTING-API.md` | Verified API behaviour | You learn something new about the API |
 | `WORKFLOW.md` | Branches, PRs, migrations, deploys | The process itself |
+| `FRONTEND.md` | The React app as built: screens, polling, and the decisions behind them | Any frontend change |
 | `DESIGN-PROMPT.md` | Frontend design brief | The design direction |
 | `Secure-Medical-Call-Center-Mockup.pdf` | All screens. Page 3 sketches the flow, but STATE-MACHINE.md is the authority for it | — |
 

@@ -1,0 +1,282 @@
+/* The workspace grid, the timeline, the text inputs and chip buttons the
+   workspace and My Callbacks share, and the Lead Timeline page.
+   Loaded by global.css, in its order: a later file can override an earlier one. */
+
+/* ---------------------------------------------------------------------------
+   Agent workspace - DESIGN-PROMPT.md 3. Phase 3 tasks 17-20.
+   --------------------------------------------------------------------------- */
+
+.workspace__top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: var(--space-4);
+}
+
+/* Three columns at 1280px and up - 30/40/30, per the brief. Below that they
+   stack: the card first, because it says who is on the phone. */
+.workspace__grid {
+  display: grid;
+  gap: var(--space-4);
+  grid-template-columns: 1fr;
+}
+
+@media (min-width: 1280px) {
+  .workspace__grid {
+    grid-template-columns: 30fr 40fr 30fr;
+    align-items: start;
+  }
+}
+
+.workspace__col {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  min-width: 0;
+}
+
+.workspace__pending {
+  padding: var(--space-5);
+  color: var(--color-text-muted);
+  font-size: var(--text-body);
+}
+
+.lead-card__score-value {
+  font-size: var(--text-display);
+  font-weight: var(--weight-bold);
+}
+
+/* Timeline - DESIGN-PROMPT.md 3. Shared by the workspace and the timeline page. */
+.timeline {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.timeline__empty {
+  color: var(--color-text-muted);
+  font-size: var(--text-body);
+}
+
+.timeline__day {
+  margin: var(--space-4) 0 var(--space-2);
+  font-size: var(--text-small);
+  text-transform: uppercase;
+  letter-spacing: var(--tracking-label);
+  color: var(--color-text-muted);
+  border-bottom: 1px solid var(--color-border);
+  padding-bottom: 4px;
+  font-weight: var(--weight-semibold);
+}
+
+.timeline__entry {
+  display: grid;
+  grid-template-columns: 54px 1fr auto;
+  gap: var(--space-3);
+  align-items: start;
+  padding: var(--space-2) 0;
+  /* The left edge carries the entry type's colour - the brief's "distinct
+     left-edge icon/colour" - so the kind is legible before the text is read. */
+  border-left: 3px solid var(--color-border);
+  padding-left: var(--space-3);
+}
+
+.timeline__kind {
+  font-size: var(--text-small);
+  font-weight: var(--weight-semibold);
+  letter-spacing: var(--tracking-label);
+  color: var(--color-text-muted);
+  padding-top: 2px;
+  text-transform: uppercase;
+}
+
+.timeline__body {
+  min-width: 0;
+}
+
+.timeline__text {
+  margin: 0;
+  font-size: var(--text-body);
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+.timeline__meta {
+  display: flex;
+  gap: var(--space-2);
+  margin: 2px 0 0;
+  font-size: var(--text-small);
+  color: var(--color-text-muted);
+}
+
+.timeline__meta:empty {
+  display: none;
+}
+
+.timeline__failed {
+  color: var(--color-danger);
+  font-weight: var(--weight-semibold);
+}
+
+.timeline__time {
+  font-size: var(--text-small);
+  color: var(--color-text-muted);
+  white-space: nowrap;
+}
+
+/* One colour per entry type. Inbound is the accent because a reply from the
+   lead is the thing an agent is waiting for. */
+.timeline__entry--inbound { border-left-color: var(--color-accent); background: var(--color-accent-soft); }
+.timeline__entry--sms { border-left-color: var(--color-border-strong); }
+.timeline__entry--agent_sms { border-left-color: var(--color-primary); }
+.timeline__entry--call { border-left-color: var(--color-low); }
+.timeline__entry--note { border-left-color: var(--color-warm); }
+.timeline__entry--callback { border-left-color: var(--color-accent); }
+.timeline__entry--disposition { border-left-color: var(--color-success); }
+.timeline__entry--system { border-left-color: transparent; }
+
+.timeline__entry--system .timeline__text {
+  color: var(--color-text-muted);
+  font-size: var(--text-small);
+}
+
+.actions-panel__textarea,
+.actions-panel__input {
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface);
+  font: inherit;
+  font-size: var(--text-body);
+  color: var(--color-text);
+  resize: vertical;
+}
+
+.actions-panel__textarea:focus,
+.actions-panel__input:focus {
+  outline: 2px solid var(--color-accent);
+  outline-offset: -1px;
+}
+
+.chip-button {
+  padding: 4px 10px;
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  background: var(--color-surface);
+  font: inherit;
+  font-size: var(--text-small);
+  cursor: pointer;
+}
+
+.chip-button:hover:not(:disabled) {
+  border-color: var(--color-border-strong);
+  background: var(--color-surface-hover);
+}
+
+/* Off while an outcome is chosen: closing finishes callbacks. */
+.chip-button:disabled {
+  color: var(--color-text-muted);
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Lead Timeline page - DESIGN-PROMPT.md 4. Phase 3 task 21. */
+.timeline-page {
+  display: grid;
+  gap: var(--space-4);
+  grid-template-columns: 1fr;
+  align-items: start;
+}
+
+@media (min-width: 1024px) {
+  .timeline-page {
+    grid-template-columns: 1fr 320px;
+  }
+}
+
+.timeline-page__main {
+  padding: var(--space-4);
+  min-width: 0;
+}
+
+.timeline-page__side {
+  padding: var(--space-4);
+}
+
+.timeline-page__side-subtitle {
+  margin: var(--space-4) 0 var(--space-2);
+  font-size: var(--text-body);
+  font-weight: var(--weight-semibold);
+  color: var(--color-text);
+}
+
+.timeline-page__side-title {
+  margin: 0 0 var(--space-3);
+  font-size: var(--text-title);
+  color: var(--color-text);
+  font-weight: var(--weight-semibold);
+}
+
+.timeline-page__side-title + * {
+  margin-top: 0;
+}
+
+.timeline-page__head-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.summary {
+  margin: 0 0 var(--space-5);
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: var(--space-2) var(--space-3);
+  font-size: var(--text-body);
+}
+
+.summary dt {
+  color: var(--color-text-muted);
+  white-space: nowrap;
+}
+
+.summary dd {
+  margin: 0;
+}
+
+/* Rows with no data behind them - AGENT-WORKSPACE.md, "Known gaps". */
+.summary__gap {
+  color: var(--color-text-muted);
+}
+
+.summary__list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: var(--text-body);
+}
+
+.summary__list li {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  padding: var(--space-2) 0;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.summary__list li:last-child {
+  border-bottom: none;
+}
+
+.summary__list-when,
+.summary__list-who {
+  color: var(--color-text-muted);
+  font-size: var(--text-small);
+}
+
+.summary__empty {
+  margin: 0;
+  font-size: var(--text-body);
+  color: var(--color-text-muted);
+}

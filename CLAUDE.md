@@ -95,7 +95,7 @@ went a different way:
 | Layer | Actual |
 |---|---|
 | API | Express 4. Every route is under `/api`. |
-| Worker | A plain serialised loop in `backend/src/worker/index.ts`, no job queue. `bull` and `redis` are in `package.json` and Redis runs, but no code uses either yet. |
+| Worker | A plain serialised loop in `backend/src/worker/index.ts`, no job queue. Redis runs, but no code uses it; the unused `bull` and `redis` packages were removed on 2026-09-28. |
 | Migrations | Plain numbered `.sql` files run by `backend/scripts/migrate.js`. No Prisma, no node-pg-migrate. |
 | Auth | bcrypt (cost 12) and a JWT in an httpOnly, SameSite=Strict cookie. See `docs/AUTH.md`. |
 | Frontend | React 18, Vite 4, React Router 6, zustand, plain CSS with design tokens. |
@@ -151,7 +151,38 @@ you change something the docs describe, update the doc in the same commit.
     src/api/auth/           sign-in, sessions, guards
     src/api/users/          superadmin account management
     src/api/admin/leads.ts  Admin > Leads query endpoint
-    src/api/leads.ts        the agents' priority queue endpoint
+    src/api/admin/config.ts    Admin > Configuration, read-only
+    src/api/admin/overview.ts  Admin > Overview statistics
+    src/api/admin/dnc.ts       Admin > DNC list, read-only
+    src/api/admin/health.ts    deep health check, superadmin only
+    src/db/health.ts        database, poller, webhook, expiry, sending
+    src/db/admin-config.ts  live copy, scoring and tiers, with segment counts
+    src/db/admin-overview.ts  KPIs, funnel, per-agent table, activity feed
+    src/db/admin-dnc.ts     the DNC list, released rows included
+    src/api/leads.ts        the agents' priority queue, and claim/release
+    src/api/lead-workspace.ts  every route on one lead: card, timeline, notes, callbacks, SMS, dispositions, read
+    src/api/filters.ts      request parsing shared by several routes: since, tz, lists, lead id
+    src/db/claims.ts        claiming and releasing a lead
+    src/db/read-flag.ts     clears has_unread_inbound
+    src/db/lead-detail.ts   the lead card
+    src/db/timeline.ts      the merged lead timeline
+    src/db/notes.ts         agent notes, append-only
+    src/api/callbacks.ts    My Callbacks: list, reschedule, mark done
+    src/db/callbacks.ts     callbacks, and the today/upcoming/overdue windows
+    src/db/dispositions.ts  setting a disposition, and the DNC block
+    src/core/dispositions.ts  Closed and DNC, pure
+    src/db/dnc.ts           blocking and releasing a number - every path uses it
+    src/db/agent-sms.ts     agent SMS, and the rule 2b take-over timestamp
+    src/core/score-breakdown.ts  answer chips and the score breakdown, pure
+    scripts/claims-live-check.ts  proves that SQL, including the claim race
+    scripts/read-flag-live-check.ts  proves a read lead leaves the queue
+    scripts/lead-detail-live-check.ts  proves the card's SQL
+    scripts/timeline-live-check.ts  proves the merge and the derived events
+    scripts/callbacks-live-check.ts  proves the tab windows against a real clock
+    scripts/dispositions-live-check.ts  proves the DNC block and the queue effect
+    scripts/agent-sms-live-check.ts  proves the take-over stops the questions
+    scripts/admin-live-check.ts  proves the three admin read models
+    scripts/health-live-check.ts  proves the poller staleness signal
     src/core/queue-tags.ts  which tag a queued lead gets
     src/db/queue.ts         the priority queue SQL
     scripts/queue-live-check.ts  proves that SQL against a real database
@@ -161,15 +192,48 @@ you change something the docs describe, update the doc in the same commit.
     src/core/answers.ts     matches a reply to an option, pure
     src/api/reply-flow.ts   runs the state machine for an inbound reply
     src/worker/expiry.ts    marks stale open conversations expired
+    src/worker/retry-openers.ts  retries openers that never went out
+    src/worker/opener.ts    sends question 1: shared by the poller and the retry
+    scripts/retry-openers-live-check.ts  proves the backoff and the two must-nots
+    scripts/end-to-end.ts   the whole system in one run - npm run e2e
     src/db/leads.ts         Admin > Leads SQL
+    src/db/lead-state.ts    closed and worked, shared by the queue and Admin > Leads
+    src/db/sql.ts           LIKE escaping and the expiry-days reader, shared by every query
+    src/db/holder.ts        who holds a lead - checked before every write on it
+    src/db/failed-sends.ts  keeps a message EZ Texting refused, marked failed
+    scripts/admin-leads-live-check.ts  proves the Admin > Leads statuses
+    src/lib/log.ts          structured JSON logging, with redaction enforced
     src/cli/                create-superadmin
     src/integrations/       EZ Texting client
     src/db/users.ts         user queries; src/db/pool.ts
   frontend/
     Dockerfile              production Caddy image with the built app
+    src/api/usePolling.ts   the one place every live screen fetches from
+    src/api/workspace.ts    lead card, timeline, notes, callbacks, dispositions, SMS
+    src/api/admin.ts        config, overview, DNC, health
+    src/lib/format.ts       phone, dates, age, answer labels
+    src/lib/lock.ts         which queue rows an agent may open
+    src/lib/useSecond.ts    a clock that re-renders every second
+    src/components/Timeline.tsx      shared by the workspace and the timeline page
+    src/components/QueueStatus.tsx   the queue's STATUS column: icon and words
+    src/components/LeadStatus.tsx    an Admin > Leads status: icon and words
+    src/components/StatusIcon.tsx    every status icon, one set for all screens
+    src/components/TierSignal.tsx    the TIER column's bars
+    src/components/Segmented.tsx     the sliding navy switcher
+    src/components/LiveStatus.tsx    "Live · updated just now"
+    src/components/SyncStatus.tsx    "Synced with EZ Texting 1m ago"
+    src/components/RowMenu.tsx       a row's "⋯" actions menu
+    src/components/LockIcon.tsx      the padlock on a locked queue row
+    src/pages/QueuePage.tsx          the priority queue
+    src/pages/WorkspacePage.tsx      the agent workspace shell
+    src/pages/workspace/             header card, answers and score, conversation, SMS compose, Wrap up
+    src/pages/LeadTimelinePage.tsx   read-only history with a summary sidebar
+    src/pages/CallbacksPage.tsx      My Callbacks
+    src/pages/admin/                 overview, leads, agents, config, dnc
   docs/
+    LEAD-FLOW.md            a lead's whole life on one page - start here
     AUTH.md  POLLER.md  WORKFLOW.md  WEBHOOKS.md  ADMIN-LEADS.md  STATE-MACHINE.md
-    QUEUE.md
+    QUEUE.md  AGENT-WORKSPACE.md  ADMIN.md  LOGGING.md  FRONTEND.md
 ```
 
 `core/` holds message rendering, the state machine and answer matching, all of
@@ -243,7 +307,7 @@ Tiers: HOT 75–100, WARM 45–74, LOW 1–44
 3. On end, Twilio status callback → save to `calls`.
 4. Agent sets disposition/note/callback. DNC disposition = same as SMS STOP.
 
-Queue tags (New, Attempted 1x, In progress, Callback, Needs review, Stalled at Q2, Inbound reply, Seen before) are **computed** from these tables, not stored as a status. *(2026-09-19: "Seen before" cannot occur until repeat-lead handling is built - a future item, §10.)* *(2026-09-22: built - which tag wins when several apply is in `docs/QUEUE.md`.)*
+Queue tags (New, Attempted 1x, In progress, Callback, Needs review, Stalled at Q2, Inbound reply, Seen before) *(2026-09-28: Stalled is gone - the queue holds only leads that need a person, `docs/QUEUE.md`)* are **computed** from these tables, not stored as a status. *(2026-09-19: "Seen before" cannot occur until repeat-lead handling is built - a future item, §10.)* *(2026-09-22: built - which tag wins when several apply is in `docs/QUEUE.md`.)* *(2026-09-28: only Working – name (was In progress), Inbound reply and Needs review are shown; the rest were dropped - `docs/QUEUE.md`, "The tag".)*
 
 **Paths, as of 2026-09-15.** Caddy forwards only `/api/*` to the API; everything
 else is the frontend, so every route lives under `/api`. The EZ Texting webhook
@@ -342,7 +406,7 @@ onto them:
 |---|---|---|
 | 1 | Week 1 | Done |
 | 2 | Week 2 | Done, approved 2026-09-23 |
-| 3 | Week 3 **and all of Week 4 except Twilio** | Next |
+| 3 | Week 3 **and all of Week 4 except Twilio** | Done 2026-09-28, merged into `main` |
 | 4 | Week 4 items 1-4, Twilio calling | After Phase 3 |
 
 **Phase 3 is everything that is left except calling.** That means the Week 3
@@ -390,6 +454,60 @@ named beside it - read that first, not this line. §9's definition of done
 applies to each: works locally with fake data, tests, docs updated in the same
 commit.
 
+**Backend done, 2026-09-26.** Tasks 1-13: the agent workspace endpoints, agent
+SMS with rule 2b, the three read-only admin screens and the deep health
+endpoint. Suite at 360 tests, plus eight `scripts/*-live-check.ts` files that
+prove the SQL against a real Postgres.
+
+**Frontend done, 2026-09-26.** Tasks 14-25, on the same branch: the shared
+polling hook, the priority queue with the one-agent lock, the agent workspace
+(card, timeline, actions, SMS compose), the lead timeline page, My Callbacks,
+and the three admin pages. `docs/FRONTEND.md` is the record of what was built
+and why. The frontend gains its first test setup - Vitest, jsdom, tests
+covering logic rather than buttons.
+
+**Operations done, 2026-09-28.** Tasks 26-30, on `feat/phase3-operations`:
+structured JSON logging with redaction enforced in the logger, the failed-opener
+retry, the end-to-end script, and a README with how to test and known limits.
+**Phase 3 is complete.** Next is Phase 4, Twilio calling.
+
+**Open when Phase 3 closed, 2026-09-28** - each written up where it lives:
+
+- ~~**"Today" is UTC.**~~ Fixed 2026-09-28: each viewer's own time zone, sent
+  by the browser as `?tz=` - `db/sql.ts`, `startOfTodaySql`.
+- **Force-release has no screen.** The API lets a superadmin release anyone's
+  claim; nothing on screen offers it. `FRONTEND.md`, "Not built".
+- **Source always reads "API" in production** - it is how the contact was
+  added to EZ Texting, not which partner sent it. Keep the column, or find the
+  partner elsewhere.
+- **Deploy:** `npm run migrate` applies 002, 003, 004 and 005 on the server (005, 2026-09-29: poll every 30s). Production also needs `EZT_WEBHOOK_TOKEN` set, or the API will not start - it is already set there.
+
+Task 29 found nothing to fix in the app: all three bugs the end-to-end script
+surfaced were in the script itself. Two apparent failures were the app being
+right and the script being out of date with Jeel's changes.
+
+*(2026-09-28, in review before merging: the retry of task 27 had two faults its
+own check did not catch, both fixed on the branch. Its waits counted from the
+lead's arrival, so an older lead's four retries fired in four minutes; and
+nothing stopped a first question going out days late. The README also still
+described two things changed the same day. `POLLER.md`, "Retrying a failed
+opener".)*
+
+Two things found while building, neither fixed inside its task, both needing
+Jeel:
+
+- **A disposition does not remove a lead from the queue.** `db/queue.ts` does
+  not read `dispositions` at all, so a lead dispositioned `not_interested`
+  stays in the queue at full score and the next agent picks it up again. Only
+  `dnc` removes one, and only through `dnc_list`. *(2026-09-28, Jeel: fixed.
+  Wrap up now has two outcomes, Closed and DNC. Closed takes a lead out of the
+  queue and reads Closed on Admin > Leads, next to a new Working status.
+  `AGENT-WORKSPACE.md`, "Dispositions"; `ADMIN-LEADS.md`.)*
+- **The deep health endpoint cannot be polled by external monitoring,** because
+  it is superadmin-only as `LOGGING.md` specified. If an uptime service is
+  wanted, it needs a separate unauthenticated route returning less. *(Still
+  open, 2026-09-28 - `README.md`, "Known limits".)*
+
 **Backend (`AGENT-WORKSPACE.md`, `ADMIN.md`, `LOGGING.md`)**
 
 | # | Task | Doc | Needs |
@@ -417,7 +535,7 @@ commit.
 | 16 | One-agent lock in the queue: claimed rows muted and unclickable | `DESIGN-PROMPT.md` 2 | 2, 15 |
 | 17 | Agent Workspace shell: lead card, three columns, Call button disabled | `DESIGN-PROMPT.md` 3 | 4 |
 | 18 | Timeline component | `DESIGN-PROMPT.md` 3 | 5 |
-| 19 | Workspace right column: note, callback, disposition, Save and next | `DESIGN-PROMPT.md` 3 | 6, 7, 8 |
+| 19 | Workspace right column: note, callback, disposition, Save and next *(2026-09-28: Save only)* | `DESIGN-PROMPT.md` 3 | 6, 7, 8 |
 | 20 | Workspace SMS compose, with templates | `DESIGN-PROMPT.md` 3 | 9 |
 | 21 | Lead Timeline page, full width with summary sidebar | `DESIGN-PROMPT.md` 4 | 18 |
 | 22 | My Callbacks page | `DESIGN-PROMPT.md` 5 | 7 |
@@ -498,8 +616,8 @@ Done when:
 Build:
 1. React app scaffold, login page, role-based routing
 2. Priority queue screen (mockup p.5): HOT/WARM/LOW counts, table, filters, live age ticking, refresh on new data
-3. One-agent lock: claiming a lead sets `assigned_to`; other agents see "In progress – name"
-4. Agent workspace (mockup p.6) minus the call button: lead card, score breakdown, SMS send, note, callback scheduling, disposition, save & next
+3. One-agent lock: claiming a lead sets `assigned_to`; other agents see "In progress – name" *(2026-09-28: now "Working – name")*
+4. Agent workspace (mockup p.6) minus the call button: lead card, score breakdown, SMS send, note, callback scheduling, disposition, save & next *(2026-09-28: Save only; the outcomes are Closed and DNC)*
 5. Lead timeline (mockup p.7): merged view of messages, calls, notes, callbacks, dispositions
 6. My Callbacks page
 7. Admin (mockup p.8): ~~edit scoring rules and tier thresholds, recalculate existing, edit question copy / clarification / STOP text / expiry days~~, manage agents. *(2026-09-23: all of it read-only except managing agents - see "Phases, and what Phase 3 is" above. The screen shows the questions, the clarifications, the thanks message, the score table and the tier bands; nothing is editable and Recalculate is dropped.)*
@@ -539,7 +657,7 @@ Done when:
 - Client UAT with real agents
 - Fixes from UAT
 - Later phase (not in scope now): ElevenLabs AI attendant, voicemail, after-hours handling
-- Only if the client asks: showing responders whose conversation expired in the agents' queue as "Stalled at Qn"
+- Only if the client asks: showing responders whose conversation expired in the agents' queue as "Stalled at Qn" *(2026-09-28: the queue no longer shows partway leads at all, open or expired - Jeel's decision. This would reverse it.)*
 
 ### Future: repeat leads - check first, then build
 
@@ -603,6 +721,7 @@ were taken on trust and the poller silently ingested nothing.
 - **Every change reaches the repo through a PR into `dev`.** Branch off `dev`,
   push the branch, open the PR against `dev` - never against `main`, and never
   by committing to either directly. Jeel merges `dev` into `main`.
-- Prefer small PRs, one concern each. Run `npm test` before opening one, and
+- Prefer small PRs, one concern each. Run `npm test` and `npm run lint` (ESLint,
+  added 2026-09-28) before opening one, and
   `docker compose build api worker` - a local `node_modules` can hide a
   dependency missing from `package.json`.

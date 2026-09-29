@@ -1,0 +1,515 @@
+/* The admin layout, score and tier, the data table and table card, and the queue and Admin > Leads on top of them.
+   Loaded by global.css, in its order: a later file can override an earlier one. */
+
+/* ---------- Admin ---------- */
+
+.admin {
+  display: grid;
+  grid-template-columns: 200px 1fr;
+  gap: var(--space-6);
+  align-items: start;
+}
+
+.admin__nav {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  position: sticky;
+  top: calc(var(--appbar-height) + var(--space-6));
+}
+
+.admin__nav-heading {
+  padding: 0 var(--space-3) var(--space-2);
+  font-size: var(--text-small);
+  font-weight: var(--weight-semibold);
+  letter-spacing: var(--tracking-label);
+  text-transform: uppercase;
+  color: var(--color-text-subtle);
+}
+
+.admin__nav-link {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 34px;
+  padding: 0 var(--space-3);
+  border-radius: var(--radius-md);
+  color: var(--color-text-muted);
+  font-weight: var(--weight-regular);
+  text-decoration: none;
+}
+
+.admin__nav-link:hover {
+  background: var(--color-surface-hover);
+  color: var(--color-text);
+}
+
+.admin__nav-link.active {
+  background: var(--color-surface);
+  color: var(--color-text);
+  box-shadow: inset 0 0 0 1px var(--color-border);
+}
+
+/* ---------- Score and tier ---------- */
+
+/*
+ * Colour carries the tier, so a scan down the column shows where the heat is
+ * without reading every number. The palette is the design brief's: HOT red,
+ * WARM amber, LOW slate. A lead with no reply has no score and shows "-".
+ */
+.score {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+/* ---------- Data table ---------- */
+
+.table-wrap {
+  overflow-x: auto;
+  transition: opacity 120ms ease;
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--text-body);
+}
+
+.table th {
+  height: 36px;
+  padding: 0 var(--space-4);
+  text-align: left;
+  font-size: var(--text-small);
+  font-weight: var(--weight-semibold);
+  letter-spacing: var(--tracking-label);
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+  border-bottom: 1px solid var(--color-border);
+  white-space: nowrap;
+}
+
+.table td {
+  height: var(--row-height);
+  padding: 0 var(--space-4);
+  border-bottom: 1px solid var(--color-border);
+  white-space: nowrap;
+}
+
+/* A row is its cells and its row label. Written for td alone, the last row
+   kept a divider under the label only - half a line - and hovering lit the
+   value but not the label beside it. Config's key/value tables showed both. */
+.table tbody tr:last-child th,
+.table tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+.table tbody tr:hover th,
+.table tbody tr:hover td {
+  background: var(--color-surface-muted);
+}
+
+.table__row--inactive td {
+  color: var(--color-text-subtle);
+}
+
+.skeleton {
+  display: block;
+  height: 12px;
+  border-radius: var(--radius-sm);
+  background: linear-gradient(90deg, #edf1f5 0%, #f6f8fa 50%, #edf1f5 100%);
+  background-size: 200% 100%;
+  animation: shimmer 1.2s ease-in-out infinite;
+}
+
+@keyframes shimmer {
+  from {
+    background-position: 200% 0;
+  }
+  to {
+    background-position: -200% 0;
+  }
+}
+
+@media (max-width: 900px) {
+  .admin {
+    grid-template-columns: 1fr;
+  }
+
+  .admin__nav {
+    position: static;
+    flex-direction: row;
+    flex-wrap: wrap;
+  }
+
+  .appbar__inner {
+    grid-template-columns: auto 1fr auto;
+    gap: var(--space-4);
+  }
+
+  .user-menu__label {
+    display: none;
+  }
+}
+
+/* ---------------------------------------------------------------- Leads */
+
+/* Received and Last activity: when things happened, a step quieter than the
+   lead and its status. */
+.cell-muted {
+  color: var(--color-text-muted);
+  white-space: nowrap;
+}
+
+.search-input,
+.select-input {
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface);
+  color: var(--color-text);
+  font: inherit;
+}
+
+.search-input {
+  min-width: 16rem;
+  flex: 1 1 16rem;
+}
+
+.search-input:focus-visible,
+.select-input:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring-field);
+  border-color: var(--color-primary);
+}
+
+.table-card__count {
+  margin-left: auto;
+  color: var(--color-text-subtle);
+  font-size: var(--text-small);
+  font-variant-numeric: tabular-nums;
+}
+
+.loading-block,
+.table-card__empty {
+  padding: var(--space-8);
+  text-align: center;
+  color: var(--color-text-muted);
+}
+
+/* Matches the 600ms highlight the queue uses for newly arrived rows. */
+@keyframes leads-row-in {
+  from { background: var(--color-accent-soft); }
+  to { background: transparent; }
+}
+
+.data-table__row--new td {
+  animation: leads-row-in 600ms ease-out;
+}
+
+.table-card__pager {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-4);
+  padding: var(--space-4);
+  border-top: 1px solid var(--color-border);
+  color: var(--color-text-muted);
+  font-size: var(--text-body);
+}
+
+.mono {
+  font-family: var(--font-mono);
+}
+
+/* ---------------------------------------------------------------------------
+   Priority queue - DESIGN-PROMPT.md 2. Phase 3 tasks 15 and 16.
+   --------------------------------------------------------------------------- */
+
+/* The "Live" indicator: the brief asks agents to be able to tell at a glance
+   that the screen is still updating. */
+.live {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--text-small);
+  color: var(--color-text-muted);
+}
+
+.live__dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--color-success);
+}
+
+.live--paused {
+  color: var(--color-warning);
+}
+
+.live--paused .live__dot {
+  background: var(--color-warning);
+}
+
+/* ---------- Priority queue, redesigned 2026-09-28 to Jeel's mockup ----------
+   One card holding the filters and the table. Calm and mostly monochrome: the
+   tier is signal bars, the status a small mark, overdue waiting a heavier
+   weight. Colour is left for what needs a person first. */
+
+.table-card {
+  overflow: hidden;
+  transition: opacity 120ms ease;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
+}
+
+.table-card__toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-4) var(--space-5);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.table-card__search {
+  flex: 1;
+  min-width: 200px;
+}
+
+.segmented__count {
+  margin-left: var(--space-2);
+  color: var(--color-text-subtle);
+}
+
+/* On navy the grey count would all but vanish; it follows the white label,
+   a step quieter. */
+.segmented__option[aria-checked='true'] .segmented__count {
+  color: inherit;
+  opacity: 0.7;
+}
+
+.data-table thead th {
+  background: var(--color-surface-muted);
+}
+
+.data-table th:first-child,
+.data-table td:first-child {
+  padding-left: var(--space-5);
+}
+
+.data-table th:last-child,
+.data-table td:last-child {
+  padding-right: var(--space-5);
+}
+
+.data-table td {
+  height: 64px;
+  vertical-align: middle;
+}
+
+.data-table__row {
+  cursor: pointer;
+}
+
+/* The one-agent lock, task 16. Muted and not clickable: another agent is
+   working this lead, and the row should not invite a click it will refuse. */
+.data-table__row--locked {
+  cursor: not-allowed;
+  color: var(--color-text-muted);
+  background: var(--color-surface-muted);
+}
+
+.data-table__row--locked .cell-name,
+.data-table__row--locked .tier-signal,
+.data-table__row--locked .cell-strong,
+.data-table__row--locked .status {
+  color: var(--color-text-muted);
+  font-weight: var(--weight-regular);
+}
+
+.cell-name {
+  display: block;
+  font-weight: var(--weight-semibold);
+}
+
+.cell-sub {
+  display: block;
+  margin-top: 2px;
+  font-family: var(--font-mono);
+  font-size: var(--text-small);
+  color: var(--color-text-muted);
+}
+
+.cell-strong {
+  font-weight: var(--weight-semibold);
+}
+
+.cell-code {
+  font-size: var(--text-small);
+  color: var(--color-text-muted);
+}
+
+/* The action column is centred, buttons and Locked alike, so they share one
+   axis down the table instead of Locked sitting apart from the buttons. Its
+   left padding matches the right one, so the centre is the cell's centre. */
+.data-table .cell-action {
+  padding-left: var(--space-5);
+  text-align: center;
+}
+
+/* Hovering an action turns it into a primary button: the header's navy -
+   --color-primary is the same #0f2942 as --color-appbar - with white text.
+   Jeel, 2026-09-28. */
+.cell-action .btn--secondary:hover:not(:disabled) {
+  background: var(--color-primary);
+  border-color: var(--color-primary);
+  color: var(--color-on-primary);
+}
+
+.queue__locked {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--text-body);
+  color: var(--color-text-subtle);
+}
+
+/* Status: an icon and the words. Only three statuses exist, and a lead with
+   none shows a hyphen - QueueStatus.tsx. */
+.status {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  color: var(--color-text);
+}
+
+.status__icon {
+  flex: none;
+}
+
+.status--strong { font-weight: var(--weight-semibold); }
+.status--muted { color: var(--color-text-muted); }
+.status--danger { color: var(--color-danger); }
+.status--warning { color: var(--color-warning); }
+
+/* Admin > Agents: the email under the name, the way a phone sits under a
+   lead's name elsewhere. */
+.agents__name {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.agents__you {
+  padding: 0 var(--space-2);
+  border-radius: 999px;
+  background: var(--color-surface-hover);
+  color: var(--color-text-muted);
+  font-size: var(--text-small);
+  font-weight: var(--weight-regular);
+}
+
+.agents__email {
+  display: block;
+  margin-top: 2px;
+  color: var(--color-text-muted);
+  font-size: var(--text-small);
+}
+
+.agents__actions {
+  width: 1%;
+  text-align: right;
+}
+
+/* A row's "⋯" - RowMenu.tsx. Quiet until hovered, then the header navy like
+   every other action. */
+.row-menu__trigger {
+  display: inline-grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--color-text-muted);
+  cursor: pointer;
+}
+
+.row-menu__trigger:hover,
+.row-menu__trigger[aria-expanded='true'] {
+  border-color: var(--color-primary);
+  background: var(--color-primary);
+  color: var(--color-on-primary);
+}
+
+.row-menu__trigger:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
+.row-menu__panel {
+  position: fixed;
+  z-index: 20;
+  min-width: 180px;
+}
+
+.row-menu__item--danger {
+  color: var(--color-danger);
+}
+
+/* Tier as signal bars: three for Hot, two for Warm, one for Low. */
+.tier-signal {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-weight: var(--weight-semibold);
+}
+
+.tier-signal--none {
+  color: var(--color-text-subtle);
+  font-weight: var(--weight-regular);
+}
+
+.tier-signal__bar {
+  fill: var(--color-border-strong);
+}
+
+.tier-signal__bar--on {
+  fill: var(--color-primary);
+}
+
+.tier {
+  display: inline-block;
+  min-width: 46px;
+  padding: 3px 8px;
+  border-radius: var(--radius-sm);
+  font-size: var(--text-small);
+  font-weight: var(--weight-semibold);
+  letter-spacing: var(--tracking-label);
+  text-align: center;
+  text-transform: uppercase;
+}
+
+.tier--hot { background: var(--color-hot-soft); color: var(--color-hot); }
+.tier--warm { background: var(--color-warm-soft); color: var(--color-warm); }
+.tier--low { background: var(--color-low-soft); color: var(--color-low); }
+
+.queue__truncated {
+  margin-top: var(--space-3);
+  font-size: var(--text-small);
+  color: var(--color-text-muted);
+}
+
+.right {
+  text-align: right;
+}
+
+/* `.table th` sets text-align: left and outranks `.right`, so a right-aligned
+   column's heading stayed left above its numbers - SCORE and WAITING on the
+   queue, SCORE on Admin > Leads. */
+.table th.right {
+  text-align: right;
+}

@@ -31,7 +31,7 @@ Role is set at login. Navigation adapts to role.
   - Success (delivered, completed) – green
   - Danger (DNC, suppressed) – deep red
   - Live/active (call in progress, ticking timers) – a single accent, e.g. teal or blue
-- **Typography:** one sans family (Inter or similar). Tabular numerals for scores, timers, phone numbers. 13–14px body in tables, 16px in forms.
+- **Typography:** one sans family (Inter or similar). Tabular numerals for scores, timers, phone numbers. 13–14px body in tables, 16px in forms. *(2026-09-28: superseded by the type system in `frontend/src/styles/tokens.css` - five sizes, 12/14/16/20/24, chosen by role. Body is 14px everywhere, forms included: they already were, and a field in larger type than the text around it read as a different app. 13px is gone - one pixel from 12 and 14, it made matching text look slightly off. `FRONTEND.md`, "Type system".)*
 - **Iconography:** one consistent line-icon set (Lucide or Phosphor). Icons always paired with a label unless in a dense table.
 - **Motion:** minimal. Row highlight on new lead arrival (fade in over 600ms), timer tick, call-state transitions. No decorative animation.
 - **Light mode only** for v1. Design tokens should make dark mode possible later.
@@ -64,25 +64,25 @@ Role is set at login. Navigation adapts to role.
 
 ### 2. Priority Queue (default landing for agents)
 
-**Purpose:** show every responder, sorted by score then freshness, so the newest high-intent lead is always at the top. Updates live as replies arrive.
+**Purpose:** show every responder *(2026-09-28, Jeel: no - only leads that need a person: completed, needs review, an inbound reply, or one being worked. A lead partway through the questions is on Admin > Leads. `QUEUE.md`)*, sorted by score then freshness, so the newest high-intent lead is always at the top. Updates live as replies arrive.
 
 *(2026-09-22: the API behind this screen is built - `QUEUE.md` says what it returns, which leads are in it and which status tag wins when several apply. Two things it does not give the screen: **STATE** has no data behind it, because EZ Texting sends no state with a contact (`EZTEXTING-API.md`), and there is no live channel yet, so "updates live" is still a design intent.)*
 
 **Header row**
-- Three tier counters as pill-buttons that also act as filters: `HOT 4`, `WARM 7`, `LOW 12`. Selected state shows which tiers are visible.
+- Three tier counters as pill-buttons that also act as filters: `HOT 4`, `WARM 7`, `LOW 12`. Selected state shows which tiers are visible. *(2026-09-28, Jeel's mockup: one segmented switcher - **All · Hot · Warm · Low**, each with its count - and one choice at a time, not several. The filters and the table sit together in one card.)*
 - Filters: **Source** (multi-select dropdown: e.g. CORE-G-27, CORE-G-31), **Time window** (Last 1h / 24h / 7d / All).
 - Search box: name or phone.
 - "Live" indicator with last-updated timestamp.
 
 **Table columns** (in this order)
-1. **TIER** – coloured badge (HOT / WARM / LOW)
+1. **TIER** – coloured badge (HOT / WARM / LOW) *(2026-09-28: signal bars plus the word - three bars Hot, two Warm, one Low. `components/TierSignal.tsx`.)*
 2. **LEAD** – first name + last initial, bold
 3. **STATE** – 2-letter US state or "–"
 4. **INTEREST** – Supplements / Telehealth/Rx / Both / –
 5. **TIMING** – Today / This week / Researching / –
 6. **PREFERENCE** – Call me now / Text me / Contact me later / –
 7. **SCORE** – number, right-aligned, tabular
-8. **AGE** – `m:ss` since lead arrived, ticking live. Turns amber past 5 min, red past 15 min for HOT.
+8. **AGE** – `m:ss` since lead arrived, ticking live. Turns amber past 5 min, red past 15 min for HOT. *(2026-09-28, Jeel: headed **WAITING**, monospace, and no highlight at all - every waiting time is the same weight and colour. Neither amber and red nor bold; a column where some values stand out read as inconsistent.)*
 9. **SOURCE** – partner code, monospace
 10. **STATUS** – a tag with one of:
    - `New`
@@ -90,13 +90,15 @@ Role is set at login. Navigation adapts to role.
    - `In progress – {agent name}` (lead is locked)
    - `Callback {time}`
    - `Needs review` (invalid replies, agent must read raw text)
-   - `Stalled at Q2` / `Stalled at Q1` (partial responder)
+   - `Stalled at Q2` / `Stalled at Q1` (partial responder) *(2026-09-28: removed - partway leads are not in the queue)*
    - `Inbound reply` (lead texted after conversation ended – unread indicator)
    - `Seen before, stopped at Q2` (resold lead with history) - *2026-09-19: does not occur until repeat-lead handling is built, a future item.*
-11. **Actions** – "Open" button; on hover, quick "Call" and "SMS" icons.
+
+   *(2026-09-28, Jeel: only three of these are shown - `Working – {agent name}` (renamed from In progress, to match Admin > Leads), `Inbound reply` and `Needs review`. Any other row shows `-`. `New`, `Attempted` and `Callback` are dropped: that history is the working agent's to remember, on My Callbacks and the lead's timeline, and on the home page it made every row say something. `QUEUE.md`, "The tag".)*
+11. **Actions** – "Open" button; on hover, quick "Call" and "SMS" icons. *(2026-09-28, Jeel: the button is **Pick**, not Open. Clicking it assigns the lead to the agent - `leads.assigned_to` - and "Open" said nothing about that, so an agent could take a lead without realising they had. It has four states, since "may click" and "may claim" are different questions: **Pick** when nobody holds it, **Resume** when you do, **View** when a superadmin looks at someone else's, and no button at all for an agent on someone else's. `QUEUE.md`, "What the button offers". Same wording on the My Callbacks row and the Lead Timeline header, which claim the same way.)*
 
 **Row behaviour**
-- Click row → opens Agent Workspace for that lead.
+- Click row → opens Agent Workspace for that lead. *(2026-09-28, Jeel: no - opening a lead must not assign it. A row click opens the same Agent Workspace, read-only: actions switched off, with Pick at the top; only the **Pick** button assigns the lead. The row click used to pick, so an agent glancing at a lead took it and locked everyone else out without meaning to.)*
 - Locked rows (In progress by another agent) are visually muted and not clickable, with a tooltip.
 - New rows animate in at their sorted position.
 - Rows with `Inbound reply` show a small unread dot.
@@ -106,6 +108,8 @@ Role is set at login. Navigation adapts to role.
 ### 3. Agent Workspace (single lead)
 
 **Purpose:** one screen. See who the lead is, what they said, and call, text, note, schedule and disposition without leaving the page.
+
+*(2026-09-28, Jeel: redesigned to a mockup he supplied. The layout below is superseded where they differ - a full-width header card over three columns: "What {name} told us" and the score breakdown on the left, the SMS thread as a conversation in the centre, and a numbered "Wrap up" on the right. The behaviour is unchanged. `FRONTEND.md`, "The workspace", records what moved and why.)*
 
 **Layout:** three columns on ≥1280px.
 - **Left (30%)** – Lead card + actions
@@ -145,8 +149,8 @@ Role is set at login. Navigation adapts to role.
 **Right column**
 - **Note** – textarea, auto-saves draft, "Add note".
 - **Callback** – date + time picker, quick chips (In 1h / Tomorrow 10am / Tomorrow 3pm), "Assign to" (defaults to me; superadmin can pick any agent).
-- **Disposition** – single-select as a segmented/radio group: `Interested` · `Callback set` · `No answer` · `Voicemail` · `Not interested` · `Wrong number` · `DNC`. DNC requires confirm dialog and shows a red warning ("Suppresses this number for SMS and calls everywhere").
-- **Save** and **Save & next lead** (primary). Save & next loads the next highest lead automatically.
+- **Disposition** – single-select as a segmented/radio group: `Interested` · `Callback set` · `No answer` · `Voicemail` · `Not interested` · `Wrong number` · `DNC`. DNC requires confirm dialog and shows a red warning ("Suppresses this number for SMS and calls everywhere"). *(2026-09-28, Jeel: two outcomes only - **Closed** and **DNC** - then the callback and the note. Closed takes the lead out of the queue; "no answer" or "call back Friday" goes in the note or a callback. `AGENT-WORKSPACE.md`, "Dispositions".)*
+- **Save** and **Save & next lead** (primary). Save & next loads the next highest lead automatically. *(2026-09-28, Jeel: Save & next is dropped - Save only, and the agent leaves with Back to queue. `FRONTEND.md`, "One button".)*
 - Unsaved-changes guard when navigating away.
 
 ### 4. Lead Timeline (read-only detail)
@@ -182,7 +186,7 @@ Left sub-navigation within the page: **Overview** · **Leads** · **Scoring** ·
 
 **6a. Overview**
 - KPI cards for the selected period (Today / 7d / 30d): Leads received, Responded %, Completed %, HOT count, Calls made, Reached %, Callbacks set, DNC added.
-- Funnel bar: Received → Responded → Completed → Called → Interested.
+- Funnel bar: Received → Responded → Completed → Called → Interested. *(2026-09-28, Jeel: the funnel, the call figures and most KPI cards are gone - four totals, an agents table, system checks and activity. `ADMIN.md`, "Overview".)*
 - Per-agent table: Agent, Calls, Reached, Avg call length, Dispositions breakdown (mini bar), Callbacks pending.
 - Recent activity feed (all agents): "Michael set Interested on Jordan M.", etc.
 - Live system status: last poll time, last inbound webhook, worker health.
@@ -214,13 +218,13 @@ Left sub-navigation within the page: **Overview** · **Leads** · **Scoring** ·
 **6d. Agents**
 - Table: Name, Email, Role, Status (Active / Inactive), Last login, Actions.
 - "Add agent" drawer: name, email, role, generates a temporary password shown once.
-- Row actions: Reset password (shows temp password once), Deactivate / Reactivate, Change role.
+- Row actions: Reset password (shows temp password once), Deactivate / Reactivate, Change role. *(2026-09-28, Jeel: behind one "⋯" menu per row, and the page in the other admin pages' card style. `FRONTEND.md`, "Admin > Agents".)*
 
 **6e. DNC list**
 
 *(2026-09-23, Jeel: read-only - no manual add. A number is blocked by an agent's DNC disposition, an SMS STOP or an EZ Texting opt-out. The list must show rows released by START as released, not hide them.)*
 - Table: Phone, Reason (SMS STOP / Agent DNC / Imported), Added by, Date.
-- Search by phone. Add manually. Export CSV.
+- Search by phone. Add manually. Export CSV. *(2026-09-28: the page is built in the other admin pages' card style, with the navy All / Blocked / Released switcher - `ADMIN.md`, "DNC list".)*
 - No delete in v1 (compliance) – show a note explaining this.
 
 **6f. Settings**
@@ -245,14 +249,16 @@ Left sub-navigation within the page: **Overview** · **Leads** · **Scoring** ·
   - `Needs review` – invalid reply twice
   - `Opted out` – replied STOP, opted out in EZ Texting, or on the DNC list
   - `Expired` – no reply within the expiry window, or replaced by a newer delivery
+
+  *(2026-09-28, Jeel: two statuses added and two renamed, so the tabs follow a lead's whole life - **Awaiting reply · Answering · Ready · Working · Closed**, then Needs review, Opted out, Expired. Answering was In progress, Ready was Completed. **Working** is a lead an agent has picked or done anything with; **Closed** is one an agent pressed Closed on. `ADMIN-LEADS.md`, "Status is derived, never stored".)*
 - **Filters:** Source (multi-select), Received (Last 1h / 24h / 7d / 30d / All). **Search:** name or phone.
 - **Table columns:** Received (date and time, tabular), Lead (first name + last initial), Phone (formatted), Source (monospace), Status (tag, as above), Step reached (`–`, `Q1`, `Q2`, `Q3`), Score and tier (only when completed, else `–`), Last activity (time of the most recent SMS in or out, with direction).
 - **Default sort:** newest received first.
-- **Row click** opens the Lead Timeline (page 4) for that lead.
+- **Row click** opens the Lead Timeline (page 4) for that lead. *(2026-09-28: built, with the page redesigned in the queue's style - one card, tier bars, status icons. `ADMIN-LEADS.md`, "The page".)*
 - **Read-only.** No Call or SMS buttons here; working a lead happens in the Agent Workspace. `Opted out` rows are tinted with the Danger colour and say so.
 - **Pagination:** 50 rows per page, page controls at the bottom, total count at the top. At 50–100 leads a day the list passes 30,000 rows within a year.
 - **Live:** new leads appear at the top without a refresh, with the same 600ms row highlight as the queue.
-- **States:** loading skeleton; empty ("No leads in this view"); a warning banner when the last successful poll is older than three poll intervals ("No new leads pulled since 2:14 PM – check the worker").
+- **States:** loading skeleton; empty ("No leads in this view"); a warning banner *(2026-09-28, Jeel: not a banner - a quiet "Synced with EZ Texting 1m ago" line under the Live label, amber when stale. `ADMIN-LEADS.md`)* when the last successful poll is older than three poll intervals ("No new leads pulled since 2:14 PM – check the worker").
 
 ---
 
@@ -280,7 +286,7 @@ Left sub-navigation within the page: **Overview** · **Leads** · **Scoring** ·
 ## Interaction details that matter
 
 - Every table row is keyboard-navigable (↑ ↓ Enter).
-- In the workspace: `C` = call, `S` = SMS, `N` = note, `1–7` = disposition, `Cmd/Ctrl+Enter` = Save & next.
+- In the workspace: `C` = call, `S` = SMS, `N` = note, `1–7` = disposition, `Cmd/Ctrl+Enter` = Save & next *(dropped with the button, 2026-09-28)*.
 - Ticking timers must not cause layout shift – fixed-width tabular numbers.
 - When a lead gets locked by another agent while you're viewing the queue, its row updates in place with the tag – no full refresh.
 - Toasts never cover the Call button.

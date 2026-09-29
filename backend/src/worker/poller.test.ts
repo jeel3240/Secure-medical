@@ -158,6 +158,26 @@ describe('when the opener cannot be sent', () => {
     expect(stats).toMatchObject({ inserted: 1, openersSent: 0 });
     expect(sqlOf()).not.toMatch(/SET expires_at = now\(\)/i);
   });
+
+  it('keeps the refused opener as a failed message, so the thread shows it', async () => {
+    sendMessage.mockRejectedValue(new Error('EZ Texting down'));
+
+    await pollOnce();
+
+    const failed = query.mock.calls.find(([sql]) => /delivery_status/i.test(sql) && /'failed'/.test(sql));
+    expect(failed).toBeDefined();
+    // The rendered opener, not the template - it is what the agent would read.
+    expect(String(failed?.[1]?.[1])).not.toContain('{first_name}');
+  });
+
+  it('keeps nothing when the number is blocked - that send was never attempted', async () => {
+    const blocked = Object.assign(new Error('blocked'), { name: 'BlockedNumberError' });
+    sendMessage.mockRejectedValue(blocked);
+
+    await pollOnce();
+
+    expect(sqlOf()).not.toMatch(/'failed'/);
+  });
 });
 
 describe('the checkpoint', () => {
@@ -166,5 +186,15 @@ describe('the checkpoint', () => {
 
     await expect(pollOnce()).rejects.toThrow('EZ Texting down');
     expect(sqlOf()).not.toMatch(/INSERT INTO settings/i);
+  });
+
+  it('is still written on a quiet poll, so its time says the worker polled', async () => {
+    // Nothing new: the value stays, updated_at moves. Without this a quiet
+    // account looked like a stopped worker - Jeel, 2026-09-28.
+    listContacts.mockResolvedValue({ content: [], last: true });
+
+    await pollOnce();
+
+    expect(sqlOf()).toMatch(/INSERT INTO settings/i);
   });
 });

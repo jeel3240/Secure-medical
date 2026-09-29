@@ -1,3 +1,4 @@
+/// <reference types="vitest" />
 import react from '@vitejs/plugin-react';
 import { defineConfig } from 'vite';
 
@@ -7,6 +8,18 @@ import { defineConfig } from 'vite';
 // behind Caddy in production.
 export default defineConfig({
   plugins: [react()],
+  // Tests cover the logic a bug hides in - the polling hook's race guard, the
+  // age and tier formatting - rather than every button. A screen is easy to
+  // judge by eye; a dropped response is not.
+  test: {
+    environment: 'jsdom',
+    globals: true,
+    include: ['src/**/*.test.{ts,tsx}'],
+    // Vitest replaces CSS with an empty string unless told otherwise, `?raw`
+    // imports included. The type-system test reads the stylesheets as text,
+    // so it needs the files in src/styles for real; nothing else is processed.
+    css: { include: [/src\/styles\/[\w-]+\.css/] },
+  },
   server: {
     port: 5173,
     strictPort: true,

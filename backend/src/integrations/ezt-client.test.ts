@@ -83,7 +83,7 @@ describe('sendMessage', () => {
   });
 
   it('refuses before touching the database when EZT_SEND_GROUP is unset', async () => {
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
     const { config } = require('../config') as { config: { ezt: { sendGroup: string } } };
     config.ezt.sendGroup = '';
 

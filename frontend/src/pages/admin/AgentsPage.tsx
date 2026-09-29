@@ -3,13 +3,14 @@ import { toApiError } from '../../api/client';
 import type { PublicUser, Role } from '../../api/types';
 import { listUsers, resetUserPassword, updateUser } from '../../api/users';
 import { useAuth } from '../../auth/store';
-import { Badge } from '../../components/Badge';
 import { Banner } from '../../components/Banner';
 import { Button } from '../../components/Button';
 import { Modal } from '../../components/Modal';
 import { OneTimeSecret } from '../../components/OneTimeSecret';
+import { RowMenu, type RowMenuItem } from '../../components/RowMenu';
+import { StatusIcon } from '../../components/StatusIcon';
 import { AddAgentDrawer } from './AddAgentDrawer';
-import { formatLastLogin } from './format';
+import { formatLastLogin } from '../../lib/format';
 
 type Dialog =
   | { kind: 'add' }
@@ -18,7 +19,13 @@ type Dialog =
   | { kind: 'role'; user: PublicUser; role: Role }
   | { kind: 'secret'; user: PublicUser; password: string };
 
-const COLUMNS = ['Name', 'Email', 'Role', 'Status', 'Last login', ''];
+/**
+ * Admin > Agents, laid out like the other admin pages - Jeel, 2026-09-28: one
+ * card, the grey header band, the email under the name as the phone sits under
+ * a lead's, role and status as an icon and words, and each row's actions behind
+ * one "⋯" menu instead of three text buttons.
+ */
+const COLUMNS = ['Agent', 'Role', 'Status', 'Last login', ''];
 
 function ConfirmDialog({
   title,
@@ -77,7 +84,7 @@ function SkeletonRows() {
         <tr key={row} aria-hidden="true">
           {COLUMNS.map((_, col) => (
             <td key={col}>
-              <span className="skeleton" style={{ width: col === 5 ? 80 : `${50 + ((row + col) % 3) * 15}%` }} />
+              <span className="skeleton" style={{ width: col === 4 ? 24 : `${50 + ((row + col) % 3) * 15}%` }} />
             </td>
           ))}
         </tr>
@@ -139,9 +146,9 @@ export function AgentsPage() {
           </Banner>
         ) : null}
 
-        <section className="panel">
+        <section className="card table-card">
           <div className="table-wrap">
-            <table className="table">
+            <table className="table data-table">
               <thead>
                 <tr>
                   {COLUMNS.map((column, index) => (
@@ -153,85 +160,66 @@ export function AgentsPage() {
                 {users === null && !loadError ? <SkeletonRows /> : null}
                 {users?.map((user) => {
                   const isMe = user.id === me.id;
+                  const actions: RowMenuItem[] = [
+                    {
+                      label: user.role === 'superadmin' ? 'Make agent' : 'Make superadmin',
+                      onSelect: () =>
+                        setDialog({ kind: 'role', user, role: user.role === 'superadmin' ? 'agent' : 'superadmin' }),
+                    },
+                    { label: 'Reset password', onSelect: () => setDialog({ kind: 'reset', user }) },
+                    user.isActive
+                      ? { label: 'Deactivate', danger: true, onSelect: () => setDialog({ kind: 'deactivate', user }) }
+                      : {
+                          label: 'Reactivate',
+                          onSelect: async () => {
+                            try {
+                              replaceUser(await updateUser(user.id, { isActive: true }));
+                              setFlash(`${user.name} can sign in again.`);
+                            } catch (err) {
+                              setLoadError(toApiError(err).message);
+                            }
+                          },
+                        },
+                  ];
                   return (
                     <tr key={user.id} className={user.isActive ? undefined : 'table__row--inactive'}>
                       <td>
-                        <span className="table__name">
+                        <span className="cell-name agents__name">
                           {user.name}
-                          {isMe ? <Badge tone="muted">You</Badge> : null}
+                          {isMe ? <span className="agents__you">You</span> : null}
                         </span>
+                        <span className="agents__email">{user.email}</span>
                       </td>
-                      <td>{user.email}</td>
                       <td>
-                        {user.role === 'superadmin' ? <Badge tone="navy">Superadmin</Badge> : <Badge>Agent</Badge>}
+                        <span className="status">
+                          <StatusIcon name={user.role === 'superadmin' ? 'shield' : 'person'} />
+                          {user.role === 'superadmin' ? 'Superadmin' : 'Agent'}
+                        </span>
                       </td>
                       <td>
                         {!user.isActive ? (
-                          <Badge tone="muted" dot>
+                          <span className="status status--muted">
+                            <StatusIcon name="ban" />
                             Inactive
-                          </Badge>
+                          </span>
                         ) : user.mustChangePassword ? (
-                          <Badge tone="warning" dot>
+                          <span className="status status--warning">
+                            <StatusIcon name="clock" />
                             Pending first sign-in
-                          </Badge>
+                          </span>
                         ) : (
-                          <Badge tone="success" dot>
+                          <span className="status">
+                            <StatusIcon name="check" />
                             Active
-                          </Badge>
+                          </span>
                         )}
                       </td>
-                      <td className="tabular">{formatLastLogin(user.lastLoginAt)}</td>
-                      <td>
-                        {isMe ? (
-                          <div className="table__actions">
-                            <span className="field__hint">Manage your password from your menu</span>
-                          </div>
-                        ) : (
-                          <div className="table__actions">
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() =>
-                                setDialog({
-                                  kind: 'role',
-                                  user,
-                                  role: user.role === 'superadmin' ? 'agent' : 'superadmin',
-                                })
-                              }
-                            >
-                              {user.role === 'superadmin' ? 'Make agent' : 'Make superadmin'}
-                            </Button>
-                            <Button variant="ghost" size="sm" onClick={() => setDialog({ kind: 'reset', user })}>
-                              Reset password
-                            </Button>
-                            {user.isActive ? (
-                              <Button
-                                key="deactivate"
-                                variant="danger-ghost"
-                                size="sm"
-                                onClick={() => setDialog({ kind: 'deactivate', user })}
-                              >
-                                Deactivate
-                              </Button>
-                            ) : (
-                              <Button
-                                key="reactivate"
-                                variant="ghost"
-                                size="sm"
-                                onClick={async () => {
-                                  try {
-                                    replaceUser(await updateUser(user.id, { isActive: true }));
-                                    setFlash(`${user.name} can sign in again.`);
-                                  } catch (err) {
-                                    setLoadError(toApiError(err).message);
-                                  }
-                                }}
-                              >
-                                Reactivate
-                              </Button>
-                            )}
-                          </div>
-                        )}
+                      <td className="cell-muted">{formatLastLogin(user.lastLoginAt)}</td>
+                      <td className="agents__actions">
+                        {/* Your own row has no menu: changing your own role or
+                            deactivating yourself would lock you out, and your
+                            password is changed from your menu. */}
+                        {isMe ? null : <RowMenu label={`Actions for ${user.name}`} items={actions} />}
                       </td>
                     </tr>
                   );

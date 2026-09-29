@@ -9,6 +9,8 @@
  */
 
 import { queueTag, type QueueTag } from '../core/queue-tags';
+import { CLOSED_SQL } from './lead-state';
+import { likeLiteral } from './sql';
 import { pool } from './pool';
 
 export interface QueueRow {
@@ -26,7 +28,8 @@ export interface QueueRow {
   q2: string | null;
   q3: string | null;
   conversationStatus: 'open' | 'completed' | 'review' | 'expired';
-  tag: QueueTag;
+  /** `null` when there is nothing to say: the lead is waiting to be picked up. */
+  tag: QueueTag | null;
 }
 
 export interface QueueQuery {
@@ -54,9 +57,8 @@ const DEFAULT_LIMIT = 100;
 const MAX_LIMIT = 500;
 
 /**
- * One row per lead: the newest conversation, the agent holding it, how many
- * calls have been made, and the soonest callback still to be done. Lateral
- * joins rather than group-bys, so history cannot multiply rows.
+ * One row per lead: the newest conversation and the agent holding it. A
+ * lateral join rather than a group-by, so history cannot multiply rows.
  */
 const BASE = `
   FROM leads l
@@ -68,52 +70,70 @@ const BASE = `
     LIMIT 1
   ) c ON true
   LEFT JOIN users u ON u.id = l.assigned_to AND u.is_active
-  LEFT JOIN LATERAL (
-    SELECT count(*)::int AS calls FROM calls ca WHERE ca.lead_id = l.id
-  ) ca ON true
-  LEFT JOIN LATERAL (
-    SELECT cb.scheduled_at
-    FROM callbacks cb
-    WHERE cb.lead_id = l.id AND cb.done_at IS NULL
-    ORDER BY cb.scheduled_at
-    LIMIT 1
-  ) cb ON true
 `;
 
 /**
- * Who belongs in the queue.
+ * Who belongs in the queue: only leads that need a person - Jeel, 2026-09-28.
  *
- * - **Responders only.** A score above 0 means they have replied at least once;
- *   the queue is for people who showed interest, not everyone the partner sent.
- * - **Never a blocked number**, whatever its conversation says. An opt-out is
- *   absolute, and a live `dnc_list` row is the record of one.
- * - **Not suppressed**, which is the same lead from the conversation's side.
- * - **Not expired** - a conversation that timed out is closed, Jeel's decision
- *   2026-09-19 - *unless* the lead has texted since. That reply is unread and
- *   needs a human, so the lead comes back tagged `inbound_reply` until an agent
- *   opens it. STATE-MACHINE.md, "Expiry".
+ * It used to hold every responder, including a lead halfway through the
+ * questions. But question 3 asks how they want to be contacted, so a lead who
+ * has not reached it has not asked for a call - and one still answering would
+ * be interrupted by it. A lead is in when it has replied (a score above 0, or
+ * an unread message - below), its number is not blocked (a live `dnc_list`
+ * row, whatever the conversation says), and one of these holds:
+ *
+ * - **Completed** - answered all three, including how to contact them.
+ * - **Needs review** - replied, and we could not understand it.
+ * - **Inbound reply** - texted something the questions cannot handle: after
+ *   the conversation ended, or to an agent who took it over. Since the same day
+ *   that is exactly what `has_unread_inbound` means - STATE-MACHINE.md, rules 2
+ *   and 2b - so the flag can stand on its own here.
+ * - **Being worked** - an active agent holds it, or a callback is booked. A
+ *   lead must never vanish from under the agent working it, whatever its
+ *   conversation says.
+ *
+ * **A closed lead leaves** - Jeel, 2026-09-28. Once an agent has pressed
+ * Closed (`db/lead-state.ts`), completing the questions, needing review or an
+ * older callback no longer keeps it here. Two things still do: an agent
+ * holding it, so it does not vanish while they save and move on; and a new
+ * message from the lead, which a person must read. A callback booked after
+ * closing reopens the lead altogether.
+ *
+ * A lead partway through the questions is on Admin > Leads only.
+ *
+ * **An unread message counts as having replied** - 2026-09-28, from review. A
+ * lead who never answered a question has a score of 0, so one who texts "please
+ * call me" on day 9 - or STOPs, STARTs, then writes - was flagged for a person
+ * and then kept out of the queue by `score > 0`, where no person would ever see
+ * it.
+ *
+ * **A lead someone holds is always here** - Jeel, 2026-09-29. `score > 0` used
+ * to come first, so a lead picked up before it answered anything - possible
+ * from Admin > Leads - read Working there but was missing from the queue,
+ * including for the person holding it. Holding now stands on its own; the
+ * score test applies to everything else.
  */
 const INCLUDED = `
-  c.score > 0
-  AND NOT EXISTS (
+  NOT EXISTS (
     SELECT 1 FROM dnc_list d WHERE d.phone = l.phone AND d.released_at IS NULL
   )
   AND (
-    c.status IN ('open', 'completed', 'review')
-    OR (c.status = 'expired' AND l.has_unread_inbound)
+    u.id IS NOT NULL
+    OR l.has_unread_inbound
+    OR (
+      c.score > 0
+      AND NOT ${CLOSED_SQL}
+      AND (
+        c.status IN ('completed', 'review')
+        OR EXISTS (
+          SELECT 1 FROM callbacks cb WHERE cb.lead_id = l.id AND cb.done_at IS NULL
+        )
+      )
+    )
   )
 `;
 
 const RECEIVED = `COALESCE(l.ezt_added_at, l.created_at)`;
-
-/**
- * Escapes what the agent typed for LIKE. Without this a search box holding "%"
- * or "_" is a wildcard and matches leads it has nothing to do with.
- * Backslash is LIKE's own default escape character, so no ESCAPE clause.
- */
-function likeLiteral(text: string): string {
-  return text.replace(/[\\%_]/g, (c) => `\\${c}`);
-}
 
 function buildFilters(query: QueueQuery, values: unknown[]): string {
   const clauses: string[] = [INCLUDED];
@@ -161,10 +181,12 @@ interface QueueDbRow {
   q1: string | null;
   q2: string | null;
   q3: string | null;
+  agent_id: number | null;
   agent_name: string | null;
   has_unread_inbound: boolean;
-  calls: number | null;
-  next_callback_at: Date | null;
+  callback_agent_id: number | null;
+  callback_agent_name: string | null;
+  callback_at: Date | null;
 }
 
 /**
@@ -185,9 +207,17 @@ export async function listQueue(query: QueueQuery = {}): Promise<QueuePage> {
     `SELECT l.id, l.phone, l.first_name, l.last_name, l.source,
             ${RECEIVED} AS received_at,
             c.score, c.tier, c.status, c.q1, c.q2, c.q3,
-            u.name AS agent_name, l.has_unread_inbound,
-            ca.calls, cb.scheduled_at AS next_callback_at
+            u.id AS agent_id, u.name AS agent_name, l.has_unread_inbound,
+            ncb.agent_id AS callback_agent_id, ncb.agent_name AS callback_agent_name,
+            ncb.scheduled_at AS callback_at
      ${BASE}
+     LEFT JOIN LATERAL (
+       SELECT cb.agent_id, cu.name AS agent_name, cb.scheduled_at
+       FROM callbacks cb JOIN users cu ON cu.id = cb.agent_id
+       WHERE cb.lead_id = l.id AND cb.done_at IS NULL
+       ORDER BY cb.scheduled_at, cb.id
+       LIMIT 1
+     ) ncb ON true
      ${where}
      ORDER BY c.score DESC, ${RECEIVED} DESC, l.id DESC
      LIMIT ${limit}`,
@@ -240,11 +270,16 @@ export async function listQueue(query: QueueQuery = {}): Promise<QueuePage> {
       conversationStatus: r.status,
       tag: queueTag({
         conversationStatus: r.status,
-        answers: [r.q1, r.q2, r.q3],
-        assignedAgentName: r.agent_name,
+        holder: r.agent_id === null ? null : { id: r.agent_id, name: r.agent_name ?? 'Another agent' },
         hasUnreadInbound: r.has_unread_inbound,
-        callCount: r.calls ?? 0,
-        nextCallbackAt: r.next_callback_at?.toISOString() ?? null,
+        nextCallback:
+          r.callback_agent_id === null || !r.callback_at
+            ? null
+            : {
+                agentId: r.callback_agent_id,
+                agentName: r.callback_agent_name ?? 'Another agent',
+                at: r.callback_at.toISOString(),
+              },
       }),
     })),
     counts: byTier,

@@ -17,7 +17,10 @@ Code: `backend/src/api/webhooks.ts`. Payload shape: `docs/EZTEXTING-API.md`.
 3. Find the lead by phone. **If there is none, stop**: log it, opt the number
    out if the reply was a STOP, return 200, and create nothing - see below.
 4. Insert the message, deduped on `(from_number, received_at)`.
-5. Set `leads.has_unread_inbound`.
+5. ~~Set `leads.has_unread_inbound`.~~ *(2026-09-28: set only when a person has
+   to read the reply, and after the state machine has run, since it decides -
+   `STATE-MACHINE.md`, "Which replies need a person". An answer, an unclear
+   reply and an opt-out are never flagged.)*
 6. If it is an opt-out, add to `dnc_list` and suppress any open conversation. A
    lead can opt out with no open conversation - already completed, for instance -
    and the `dnc_list` row is what blocks future contact either way.
@@ -77,7 +80,14 @@ URL, so only EZ Texting and we know it.
 
 A wrong or missing token gets 404 rather than 401, so probing the base path
 gives nothing away. When the variable is unset the plain path is accepted,
-which keeps local `curl` testing simple - production should always set it.
+which keeps local `curl` testing simple.
+
+**Production will not start without it - Jeel, 2026-09-29.** Unset, or shorter
+than 16 characters, and the API logs `api.refused_start` with reason
+`no_webhook_token` and exits, alongside the existing check on a weak
+`JWT_SECRET` - `api/startup-checks.ts`. Before this it was only a line in
+`.env.example`, and forgetting it left the webhook open to anyone who found the
+URL: a fake reply could answer a lead's questions or opt them out.
 
 Generate one with:
 
@@ -131,9 +141,18 @@ For the same reason a failed send still returns 200: a retry would not re-send.
 re-reading the text. The handler decides whether the reply *is* an opt-out,
 because it holds the keyword list; the core decides what that means.
 
+**`blockNumber` and `releaseNumber` live in `db/dnc.ts`,** not in this file.
+They were locals here until task 8 gave them a second caller - an agent's DNC
+disposition, `AGENT-WORKSPACE.md`. Moved rather than copied: a compliance table
+with two insert statements is a table that eventually holds two shapes of row.
+Every path that blocks a number - a STOP reply, the poller finding a contact
+already opted out, an agent's disposition - writes the same upsert, and only a
+row with `released_at IS NULL` blocks anything. The keyword lists and the
+decision of what counts as an opt-out stay here.
+
 A send to a number on `dnc_list` is refused inside `sendMessage`, so a reply
 arriving after a STOP from elsewhere advances the conversation but sends
-nothing. The log line reads `NOT sent=` in that case.
+nothing. The `conversation.advanced` log line says `"sent": false` in that case.
 
 ## Not done yet
 

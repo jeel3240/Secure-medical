@@ -20,6 +20,13 @@ export interface Conversation {
   invalidCount: number;
   score: number;
   tier: string | null;
+  /**
+   * When an agent sent the first manual SMS, or null. Set by the agent SMS
+   * endpoint, never by this module. Once it is set the questions stop - rule
+   * 2b. A timestamp rather than a flag because the timeline shows the moment
+   * the handoff happened.
+   */
+  agentTookOverAt?: Date | string | null;
 }
 
 export interface Reply {
@@ -69,6 +76,15 @@ export interface StepResult {
   send: MessageKey | null;
   /** The caller adds the phone to `dnc_list`. */
   blockNumber: boolean;
+  /**
+   * The reply is not something the questions can handle, so a person has to
+   * read it: the caller sets `leads.has_unread_inbound`, which is what the
+   * queue shows as Inbound reply. True only for rules 2 and 2b - a message
+   * after the conversation ended, or to an agent who took it over. An answer,
+   * an unclear reply and an opt-out are all handled here, and flagging them
+   * made every responder read as an inbound reply. Jeel, 2026-09-28.
+   */
+  needsPerson: boolean;
 }
 
 function points(rules: Rules, code: string): number {
@@ -120,14 +136,28 @@ export function step(conversation: Conversation, reply: Reply, rules: Rules): St
         conversation.status === 'open' ? { ...conversation, status: 'suppressed' } : conversation,
       send: null,
       blockNumber: true,
+      needsPerson: false,
     };
   }
 
   // 2. Not open. completed, review, expired and suppressed are final for that
-  // conversation: the caller stores the message and flags the lead, and a human
-  // picks it up.
+  // conversation: the caller stores the message and flags the lead, and a
+  // person picks it up.
   if (conversation.status !== 'open') {
-    return { conversation, send: null, blockNumber: false };
+    return { conversation, send: null, blockNumber: false, needsPerson: true };
+  }
+
+  // 2b. An agent has taken the conversation over - Jeel, 2026-09-23. Once an
+  // agent has sent a manual SMS the questions stop: the lead is answering the
+  // agent, not us, and an automated "Question 2 of 3" landing on top of that
+  // reads as a broken system. The reply is stored and the lead is flagged
+  // unread by the caller, exactly as in rule 2; nothing is scored and nothing
+  // is sent. The score earned so far is kept as it stands.
+  //
+  // Below rule 1 deliberately: an opt-out can never depend on whether an agent
+  // happened to text first.
+  if (conversation.agentTookOverAt) {
+    return { conversation, send: null, blockNumber: false, needsPerson: true };
   }
 
   const current = conversation.step ?? 1;
@@ -147,10 +177,18 @@ export function step(conversation: Conversation, reply: Reply, rules: Rules): St
         conversation: { ...scored, invalidCount: scored.invalidCount + 1 },
         send: `message_clarify_${current}` as MessageKey,
         blockNumber: false,
+        needsPerson: false,
       };
     }
 
-    return { conversation: { ...scored, status: 'review' }, send: 'message_review', blockNumber: false };
+    // Not flagged: the review status is what brings this lead to a person, and
+    // Inbound reply would outrank Needs review and hide why.
+    return {
+      conversation: { ...scored, status: 'review' },
+      send: 'message_review',
+      blockNumber: false,
+      needsPerson: false,
+    };
   }
 
   // 3. A valid answer. Store it, reset the unclear count - a lead who fumbles
@@ -171,6 +209,7 @@ export function step(conversation: Conversation, reply: Reply, rules: Rules): St
       conversation: advanced,
       send: `question_${current + 1}` as MessageKey,
       blockNumber: false,
+      needsPerson: false,
     };
   }
 
@@ -180,5 +219,5 @@ export function step(conversation: Conversation, reply: Reply, rules: Rules): St
     scoreAfterAnswer + points(rules, 'completed')
   );
 
-  return { conversation: finished, send: 'message_thanks', blockNumber: false };
+  return { conversation: finished, send: 'message_thanks', blockNumber: false, needsPerson: false };
 }

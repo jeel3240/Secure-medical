@@ -9,18 +9,56 @@ tag). Flow rules it depends on: `STATE-MACHINE.md`.
 
 ## Who is in it
 
-Responders only. Someone the partner sent who never texted back is not an
-agent's problem, and burying HOT leads under them is the reason this list and
-Admin > Leads are separate pages - `ADMIN-LEADS.md`.
+**Only leads that need a person - Jeel, 2026-09-28.** It used to hold every
+responder, a lead halfway through the questions included. But question 3 asks
+how they want to be contacted: a lead who has not reached it has not asked for
+a call, and one still answering would be interrupted by it. Agents contact
+people who have given them a reason to.
 
-A lead is in the queue when all of these hold:
+A lead is in the queue when it has replied, its number is not blocked, and one
+of the four reasons below holds:
 
-| Rule | Why |
+| Always | Why |
 |---|---|
-| Score above 0 | Scoring starts at the first reply, so a score is the mark of a responder. Nothing else on the row proves a reply as cheaply. |
+| Score above 0, **or an unread message** | Scoring starts at the first reply, so a score is the mark of a responder. An unread message counts too (2026-09-28, from review): a lead who never answered a question has a score of 0, so one who texts "please call me" on day 9 - or STOPs, STARTs, then writes - was flagged for a person and then kept out of the queue, where nobody would see it |
 | No live `dnc_list` row for the phone | An opt-out is absolute. A row released by START (`released_at` set) does not count - `STATE-MACHINE.md`, "Opting back in". |
-| Newest conversation is `open`, `completed` or `review` | `suppressed` is an opt-out from the conversation's side. |
-| …or `expired` **and** the lead has an unread inbound | Expired leads leave the queue - Jeel, 2026-09-19 - but a lead who texts us afterwards comes back until an agent reads it. |
+
+| And one of | Why a person is needed |
+|---|---|
+| Newest conversation `completed` | Answered all three, including how to contact them |
+| Newest conversation `review` | Replied, and we could not understand it |
+| `has_unread_inbound` | Texted something the questions cannot handle - after the conversation ended, or to an agent who took it over. `STATE-MACHINE.md`, "Which replies need a person" |
+| An active agent holds it, or a callback is booked | Being worked. A lead must never vanish from under the agent working it, whatever its conversation says - this is also what keeps an expired lead with a callback, as the 2026-09-19 rule intended |
+
+**Holding a lead needs no score - Jeel, 2026-09-29.** Everything else in the
+queue has replied (score above 0) or has an unread message. A held lead did
+too, until a test picked one up from Admin > Leads before it answered: it read
+Working there but was missing from the queue, even for the admin holding it.
+Holding now stands on its own (`db/queue.ts`, `INCLUDED`); once let go, such a
+lead leaves until it replies.
+
+**A closed lead leaves - Jeel, 2026-09-28.** Once an agent presses Closed,
+none of the four reasons above keeps the lead - not completing, not needing
+review, not a callback booked before it was closed. Saving the outcome also
+releases the lead, so it leaves the moment Closed is saved (Jeel, 2026-09-29;
+until then it stayed as "Working – name" until the agent pressed Back to
+queue, though nobody needed to pick it up). Three things still keep one in:
+
+| Keeps a closed lead in | Why |
+|---|---|
+| An agent picks it up again | Someone is deliberately working it again |
+| `has_unread_inbound` | The lead texted after closing, and a person has to read it. It shows as Inbound reply |
+| A callback booked after closing, not yet done | It is not finished after all - "call me Friday". That reopens the lead altogether |
+
+"Closed" is defined once, in `backend/src/db/lead-state.ts`, and Admin > Leads
+uses the same definition (`ADMIN-LEADS.md`, "Closed"). Before this, the queue
+did not read `dispositions` at all, so a finished lead stayed at the top for
+the next agent to call again.
+
+A lead partway through the questions is on Admin > Leads, under *Answering*,
+and nowhere an agent works from. Someone who stops for good expires after the
+reply window and never reaches the queue - accepted: they never said how, or
+whether, they wanted to be contacted.
 
 Only the newest conversation counts. Older ones are history and are not
 consulted, so a lead who completed a second conversation is not dragged back by
@@ -36,30 +74,53 @@ freshness". Id last so the order never wobbles between two identical rows.
 
 ## The tag
 
-One tag per row, computed, never stored, so it stays true as calls and
-callbacks happen. The API returns what is true and the screen words it: `{ kind:
-'in_progress', agentName: 'Michael' }` becomes "In progress - Michael".
+At most one tag per row - the STATUS column - computed, never stored. The API
+returns what is true and the screen words it: `{ kind: 'working', agentId: 7,
+agentName: 'Michael' }` becomes "Working – Michael".
 
-Several can apply at once, so they are ranked by what an agent most needs to
-know:
+*(It read "In progress – Michael" until later on 2026-09-28. Jeel: Working, the
+same word Admin > Leads uses for a lead an agent is on, so "In progress" no
+longer means two things. The API's `kind` followed in the code-quality pass the
+same day - `in_progress` became `working` - and gained `agentId`, so the lock
+matches the holder by id. The queue says Working only while someone holds the
+lead, while Admin > Leads keeps saying Working after it is released -
+`ADMIN-LEADS.md`.)*
+
+**Few, and most rows have none - Jeel, 2026-09-28.** A tag answers the
+two questions an agent scanning the queue has: is somebody already on this, and
+why is it here? When several apply, the first wins:
 
 | # | `kind` | Shown when | Carries |
 |---|---|---|---|
-| 1 | `in_progress` | An **active** agent holds the lead | `agentName` |
-| 2 | `callback` | A callback is booked and not done | `callbackAt` - the soonest |
-| 3 | `inbound_reply` | The lead has texted and nobody has read it | |
+| 1 | `working` | An **active** agent holds the lead | `agentId`, `agentName` |
+| 2 | `inbound_reply` | The lead has texted and nobody has read it | |
+| 3 | `callback` | A callback is booked and not done - the soonest one. "Callback – Maya Chen · 8:13 PM", with the date when not today. Does not lock the row | `agentId`, `agentName`, `at` |
 | 4 | `needs_review` | Conversation `review`: replies we could not read | |
-| 5 | `stalled` | Conversation `open`, one or two answers in | `step` - the number of answers |
-| 6 | `attempted` | Calls have been made and none connected | `attempts` |
-| 7 | `new` | Nothing has happened yet | |
+| - | `null` | None of those: the lead is waiting to be picked up. The screen shows a hyphen | |
 
-Two things worth knowing:
+**Callback came back - Jeel, 2026-09-29.** Testing showed the cost of
+dropping it: a lead waiting on Maya's callback said nothing, so another agent
+could pick it up and call first. It returns naming whose callback it is, which
+answers the first of the two questions - is somebody already on this? It ranks
+below an unread reply, which needs reading whoever's call it is.
 
-- **`stalled` counts answers, not the pending question.** `step: 2` is a lead
-  who answered Q1 and Q2 and went quiet, and the screen writes it "Stalled at
-  Q2". `step` is therefore only ever 1 or 2 - a third answer completes the
-  conversation. It is never set for an `expired` conversation, which is closed
-  rather than waiting: `STATE-MACHINE.md`, "Expiry".
+**What was dropped, and why.** There were three more: `new` ("New"),
+`attempted` ("Attempted 2x") and `callback` ("Callback 3:00 PM"). Call history
+and callback times belong to the agent working the lead - their callbacks are on
+My Callbacks, every call is in the lead's timeline - and on the home page they
+gave every row something to say, so nothing stood out. `new` went with them:
+without the other two, a lead called twice by nobody currently holding it would
+have read "New" again.
+
+A booked callback still keeps a lead **in** the queue ("Who is in it" above),
+unless the lead is closed. It no longer changes what the row says.
+
+*(Earlier the same day there was also a `stalled` tag - "Stalled at Q1 / Q2" -
+for a lead partway through. Partway leads are no longer in the queue, so it
+could never be shown and is gone.)*
+
+One thing worth knowing:
+
 - **A claim by a deactivated agent is ignored.** `assigned_to` is joined through
   `users.is_active`, so deactivating an agent hands their held leads back to the
   floor instead of parking them behind a name nobody can sign in as.
@@ -93,7 +154,7 @@ reaches `LIKE`: a `%` in the search box is the character, not a wildcard.
   "leads": [ { "id": 7, "phone": "+1…", "firstName": "…", "lastName": "…",
                "source": "CORE-G-27", "receivedAt": "…", "score": 90,
                "tier": "HOT", "q1": "3", "q2": "1", "q3": "1",
-               "conversationStatus": "completed", "tag": { "kind": "new" } } ],
+               "conversationStatus": "completed", "tag": null } ],
   "counts":  { "all": 12, "HOT": 4, "WARM": 5, "LOW": 3 },
   "sources": ["CORE-G-27", "CORE-G-31"],
   "total":   12,
@@ -101,7 +162,7 @@ reaches `LIKE`: a `%` in the search box is the character, not a wildcard.
 }
 ```
 
-`counts` feeds the header pills, which are also the tier filter, so it is
+`counts` feeds the tier switcher (All, Hot, Warm, Low with their counts), which is also the tier filter, so it is
 counted **without** the tier filter - otherwise picking HOT would zero the other
 two and the agent would lose sight of what is waiting. `sources` is the dropdown
 and is counted without the source filter, for the same reason: picking one
@@ -130,20 +191,137 @@ question copy in `settings`, which a superadmin can edit.
   `ADMIN-LEADS.md` already does - at 50-100 leads a day an agent cannot tell it
   from a push, and it needs nothing new on the server. The fetching goes in one
   place so a real push can replace it later without touching the screens.)*
-- **No claiming.** `assigned_to` is read here, never written. The one-agent lock
-  is Week 3 item 3.
-- **Nothing clears `has_unread_inbound`.** An expired lead who texted back is
-  meant to drop out of the queue once an agent opens it. No code unsets the
-  flag, so for now it stays. `STATE-MACHINE.md`, "Expiry".
+  **Built 2026-09-26** as `frontend/src/api/usePolling.ts`, Phase 3 task 14 -
+  see "The polling hook" below.
+- **Claiming is written elsewhere.** `assigned_to` is read here, never written.
+  `POST /api/leads/:id/claim` and `/release` do that - Phase 3 task 2,
+  `AGENT-WORKSPACE.md`.
+- **`has_unread_inbound` is cleared by `POST /api/leads/:id/read`** - Phase 3
+  task 3. Until it existed nothing unset the flag, so an expired lead who texted
+  back stayed in the queue however often an agent read the message. Proved
+  against a real database: such a lead leaves the queue once read, while a lead
+  whose conversation is still open stays, because the flag was never what was
+  keeping it there. `STATE-MACHINE.md`, "Expiry".
 - **No paging.** `limit` truncates and `total` says by how much; at 50-100 leads
   a day the default of 100 holds several days of queue. Page when it does not.
 
 ## Proving it
 
 The tag rules and the route have unit tests (`queue-tags.test.ts`,
-`api/__tests__/queue.test.ts`, 41 tests). Neither touches the SQL, which is
+`api/__tests__/queue.test.ts`). Neither touches the SQL, which is
 where most of the rules above actually live, so
 `backend/scripts/queue-live-check.ts` seeds one lead per case in a scratch
 database and asserts what comes back - inclusion, exclusion, order, every tag,
 each filter, the counts. The header of that file says how to run it. Last run
-2026-09-22: 36 checks, all passing.
+2026-09-28: 39 checks, all passing - including a partway lead kept out, and
+three partway leads kept in because they are held, booked, or taken over and
+replied to; and a booked callback and two call attempts that keep or leave a
+lead in the queue but show no tag. Removing any one of the four reasons fails
+it.
+
+## The polling hook
+
+`frontend/src/api/usePolling.ts`. Every live screen fetches through it: the
+queue, the workspace, the timeline, My Callbacks and the three admin pages.
+
+```ts
+const fetcher = useCallback(() => listQueue({ tier, source, since, q }), [tier, source, since, q]);
+const { data, loading, error, refresh, updatedAt } = usePolling(fetcher);
+```
+
+**One place, so a push can replace it.** `POLL_MS` is 5000 and the interval
+lives here alone. Swapping polling for websockets later means rewriting this
+file and nothing else. `admin/LeadsPage.tsx` had its own copy of the interval
+before this task and now uses the hook; copying it to eleven more screens is how
+a codebase ends up with five different refresh behaviours.
+
+**What it guarantees, and why each one is tested rather than eyeballed:**
+
+| Behaviour | Why it matters |
+|---|---|
+| `data` survives a tick | The table must not blank out every five seconds |
+| `loading` is true only when there is nothing to show | A spinner on every tick makes the screen flicker |
+| An error keeps the last good `data` | A dropped connection shows a banner over stale rows, not a blank page - the design brief's "Live updates paused" |
+| A stale response is discarded | A slow request from a filter the agent has already changed must not overwrite the current view |
+| The timer stops on unmount | Otherwise it polls forever and sets state on a dead component |
+| `refresh()` fetches now | So a claim or a note appears at once instead of up to 5s later |
+| `keepPreviousData` keeps the old data through a switch | Opt-in, 2026-09-28: Overview's period, this queue's tier and search, Admin > Leads' status and the DNC list's state. The page stays and the old rows fade while `switching` is true, instead of blanking for a spinner. Faded rows are also unclickable (`.is-switching`), so nobody picks up a lead from the list they just switched away from |
+
+**The fetcher must be stable** - wrapped in `useCallback` with the filters as
+dependencies. When it changes that counts as a new view: the spinner returns and
+the old rows are cleared, because rows fetched under the old filter do not
+belong under the new one. A fetcher rebuilt on every render would clear the data
+on every render.
+
+`frontend/src/api/usePolling.test.ts` covers all seven rows above. None of them is
+visible in a browser, which is why they are tested at all - the screens
+themselves are judged by eye.
+
+## The one-agent lock on screen
+
+`frontend/src/lib/lock.ts`, Phase 3 task 16. The rule is enforced on the
+server - `db/claims.ts`, and no screen is trusted with it - but the queue has to
+decide which rows to mute before anyone clicks.
+
+A row is locked when its tag is `working` and someone else holds it. Three
+ways it is not:
+
+| Case | Why |
+|---|---|
+| Nobody holds it | The usual case |
+| You hold it | Reopening your own claim is the normal way back into a lead; locking an agent out of it would strand them |
+| You are a superadmin | They need to see what an agent is stuck on |
+
+A locked row is muted, carries a `Locked` badge instead of a button, has a
+tooltip naming the holder, and has no click handler at all - the lock has to be
+felt, not only seen.
+
+### What the button offers - 2026-09-28
+
+Not locked is not the same as claimable, and for a while the screen treated them
+as the same thing: every unlocked row said **Pick** (now **Pick up**), including rows where the
+server would refuse the claim. A superadmin looking at a lead another agent held
+got a button that always returned 409. `rowAction()` now answers the narrower
+question - what may this person actually do:
+
+| `rowAction` | When | Button | What it does |
+|---|---|---|---|
+| `pick` | Nobody holds it | **Pick up** | Claims it, opens the workspace |
+| `resume` | You hold it | **Resume** | Back into your own lead. Re-claiming your own lead succeeds, but "Pick" implies taking something you already have. While it checks, the button reads *Opening...*, not *Picking...* |
+| `view` | Someone else holds it, you are a superadmin | **View** | Opens the read-only timeline. Claims nothing, and the holder keeps the lead |
+| `locked` | Someone else holds it, you are an agent | *Locked* | No action |
+
+**Resume still asks the server, and changes nothing.** It sends the same claim
+as Pick. For a lead that is already yours, `db/claims.ts` keeps `assigned_to`
+and the original `assigned_at` - the pick time does not move - and only
+`updated_at` changes. It asks at all because the queue on screen can be up to
+five seconds old: in that gap a superadmin may have released the lead and
+someone else picked it, and the claim is what finds out. Checked against the
+database 2026-09-28.
+
+**The row and the button do different things - 2026-09-28.** A row click only
+ever looks: it opens the workspace read-only, assigns nothing and leaves an
+unread reply unread. The button is the only thing that claims, and View opens
+the same read-only workspace. Locked rows are still not clickable at all.
+
+**Your own claim is tested before the superadmin rule.** Otherwise a superadmin
+working their own lead would be sent to the read-only page for a lead they are
+in the middle of.
+
+**`lockHolder()` is derived from `rowAction()`** rather than repeating the rule,
+so the muting and the button cannot drift apart.
+
+The same three states are on the Lead Timeline header, decided there by holder
+id because `GET /api/leads/:id` returns one.
+
+**A deactivated agent's claim counts as unlocked.** The queue joins `users` on
+`is_active`, so such a claim returns no holder and no `working` tag, and
+`db/claims.ts` lets anyone take the lead over. Muting it would strand the lead
+where nobody could open it. `rowAction()` also treats a `working` tag without a
+holder id as unlocked, for the same reason.
+
+**The holder is matched by id** - `agentId` on the tag, against the signed-in
+user's id. Until 2026-09-28 the endpoint returned only the name and the lock
+compared names, so two agents with the same name each saw the other's lead as
+their own "Resume" row and got a 409 on clicking it. Found in review;
+`lock.test.ts` covers two agents called "Sam Okonjo".

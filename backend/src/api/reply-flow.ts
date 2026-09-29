@@ -8,6 +8,7 @@
  * is the authority for the behaviour.
  */
 
+import { readExpiryDays, type Querier } from '../db/sql';
 import type { PoolClient } from 'pg';
 import { renderMessage } from '../core/messages';
 import {
@@ -17,6 +18,7 @@ import {
   type Rules,
   type StepResult,
 } from '../core/state-machine';
+import { errText, log } from '../lib/log';
 
 export interface ConversationRow extends Conversation {
   id: number;
@@ -39,7 +41,7 @@ export async function loadNewestConversation(
   leadId: number
 ): Promise<ConversationRow | null> {
   const { rows } = await client.query(
-    `SELECT id, status, step, q1, q2, q3, invalid_count, score, tier
+    `SELECT id, status, step, q1, q2, q3, invalid_count, score, tier, agent_took_over_at
      FROM conversations
      WHERE lead_id = $1
      ORDER BY created_at DESC, id DESC
@@ -60,6 +62,8 @@ export async function loadNewestConversation(
     invalidCount: r.invalid_count,
     score: r.score,
     tier: r.tier,
+    // Rule 2b: once this is set the state machine stops asking questions.
+    agentTookOverAt: r.agent_took_over_at,
   };
 }
 
@@ -97,10 +101,15 @@ async function saveConversation(client: PoolClient, id: number, c: Conversation)
   // expires_at is not touched here. It is the window the lead has to reply to a
   // message, so it moves only once that message has actually gone out - see
   // bumpExpiry, called after the send succeeds.
+  //
+  // completed_at is stamped the first time the conversation is saved as
+  // completed, and kept after - migration 004, for Admin > Overview's
+  // "Answered all 3".
   await client.query(
     `UPDATE conversations
      SET status = $2, step = $3, q1 = $4, q2 = $5, q3 = $6,
-         invalid_count = $7, score = $8, tier = $9, updated_at = now()
+         invalid_count = $7, score = $8, tier = $9, updated_at = now(),
+         completed_at = CASE WHEN $2 = 'completed' THEN COALESCE(completed_at, now()) ELSE completed_at END
      WHERE id = $1`,
     [id, c.status, c.step, c.q1, c.q2, c.q3, c.invalidCount, c.score, c.tier]
   );
@@ -150,16 +159,6 @@ export async function applyReply(
   };
 }
 
-interface Querier {
-  query: (sql: string, values?: unknown[]) => Promise<{ rows: Array<Record<string, unknown>> }>;
-}
-
-async function readExpiryDays(q: Querier): Promise<number> {
-  const { rows } = await q.query(`SELECT value FROM settings WHERE key = 'expiry_days'`);
-  const days = Number(rows[0]?.value);
-  return Number.isFinite(days) && days > 0 ? days : 7;
-}
-
 /**
  * Restarts the lead's reply window, after a message has actually gone out.
  *
@@ -184,8 +183,8 @@ async function bumpExpiry(q: Querier, conversationId: number): Promise<void> {
  *
  * A failure is logged and swallowed. The conversation has already advanced, and
  * rolling that back would mean re-asking a question the lead has answered; a
- * missing follow-up is the lesser problem. It is visible as a conversation
- * whose newest message is inbound.
+ * missing follow-up is the lesser problem. The refused message is kept as a
+ * failed one, so the thread shows it with a red "!" - `db/failed-sends.ts`.
  *
  * A failure also leaves `expires_at` where it was, so a lead who was never
  * actually messaged expires on schedule rather than a week late.
@@ -197,41 +196,46 @@ async function sendFlowMessage(
   firstName: string | null,
   key: MessageKey
 ): Promise<string | null> {
-  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
   const { pool } = require('../db/pool') as typeof import('../db/pool');
-  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
   const ezt = require('../integrations/ezt-client') as typeof import('../integrations/ezt-client');
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const { sendAndRecord } = require('../db/outbound') as typeof import('../db/outbound');
 
   try {
     const { rows } = await pool.query(`SELECT value FROM settings WHERE key = $1`, [key]);
     const template: string | undefined = rows[0]?.value;
     if (!template) {
-      console.error(`no ${key} in settings, nothing sent to lead ${leadId}`);
+      log.error('sms.no_template', { leadId, key });
       return null;
     }
 
     const { text, nameDropped } = renderMessage(template, firstName);
     if (nameDropped) {
-      console.log(`${key} for lead ${leadId}: name dropped to stay within one segment`);
+      log.info('sms.name_dropped', { leadId, key });
     }
 
-    const sent = await ezt.sendMessage([phone], text);
-
-    await pool.query(
-      `INSERT INTO messages (lead_id, direction, body, ezt_message_id)
-       VALUES ($1, 'outbound', $2, $3)`,
-      [leadId, text, sent.id]
-    );
+    // Recorded around the send so it is never sent twice nor marked refused
+    // after it went out - db/outbound.ts.
+    const result = await sendAndRecord(pool, {
+      leadId,
+      body: text,
+      send: () => ezt.sendMessage([phone], text),
+    });
+    if (!result.sent) {
+      log.error('sms.failed', { leadId, key, blocked: result.blocked, err: errText(result.err) });
+      return null;
+    }
 
     await bumpExpiry(pool, conversationId);
 
-    console.log(`sent ${key} to lead ${leadId}, ezt id ${sent.id}`);
-    return sent.id;
+    log.info('sms.sent', { leadId, key, eztMessageId: result.eztMessageId });
+    return result.eztMessageId;
   } catch (err) {
-    const detail =
-      (err as { response?: { data?: unknown } })?.response?.data ??
-      (err instanceof Error ? err.message : err);
-    console.error(`sending ${key} to lead ${leadId} failed:`, JSON.stringify(detail));
+    // Before the send: the template, or the database refusing the row. Nothing
+    // went out.
+    log.error('sms.failed', { leadId, key, err: errText(err) });
     return null;
   }
 }

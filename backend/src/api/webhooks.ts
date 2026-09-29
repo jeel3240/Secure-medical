@@ -1,4 +1,9 @@
 import { Request, Response, Router } from 'express';
+// Safe at module scope: db/dnc.ts imports nothing, taking its client as an
+// argument, so it does not drag in src/config the way db/pool does.
+import { blockNumber, DNC_REASONS, releaseNumber } from '../db/dnc';
+import { errText, log } from '../lib/log';
+import { asyncHandler } from './http';
 
 export const webhooksRouter = Router();
 
@@ -11,11 +16,11 @@ export const webhooksRouter = Router();
  * pool directly.
  */
 function deps() {
-  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
   const { pool } = require('../db/pool') as typeof import('../db/pool');
-  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
   const { toE164 } = require('../integrations/ezt-client') as typeof import('../integrations/ezt-client');
-  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
   const { applyReply } = require('./reply-flow') as typeof import('./reply-flow');
   return { pool, toE164, applyReply };
 }
@@ -52,10 +57,7 @@ interface InboundText {
  * number. CTIA's standard set.
  */
 /** dnc_list.reason for an opt-out that arrived as a reply, vs the poller's `ezt_opt_out`. */
-const STOP_REASON = 'sms_stop';
-
-/** dnc_list.released_reason when a lead texts START. */
-const START_REASON = 'sms_start';
+const STOP_REASON = DNC_REASONS.smsStop;
 
 /**
  * Opt-in keywords. EZ Texting re-subscribes the contact on its side and sets
@@ -82,47 +84,6 @@ function isOptIn(payload: InboundText): boolean {
 }
 
 /**
- * Lifts every live block on the number, keeping the row as the record.
- *
- * Every reason is released, including one an agent set - Jeel's decision,
- * 2026-09-22: someone who asks to be contacted again is asking whatever the
- * block was for. The dates stay on the row, so the history reads "blocked on
- * the 22nd, released on the 22nd".
- *
- * Returns how many rows were released, which is 0 when the number was not
- * blocked - a START from someone we never blocked changes nothing.
- */
-async function releaseNumber(
-  client: { query: (q: string, v?: unknown[]) => Promise<{ rows: any[]; rowCount: number | null }> },
-  phone: string
-): Promise<number> {
-  const { rowCount } = await client.query(
-    `UPDATE dnc_list
-     SET released_at = now(), released_reason = $2
-     WHERE phone = $1 AND released_at IS NULL`,
-    [phone, START_REASON]
-  );
-  return rowCount ?? 0;
-}
-
-/** Added without a lead, which the table allows: phone is its only key. */
-async function blockNumber(
-  client: { query: (q: string, v?: unknown[]) => Promise<{ rows: any[]; rowCount: number | null }> },
-  phone: string,
-  reason: string
-): Promise<void> {
-  // A number that opted out, was released, and opts out again reuses its row:
-  // the block is live again and the release dates are cleared.
-  await client.query(
-    `INSERT INTO dnc_list (phone, reason) VALUES ($1, $2)
-     ON CONFLICT (phone) DO UPDATE
-     SET reason = EXCLUDED.reason, added_at = now(),
-         released_at = NULL, released_reason = NULL`,
-    [phone, reason]
-  );
-}
-
-/**
  * EZ Texting sends no signature header, so the caller cannot be verified. The
  * fallback is a random segment in the path, known only to them and us: the
  * subscription is registered against /eztexting/<token>.
@@ -132,7 +93,7 @@ async function blockNumber(
  * curl testing simple - production should always set it.
  */
 function rejectBadToken(req: Request, res: Response): boolean {
-  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
   const { config } = require('../config') as typeof import('../config');
   const expected = config.ezt.webhookToken;
   const supplied = req.params.token ?? '';
@@ -140,7 +101,7 @@ function rejectBadToken(req: Request, res: Response): boolean {
   if (!expected) return false;
   if (supplied === expected) return false;
 
-  console.warn('webhook rejected: bad or missing path token');
+  log.warn('webhook.rejected', { reason: 'bad_token' });
   res.status(404).json({ error: 'not_found', message: 'No such endpoint.' });
   return true;
 }
@@ -153,12 +114,12 @@ const handleInbound = async (req: Request, res: Response) => {
   // Only inbound replies are handled. Anything else is acknowledged so EZ
   // Texting stops retrying it.
   if (payload?.type !== 'inbound_text.received') {
-    console.log(`webhook ignored: type=${payload?.type}`);
+    log.info('webhook.ignored', { reason: 'wrong_type', type: payload?.type });
     return res.sendStatus(200);
   }
 
   if (!payload.fromNumber || !payload.received || payload.message === undefined) {
-    console.warn('webhook missing fromNumber, received or message');
+    log.warn('webhook.ignored', { reason: 'missing_fields' });
     return res.sendStatus(200);
   }
 
@@ -186,11 +147,10 @@ const handleInbound = async (req: Request, res: Response) => {
       if (isOptIn(payload)) {
         const released = await releaseNumber(client, phone);
         await client.query('COMMIT');
-        console.log(
-          released
-            ? `webhook: ${phone} opted back in, block released (no lead)`
-            : `webhook: ignored reply from ${phone} - no lead for that number`
-        );
+        log.info(released ? 'dnc.released' : 'webhook.ignored', {
+          reason: released ? undefined : 'no_lead',
+          hasLead: false,
+        });
         return res.sendStatus(200);
       }
 
@@ -201,10 +161,10 @@ const handleInbound = async (req: Request, res: Response) => {
         await blockNumber(client, phone, STOP_REASON);
       }
       await client.query('COMMIT');
-      console.log(
-        `webhook: ignored reply from ${phone} - no lead for that number` +
-          (isOptOut(payload) ? ', added to dnc_list' : '')
-      );
+      log.info('webhook.ignored', {
+        reason: 'no_lead',
+        blocked: isOptOut(payload) || undefined,
+      });
       return res.sendStatus(200);
     }
 
@@ -225,11 +185,9 @@ const handleInbound = async (req: Request, res: Response) => {
 
     if (inserted.rowCount === 0) {
       await client.query('COMMIT');
-      console.log(`webhook: duplicate from ${phone} at ${payload.received}, ignored`);
+      log.info('webhook.ignored', { reason: 'duplicate', leadId });
       return res.sendStatus(200);
     }
-
-    await client.query('UPDATE leads SET has_unread_inbound = true WHERE id = $1', [leadId]);
 
     const optedOut = isOptOut(payload);
 
@@ -240,7 +198,7 @@ const handleInbound = async (req: Request, res: Response) => {
     if (isOptIn(payload)) {
       const released = await releaseNumber(client, phone);
       if (released) {
-        console.log(`webhook: ${phone} opted back in, block released`);
+        log.info('dnc.released', { leadId });
       }
     }
 
@@ -258,14 +216,24 @@ const handleInbound = async (req: Request, res: Response) => {
       await blockNumber(client, phone, STOP_REASON);
     }
 
+    // Flag the lead only when a person has to read this - Jeel, 2026-09-28.
+    // The flag is the queue's Inbound reply, and it used to be set on every
+    // reply, so a lead simply answering "1" read as one. The state machine
+    // decides: a message after the conversation ended, or to an agent who took
+    // it over. A lead with no conversation has nothing handling their message
+    // either. An opt-out never needs one - the block is the whole response.
+    const needsPerson = !optedOut && (pending === null || pending.result.needsPerson);
+    if (needsPerson) {
+      await client.query('UPDATE leads SET has_unread_inbound = true WHERE id = $1', [leadId]);
+    }
+
     await client.query('COMMIT');
 
     if (optedOut) {
-      console.log(
-        pending?.result.conversation.status === 'suppressed'
-          ? `webhook: ${phone} opted out, open conversation suppressed`
-          : `webhook: ${phone} opted out, added to dnc_list (no open conversation)`
-      );
+      log.info('dnc.blocked', {
+        leadId,
+        suppressed: pending?.result.conversation.status === 'suppressed',
+      });
     }
 
     // After the commit, deliberately: a failed send must not roll back an
@@ -277,23 +245,33 @@ const handleInbound = async (req: Request, res: Response) => {
       // Says what actually happened: a send can be refused (dnc_list) or fail
       // while the conversation still advances, and a log line claiming it went
       // out would hide exactly the case worth noticing.
-      console.log(
-        `webhook: lead ${leadId} -> ${c.status} step=${c.step ?? '-'}` +
-          ` score=${c.score} tier=${c.tier ?? '-'}` +
-          (sentId ? ` sent=${pending.result.send}` : ` NOT sent=${pending.result.send}`)
-      );
+      log.info('conversation.advanced', {
+        leadId,
+        status: c.status,
+        step: c.step,
+        score: c.score,
+        tier: c.tier,
+        send: pending.result.send,
+        // A send can be refused (dnc_list) or fail while the conversation still
+        // advances; a line claiming it went out would hide the case worth seeing.
+        sent: Boolean(sentId),
+      });
     }
 
     return res.sendStatus(200);
   } catch (err) {
     await client.query('ROLLBACK');
     // 500 so EZ Texting retries; the dedupe makes that safe.
-    console.error('webhook failed:', err instanceof Error ? err.message : err);
+    log.error('webhook.failed', { err: errText(err) });
     return res.sendStatus(500);
   } finally {
     client.release();
   }
 };
 
-webhooksRouter.post('/eztexting', handleInbound);
-webhooksRouter.post('/eztexting/:token', handleInbound);
+// Wrapped like every other route. `pool.connect()` runs before the handler's own
+// try, so a database blip used to be an unhandled rejection - which in Node 20
+// takes the whole API process down. Now it is a 500, which EZ Texting retries,
+// and the dedupe makes the retry safe. Found 2026-09-28.
+webhooksRouter.post('/eztexting', asyncHandler(handleInbound));
+webhooksRouter.post('/eztexting/:token', asyncHandler(handleInbound));

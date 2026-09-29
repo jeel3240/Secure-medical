@@ -23,8 +23,8 @@ expiry). Related: WEBHOOKS.md, POLLER.md, SCHEMA.md, the plan's §6.
 | `core/state-machine.ts` | `step()` and `tierFor()` - every branch below, and scoring |
 | `core/answers.ts` | `matchAnswer()` - the numbers and the word lists |
 | `api/reply-flow.ts` | Loads the conversation and rules, runs `step`, saves, sends |
-| `core/state-machine.test.ts` | 34 tests, one per case in "Tests the state machine needs" |
-| `api/__tests__/webhooks.test.ts` | 36, including the flow advancing through the webhook |
+| `core/state-machine.test.ts` | 54 tests, one per case in "Tests the state machine needs", plus which replies need a person |
+| `api/__tests__/webhooks.test.ts` | 41, including the flow advancing through the webhook and flagging a reply for a person |
 
 A reply now advances the conversation. Verified against the live account on
 2026-09-21: replies of 3, 1, 1 walked a lead from step 1 to `completed`, score
@@ -150,6 +150,23 @@ belongs to. From then on:
 `leads.has_unread_inbound`, send nothing. A human sees it on the lead. Already
 implemented.
 
+### Which replies need a person - Decided by Jeel, 2026-09-28
+
+`leads.has_unread_inbound` means *a person has to read this*, and it is set only
+when the questions cannot handle a reply: rule 2 above, and rule 2b below - a
+message to an agent who took the conversation over. `step()` returns this as
+`needsPerson`, so the rule lives beside the others; a lead with no conversation
+at all is flagged too, since nothing handles their message either.
+
+Never flagged: a valid answer, an unclear reply (the clarification, or the move
+to review, is the response - and `review` is how that lead reaches a person),
+and an opt-out.
+
+**Why.** The flag is the queue's *Inbound reply*, and it decides who is in the
+queue. It used to be set on every reply, so a lead simply answering "1" read as
+an inbound reply - every responder did. Migration 003 (part 2) cleared the flags that
+rule left behind: `SCHEMA.md`.
+
 ### 2b. An agent has taken the conversation over - Decided by Jeel, 2026-09-23
 
 Once an agent sends a manual SMS to a lead, the questions stop. The reply is
@@ -177,8 +194,21 @@ agent SMS is sent. The status does not change, so the queue tabs and Admin >
 Leads are unaffected, and expiry still applies - the agent's own callback and
 disposition are what track the lead from then on.
 
-*Not built: the agent SMS send is Phase 3. Until it exists, no conversation can
-be in this state.*
+**Built 2026-09-26** (Phase 3 task 9). `conversations.agent_took_over_at` is set
+by `POST /api/leads/:id/messages` - `db/agent-sms.ts` - and read by
+`api/reply-flow.ts`, which passes it to the state machine as `agentTookOverAt`.
+The rule sits between the not-open check and answer matching, so an opt-out is
+still decided first.
+
+The timestamp is set only on the first agent message, by `COALESCE`: the handoff
+happened then, and the tenth message should not rewrite when it happened. It is
+set only while the newest conversation is still `open` - texting a lead whose
+conversation already completed is not taking over a flow that is still running.
+
+A send that fails, or is refused because the number is on `dnc_list`, records no
+take-over: the questions must not stop on the strength of a message the lead
+never received. `scripts/agent-sms-live-check.ts` proves that, and proves a real
+reply after the handoff gets no question, no score and no clarification.
 
 ### 3. A valid answer to the current question
 
@@ -258,7 +288,9 @@ they are read when the reply is processed, never cached across replies.
 **Decided: score and tier are updated on every reply, not only on completion.**
 A lead who answers question 1 and goes quiet is a real responder, and the queue
 shows responders; with a score of 10 or more they carry a tier like everyone
-else. The schema doc explains why this is what fills the LOW band - completed
+else. *(2026-09-28: the queue no longer shows a lead partway through - only
+completed, needs review, an inbound reply, or one being worked - `QUEUE.md`. A
+partway lead still carries its running score and tier, on Admin > Leads.)* The schema doc explains why this is what fills the LOW band - completed
 conversations never score below 40.
 
 The tier is the `tiers` row whose range contains the score. A score of 0, which
@@ -288,8 +320,9 @@ covers both kinds:
 | Never replied, then expired | Not shown - the queue only ever shows responders |
 | Replied at least once, then went quiet and expired | Not shown either |
 
-Both stay visible on Admin > Leads under Expired. "Stalled at Q1" and "Stalled
-at Q2" therefore apply only to responders whose conversation is still `open`.
+Both stay visible on Admin > Leads under Expired. *(2026-09-28: there is no
+longer a "Stalled at Q1 / Q2" tag - a lead partway through is not in the queue
+at all.)*
 Which leads the queue shows and the tag each gets is in `QUEUE.md`.
 
 **An expired lead who texts again comes back - Decided by Jeel, 2026-09-19,
@@ -305,7 +338,9 @@ left sitting unseen:
   agent follows up by hand;
 - the conversation stays `expired` - no questions restart;
 - once an agent opens the lead, the flag clears and it leaves the queue again,
-  unless it now has a callback or other reason to be there.
+  unless it now has a callback or other reason to be there. *(2026-09-28:
+  once an agent **picks** it, not opens it - looking at a lead no longer clears
+  the flag. `AGENT-WORKSPACE.md`, "Rules".)*
 
 *(2026-09-22: the last bullet is not built. `api/webhooks.ts` sets
 `has_unread_inbound` and nothing anywhere unsets it, so such a lead stays in
@@ -322,7 +357,7 @@ while EZ Texting is unreachable.
 
 `expires_at` is set once a message has actually gone out, not when the
 conversation is created and not when a send is merely attempted - by
-`sendOpener` in the poller and by `bumpExpiry` in `reply-flow.ts`, both after
+`sendOpener` in `worker/opener.ts` (the poller and the opener retry) and by `bumpExpiry` in `reply-flow.ts`, both after
 the send returns. It is the window the lead has to reply to *that message*, so
 a conversation whose opener or follow-up failed has not started one. Those, and
 any created before this existed, fall back to `created_at + expiry_days` in the
@@ -351,8 +386,8 @@ left it `expired`, set `has_unread_inbound`, and sent nothing.
   `16026203572` against a stored `+16026203572` would match nothing and send to
   a blocked phone.
   The conversation still advances when a send is refused: the lead's answer is
-  recorded, and only the message is withheld. The tick log says `NOT sent=`
-  rather than `sent=`, so the case is visible.
+  recorded, and only the message is withheld. Its `conversation.advanced` log
+  line says `"sent": false`, so the case is visible.
 - Every automated send uses the copy in `settings`, rendered by
   `core/messages.ts` (`{first_name}`, one-segment limit), and is recorded in
   `messages` with the id EZ Texting returns - that id is what links the lead's
@@ -361,6 +396,16 @@ left it `expired`, set `has_unread_inbound`, and sent nothing.
   logged and leaves the conversation where it is; it does not roll the answer
   back. The lead has answered, and losing that would be worse than a missing
   follow-up.
+- **Every automated send is recorded around the send** - `db/outbound.ts`,
+  2026-09-28. The row is written as `sending` first, so if the database is
+  down nothing is sent; EZ Texting's id is recorded after, and if that write
+  fails the text went out, so the row stays `sending` rather than being marked
+  refused and sent again.
+- **A message EZ Texting refuses is kept, marked failed** - 2026-09-28,
+  `db/outbound.ts` (an agent's own SMS: `db/failed-sends.ts`). It has `delivery_status = 'failed'` and no
+  `ezt_message_id`, so no reply can link to it, and it does not restart the
+  reply window. The thread shows it with a red "!". A send refused because the
+  number is blocked is not kept: it was never attempted.
 
 ### When the opener is sent - Decided by Jeel, 2026-09-19
 

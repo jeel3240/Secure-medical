@@ -1,5 +1,8 @@
 /**
- * `GET /api/leads` - the agents' priority queue.
+ * `GET /api/leads` - the agents' priority queue - and the claim/release pair
+ * that decides who is working a lead. The routes on one lead - the card, the
+ * timeline, notes, callbacks, SMS, dispositions, marking read - are
+ * `lead-workspace.ts`, registered on this same router.
  *
  * Open to any signed-in user: agents work from it, and a superadmin sees the
  * same thing. The superadmin-only list of every lead, replied or not, is
@@ -10,9 +13,10 @@ import { Router } from 'express';
 import { requireAuth, requirePasswordChanged } from './auth/middleware';
 import type { AppDeps } from './deps';
 import { asyncHandler, HttpError } from './http';
+import { parseLeadId, parseList, parseSince } from './filters';
+import { leadWorkspaceRoutes } from './lead-workspace';
 
 const TIERS = ['HOT', 'WARM', 'LOW'];
-const SINCE_HOURS: Record<string, number> = { '1h': 1, '24h': 24, '7d': 24 * 7, '30d': 24 * 30 };
 
 /** Comma-separated and case-insensitive, so `tier=hot,warm` works. */
 function parseTiers(raw: unknown): string[] | undefined {
@@ -30,14 +34,6 @@ function parseTiers(raw: unknown): string[] | undefined {
   return asked.length ? asked : undefined;
 }
 
-function parseSince(raw: unknown): Date | undefined {
-  if (raw === undefined || raw === 'all') return undefined;
-  const hours = typeof raw === 'string' ? SINCE_HOURS[raw] : undefined;
-  if (!hours) {
-    throw new HttpError(400, 'invalid_since', `Time window must be one of: ${Object.keys(SINCE_HOURS).join(', ')}, all.`);
-  }
-  return new Date(Date.now() - hours * 3600_000);
-}
 
 /** Page size. Out of range is clamped by the query, not rejected. */
 function parseLimit(raw: unknown): number | undefined {
@@ -47,12 +43,6 @@ function parseLimit(raw: unknown): number | undefined {
     throw new HttpError(400, 'invalid_limit', 'Limit must be a whole number above 0.');
   }
   return n;
-}
-
-function parseList(raw: unknown): string[] | undefined {
-  if (typeof raw !== 'string' || !raw.trim()) return undefined;
-  const values = raw.split(',').map((s) => s.trim()).filter(Boolean);
-  return values.length ? values : undefined;
 }
 
 export function queueRouter(deps: AppDeps): Router {
@@ -65,7 +55,7 @@ export function queueRouter(deps: AppDeps): Router {
       // Loaded lazily: ../db/queue pulls in the pool, which pulls in config,
       // which exits the process when an env var is missing - that would break
       // the tests, which build the app without a full environment.
-      // eslint-disable-next-line @typescript-eslint/no-var-requires
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
       const db = require('../db/queue') as typeof import('../db/queue');
 
       const result = await db.listQueue({
@@ -79,6 +69,61 @@ export function queueRouter(deps: AppDeps): Router {
       res.json(result);
     })
   );
+
+  router.post(
+    '/:id/claim',
+    asyncHandler(async (req, res) => {
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const db = require('../db/claims') as typeof import('../db/claims');
+
+      const result = await db.claimLead(parseLeadId(req.params.id), req.user!.id);
+
+      if (!result.ok) {
+        if (result.reason === 'not_found') {
+          throw new HttpError(404, 'not_found', 'No such lead.');
+        }
+        // 409 rather than 403: the caller did nothing wrong, someone was
+        // simply first. The holder's name is what the queue shows.
+        throw new HttpError(
+          409,
+          'already_claimed',
+          `${result.heldBy.name} is already working this lead.`
+        );
+      }
+
+      res.json({ claim: result.claim });
+    })
+  );
+
+  router.post(
+    '/:id/release',
+    asyncHandler(async (req, res) => {
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const db = require('../db/claims') as typeof import('../db/claims');
+
+      const result = await db.releaseLead(
+        parseLeadId(req.params.id),
+        req.user!.id,
+        req.user!.role === 'superadmin'
+      );
+
+      if (!result.ok) {
+        if (result.reason === 'not_found') {
+          throw new HttpError(404, 'not_found', 'No such lead.');
+        }
+        throw new HttpError(
+          403,
+          'not_yours',
+          `${result.heldBy.name} is working this lead. Only they or a superadmin can release it.`
+        );
+      }
+
+      res.status(204).end();
+    })
+  );
+
+  // The per-lead routes, on the same router so they share its sign-in check.
+  leadWorkspaceRoutes(router);
 
   return router;
 }

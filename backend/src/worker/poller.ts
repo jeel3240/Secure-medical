@@ -1,14 +1,14 @@
 import { pool } from '../db/pool';
 import { config } from '../config';
-import { renderMessage } from '../core/messages';
 import {
   EztContact,
   findGroup,
   isInGroup,
   listContacts,
-  sendMessage,
   toE164,
 } from '../integrations/ezt-client';
+import { errText, log } from '../lib/log';
+import { sendOpener } from './opener';
 
 const CHECKPOINT_KEY = 'ezt_poll_checkpoint';
 const PAGE_SIZE = 50;
@@ -25,10 +25,13 @@ export interface PollStats {
 
 async function readCheckpoint(): Promise<Date> {
   const { rows } = await pool.query('SELECT value FROM settings WHERE key = $1', [CHECKPOINT_KEY]);
-  if (rows.length === 0) {
+  const stored = rows.length > 0 ? new Date(rows[0].value) : null;
+  // Absent, or not a date: look back an hour. Every poll now writes the
+  // checkpoint back, so an unreadable one must not stop the poller cold.
+  if (!stored || Number.isNaN(stored.getTime())) {
     return new Date(Date.now() - DEFAULT_LOOKBACK_MS);
   }
-  return new Date(rows[0].value);
+  return stored;
 }
 
 async function writeCheckpoint(at: Date): Promise<void> {
@@ -96,7 +99,7 @@ async function isOnDnc(phone: string): Promise<boolean> {
  * existing one, since that decides whether createdAt moves and the poller sees
  * it at all. Wire it with the state machine.
  *
- * expires_at is set by sendOpener rather than here, because it is the window
+ * expires_at is set by sendOpener (worker/opener.ts) rather than here, because it is the window
  * the lead has to reply to a message - a conversation whose opener failed has
  * not started one. The expiry sweep falls back to created_at for those.
  */
@@ -159,7 +162,7 @@ async function insertLead(
 }
 
 /**
- * Sends question 1 to a newly created lead and records it.
+ * Sends question 1 to a newly created lead and records it - `worker/opener.ts`.
  *
  * The returned id goes in messages.ezt_message_id, which is what an inbound
  * reply's `id` field points back at - that is how a reply is tied to the
@@ -167,51 +170,30 @@ async function insertLead(
  *
  * A failure here is logged and swallowed: the lead is already committed, and
  * throwing would abandon the rest of the page and leave the checkpoint behind,
- * so every later contact would be re-polled because one send failed. The lead
- * simply has no opener, which is visible as a conversation with no outbound
- * message.
+ * so every later contact would be re-polled because one send failed. The
+ * refused opener is kept as a failed message, so the lead's thread shows it
+ * with a red "!" - `db/failed-sends.ts`.
  */
-async function sendOpener(leadId: number, phone: string, firstName: string | null): Promise<boolean> {
+async function openLead(leadId: number, phone: string, firstName: string | null): Promise<boolean> {
   try {
     const template = await readSetting('question_1');
     if (!template) {
-      console.error('no question_1 in settings, opener not sent');
+      log.error('sms.no_template', { leadId, key: 'question_1' });
       return false;
     }
 
-    // The stored copy carries {first_name}; what goes out, and what is recorded
-    // in messages.body, is the rendered text.
-    const { text, nameDropped } = renderMessage(template, firstName);
-    if (nameDropped) {
-      console.log(`opener for lead ${leadId}: name dropped to stay within one segment`);
+    const result = await sendOpener({ id: leadId, phone, firstName }, template);
+    if (!result.sent) {
+      log.error('sms.failed', { leadId, key: 'question_1', blocked: result.blocked, err: errText(result.err) });
+      return false;
     }
 
-    const result = await sendMessage([phone], text);
-
-    await pool.query(
-      `INSERT INTO messages (lead_id, direction, body, ezt_message_id)
-       VALUES ($1, 'outbound', $2, $3)`,
-      [leadId, text, result.id]
-    );
-
-    // The reply window starts when the opener actually goes out. Set here
-    // rather than at creation so a conversation whose opener failed has no
-    // deadline it never earned; the sweep falls back to created_at for those.
-    const days = await readSetting('expiry_days');
-    await pool.query(
-      `UPDATE conversations
-       SET expires_at = now() + ($2 || ' days')::interval, updated_at = now()
-       WHERE lead_id = $1 AND status = 'open'`,
-      [leadId, days ?? '7']
-    );
-
-    console.log(`opener sent to lead ${leadId}, ezt id ${result.id}`);
+    log.info('sms.sent', { leadId, key: 'question_1', eztMessageId: result.eztMessageId });
     return true;
   } catch (err) {
-    const detail =
-      (err as { response?: { data?: unknown } })?.response?.data ??
-      (err instanceof Error ? err.message : err);
-    console.error(`opener failed for lead ${leadId}:`, JSON.stringify(detail));
+    // Before the send, or after it went out (the reply window). Either way
+    // nothing is marked refused, so the retry cannot send the opener twice.
+    log.error('sms.failed', { leadId, key: 'question_1', err: errText(err) });
     return false;
   }
 }
@@ -295,7 +277,7 @@ export async function pollOnce(): Promise<PollStats> {
         stats.skipped += 1;
       } else {
         stats.inserted += 1;
-        if (await sendOpener(leadId, phone, contact.firstName ?? null)) {
+        if (await openLead(leadId, phone, contact.firstName ?? null)) {
           stats.openersSent += 1;
         }
       }
@@ -305,9 +287,12 @@ export async function pollOnce(): Promise<PollStats> {
     page += 1;
   }
 
-  if (newest) {
-    await writeCheckpoint(newest);
-  }
+  // A quiet poll still writes the checkpoint - the same value, a fresh
+  // updated_at. That time is what Admin > Leads' "Synced" line and the health
+  // check read as "the worker last polled"; written only when a new contact
+  // arrived, it stood still on a quiet account and both reported a healthy
+  // worker as stopped. Jeel, 2026-09-28.
+  await writeCheckpoint(newest ?? checkpoint);
 
   stats.durationMs = Date.now() - startedAt;
   return stats;
