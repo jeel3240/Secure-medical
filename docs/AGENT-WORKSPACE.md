@@ -423,7 +423,7 @@ timestamp that actually exists:
 | Event | Placed at | Why there |
 |---|---|---|
 | `lead_received` | `ezt_added_at` | Its own timestamp. Carries the source. |
-| `scored` | The last inbound reply | Nothing records when a score was reached. `updated_at` moves on every change, so it cannot be used; the last reply is what earned the final points. |
+| `scored` | `completed_at` once the flow has finished; before that, the last inbound reply | `updated_at` moves on every change, so it cannot be used. Until 2026-09-29 it was always the last reply, so a lead texting "Hi" after finishing moved "Scored · completed" down under the "Hi" - found testing with a real lead. `completed_at` (migration 004) is when the flow actually finished |
 | `agent_took_over` | `agent_took_over_at` | Migration 003. |
 | `conversation_expired` | `expires_at`, only when the status is `expired` | `expires_at` is set on every send, so a live conversation always has a future one that has not happened. |
 

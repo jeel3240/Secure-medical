@@ -104,18 +104,24 @@ const iso = (v: Date | null | undefined): string | null => v?.toISOString() ?? n
  * accurate and already recorded.
  *
  * An event with no timestamp to stand on is left out rather than guessed at.
+ *
+ * **A finished conversation is placed at `completed_at`** (migration 004).
+ * Placing it at the last inbound reply was only right until the lead texted
+ * again: every later "Hi" moved "Scored 60 · completed" down to sit under it -
+ * found testing with a real lead, 2026-09-29. The last reply is still used for
+ * a conversation that has not finished, where it is what earned the points.
  */
 async function systemEvents(leadId: number): Promise<TimelineEntry[]> {
   const { rows } = await pool.query(
     `SELECT
        COALESCE(l.ezt_added_at, l.created_at) AS received_at,
        l.source,
-       c.status, c.score, c.tier, c.expires_at, c.agent_took_over_at,
+       c.status, c.score, c.tier, c.expires_at, c.agent_took_over_at, c.completed_at,
        (SELECT max(m.received_at) FROM messages m
         WHERE m.lead_id = l.id AND m.direction = 'inbound') AS last_reply_at
      FROM leads l
      LEFT JOIN LATERAL (
-       SELECT c.status, c.score, c.tier, c.expires_at, c.agent_took_over_at
+       SELECT c.status, c.score, c.tier, c.expires_at, c.agent_took_over_at, c.completed_at
        FROM conversations c
        WHERE c.lead_id = l.id
        ORDER BY c.created_at DESC, c.id DESC
@@ -138,12 +144,13 @@ async function systemEvents(leadId: number): Promise<TimelineEntry[]> {
     });
   }
 
-  // Placed at the reply that earned the points, because nothing records when
-  // the score was reached.
-  if (r.score > 0 && r.tier && r.last_reply_at) {
+  // When the flow finished, if it has; otherwise the reply that earned the
+  // points so far.
+  const scoredAt: Date | null = r.completed_at ?? r.last_reply_at;
+  if (r.score > 0 && r.tier && scoredAt) {
     events.push({
       kind: 'system',
-      at: r.last_reply_at.toISOString(),
+      at: scoredAt.toISOString(),
       author: null,
       detail: { event: 'scored', score: r.score, tier: r.tier, status: r.status },
     });
