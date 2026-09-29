@@ -176,6 +176,17 @@ async function main() {
   const wrote = await lead({ phone: '+15550000199', first: 'Wrote', source: 'CORE-G-27', ageMin: 9 * 1440, status: 'expired', score: 0, tier: null, unread: true });
   const withWrote = await listQueue({ limit: 500 });
   check('a lead with no score who texted us is in the queue', withWrote.leads.some((l) => l.id === wrote), true);
+
+  // Picked up before answering anything - from Admin > Leads. It read Working
+  // there but was missing from the queue until 2026-09-29.
+  const pickedEarly = await lead({ phone: '+15550000198', first: 'PickedEarly', source: 'CORE-G-27', ageMin: 3, status: 'open', score: 0, tier: null });
+  const holderId = (await pool.query(`SELECT id FROM users ORDER BY id LIMIT 1`)).rows[0].id;
+  await pool.query(`UPDATE leads SET assigned_to = $2, assigned_at = now() WHERE id = $1`, [pickedEarly, holderId]);
+  const withEarly = await listQueue({ limit: 200 });
+  check('a lead held before it answered is in the queue', withEarly.leads.some((l) => l.id === pickedEarly), true);
+  check('as working', withEarly.leads.find((l) => l.id === pickedEarly)?.tag?.kind, 'working');
+  await pool.query(`UPDATE leads SET assigned_to = NULL, assigned_at = NULL WHERE id = $1`, [pickedEarly]);
+  check('and leaves once let go', (await listQueue({ limit: 200 })).leads.some((l) => l.id === pickedEarly), false);
   check('as an inbound reply', withWrote.leads.find((l) => l.id === wrote)?.tag, { kind: 'inbound_reply' });
   await pool.query(`DELETE FROM leads WHERE id = $1`, [wrote]);
 
