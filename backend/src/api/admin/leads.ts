@@ -2,7 +2,7 @@ import { Router } from 'express';
 import { requireAuth, requirePasswordChanged, requireRole } from '../auth/middleware';
 import type { AppDeps } from '../deps';
 import { asyncHandler, HttpError } from '../http';
-import { parseSince } from '../filters';
+import { parseList, parseSince } from '../filters';
 import type { LeadStatus } from '../../db/leads';
 
 const STATUSES: LeadStatus[] = [
@@ -23,12 +23,6 @@ function parseStatus(raw: unknown): LeadStatus | 'all' {
     throw new HttpError(400, 'invalid_status', `status must be one of: ${STATUSES.join(', ')}, all.`);
   }
   return raw as LeadStatus;
-}
-
-function parseSource(raw: unknown): string[] | undefined {
-  if (typeof raw !== 'string' || !raw) return undefined;
-  const values = raw.split(',').map((s) => s.trim()).filter(Boolean);
-  return values.length ? values : undefined;
 }
 
 /**
@@ -52,7 +46,7 @@ export function adminLeadsRouter(deps: AppDeps): Router {
 
       const result = await db.listAdminLeads({
         status: parseStatus(req.query.status),
-        source: parseSource(req.query.source),
+        source: parseList(req.query.source),
         since: parseSince(req.query.since),
         q: typeof req.query.q === 'string' && req.query.q.trim() ? req.query.q.trim() : undefined,
         page: Number(req.query.page) || 1,

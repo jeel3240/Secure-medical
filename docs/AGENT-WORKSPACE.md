@@ -5,7 +5,9 @@ The endpoints behind the Agent Workspace, the Lead Timeline and My Callbacks -
 
 **Built so far** (all 2026-09-26): claim and release (task 2), marking a lead
 read (task 3), the lead card (task 4), the timeline (task 5), notes (task 6),
-callbacks (task 7) and dispositions (task 8) - `api/leads.ts`,
+callbacks (task 7) and dispositions (task 8) - `api/leads.ts` (claim and
+release), `api/lead-workspace.ts` (every route on one lead, split out
+2026-09-28),
 `api/callbacks.ts`, `db/claims.ts`, `db/read-flag.ts`, `db/lead-detail.ts`,
 `db/timeline.ts`, `db/notes.ts`, `db/callbacks.ts`, `db/dispositions.ts`,
 `db/dnc.ts`, `db/agent-sms.ts`, `core/dispositions.ts`,
@@ -36,7 +38,7 @@ and still needs a control. `QUEUE.md`, "What the button offers".)*
 callback, an agent SMS, a disposition and marking a reply read are all refused
 unless the caller holds the lead. Reading it is not: the workspace shows any
 lead, and switches its actions off until you pick. `db/holder.ts` answers who
-holds it; `requireHolding` in `api/leads.ts` runs before each write, and before
+holds it; `requireHolding` in `api/lead-workspace.ts` runs before each write, and before
 the body is validated, so a caller who may not act learns nothing from the
 shape of the request.
 

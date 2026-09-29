@@ -160,6 +160,8 @@ you change something the docs describe, update the doc in the same commit.
     src/db/admin-overview.ts  KPIs, funnel, per-agent table, activity feed
     src/db/admin-dnc.ts     the DNC list, released rows included
     src/api/leads.ts        the agents' priority queue, and claim/release
+    src/api/lead-workspace.ts  every route on one lead: card, timeline, notes, callbacks, SMS, dispositions, read
+    src/api/filters.ts      request parsing shared by several routes: since, tz, lists, lead id
     src/db/claims.ts        claiming and releasing a lead
     src/db/read-flag.ts     clears has_unread_inbound
     src/db/lead-detail.ts   the lead card
