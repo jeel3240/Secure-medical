@@ -86,7 +86,7 @@ matches the holder by id. The queue says Working only while someone holds the
 lead, while Admin > Leads keeps saying Working after it is released -
 `ADMIN-LEADS.md`.)*
 
-**Only three, and most rows have none - Jeel, 2026-09-28.** A tag answers the
+**Few, and most rows have none - Jeel, 2026-09-28.** A tag answers the
 two questions an agent scanning the queue has: is somebody already on this, and
 why is it here? When several apply, the first wins:
 
@@ -94,8 +94,15 @@ why is it here? When several apply, the first wins:
 |---|---|---|---|
 | 1 | `working` | An **active** agent holds the lead | `agentId`, `agentName` |
 | 2 | `inbound_reply` | The lead has texted and nobody has read it | |
-| 3 | `needs_review` | Conversation `review`: replies we could not read | |
+| 3 | `callback` | A callback is booked and not done - the soonest one. "Callback – Maya Chen · 8:13 PM", with the date when not today. Does not lock the row | `agentId`, `agentName`, `at` |
+| 4 | `needs_review` | Conversation `review`: replies we could not read | |
 | - | `null` | None of those: the lead is waiting to be picked up. The screen shows a hyphen | |
+
+**Callback came back - Jeel, 2026-09-29.** Testing showed the cost of
+dropping it: a lead waiting on Maya's callback said nothing, so another agent
+could pick it up and call first. It returns naming whose callback it is, which
+answers the first of the two questions - is somebody already on this? It ranks
+below an unread reply, which needs reading whoever's call it is.
 
 **What was dropped, and why.** There were three more: `new` ("New"),
 `attempted` ("Attempted 2x") and `callback` ("Callback 3:00 PM"). Call history

@@ -130,12 +130,14 @@ async function main() {
   check('tag: nothing to say', tags.Hot, null);
   check('tag: held by an agent, with their id', tags.Held, { kind: 'working', agentId: michael, agentName: 'Michael' });
   check('tag: stale claim by a deactivated agent is ignored', tags.Stale, null);
-  check('tag: a booked callback shows no status', tags.Released, null);
+  // Callback was dropped from the queue on 2026-09-28 and restored the next day,
+  // naming whose it is.
+  check('tag: a booked callback names whose it is', (tags.Released as { kind?: string; agentName?: string } | null)?.kind === 'callback' && (tags.Released as { agentName?: string }).agentName === 'Michael', true);
   check('tag: unread reply', tags.Back, { kind: 'inbound_reply' });
   check('tag: unreadable replies need a human', tags.Low, { kind: 'needs_review' });
   check('tag: call attempts show no status', tags.Called, null);
   check('partway, but an agent holds it: stays, Working', tags.Busy, { kind: 'working', agentId: michael, agentName: 'Michael' });
-  check('partway, but a callback is booked: stays, no status', tags.Booked, null);
+  check('partway, but a callback is booked: stays, Callback', (tags.Booked as { kind?: string } | null)?.kind, 'callback');
   check('partway, taken over, lead replied: stays, Inbound reply', tags.Handover, { kind: 'inbound_reply' });
 
   const hotOnly = await listQueue({ tier: ['HOT'] });
@@ -187,6 +189,18 @@ async function main() {
   check('as working', withEarly.leads.find((l) => l.id === pickedEarly)?.tag?.kind, 'working');
   await pool.query(`UPDATE leads SET assigned_to = NULL, assigned_at = NULL WHERE id = $1`, [pickedEarly]);
   check('and leaves once let go', (await listQueue({ limit: 200 })).leads.some((l) => l.id === pickedEarly), false);
+
+  // A pending callback names whose it is - 2026-09-29.
+  const promised = await lead({ phone: '+15550000197', first: 'Promised', source: 'CORE-G-27', ageMin: 30, status: 'completed', score: 50, tier: 'WARM' });
+  await pool.query(
+    `INSERT INTO callbacks (lead_id, agent_id, scheduled_at) VALUES ($1, $2, now() + interval '2 hours'), ($1, $2, now() + interval '1 hour')`,
+    [promised, holderId]
+  );
+  const promisedTag = (await listQueue({ limit: 200 })).leads.find((l) => l.id === promised)?.tag;
+  check('a pending callback shows whose it is', promisedTag?.kind === 'callback' && promisedTag.agentId === holderId, true);
+  check('and the soonest one', promisedTag?.at && Math.round((Date.parse(promisedTag.at) - Date.now()) / 60_000), 60);
+  await pool.query(`UPDATE callbacks SET done_at = now() WHERE lead_id = $1`, [promised]);
+  check('once done, nothing to say', (await listQueue({ limit: 200 })).leads.find((l) => l.id === promised)?.tag, null);
   check('as an inbound reply', withWrote.leads.find((l) => l.id === wrote)?.tag, { kind: 'inbound_reply' });
   await pool.query(`DELETE FROM leads WHERE id = $1`, [wrote]);
 

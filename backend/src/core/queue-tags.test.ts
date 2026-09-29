@@ -8,6 +8,18 @@ const facts = (over: Partial<QueueFacts> = {}): QueueFacts => ({
 });
 
 describe('what an agent sees against a lead', () => {
+  it('names whose callback it is, and when', () => {
+    const nextCallback = { agentId: 21, agentName: 'Maya Chen', at: '2026-09-29T03:13:00.000Z' };
+    expect(queueTag(facts({ nextCallback }))).toEqual({ kind: 'callback', ...nextCallback });
+  });
+
+  it('a callback outranks needing review, but not someone working it or an unread reply', () => {
+    const nextCallback = { agentId: 21, agentName: 'Maya Chen', at: '2026-09-29T03:13:00.000Z' };
+    expect(queueTag(facts({ nextCallback, conversationStatus: 'review' }))?.kind).toBe('callback');
+    expect(queueTag(facts({ nextCallback, hasUnreadInbound: true }))?.kind).toBe('inbound_reply');
+    expect(queueTag(facts({ nextCallback, holder: { id: 7, name: 'Michael' } }))?.kind).toBe('working');
+  });
+
   it('names the agent holding the lead, with their id to match on', () => {
     expect(queueTag(facts({ holder: { id: 7, name: 'Michael' } }))).toEqual({
       kind: 'working',
