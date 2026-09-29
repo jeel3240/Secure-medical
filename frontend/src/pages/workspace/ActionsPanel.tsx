@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { toApiError } from '../../api/client';
 import {
   addNote,
@@ -7,10 +8,9 @@ import {
   type Disposition,
   type LeadDetail,
 } from '../../api/workspace';
-import { Banner } from '../../components/Banner';
 import { Button } from '../../components/Button';
 import { Modal } from '../../components/Modal';
-import { toLocalInput } from '../../lib/format';
+import { formatTime, toLocalInput } from '../../lib/format';
 
 /**
  * The workspace's right column: outcome, callback, note, Save.
@@ -19,9 +19,18 @@ import { toLocalInput } from '../../lib/format';
  *
  * **One button, Save - Jeel, 2026-09-28.** There was also "Save & next lead",
  * which saved, released the lead and opened the top of the queue. It was
- * dropped: the agent stays on the lead after saving, and leaves with Back to
- * queue, which releases it. One way out, and nothing moves them on to a lead
- * they did not choose.
+ * dropped: nothing moves an agent on to a lead they did not choose.
+ *
+ * **An outcome finishes the lead - Jeel, 2026-09-29.** Saving Closed or DNC
+ * releases the lead on the server, so it leaves the queue at once, and the
+ * agent is taken back to the queue: there is nothing left to do on it. Saving
+ * only a note or a callback keeps them on the lead, as before.
+ *
+ * **Saved, quietly.** A green "Saved outcome." banner over the panel read as
+ * generic - Jeel, 2026-09-29. Success is now a muted line beside Save, like the
+ * ticks on a sent message; a failure is a short red line in the same place.
+ * The saved outcome shows as the selected button, from the lead card, so
+ * nobody presses Closed twice wondering whether it took.
  *
  * **One Save, three writes.** The brief has a single Save for all three
  * controls, so this posts whichever the agent filled in. They are separate
@@ -90,9 +99,16 @@ export function ActionsPanel({
 
   const [saving, setSaving] = useState(false);
   const [problems, setProblems] = useState<string[]>([]);
-  const [saved, setSaved] = useState<string | null>(null);
+  const [saved, setSaved] = useState<Date | null>(null);
 
-  const dirty = note.trim() !== '' || callbackAt !== '' || disposition !== null;
+  const navigate = useNavigate();
+
+  // What the buttons show: the agent's unsaved choice, else what is saved.
+  const shown: Disposition | null = disposition ?? (lead.closed ? 'closed' : null);
+  // Choosing the outcome that is already saved changes nothing.
+  const newOutcome = disposition !== null && !(disposition === 'closed' && lead.closed);
+
+  const dirty = note.trim() !== '' || callbackAt !== '' || newOutcome;
 
   /**
    * The unsaved-changes guard the brief asks for, for the case that actually
@@ -135,18 +151,27 @@ export function ActionsPanel({
       }
     }
 
-    if (disposition) {
+    let finished = false;
+    if (disposition && newOutcome) {
       try {
         await setDisposition(lead.id, disposition, disposition === 'dnc');
         done.push('outcome');
         setDispositionValue(null);
+        finished = true;
       } catch (err) {
         failures.push(`Outcome: ${toApiError(err).message}`);
       }
     }
 
+    // The lead is closed and released - nothing left to do here. A failure
+    // anywhere keeps the agent on the page to see it.
+    if (finished && failures.length === 0) {
+      navigate('/queue');
+      return;
+    }
+
     setProblems(failures);
-    setSaved(failures.length === 0 && done.length > 0 ? `Saved ${done.join(', ')}.` : null);
+    setSaved(failures.length === 0 && done.length > 0 ? new Date() : null);
     await refresh();
   };
 
@@ -180,17 +205,6 @@ export function ActionsPanel({
           The server refuses the write anyway; this saves the agent the round
           trip. */}
       <fieldset className="wrapup__fieldset" disabled={!canAct}>
-        {problems.length > 0 && (
-          <Banner tone="error">
-            {problems.map((p) => (
-              <span key={p} className="actions-panel__problem">
-                {p}
-              </span>
-            ))}
-          </Banner>
-        )}
-        {saved && <Banner tone="success">{saved}</Banner>}
-
         <section className="wrapup__section">
           <h3 className="wrapup__legend">
             <span className="wrapup__num">1</span> Outcome
@@ -202,8 +216,8 @@ export function ActionsPanel({
                 key={outcome.value}
                 type="button"
                 role="radio"
-                aria-checked={disposition === outcome.value}
-                className={`outcome outcome--${outcome.tone}${disposition === outcome.value ? ' outcome--on' : ''}`}
+                aria-checked={shown === outcome.value}
+                className={`outcome outcome--${outcome.tone}${shown === outcome.value ? ' outcome--on' : ''}`}
                 onClick={() => choose(outcome.value)}
               >
                 <span className="outcome__dot" aria-hidden="true" />
@@ -211,6 +225,12 @@ export function ActionsPanel({
               </button>
             ))}
           </div>
+          {lead.closed && disposition === null && (
+            <p className="wrapup__state">
+              Closed{lead.closed.by ? ` by ${lead.closed.by}` : ''}
+              {lead.closed.at ? ` · ${formatTime(new Date(lead.closed.at))}` : ''}
+            </p>
+          )}
         </section>
 
         <section className="wrapup__section">
@@ -262,6 +282,23 @@ export function ActionsPanel({
         </section>
 
         <div className="wrapup__save">
+          {problems.length > 0 ? (
+            <div className="wrapup__status wrapup__status--error" role="alert">
+              {problems.map((p) => (
+                <span key={p}>{p}</span>
+              ))}
+            </div>
+          ) : (
+            saved &&
+            !dirty && (
+              <span className="wrapup__status" role="status">
+                <svg viewBox="0 0 16 11" width="14" height="10" aria-hidden="true">
+                  <path d="M1 5.5l3.5 3.5L11 2.5" fill="none" stroke="currentColor" strokeWidth="1.6" />
+                </svg>
+                Saved {formatTime(saved)}
+              </span>
+            )
+          )}
           <Button loading={saving} disabled={!dirty} onClick={() => void onSave()}>
             Save
           </Button>

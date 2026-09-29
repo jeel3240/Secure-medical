@@ -622,7 +622,8 @@
 .wrapup__save {
   display: flex;
   justify-content: flex-end;
-  gap: var(--space-2);
+  align-items: center;
+  gap: var(--space-3);
   margin-top: var(--space-5);
   padding-top: var(--space-4);
   border-top: 1px solid var(--color-border);
@@ -733,4 +734,29 @@
 .wrapup__fieldset:disabled,
 .composer:disabled {
   opacity: 0.55;
+}
+
+/* What Save did, beside it: a muted tick and the time, like a sent message's
+   ticks; a failure in red, in the same place. Replaced a green banner over the
+   panel - Jeel, 2026-09-29. */
+.wrapup__status {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  margin-right: auto;
+  color: var(--color-text-muted);
+  font-size: var(--text-small);
+}
+
+.wrapup__status--error {
+  flex-direction: column;
+  align-items: flex-start;
+  color: var(--color-danger);
+}
+
+/* Under the outcome buttons: who closed the lead and when. */
+.wrapup__state {
+  margin: var(--space-2) 0 0;
+  color: var(--color-text-muted);
+  font-size: var(--text-small);
 }

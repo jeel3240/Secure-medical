@@ -100,9 +100,12 @@ saying Working after karm lets go, until the lead is Closed.
    - **1 Outcome** - **Closed** or **DNC**, or neither
    - **2 Callback** - optional
    - **3 Note** - "no answer", "left a voicemail", "call back Friday"
-3. **Save**. The agent stays on the lead.
-4. **Back to queue**. This releases the lead. A closed lead leaves the queue
-   here.
+3. **Save**.
+   - With **Closed** or **DNC**: the lead is released and leaves the queue at
+     once, and the agent is taken back to the queue. Nobody needs to pick it
+     up any more - Jeel, 2026-09-29.
+   - With only a callback or a note: the agent stays on the lead.
+4. **Back to queue** releases a lead the agent is leaving without an outcome.
 
 There is no reason to pick when closing. The note says why, if anything does.
 
@@ -127,4 +130,4 @@ The flow above replaced a looser one the same day:
 | Admin > Leads statuses described the SMS only; "Completed" forever | Ready, Working and Closed follow the agent part too |
 | "In progress" meant two things | Answering (SMS) and Working (agent) |
 | Eight outcomes, none of which removed a lead | Closed and DNC. Closed removes it |
-| Save and Save & next lead | Save, then Back to queue |
+| Save and Save & next lead | Save. An outcome releases the lead and returns to the queue (2026-09-29) |

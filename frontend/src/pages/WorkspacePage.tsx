@@ -194,7 +194,9 @@ export function WorkspacePage() {
           <span>
             {held
               ? `${held.name} is working this lead. You can look, but not act on it.`
-              : 'You are viewing this lead. Pick it up to text them or record an outcome.'}
+              : lead.closed
+                ? 'This lead is closed. Pick it up only to work it again.'
+                : 'You are viewing this lead. Pick it up to text them or record an outcome.'}
           </span>
           {!held && (
             <Button loading={picking} onClick={() => void pick()}>
@@ -220,6 +222,7 @@ export function WorkspacePage() {
       <LeadHeader lead={lead} mine={mine} now={now} onSendSms={() => setFocusCompose((n) => n + 1)} />
 
       <div className="workspace__flags">
+        {lead.closed && <Badge tone="muted">Closed</Badge>}
         {lead.flags.dnc && <Badge tone="muted">DNC</Badge>}
         {lead.flags.needsReview && <Badge tone="warning">Needs review</Badge>}
         {lead.flags.expired && <Badge tone="muted">Expired</Badge>}

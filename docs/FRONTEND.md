@@ -482,11 +482,16 @@ than claiming the whole save went wrong.
 
 **One button: Save - Jeel, 2026-09-28.** Wrap up had a second button, *Save &
 next lead*, which saved, released the lead and opened the top unlocked lead in
-the queue. It was dropped. The agent stays on the lead after Save - so they can
-still text or add a note - and leaves with *Back to queue*, which releases it.
-One way out, and nothing moves an agent on to a lead they did not choose. Save
-is now the primary button, and a closed lead leaves the queue when the agent
-goes back (`QUEUE.md`).
+the queue. It was dropped: nothing moves an agent on to a lead they did not
+choose. Save is the primary button.
+
+**Saving an outcome ends the visit - Jeel, 2026-09-29.** With Closed or DNC,
+Save releases the lead (on the server) and takes the agent back to the queue,
+where the lead is already gone. With only a note or a callback the agent stays
+and leaves with *Back to queue*. The saved outcome shows as the selected
+button with "Closed by Maya · 7:01 PM" beneath it. What Save did is a muted
+"✓ Saved 7:01 PM" beside the button, and a failure a short red line in the same
+place - both replacing a green banner over the panel that read as generic.
 
 **DNC asks twice,** and the dialog says the block can only be lifted by the lead
 texting START. The API refuses the value without `confirmDnc: true` regardless.
