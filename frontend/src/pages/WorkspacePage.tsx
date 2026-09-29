@@ -171,7 +171,7 @@ export function WorkspacePage() {
 
   if (loading) {
     return (
-      <div className="leads__loading">
+      <div className="loading-block">
         <Spinner />
       </div>
     );

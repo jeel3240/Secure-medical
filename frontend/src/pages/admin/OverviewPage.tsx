@@ -97,7 +97,7 @@ export function OverviewPage() {
 
   if (loading) {
     return (
-      <div className="leads__loading">
+      <div className="loading-block">
         <Spinner />
       </div>
     );
@@ -130,7 +130,7 @@ export function OverviewPage() {
 
       {error && <Banner tone="warning">{error} Showing the last update.</Banner>}
 
-      <div className={`card queue-card stats${switching ? ' is-switching' : ''}`}>
+      <div className={`card table-card stats${switching ? ' is-switching' : ''}`}>
         {stats.map((stat) => (
           <div key={stat.label} className="stats__item">
             <span className="stats__label">{stat.label}</span>
@@ -141,13 +141,13 @@ export function OverviewPage() {
       </div>
 
       <div className="overview">
-        <section className={`card queue-card${switching ? ' is-switching' : ''}`}>
+        <section className={`card table-card${switching ? ' is-switching' : ''}`}>
           <header className="card-head">
             <h2 className="card-head__title">Agents</h2>
             <span className="card-head__meta">Closed in this period</span>
           </header>
           <div className="table-wrap">
-            <table className="table queue__table">
+            <table className="table data-table">
               <thead>
                 <tr>
                   <th>Agent</th>
@@ -161,12 +161,12 @@ export function OverviewPage() {
                 {data.agents.map((agent) => (
                   <tr key={agent.agentId}>
                     <td>
-                      <span className="queue__name">{agent.name}</span>
+                      <span className="cell-name">{agent.name}</span>
                     </td>
                     <td className="right tabular">{agent.holding || '-'}</td>
-                    <td className="right tabular queue__score">{agent.closed || '-'}</td>
+                    <td className="right tabular cell-strong">{agent.closed || '-'}</td>
                     <td className="right tabular">{agent.callbacksDue || '-'}</td>
-                    <td className="leads__when">
+                    <td className="cell-muted">
                       {agent.lastActiveAt ? formatRelative(agent.lastActiveAt) : 'No activity yet'}
                     </td>
                   </tr>
@@ -176,7 +176,7 @@ export function OverviewPage() {
           </div>
         </section>
 
-        <section className="card queue-card">
+        <section className="card table-card">
           <header className="card-head">
             <h2 className="card-head__title">System</h2>
             {health && (
@@ -188,7 +188,7 @@ export function OverviewPage() {
             )}
           </header>
           {!health ? (
-            <div className="leads__loading">
+            <div className="loading-block">
               <Spinner />
             </div>
           ) : (
@@ -224,13 +224,13 @@ export function OverviewPage() {
         </section>
       </div>
 
-      <section className={`card queue-card${switching ? ' is-switching' : ''}`}>
+      <section className={`card table-card${switching ? ' is-switching' : ''}`}>
         <header className="card-head">
           <h2 className="card-head__title">Recent activity</h2>
           <span className="card-head__meta">Agent actions, newest first</span>
         </header>
         {data.activity.length === 0 ? (
-          <p className="leads__empty">Nothing in this period.</p>
+          <p className="table-card__empty">Nothing in this period.</p>
         ) : (
           <ul className="activity">
             {data.activity.map((entry, i) => (

@@ -7,6 +7,7 @@
  * `GET /api/admin/leads` - see ADMIN-LEADS.md for why they are separate.
  */
 
+import { parseSince } from './filters';
 import { Router } from 'express';
 import { requireAuth, requirePasswordChanged } from './auth/middleware';
 import type { AppDeps } from './deps';
@@ -14,7 +15,6 @@ import { asyncHandler, HttpError } from './http';
 import { DISPOSITIONS, DNC_DISPOSITION, isDisposition } from '../core/dispositions';
 
 const TIERS = ['HOT', 'WARM', 'LOW'];
-const SINCE_HOURS: Record<string, number> = { '1h': 1, '24h': 24, '7d': 24 * 7, '30d': 24 * 30 };
 
 /** Comma-separated and case-insensitive, so `tier=hot,warm` works. */
 function parseTiers(raw: unknown): string[] | undefined {
@@ -32,14 +32,6 @@ function parseTiers(raw: unknown): string[] | undefined {
   return asked.length ? asked : undefined;
 }
 
-function parseSince(raw: unknown): Date | undefined {
-  if (raw === undefined || raw === 'all') return undefined;
-  const hours = typeof raw === 'string' ? SINCE_HOURS[raw] : undefined;
-  if (!hours) {
-    throw new HttpError(400, 'invalid_since', `Time window must be one of: ${Object.keys(SINCE_HOURS).join(', ')}, all.`);
-  }
-  return new Date(Date.now() - hours * 3600_000);
-}
 
 /**
  * Free text from an agent. Trimmed, required, and capped well above anything

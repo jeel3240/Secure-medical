@@ -71,8 +71,10 @@ Two renames came with it, so each word means one thing:
 | `in_progress`, In progress | `answering`, Answering | The queue's "In progress – karm" means an agent holds the lead. Two meanings for one phrase |
 | `completed`, Completed | `ready`, Ready | "Completed" read as finished when the calling had not started. Briefly "Ready to call" the same day - Jeel: that reads as an instruction to call, so just Ready |
 
-The API values changed with the labels. A saved link with `?status=in_progress`
-or `?status=completed` now falls back to All, as any unknown status does.
+The API values changed with the labels. `?status=in_progress` or
+`?status=completed` is now refused with a 400, as any unknown status is - see
+"Filters" below. The screen keeps its filters in memory, not the address, so no
+saved link carries the old values.
 
 ### Closed
 
@@ -116,6 +118,20 @@ awaiting is the honest answer.
 ## The query
 
 `GET /api/admin/leads?status=&source=&since=&q=&page=`
+
+### Filters
+
+Absent, empty or `all` means no filter. Anything else must be a known value, or
+the request is refused with a 400 and the query never runs: `invalid_status`,
+or `invalid_since` for a time window other than `1h`, `24h`, `7d` or `30d`.
+
+Until 2026-09-28 this route silently read an unknown value as no filter, while
+the queue refused the same `?since=` with a 400 - one filter, two behaviours.
+Both now use `parseSince` in `api/filters.ts`, where the viewer's `?tz=` check
+also lives. A typo in a filter now shows as an error, not as the wrong list.
+`api/__tests__/admin-leads.test.ts` pins it.
+
+### The SQL
 
 Newest conversation and newest message are both lateral joins, so the result
 stays one row per lead however much history accumulates. Tab counts come from a

@@ -144,8 +144,8 @@ export function CallbacksPage() {
       {error && <Banner tone="error">{error}</Banner>}
       {pollError && <Banner tone="warning">{pollError} Showing the last update.</Banner>}
 
-      <div className="card queue-card">
-        <div className="queue-card__toolbar">
+      <div className="card table-card">
+        <div className="table-card__toolbar">
           <Segmented
             label="When"
             value={when}
@@ -156,7 +156,7 @@ export function CallbacksPage() {
             <label className="toolbar-field">
               <span className="toolbar-field__label">Agent</span>
               <select
-                className="leads__select"
+                className="select-input"
                 value={whose}
                 onChange={(e) => {
                   const v = e.target.value;
@@ -174,21 +174,21 @@ export function CallbacksPage() {
             </label>
           )}
           {data && (
-            <span className="leads__total toolbar-end">
+            <span className="table-card__count toolbar-end">
               {data.callbacks.length} callback{data.callbacks.length === 1 ? '' : 's'}
             </span>
           )}
         </div>
 
         {loading ? (
-          <div className="leads__loading">
+          <div className="loading-block">
             <Spinner />
           </div>
         ) : !data || data.callbacks.length === 0 ? (
-          <p className="leads__empty">No callbacks in this view.</p>
+          <p className="table-card__empty">No callbacks in this view.</p>
         ) : (
           <div className={`table-wrap${switching ? ' is-switching' : ''}`}>
-            <table className="table queue__table">
+            <table className="table data-table">
               <thead>
                 <tr>
                   <th>Due</th>
@@ -224,15 +224,15 @@ export function CallbacksPage() {
                         )}
                       </td>
                       <td>
-                        <span className="queue__name">{leadName(row.lead)}</span>
-                        <span className="queue__phone">{formatPhone(row.lead.phone)}</span>
+                        <span className="cell-name">{leadName(row.lead)}</span>
+                        <span className="cell-sub">{formatPhone(row.lead.phone)}</span>
                       </td>
                       <td>
                         <TierSignal tier={row.lead.tier} />
                       </td>
                       {everyone && <td>{row.agentName || '-'}</td>}
                       <td className="callbacks__note">{row.latestNote ?? '-'}</td>
-                      <td className="queue__action callbacks__actions">
+                      <td className="cell-action callbacks__actions">
                         {rescheduling === row.id ? (
                           <div className="callbacks__reschedule">
                             <input

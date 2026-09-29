@@ -360,6 +360,32 @@ Agents land on `/queue`; `/admin` lands on Overview. The admin section is behind
 `RequireRole`, and every admin endpoint refuses an agent independently - the
 guard on the screen is convenience, not security.
 
+## Shared class names - 2026-09-28
+
+The table card, its toolbar and the table inside it began life on the queue and
+Admin > Leads, so every page that reused them carried `queue-card`,
+`queue__name` or `leads__search` - names that said "queue" on the DNC list. They
+were renamed for what they are, with no change to how anything looks (a
+before-and-after pixel diff of every page matched):
+
+| Was | Is |
+|---|---|
+| `queue-card`, `queue-card__toolbar`, `queue-card__search` | `table-card`, `table-card__toolbar`, `table-card__search` |
+| `queue__table`, `queue__row`, `queue__row--locked`, `leads__row--new` | `data-table`, `data-table__row`, `data-table__row--locked`, `data-table__row--new` |
+| `queue__name`, `queue__phone`, `queue__score`, `queue__source`, `queue__action`, `leads__when` | `cell-name`, `cell-sub`, `cell-strong`, `cell-code`, `cell-action`, `cell-muted` |
+| `leads__search`, `leads__select` | `search-input`, `select-input` |
+| `leads__total`, `leads__empty`, `leads__pager`, `leads__loading` | `table-card__count`, `table-card__empty`, `table-card__pager`, `loading-block` |
+
+`queue__locked` and `queue__truncated` keep their names: only the queue uses them.
+
+Internal values and screen words still differ in a few places, on purpose:
+
+| Stored or sent | Shown | Why it stays |
+|---|---|---|
+| conversation `status = 'completed'` | Ready | A database value; renaming it is a migration for no behaviour change. The API's lead status is already `ready` |
+| queue tag kind `working` | Working – name | Same word since 2026-09-28 |
+| Overview `responded`, `completed` | Replied, Answered all 3 | Field names in one JSON payload, read in one page |
+
 ## Fetching
 
 **Every live screen polls through `api/usePolling.ts`.** One hook, 5 seconds,

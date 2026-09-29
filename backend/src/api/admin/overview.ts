@@ -10,7 +10,7 @@
  * ADMIN.md.
  */
 
-import { parseTimeZone } from '../time-zone';
+import { parseTimeZone } from '../filters';
 import { Router } from 'express';
 import { requireAuth, requirePasswordChanged, requireRole } from '../auth/middleware';
 import type { AppDeps } from '../deps';

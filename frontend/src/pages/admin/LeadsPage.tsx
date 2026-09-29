@@ -131,11 +131,11 @@ export function LeadsPage() {
 
       {error && <Banner tone="error">{error}</Banner>}
 
-      <div className="card queue-card">
+      <div className="card table-card">
         {/* The queue's tier switcher, so the chosen status is the brand navy
             and slides the same way - Jeel, 2026-09-28. The underline tabs it
             replaces used the brighter link blue. */}
-        <div className="queue-card__toolbar">
+        <div className="table-card__toolbar">
           <Segmented
             label="Status"
             value={status}
@@ -147,9 +147,9 @@ export function LeadsPage() {
           />
         </div>
 
-        <div className="queue-card__toolbar">
+        <div className="table-card__toolbar">
           <input
-            className="leads__search queue-card__search"
+            className="search-input table-card__search"
             type="search"
             placeholder="Search name or phone"
             value={search}
@@ -157,7 +157,7 @@ export function LeadsPage() {
             aria-label="Search leads"
           />
           <select
-            className="leads__select"
+            className="select-input"
             value={source}
             onChange={(e) => {
               setSource(e.target.value);
@@ -173,7 +173,7 @@ export function LeadsPage() {
             ))}
           </select>
           <select
-            className="leads__select"
+            className="select-input"
             value={since}
             onChange={(e) => {
               setSince(e.target.value);
@@ -187,18 +187,18 @@ export function LeadsPage() {
               </option>
             ))}
           </select>
-          {data && <span className="leads__total">{data.total} leads</span>}
+          {data && <span className="table-card__count">{data.total} leads</span>}
         </div>
 
         {!data ? (
-          <div className="leads__loading">
+          <div className="loading-block">
             <Spinner />
           </div>
         ) : data.leads.length === 0 ? (
-          <p className="leads__empty">No leads in this view.</p>
+          <p className="table-card__empty">No leads in this view.</p>
         ) : (
           <div className={`table-wrap${switching ? ' is-switching' : ''}`}>
-            <table className="table queue__table">
+            <table className="table data-table">
               <thead>
                 <tr>
                   <th>Tier</th>
@@ -215,7 +215,7 @@ export function LeadsPage() {
                 {data.leads.map((lead) => (
                   <tr
                     key={lead.id}
-                    className={`queue__row${fresh.has(lead.id) ? ' leads__row--new' : ''}`}
+                    className={`data-table__row${fresh.has(lead.id) ? ' data-table__row--new' : ''}`}
                     onClick={() => navigate(`/leads/${lead.id}/timeline`)}
                     title="Open the timeline"
                   >
@@ -223,17 +223,17 @@ export function LeadsPage() {
                       <TierSignal tier={lead.tier} />
                     </td>
                     <td>
-                      <span className="queue__name">{leadName(lead)}</span>
-                      <span className="queue__phone">{formatPhone(lead.phone)}</span>
+                      <span className="cell-name">{leadName(lead)}</span>
+                      <span className="cell-sub">{formatPhone(lead.phone)}</span>
                     </td>
                     <td>{lead.status ? <LeadStatus status={lead.status} /> : EMPTY}</td>
                     <td className={lead.stepReached ? 'mono' : undefined}>
                       {lead.stepReached ? `Q${lead.stepReached}` : EMPTY}
                     </td>
-                    <td className="right tabular queue__score">{lead.score ?? EMPTY}</td>
-                    <td className="mono queue__source">{lead.source ?? EMPTY}</td>
-                    <td className="leads__when">{formatReceived(lead.receivedAt)}</td>
-                    <td className="leads__when">
+                    <td className="right tabular cell-strong">{lead.score ?? EMPTY}</td>
+                    <td className="mono cell-code">{lead.source ?? EMPTY}</td>
+                    <td className="cell-muted">{formatReceived(lead.receivedAt)}</td>
+                    <td className="cell-muted">
                       {lead.lastActivityAt ? (
                         <>
                           <span aria-label={lead.lastActivityDirection === 'inbound' ? 'From the lead' : 'To the lead'}>
@@ -253,7 +253,7 @@ export function LeadsPage() {
         )}
 
         {data && totalPages > 1 && (
-          <div className="leads__pager">
+          <div className="table-card__pager">
             <Button variant="secondary" disabled={page <= 1} onClick={() => setPage((p) => p - 1)}>
               Previous
             </Button>

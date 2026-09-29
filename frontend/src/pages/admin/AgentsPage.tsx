@@ -146,9 +146,9 @@ export function AgentsPage() {
           </Banner>
         ) : null}
 
-        <section className="card queue-card">
+        <section className="card table-card">
           <div className="table-wrap">
-            <table className="table queue__table">
+            <table className="table data-table">
               <thead>
                 <tr>
                   {COLUMNS.map((column, index) => (
@@ -184,7 +184,7 @@ export function AgentsPage() {
                   return (
                     <tr key={user.id} className={user.isActive ? undefined : 'table__row--inactive'}>
                       <td>
-                        <span className="queue__name agents__name">
+                        <span className="cell-name agents__name">
                           {user.name}
                           {isMe ? <span className="agents__you">You</span> : null}
                         </span>
@@ -214,7 +214,7 @@ export function AgentsPage() {
                           </span>
                         )}
                       </td>
-                      <td className="leads__when">{formatLastLogin(user.lastLoginAt)}</td>
+                      <td className="cell-muted">{formatLastLogin(user.lastLoginAt)}</td>
                       <td className="agents__actions">
                         {/* Your own row has no menu: changing your own role or
                             deactivating yourself would lock you out, and your

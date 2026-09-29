@@ -1148,21 +1148,13 @@ a {
 
 /* Received and Last activity: when things happened, a step quieter than the
    lead and its status. */
-.leads__when {
+.cell-muted {
   color: var(--color-text-muted);
   white-space: nowrap;
 }
 
-.leads__filters {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--space-3);
-  margin-bottom: var(--space-4);
-}
-
-.leads__search,
-.leads__select {
+.search-input,
+.select-input {
   padding: var(--space-2) var(--space-3);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-sm);
@@ -1171,27 +1163,27 @@ a {
   font: inherit;
 }
 
-.leads__search {
+.search-input {
   min-width: 16rem;
   flex: 1 1 16rem;
 }
 
-.leads__search:focus-visible,
-.leads__select:focus-visible {
+.search-input:focus-visible,
+.select-input:focus-visible {
   outline: none;
   box-shadow: var(--focus-ring-field);
   border-color: var(--color-primary);
 }
 
-.leads__total {
+.table-card__count {
   margin-left: auto;
   color: var(--color-text-subtle);
   font-size: var(--text-small);
   font-variant-numeric: tabular-nums;
 }
 
-.leads__loading,
-.leads__empty {
+.loading-block,
+.table-card__empty {
   padding: var(--space-8);
   text-align: center;
   color: var(--color-text-muted);
@@ -1203,11 +1195,11 @@ a {
   to { background: transparent; }
 }
 
-.leads__row--new td {
+.data-table__row--new td {
   animation: leads-row-in 600ms ease-out;
 }
 
-.leads__pager {
+.table-card__pager {
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1256,7 +1248,7 @@ a {
    tier is signal bars, the status a small mark, overdue waiting a heavier
    weight. Colour is left for what needs a person first. */
 
-.queue-card {
+.table-card {
   overflow: hidden;
   transition: opacity 120ms ease;
   background: var(--color-surface);
@@ -1265,7 +1257,7 @@ a {
   box-shadow: var(--shadow-sm);
 }
 
-.queue-card__toolbar {
+.table-card__toolbar {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
@@ -1274,7 +1266,7 @@ a {
   border-bottom: 1px solid var(--color-border);
 }
 
-.queue-card__search {
+.table-card__search {
   flex: 1;
   min-width: 200px;
 }
@@ -1291,51 +1283,51 @@ a {
   opacity: 0.7;
 }
 
-.queue__table thead th {
+.data-table thead th {
   background: var(--color-surface-muted);
 }
 
-.queue__table th:first-child,
-.queue__table td:first-child {
+.data-table th:first-child,
+.data-table td:first-child {
   padding-left: var(--space-5);
 }
 
-.queue__table th:last-child,
-.queue__table td:last-child {
+.data-table th:last-child,
+.data-table td:last-child {
   padding-right: var(--space-5);
 }
 
-.queue__table td {
+.data-table td {
   height: 64px;
   vertical-align: middle;
 }
 
-.queue__row {
+.data-table__row {
   cursor: pointer;
 }
 
 /* The one-agent lock, task 16. Muted and not clickable: another agent is
    working this lead, and the row should not invite a click it will refuse. */
-.queue__row--locked {
+.data-table__row--locked {
   cursor: not-allowed;
   color: var(--color-text-muted);
   background: var(--color-surface-muted);
 }
 
-.queue__row--locked .queue__name,
-.queue__row--locked .tier-signal,
-.queue__row--locked .queue__score,
-.queue__row--locked .status {
+.data-table__row--locked .cell-name,
+.data-table__row--locked .tier-signal,
+.data-table__row--locked .cell-strong,
+.data-table__row--locked .status {
   color: var(--color-text-muted);
   font-weight: var(--weight-regular);
 }
 
-.queue__name {
+.cell-name {
   display: block;
   font-weight: var(--weight-semibold);
 }
 
-.queue__phone {
+.cell-sub {
   display: block;
   margin-top: 2px;
   font-family: var(--font-mono);
@@ -1343,11 +1335,11 @@ a {
   color: var(--color-text-muted);
 }
 
-.queue__score {
+.cell-strong {
   font-weight: var(--weight-semibold);
 }
 
-.queue__source {
+.cell-code {
   font-size: var(--text-small);
   color: var(--color-text-muted);
 }
@@ -1355,7 +1347,7 @@ a {
 /* The action column is centred, buttons and Locked alike, so they share one
    axis down the table instead of Locked sitting apart from the buttons. Its
    left padding matches the right one, so the centre is the cell's centre. */
-.queue__table .queue__action {
+.data-table .cell-action {
   padding-left: var(--space-5);
   text-align: center;
 }
@@ -1363,7 +1355,7 @@ a {
 /* Hovering an action turns it into a primary button: the header's navy -
    --color-primary is the same #0f2942 as --color-appbar - with white text.
    Jeel, 2026-09-28. */
-.queue__action .btn--secondary:hover:not(:disabled) {
+.cell-action .btn--secondary:hover:not(:disabled) {
   background: var(--color-primary);
   border-color: var(--color-primary);
   color: var(--color-on-primary);
@@ -2284,7 +2276,7 @@ a {
    Admin > Leads' status, the DNC list's state. The old stays, a step back,
    until the new lands; nothing blanks. It cannot be clicked meanwhile: picking
    up a lead from the list being replaced would act on the wrong view.
-   `.queue-card` and `.table-wrap` carry the transition. */
+   `.table-card` and `.table-wrap` carry the transition. */
 .is-switching {
   opacity: 0.55;
   pointer-events: none;
