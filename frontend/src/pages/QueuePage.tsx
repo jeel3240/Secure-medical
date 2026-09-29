@@ -157,8 +157,8 @@ export function QueuePage() {
       {error && <Banner tone="warning">{error} Showing the last update.</Banner>}
       {claimError && <Banner tone="error">{claimError}</Banner>}
 
-      <div className="card queue-card">
-        <div className="queue-card__toolbar">
+      <div className="card table-card">
+        <div className="table-card__toolbar">
           <Segmented
             label="Tier"
             value={tier}
@@ -171,7 +171,7 @@ export function QueuePage() {
           />
 
           <input
-            className="leads__search queue-card__search"
+            className="search-input table-card__search"
             type="search"
             placeholder="Search name or phone"
             value={search}
@@ -179,7 +179,7 @@ export function QueuePage() {
             aria-label="Search the queue"
           />
           <select
-            className="leads__select"
+            className="select-input"
             value={source}
             onChange={(e) => setSource(e.target.value)}
             aria-label="Source"
@@ -192,7 +192,7 @@ export function QueuePage() {
             ))}
           </select>
           <select
-            className="leads__select"
+            className="select-input"
             value={since}
             onChange={(e) => setSince(e.target.value)}
             aria-label="Time window"
@@ -203,18 +203,18 @@ export function QueuePage() {
               </option>
             ))}
           </select>
-          {data && <span className="leads__total">{data.total} in queue</span>}
+          {data && <span className="table-card__count">{data.total} in queue</span>}
         </div>
 
         {loading ? (
-          <div className="leads__loading">
+          <div className="loading-block">
             <Spinner />
           </div>
         ) : !data || data.leads.length === 0 ? (
-          <p className="leads__empty">No leads in this view.</p>
+          <p className="table-card__empty">No leads in this view.</p>
         ) : (
           <div className={`table-wrap${switching ? ' is-switching' : ''}`}>
-            <table className="table queue__table">
+            <table className="table data-table">
               <thead>
                 <tr>
                   <th>Tier</th>
@@ -237,7 +237,7 @@ export function QueuePage() {
                   return (
                     <tr
                       key={lead.id}
-                      className={`queue__row${locked ? ' queue__row--locked' : ''}`}
+                      className={`data-table__row${locked ? ' data-table__row--locked' : ''}`}
                       // A row click only ever looks. Picking is the button's job
                       // alone, so nothing is assigned by accident. Locked rows are
                       // not clickable at all - the lock has to be felt, not just
@@ -250,22 +250,22 @@ export function QueuePage() {
                         <TierSignal tier={lead.tier} />
                       </td>
                       <td>
-                        <span className="queue__name">{leadName(lead)}</span>
-                        <span className="queue__phone">{formatPhone(lead.phone)}</span>
+                        <span className="cell-name">{leadName(lead)}</span>
+                        <span className="cell-sub">{formatPhone(lead.phone)}</span>
                       </td>
                       <td>{answer(1, lead.q1)}</td>
                       <td>{answer(2, lead.q2)}</td>
                       <td>{answer(3, lead.q3)}</td>
-                      <td className="right tabular queue__score">{lead.score}</td>
+                      <td className="right tabular cell-strong">{lead.score}</td>
                       {/* One style for every waiting time - Jeel, 2026-09-28.
                           It used to turn bold for an overdue HOT lead, which
                           left the column half dark, half light. */}
                       <td className="right mono">
                         {formatAge(lead.receivedAt, now)}
                       </td>
-                      <td className="mono queue__source">{lead.source ?? EMPTY}</td>
+                      <td className="mono cell-code">{lead.source ?? EMPTY}</td>
                       <td>{lead.tag ? <QueueStatus tag={lead.tag} /> : EMPTY}</td>
-                      <td className="queue__action">
+                      <td className="cell-action">
                         {locked ? (
                           <span className="queue__locked">
                             <LockIcon />

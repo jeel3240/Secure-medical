@@ -6,7 +6,7 @@
  * `POST /api/leads/:id/callbacks`.
  */
 
-import { parseTimeZone } from './time-zone';
+import { parseTimeZone } from './filters';
 import { Router } from 'express';
 import { requireAuth, requirePasswordChanged } from './auth/middleware';
 import type { AppDeps } from './deps';

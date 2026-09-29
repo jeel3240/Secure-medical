@@ -81,7 +81,7 @@ export function ConfigPage() {
 
   if (loading) {
     return (
-      <div className="leads__loading">
+      <div className="loading-block">
         <Spinner />
       </div>
     );
@@ -105,7 +105,7 @@ export function ConfigPage() {
       {error && <Banner tone="warning">{error} Showing the last update.</Banner>}
 
       <div className="config">
-        <section className="card queue-card">
+        <section className="card table-card">
           <header className="card-head">
             <h2 className="card-head__title">Messages</h2>
             <span className="card-head__meta">In the order a lead receives them</span>
@@ -144,7 +144,7 @@ export function ConfigPage() {
         </section>
 
         <div className="config__column">
-          <section className="card queue-card">
+          <section className="card table-card">
             <header className="card-head">
               <h2 className="card-head__title">Scoring</h2>
               <span className="card-head__meta">Points per answer</span>
@@ -174,7 +174,7 @@ export function ConfigPage() {
             </dl>
           </section>
 
-          <section className="card queue-card">
+          <section className="card table-card">
             <header className="card-head">
               <h2 className="card-head__title">Tiers</h2>
               <span className="card-head__meta">Score bands</span>
@@ -196,7 +196,7 @@ export function ConfigPage() {
             <p className="card-note">A rule change does not rescore leads already scored.</p>
           </section>
 
-          <section className="card queue-card">
+          <section className="card table-card">
             <header className="card-head">
               <h2 className="card-head__title">Settings</h2>
             </header>

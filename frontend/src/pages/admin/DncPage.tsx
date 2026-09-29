@@ -89,8 +89,8 @@ export function DncPage() {
 
       {error && <Banner tone="warning">{error} Showing the last update.</Banner>}
 
-      <div className="card queue-card">
-        <div className="queue-card__toolbar">
+      <div className="card table-card">
+        <div className="table-card__toolbar">
           <Segmented
             label="State"
             value={state}
@@ -101,25 +101,25 @@ export function DncPage() {
             options={TABS.map((tab) => ({ value: tab.key, label: tab.label, count: counts[tab.key] }))}
           />
           <input
-            className="leads__search queue-card__search"
+            className="search-input table-card__search"
             type="search"
             placeholder="Search number or name"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             aria-label="Search the do-not-call list"
           />
-          {data && <span className="leads__total">{data.total} numbers</span>}
+          {data && <span className="table-card__count">{data.total} numbers</span>}
         </div>
 
         {loading ? (
-          <div className="leads__loading">
+          <div className="loading-block">
             <Spinner />
           </div>
         ) : !data || data.rows.length === 0 ? (
-          <p className="leads__empty">No numbers in this view.</p>
+          <p className="table-card__empty">No numbers in this view.</p>
         ) : (
           <div className={`table-wrap${switching ? ' is-switching' : ''}`}>
-            <table className="table queue__table">
+            <table className="table data-table">
               <thead>
                 <tr>
                   <th>Lead</th>
@@ -134,20 +134,20 @@ export function DncPage() {
                   return (
                     <tr
                       key={row.phone}
-                      className={lead ? 'queue__row' : undefined}
+                      className={lead ? 'data-table__row' : undefined}
                       onClick={lead ? () => navigate(`/leads/${lead.id}/timeline`) : undefined}
                       title={lead ? 'Open the timeline' : undefined}
                     >
                       <td>
                         {/* A number can be blocked before we hold a lead for it -
                             that is what protects a later partner delivery. */}
-                        <span className={`queue__name${lead ? '' : ' dnc__no-lead'}`}>
+                        <span className={`cell-name${lead ? '' : ' dnc__no-lead'}`}>
                           {lead ? lead.name : 'No lead'}
                         </span>
-                        <span className="queue__phone">{formatPhone(row.phone)}</span>
+                        <span className="cell-sub">{formatPhone(row.phone)}</span>
                       </td>
                       <td>{REASON[row.reason] ?? row.reason}</td>
-                      <td className="leads__when">{formatReceived(row.addedAt)}</td>
+                      <td className="cell-muted">{formatReceived(row.addedAt)}</td>
                       <td>
                         {row.blocked ? (
                           <span className="status status--danger">
@@ -176,7 +176,7 @@ export function DncPage() {
         )}
 
         {data && totalPages > 1 && (
-          <div className="leads__pager">
+          <div className="table-card__pager">
             <Button variant="secondary" disabled={page <= 1} onClick={() => setPage((p) => p - 1)}>
               Previous
             </Button>
