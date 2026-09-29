@@ -29,8 +29,10 @@ import { formatTime, toLocalInput } from '../../lib/format';
  * **Saved, quietly.** A green "Saved outcome." banner over the panel read as
  * generic - Jeel, 2026-09-29. Success is now a muted line beside Save, like the
  * ticks on a sent message; a failure is a short red line in the same place.
- * The saved outcome shows as the selected button, from the lead card, so
- * nobody presses Closed twice wondering whether it took.
+ * To someone viewing the lead, the saved outcome shows as the selected button,
+ * from the lead card. To the agent holding it, the buttons are theirs: an
+ * earlier close is a line beneath them, "Last closed by ...", and pressing
+ * Closed records a new one.
  *
  * **One Save, three writes.** The brief has a single Save for all three
  * controls, so this posts whichever the agent filled in. They are separate
@@ -103,10 +105,14 @@ export function ActionsPanel({
 
   const navigate = useNavigate();
 
-  // What the buttons show: the agent's unsaved choice, else what is saved.
-  const shown: Disposition | null = disposition ?? (lead.closed ? 'closed' : null);
-  // Choosing the outcome that is already saved changes nothing.
-  const newOutcome = disposition !== null && !(disposition === 'closed' && lead.closed);
+  // What the buttons show. To someone only looking, the saved outcome. To the
+  // agent holding the lead, only their own choice: they picked it up to work
+  // it, so pressing Closed records *their* close and releases it. Until
+  // 2026-09-29 the holder saw an earlier close as already selected - a lead
+  // that texts after closing reads Closed again once opened - and pressing it
+  // saved nothing, leaving the lead held and in the queue.
+  const shown: Disposition | null = disposition ?? (lead.closed && !canAct ? 'closed' : null);
+  const newOutcome = disposition !== null;
 
   const dirty = note.trim() !== '' || callbackAt !== '' || newOutcome;
 
@@ -227,7 +233,8 @@ export function ActionsPanel({
           </div>
           {lead.closed && disposition === null && (
             <p className="wrapup__state">
-              Closed{lead.closed.by ? ` by ${lead.closed.by}` : ''}
+              {canAct ? 'Last closed' : 'Closed'}
+              {lead.closed.by ? ` by ${lead.closed.by}` : ''}
               {lead.closed.at ? ` · ${formatTime(new Date(lead.closed.at))}` : ''}
             </p>
           )}

@@ -247,7 +247,13 @@ the disposition row, and returns `released: true`. The unread flag goes too
 because the agent closing the lead was reading it; a text that arrives later
 sets it again. The lead card carries `closed: { by, at }` while the lead is
 closed, by the same rule as the queue, so the workspace shows Closed as the
-selected outcome, "Closed by Maya · 7:01 PM" under it, and a Closed badge. Before
+selected outcome, "Closed by Maya · 7:01 PM" under it, and a Closed badge -
+to anyone viewing the lead. To the agent holding it the buttons start clear,
+with "Last closed by Maya · 7:01 PM" beneath, so pressing Closed records their
+own close and releases it. The same day's test showed why: a closed lead that
+texts reads Closed again once the reply is read, so an admin who picked it up
+saw Closed already selected, pressed it, and saved nothing - the lead stayed
+held and in the queue. Before
 that nothing on screen said a lead was closed, and an agent in the 2026-09-29
 test pressed Closed twice. `scripts/dispositions-live-check.ts` proves it.
 
