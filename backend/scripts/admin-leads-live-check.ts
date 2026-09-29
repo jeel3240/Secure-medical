@@ -131,6 +131,12 @@ async function main(): Promise<void> {
   const wroteBack = await lead('WroteBack', COMPLETED);
   await disposition(wroteBack, 'closed');
   await pool.query(`UPDATE leads SET has_unread_inbound = true WHERE id = $1`, [wroteBack]);
+  // Closed, texted, and picked up again: the reply is read, so without the
+  // hold rule it read Closed while an agent was working it - 2026-09-29.
+  const pickedAgain = await lead('PickedAgain', COMPLETED);
+  await disposition(pickedAgain, 'closed');
+  await pool.query(`UPDATE leads SET assigned_to = $2, assigned_at = now() WHERE id = $1`, [pickedAgain, maya]);
+
   const closedThenBlocked = await lead('ClosedThenBlocked', COMPLETED);
   await disposition(closedThenBlocked, 'closed');
   await pool.query(`INSERT INTO dnc_list (phone, reason) SELECT phone, 'sms_stop' FROM leads WHERE id = $1`, [closedThenBlocked]);
@@ -167,17 +173,18 @@ async function main(): Promise<void> {
   check('a lead closed under a retired value stays closed', status('SoldBefore'), 'closed');
   check('a callback booked after closing makes it working again', status('Reopened'), 'working');
   check('a closed lead that texts us is working again', status('WroteBack'), 'working');
+  check('a closed lead an agent picked up again is working', status('PickedAgain'), 'working');
   check('opted_out still outranks closed', status('ClosedThenBlocked'), 'opted_out');
 
   console.log('\ntabs');
   const closedTab = await listAdminLeads({ status: 'closed', pageSize: 200 });
   check('the closed tab lists exactly the closed leads', closedTab.leads.map((l) => l.firstName).sort(), ['Closed', 'SoldBefore']);
   check('the counts add up per status', all.counts, {
-    all: 21,
+    all: 22,
     awaiting_reply: 2,
     answering: 1,
     ready: 3,
-    working: 9,
+    working: 10,
     closed: 2,
     needs_review: 1,
     expired: 1,

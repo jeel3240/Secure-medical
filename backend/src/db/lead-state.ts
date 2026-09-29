@@ -40,6 +40,12 @@ const closingList = CLOSING_DISPOSITIONS.map((value) => {
  *   reach, and a callback is the action that says "this is not finished".
  *   Until 2026-09-28 an agent reopened a lead by marking it Interested; that
  *   disposition was retired.
+ * - **An agent picks it up again** - Jeel, 2026-09-29. Whoever holds a lead is
+ *   working it, whatever was saved before. Without this, a closed lead that
+ *   texted and was picked up read Closed again the moment the reply was read:
+ *   Admin > Leads said Closed while the queue said "Working - Maya", and the
+ *   workspace showed Closed already selected to the agent holding it. Saving
+ *   an outcome releases the lead, so it reads Closed again from then on.
  *
  * Written as EXISTS rather than `latest IN (...)`: a lead with no disposition
  * has a NULL newest one, `NULL IN (...)` is NULL rather than false, and an
@@ -62,6 +68,7 @@ export const CLOSED_SQL = `(
       )
   )
   AND NOT l.has_unread_inbound
+  AND NOT EXISTS (SELECT 1 FROM users hu WHERE hu.id = l.assigned_to AND hu.is_active)
 )`;
 
 /**

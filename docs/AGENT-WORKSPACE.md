@@ -247,20 +247,24 @@ the disposition row, and returns `released: true`. The unread flag goes too
 because the agent closing the lead was reading it; a text that arrives later
 sets it again. The lead card carries `closed: { by, at }` while the lead is
 closed, by the same rule as the queue, so the workspace shows Closed as the
-selected outcome, "Closed by Maya · 7:01 PM" under it, and a Closed badge -
-to anyone viewing the lead. To the agent holding it the buttons start clear,
-with "Last closed by Maya · 7:01 PM" beneath, so pressing Closed records their
-own close and releases it. The same day's test showed why: a closed lead that
-texts reads Closed again once the reply is read, so an admin who picked it up
-saw Closed already selected, pressed it, and saved nothing - the lead stayed
-held and in the queue. Before
+selected outcome, "Closed by Maya · 7:01 PM" under it, and a Closed badge.
+
+**A lead someone holds is never closed - Jeel, 2026-09-29.** Whoever picks a
+closed lead up again is working it, so `CLOSED_SQL` excludes a lead with an
+active holder: Admin > Leads reads Working, the card's `closed` is null, and the
+holder's buttons start clear, so their Closed is always saved. The same day's
+test found both halves: a closed lead that texted and was picked up read Closed
+again the moment the reply was read - Closed on Admin > Leads while the queue
+said "Working – Maya", and Closed already selected in the workspace, so
+pressing it saved nothing. Before
 that nothing on screen said a lead was closed, and an agent in the 2026-09-29
 test pressed Closed twice. `scripts/dispositions-live-check.ts` proves it.
 
 **What brings a closed lead back:**
 
 - **The lead texts us.** It returns as an Inbound reply, because a person has
-  to read it. Once read, it is closed again - nobody presses Closed twice.
+  to read it. Read and left alone, it is closed again - nobody presses Closed
+  twice. Picked up, it is Working until the agent saves an outcome or lets go.
 - **An agent books a callback after closing it.** "Actually, call me Friday"
   keeps the lead in reach until that callback is done. A callback booked
   *before* closing - or in the same Save - does not hold it in; it stays on My

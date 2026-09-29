@@ -87,7 +87,12 @@ because it needs to be none: it blocks the number, which is Opted out.
 
 **A closed lead that texts us is Working again.** Its message needs a person,
 so it also returns to the queue as an Inbound reply (`QUEUE.md`). Once that is
-read, it is Closed once more.
+read, it is Closed once more - unless an agent has picked it up.
+
+**A closed lead an agent picks up again is Working** - Jeel, 2026-09-29. Until
+that day it read Closed the moment its reply was read, while the queue showed
+"Working – Maya". A lead with an active holder is never closed
+(`db/lead-state.ts`); saving an outcome releases it, and it reads Closed again.
 
 **A callback booked after closing makes it Working again**, until the callback
 is done. One booked before closing, or in the same Save, does not.
