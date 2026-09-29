@@ -488,8 +488,10 @@ choose. Save is the primary button.
 **Saving an outcome ends the visit - Jeel, 2026-09-29.** With Closed or DNC,
 Save releases the lead (on the server) and takes the agent back to the queue,
 where the lead is already gone. With only a note or a callback the agent stays
-and leaves with *Back to queue*. The saved outcome shows as the selected
-button with "Closed by Maya · 7:01 PM" beneath it. What Save did is a muted
+and leaves with *Back to queue*. To a viewer, the saved outcome shows as the
+selected button with "Closed by Maya · 7:01 PM" beneath it; to the agent holding
+the lead the buttons start clear, with "Last closed by ..." beneath, so their
+Closed is always saved. What Save did is a muted
 "✓ Saved 7:01 PM" beside the button, and a failure a short red line in the same
 place - both replacing a green banner over the panel that read as generic.
 
