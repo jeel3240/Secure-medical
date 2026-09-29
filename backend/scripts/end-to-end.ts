@@ -201,7 +201,7 @@ async function main(): Promise<void> {
   check('at the top', queue.leads[0]?.id, leadId);
   check('as HOT', queued?.tier, 'HOT');
   check('with its answers', [queued?.q1, queued?.q2, queued?.q3], ['3', '1', '1']);
-  check('and nobody holds it', queued?.tag?.kind !== 'in_progress', true);
+  check('and nobody holds it', queued?.tag?.kind !== 'working', true);
 
   // ------------------------------------------------------------- 4. claim
   step('4. An agent picks it up');
@@ -279,7 +279,7 @@ async function main(): Promise<void> {
   check('the release succeeds', released.ok, true);
 
   const afterRelease = (await listQueue({})).leads.find((l) => l.id === leadId);
-  check('the queue frees it', afterRelease?.tag?.kind !== 'in_progress', true);
+  check('the queue frees it', afterRelease?.tag?.kind !== 'working', true);
 
   // ------------------------------------------------------------- 9. DNC
   step('9. A do-not-call disposition blocks the number');

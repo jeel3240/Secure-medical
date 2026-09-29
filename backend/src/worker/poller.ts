@@ -1,4 +1,4 @@
-import { isBlocked, recordFailedSend } from '../db/failed-sends';
+import { sendAndRecord } from '../db/outbound';
 import { pool } from '../db/pool';
 import { readExpiryDays } from '../db/sql';
 import { config } from '../config';
@@ -178,8 +178,6 @@ async function insertLead(
  * with a red "!" - `db/failed-sends.ts`.
  */
 async function sendOpener(leadId: number, phone: string, firstName: string | null): Promise<boolean> {
-  // Rendered before the send, so a refused opener can be kept with its text.
-  let rendered: string | null = null;
   try {
     const template = await readSetting('question_1');
     if (!template) {
@@ -190,18 +188,18 @@ async function sendOpener(leadId: number, phone: string, firstName: string | nul
     // The stored copy carries {first_name}; what goes out, and what is recorded
     // in messages.body, is the rendered text.
     const { text, nameDropped } = renderMessage(template, firstName);
-    rendered = text;
     if (nameDropped) {
       log.info('sms.name_dropped', { leadId, key: 'question_1' });
     }
 
-    const result = await sendMessage([phone], text);
-
-    await pool.query(
-      `INSERT INTO messages (lead_id, direction, body, ezt_message_id)
-       VALUES ($1, 'outbound', $2, $3)`,
-      [leadId, text, result.id]
-    );
+    // Recorded around the send, so a refused opener is kept (the red "!", and
+    // the retry's attempt count) and a delivered one is never sent again -
+    // db/outbound.ts.
+    const result = await sendAndRecord(pool, { leadId, body: text, send: () => sendMessage([phone], text) });
+    if (!result.sent) {
+      log.error('sms.failed', { leadId, key: 'question_1', blocked: result.blocked, err: errText(result.err) });
+      return false;
+    }
 
     // The reply window starts when the opener actually goes out. Set here
     // rather than at creation so a conversation whose opener failed has no
@@ -214,12 +212,12 @@ async function sendOpener(leadId: number, phone: string, firstName: string | nul
       [leadId, String(days)]
     );
 
-    log.info('sms.sent', { leadId, key: 'question_1', eztMessageId: result.id });
+    log.info('sms.sent', { leadId, key: 'question_1', eztMessageId: result.eztMessageId });
     return true;
   } catch (err) {
+    // Before the send, or after it went out (the reply window). Either way
+    // nothing is marked refused, so the retry cannot send the opener twice.
     log.error('sms.failed', { leadId, key: 'question_1', err: errText(err) });
-    // A blocked number was never attempted, so there is no failed send to keep.
-    if (rendered && !isBlocked(err)) await recordFailedSend(leadId, rendered);
     return false;
   }
 }

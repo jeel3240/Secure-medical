@@ -78,9 +78,9 @@ const BASE = `
  * It used to hold every responder, including a lead halfway through the
  * questions. But question 3 asks how they want to be contacted, so a lead who
  * has not reached it has not asked for a call - and one still answering would
- * be interrupted by it. A lead is in when it has replied (a score above 0), its
- * number is not blocked (a live `dnc_list` row, whatever the conversation
- * says), and one of these holds:
+ * be interrupted by it. A lead is in when it has replied (a score above 0, or
+ * an unread message - below), its number is not blocked (a live `dnc_list`
+ * row, whatever the conversation says), and one of these holds:
  *
  * - **Completed** - answered all three, including how to contact them.
  * - **Needs review** - replied, and we could not understand it.
@@ -100,9 +100,15 @@ const BASE = `
  * closing reopens the lead altogether.
  *
  * A lead partway through the questions is on Admin > Leads only.
+ *
+ * **An unread message counts as having replied** - 2026-09-28, from review. A
+ * lead who never answered a question has a score of 0, so one who texts "please
+ * call me" on day 9 - or STOPs, STARTs, then writes - was flagged for a person
+ * and then kept out of the queue by `score > 0`, where no person would ever see
+ * it.
  */
 const INCLUDED = `
-  c.score > 0
+  (c.score > 0 OR l.has_unread_inbound)
   AND NOT EXISTS (
     SELECT 1 FROM dnc_list d WHERE d.phone = l.phone AND d.released_at IS NULL
   )
@@ -169,6 +175,7 @@ interface QueueDbRow {
   q1: string | null;
   q2: string | null;
   q3: string | null;
+  agent_id: number | null;
   agent_name: string | null;
   has_unread_inbound: boolean;
 }
@@ -191,7 +198,7 @@ export async function listQueue(query: QueueQuery = {}): Promise<QueuePage> {
     `SELECT l.id, l.phone, l.first_name, l.last_name, l.source,
             ${RECEIVED} AS received_at,
             c.score, c.tier, c.status, c.q1, c.q2, c.q3,
-            u.name AS agent_name, l.has_unread_inbound
+            u.id AS agent_id, u.name AS agent_name, l.has_unread_inbound
      ${BASE}
      ${where}
      ORDER BY c.score DESC, ${RECEIVED} DESC, l.id DESC
@@ -245,7 +252,7 @@ export async function listQueue(query: QueueQuery = {}): Promise<QueuePage> {
       conversationStatus: r.status,
       tag: queueTag({
         conversationStatus: r.status,
-        assignedAgentName: r.agent_name,
+        holder: r.agent_id === null ? null : { id: r.agent_id, name: r.agent_name ?? 'Another agent' },
         hasUnreadInbound: r.has_unread_inbound,
       }),
     })),

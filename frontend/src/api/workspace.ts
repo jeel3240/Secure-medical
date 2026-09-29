@@ -1,4 +1,4 @@
-import { api } from './client';
+import { api, viewerTimeZone } from './client';
 
 /**
  * The agent workspace, the lead timeline and My Callbacks.
@@ -203,7 +203,7 @@ export async function listCallbacks(
   /** Another agent's id, or 'all' for everyone's - superadmin only. Omit for your own. */
   agentId?: number | 'all'
 ): Promise<CallbackList> {
-  const params: Record<string, string | number> = { when };
+  const params: Record<string, string | number> = { when, tz: viewerTimeZone() };
   if (agentId) params.agentId = agentId;
   const { data } = await api.get<CallbackList>('/callbacks', { params });
   return data;

@@ -48,7 +48,7 @@
 
 import { pool } from '../db/pool';
 import { readExpiryDays } from '../db/sql';
-import { isBlocked, recordFailedSend } from '../db/failed-sends';
+import { sendAndRecord } from '../db/outbound';
 import { renderMessage } from '../core/messages';
 import { sendMessage } from '../integrations/ezt-client';
 import { errText, log } from '../lib/log';
@@ -94,15 +94,21 @@ export interface RetryStats {
  * How many openers we have already tried for this lead, and when the last one
  * failed.
  *
- * Read from the failed message rows `recordFailedSend` leaves, so no new column
+ * Read from the failed message rows `db/outbound.ts` leaves, so no new column
  * is needed and both survive a restart. A blocked number records nothing -
  * that send was never attempted - so it never looks due here either.
+ *
+ * Automated sends only (`sent_by IS NULL`). An agent's own text that EZ Texting
+ * refused is a failed row too, and until 2026-09-28 it counted as an opener
+ * attempt: a few tries by an agent during an outage gave the lead up after
+ * five minutes instead of nine hours. Found in review.
  */
 const FAILED_OPENERS = `
   FROM messages m
   WHERE m.lead_id = l.id
     AND m.direction = 'outbound'
     AND m.delivery_status = 'failed'
+    AND m.sent_by IS NULL
 `;
 
 /**
@@ -136,6 +142,15 @@ export async function retryFailedOpeners(): Promise<RetryStats> {
      JOIN conversations c ON c.lead_id = l.id
      WHERE c.status = 'open'
        AND c.expires_at IS NULL
+       -- Still on question 1 with nothing answered. A lead who replied anyway
+       -- has moved the conversation on, and question 1 again would be scored
+       -- as the answer to question 2 (review, 2026-09-28).
+       AND c.step = 1 AND c.score = 0
+       AND NOT EXISTS (
+         SELECT 1 FROM messages m WHERE m.lead_id = l.id AND m.direction = 'inbound'
+       )
+       -- Nothing of ours went out or may have: a 'sending' row counts, since
+       -- that text may have been delivered - db/outbound.ts.
        AND NOT EXISTS (
          SELECT 1 FROM messages m
          WHERE m.lead_id = l.id AND m.direction = 'outbound'
@@ -173,18 +188,34 @@ export async function retryFailedOpeners(): Promise<RetryStats> {
 
     stats.due++;
 
-    let rendered: string | null = null;
     try {
       const { text } = renderMessage(template, row.first_name);
-      rendered = text;
 
-      const result = await sendMessage([row.phone], text);
+      // Recorded around the send - db/outbound.ts - so a text that went out is
+      // never retried because a write after it failed.
+      const result = await sendAndRecord(pool, {
+        leadId: row.id,
+        body: text,
+        send: () => sendMessage([row.phone], text),
+      });
 
-      await pool.query(
-        `INSERT INTO messages (lead_id, direction, body, ezt_message_id)
-         VALUES ($1, 'outbound', $2, $3)`,
-        [row.id, text, result.id]
-      );
+      if (!result.sent) {
+        stats.failed++;
+        log.error('sms.failed', {
+          leadId: row.id,
+          key: 'question_1',
+          retry: attempts + 1,
+          blocked: result.blocked,
+          err: errText(result.err),
+        });
+        // Logged once, at the attempt that reaches the limit, rather than
+        // every tick the lead stays abandoned. A blocked number records no
+        // attempt, so it never reaches it.
+        if (!result.blocked && attempts + 1 >= MAX_ATTEMPTS) {
+          log.warn('opener.gave_up', { leadId: row.id, attempts: attempts + 1 });
+        }
+        continue;
+      }
 
       // The reply window starts now, not when the lead arrived: they are only
       // being asked at this point, so the seven days run from here.
@@ -202,24 +233,14 @@ export async function retryFailedOpeners(): Promise<RetryStats> {
         leadId: row.id,
         key: 'question_1',
         retry: attempts + 1,
-        eztMessageId: result.id,
+        eztMessageId: result.eztMessageId,
       });
     } catch (err) {
+      // Before the send (the database refused the row - nothing went out, and
+      // nothing is counted, so it is tried again next tick) or after it (the
+      // reply window - the text went out and its row says so).
       stats.failed++;
-      log.error('sms.failed', {
-        leadId: row.id,
-        key: 'question_1',
-        retry: attempts + 1,
-        err: errText(err),
-      });
-      // A number blocked between the poll and now is not a failure to retry.
-      if (rendered && !isBlocked(err)) {
-        await recordFailedSend(row.id, rendered);
-        // Logged once, here, rather than every tick the lead stays abandoned.
-        if (attempts + 1 >= MAX_ATTEMPTS) {
-          log.warn('opener.gave_up', { leadId: row.id, attempts: attempts + 1 });
-        }
-      }
+      log.error('sms.failed', { leadId: row.id, key: 'question_1', retry: attempts + 1, err: errText(err) });
     }
   }
 

@@ -2,15 +2,16 @@ import { queueTag, type QueueFacts } from './queue-tags';
 
 const facts = (over: Partial<QueueFacts> = {}): QueueFacts => ({
   conversationStatus: 'completed',
-  assignedAgentName: null,
+  holder: null,
   hasUnreadInbound: false,
   ...over,
 });
 
 describe('what an agent sees against a lead', () => {
-  it('names the agent holding the lead', () => {
-    expect(queueTag(facts({ assignedAgentName: 'Michael' }))).toEqual({
-      kind: 'in_progress',
+  it('names the agent holding the lead, with their id to match on', () => {
+    expect(queueTag(facts({ holder: { id: 7, name: 'Michael' } }))).toEqual({
+      kind: 'working',
+      agentId: 7,
       agentName: 'Michael',
     });
   });
@@ -37,8 +38,8 @@ describe('what an agent sees against a lead', () => {
 describe('when several could apply, the most urgent wins', () => {
   it('a lead someone is working says so, whatever else is true', () => {
     expect(
-      queueTag(facts({ assignedAgentName: 'Michael', hasUnreadInbound: true, conversationStatus: 'review' }))
-    ).toMatchObject({ kind: 'in_progress' });
+      queueTag(facts({ holder: { id: 7, name: 'Michael' }, hasUnreadInbound: true, conversationStatus: 'review' }))
+    ).toMatchObject({ kind: 'working' });
   });
 
   it('an unread reply outranks needing review', () => {

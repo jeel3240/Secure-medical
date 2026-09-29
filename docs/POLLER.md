@@ -153,8 +153,22 @@ on any screen to say so.
 **How a failed opener is recognised.** The poller sets `expires_at` only once
 the opener is accepted, so a conversation still `open` with `expires_at IS NULL`
 and no successful outbound message never had one go out. No new column was
-needed. The attempt count comes from the failed message rows
-`recordFailedSend` already writes, so it survives a restart.
+needed. The attempt count comes from the failed message rows, so it survives a
+restart.
+
+**Only a lead still waiting on question 1 is retried** - on step 1, score 0,
+with no message from the lead and no text of ours that went out or may have
+(a `sending` row counts). **Only automated failures count as attempts** -
+`sent_by IS NULL`. Both from review, 2026-09-28: an agent's own refused texts
+used to count, giving a lead up after five minutes; and a lead who replied
+anyway could be sent question 1 again, their next answer then scored against
+question 2.
+
+**Sent through `db/outbound.ts`**, which writes the row as `sending` before the
+send and records EZ Texting's id after. A text that went out is never marked
+refused and never retried because a database write after it failed - until
+2026-09-28 that case became a "failed" row and the retry sent the opener
+again. The poller's own opener and the reply flow use the same helper.
 
 **The backoff,** each wait counted from the *last failed attempt*:
 

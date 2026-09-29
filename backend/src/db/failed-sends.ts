@@ -12,9 +12,13 @@
  * out: the Overview activity feed and Admin > Leads' Last activity. A blocked
  * number is not recorded at all: that send was never attempted.
  *
+ * Used for an agent's own SMS, which sends first and then writes. The three
+ * automated paths write their row before sending instead, and mark it failed
+ * there - `db/outbound.ts`, since 2026-09-28.
+ *
  * Never throws. It runs in the catch of a send that has already failed, and a
  * second failure there must not replace the first in the log or break the
- * caller - the poller would abandon its page.
+ * caller.
  */
 
 import { pool } from './pool';
@@ -34,13 +38,4 @@ export async function recordFailedSend(
   } catch (err) {
     log.error('sms.record_failed', { leadId, err: errText(err) });
   }
-}
-
-/**
- * Whether a send was refused because the number is blocked - checked by name
- * rather than `instanceof`, so it holds wherever the EZ Texting client is
- * replaced, as the tests do.
- */
-export function isBlocked(err: unknown): boolean {
-  return err instanceof Error && err.name === 'BlockedNumberError';
 }

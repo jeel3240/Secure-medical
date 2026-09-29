@@ -5,6 +5,7 @@
  * done from either. AGENT-WORKSPACE.md, "Endpoints"; DESIGN-PROMPT.md 5.
  */
 
+import { startOfTodaySql } from './sql';
 import { pool } from './pool';
 
 export type CallbackWhen = 'today' | 'upcoming' | 'overdue' | 'all';
@@ -137,12 +138,17 @@ export async function updateCallback(
  * `today` is the rest of today, not the whole day: a callback at 9am seen at
  * 3pm is overdue, and showing it under both would hide that it was missed.
  * `overdue` is everything past its time and still not done.
+ *
+ * Days are the viewer's, from `timeZone` - `db/sql.ts`, `startOfTodaySql`.
  */
-const WHEN_SQL: Record<Exclude<CallbackWhen, 'all'>, string> = {
-  today: `cb.done_at IS NULL AND cb.scheduled_at >= now() AND cb.scheduled_at < date_trunc('day', now()) + interval '1 day'`,
-  upcoming: `cb.done_at IS NULL AND cb.scheduled_at >= date_trunc('day', now()) + interval '1 day'`,
-  overdue: `cb.done_at IS NULL AND cb.scheduled_at < now()`,
-};
+function whenSql(timeZone?: string): Record<Exclude<CallbackWhen, 'all'>, string> {
+  const tomorrow = `${startOfTodaySql(timeZone)} + interval '1 day'`;
+  return {
+    today: `cb.done_at IS NULL AND cb.scheduled_at >= now() AND cb.scheduled_at < ${tomorrow}`,
+    upcoming: `cb.done_at IS NULL AND cb.scheduled_at >= ${tomorrow}`,
+    overdue: `cb.done_at IS NULL AND cb.scheduled_at < now()`,
+  };
+}
 
 export interface CallbackListResult {
   callbacks: CallbackListRow[];
@@ -157,7 +163,10 @@ export interface CallbackListResult {
 export async function listCallbacks(opts: {
   agentId: number | 'all';
   when: CallbackWhen;
+  /** The viewer's IANA zone, for where today ends. UTC when absent. */
+  timeZone?: string;
 }): Promise<CallbackListResult> {
+  const WHEN_SQL = whenSql(opts.timeZone);
   const where = opts.when === 'all' ? 'true' : WHEN_SQL[opts.when];
   const everyone = opts.agentId === 'all';
   const whose = everyone ? 'true' : 'cb.agent_id = $1';
