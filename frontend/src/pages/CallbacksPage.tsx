@@ -106,8 +106,16 @@ export function CallbacksPage() {
     }
   };
 
-  /** Picking up from here claims the lead, exactly as the queue does. */
+  /**
+   * Picking up from here claims the lead, exactly as the queue does - and
+   * Resume, on a lead you already hold, sends the same claim. A lead someone
+   * else holds is only opened, read-only: a claim would be refused.
+   */
   const open = async (row: CallbackRow) => {
+    if (row.holder && row.holder.id !== me?.id) {
+      navigate(`/leads/${row.leadId}`);
+      return;
+    }
     setBusy(row.id);
     setError(null);
     try {
@@ -260,8 +268,13 @@ export function CallbacksPage() {
                               variant="secondary"
                               loading={busy === row.id}
                               onClick={() => void open(row)}
+                              title={
+                                row.holder && row.holder.id !== me?.id
+                                  ? `${row.holder.name} is working this lead`
+                                  : undefined
+                              }
                             >
-                              Pick up
+                              {!row.holder ? 'Pick up' : row.holder.id === me?.id ? 'Resume' : 'View'}
                             </Button>
                             <RowMenu
                               label={`More for ${leadName(row.lead)}`}

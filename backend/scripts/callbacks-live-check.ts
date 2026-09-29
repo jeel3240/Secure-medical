@@ -188,6 +188,16 @@ async function main(): Promise<void> {
     check('the lead phone', row?.lead.phone, '+15550000402');
     check('the tier', row?.lead.tier, 'HOT');
     check('and the newest note', row?.latestNote, 'newest note');
+    check('nobody holds it, so the screen offers Pick up', row?.holder, null);
+
+    // The holder, so the row says Resume to them and View to anyone else.
+    await pool.query(`UPDATE leads SET assigned_to = $2, assigned_at = now() WHERE id = $1`, [other, sam]);
+    const held = (await listCallbacks({ agentId: sam, when: 'today' })).callbacks.find((c) => c.leadId === other);
+    check('who holds the lead', held?.holder, { id: sam, name: 'Sam' });
+    await pool.query(`UPDATE users SET is_active = false WHERE id = $1`, [sam]);
+    const gone = (await listCallbacks({ agentId: sam, when: 'today' })).callbacks.find((c) => c.leadId === other);
+    check('but not a deactivated holder', gone?.holder, null);
+    await pool.query(`UPDATE users SET is_active = true WHERE id = $1`, [sam]);
   }
 
   console.log('\nbad input');

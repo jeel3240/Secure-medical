@@ -214,6 +214,12 @@ Agents see no picker.
 
 The underline tabs were the last of their kind; their styles are gone.
 
+**The row's button follows who holds the lead - 2026-09-29.** It said Pick up
+on every row, even to the agent already holding that lead. Now the list carries
+the lead's holder (`holder` on each row, `db/callbacks.ts`): **Pick up** when
+nobody holds it, **Resume** to its holder, and **View** to anyone else - which
+only opens the lead, read-only, since a claim would be refused.
+
 ## Switching is smooth everywhere - 2026-09-28
 
 Jeel, after the Overview's period switch: "really smooth, can we add same on
