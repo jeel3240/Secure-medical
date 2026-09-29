@@ -95,6 +95,27 @@ async function main(): Promise<void> {
     check('the score carries its tier', (t[scored].detail as any).tier, 'HOT');
   }
 
+  console.log('\na text after the questions were finished');
+  {
+    // Until 2026-09-29 "Scored" sat at the newest reply, so a later "Hi" moved
+    // it down under itself. It now sits at completed_at.
+    const lead = await makeLead('+15550000309', '2 hours');
+    await pool.query(
+      `INSERT INTO conversations (lead_id, status, step, q1, q2, q3, score, tier, completed_at)
+       VALUES ($1, 'completed', 3, '2', '2', '3', 60, 'WARM', now() - interval '60 minutes')`,
+      [lead]
+    );
+    await pool.query(
+      `INSERT INTO messages (lead_id, direction, body, from_number, received_at, created_at)
+       VALUES ($1, 'inbound', 'Hi', '15550000309', now() - interval '5 minutes', now() - interval '5 minutes')`,
+      [lead]
+    );
+    const t = (await getTimeline(lead))!;
+    const scored = t.find((e) => e.kind === 'system' && (e.detail as any).event === 'scored');
+    const hi = t.find((e) => e.kind === 'inbound');
+    check('scored is placed when the flow finished', scored && Date.parse(hi!.at) - Date.parse(scored.at) > 50 * 60_000, true);
+  }
+
   console.log('\nordering across every table');
   {
     const lead = await makeLead('+15550000302', '3 hours');
