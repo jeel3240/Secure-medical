@@ -10,6 +10,7 @@ import {
 import { Banner } from '../../components/Banner';
 import { Button } from '../../components/Button';
 import { Modal } from '../../components/Modal';
+import { toLocalInput } from '../../lib/format';
 
 /**
  * The workspace's right column: outcome, callback, note, Save.
@@ -70,14 +71,6 @@ const OUTCOMES: { value: Disposition; tone: 'good' | 'danger'; label: string }[]
   { value: 'closed', tone: 'good', label: 'Closed' },
   { value: 'dnc', tone: 'danger', label: 'DNC' },
 ];
-
-/** `<input type="datetime-local">` wants local time with no zone, not an ISO string. */
-function toLocalInput(date: Date): string {
-  const pad = (n: number) => String(n).padStart(2, '0');
-  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(
-    date.getHours()
-  )}:${pad(date.getMinutes())}`;
-}
 
 export function ActionsPanel({
   lead,

@@ -1,4 +1,5 @@
 import { CLOSED_SQL, WORKED_SQL } from './lead-state';
+import { likeLiteral } from './sql';
 import { pool } from './pool';
 
 /**
@@ -149,7 +150,8 @@ function buildFilters(query: AdminLeadQuery): { sql: string; values: unknown[] }
   if (query.q) {
     // Phone is searched with punctuation stripped, so "(602) 620-3572" matches
     // the stored +16026203572.
-    values.push(`%${query.q.toLowerCase()}%`);
+    // Escaped, so a "%" or "_" in the box is that character, not a wildcard.
+    values.push(`%${likeLiteral(query.q.toLowerCase())}%`);
     const like = `$${values.length}`;
     values.push(`%${query.q.replace(/\D/g, '')}%`);
     const digits = `$${values.length}`;

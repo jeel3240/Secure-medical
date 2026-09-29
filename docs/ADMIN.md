@@ -176,6 +176,14 @@ with no lead reads "No lead". A row with a lead opens its timeline. The blue
 box explaining where numbers come from became a quiet note at the foot of the
 card, and the header has "Live · updated just now".
 
+**Search escaping was broken until 2026-09-28.** The DNC query's own copy of
+the LIKE escape was a template literal that produced the text `${c}`, so a
+`%` or `_` was never escaped, and its digits clean-up read `'D'` for `'\D'`,
+stripping the letter D instead of every non-digit. Its check only proved `%`
+matched nothing - which the broken version also did. All searches now use the
+one escape in `db/sql.ts`, and `scripts/admin-live-check.ts` finds a name with
+an underscore, which fails against the old code.
+
 **As built.** `state` is `all` by default, and `all`, `blocked` or `released`
 are the accepted values. Counts for all three come back whichever is asked for,
 so a tab badge is right while another tab is open. Search takes digits only

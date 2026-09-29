@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { listAdminLeads, type AdminLead, type AdminLeadsResponse } from '../../api/leads';
+import { listAdminLeads, type AdminLeadsResponse } from '../../api/leads';
 import { usePolling } from '../../api/usePolling';
 import { Banner } from '../../components/Banner';
 import { Button } from '../../components/Button';
@@ -10,7 +10,7 @@ import { Segmented } from '../../components/Segmented';
 import { Spinner } from '../../components/Spinner';
 import { SyncStatus } from '../../components/SyncStatus';
 import { TierSignal } from '../../components/TierSignal';
-import { formatPhone, formatReceived, formatRelative } from '../../lib/format';
+import { formatPhone, formatReceived, formatRelative, leadName } from '../../lib/format';
 
 /**
  * Admin > Leads: every lead the poller has pulled in, replied or not.
@@ -54,13 +54,6 @@ const SINCE: { key: string; label: string }[] = [
   { key: '30d', label: 'Last 30 days' },
   { key: 'all', label: 'All time' },
 ];
-
-function leadName(lead: AdminLead): string {
-  const first = lead.firstName?.trim();
-  const last = lead.lastName?.trim();
-  if (!first && !last) return 'Unknown';
-  return [first, last ? `${last[0].toUpperCase()}.` : null].filter(Boolean).join(' ');
-}
 
 export function LeadsPage() {
   const navigate = useNavigate();

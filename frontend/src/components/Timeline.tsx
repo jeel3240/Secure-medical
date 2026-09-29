@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react';
 import type { TimelineEntry, TimelineKind } from '../api/workspace';
 import { DISPOSITION_LABEL, type Disposition } from '../api/workspace';
+import { formatTime } from '../lib/format';
 
 /**
  * The lead's history: one ordered list built from messages, calls, notes,
@@ -29,7 +30,6 @@ const LABEL: Record<TimelineKind, string> = {
   disposition: 'DISP',
 };
 
-const timeFormat = new Intl.DateTimeFormat(undefined, { hour: 'numeric', minute: '2-digit' });
 const dayFormat = new Intl.DateTimeFormat(undefined, {
   weekday: 'short',
   month: 'short',
@@ -44,7 +44,8 @@ function duration(seconds: unknown): string {
 }
 
 /** The system events the backend derives, in words. */
-function systemText(detail: Record<string, unknown>): string {
+/** The words for a system event - shared with the workspace conversation. */
+export function systemText(detail: Record<string, unknown>): string {
   switch (detail.event) {
     case 'lead_received':
       return `Lead received${detail.source ? ` from ${detail.source}` : ''}`;
@@ -72,7 +73,7 @@ function entryText(entry: TimelineEntry): string {
     }
     case 'callback': {
       const at = typeof d.scheduledAt === 'string' ? new Date(d.scheduledAt) : null;
-      const when = at ? `${dayFormat.format(at)} ${timeFormat.format(at)}` : 'unscheduled';
+      const when = at ? `${dayFormat.format(at)} ${formatTime(at)}` : 'unscheduled';
       return d.doneAt ? `Callback completed (was ${when})` : `Callback scheduled for ${when}`;
     }
     case 'disposition': {
@@ -136,7 +137,7 @@ export function Timeline({
               </div>
 
               <time className="timeline__time tabular" dateTime={entry.at}>
-                {timeFormat.format(at)}
+                {formatTime(at)}
               </time>
             </div>
           </li>

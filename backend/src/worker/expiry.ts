@@ -10,19 +10,14 @@
  */
 
 import { pool } from '../db/pool';
+import { readExpiryDays } from '../db/sql';
 
-const DEFAULT_EXPIRY_DAYS = 7;
 
 export interface ExpirySweep {
   expired: number;
   durationMs: number;
 }
 
-async function readExpiryDays(): Promise<number> {
-  const { rows } = await pool.query(`SELECT value FROM settings WHERE key = 'expiry_days'`);
-  const days = Number(rows[0]?.value);
-  return Number.isFinite(days) && days > 0 ? days : DEFAULT_EXPIRY_DAYS;
-}
 
 /**
  * Marks every `open` conversation that is past its deadline as `expired`.
@@ -36,7 +31,7 @@ async function readExpiryDays(): Promise<number> {
  */
 export async function expireStaleConversations(): Promise<ExpirySweep> {
   const startedAt = Date.now();
-  const days = await readExpiryDays();
+  const days = await readExpiryDays(pool);
 
   const { rowCount } = await pool.query(
     `UPDATE conversations

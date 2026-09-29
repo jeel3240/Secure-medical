@@ -1,5 +1,7 @@
 import { useEffect, useRef } from 'react';
 import type { AnswerChip, TimelineEntry } from '../../api/workspace';
+import { systemText } from '../../components/Timeline';
+import { formatTime } from '../../lib/format';
 
 /**
  * The workspace centre column: the SMS thread, read as a conversation rather
@@ -16,24 +18,8 @@ import type { AnswerChip, TimelineEntry } from '../../api/workspace';
  * the handoff in STATE-MACHINE.md rule 2b is visible in the thread itself.
  */
 
-const timeFormat = new Intl.DateTimeFormat(undefined, { hour: 'numeric', minute: '2-digit' });
 
 const SHOWN = new Set<TimelineEntry['kind']>(['sms', 'inbound', 'agent_sms', 'system']);
-
-function systemText(detail: Record<string, unknown>): string {
-  switch (detail.event) {
-    case 'lead_received':
-      return `Lead received${detail.source ? ` from ${detail.source}` : ''}`;
-    case 'scored':
-      return `Scored ${detail.score} · ${detail.tier ?? 'no tier'} · ${detail.status}`;
-    case 'agent_took_over':
-      return 'Agent took over - automated questions stopped';
-    case 'conversation_expired':
-      return 'Conversation expired';
-    default:
-      return String(detail.event ?? 'System event');
-  }
-}
 
 /**
  * Pairs each inbound reply with the answer it was recorded as, so `3` can be
@@ -140,7 +126,7 @@ export function Conversation({
     <div className="convo">
       {shown.map((entry, index) => {
         const at = new Date(entry.at);
-        const time = timeFormat.format(at);
+        const time = formatTime(at);
 
         if (entry.kind === 'system') {
           return (

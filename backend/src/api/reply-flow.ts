@@ -8,6 +8,7 @@
  * is the authority for the behaviour.
  */
 
+import { readExpiryDays, type Querier } from '../db/sql';
 import type { PoolClient } from 'pg';
 import { renderMessage } from '../core/messages';
 import {
@@ -156,16 +157,6 @@ export async function applyReply(
     send: async () =>
       result.send ? sendFlowMessage(leadId, conversation.id, phone, firstName, result.send) : null,
   };
-}
-
-interface Querier {
-  query: (sql: string, values?: unknown[]) => Promise<{ rows: Array<Record<string, unknown>> }>;
-}
-
-async function readExpiryDays(q: Querier): Promise<number> {
-  const { rows } = await q.query(`SELECT value FROM settings WHERE key = 'expiry_days'`);
-  const days = Number(rows[0]?.value);
-  return Number.isFinite(days) && days > 0 ? days : 7;
 }
 
 /**

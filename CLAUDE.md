@@ -195,6 +195,7 @@ you change something the docs describe, update the doc in the same commit.
     scripts/end-to-end.ts   the whole system in one run - npm run e2e
     src/db/leads.ts         Admin > Leads SQL
     src/db/lead-state.ts    closed and worked, shared by the queue and Admin > Leads
+    src/db/sql.ts           LIKE escaping and the expiry-days reader, shared by every query
     src/db/holder.ts        who holds a lead - checked before every write on it
     src/db/failed-sends.ts  keeps a message EZ Texting refused, marked failed
     scripts/admin-leads-live-check.ts  proves the Admin > Leads statuses
@@ -209,6 +210,7 @@ you change something the docs describe, update the doc in the same commit.
     src/api/admin.ts        config, overview, DNC, health
     src/lib/format.ts       phone, dates, age, answer labels
     src/lib/lock.ts         which queue rows an agent may open
+    src/lib/useSecond.ts    a clock that re-renders every second
     src/components/Timeline.tsx      shared by the workspace and the timeline page
     src/components/QueueStatus.tsx   the queue's STATUS column: icon and words
     src/components/LeadStatus.tsx    an Admin > Leads status: icon and words
