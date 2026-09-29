@@ -23,7 +23,7 @@ export function adminConfigRouter(deps: AppDeps): Router {
       // Loaded lazily: ../../db/admin-config pulls in the pool, which pulls in
       // config, which exits the process when an env var is missing - that would
       // break the tests, which build the app without a full environment.
-      // eslint-disable-next-line @typescript-eslint/no-var-requires
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
       const db = require('../../db/admin-config') as typeof import('../../db/admin-config');
 
       res.json(await db.getAdminConfig());

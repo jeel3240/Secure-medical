@@ -196,11 +196,11 @@ async function sendFlowMessage(
   firstName: string | null,
   key: MessageKey
 ): Promise<string | null> {
-  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
   const { pool } = require('../db/pool') as typeof import('../db/pool');
-  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
   const ezt = require('../integrations/ezt-client') as typeof import('../integrations/ezt-client');
-  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
   const { sendAndRecord } = require('../db/outbound') as typeof import('../db/outbound');
 
   try {

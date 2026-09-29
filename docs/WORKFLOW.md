@@ -33,6 +33,7 @@ commit message.
 ```bash
 cd backend && npx tsc --noEmit    # must be clean
 npm test                          # must pass
+npm run lint                      # must pass - ESLint, both projects
 cd ../frontend && npm run build   # type-checks and builds the frontend
 cd ..
 docker compose build api worker   # catches what a local node_modules hides

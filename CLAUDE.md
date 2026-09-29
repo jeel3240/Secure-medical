@@ -718,6 +718,7 @@ were taken on trust and the poller silently ingested nothing.
 - **Every change reaches the repo through a PR into `dev`.** Branch off `dev`,
   push the branch, open the PR against `dev` - never against `main`, and never
   by committing to either directly. Jeel merges `dev` into `main`.
-- Prefer small PRs, one concern each. Run `npm test` before opening one, and
+- Prefer small PRs, one concern each. Run `npm test` and `npm run lint` (ESLint,
+  added 2026-09-28) before opening one, and
   `docker compose build api worker` - a local `node_modules` can hide a
   dependency missing from `package.json`.

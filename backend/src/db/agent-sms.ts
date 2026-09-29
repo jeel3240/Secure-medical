@@ -59,7 +59,7 @@ export async function sendAgentSms(
   agentId: number,
   body: string
 ): Promise<SendAgentSmsResult> {
-  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
   const ezt = require('../integrations/ezt-client') as typeof import('../integrations/ezt-client');
 
   const lead = await pool.query('SELECT id, phone FROM leads WHERE id = $1', [leadId]);
@@ -81,7 +81,7 @@ export async function sendAgentSms(
     log.error('sms.failed', { leadId, agentSms: true, err: errText(err) });
     // Kept as a failed message so the thread shows it with a red "!", the way
     // a phone does. It sets no take-over: nothing reached the lead.
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
     const { recordFailedSend } = require('./failed-sends') as typeof import('./failed-sends');
     await recordFailedSend(leadId, body, agentId);
     return { ok: false, reason: 'send_failed', detail: typeof detail === 'string' ? detail : 'send failed' };

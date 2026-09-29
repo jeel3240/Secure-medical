@@ -132,7 +132,7 @@ describe('the happy path', () => {
   });
 
   it('sends each next question in turn', () => {
-    let c = fresh();
+    const c = fresh();
     let r = step(c, answer('3'), RULES);
     expect(r.send).toBe('question_2');
     expect(r.conversation.step).toBe(2);

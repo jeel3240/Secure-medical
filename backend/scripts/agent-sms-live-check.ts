@@ -101,7 +101,7 @@ const tookOverAt = async (conversationId: number) =>
 
 /** Runs a reply through the real reply path, the way the webhook does. */
 async function replyAs(leadId: number, phone: string, text: string) {
-  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
   const { applyReply } = require('../src/api/reply-flow') as typeof import('../src/api/reply-flow');
   const client = await pool.connect();
   try {

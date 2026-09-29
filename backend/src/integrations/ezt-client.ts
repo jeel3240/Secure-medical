@@ -113,7 +113,7 @@ export class BlockedNumberError extends Error {
  * otherwise a pure HTTP client, and its own tests do not need one.
  */
 async function blockedAmong(phones: string[]): Promise<string[]> {
-  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
   const { pool } = require('../db/pool') as typeof import('../db/pool');
 
   // dnc_list stores E.164. Callers pass E.164 today, but comparing a bare

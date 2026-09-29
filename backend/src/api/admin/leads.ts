@@ -48,7 +48,7 @@ export function adminLeadsRouter(deps: AppDeps): Router {
   router.get(
     '/',
     asyncHandler(async (req, res) => {
-      // eslint-disable-next-line @typescript-eslint/no-var-requires
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
       const db = require('../../db/leads') as typeof import('../../db/leads');
 
       const result = await db.listAdminLeads({
