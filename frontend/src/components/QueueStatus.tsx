@@ -1,4 +1,5 @@
 import type { QueueTag } from '../api/leads';
+import { formatDateTime, formatTime } from '../lib/format';
 import { StatusIcon, type StatusIconName } from './StatusIcon';
 
 /**
@@ -22,7 +23,17 @@ import { StatusIcon, type StatusIconName } from './StatusIcon';
  *
  * Inbound reply is also bold, because a lead has written to us and nobody has
  * read it.
+ *
+ * **Callback is back - Jeel, 2026-09-29**, naming whose it is: "Callback –
+ * Maya Chen · 8:13 PM", with the date as well when it is not today. Without it
+ * another agent could pick the lead up and call first.
  */
+
+/** 8:13 PM today, Sep 30, 8:13 PM otherwise. */
+function when(iso: string): string {
+  const at = new Date(iso);
+  return at.toDateString() === new Date().toDateString() ? formatTime(at) : formatDateTime(at);
+}
 
 export function tagText(tag: QueueTag): string {
   switch (tag.kind) {
@@ -33,6 +44,8 @@ export function tagText(tag: QueueTag): string {
       return tag.agentName ? `Working – ${tag.agentName}` : 'Working';
     case 'inbound_reply':
       return 'Inbound reply';
+    case 'callback':
+      return `Callback – ${tag.agentName ?? 'an agent'}${tag.at ? ` · ${when(tag.at)}` : ''}`;
     case 'needs_review':
       return 'Needs review';
   }
@@ -42,6 +55,7 @@ export function tagText(tag: QueueTag): string {
 const ICON: Record<QueueTag['kind'], StatusIconName> = {
   working: 'half',
   inbound_reply: 'inbound',
+  callback: 'clock',
   needs_review: 'warning',
 };
 

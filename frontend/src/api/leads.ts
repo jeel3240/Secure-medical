@@ -57,14 +57,16 @@ export async function listAdminLeads(query: AdminLeadsQuery): Promise<AdminLeads
 }
 
 /** Mirrors QueueTag in backend/src/core/queue-tags.ts. */
-export type QueueTagKind = 'working' | 'inbound_reply' | 'needs_review';
+export type QueueTagKind = 'working' | 'inbound_reply' | 'callback' | 'needs_review';
 
 export interface QueueTag {
   kind: QueueTagKind;
   /** `working`: who holds it - the id to match on. */
   agentId?: number;
-  /** `working`: who holds it - the name to show. */
+  /** `working`: who holds it - the name to show. `callback`: whose it is. */
   agentName?: string;
+  /** `callback`: when it is due, ISO. */
+  at?: string;
 }
 
 /** Mirrors QueueRow in backend/src/db/queue.ts. */

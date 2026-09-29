@@ -25,6 +25,7 @@ describe('statuses', () => {
     ['someone working it', { kind: 'working', agentId: 2, agentName: 'karm' }, 'Working – karm', 'half', false],
     ['an unread reply', { kind: 'inbound_reply' }, 'Inbound reply', 'inbound', true],
     ['replies nobody understood', { kind: 'needs_review' }, 'Needs review', 'warning', false],
+    ['a callback booked', { kind: 'callback', agentId: 21, agentName: 'Maya Chen' }, 'Callback – Maya Chen', 'clock', false],
   ])('%s: its own icon, and the words', (_, tag, text, icon, bold) => {
     expect(renderTag(tag)).toEqual({ text, icon, bold });
   });
@@ -32,6 +33,19 @@ describe('statuses', () => {
   it('draws no dot any more', () => {
     const { container } = render(<QueueStatus tag={{ kind: 'needs_review' }} />);
     expect(container.querySelector('.status__mark')).toBeNull();
+  });
+
+  it('gives a callback today just the time, and another day the date too', () => {
+    const today = new Date();
+    today.setHours(20, 13, 0, 0);
+    expect(tagText({ kind: 'callback', agentName: 'Maya Chen', at: today.toISOString() })).toMatch(
+      /^Callback – Maya Chen · 8:13\sPM$/
+    );
+    const later = new Date(today);
+    later.setDate(later.getDate() + 3);
+    expect(tagText({ kind: 'callback', agentName: 'Maya Chen', at: later.toISOString() })).toMatch(
+      /^Callback – Maya Chen · [A-Z][a-z]{2} \d{1,2}, 8:13\sPM$/
+    );
   });
 
   it('names the holder with an en dash, as drawn', () => {

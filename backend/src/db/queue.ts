@@ -184,6 +184,9 @@ interface QueueDbRow {
   agent_id: number | null;
   agent_name: string | null;
   has_unread_inbound: boolean;
+  callback_agent_id: number | null;
+  callback_agent_name: string | null;
+  callback_at: Date | null;
 }
 
 /**
@@ -204,8 +207,17 @@ export async function listQueue(query: QueueQuery = {}): Promise<QueuePage> {
     `SELECT l.id, l.phone, l.first_name, l.last_name, l.source,
             ${RECEIVED} AS received_at,
             c.score, c.tier, c.status, c.q1, c.q2, c.q3,
-            u.id AS agent_id, u.name AS agent_name, l.has_unread_inbound
+            u.id AS agent_id, u.name AS agent_name, l.has_unread_inbound,
+            ncb.agent_id AS callback_agent_id, ncb.agent_name AS callback_agent_name,
+            ncb.scheduled_at AS callback_at
      ${BASE}
+     LEFT JOIN LATERAL (
+       SELECT cb.agent_id, cu.name AS agent_name, cb.scheduled_at
+       FROM callbacks cb JOIN users cu ON cu.id = cb.agent_id
+       WHERE cb.lead_id = l.id AND cb.done_at IS NULL
+       ORDER BY cb.scheduled_at, cb.id
+       LIMIT 1
+     ) ncb ON true
      ${where}
      ORDER BY c.score DESC, ${RECEIVED} DESC, l.id DESC
      LIMIT ${limit}`,
@@ -260,6 +272,14 @@ export async function listQueue(query: QueueQuery = {}): Promise<QueuePage> {
         conversationStatus: r.status,
         holder: r.agent_id === null ? null : { id: r.agent_id, name: r.agent_name ?? 'Another agent' },
         hasUnreadInbound: r.has_unread_inbound,
+        nextCallback:
+          r.callback_agent_id === null || !r.callback_at
+            ? null
+            : {
+                agentId: r.callback_agent_id,
+                agentName: r.callback_agent_name ?? 'Another agent',
+                at: r.callback_at.toISOString(),
+              },
       }),
     })),
     counts: byTier,
