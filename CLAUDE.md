@@ -95,7 +95,7 @@ went a different way:
 | Layer | Actual |
 |---|---|
 | API | Express 4. Every route is under `/api`. |
-| Worker | A plain serialised loop in `backend/src/worker/index.ts`, no job queue. `bull` and `redis` are in `package.json` and Redis runs, but no code uses either yet. |
+| Worker | A plain serialised loop in `backend/src/worker/index.ts`, no job queue. Redis runs, but no code uses it; the unused `bull` and `redis` packages were removed on 2026-09-28. |
 | Migrations | Plain numbered `.sql` files run by `backend/scripts/migrate.js`. No Prisma, no node-pg-migrate. |
 | Auth | bcrypt (cost 12) and a JWT in an httpOnly, SameSite=Strict cookie. See `docs/AUTH.md`. |
 | Frontend | React 18, Vite 4, React Router 6, zustand, plain CSS with design tokens. |
