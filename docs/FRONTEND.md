@@ -436,7 +436,8 @@ field below that - three rows, and nothing showed which chip had been chosen.
 Now: `In 1 hour`, `Tomorrow 10 AM`, `Tomorrow 3 PM` and `Other…`. The chosen
 one is brand navy; pressing it again books nothing. `Other…` opens the
 calendar and then shows the date itself ("Sep 30, 3:00 PM"), with Clear in the
-panel. The "OPTIONAL" pill became plain grey "optional".
+panel. The "OPTIONAL" pill beside the heading is gone - every part of Wrap
+up is optional, so it said nothing.
 
 ## Fetching
 
