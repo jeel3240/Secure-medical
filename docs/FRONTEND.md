@@ -278,11 +278,13 @@ disabled controls save a round trip rather than enforce anything.
 **Layout.** A full-width header card over three cards. The header was made
 plainer on 2026-09-29 - Jeel: the first one read as generated (initials circle,
 tiny letter-spaced uppercase labels, monospace phone and source, a big red
-score, a dashed Call button, a "Phase 4" note). It is now the full name with the
-queue's tier bars; one quiet line of phone, source in words ("Web interface")
-and age; Score "90 / 100" and Questions in the Step column's words ("On Q2",
-"Stopped at Q2", "Completed"); and Send SMS beside a plain disabled Call whose
-reason is a tooltip. On a phone the phone, source and age stack. The three
+score, a dashed Call button, a "Phase 4" note). It is now the full name; one
+quiet line of phone, source in words ("Web interface") and age; Score "90 /
+100" and Questions in the Step column's words ("On Q2", "Stopped at Q2",
+"Completed"); and a plain disabled Call whose reason is a tooltip. The tier
+and a Send SMS button went the same day - Jeel: the score already says how
+strong the lead is, and Send SMS only moved the cursor to the message box just
+below. On a phone the phone, source and age stack. The three
 cards below are: what the lead told us and the score breakdown; the
 conversation; and the wrap-up.
 

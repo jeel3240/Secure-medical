@@ -67,11 +67,6 @@
   margin-right: auto;
 }
 
-.lead-head__title {
-  display: flex;
-  align-items: center;
-  gap: var(--space-3);
-}
 
 .lead-head__name {
   margin: 0;
