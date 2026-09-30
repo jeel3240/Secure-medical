@@ -275,9 +275,15 @@ inside, so none can be missed - and a strip above the header says why. The
 server refuses the write regardless (`AGENT-WORKSPACE.md`, "Rules"), so the
 disabled controls save a round trip rather than enforce anything.
 
-**Layout.** A full-width header card - avatar, name and tier, score out of 100,
-ticking lead age, source, SMS flow state, and the Send SMS and Call buttons -
-over three cards: what the lead told us and the score breakdown; the
+**Layout.** A full-width header card over three cards. The header was made
+plainer on 2026-09-29 - Jeel: the first one read as generated (initials circle,
+tiny letter-spaced uppercase labels, monospace phone and source, a big red
+score, a dashed Call button, a "Phase 4" note). It is now the full name with the
+queue's tier bars; one quiet line of phone, source in words ("Web interface")
+and age; Score "90 / 100" and Questions in the Step column's words ("On Q2",
+"Stopped at Q2", "Completed"); and Send SMS beside a plain disabled Call whose
+reason is a tooltip. On a phone the phone, source and age stack. The three
+cards below are: what the lead told us and the score breakdown; the
 conversation; and the wrap-up.
 
 **Files.** `WorkspacePage.tsx` holds the data, picking and releasing, and the
