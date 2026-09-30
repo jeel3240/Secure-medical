@@ -19,7 +19,8 @@ export interface AdminLead {
   source: string | null;
   receivedAt: string | null;
   status: LeadStatus | null;
-  stepReached: number | null;
+  /** The question the lead is on now, or `done` once all three are answered. */
+  step: number | 'done' | null;
   score: number | null;
   tier: string | null;
   lastActivityAt: string | null;
