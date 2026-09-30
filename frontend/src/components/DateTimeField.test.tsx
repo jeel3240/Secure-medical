@@ -30,7 +30,8 @@ describe('the date and time field', () => {
     const { getByRole, getAllByRole } = render(
       <DateTimeField value="2031-03-04T15:30" onChange={onChange} label="New time" />
     );
-    fireEvent.click(getByRole('button', { name: 'New time' }));
+    // Once a date is chosen the label carries it, for screen readers.
+    fireEvent.click(getByRole('button', { name: /^New time: Mar 4, 3:30\sPM$/ }));
     const day10 = getAllByRole('button').find((b) => b.textContent === '10' && !b.className.includes('--other'))!;
     fireEvent.click(day10);
     expect(onChange).toHaveBeenLastCalledWith('2031-03-10T15:30');
@@ -49,6 +50,17 @@ describe('the date and time field', () => {
     );
     expect(shown?.disabled).toBe(true);
     expect((getByRole('button', { name: 'Previous month' }) as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  it('clears, as a chip, back to its label', () => {
+    const onChange = vi.fn();
+    const { getByRole, container } = render(
+      <DateTimeField variant="chip" value="2031-03-04T15:30" onChange={onChange} label="Other…" />
+    );
+    expect(container.querySelector('.chip-button--on')).not.toBeNull();
+    fireEvent.click(getByRole('button', { name: /^Other…: / }));
+    fireEvent.click(getByRole('button', { name: 'Clear' }));
+    expect(onChange).toHaveBeenLastCalledWith('');
   });
 
   it('closes on Escape', () => {
