@@ -1,3 +1,4 @@
+import { DateTimeField } from '../components/DateTimeField';
 import { useCallback, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { toApiError } from '../api/client';
@@ -243,13 +244,7 @@ export function CallbacksPage() {
                       <td className="cell-action callbacks__actions">
                         {rescheduling === row.id ? (
                           <div className="callbacks__reschedule">
-                            <input
-                              type="datetime-local"
-                              className="actions-panel__input"
-                              value={newTime}
-                              onChange={(e) => setNewTime(e.target.value)}
-                              aria-label="New time"
-                            />
+                            <DateTimeField value={newTime} onChange={setNewTime} label="New time" />
                             <Button
                               size="sm"
                               disabled={!newTime || busy === row.id}
