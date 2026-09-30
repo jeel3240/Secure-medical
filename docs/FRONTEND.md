@@ -418,6 +418,18 @@ Internal values and screen words still differ in a few places, on purpose:
 | queue tag kind `working` | Working – name | Same word since 2026-09-28 |
 | Overview `responded`, `completed` | Replied, Answered all 3 | Field names in one JSON payload, read in one page |
 
+## Picking a date and time - 2026-09-29
+
+Wrap up's "Pick time..." and My Callbacks' Reschedule used
+`<input type="datetime-local">`, whose calendar the browser draws in its own
+blue and fonts, and which cannot be restyled - Jeel: it did not match the app.
+Both now use `components/DateTimeField.tsx`: a field like the other inputs that
+opens a small calendar (past days off, today outlined, the chosen day brand
+navy) and a time menu in 15-minute steps, with times already gone hidden for
+today. The value is the same local-time string the input gave, so nothing that
+saves a callback changed. The time menu is still the browser's own list, which
+is as plain as the other selects in the app. `DateTimeField.test.tsx`.
+
 ## Fetching
 
 **Every live screen polls through `api/usePolling.ts`.** One hook, 5 seconds,

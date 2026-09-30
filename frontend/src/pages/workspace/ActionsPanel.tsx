@@ -9,6 +9,7 @@ import {
   type LeadDetail,
 } from '../../api/workspace';
 import { Button } from '../../components/Button';
+import { DateTimeField } from '../../components/DateTimeField';
 import { Modal } from '../../components/Modal';
 import { formatTime, toLocalInput } from '../../lib/format';
 
@@ -278,12 +279,11 @@ export function ActionsPanel({
             <p className="wrapup__state">Closing a lead finishes its callbacks.</p>
           )}
           {disposition === null && (picking || callbackAt !== '') && (
-            <input
-              type="datetime-local"
-              className="actions-panel__input"
+            <DateTimeField
               value={callbackAt}
-              onChange={(e) => setCallbackAt(e.target.value)}
-              aria-label="Callback date and time"
+              onChange={setCallbackAt}
+              label="Callback date and time"
+              defaultOpen={picking && callbackAt === ''}
             />
           )}
         </section>

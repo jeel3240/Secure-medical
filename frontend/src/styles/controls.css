@@ -464,3 +464,148 @@
   border-radius: var(--radius-md);
   user-select: all;
 }
+
+/* ---------- Date and time field - DateTimeField.tsx, 2026-09-29 ----------
+   Replaces the browser's own datetime picker, whose calendar could not take
+   the app's colours. The field looks like the other inputs; the panel like the
+   row menu; the chosen day is the brand navy. */
+.dt-field {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface);
+  color: var(--color-text);
+  font: inherit;
+  cursor: pointer;
+}
+
+.dt-field svg {
+  color: var(--color-text-muted);
+}
+
+.dt-field--empty {
+  color: var(--color-text-muted);
+}
+
+.dt-field:hover {
+  border-color: var(--color-border-strong);
+}
+
+.dt-field:focus-visible,
+.dt-field[aria-expanded='true'] {
+  outline: none;
+  border-color: var(--color-primary);
+  box-shadow: var(--focus-ring-field);
+}
+
+.dt-panel {
+  position: fixed;
+  z-index: 50;
+  width: 288px;
+  padding: var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  box-shadow: var(--shadow-md);
+}
+
+.dt-panel__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: var(--space-2);
+}
+
+.dt-panel__month {
+  font-size: var(--text-body);
+  font-weight: var(--weight-semibold);
+  color: var(--color-text);
+}
+
+.dt-panel__nav {
+  width: 28px;
+  height: 28px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: none;
+  color: var(--color-text-muted);
+  font: inherit;
+  font-size: var(--text-title);
+  cursor: pointer;
+}
+
+.dt-panel__nav:hover:not(:disabled) {
+  background: var(--color-surface-hover);
+  color: var(--color-text);
+}
+
+.dt-panel__nav:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+.dt-panel__grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 2px;
+}
+
+.dt-panel__weekday {
+  padding: var(--space-1) 0;
+  color: var(--color-text-subtle);
+  font-size: var(--text-small);
+  text-align: center;
+}
+
+.dt-panel__day {
+  height: 34px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  background: none;
+  color: var(--color-text);
+  font: inherit;
+  font-size: var(--text-body);
+  cursor: pointer;
+}
+
+.dt-panel__day:hover:not(:disabled) {
+  background: var(--color-surface-hover);
+}
+
+.dt-panel__day--other {
+  color: var(--color-text-subtle);
+}
+
+.dt-panel__day--today {
+  border-color: var(--color-border-strong);
+  font-weight: var(--weight-semibold);
+}
+
+.dt-panel__day--on,
+.dt-panel__day--on:hover:not(:disabled) {
+  border-color: var(--color-primary);
+  background: var(--color-primary);
+  color: var(--color-on-primary);
+  font-weight: var(--weight-semibold);
+}
+
+.dt-panel__day:disabled {
+  color: var(--color-text-subtle);
+  opacity: 0.4;
+  cursor: default;
+}
+
+.dt-panel__foot {
+  display: flex;
+  gap: var(--space-2);
+  margin-top: var(--space-3);
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--color-border);
+}
+
+.dt-panel__time {
+  flex: 1;
+}
