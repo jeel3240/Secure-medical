@@ -79,15 +79,19 @@ agent is handling reads Working.
 
 ## What agents see in the queue
 
-The queue's STATUS column shows at most one of three things. Most rows show
-none.
+The queue's STATUS column shows at most one of four things, in this order when
+more than one applies. Most rows show none.
 
 | STATUS | Means |
 |---|---|
 | **Working – karm** | karm is holding the lead right now. Others see it locked |
 | **Inbound reply** | The lead texted us and nobody has read it |
+| **Callback – karm · 3:00 PM** | karm has a callback booked on it. Not locked, but it is karm's call to make |
 | **Needs review** | We could not understand their replies |
 | **-** | Waiting for someone to pick it up |
+
+A lead someone holds is always in the queue, even one picked up from Admin >
+Leads before it answered anything.
 
 "Working – karm" lasts only while karm holds the lead. Admin > Leads keeps
 saying Working after karm lets go, until the lead is Closed.
@@ -102,8 +106,9 @@ saying Working after karm lets go, until the lead is Closed.
    - **3 Note** - "no answer", "left a voicemail", "call back Friday"
 3. **Save**.
    - With **Closed** or **DNC**: the lead is released and leaves the queue at
-     once, and the agent is taken back to the queue. Nobody needs to pick it
-     up any more - Jeel, 2026-09-29.
+     once, any open callback on it is marked done, and the agent is taken back
+     to the queue. Nobody needs to pick it up any more - Jeel, 2026-09-29.
+     While Closed or DNC is chosen, the callback choices are switched off.
    - With only a callback or a note: the agent stays on the lead.
 4. **Back to queue** releases a lead the agent is leaving without an outcome.
 
@@ -131,3 +136,17 @@ The flow above replaced a looser one the same day:
 | "In progress" meant two things | Answering (SMS) and Working (agent) |
 | Eight outcomes, none of which removed a lead | Closed and DNC. Closed removes it |
 | Save and Save & next lead | Save. An outcome releases the lead and returns to the queue (2026-09-29) |
+
+## What changed on 2026-09-29
+
+Found by testing the whole flow with a real phone:
+
+| Before | After |
+|---|---|
+| A closed lead stayed in the queue as "Working – Maya" until she pressed Back to queue | Saving Closed or DNC releases it: out of the queue at once |
+| A closed lead that texted and was picked up again read Closed, and Closed could not be saved again | A lead someone holds is never closed; the holder's Closed always saves |
+| A lead picked up before it answered was missing from the queue | Holding a lead always keeps it in the queue |
+| A callback showed nothing in the queue | "Callback – Maya Chen · 8:13 PM" |
+| Closing left the lead's callback open on My Callbacks | Closing marks it done |
+| Admin > Leads Step: the last question answered, one behind | The question the lead is on now, or Done |
+| Questions checked every 60 seconds | Every 30 seconds (migration 005) |

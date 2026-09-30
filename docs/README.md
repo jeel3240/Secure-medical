@@ -106,8 +106,8 @@ the `poll.tick` line's `openers` says how many went out. POLLER.md has the detai
 ## How to test
 
 ```bash
-cd backend  && npm test && npm run lint    # 455 tests
-cd frontend && npm test && npm run lint    # 116 tests
+cd backend  && npm test && npm run lint    # 470 tests
+cd frontend && npm test && npm run lint    # 140 tests
 ```
 
 **Unit and route tests** mock the database and cover behaviour in isolation.
