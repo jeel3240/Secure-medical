@@ -98,7 +98,8 @@ async function main(): Promise<void> {
     const config = await getAdminConfig();
 
     // Against the rows seeded by 001_init.sql.
-    check('the three questions and more are shown', config.messages.length, 7);
+    check('the three questions and more are shown', config.messages.length, 8);
+    check('including the review message, sent after a second unclear reply', config.messages.some((m) => m.key === 'message_review'), true);
     check('the opener is first', config.messages[0].key, 'question_1');
     check('and is personalised', config.messages[0].personalised, true);
 
@@ -115,6 +116,7 @@ async function main(): Promise<void> {
 
     // With no leads yet, the fallback name is the worst case.
     check('the worst case uses the fallback when there are no leads', config.longestFirstName, 'there');
+    check('and says it is the fallback', config.longestNameIsFallback, true);
   }
 
   console.log('\nthe segment count follows the longest real name');

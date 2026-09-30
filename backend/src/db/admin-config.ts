@@ -13,7 +13,11 @@
 import { pool } from './pool';
 import { NAME_FALLBACK, SEGMENT_LIMIT } from '../core/messages';
 
-/** The seven messages the page shows, in the order a lead meets them. */
+/**
+ * The eight messages the page shows, in the order a lead meets them.
+ * `message_review` - sent after a second unclear reply - was missing until
+ * 2026-09-29: the lead received it, but nobody could see it here.
+ */
 const MESSAGE_KEYS = [
   'question_1',
   'question_2',
@@ -21,6 +25,7 @@ const MESSAGE_KEYS = [
   'message_clarify_1',
   'message_clarify_2',
   'message_clarify_3',
+  'message_review',
   'message_thanks',
 ] as const;
 
@@ -62,6 +67,12 @@ export interface AdminConfig {
   settings: { expiryDays: number; maxInvalidBeforeReview: number; segmentLimit: number };
   /** The longest first name on file, which drives worstCaseLength. */
   longestFirstName: string;
+  /**
+   * True when no name on file is longer than the word used for a lead with no
+   * name ("there"), so that is what longestFirstName holds. The page words its
+   * note differently then, rather than showing "there" as if it were a name.
+   */
+  longestNameIsFallback: boolean;
 }
 
 const segmentsFor = (length: number): number => Math.max(1, Math.ceil(length / SEGMENT_LIMIT));
@@ -154,5 +165,6 @@ export async function getAdminConfig(): Promise<AdminConfig> {
       segmentLimit: SEGMENT_LIMIT,
     },
     longestFirstName: name,
+    longestNameIsFallback: name === NAME_FALLBACK,
   };
 }

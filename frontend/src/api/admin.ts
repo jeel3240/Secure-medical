@@ -31,6 +31,8 @@ export interface AdminConfig {
   settings: { expiryDays: number; maxInvalidBeforeReview: number; segmentLimit: number };
   /** The longest first name on file, which drives worstCaseLength. */
   longestFirstName: string;
+  /** No name on file is longer than "there", the word used when a lead has none. */
+  longestNameIsFallback: boolean;
 }
 
 export async function getConfig(): Promise<AdminConfig> {

@@ -112,7 +112,7 @@ export function OverviewPage() {
     { label: 'Leads in', value: kpis.leadsReceived, sub: 'Arrived from EZ Texting' },
     { label: 'Replied', value: kpis.responded, sub: 'First reply' },
     { label: 'Answered all 3', value: kpis.completed, sub: 'Finished the questions' },
-    { label: 'Closed', value: kpis.closed, sub: 'Leads, not presses' },
+    { label: 'Closed', value: kpis.closed, sub: 'Leads closed by agents' },
   ];
 
   return (
