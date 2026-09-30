@@ -23,9 +23,18 @@ function breakdownLabel(code: string, label: string): string {
   return label;
 }
 
+/**
+ * The shade for line `i` of `n`: light blue for the first, the brand navy for
+ * the last - Jeel, 2026-09-29. It was the Hot red at rising opacity, which read
+ * as an alarm on every lead and ignored the app's colours.
+ */
+export function breakdownShade(i: number, n: number): string {
+  const navy = n <= 1 ? 100 : Math.round(20 + (80 * i) / (n - 1));
+  return `color-mix(in oklch, var(--color-primary) ${navy}%, var(--breakdown-light))`;
+}
+
 export function LeadAnswers({ lead }: { lead: LeadDetail }) {
   const score = lead.conversation?.score ?? 0;
-  const tier = lead.conversation?.tier ?? null;
 
   return (
     <>
@@ -47,7 +56,7 @@ export function LeadAnswers({ lead }: { lead: LeadDetail }) {
         <article className="card breakdown">
           <h2 className="card__title">
             Score breakdown
-            <span className={`breakdown__total tabular${tier ? ` breakdown__total--${tier.toLowerCase()}` : ''}`}>
+            <span className="breakdown__total tabular">
               {score}
             </span>
           </h2>
@@ -63,7 +72,7 @@ export function LeadAnswers({ lead }: { lead: LeadDetail }) {
               <span
                 key={line.code}
                 className="breakdown__seg"
-                style={{ flexGrow: line.points, opacity: 0.45 + i * 0.14 }}
+                style={{ flexGrow: line.points, background: breakdownShade(i, lead.breakdown.length) }}
               />
             ))}
           </div>
@@ -71,7 +80,7 @@ export function LeadAnswers({ lead }: { lead: LeadDetail }) {
           <ul className="breakdown__list">
             {lead.breakdown.map((line, i) => (
               <li key={line.code}>
-                <span className="breakdown__swatch" style={{ opacity: 0.45 + i * 0.14 }} />
+                <span className="breakdown__swatch" style={{ background: breakdownShade(i, lead.breakdown.length) }} />
                 <span className="breakdown__label">{breakdownLabel(line.code, line.label)}</span>
                 <span className="breakdown__points tabular">+{line.points}</span>
               </li>

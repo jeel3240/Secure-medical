@@ -286,7 +286,9 @@ and a Send SMS button went the same day - Jeel: the score already says how
 strong the lead is, and Send SMS only moved the cursor to the message box just
 below. On a phone the phone, source and age stack. Also that day: the three answers under "What
 Priya told us" became plain text, not three coloured pills, and "Full timeline
-→" became a quiet grey link that turns navy on hover, not link blue. The three
+→" became a quiet grey link that turns navy on hover, not link blue. The score breakdown's bar and swatches
+run from light blue to the brand navy, and its total is navy - they were the
+Hot red at rising opacity, an alarm colour on every lead (same day). The three
 cards below are: what the lead told us and the score breakdown; the
 conversation; and the wrap-up.
 

@@ -177,13 +177,16 @@
 
 
 .breakdown__total {
+  color: var(--color-primary);
   font-size: var(--text-title);
   font-weight: var(--weight-bold);
 }
 
-.breakdown__total--hot { color: var(--color-hot); }
-.breakdown__total--warm { color: var(--color-warm); }
-.breakdown__total--low { color: var(--color-low); }
+/* The light end of the breakdown's blue ramp; the dark end is the brand navy.
+   LeadAnswers.tsx, breakdownShade. */
+.breakdown {
+  --breakdown-light: color-mix(in srgb, var(--color-accent) 40%, var(--color-accent-soft));
+}
 
 .breakdown__bar {
   display: flex;
@@ -194,7 +197,6 @@
 
 .breakdown__seg {
   border-radius: 2px;
-  background: var(--color-hot);
 }
 
 .breakdown__list {
@@ -217,7 +219,6 @@
   height: 9px;
   flex: none;
   border-radius: 2px;
-  background: var(--color-hot);
 }
 
 .breakdown__label {
