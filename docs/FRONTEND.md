@@ -282,10 +282,19 @@ conversation; and the wrap-up.
 
 **Files.** `WorkspacePage.tsx` holds the data, picking and releasing, and the
 layout. Each card is its own component in `pages/workspace/`: `LeadHeader`,
-`LeadAnswers` (the left column), `Conversation` with `SmsCompose` under it, and
+`LeadAnswers` and `LeadNotes` (the left column), `Conversation` with `SmsCompose` under it, and
 `ActionsPanel` (Wrap up). The first two were split out of the page on
 2026-09-28, when it had reached 420 lines; the rendered page was checked
 identical before and after, HTML and every computed style, on six leads.
+
+**Notes are on the workspace - Jeel, 2026-09-29.** A Notes card under the
+score breakdown lists the lead's notes newest first, each with who wrote it and
+when; the three newest show and "Show all N" opens the rest in place. Until
+then notes were only on the Lead Timeline page, so the agent about to call - who
+most needed "wants a call after 5 PM" - never saw them, and a note saved in
+Wrap up vanished from the screen. The card reads the timeline the page already
+polls, and the page now refreshes that timeline after every save, so a new note
+(or a sent text) shows at once. `LeadNotes.test.tsx`.
 
 **The centre column is a conversation, not a log.** `workspace/Conversation.tsx`
 shows the SMS thread and the system markers only - inbound on the left, ours on
