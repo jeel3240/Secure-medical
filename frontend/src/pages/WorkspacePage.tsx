@@ -50,7 +50,6 @@ export function WorkspacePage() {
   const [releasing, setReleasing] = useState(false);
   const [picking, setPicking] = useState(false);
   const [pickError, setPickError] = useState<string | null>(null);
-  const [focusCompose, setFocusCompose] = useState(0);
   const [place, setPlace] = useState<{ index: number; total: number } | null>(null);
 
   const valid = Number.isInteger(leadId) && leadId > 0;
@@ -228,7 +227,7 @@ export function WorkspacePage() {
         </Banner>
       )}
 
-      <LeadHeader lead={lead} mine={mine} now={now} onSendSms={() => setFocusCompose((n) => n + 1)} />
+      <LeadHeader lead={lead} now={now} />
 
       <div className="workspace__flags">
         {lead.closed && <Badge tone="muted">Closed</Badge>}
@@ -272,7 +271,7 @@ export function WorkspacePage() {
               )}
             </div>
 
-            <SmsCompose lead={lead} refresh={refreshAll} focusKey={focusCompose} canAct={mine} />
+            <SmsCompose lead={lead} refresh={refreshAll} canAct={mine} />
           </article>
         </div>
 
