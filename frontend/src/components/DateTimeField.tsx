@@ -17,6 +17,10 @@ import { useEscape } from './useDismiss';
  * is always in the future. The panel is fixed-position, like RowMenu's, so a
  * table or card with hidden overflow cannot clip it, and it closes on Escape,
  * a click outside, scroll or resize.
+ *
+ * Two looks: `field`, an input-like box (My Callbacks' Reschedule), and `chip`,
+ * one of Wrap up's callback choices - navy once it holds a date, which it then
+ * shows in place of its label. Clear, in the panel, empties it.
  */
 
 const WEEKDAYS = ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'];
@@ -55,13 +59,15 @@ export function DateTimeField({
   value,
   onChange,
   label,
-  defaultOpen = false,
+  variant = 'field',
+  disabled = false,
 }: {
   value: string;
   onChange: (value: string) => void;
   /** Read by screen readers, and shown when nothing is picked. */
   label: string;
-  defaultOpen?: boolean;
+  variant?: 'field' | 'chip';
+  disabled?: boolean;
 }) {
   const now = new Date();
   const chosen = value ? new Date(value) : null;
@@ -84,10 +90,6 @@ export function DateTimeField({
       left: Math.max(8, Math.min(rect.left, window.innerWidth - PANEL_WIDTH - 8)),
     });
   }, []);
-
-  useEffect(() => {
-    if (defaultOpen) show();
-  }, [defaultOpen, show]);
 
   useEscape(open, close);
 
@@ -144,8 +146,13 @@ export function DateTimeField({
       <button
         ref={trigger}
         type="button"
-        className={`dt-field${chosen ? '' : ' dt-field--empty'}`}
-        aria-label={label}
+        className={
+          variant === 'chip'
+            ? `chip-button chip-button--icon${chosen ? ' chip-button--on' : ''}`
+            : `dt-field${chosen ? '' : ' dt-field--empty'}`
+        }
+        disabled={disabled}
+        aria-label={chosen ? `${label}: ${formatDateTime(chosen)}` : label}
         aria-haspopup="dialog"
         aria-expanded={open}
         onClick={() => (open ? close() : show())}
@@ -216,6 +223,18 @@ export function DateTimeField({
                 </option>
               ))}
             </select>
+            {chosen && (
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={() => {
+                  onChange('');
+                  close();
+                }}
+              >
+                Clear
+              </Button>
+            )}
             <Button size="sm" disabled={!chosen} onClick={close}>
               Done
             </Button>

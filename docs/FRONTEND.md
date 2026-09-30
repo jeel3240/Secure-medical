@@ -430,6 +430,14 @@ today. The value is the same local-time string the input gave, so nothing that
 saves a callback changed. The time menu is still the browser's own list, which
 is as plain as the other selects in the app. `DateTimeField.test.tsx`.
 
+**Wrap up's callback is one set of choices - Jeel, the same day.** It was
+three quick chips, a "Pick time..." chip on a line of its own, and the date
+field below that - three rows, and nothing showed which chip had been chosen.
+Now: `In 1 hour`, `Tomorrow 10 AM`, `Tomorrow 3 PM` and `Other…`. The chosen
+one is brand navy; pressing it again books nothing. `Other…` opens the
+calendar and then shows the date itself ("Sep 30, 3:00 PM"), with Clear in the
+panel. The "OPTIONAL" pill became plain grey "optional".
+
 ## Fetching
 
 **Every live screen polls through `api/usePolling.ts`.** One hook, 5 seconds,
