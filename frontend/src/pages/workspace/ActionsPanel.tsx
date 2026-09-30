@@ -250,7 +250,6 @@ export function ActionsPanel({
         <section className="wrapup__section">
           <h3 className="wrapup__legend">
             <span className="wrapup__num">2</span> Callback
-            <span className="wrapup__optional">optional</span>
           </h3>
           {/* One set of choices; the chosen one is navy - Jeel, 2026-09-29.
               Pressing it again books nothing. "Other" opens the calendar and

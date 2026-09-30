@@ -520,12 +520,6 @@
   font-size: var(--text-small);
 }
 
-.wrapup__optional {
-  margin-left: var(--space-1);
-  color: var(--color-text-subtle);
-  font-size: var(--text-small);
-  font-weight: var(--weight-regular);
-}
 
 .wrapup__choices {
   display: flex;
