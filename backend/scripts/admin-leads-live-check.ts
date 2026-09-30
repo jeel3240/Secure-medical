@@ -47,10 +47,13 @@ async function lead(
   );
   const id = rows[0].id;
   if (conversation) {
+    // The question being asked, as the state machine keeps it: one past the
+    // answers given, and 3 once finished.
+    const answered = [conversation.q1, conversation.q2, conversation.q3].filter(Boolean).length;
     await pool.query(
       `INSERT INTO conversations (lead_id, status, step, q1, q2, q3, score, tier)
-       VALUES ($1, $2, 1, $3, $4, $5, $6, 'HOT')`,
-      [id, conversation.status, conversation.q1 ?? null, conversation.q2 ?? null, conversation.q3 ?? null, conversation.score ?? 0]
+       VALUES ($1, $2, $7, $3, $4, $5, $6, 'HOT')`,
+      [id, conversation.status, conversation.q1 ?? null, conversation.q2 ?? null, conversation.q3 ?? null, conversation.score ?? 0, Math.min(3, answered + 1)]
     );
   }
   return id;
@@ -144,6 +147,16 @@ async function main(): Promise<void> {
   const all = await listAdminLeads({ pageSize: 200 });
   const by = Object.fromEntries(all.leads.map((l) => [l.firstName, l]));
   const status = (name: string) => by[name]?.status;
+  const step = (name: string) => by[name]?.step;
+
+  // Step is the question the lead is on now - 2026-09-29. It read the highest
+  // question answered, one behind: "Answering · Q1" while being asked Q2.
+  console.log('\nstep');
+  check('no reply yet: on Q1', step('Waiting'), 1);
+  check('answered Q1: on Q2', step('Midway'), 2);
+  check('answered all three: done', step('Ready'), 'done');
+  check('went quiet after Q1: stopped at Q2', step('Quiet'), 2);
+  check('unclear replies on Q1: stuck at Q1', step('Unclear'), 1);
 
   console.log('\nthe SMS part');
   check('no reply yet: awaiting_reply', status('Waiting'), 'awaiting_reply');

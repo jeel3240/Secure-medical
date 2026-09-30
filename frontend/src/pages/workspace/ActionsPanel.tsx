@@ -9,6 +9,7 @@ import {
   type LeadDetail,
 } from '../../api/workspace';
 import { Button } from '../../components/Button';
+import { DateTimeField } from '../../components/DateTimeField';
 import { Modal } from '../../components/Modal';
 import { formatTime, toLocalInput } from '../../lib/format';
 
@@ -96,7 +97,9 @@ export function ActionsPanel({
   const [callbackAt, setCallbackAt] = useState('');
   const [disposition, setDispositionValue] = useState<Disposition | null>(null);
   const [confirmingDnc, setConfirmingDnc] = useState(false);
-  const [picking, setPicking] = useState(false);
+  // Which quick choice the callback came from, so that chip shows as chosen.
+  // Null for none, or for a time picked from the calendar.
+  const [quick, setQuick] = useState<string | null>(null);
 
   const [saving, setSaving] = useState(false);
   const [problems, setProblems] = useState<string[]>([]);
@@ -148,6 +151,7 @@ export function ActionsPanel({
         await createCallback(lead.id, new Date(callbackAt).toISOString());
         done.push('callback');
         setCallbackAt('');
+        setQuick(null);
       } catch (err) {
         failures.push(`Callback: ${toApiError(err).message}`);
       }
@@ -201,7 +205,7 @@ export function ActionsPanel({
   // would be done the moment it was saved: drop it.
   const dropCallback = () => {
     setCallbackAt('');
-    setPicking(false);
+    setQuick(null);
   };
 
   return (
@@ -246,45 +250,45 @@ export function ActionsPanel({
         <section className="wrapup__section">
           <h3 className="wrapup__legend">
             <span className="wrapup__num">2</span> Callback
-            <span className="wrapup__optional">Optional</span>
           </h3>
-          <div className="wrapup__choices">
-            {QUICK.map((quick) => (
-              <button
-                key={quick.label}
-                type="button"
-                disabled={disposition !== null}
-                className="chip-button"
-                onClick={() => {
-                  setCallbackAt(toLocalInput(quick.at()));
-                  setPicking(false);
-                }}
-              >
-                {quick.label}
-              </button>
-            ))}
-            <button
-              type="button"
-              className="chip-button"
+          {/* One set of choices; the chosen one is navy - Jeel, 2026-09-29.
+              Pressing it again books nothing. "Other" opens the calendar and
+              then shows the date itself, so the booked time is always in one
+              place. */}
+          <div className="wrapup__choices" role="group" aria-label="Callback">
+            {QUICK.map((choice) => {
+              const on = quick === choice.label;
+              return (
+                <button
+                  key={choice.label}
+                  type="button"
+                  aria-pressed={on}
+                  disabled={disposition !== null}
+                  className={`chip-button${on ? ' chip-button--on' : ''}`}
+                  onClick={() => {
+                    setQuick(on ? null : choice.label);
+                    setCallbackAt(on ? '' : toLocalInput(choice.at()));
+                  }}
+                >
+                  {choice.label}
+                </button>
+              );
+            })}
+            <DateTimeField
+              variant="chip"
+              label="Other…"
+              value={quick ? '' : callbackAt}
               disabled={disposition !== null}
-              onClick={() => setPicking(true)}
-            >
-              Pick time...
-            </button>
+              onChange={(value) => {
+                setQuick(null);
+                setCallbackAt(value);
+              }}
+            />
           </div>
           {/* Closing finishes every open callback, so one booked in the same
               Save would be done the moment it was made - 2026-09-29. */}
           {disposition !== null && (
             <p className="wrapup__state">Closing a lead finishes its callbacks.</p>
-          )}
-          {disposition === null && (picking || callbackAt !== '') && (
-            <input
-              type="datetime-local"
-              className="actions-panel__input"
-              value={callbackAt}
-              onChange={(e) => setCallbackAt(e.target.value)}
-              aria-label="Callback date and time"
-            />
           )}
         </section>
 

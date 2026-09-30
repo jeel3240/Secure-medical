@@ -36,7 +36,11 @@ export interface AdminLeadRow {
   source: string | null;
   receivedAt: string | null;
   status: LeadStatus | null;
-  stepReached: number | null;
+  /**
+   * The question the lead is on now - 1 to 3 - or `done` once all three are
+   * answered. Null when no question ever went out (blocked on arrival).
+   */
+  step: number | 'done' | null;
   score: number | null;
   tier: string | null;
   lastActivityAt: string | null;
@@ -118,13 +122,22 @@ const STATUS_SQL = `
   END
 `;
 
-/** Highest question answered, which is what "Step reached" shows. */
+/**
+ * The question the lead is on now, from the conversation's own `step` - which
+ * the state machine moves on after each valid answer - or `done` once all
+ * three are answered.
+ *
+ * Until 2026-09-29 this was the highest question *answered*, so the column
+ * always read one behind: "Answering · Q1" for a lead already answered Q1 and
+ * being asked Q2, and "Ready · Q3" for one who had finished - Jeel, from a test
+ * with a real lead. Now a lead that went quiet reads the question it never
+ * answered, which is where it dropped off.
+ */
 const STEP_SQL = `
   CASE
-    WHEN c.q3 IS NOT NULL THEN 3
-    WHEN c.q2 IS NOT NULL THEN 2
-    WHEN c.q1 IS NOT NULL THEN 1
-    ELSE NULL
+    WHEN c.status = 'completed' THEN 'done'
+    WHEN c.status = 'suppressed' THEN NULL
+    ELSE c.step::text
   END
 `;
 
@@ -174,7 +187,7 @@ export async function listAdminLeads(query: AdminLeadQuery): Promise<AdminLeadPa
     `SELECT l.id, l.phone, l.first_name, l.last_name, l.source,
             COALESCE(l.ezt_added_at, l.created_at) AS received_at,
             ${STATUS_SQL} AS status,
-            ${STEP_SQL} AS step_reached,
+            ${STEP_SQL} AS step,
             c.score, c.tier,
             COALESCE(m.received_at, m.created_at) AS last_activity_at,
             m.direction AS last_activity_direction
@@ -212,7 +225,7 @@ export async function listAdminLeads(query: AdminLeadQuery): Promise<AdminLeadPa
       source: r.source,
       receivedAt: r.received_at?.toISOString() ?? null,
       status: r.status,
-      stepReached: r.step_reached,
+      step: r.step === null ? null : r.step === 'done' ? 'done' : Number(r.step),
       // The running score, not only the final one. Scoring starts at the first
       // reply, so a lead part-way through has a real score and tier worth
       // seeing. A score of 0 means no reply yet and shows as blank rather than

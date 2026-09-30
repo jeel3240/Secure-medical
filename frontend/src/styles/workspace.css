@@ -52,130 +52,83 @@
   display: none;
 }
 
-/* --- header card --- */
+/* --- header card --- 2026-09-29: plainer. LeadHeader.tsx says what changed. */
 
 .lead-head {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: var(--space-5);
+  gap: var(--space-4) var(--space-6);
   padding: var(--space-4) var(--space-5);
 }
 
 .lead-head__who {
-  display: flex;
-  align-items: center;
-  gap: var(--space-3);
   min-width: 0;
+  margin-right: auto;
 }
 
-/* Its own name, not .avatar: that is the app bar's user menu, and styling it
-   here restyled the app bar on every page. */
-.lead-head__avatar {
-  display: grid;
-  place-items: center;
-  width: 44px;
-  height: 44px;
-  flex: none;
-  border-radius: 50%;
-  background: var(--color-accent-soft);
-  color: var(--color-accent);
-  font-size: var(--text-body);
-  font-weight: var(--weight-semibold);
-}
 
 .lead-head__name {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
   margin: 0;
   font-size: var(--text-heading);
-  line-height: 1.2;
   font-weight: var(--weight-semibold);
+  line-height: 1.25;
+  color: var(--color-text);
 }
 
-.lead-head__phone {
-  margin: 2px 0 0;
+/* Phone · source · age, one quiet line. */
+.lead-head__facts {
+  display: flex;
+  flex-wrap: wrap;
+  margin: var(--space-1) 0 0;
   color: var(--color-text-muted);
-  font-family: var(--font-mono);
   font-size: var(--text-body);
+}
+
+.lead-head__facts span + span::before {
+  content: '·';
+  margin: 0 var(--space-2);
+  color: var(--color-text-subtle);
+}
+
+/* Too narrow for one line: stacked, rather than a dot starting the next line. */
+@media (max-width: 600px) {
+  .lead-head__facts {
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  .lead-head__facts span + span::before {
+    content: none;
+  }
 }
 
 .lead-head__stats {
   display: flex;
-  flex-wrap: wrap;
-  gap: 0;
+  gap: var(--space-6);
   margin: 0;
-  padding-left: var(--space-5);
-  border-left: 1px solid var(--color-border);
 }
 
 .lead-head__stats dt {
-  color: var(--color-text-subtle);
+  color: var(--color-text-muted);
   font-size: var(--text-small);
-  letter-spacing: var(--tracking-label);
-  text-transform: uppercase;
-  font-weight: var(--weight-semibold);
 }
 
 .lead-head__stats dd {
-  display: flex;
-  align-items: baseline;
-  gap: 2px;
-  margin: var(--space-1) 0 0;
+  margin: 2px 0 0;
+  color: var(--color-text);
   font-size: var(--text-body);
   font-weight: var(--weight-semibold);
 }
 
-.lead-head__score {
-  font-size: var(--text-display);
-  font-weight: var(--weight-bold);
-}
-
-.lead-head__score--hot { color: var(--color-hot); }
-.lead-head__score--warm { color: var(--color-warm); }
-.lead-head__score--low { color: var(--color-low); }
-
 .lead-head__of {
-  color: var(--color-text-subtle);
-  font-size: var(--text-small);
-}
-
-.flow {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-2);
-}
-
-.flow::before {
-  content: '';
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: var(--color-text-subtle);
-}
-
-.flow--completed::before { background: var(--color-success); }
-.flow--open::before { background: var(--color-accent); }
-.flow--review::before { background: var(--color-warning); }
-.flow--expired::before,
-.flow--suppressed::before { background: var(--color-text-subtle); }
-
-.lead-head__actions {
-  margin-left: auto;
-  text-align: right;
+  color: var(--color-text-muted);
+  font-weight: var(--weight-regular);
 }
 
 .lead-head__buttons {
   display: flex;
   gap: var(--space-2);
-  justify-content: flex-end;
-}
-
-.lead-head__call-note {
-  margin: var(--space-2) 0 0;
-  color: var(--color-text-subtle);
-  font-size: var(--text-small);
 }
 
 /* --- left column --- */
@@ -212,34 +165,28 @@
 .told-us__list dd {
   margin: 0;
   text-align: right;
-}
-
-.answer {
-  display: inline-block;
-  padding: var(--space-1) var(--space-2);
-  border-radius: var(--radius-sm);
+  color: var(--color-text);
   font-size: var(--text-body);
   font-weight: var(--weight-semibold);
-  background: var(--color-surface-hover);
 }
 
-.answer--q1 { background: #eef2ff; color: #3730a3; }
-.answer--q2 { background: var(--color-warm-soft); color: var(--color-warm); }
-.answer--q3 { background: var(--color-success-soft); color: var(--color-success); }
-
-.answer--empty {
-  background: transparent;
+.told-us__none {
   color: var(--color-text-subtle);
+  font-weight: var(--weight-regular);
 }
+
 
 .breakdown__total {
+  color: var(--color-primary);
   font-size: var(--text-title);
   font-weight: var(--weight-bold);
 }
 
-.breakdown__total--hot { color: var(--color-hot); }
-.breakdown__total--warm { color: var(--color-warm); }
-.breakdown__total--low { color: var(--color-low); }
+/* The light end of the breakdown's blue ramp; the dark end is the brand navy.
+   LeadAnswers.tsx, breakdownShade. */
+.breakdown {
+  --breakdown-light: color-mix(in srgb, var(--color-accent) 40%, var(--color-accent-soft));
+}
 
 .breakdown__bar {
   display: flex;
@@ -250,7 +197,6 @@
 
 .breakdown__seg {
   border-radius: 2px;
-  background: var(--color-hot);
 }
 
 .breakdown__list {
@@ -273,7 +219,6 @@
   height: 9px;
   flex: none;
   border-radius: 2px;
-  background: var(--color-hot);
 }
 
 .breakdown__label {
@@ -313,9 +258,19 @@
   font-weight: var(--weight-regular);
 }
 
+/* A quiet link, not link blue - Jeel, 2026-09-29: muted until hovered, then
+   the brand navy. */
 .convo-card__link {
-  font-size: var(--text-body);
+  color: var(--color-text-muted);
+  font-size: var(--text-small);
+  font-weight: var(--weight-semibold);
+  text-decoration: none;
   white-space: nowrap;
+}
+
+.convo-card__link:hover {
+  color: var(--color-primary);
+  text-decoration: underline;
 }
 
 .convo-card__body {
@@ -566,17 +521,6 @@
   font-size: var(--text-small);
 }
 
-.wrapup__optional {
-  margin-left: var(--space-1);
-  padding: 1px var(--space-2);
-  border-radius: var(--radius-sm);
-  background: var(--color-surface-hover);
-  color: var(--color-text-subtle);
-  font-size: var(--text-small);
-  font-weight: var(--weight-semibold);
-  letter-spacing: var(--tracking-label);
-  text-transform: uppercase;
-}
 
 .wrapup__choices {
   display: flex;
@@ -650,26 +594,7 @@
   margin-bottom: var(--space-4);
 }
 
-/* One divider between every stat, not just before the first. */
 
-.lead-head__stats > div {
-  padding: 0 var(--space-5);
-  border-left: 1px solid var(--color-border);
-}
-
-.lead-head__stats > div:first-child {
-  border-left: 0;
-  padding-left: 0;
-}
-
-/* Disabled, and looks it: dashed rather than a solid grey block that reads as
-   a button that ought to work. */
-.btn.lead-head__call:disabled {
-  border-style: dashed;
-  background: var(--color-surface-muted);
-  color: var(--color-text-subtle);
-  opacity: 1;
-}
 
 .convo__bubble--in .convo__choice {
   border: 0;
@@ -759,4 +684,62 @@
   margin: var(--space-2) 0 0;
   color: var(--color-text-muted);
   font-size: var(--text-small);
+}
+
+/* Notes, in the left column - LeadNotes.tsx, 2026-09-29. Each note is its
+   text, then who wrote it and when, a step quieter; a rule between them. */
+.notes-card__count {
+  color: var(--color-text-muted);
+  font-size: var(--text-small);
+  font-weight: var(--weight-regular);
+}
+
+.notes-card__list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.notes-card__list li {
+  padding: var(--space-3) 0;
+  border-top: 1px solid var(--color-border);
+}
+
+.notes-card__list li:first-child {
+  padding-top: 0;
+  border-top: 0;
+}
+
+.notes-card__body {
+  margin: 0;
+  color: var(--color-text);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.notes-card__meta,
+.notes-card__empty {
+  margin: var(--space-1) 0 0;
+  color: var(--color-text-muted);
+  font-size: var(--text-small);
+}
+
+.notes-card__empty {
+  margin: 0;
+}
+
+.notes-card__more {
+  margin-top: var(--space-2);
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--color-primary);
+  font: inherit;
+  font-size: var(--text-small);
+  font-weight: var(--weight-semibold);
+  cursor: pointer;
+}
+
+.notes-card__more:hover {
+  text-decoration: underline;
 }

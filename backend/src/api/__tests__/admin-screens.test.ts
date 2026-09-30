@@ -85,6 +85,7 @@ describe('Configuration', () => {
       tiers: [{ name: 'HOT', minScore: 75, maxScore: 100 }],
       settings: { expiryDays: 7, maxInvalidBeforeReview: 1, segmentLimit: 160 },
       longestFirstName: 'Christopher',
+      longestNameIsFallback: false,
     });
 
     const res = await boss.get('/api/admin/config');

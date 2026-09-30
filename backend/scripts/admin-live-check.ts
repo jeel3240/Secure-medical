@@ -98,7 +98,8 @@ async function main(): Promise<void> {
     const config = await getAdminConfig();
 
     // Against the rows seeded by 001_init.sql.
-    check('the three questions and more are shown', config.messages.length, 7);
+    check('the three questions and more are shown', config.messages.length, 8);
+    check('including the review message, sent after a second unclear reply', config.messages.some((m) => m.key === 'message_review'), true);
     check('the opener is first', config.messages[0].key, 'question_1');
     check('and is personalised', config.messages[0].personalised, true);
 
@@ -115,6 +116,7 @@ async function main(): Promise<void> {
 
     // With no leads yet, the fallback name is the worst case.
     check('the worst case uses the fallback when there are no leads', config.longestFirstName, 'there');
+    check('and says it is the fallback', config.longestNameIsFallback, true);
   }
 
   console.log('\nthe segment count follows the longest real name');
@@ -188,7 +190,12 @@ async function main(): Promise<void> {
     await pool.query(`INSERT INTO dispositions (lead_id, agent_id, value) VALUES ($1, $2, 'closed')`, [lead, maya]);
     await pool.query(`INSERT INTO notes (lead_id, agent_id, body) VALUES ($1, $2, 'spoke briefly')`, [lead, sam]);
     await pool.query(
-      `INSERT INTO callbacks (lead_id, agent_id, scheduled_at) VALUES ($1, $2, now() + interval '1 hour'), ($1, $2, now() - interval '1 hour')`,
+      // Overdue, later today (halfway to midnight UTC, so it is still today at
+      // any hour), and in two days.
+      `INSERT INTO callbacks (lead_id, agent_id, scheduled_at) VALUES
+         ($1, $2, now() - interval '1 hour'),
+         ($1, $2, now() + ((date_trunc('day', now() AT TIME ZONE 'UTC') AT TIME ZONE 'UTC' + interval '1 day') - now()) / 2),
+         ($1, $2, now() + interval '2 days')`,
       [lead, sam]
     );
 
@@ -196,7 +203,7 @@ async function main(): Promise<void> {
     const mayaRow = after.agents.find((a) => a.name === 'Maya');
     const samRow = after.agents.find((a) => a.name === 'Sam');
 
-    check("Sam's overdue callback is due; the one in an hour is not yet", samRow?.callbacksDue, 1);
+    check("Sam's callbacks due today: the overdue one and the one later today, not the one in two days", samRow?.callbacksDue, 2);
     check('and Maya has none due', mayaRow?.callbacksDue, 0);
 
     // The funnel went on 2026-09-28; Closed is a total of its own now.
@@ -213,7 +220,7 @@ async function main(): Promise<void> {
 
     console.log('\nthe activity feed');
     const kinds = after.activity.map((a) => a.kind).sort();
-    check('covers every agent action', kinds, ['callback', 'callback', 'disposition', 'disposition', 'disposition', 'note']);
+    check('covers every agent action', kinds, ['callback', 'callback', 'callback', 'disposition', 'disposition', 'disposition', 'note']);
     check('newest first', after.activity[0].at >= after.activity[1].at, true);
     check('and names the lead', after.activity[0].leadName, 'Jordan');
   }

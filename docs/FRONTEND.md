@@ -100,7 +100,7 @@ Rebuilt to a mockup Jeel supplied. What changed and why:
 | Tier filter | Three pills, several at once | One segmented switcher - All, Hot, Warm, Low with counts - one at a time |
 | Tier column | Coloured badge | Signal bars and the word, `components/TierSignal.tsx` |
 | Age column | "AGE", amber and red | "WAITING", monospace, one weight and colour for every lead |
-| Status column | Coloured pills, six statuses | An icon and the words, three statuses, a hyphen otherwise - `components/QueueStatus.tsx` |
+| Status column | Coloured pills, six statuses | An icon and the words, four statuses (Callback came back 2026-09-29), a hyphen otherwise - `components/QueueStatus.tsx` |
 | Button | Pick | **Pick up** - on every screen that picks, so the action has one name |
 | Someone else's lead | "Locked" | A padlock and "Locked", `components/LockIcon.tsx` |
 | Action column | Right-aligned | Centred - buttons and Locked on one axis |
@@ -108,6 +108,9 @@ Rebuilt to a mockup Jeel supplied. What changed and why:
 | Chosen tier | White on grey | The header's navy, white text - the same look as a hovered action - on a thumb that slides to the chosen option. `components/Segmented.tsx`, shared with the Add agent drawer's role choice |
 | Empty cells | `-` | `-` - an em dash was tried and reverted |
 | Live label | Live | Live · updated just now |
+
+*(2026-09-29: a fourth, **Callback – Maya Chen · 8:13 PM** with a clock icon,
+came back - see below and `QUEUE.md`, "The tag".)*
 
 **Only three statuses, and most rows have none - Jeel, 2026-09-28.**
 Working – name (was In progress – name), Inbound reply and Needs review, each an icon and the words; any
@@ -275,17 +278,45 @@ inside, so none can be missed - and a strip above the header says why. The
 server refuses the write regardless (`AGENT-WORKSPACE.md`, "Rules"), so the
 disabled controls save a round trip rather than enforce anything.
 
-**Layout.** A full-width header card - avatar, name and tier, score out of 100,
-ticking lead age, source, SMS flow state, and the Send SMS and Call buttons -
-over three cards: what the lead told us and the score breakdown; the
+**Layout.** A full-width header card over three cards. The header was made
+plainer on 2026-09-29 - Jeel: the first one read as generated (initials circle,
+tiny letter-spaced uppercase labels, monospace phone and source, a big red
+score, a dashed Call button, a "Phase 4" note). It is now the full name; one
+quiet line of phone, source in words ("Web interface") and age; Score "90 /
+100" and Questions in the Step column's words ("On Q2", "Stopped at Q2",
+"Completed"); and a plain disabled Call whose reason is a tooltip. The tier
+and a Send SMS button went the same day - Jeel: the score already says how
+strong the lead is, and Send SMS only moved the cursor to the message box just
+below. On a phone the phone, source and age stack. Also that day: the three answers under "What
+Priya told us" became plain text, not three coloured pills, and "Full timeline
+→" became a quiet grey link that turns navy on hover, not link blue. The score breakdown's bar and swatches
+run from light blue to the brand navy, and its total is navy - they were the
+Hot red at rising opacity, an alarm colour on every lead (same day). The three
+cards below are: what the lead told us and the score breakdown; the
 conversation; and the wrap-up.
 
 **Files.** `WorkspacePage.tsx` holds the data, picking and releasing, and the
 layout. Each card is its own component in `pages/workspace/`: `LeadHeader`,
-`LeadAnswers` (the left column), `Conversation` with `SmsCompose` under it, and
+`LeadAnswers` and `LeadNotes` (the left column), `Conversation` with `SmsCompose` under it, and
 `ActionsPanel` (Wrap up). The first two were split out of the page on
 2026-09-28, when it had reached 420 lines; the rendered page was checked
 identical before and after, HTML and every computed style, on six leads.
+
+**Notes are on the workspace - Jeel, 2026-09-29.** A Notes card under the
+score breakdown lists the lead's notes newest first, each with who wrote it and
+when; the three newest show and "Show all N" opens the rest in place. Until
+then notes were only on the Lead Timeline page, so the agent about to call - who
+most needed "wants a call after 5 PM" - never saw them, and a note saved in
+Wrap up vanished from the screen. The card reads the timeline the page already
+polls, and the page now refreshes that timeline after every save, so a new note
+(or a sent text) shows at once. `LeadNotes.test.tsx`.
+
+**The conversation keeps its newest message in view.** On opening and on every
+new message the scrolling box goes to its very end. Until 2026-09-29 it
+scrolled a marker after the last message into view, which stopped short by the
+box's padding, so the newest message's name and time sat below the edge and a
+sent text looked as if it had not arrived - Jeel. Measured after the fix: 0px
+left below, on open and after each of three new messages.
 
 **The centre column is a conversation, not a log.** `workspace/Conversation.tsx`
 shows the SMS thread and the system markers only - inbound on the left, ours on
@@ -306,8 +337,9 @@ unclear reply cannot shift every later label by one, and a worded answer like
 This needed the raw `choice` on each answer chip - `AGENT-WORKSPACE.md`.
 
 **The composer is a message box.** Always present at the foot of the thread,
-Enter to send and Shift+Enter for a new line, templates behind a button. The
-header's Send SMS puts the cursor in it. The takeover warning appears once there
+Enter to send and Shift+Enter for a new line, templates behind a button. (The
+header's Send SMS button, which only put the cursor here, went on 2026-09-29.)
+The takeover warning appears once there
 is text and before the first send, as before; the 160-character limit and the
 blocked-number notice are unchanged.
 
@@ -340,7 +372,8 @@ Positive / No contact / Negative. *(2026-09-28, Jeel: replaced by two buttons,
 confirm dialog. The groups, the Step N of 3 counter that tracked them and
 their styles are gone. `AGENT-WORKSPACE.md`, "Dispositions".)* DNC is a separate red link, not one of the
 buttons - it still opens the same confirm dialog. The quick callback chips gained
-"Pick time...", which reveals the date field. "Step N of 3" (since removed) showed which section
+"Pick time...", which reveals the date field *(2026-09-29: now one set of
+choices ending in "Other…" - "Picking a date and time" below)*. "Step N of 3" (since removed) showed which section
 still wants something: outcome, then callback or note - the callback is optional,
 so it never holds the step back on its own. Save and the unsaved changes guard
 are untouched. *(Save & next was removed later the same day - "One button"
@@ -398,6 +431,27 @@ Internal values and screen words still differ in a few places, on purpose:
 | conversation `status = 'completed'` | Ready | A database value; renaming it is a migration for no behaviour change. The API's lead status is already `ready` |
 | queue tag kind `working` | Working – name | Same word since 2026-09-28 |
 | Overview `responded`, `completed` | Replied, Answered all 3 | Field names in one JSON payload, read in one page |
+
+## Picking a date and time - 2026-09-29
+
+Wrap up's "Pick time..." and My Callbacks' Reschedule used
+`<input type="datetime-local">`, whose calendar the browser draws in its own
+blue and fonts, and which cannot be restyled - Jeel: it did not match the app.
+Both now use `components/DateTimeField.tsx`: a field like the other inputs that
+opens a small calendar (past days off, today outlined, the chosen day brand
+navy) and a time menu in 15-minute steps, with times already gone hidden for
+today. The value is the same local-time string the input gave, so nothing that
+saves a callback changed. The time menu is still the browser's own list, which
+is as plain as the other selects in the app. `DateTimeField.test.tsx`.
+
+**Wrap up's callback is one set of choices - Jeel, the same day.** It was
+three quick chips, a "Pick time..." chip on a line of its own, and the date
+field below that - three rows, and nothing showed which chip had been chosen.
+Now: `In 1 hour`, `Tomorrow 10 AM`, `Tomorrow 3 PM` and `Other…`. The chosen
+one is brand navy; pressing it again books nothing. `Other…` opens the
+calendar and then shows the date itself ("Sep 30, 3:00 PM"), with Clear in the
+panel. The "OPTIONAL" pill beside the heading is gone - every part of Wrap
+up is optional, so it said nothing.
 
 ## Fetching
 
@@ -525,7 +579,7 @@ page forgot them.
 
 ## Tests
 
-`npm test` in `frontend/`. Vitest with jsdom, 115 tests (2026-09-28).
+`npm test` in `frontend/`. Vitest with jsdom, 140 tests (2026-09-29).
 
 Logic first, by agreement - a screen is easy to judge by eye, and a dropped
 response or an off-by-one age threshold is not:
@@ -537,7 +591,11 @@ response or an off-by-one age threshold is not:
 | `components/Timeline.test.tsx`, `pages/LeadTimelinePage.test.ts` | The timeline's wording, and the summary sidebar |
 | `pages/workspace/Conversation.test.ts` | Labelling a reply with the answer it was recorded as |
 | `pages/workspace/Conversation.render.test.tsx` | The sent ticks and the red "!" on a refused message |
-| `components/QueueStatus.test.tsx` | The queue's three statuses, their icons, and the tier bars |
+| `components/QueueStatus.test.tsx` | The queue's four statuses, their icons, a callback's time, and the tier bars |
+| `components/DateTimeField.test.tsx` | The date and time picker: the month grid, quarter hours, past days off, Clear, Escape |
+| `pages/workspace/LeadHeader.test.ts` | The header's source and Questions wording |
+| `pages/workspace/LeadNotes.test.tsx` | The Notes card: newest first, three then Show all, the author, the empty state |
+| `pages/workspace/LeadAnswers.test.ts` | The score breakdown's light-blue-to-navy shades |
 | `components/SyncStatus.test.tsx` | The EZ Texting sync line, quiet and amber |
 | `components/Segmented.test.tsx` | The sliding switcher |
 | `styles/type-system.test.ts` | The type scale, duplicate selectors, undefined tokens - "Type system" above |

@@ -1,112 +1,105 @@
 import type { LeadDetail } from '../../api/workspace';
 import { Button } from '../../components/Button';
-import { formatAge, formatPhone, leadName } from '../../lib/format';
+import { formatAge, formatPhone } from '../../lib/format';
 
 /**
- * The workspace's full-width header card: who the lead is, the score, age,
- * source and SMS flow state, and the two contact actions. Split out of
- * WorkspacePage.tsx, 2026-09-28.
+ * The workspace's full-width header card: who the lead is, then the two facts
+ * an agent checks before calling - the score and how far the questions got -
+ * and the two contact actions. Split out of WorkspacePage.tsx, 2026-09-28.
  *
- * **The Call button is here and disabled.** Twilio is Phase 4, and CLAUDE.md
- * §10 asks for it visible but inert so the screen does not change shape later.
- * It says why it is off rather than sitting there dead.
+ * **Redesigned plainer - Jeel, 2026-09-29.** The first version read as
+ * generated: an initials circle, four tiny letter-spaced UPPERCASE labels, the
+ * phone and "WEBINTERFACE" in monospace, a large red score, a coloured dot, a
+ * dashed Call button and a "Phase 4" note agents have no reason to understand.
+ * Now: the full name at heading size, one quiet line of phone, source and age,
+ * two facts with sentence-case labels in the body face, and a plain disabled
+ * Call button that explains itself on hover.
+ *
+ * **No tier and no Send SMS - Jeel, the same day.** The score beside it already
+ * says how strong the lead is, and Send SMS only moved the cursor to the
+ * message box that sits right under the header.
  */
 
-/** `Maria Reyes` -> `MR`, `Maria` -> `M`. */
-function initials(lead: LeadDetail): string {
-  return [lead.firstName, lead.lastName]
-    .filter(Boolean)
-    .map((part) => (part as string).trim()[0]?.toUpperCase() ?? '')
-    .join('')
-    .slice(0, 2);
+/** "WEBINTERFACE" -> "Web interface". EZ Texting's own words for how a contact arrived. */
+export function sourceLabel(source: string | null): string | null {
+  if (!source) return null;
+  const known: Record<string, string> = { WEBINTERFACE: 'Web interface', API: 'API' };
+  return known[source.toUpperCase()] ?? source;
 }
 
-/** `open` -> `Open`, `completed` -> `Completed`. */
-function sentenceCase(text: string): string {
-  return text.charAt(0).toUpperCase() + text.slice(1).replace(/_/g, ' ');
+/**
+ * How far the questions got, in the Step column's words (ADMIN-LEADS.md,
+ * "Step"): the question they are on, or where they stopped.
+ */
+export function questionsLabel(conversation: LeadDetail['conversation']): string {
+  if (!conversation) return 'Not started';
+  const q = `Q${conversation.step ?? 1}`;
+  switch (conversation.status) {
+    case 'completed':
+      return 'Completed';
+    case 'open':
+      return conversation.agentTookOverAt ? `Agent took over at ${q}` : `On ${q}`;
+    case 'expired':
+      return `Stopped at ${q}`;
+    case 'review':
+      return `Needs review at ${q}`;
+    case 'suppressed':
+      return 'Not sent - blocked';
+    default:
+      return conversation.status;
+  }
 }
 
-export function LeadHeader({
-  lead,
-  mine,
-  now,
-  onSendSms,
-}: {
-  lead: LeadDetail;
-  /** The viewer holds the lead - only then is Send SMS offered. */
-  mine: boolean;
-  now: Date;
-  onSendSms: () => void;
-}) {
+function fullName(lead: LeadDetail): string {
+  return [lead.firstName, lead.lastName].filter(Boolean).join(' ') || formatPhone(lead.phone);
+}
+
+export function LeadHeader({ lead, now }: { lead: LeadDetail; now: Date }) {
   const score = lead.conversation?.score ?? 0;
-  const tier = lead.conversation?.tier ?? null;
+  const source = sourceLabel(lead.source);
+  const facts = [formatPhone(lead.phone), source, lead.receivedAt ? `${formatAge(lead.receivedAt, now)} ago` : null];
 
   return (
     <article className="card lead-head">
       <div className="lead-head__who">
-        <span className="lead-head__avatar" aria-hidden="true">
-          {initials(lead)}
-        </span>
-        <div>
-          <h1 className="lead-head__name">
-            {leadName(lead)}
-            {tier && <span className={`tier tier--${tier.toLowerCase()}`}>{tier}</span>}
-          </h1>
-          <p className="lead-head__phone tabular">{formatPhone(lead.phone)}</p>
-        </div>
+        <h1 className="lead-head__name">{fullName(lead)}</h1>
+        <p className="lead-head__facts">
+          {facts.filter(Boolean).map((fact, i) => (
+            <span key={i} className={i === 0 ? 'tabular' : undefined}>
+              {fact}
+            </span>
+          ))}
+        </p>
       </div>
 
       <dl className="lead-head__stats">
         <div>
           <dt>Score</dt>
-          <dd>
-            <span className={`lead-head__score tabular${tier ? ` lead-head__score--${tier.toLowerCase()}` : ''}`}>
-              {score}
-            </span>
-            <span className="lead-head__of">/100</span>
+          <dd className="tabular">
+            {score}
+            <span className="lead-head__of"> / 100</span>
           </dd>
         </div>
         <div>
-          <dt>Lead age</dt>
-          <dd className="tabular">{formatAge(lead.receivedAt, now)}</dd>
-        </div>
-        <div>
-          <dt>Source</dt>
-          <dd className="mono">{lead.source ?? '-'}</dd>
-        </div>
-        <div>
-          <dt>SMS flow</dt>
-          <dd>
-            <span className={`flow flow--${lead.conversation?.status ?? 'none'}`}>
-              {lead.conversation ? sentenceCase(lead.conversation.status) : 'No conversation'}
-            </span>
-          </dd>
+          <dt>Questions</dt>
+          <dd>{questionsLabel(lead.conversation)}</dd>
         </div>
       </dl>
 
-      <div className="lead-head__actions">
-        <div className="lead-head__buttons">
-          {mine && !lead.flags.dnc && (
-            <Button variant="secondary" onClick={onSendSms}>
-              Send SMS
-            </Button>
-          )}
-          {/* Phase 4. Visible but inert, so the screen keeps its shape and an
-              agent can see that calling is coming rather than missing. */}
-          <Button
-            variant="secondary"
-            className="lead-head__call"
-            disabled
-            title="Browser calling arrives with Twilio in Phase 4"
-          >
-            Call {formatPhone(lead.phone)}
-          </Button>
-        </div>
-        <p className="lead-head__call-note">
-          {lead.flags.dnc
-            ? 'Blocked: this number is on the do-not-call list.'
-            : 'Browser calling is off until Phase 4.'}
-        </p>
+      <div className="lead-head__buttons">
+        {/* Twilio calling is Phase 4. Visible but inert, so the screen keeps its
+            shape; the reason is a tooltip, not a line agents have to read. */}
+        <Button
+          variant="secondary"
+          disabled
+          title={
+            lead.flags.dnc
+              ? 'This number is on the do-not-call list.'
+              : 'Calling from the browser is not available yet.'
+          }
+        >
+          Call
+        </Button>
       </div>
     </article>
   );

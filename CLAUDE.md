@@ -162,6 +162,7 @@ you change something the docs describe, update the doc in the same commit.
     src/api/leads.ts        the agents' priority queue, and claim/release
     src/api/lead-workspace.ts  every route on one lead: card, timeline, notes, callbacks, SMS, dispositions, read
     src/api/filters.ts      request parsing shared by several routes: since, tz, lists, lead id
+    src/api/startup-checks.ts  what stops the API starting in production: weak JWT secret, no webhook token
     src/db/claims.ts        claiming and releasing a lead
     src/db/read-flag.ts     clears has_unread_inbound
     src/db/lead-detail.ts   the lead card
@@ -224,9 +225,10 @@ you change something the docs describe, update the doc in the same commit.
     src/components/SyncStatus.tsx    "Synced with EZ Texting 1m ago"
     src/components/RowMenu.tsx       a row's "⋯" actions menu
     src/components/LockIcon.tsx      the padlock on a locked queue row
+    src/components/DateTimeField.tsx the date and time picker, in the app's style
     src/pages/QueuePage.tsx          the priority queue
     src/pages/WorkspacePage.tsx      the agent workspace shell
-    src/pages/workspace/             header card, answers and score, conversation, SMS compose, Wrap up
+    src/pages/workspace/             header card, answers and score, notes, conversation, SMS compose, Wrap up
     src/pages/LeadTimelinePage.tsx   read-only history with a summary sidebar
     src/pages/CallbacksPage.tsx      My Callbacks
     src/pages/admin/                 overview, leads, agents, config, dnc
@@ -307,7 +309,7 @@ Tiers: HOT 75–100, WARM 45–74, LOW 1–44
 3. On end, Twilio status callback → save to `calls`.
 4. Agent sets disposition/note/callback. DNC disposition = same as SMS STOP.
 
-Queue tags (New, Attempted 1x, In progress, Callback, Needs review, Stalled at Q2, Inbound reply, Seen before) *(2026-09-28: Stalled is gone - the queue holds only leads that need a person, `docs/QUEUE.md`)* are **computed** from these tables, not stored as a status. *(2026-09-19: "Seen before" cannot occur until repeat-lead handling is built - a future item, §10.)* *(2026-09-22: built - which tag wins when several apply is in `docs/QUEUE.md`.)* *(2026-09-28: only Working – name (was In progress), Inbound reply and Needs review are shown; the rest were dropped - `docs/QUEUE.md`, "The tag".)*
+Queue tags (New, Attempted 1x, In progress, Callback, Needs review, Stalled at Q2, Inbound reply, Seen before) *(2026-09-28: Stalled is gone - the queue holds only leads that need a person, `docs/QUEUE.md`)* are **computed** from these tables, not stored as a status. *(2026-09-19: "Seen before" cannot occur until repeat-lead handling is built - a future item, §10.)* *(2026-09-22: built - which tag wins when several apply is in `docs/QUEUE.md`.)* *(2026-09-28: only Working – name (was In progress), Inbound reply and Needs review are shown; the rest were dropped - `docs/QUEUE.md`, "The tag".)* *(2026-09-29: Callback – name · time is back, so four.)*
 
 **Paths, as of 2026-09-15.** Caddy forwards only `/api/*` to the API; everything
 else is the frontend, so every route lives under `/api`. The EZ Texting webhook

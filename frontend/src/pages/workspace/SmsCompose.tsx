@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useRef, useState } from 'react';
 import { toApiError } from '../../api/client';
 import { sendAgentSms, SMS_LIMIT, type LeadDetail } from '../../api/workspace';
 import { Banner } from '../../components/Banner';
@@ -54,13 +54,10 @@ const TEMPLATES: { label: string; body: (lead: LeadDetail) => string }[] = [
 export function SmsCompose({
   lead,
   refresh,
-  focusKey = 0,
   canAct,
 }: {
   lead: LeadDetail;
   refresh: () => Promise<void>;
-  /** Bumped by the header's Send SMS button to put the cursor in the box. */
-  focusKey?: number;
   /** False on a lead you have not picked. */
   canAct: boolean;
 }) {
@@ -69,10 +66,6 @@ export function SmsCompose({
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const box = useRef<HTMLTextAreaElement>(null);
-
-  useEffect(() => {
-    if (focusKey > 0) box.current?.focus();
-  }, [focusKey]);
 
   const blocked = lead.flags.dnc;
   const remaining = SMS_LIMIT - body.length;
