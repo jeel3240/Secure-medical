@@ -96,7 +96,7 @@ complex".** The page and the API now hold only what a superadmin acts on:
 | Part | Shows |
 |---|---|
 | Totals | Leads in · Replied · Answered all 3 · Closed - for Today, 7 days or 30 days, chosen on the navy switcher |
-| Agents | Per active agent: **Working now** (leads they hold), **Closed** in the period, **Callbacks due**, **Last active** (their newest note, callback, outcome, call or SMS) |
+| Agents | Per active agent: **Working now** (leads they hold), **Closed** in the period, **Due today**, **Last active** (their newest note, callback, outcome, call or SMS) |
 | System | Database, EZ Texting sync, the expiry sweep, sending - each OK or Degraded - and incoming replies, which shows its last reply with no verdict. From the health endpoint |
 
 **Every number counts what happened in the period - Jeel, 2026-09-28, "i want
@@ -109,7 +109,7 @@ all real":**
 | Answered all 3 | Leads whose third answer came in the period - `conversations.completed_at`, migration 004 |
 | Closed | **Leads** closed in the period, not presses of Closed: a lead closed, reopened by a text and closed again is one |
 | Working now | Leads the agent holds right now, whatever the period |
-| Callbacks due | The agent's open callbacks due **now or overdue** - one booked for next week is not due |
+| Due today | The agent's open callbacks due **by the end of today**, in the viewer's time zone, overdue ones included - one booked for next week is not. Until 2026-09-29 it counted only those already due, so a 3 PM callback showed nothing all morning; the column was called Callbacks due |
 
 Until that day Replied and Answered all 3 counted leads that *arrived* in the
 period, Closed counted presses, and Callbacks due counted every open callback;

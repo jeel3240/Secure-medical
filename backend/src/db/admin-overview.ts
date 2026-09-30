@@ -125,11 +125,14 @@ export async function getOverview(period: OverviewPeriod, timeZone?: string): Pr
           SELECT count(DISTINCT d.lead_id)::int FROM dispositions d
           WHERE d.agent_id = u.id AND d.value IN (${closing}) AND d.created_at >= ${since}
         ) AS closed,
-        -- Due now or overdue - not next week's. Open ones booked for later
-        -- are not yet anything to act on.
+        -- Due today - overdue ones included, next week's not. It counted only
+        -- those already due, so a callback at 3 PM showed nothing all
+        -- morning, and a manager could not see who had calls to make that
+        -- day - Jeel, 2026-09-29. "Today" ends at the viewer's midnight.
         (
           SELECT count(*)::int FROM callbacks cb
-          WHERE cb.agent_id = u.id AND cb.done_at IS NULL AND cb.scheduled_at <= now()
+          WHERE cb.agent_id = u.id AND cb.done_at IS NULL
+            AND cb.scheduled_at < (${startOfTodaySql(timeZone)} + interval '1 day')
         ) AS callbacks_due,
         (SELECT count(*)::int FROM leads hl WHERE hl.assigned_to = u.id) AS holding,
         (

@@ -153,7 +153,7 @@ export function OverviewPage() {
                   <th>Agent</th>
                   <th className="right">Working now</th>
                   <th className="right">Closed</th>
-                  <th className="right" title="Due now or overdue">Callbacks due</th>
+                  <th className="right" title="Callbacks due by the end of today, overdue ones included">Due today</th>
                   <th>Last active</th>
                 </tr>
               </thead>
