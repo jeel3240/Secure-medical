@@ -13,6 +13,7 @@ import { ActionsPanel } from './workspace/ActionsPanel';
 import { Conversation } from './workspace/Conversation';
 import { LeadAnswers } from './workspace/LeadAnswers';
 import { LeadHeader } from './workspace/LeadHeader';
+import { LeadNotes } from './workspace/LeadNotes';
 import { SmsCompose } from './workspace/SmsCompose';
 import { formatTime } from '../lib/format';
 import { useSecond } from '../lib/useSecond';
@@ -34,7 +35,7 @@ import { useSecond } from '../lib/useSecond';
  * the switched-off controls are a courtesy, not the lock - AGENT-WORKSPACE.md.
  *
  * The header card is `workspace/LeadHeader.tsx`, the left column
- * `workspace/LeadAnswers.tsx`, the SMS box `SmsCompose.tsx` and the wrap-up
+ * `workspace/LeadAnswers.tsx` and `workspace/LeadNotes.tsx`, the SMS box `SmsCompose.tsx` and the wrap-up
  * `ActionsPanel.tsx`. This page holds the data, picking and releasing, and the
  * layout.
  */
@@ -63,7 +64,15 @@ export function WorkspacePage() {
   // keeping them apart means a slow thread cannot hold up the card an agent is
   // reading while the phone rings.
   const timelineFetcher = useCallback(() => getTimeline(leadId), [leadId]);
-  const { data: entries } = usePolling<TimelineEntry[]>(timelineFetcher, { enabled: valid });
+  const { data: entries, refresh: refreshTimeline } = usePolling<TimelineEntry[]>(timelineFetcher, {
+    enabled: valid,
+  });
+
+  // After a write: the card, and the timeline too, so a saved note shows in the
+  // Notes card and a sent text in the thread at once, not on the next poll.
+  const refreshAll = useCallback(async () => {
+    await Promise.all([refresh(), refreshTimeline()]);
+  }, [refresh, refreshTimeline]);
 
   /**
    * "Lead 3 of 12" - where this one sits in the queue an agent is working
@@ -234,6 +243,7 @@ export function WorkspacePage() {
       <div className="workspace__grid">
         <div className="workspace__col workspace__col--left">
           <LeadAnswers lead={lead} />
+          <LeadNotes entries={entries} />
         </div>
 
         <div className="workspace__col workspace__col--center">
@@ -262,12 +272,12 @@ export function WorkspacePage() {
               )}
             </div>
 
-            <SmsCompose lead={lead} refresh={refresh} focusKey={focusCompose} canAct={mine} />
+            <SmsCompose lead={lead} refresh={refreshAll} focusKey={focusCompose} canAct={mine} />
           </article>
         </div>
 
         <div className="workspace__col workspace__col--right">
-          <ActionsPanel lead={lead} refresh={refresh} canAct={mine} />
+          <ActionsPanel lead={lead} refresh={refreshAll} canAct={mine} />
         </div>
       </div>
     </section>

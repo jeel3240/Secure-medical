@@ -760,3 +760,61 @@
   color: var(--color-text-muted);
   font-size: var(--text-small);
 }
+
+/* Notes, in the left column - LeadNotes.tsx, 2026-09-29. Each note is its
+   text, then who wrote it and when, a step quieter; a rule between them. */
+.notes-card__count {
+  color: var(--color-text-muted);
+  font-size: var(--text-small);
+  font-weight: var(--weight-regular);
+}
+
+.notes-card__list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.notes-card__list li {
+  padding: var(--space-3) 0;
+  border-top: 1px solid var(--color-border);
+}
+
+.notes-card__list li:first-child {
+  padding-top: 0;
+  border-top: 0;
+}
+
+.notes-card__body {
+  margin: 0;
+  color: var(--color-text);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.notes-card__meta,
+.notes-card__empty {
+  margin: var(--space-1) 0 0;
+  color: var(--color-text-muted);
+  font-size: var(--text-small);
+}
+
+.notes-card__empty {
+  margin: 0;
+}
+
+.notes-card__more {
+  margin-top: var(--space-2);
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--color-primary);
+  font: inherit;
+  font-size: var(--text-small);
+  font-weight: var(--weight-semibold);
+  cursor: pointer;
+}
+
+.notes-card__more:hover {
+  text-decoration: underline;
+}
