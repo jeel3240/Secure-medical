@@ -165,25 +165,16 @@
 .told-us__list dd {
   margin: 0;
   text-align: right;
-}
-
-.answer {
-  display: inline-block;
-  padding: var(--space-1) var(--space-2);
-  border-radius: var(--radius-sm);
+  color: var(--color-text);
   font-size: var(--text-body);
   font-weight: var(--weight-semibold);
-  background: var(--color-surface-hover);
 }
 
-.answer--q1 { background: #eef2ff; color: #3730a3; }
-.answer--q2 { background: var(--color-warm-soft); color: var(--color-warm); }
-.answer--q3 { background: var(--color-success-soft); color: var(--color-success); }
-
-.answer--empty {
-  background: transparent;
+.told-us__none {
   color: var(--color-text-subtle);
+  font-weight: var(--weight-regular);
 }
+
 
 .breakdown__total {
   font-size: var(--text-title);
@@ -266,9 +257,19 @@
   font-weight: var(--weight-regular);
 }
 
+/* A quiet link, not link blue - Jeel, 2026-09-29: muted until hovered, then
+   the brand navy. */
 .convo-card__link {
-  font-size: var(--text-body);
+  color: var(--color-text-muted);
+  font-size: var(--text-small);
+  font-weight: var(--weight-semibold);
+  text-decoration: none;
   white-space: nowrap;
+}
+
+.convo-card__link:hover {
+  color: var(--color-primary);
+  text-decoration: underline;
 }
 
 .convo-card__body {
