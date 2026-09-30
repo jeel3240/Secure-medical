@@ -99,6 +99,15 @@ function NotSentMark() {
   );
 }
 
+/** The nearest ancestor that scrolls - the workspace's conversation card. */
+function scrollParent(el: HTMLElement | null): HTMLElement | null {
+  for (let node = el?.parentElement ?? null; node; node = node.parentElement) {
+    const { overflowY } = getComputedStyle(node);
+    if (overflowY === 'auto' || overflowY === 'scroll') return node;
+  }
+  return null;
+}
+
 export function Conversation({
   entries,
   chips,
@@ -114,8 +123,14 @@ export function Conversation({
 
   // An agent watching for a reply wants the newest in view; the timeline page
   // deliberately does not do this, so a reader is not jumped down the page.
+  //
+  // The box that scrolls is scrolled to its very end - 2026-09-29. This used
+  // scrollIntoView on a marker after the last message, which stopped short by
+  // the box's bottom padding, so the newest message's name and time sat below
+  // the edge and a sent message looked as if it had not arrived.
   useEffect(() => {
-    bottom.current?.scrollIntoView({ block: 'nearest' });
+    const box = scrollParent(bottom.current);
+    if (box) box.scrollTop = box.scrollHeight;
   }, [shown.length]);
 
   if (shown.length === 0) {

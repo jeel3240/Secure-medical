@@ -308,6 +308,13 @@ Wrap up vanished from the screen. The card reads the timeline the page already
 polls, and the page now refreshes that timeline after every save, so a new note
 (or a sent text) shows at once. `LeadNotes.test.tsx`.
 
+**The conversation keeps its newest message in view.** On opening and on every
+new message the scrolling box goes to its very end. Until 2026-09-29 it
+scrolled a marker after the last message into view, which stopped short by the
+box's padding, so the newest message's name and time sat below the edge and a
+sent text looked as if it had not arrived - Jeel. Measured after the fix: 0px
+left below, on open and after each of three new messages.
+
 **The centre column is a conversation, not a log.** `workspace/Conversation.tsx`
 shows the SMS thread and the system markers only - inbound on the left, ours on
 the right, automated sends marked `Auto` and an agent's own send carrying their
