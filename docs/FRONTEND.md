@@ -100,7 +100,7 @@ Rebuilt to a mockup Jeel supplied. What changed and why:
 | Tier filter | Three pills, several at once | One segmented switcher - All, Hot, Warm, Low with counts - one at a time |
 | Tier column | Coloured badge | Signal bars and the word, `components/TierSignal.tsx` |
 | Age column | "AGE", amber and red | "WAITING", monospace, one weight and colour for every lead |
-| Status column | Coloured pills, six statuses | An icon and the words, three statuses, a hyphen otherwise - `components/QueueStatus.tsx` |
+| Status column | Coloured pills, six statuses | An icon and the words, four statuses (Callback came back 2026-09-29), a hyphen otherwise - `components/QueueStatus.tsx` |
 | Button | Pick | **Pick up** - on every screen that picks, so the action has one name |
 | Someone else's lead | "Locked" | A padlock and "Locked", `components/LockIcon.tsx` |
 | Action column | Right-aligned | Centred - buttons and Locked on one axis |
@@ -108,6 +108,9 @@ Rebuilt to a mockup Jeel supplied. What changed and why:
 | Chosen tier | White on grey | The header's navy, white text - the same look as a hovered action - on a thumb that slides to the chosen option. `components/Segmented.tsx`, shared with the Add agent drawer's role choice |
 | Empty cells | `-` | `-` - an em dash was tried and reverted |
 | Live label | Live | Live · updated just now |
+
+*(2026-09-29: a fourth, **Callback – Maya Chen · 8:13 PM** with a clock icon,
+came back - see below and `QUEUE.md`, "The tag".)*
 
 **Only three statuses, and most rows have none - Jeel, 2026-09-28.**
 Working – name (was In progress – name), Inbound reply and Needs review, each an icon and the words; any
@@ -334,8 +337,9 @@ unclear reply cannot shift every later label by one, and a worded answer like
 This needed the raw `choice` on each answer chip - `AGENT-WORKSPACE.md`.
 
 **The composer is a message box.** Always present at the foot of the thread,
-Enter to send and Shift+Enter for a new line, templates behind a button. The
-header's Send SMS puts the cursor in it. The takeover warning appears once there
+Enter to send and Shift+Enter for a new line, templates behind a button. (The
+header's Send SMS button, which only put the cursor here, went on 2026-09-29.)
+The takeover warning appears once there
 is text and before the first send, as before; the 160-character limit and the
 blocked-number notice are unchanged.
 
@@ -368,7 +372,8 @@ Positive / No contact / Negative. *(2026-09-28, Jeel: replaced by two buttons,
 confirm dialog. The groups, the Step N of 3 counter that tracked them and
 their styles are gone. `AGENT-WORKSPACE.md`, "Dispositions".)* DNC is a separate red link, not one of the
 buttons - it still opens the same confirm dialog. The quick callback chips gained
-"Pick time...", which reveals the date field. "Step N of 3" (since removed) showed which section
+"Pick time...", which reveals the date field *(2026-09-29: now one set of
+choices ending in "Other…" - "Picking a date and time" below)*. "Step N of 3" (since removed) showed which section
 still wants something: outcome, then callback or note - the callback is optional,
 so it never holds the step back on its own. Save and the unsaved changes guard
 are untouched. *(Save & next was removed later the same day - "One button"
@@ -574,7 +579,7 @@ page forgot them.
 
 ## Tests
 
-`npm test` in `frontend/`. Vitest with jsdom, 115 tests (2026-09-28).
+`npm test` in `frontend/`. Vitest with jsdom, 140 tests (2026-09-29).
 
 Logic first, by agreement - a screen is easy to judge by eye, and a dropped
 response or an off-by-one age threshold is not:
@@ -586,7 +591,11 @@ response or an off-by-one age threshold is not:
 | `components/Timeline.test.tsx`, `pages/LeadTimelinePage.test.ts` | The timeline's wording, and the summary sidebar |
 | `pages/workspace/Conversation.test.ts` | Labelling a reply with the answer it was recorded as |
 | `pages/workspace/Conversation.render.test.tsx` | The sent ticks and the red "!" on a refused message |
-| `components/QueueStatus.test.tsx` | The queue's three statuses, their icons, and the tier bars |
+| `components/QueueStatus.test.tsx` | The queue's four statuses, their icons, a callback's time, and the tier bars |
+| `components/DateTimeField.test.tsx` | The date and time picker: the month grid, quarter hours, past days off, Clear, Escape |
+| `pages/workspace/LeadHeader.test.ts` | The header's source and Questions wording |
+| `pages/workspace/LeadNotes.test.tsx` | The Notes card: newest first, three then Show all, the author, the empty state |
+| `pages/workspace/LeadAnswers.test.ts` | The score breakdown's light-blue-to-navy shades |
 | `components/SyncStatus.test.tsx` | The EZ Texting sync line, quiet and amber |
 | `components/Segmented.test.tsx` | The sliding switcher |
 | `styles/type-system.test.ts` | The type scale, duplicate selectors, undefined tokens - "Type system" above |

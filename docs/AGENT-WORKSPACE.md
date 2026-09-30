@@ -115,6 +115,10 @@ the agent SMS box is disabled on a DNC lead rather than failing at send time.
 timeline shows it in sequence; nothing edits or deletes one. `notes` has no
 `updated_at`, which is the schema saying the same thing.
 
+**Shown in the workspace - 2026-09-29.** A Notes card in the left column lists
+them newest first with who wrote each and when (`FRONTEND.md`); until then they
+were only on the Lead Timeline page, so the agent about to call never saw them.
+
 **The author is the session,** never the payload - a body carrying `agentId` is
 ignored. **Not restricted to the lead's holder:** a superadmin reviewing a lead
 an agent is working may still record what they saw, and a note is evidence
