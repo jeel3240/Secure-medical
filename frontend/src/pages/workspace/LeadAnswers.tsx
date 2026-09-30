@@ -3,6 +3,10 @@ import type { LeadDetail } from '../../api/workspace';
 /**
  * The workspace's left column: what the lead told us, and how that became
  * their score. Split out of WorkspacePage.tsx, 2026-09-28.
+ *
+ * The answers are plain text - Jeel, 2026-09-29. They were three pills in three
+ * colours (indigo, amber, green), which said nothing the words did not and read
+ * as decoration.
  */
 
 /**
@@ -32,11 +36,7 @@ export function LeadAnswers({ lead }: { lead: LeadDetail }) {
             <div key={chip.question}>
               <dt>{chip.heading}</dt>
               <dd>
-                {chip.answer ? (
-                  <span className={`answer answer--q${chip.question}`}>{chip.answer}</span>
-                ) : (
-                  <span className="answer answer--empty">-</span>
-                )}
+                {chip.answer ?? <span className="told-us__none">-</span>}
               </dd>
             </div>
           ))}
