@@ -227,8 +227,8 @@ export function LeadsPage() {
                       <span className="cell-sub">{formatPhone(lead.phone)}</span>
                     </td>
                     <td>{lead.status ? <LeadStatus status={lead.status} /> : EMPTY}</td>
-                    <td className={lead.stepReached ? 'mono' : undefined}>
-                      {lead.stepReached ? `Q${lead.stepReached}` : EMPTY}
+                    <td className={lead.step ? 'mono' : undefined}>
+                      {lead.step === 'done' ? 'Done' : lead.step ? `Q${lead.step}` : EMPTY}
                     </td>
                     <td className="right tabular cell-strong">{lead.score ?? EMPTY}</td>
                     <td className="mono cell-code">{lead.source ?? EMPTY}</td>

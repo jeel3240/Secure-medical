@@ -121,6 +121,28 @@ showed it. That is fixed. It can still happen for a reply the flow does not
 act on - one that arrives with no conversation on the lead - and in that case
 awaiting is the honest answer.
 
+## Step
+
+**The question the lead is on now - Jeel, 2026-09-29.** Q1, Q2 or Q3 from the
+conversation's own `step`, which the state machine moves on after each valid
+answer; **Done** once all three are answered; blank when no question ever went
+out (blocked on arrival).
+
+| Lead | Status · Step |
+|---|---|
+| Question 1 sent, no reply | Awaiting reply · Q1 |
+| Answered Q1, being asked Q2 | Answering · Q2 |
+| Answered all three | Ready · Done |
+| Answered Q1, then silent 7 days | Expired · Q2 - where they dropped off |
+| Two unclear replies to Q1 | Needs review · Q1 |
+
+Until that day it was the highest question *answered*, so it always read one
+behind - "Answering · Q1" for a lead already past Q1, "Ready · Q3" for one who
+had finished - and said nothing about where a lead that stopped had stopped.
+The API field changed with it: `stepReached` (a number) became `step`
+(`1`-`3`, `'done'` or null). No database change: `conversations.step` already
+held it. `scripts/admin-leads-live-check.ts` proves each row above.
+
 ## The query
 
 `GET /api/admin/leads?status=&source=&since=&q=&page=`
