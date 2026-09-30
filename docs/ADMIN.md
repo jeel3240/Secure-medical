@@ -39,7 +39,14 @@ documentation of what we intended, but a window on live values.
 `costsExtraSegment`. The worst case matters more than the stored length: an
 opener holding `{first_name}` is a different length for every lead, so the
 count is taken against the longest first name currently in the `leads` table -
-returned as `longestFirstName` - or the `there` fallback when that is shorter.
+returned as `longestFirstName` - or the `there` fallback when that is shorter,
+with `longestNameIsFallback` set so the page says which it is rather than
+showing "there" as a name (2026-09-29).
+
+**Eight messages**, in the order a lead meets them: three questions, three
+clarifications, the review message sent after a second unclear reply, and the
+thanks. The review message was missing until 2026-09-29 - leads received it,
+but it could not be seen here.
 A message that fits in one segment for "Jo" and not for "Christopher" is one
 that costs two segments for some leads, and the page has to show that.
 

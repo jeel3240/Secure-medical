@@ -37,6 +37,7 @@ const MESSAGE_HEADING: Record<string, { name: string; when: string }> = {
   message_clarify_1: { name: 'Clarify Q1', when: 'Unclear answer 1' },
   message_clarify_2: { name: 'Clarify Q2', when: 'Unclear answer 2' },
   message_clarify_3: { name: 'Clarify Q3', when: 'Unclear answer 3' },
+  message_review: { name: 'Review', when: 'Second unclear answer' },
   message_thanks: { name: 'Thanks', when: 'After answer 3' },
 };
 
@@ -137,9 +138,11 @@ export function ConfigPage() {
           </ol>
 
           <p className="card-note">
-            Lengths assume the longest first name on file ({data.longestFirstName}); over{' '}
-            {data.settings.segmentLimit} characters costs a second segment. The STOP confirmation is
-            sent by EZ Texting, not by us, so it is not listed.
+            {data.longestNameIsFallback
+              ? `Lengths are counted with "${data.longestFirstName}", the word used when a lead has no first name - no name on file is longer.`
+              : `Lengths are counted with the longest first name on file, "${data.longestFirstName}".`}{' '}
+            Over {data.settings.segmentLimit} characters costs a second segment. The STOP confirmation
+            is sent by EZ Texting, not by us, so it is not listed.
           </p>
         </section>
 
