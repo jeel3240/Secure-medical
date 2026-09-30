@@ -5,3 +5,9 @@ dist/
 .DS_Store
 *.log
 postgres_data/
+
+# Stray screenshots from checking the UI - 2026-09-29, eight were committed by
+# mistake. Real image assets live in frontend/public/ or frontend/src/, which
+# this does not touch.
+/*.png
+/frontend/*.png
