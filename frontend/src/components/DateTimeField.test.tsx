@@ -15,7 +15,7 @@ describe('the date and time field', () => {
     const slots = timeSlots();
     expect(slots).toHaveLength(96);
     expect(slots.slice(0, 2)).toEqual(['00:00', '00:15']);
-    expect(slots.at(-1)).toBe('23:45');
+    expect(slots[slots.length - 1]).toBe('23:45');
   });
 
   it('shows the label until something is picked, then the date and time', () => {
