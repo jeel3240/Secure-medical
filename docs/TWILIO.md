@@ -161,7 +161,13 @@ the header itself into the call's controls, which scrolled out of sight.
 | Ringing | "Ringing…". The agent hears real ringback |
 | Live | "Connected", a running clock, **Mute**, **Keypad**, **End**. The dot on the avatar turns green |
 | Ended | It becomes a **note box**: "Call ended · 2:14" (or "No answer", "Call cancelled"), a field already focused, **Save note** and **Skip** |
-| Failed | A sentence the agent can act on - microphone blocked, no microphone, connection dropped - and **Dismiss** |
+| Failed | A sentence the agent can act on - microphone blocked, no microphone, the call did not connect - and **Dismiss** |
+
+**An invalid number reads "The call did not connect. The number may not be
+reachable, or the connection dropped."** Twilio gives the browser one code,
+31005, for both, so the sentence covers both; it said "check your internet"
+until a call to a test lead's made-up 555 number showed that was the wrong
+advice. The call is still recorded, as `failed`.
 
 **The note after a call** is asked at the moment the agent knows the answer.
 It is saved straight to the lead's notes - the same note Wrap up writes - so

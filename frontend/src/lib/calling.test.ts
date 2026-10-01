@@ -14,7 +14,8 @@ describe('a call that could not be placed, in words an agent can act on', () => 
     ['the microphone was refused (browser)', named('NotAllowedError'), /Allow microphone access/],
     ['there is no microphone', twilioError(31402), /No microphone was found/],
     ['the calling session expired', twilioError(20104), /session expired/],
-    ['the connection dropped', twilioError(31005), /Check your internet/],
+    ['the number cannot be reached, or the line dropped', twilioError(31005), /did not connect.*may not be reachable/],
+    ['the calling service cannot be reached', twilioError(31009), /Check your internet/],
     ['calling is off on the server', apiError(503, 'calling_off'), /not set up/],
     ['the agent is signed out', apiError(401, 'unauthorized'), /Sign in again/],
   ])('%s', (_, err, words) => {
