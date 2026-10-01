@@ -144,22 +144,42 @@ and changes nothing else on the account.
 
 ## The screen
 
-The lead header's Call button (`CallControl.tsx`):
+**A Call button, then a call bar** - Jeel's design, 2026-10-01. The lead
+header has only the button (`CallControl.tsx`). Pressing it slides a dark bar
+up from the foot of the screen (`CallBar.tsx`), which stays in view while the
+agent scrolls the conversation or types in Wrap up. The first version turned
+the header itself into the call's controls, which scrolled out of sight.
 
-| State | Shows |
+```
+[PS] Priya S. (555) 010-0016        0:42   | Mute  Keypad |  End
+     Connected
+```
+
+| State | The bar shows |
 |---|---|
-| Idle | **Call**. Hovering says which number the lead will see |
-| Connecting | "Connecting…" and **Hang up** |
-| Ringing | "Ringing…" and **Hang up**. The agent hears real ringback |
-| Live | A green dot and a clock, **Mute**, **Hang up** |
-| Ended | "Call ended · 2:14", "No answer" or "Call cancelled", for 8 seconds, then Call again |
-| Failed | A sentence in red the agent can act on - microphone blocked, no microphone, connection dropped |
+| Connecting | "Connecting…", the clock at 0:00, **End**. Mute and Keypad are off - there is nobody to mute yet |
+| Ringing | "Ringing…". The agent hears real ringback |
+| Live | "Connected", a running clock, **Mute**, **Keypad**, **End**. The dot on the avatar turns green |
+| Ended | It becomes a **note box**: "Call ended · 2:14" (or "No answer", "Call cancelled"), a field already focused, **Save note** and **Skip** |
+| Failed | A sentence the agent can act on - microphone blocked, no microphone, connection dropped - and **Dismiss** |
 
-**Off, with the reason as a tooltip,** when the number is on the do-not-call
-list, calling is not set up, or the viewer has not picked the lead up.
+**The note after a call** is asked at the moment the agent knows the answer.
+It is saved straight to the lead's notes - the same note Wrap up writes - so
+it appears in the Notes card at once and is recorded in the activity log.
+Enter saves; Skip is always there, because not every call needs a note. The
+bar stays until one of them is pressed: it does not time out while someone is
+typing.
+
+**Keypad** sends tones for a phone menu or an extension, and shows what was
+pressed, since a tone cannot be seen.
+
+**The Call button is off, with the reason as a tooltip,** when the number is on
+the do-not-call list, calling is not set up, or the viewer has not picked the
+lead up. While a call is in progress it reads "On call".
 
 **Leaving the lead ends the call.** `useLeadCall` hangs up when the page is
-left; closing the tab mid-call asks first.
+left; closing the tab mid-call asks first. The page owns the call
+(`WorkspacePage.tsx`) because the button and the bar both use it.
 
 **A call shows in the workspace** as a quiet line in the conversation -
 "Outbound call · answered · 2:14 · Maya Chen · 3:02 PM" - and on the Lead
@@ -170,6 +190,7 @@ gzipped), not with the app.
 
 The states are a pure reducer, `lib/call-state.ts`, tested without a
 microphone. `lib/calling.ts` is the only file that touches the SDK.
+`CallBar.test.tsx` covers the bar in every state.
 
 ## Testing
 
@@ -223,8 +244,12 @@ own phone.
 
 ## Not built
 
-- **Recording, voicemail drop, transfer, hold.** Not in the plan. Recording
-  needs the lead's consent.
+- **Hold.** The call bar's design has a Hold button; it is not on the screen. A
+  real hold - the lead hears music and is brought back - needs the call set up
+  as a conference on the server, which Phase 4 did not build, and a button
+  that only muted would mislead.
+- **Recording, voicemail drop, transfer.** Not in the plan. Recording needs the
+  lead's consent, and is waiting on Jeel's decision.
 - **Incoming calls.** A lead who rings the number back reaches whatever the
   number is configured to do in Twilio, not the app.
 - **A stale call is not closed.** If Twilio's end-of-call report never arrives,

@@ -241,7 +241,7 @@ you change something the docs describe, update the doc in the same commit.
     src/components/DateTimeField.tsx the date and time picker, in the app's style
     src/pages/QueuePage.tsx          the priority queue
     src/pages/WorkspacePage.tsx      the agent workspace shell
-    src/pages/workspace/             header card, Call control, answers and score, notes, conversation, SMS compose, Wrap up
+    src/pages/workspace/             header card, Call button and call bar, answers and score, notes, conversation, SMS compose, Wrap up
     src/pages/LeadTimelinePage.tsx   read-only history with a summary sidebar
     src/pages/CallbacksPage.tsx      My Callbacks
     src/pages/admin/                 overview, leads, agents, config, dnc

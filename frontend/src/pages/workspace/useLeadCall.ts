@@ -13,21 +13,26 @@ import { describeCallError, placeCall, type CallHandle } from '../../lib/calling
  * `onOver` runs when a call ends, and once more a little later: the server
  * learns how the call ended from Twilio a moment after the browser does, and
  * the second run is what brings the finished call onto the page.
+ *
+ * A finished call stays finished until `dismiss`: the call bar turns into a
+ * note box at that point, and it must not vanish while the agent is typing.
  */
 
 const SECOND_REFRESH_MS = 2500;
-/** How long "Call ended · 2:14" stays before the button returns to Call. */
-const ENDED_NOTE_MS = 8000;
 
-export function useLeadCall(
-  leadId: number,
-  onOver: () => void
-): {
+export interface LeadCall {
   state: CallState;
   start: () => void;
   hangUp: () => void;
   setMuted: (muted: boolean) => void;
-} {
+  sendDigits: (digits: string) => void;
+  dismiss: () => void;
+}
+
+export function useLeadCall(
+  leadId: number,
+  onOver: () => void
+): LeadCall {
   const [state, dispatch] = useReducer(callReducer, IDLE);
 
   const handle = useRef<CallHandle | null>(null);
@@ -86,6 +91,9 @@ export function useLeadCall(
   }, []);
 
   const setMuted = useCallback((muted: boolean) => handle.current?.setMuted(muted), []);
+  const sendDigits = useCallback((digits: string) => handle.current?.sendDigits(digits), []);
+  /** Clears a finished or failed call. Does nothing while one is in progress. */
+  const dismiss = useCallback(() => dispatch({ type: 'reset' }), []);
 
   // Leaving the lead ends its call: an agent must never be on a call with a
   // lead whose page they are no longer looking at.
@@ -98,12 +106,5 @@ export function useLeadCall(
     };
   }, [leadId]);
 
-  // The result is shown for a moment, then the button is simply Call again.
-  useEffect(() => {
-    if (state.phase !== 'ended') return;
-    const timer = window.setTimeout(() => dispatch({ type: 'reset' }), ENDED_NOTE_MS);
-    return () => window.clearTimeout(timer);
-  }, [state.phase]);
-
-  return { state, start, hangUp, setMuted };
+  return { state, start, hangUp, setMuted, sendDigits, dismiss };
 }
