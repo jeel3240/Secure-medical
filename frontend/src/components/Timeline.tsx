@@ -44,6 +44,25 @@ function duration(seconds: unknown): string {
 }
 
 /** The system events the backend derives, in words. */
+/**
+ * A call in words - shared with the workspace conversation. Only an answered
+ * call has a length worth showing; "no answer · 0s" said nothing. A call with
+ * no outcome yet is still going, or Twilio has not reported back.
+ */
+const CALL_OUTCOME: Record<string, string> = {
+  no_answer: 'no answer',
+  busy: 'busy',
+  failed: 'failed',
+  canceled: 'cancelled',
+};
+
+export function callText(detail: Record<string, unknown>): string {
+  const { outcome } = detail;
+  if (typeof outcome !== 'string') return 'Outbound call · in progress';
+  if (outcome === 'answered') return `Outbound call · answered · ${duration(detail.durationSec)}`;
+  return `Outbound call · ${CALL_OUTCOME[outcome] ?? outcome.replace(/_/g, ' ')}`;
+}
+
 /** The words for a system event - shared with the workspace conversation. */
 export function systemText(detail: Record<string, unknown>): string {
   switch (detail.event) {
@@ -67,10 +86,8 @@ function entryText(entry: TimelineEntry): string {
   switch (entry.kind) {
     case 'system':
       return systemText(d);
-    case 'call': {
-      const outcome = typeof d.outcome === 'string' ? d.outcome.replace(/_/g, ' ') : 'call';
-      return `Outbound call · ${outcome} · ${duration(d.durationSec)}`;
-    }
+    case 'call':
+      return callText(d);
     case 'callback': {
       const at = typeof d.scheduledAt === 'string' ? new Date(d.scheduledAt) : null;
       const when = at ? `${dayFormat.format(at)} ${formatTime(at)}` : 'unscheduled';

@@ -95,18 +95,22 @@ describe('messages', () => {
 });
 
 describe('calls', () => {
-  it('reads outcome and length', () => {
-    render(
-      <Timeline
-        entries={[entry({ kind: 'call', author: 'Rae', detail: { outcome: 'no_answer', durationSec: 34 } })]}
-      />
-    );
-    expect(screen.getByText('Outbound call · no answer · 34s')).toBeDefined();
+  // The outcomes are the ones the server records from Twilio - core/calls.ts.
+  it.each([
+    ['answered', 134, 'Outbound call · answered · 2:14'],
+    ['answered', 34, 'Outbound call · answered · 34s'],
+    ['no_answer', 0, 'Outbound call · no answer'],
+    ['busy', 0, 'Outbound call · busy'],
+    ['failed', 0, 'Outbound call · failed'],
+    ['canceled', 0, 'Outbound call · cancelled'],
+  ])('%s reads as it went, with a length only when answered', (outcome, durationSec, text) => {
+    render(<Timeline entries={[entry({ kind: 'call', author: 'Rae', detail: { outcome, durationSec } })]} />);
+    expect(screen.getByText(text)).toBeDefined();
   });
 
-  it('shows a long call as m:ss', () => {
-    render(<Timeline entries={[entry({ kind: 'call', detail: { outcome: 'completed', durationSec: 134 } })]} />);
-    expect(screen.getByText('Outbound call · completed · 2:14')).toBeDefined();
+  it('a call with no outcome yet is in progress', () => {
+    render(<Timeline entries={[entry({ kind: 'call', detail: { outcome: null, durationSec: null } })]} />);
+    expect(screen.getByText('Outbound call · in progress')).toBeDefined();
   });
 });
 
