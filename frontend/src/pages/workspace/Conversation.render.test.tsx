@@ -51,3 +51,14 @@ describe('a message EZ Texting refused', () => {
     expect(screen.queryByRole('img', { name: 'Not sent' })).toBeNull();
   });
 });
+
+describe('a call in the thread - Phase 4', () => {
+  it('is a quiet line saying how it went and who placed it, not a bubble', () => {
+    const call = { kind: 'call', at: '2026-09-28T10:00:00Z', author: 'Maya Chen', detail: { outcome: 'no_answer', durationSec: 0 } } as TimelineEntry;
+    const { container } = renderThread([entry('sms', 'Question 1'), call]);
+    const line = container.querySelector('.convo__system');
+    expect(line?.textContent).toMatch(/^Outbound call · no answer · Maya Chen · /);
+    expect(screen.getAllByRole('img', { name: 'Sent' })).toHaveLength(1);
+  });
+});
+

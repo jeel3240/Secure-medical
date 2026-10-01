@@ -227,7 +227,7 @@ export function WorkspacePage() {
         </Banner>
       )}
 
-      <LeadHeader lead={lead} now={now} />
+      <LeadHeader lead={lead} mine={mine} now={now} onCallOver={() => void refreshAll()} />
 
       <div className="workspace__flags">
         {lead.closed && <Badge tone="muted">Closed</Badge>}

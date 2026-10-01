@@ -1,3 +1,5 @@
+import { readTwilioSettings } from './twilio-settings';
+
 // REDIS_URL left this list on 2026-09-28: nothing reads it. Redis still runs in
 // the compose files - CLAUDE.md §2 plans it for a job queue - but the code has
 // never used it, and a required setting nothing reads only stops the app
@@ -34,4 +36,6 @@ export const config = {
     // but should always be set in production.
     webhookToken: process.env.EZT_WEBHOOK_TOKEN ?? '',
   },
+  /** Browser calling: on, off, or set up only partly - twilio-settings.ts, TWILIO.md. */
+  twilio: readTwilioSettings(process.env),
 };

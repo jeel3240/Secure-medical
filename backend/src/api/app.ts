@@ -7,10 +7,12 @@ import { adminOverviewRouter } from './admin/overview';
 import { adminLeadsRouter } from './admin/leads';
 import { authRouter } from './auth/routes';
 import { callbacksRouter } from './callbacks';
+import { callsRouter } from './calls';
 import { queueRouter } from './leads';
 import type { AppDeps } from './deps';
 import { errorHandler } from './http';
 import { usersRouter } from './users/routes';
+import { twilioWebhooksRouter } from './twilio-webhooks';
 import { webhooksRouter } from './webhooks';
 
 /** Builds the Express app without listening, so tests can drive it directly. */
@@ -40,14 +42,17 @@ export function createApp(deps: AppDeps): express.Express {
   app.use('/api/users', usersRouter(deps));
   app.use('/api/leads', queueRouter(deps));
   app.use('/api/callbacks', callbacksRouter(deps));
+  app.use('/api/calls', callsRouter(deps));
   app.use('/api/admin/leads', adminLeadsRouter(deps));
   app.use('/api/admin/config', adminConfigRouter(deps));
   app.use('/api/admin/overview', adminOverviewRouter(deps));
   app.use('/api/admin/dnc', adminDncRouter(deps));
   app.use('/api/admin/health', adminHealthRouter(deps));
 
-  // Unauthenticated: EZ Texting posts here. Under /api because that is the only
-  // path Caddy forwards to the API.
+  // Unauthenticated: Twilio and EZ Texting post here. Under /api because that
+  // is the only path Caddy forwards to the API. Twilio's are signed and checked
+  // in their router; EZ Texting's carry a secret path segment.
+  app.use('/api/webhooks/twilio', twilioWebhooksRouter(deps));
   app.use('/api/webhooks', webhooksRouter);
 
   app.use('/api', (_req, res) => {

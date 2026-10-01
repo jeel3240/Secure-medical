@@ -112,6 +112,10 @@ docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
 docker compose exec api npm run migrate
 ```
 
+**If `PUBLIC_URL` or the Twilio settings changed,** also run
+`docker compose exec api npm run twilio:configure`, which points the TwiML App
+at this server - `TWILIO.md`, "Deploying it".
+
 **`docker compose logs` returns nothing on the server.** The production
 override sets the `awslogs` log driver on api, worker and caddy, so container
 output goes to CloudWatch: log group `/leads-app`, one stream per service named

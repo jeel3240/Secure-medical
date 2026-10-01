@@ -169,6 +169,13 @@ you change something the docs describe, update the doc in the same commit.
     src/db/timeline.ts      the merged lead timeline
     src/db/notes.ts         agent notes, append-only
     src/api/callbacks.ts    My Callbacks: list, reschedule, mark done
+    src/api/calls.ts        browser calling: whether it is set up, and the call token
+    src/api/twilio-webhooks.ts  Twilio's signed webhooks: connect a call, record how it ended
+    src/core/calls.ts       call rules, pure: identity, outcomes, refusals
+    src/db/calls.ts         may this call be placed, and recording it
+    src/integrations/twilio.ts  the only file that uses the twilio library
+    src/twilio-settings.ts  calling's settings: off, on or incomplete
+    scripts/calls-live-check.ts  proves the call SQL: holder, DNC, retries
     src/db/callbacks.ts     callbacks, and the today/upcoming/overdue windows
     src/db/dispositions.ts  setting a disposition, and the DNC block
     src/core/dispositions.ts  Closed and DNC, pure
@@ -204,7 +211,7 @@ you change something the docs describe, update the doc in the same commit.
     src/db/failed-sends.ts  keeps a message EZ Texting refused, marked failed
     scripts/admin-leads-live-check.ts  proves the Admin > Leads statuses
     src/lib/log.ts          structured JSON logging, with redaction enforced
-    src/cli/                create-superadmin
+    src/cli/                create-superadmin, twilio-configure
     src/integrations/       EZ Texting client
     src/db/users.ts         user queries; src/db/pool.ts
   frontend/
@@ -214,6 +221,9 @@ you change something the docs describe, update the doc in the same commit.
     src/api/admin.ts        config, overview, DNC, health
     src/lib/format.ts       phone, dates, age, answer labels
     src/lib/lock.ts         which queue rows an agent may open
+    src/api/calls.ts        calling config and token
+    src/lib/call-state.ts   a call's states, pure
+    src/lib/calling.ts      the only file that uses Twilio's Voice SDK
     src/lib/useSecond.ts    a clock that re-renders every second
     src/components/Timeline.tsx      shared by the workspace and the timeline page
     src/components/QueueStatus.tsx   the queue's STATUS column: icon and words
@@ -228,13 +238,13 @@ you change something the docs describe, update the doc in the same commit.
     src/components/DateTimeField.tsx the date and time picker, in the app's style
     src/pages/QueuePage.tsx          the priority queue
     src/pages/WorkspacePage.tsx      the agent workspace shell
-    src/pages/workspace/             header card, answers and score, notes, conversation, SMS compose, Wrap up
+    src/pages/workspace/             header card, Call control, answers and score, notes, conversation, SMS compose, Wrap up
     src/pages/LeadTimelinePage.tsx   read-only history with a summary sidebar
     src/pages/CallbacksPage.tsx      My Callbacks
     src/pages/admin/                 overview, leads, agents, config, dnc
   docs/
     LEAD-FLOW.md            a lead's whole life on one page - start here
-    AUTH.md  POLLER.md  WORKFLOW.md  WEBHOOKS.md  ADMIN-LEADS.md  STATE-MACHINE.md
+    AUTH.md  POLLER.md  WORKFLOW.md  WEBHOOKS.md  ADMIN-LEADS.md  STATE-MACHINE.md  TWILIO.md
     QUEUE.md  AGENT-WORKSPACE.md  ADMIN.md  LOGGING.md  FRONTEND.md
 ```
 
@@ -317,7 +327,9 @@ was built that way: `POST /api/webhooks/eztexting/<token>`, unauthenticated,
 with a random path segment in place of a signature - see `docs/WEBHOOKS.md`. The
 Twilio paths above, `/webhooks/twilio/voice` and `/twilio/token`, still need the
 same treatment when they are built. The queue API was built that way:
-`GET /api/leads`, 2026-09-22.
+`GET /api/leads`, 2026-09-22. *(2026-10-01: Twilio built that way too -
+`POST /api/calls/token`, `POST /api/webhooks/twilio/voice` and
+`POST /api/webhooks/twilio/status`. `docs/TWILIO.md`.)*
 
 ---
 
@@ -409,7 +421,7 @@ onto them:
 | 1 | Week 1 | Done |
 | 2 | Week 2 | Done, approved 2026-09-23 |
 | 3 | Week 3 **and all of Week 4 except Twilio** | Done 2026-09-28, merged into `main` |
-| 4 | Week 4 items 1-4, Twilio calling | After Phase 3 |
+| 4 | Week 4 items 1-4, Twilio calling | Done 2026-10-01 - `docs/TWILIO.md`. A real call placed and recorded the same day |
 
 **Phase 3 is everything that is left except calling.** That means the Week 3
 list below, plus Week 4 items 5-9: error handling and retries, logging, the
@@ -471,7 +483,7 @@ covering logic rather than buttons.
 **Operations done, 2026-09-28.** Tasks 26-30, on `feat/phase3-operations`:
 structured JSON logging with redaction enforced in the logger, the failed-opener
 retry, the end-to-end script, and a README with how to test and known limits.
-**Phase 3 is complete.** Next is Phase 4, Twilio calling.
+**Phase 3 is complete.** Next is Phase 4, Twilio calling. *(Built 2026-10-01 - `docs/TWILIO.md`.)*
 
 **Open when Phase 3 closed, 2026-09-28** - each written up where it lives:
 
@@ -712,6 +724,7 @@ were taken on trust and the poller silently ingested nothing.
 - Read `docs/DESIGN-PROMPT.md` before any frontend work.
 - Read `docs/STATE-MACHINE.md` before any Week 2 work. It is the flow spec and overrides the mockup where they differ.
 - Read `docs/AUTH.md` before touching sign-in, sessions, roles or the users table.
+- Read `docs/TWILIO.md` before touching calls, Twilio's webhooks or the Call button.
 - Read `docs/POLLER.md` before changing the worker loop, and `docs/WORKFLOW.md` for branches, migrations and deploys.
 - **Every area has one doc, and it is updated in the same commit as the change.**
   Not afterwards, not in a follow-up. `docs/README.md` maps each doc to what

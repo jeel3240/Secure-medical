@@ -8,7 +8,8 @@ React 18, Vite 4, React Router 6, zustand, plain CSS with design tokens. No UI
 framework: the components in `src/components` are the whole kit.
 
 **Built 2026-09-26** - Phase 3 tasks 14-25, the frontend half. Every screen in
-the brief now exists except calling, which is Phase 4.
+the brief now exists except calling, which is Phase 4. *(Calling was built on
+2026-10-01 - `TWILIO.md`.)*
 
 ## The screens
 
@@ -392,6 +393,7 @@ cards too - a separate decision.
 **Not in the mockup, deliberately:** its "Browser calling is off · Enable" link.
 Calling is Phase 4; a link that goes nowhere is the kind of dead control this
 phase already removed once. The note says calling is off until Phase 4.
+*(2026-10-01: calling is built; the Call button is real - `TWILIO.md`, "The screen".)*
 
 **Checked in the browser, 2026-09-28** - Send SMS focuses the composer;
 templates fill it and the takeover warning shows; Send enables and disables with
@@ -623,9 +625,8 @@ every route lives under `/api`.
 
 ## Not built
 
-- **Calling.** Phase 4. The Call button is present and disabled, and call
-  entries render in the timeline, so the screens keep their shape when Twilio
-  lands.
+- ~~**Calling.**~~ Built 2026-10-01, Phase 4 - `TWILIO.md`. Outgoing only;
+  no recording, transfer or hold.
 - **Live push.** Polling stands in for it, deliberately - see above.
 - **Export CSV** on the DNC list. In the brief, and it hands a file of phone
   numbers to a browser, so it needs Jeel to ask for it.

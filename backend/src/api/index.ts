@@ -12,19 +12,29 @@ const problems = startupProblems({
   production: isProduction,
   jwtSecret: config.jwtSecret,
   webhookToken: config.ezt.webhookToken,
+  twilio: config.twilio,
 });
 if (problems.length > 0) {
-  for (const reason of problems) log.error('api.refused_start', { reason });
+  const missing = config.twilio.status === 'incomplete' ? config.twilio.missing : undefined;
+  for (const reason of problems) {
+    log.error('api.refused_start', reason === 'twilio_incomplete' ? { reason, missing } : { reason });
+  }
   process.exit(1);
+}
+
+// Locally a partial set only warns: calling stays off, everything else runs.
+if (config.twilio.status === 'incomplete') {
+  log.warn('calling.off', { reason: 'incomplete_settings', missing: config.twilio.missing });
 }
 
 const app = createApp({
   users: pgUserStore,
   jwtSecret: config.jwtSecret,
   secureCookies: isProduction,
+  twilio: config.twilio.status === 'on' ? config.twilio.settings : null,
 });
 
 const port = process.env.PORT || 3000;
 app.listen(port, () => {
-  log.info('api.started', { port });
+  log.info('api.started', { port, calling: config.twilio.status });
 });

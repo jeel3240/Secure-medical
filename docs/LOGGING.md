@@ -80,6 +80,7 @@ firing a real webhook: the number appears nowhere in the output.
 | `api.started`, `api.refused_start` | `api/index.ts`. `refused_start` carries `reason`: `weak_jwt_secret` or `no_webhook_token` (`api/startup-checks.ts`) |
 | `worker.started`, `poll.tick`, `poll.failed` | `worker/index.ts` |
 | `conversation.expired`, `expiry.failed` | `worker/index.ts` |
+| `call.token_issued`, `call.started`, `call.refused`, `call.failed_to_start`, `call.finished`, `twilio.webhook_rejected`, `calling.off` | `api/calls.ts`, `api/twilio-webhooks.ts`, `api/index.ts` - browser calling, `TWILIO.md`. `call.refused` carries `reason`; `twilio.webhook_rejected` usually means `PUBLIC_URL` is not the address Twilio calls |
 | `sms.sent`, `sms.failed`, `sms.no_template`, `sms.name_dropped`, `sms.record_failed` | `worker/poller.ts`, `worker/retry-openers.ts`, `worker/opener.ts` (`sms.name_dropped`), `api/reply-flow.ts`, `db/agent-sms.ts`, `db/outbound.ts` (`sms.record_failed`) |
 | `webhook.rejected`, `webhook.ignored`, `webhook.failed` | `api/webhooks.ts` |
 | `conversation.advanced` | `api/webhooks.ts` |
