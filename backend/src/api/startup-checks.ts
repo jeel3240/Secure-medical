@@ -11,10 +11,15 @@
  *   accepted - handy for local curl, but in production anyone who finds the
  *   URL can post fake replies: answer a lead's questions, or opt them out.
  *   Until this, .env.example only asked for it.
+ * - **Twilio set up only partly - Phase 4.** Calling may be off, but a partial
+ *   set looks configured while every call fails. twilio-settings.ts names the
+ *   missing variables; they are logged with the refusal.
  *
  * Pure, so it is tested without starting anything; `api/index.ts` logs what it
  * returns and exits.
  */
+
+import type { TwilioSettingsResult } from '../twilio-settings';
 
 const WEAK_SECRETS = new Set(['dev-secret', 'change-me', 'dev-secret-only-change-in-prod']);
 
@@ -25,6 +30,7 @@ export function startupProblems(opts: {
   production: boolean;
   jwtSecret: string;
   webhookToken: string;
+  twilio: TwilioSettingsResult;
 }): string[] {
   if (!opts.production) return [];
   const problems: string[] = [];
@@ -33,6 +39,9 @@ export function startupProblems(opts: {
   }
   if (opts.webhookToken.length < MIN_WEBHOOK_TOKEN_LENGTH) {
     problems.push('no_webhook_token');
+  }
+  if (opts.twilio.status === 'incomplete') {
+    problems.push('twilio_incomplete');
   }
   return problems;
 }
