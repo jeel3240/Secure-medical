@@ -156,19 +156,3 @@ export function startRinging(): () => void {
     audio.currentTime = 0;
   };
 }
-
-/**
- * Plays the ringtone once through, for an agent checking their sound - the
- * user menu's "Test ring". Called from a click, so it is allowed to play.
- */
-export function testRing(): void {
-  const audio = player();
-  if (!audio || ringing) return;
-  unlocked = true;
-  play(audio);
-  window.setTimeout(() => {
-    if (ringing) return;
-    audio.pause();
-    audio.currentTime = 0;
-  }, LOOP_SECONDS * 1000);
-}

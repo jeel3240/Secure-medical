@@ -93,7 +93,7 @@ export function IncomingCall() {
   if (state.phase === 'none') {
     return ringable && silent ? (
       <p className="incoming incoming--silent" role="status">
-        Click anywhere to turn on the ring for incoming calls.
+        Call sound off · click to turn on
       </p>
     ) : null;
   }

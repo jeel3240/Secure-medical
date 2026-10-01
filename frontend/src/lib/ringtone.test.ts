@@ -125,21 +125,10 @@ describe('ringing', () => {
     stop();
   });
 
-  it('Test ring plays it once through', async () => {
-    vi.useFakeTimers();
-    const { testRing } = await fresh();
-    testRing();
-    const audio = FakeAudio.made[0];
-    expect(audio.playing).toBe(true);
-    vi.advanceTimersByTime(2400);
-    expect(audio.playing).toBe(false);
-  });
-
   it('does nothing where there is no audio at all', async () => {
     vi.stubGlobal('Audio', undefined);
-    const { startRinging, canRing, testRing } = await fresh();
+    const { startRinging, canRing } = await fresh();
     expect(canRing()).toBe(false);
     expect(() => startRinging()()).not.toThrow();
-    expect(() => testRing()).not.toThrow();
   });
 });

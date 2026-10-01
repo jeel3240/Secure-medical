@@ -197,16 +197,12 @@ was created before the first click or inside it (two attempts, 2026-10-01).
 An audio element is what every browser plays the same way. The first click
 anywhere - the sign-in button counts, `main.tsx` arms it for the whole app -
 plays it muted for an instant, which is what lets it play aloud later with
-nobody clicking. Checked in Chrome: it decodes, rings, loops and stops.
-**Not yet confirmed by ear in Safari.**
-
-**Test ring**, in the user menu, plays it once - for an agent checking that
-they will hear a call, and the quickest way to tell a sound problem from a
-call problem.
+nobody clicking. Checked in Chrome: it decodes, rings, loops and stops. Confirmed by ear in Safari by
+Jeel, the same day.
 
 **A browser will not play sound on a page nobody has clicked on.** Signing in
 counts as a click; a reload does not. So after a reload the corner shows
-"Click anywhere to turn on the ring for incoming calls." until the agent
+"Call sound off · click to turn on" until the agent
 clicks or presses a key, and then it goes. A call arriving before that click
 still shows its card, silently.
 

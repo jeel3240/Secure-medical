@@ -222,10 +222,10 @@ describe('the ring', () => {
   it('asks for a click while the browser is still blocking sound, and not after', async () => {
     canRing.mockReturnValue(false);
     await show();
-    await waitFor(() => expect(screen.getByText('Click anywhere to turn on the ring for incoming calls.')).toBeDefined());
+    await waitFor(() => expect(screen.getByText('Call sound off · click to turn on')).toBeDefined());
     canRing.mockReturnValue(true);
     fireEvent.pointerDown(window);
-    await waitFor(() => expect(screen.queryByText(/turn on the ring/)).toBeNull());
+    await waitFor(() => expect(screen.queryByText(/Call sound off/)).toBeNull());
   });
 });
 
