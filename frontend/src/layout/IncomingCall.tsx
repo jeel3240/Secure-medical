@@ -7,6 +7,7 @@ import { callClock } from '../lib/call-state';
 import { callerContext } from '../lib/caller-context';
 import { formatPhone, shortName } from '../lib/format';
 import { useIncomingCall } from '../lib/incoming-call';
+import { armRingtone, canRing, startRinging } from '../lib/ringtone';
 import type { Caller } from '../lib/incoming-state';
 import { useSecond } from '../lib/useSecond';
 import { CallBar, initials } from '../pages/workspace/CallBar';
@@ -43,12 +44,50 @@ import { questionsLabel } from '../pages/workspace/LeadHeader';
  * up at once and fills in a moment later.
  */
 export function IncomingCall() {
-  const { state, listen, answer, decline, dismiss, hangUp, setMuted, sendDigits } = useIncomingCall();
+  const { state, ringable, listen, answer, decline, dismiss, hangUp, setMuted, sendDigits } = useIncomingCall();
   const navigate = useNavigate();
 
   useEffect(() => listen(), [listen]);
+  useEffect(() => armRingtone(), []);
 
-  if (state.phase === 'none') return null;
+  // It rings for as long as the card is up, and stops the moment it is
+  // accepted, declined or missed.
+  const ringing = state.phase === 'ringing';
+  useEffect(() => (ringing ? startRinging() : undefined), [ringing]);
+
+  // The tab says so too, for an agent looking at another one.
+  useEffect(() => {
+    if (!ringing) return;
+    const title = document.title;
+    document.title = 'Incoming call';
+    return () => {
+      document.title = title;
+    };
+  }, [ringing]);
+
+  // A browser plays no sound on a page nobody has clicked on - after a reload,
+  // say. Until then a call would arrive silently, so the agent is asked for
+  // the one click that fixes it. Checked on each click and key press.
+  const [silent, setSilent] = useState(false);
+  useEffect(() => {
+    if (!ringable) return;
+    const check = () => window.setTimeout(() => setSilent(!canRing()), 50);
+    check();
+    window.addEventListener('pointerdown', check);
+    window.addEventListener('keydown', check);
+    return () => {
+      window.removeEventListener('pointerdown', check);
+      window.removeEventListener('keydown', check);
+    };
+  }, [ringable]);
+
+  if (state.phase === 'none') {
+    return ringable && silent ? (
+      <p className="incoming incoming--silent" role="status">
+        Click anywhere to turn on the ring for incoming calls.
+      </p>
+    ) : null;
+  }
   const { caller } = state;
 
   if (state.phase === 'call') {

@@ -25,6 +25,14 @@ vi.mock('../api/workspace', () => ({
   getLead: (id: number) => getLead(id),
   getTimeline: (id: number) => getTimeline(id),
 }));
+const canRing = vi.fn(() => true);
+const stopRinging = vi.fn();
+const startRinging = vi.fn(() => stopRinging);
+vi.mock('../lib/ringtone', () => ({
+  armRingtone: () => () => undefined,
+  canRing: () => canRing(),
+  startRinging: () => startRinging(),
+}));
 vi.mock('../auth/store', () => ({
   useAuth: (pick: (s: unknown) => unknown) => pick({ user: { id: 21, name: 'Maya Chen' } }),
 }));
@@ -84,7 +92,10 @@ beforeEach(() => {
   getLead.mockReset().mockResolvedValue(LEAD);
   getTimeline.mockReset().mockResolvedValue([aCall('Maya Chen'), aCall('Maya Chen')]);
   getCallConfig.mockReset().mockResolvedValue({ enabled: true, callerId: '+14804708259' });
-  useIncomingCall.setState({ state: NO_CALL });
+  useIncomingCall.setState({ state: NO_CALL, ringable: false });
+  canRing.mockReset().mockReturnValue(true);
+  startRinging.mockClear();
+  stopRinging.mockClear();
 });
 
 describe('being ringable', () => {
@@ -185,6 +196,37 @@ describe('a lead rings', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Decline' }));
     expect(ring.decline).toHaveBeenCalled();
     expect(screen.queryByText(/Incoming call|Missed call/)).toBeNull();
+  });
+});
+
+describe('the ring', () => {
+  it('sounds while the card is up, and stops when it is accepted', async () => {
+    await show();
+    act(() => twilio!.onRing(aRing().ring));
+    expect(startRinging).toHaveBeenCalledTimes(1);
+    expect(stopRinging).not.toHaveBeenCalled();
+    expect(document.title).toBe('Incoming call');
+    fireEvent.click(screen.getByRole('button', { name: 'Accept' }));
+    expect(stopRinging).toHaveBeenCalled();
+    expect(document.title).not.toBe('Incoming call');
+    await waitFor(() => expect(claimLead).toHaveBeenCalled());
+  });
+
+  it('stops when the call is missed', async () => {
+    await show();
+    const { ring } = aRing();
+    act(() => twilio!.onRing(ring));
+    act(() => twilio!.onRingOver(ring));
+    expect(stopRinging).toHaveBeenCalled();
+  });
+
+  it('asks for a click while the browser is still blocking sound, and not after', async () => {
+    canRing.mockReturnValue(false);
+    await show();
+    await waitFor(() => expect(screen.getByText('Click anywhere to turn on the ring for incoming calls.')).toBeDefined());
+    canRing.mockReturnValue(true);
+    fireEvent.pointerDown(window);
+    await waitFor(() => expect(screen.queryByText(/turn on the ring/)).toBeNull());
   });
 });
 

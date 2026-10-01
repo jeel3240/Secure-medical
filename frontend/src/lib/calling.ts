@@ -78,6 +78,8 @@ function getDevice(): Promise<Device> {
         .catch(() => undefined);
     });
     device.on('incoming', (call: Call) => listener && announce(call, listener));
+    // The ring is ours - lib/ringtone.ts. Twilio's own did not sound on real calls.
+    device.audio?.incoming(false);
     // Without a listener the SDK throws a registration error as uncaught. The
     // half-minute check is what puts it right.
     device.on('error', () => undefined);

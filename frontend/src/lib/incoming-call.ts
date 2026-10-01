@@ -17,6 +17,8 @@ import { incomingReducer, NO_CALL, type IncomingEvent, type IncomingState } from
 
 interface IncomingCallStore {
   state: IncomingState;
+  /** True once this browser is listening for calls: calling is set up, and someone is signed in. */
+  ringable: boolean;
   /** Lets this browser be rung, if calling is set up. Returns how to stop. */
   listen: () => () => void;
   /** Picks up. Resolves once the lead has been taken over, so the page it opens is theirs. */
@@ -38,6 +40,7 @@ export const useIncomingCall = create<IncomingCallStore>((set, get) => {
 
   return {
     state: NO_CALL,
+    ringable: false,
 
     listen() {
       let stop: (() => void) | null = null;
@@ -46,6 +49,7 @@ export const useIncomingCall = create<IncomingCallStore>((set, get) => {
       void getCallConfig()
         .then((config) => {
           if (stopped || !config.enabled) return;
+          set({ ringable: true });
           stop = listenForCalls({
             onRing: (incoming) => {
               const before = get().state;
@@ -70,7 +74,7 @@ export const useIncomingCall = create<IncomingCallStore>((set, get) => {
         handle?.hangUp();
         ring = null;
         handle = null;
-        set({ state: NO_CALL });
+        set({ state: NO_CALL, ringable: false });
       };
     },
 

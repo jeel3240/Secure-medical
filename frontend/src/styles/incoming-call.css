@@ -248,6 +248,14 @@
   text-align: center;
 }
 
+/* Sound is still blocked by the browser: one quiet line, gone at the first click. */
+.incoming--silent {
+  margin: 0;
+  padding: var(--space-2) var(--space-3);
+  color: var(--color-text-muted);
+  font-size: var(--text-small);
+}
+
 /* Nobody picked up: one line in the same corner, until it is dismissed. */
 .incoming--missed {
   display: flex;

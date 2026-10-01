@@ -172,12 +172,21 @@ be loaded it still rings and can still be accepted.
   shown to them and gets the missed-call path. The lead's own Call button is
   off while an incoming call is ringing or live.
 
-The browser plays Twilio's ringtone. The states are `lib/incoming-state.ts`,
+**It rings.** `lib/ringtone.ts` plays the app's own ring - the two tones of a
+US phone line, one second on and two off - for as long as the card is up, and
+the browser tab's title reads "Incoming call". Twilio's built-in ringtone is
+switched off: it did not sound on the first real calls (2026-10-01), and a
+call the agent cannot hear is a missed call. The states are `lib/incoming-state.ts`,
 pure and tested; the store that joins them to Twilio is `lib/incoming-call.ts`.
 
-**A browser will not play sound on a page nobody has clicked on.** After a
-reload, the card still appears but the ringtone may be silent until the agent
-clicks anywhere. Signing in counts as a click.
+**A browser will not play sound on a page nobody has clicked on.** Signing in
+counts as a click; a reload does not. So after a reload the corner shows
+"Click anywhere to turn on the ring for incoming calls." until the agent
+clicks or presses a key, and then it goes. A call arriving before that click
+still shows its card, silently.
+
+**Not covered:** a notification outside the browser. An agent with the
+browser minimised hears the ring but sees nothing until they return to it.
 
 **Not from the design: the "Unknown caller" card.** The design also shows a
 card for a number that is not in our leads, with "You can create one after the
@@ -365,6 +374,7 @@ microphone. `lib/calling.ts` is the only file that touches the SDK.
 | The SQL: who may call, DNC, retries, the timeline; who an incoming call rings, a missed call, and its effect on the queue and Admin > Leads | `scripts/calls-live-check.ts` - against a real Postgres |
 | Call states, wording, error sentences | `frontend/src/lib/call-state.test.ts`, `lib/calling.test.ts` |
 | The join to Twilio's SDK itself, against a stand-in for it: placing a call, being rung, accept, decline, sign-out. Added after Accept failed on the first real incoming call - the function joining a call's events to the screen called itself, and no test ran it | `frontend/src/lib/calling.device.test.ts` |
+| The ring: starts, repeats, stops, stays silent while the browser blocks sound | `frontend/src/lib/ringtone.test.ts` |
 | Incoming: ringing, answered, missed, declined, one call at a time; what the card shows; Call back | `frontend/src/lib/incoming-state.test.ts`, `lib/caller-context.test.ts`, `layout/IncomingCall.test.tsx` |
 
 **Locally a real call needs a public address**, because Twilio must reach the

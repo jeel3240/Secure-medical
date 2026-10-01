@@ -40,6 +40,7 @@ class FakeDevice extends Emitter {
     this.state = 'registered';
   });
   connect = vi.fn(async () => this.outgoing);
+  audio = { incoming: vi.fn() };
   updateToken = vi.fn();
   destroy = vi.fn();
 }
@@ -124,6 +125,8 @@ describe('a lead calling in', () => {
   it('registers the browser, and says who is calling', async () => {
     const { ring, stop } = await ringing();
     expect(ring.lead).toEqual({ id: 7, name: 'Priya Sharma', phone: '+15550100016' });
+    // The ring is the app's own, so Twilio's is switched off - never two at once.
+    expect(device.audio.incoming).toHaveBeenCalledWith(false);
     stop();
   });
 
