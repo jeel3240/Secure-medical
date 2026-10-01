@@ -86,3 +86,20 @@ export function parseUserId(value: string): number {
   }
   return id;
 }
+
+/**
+ * What an account update actually changed, as `{ field: { from, to } }` - what
+ * the activity log keeps, since the update overwrites the old values. Only the
+ * fields a superadmin can change. A field sent with its current value is not a
+ * change. AUDIT.md.
+ */
+export function accountChanges(
+  before: { name: string; role: Role; isActive: boolean },
+  after: { name: string; role: Role; isActive: boolean }
+): Record<string, { from: unknown; to: unknown }> {
+  const changes: Record<string, { from: unknown; to: unknown }> = {};
+  for (const field of ['name', 'role', 'isActive'] as const) {
+    if (before[field] !== after[field]) changes[field] = { from: before[field], to: after[field] };
+  }
+  return changes;
+}

@@ -3,6 +3,7 @@ import http from 'http';
 import request from 'supertest';
 import { createApp } from '../app';
 import { hashPassword } from '../auth/password';
+import type { ActivityEntry } from '../../core/activity';
 import type { TwilioSettings } from '../../twilio-settings';
 import type { Role } from '../users/types';
 import { MemoryUserStore } from './memory-user-store';
@@ -20,13 +21,21 @@ const openServers: http.Server[] = [];
  */
 export async function buildApp(opts: { twilio?: TwilioSettings | null } = {}) {
   const users = new MemoryUserStore();
+  /** Everything the app recorded in the activity log, in order. */
+  const activity: ActivityEntry[] = [];
   const server = http.createServer(
-    createApp({ users, jwtSecret: JWT_SECRET, secureCookies: false, twilio: opts.twilio ?? null })
+    createApp({
+      users,
+      jwtSecret: JWT_SECRET,
+      secureCookies: false,
+      twilio: opts.twilio ?? null,
+      activity: { record: async (entry) => void activity.push(entry) },
+    })
   );
   await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
   openServers.push(server);
   const { port } = server.address() as AddressInfo;
-  return { app: `http://127.0.0.1:${port}`, users };
+  return { app: `http://127.0.0.1:${port}`, users, activity };
 }
 
 export async function closeServers(): Promise<void> {

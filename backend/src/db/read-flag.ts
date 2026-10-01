@@ -13,6 +13,7 @@
  * AGENT-WORKSPACE.md, "Rules".
  */
 
+import { activityInsertSql } from './activity';
 import { pool } from './pool';
 
 export type MarkReadResult =
@@ -31,13 +32,22 @@ export type MarkReadResult =
  * superadmin looking at a lead an agent holds has still read it, and the flag
  * is about whether a human has seen the message, not about who owns the work.
  */
-export async function markLeadRead(leadId: number): Promise<MarkReadResult> {
+export async function markLeadRead(leadId: number, actorId: number | null = null): Promise<MarkReadResult> {
+  // Clearing the flag leaves no trace of who read the reply or when, so the
+  // statement records it - only when this call is the one that cleared it.
   const cleared = await pool.query(
-    `UPDATE leads
-     SET has_unread_inbound = false, updated_at = now()
-     WHERE id = $1 AND has_unread_inbound
-     RETURNING id`,
-    [leadId]
+    `WITH cleared AS (
+       UPDATE leads
+       SET has_unread_inbound = false, updated_at = now()
+       WHERE id = $1 AND has_unread_inbound
+       RETURNING id
+     ),
+     logged AS (
+       ${activityInsertSql}
+       SELECT $2, 'reply.read', id, NULL, '{}'::jsonb FROM cleared
+     )
+     SELECT id FROM cleared`,
+    [leadId, actorId]
   );
 
   if (cleared.rowCount === 1) return { ok: true, changed: true };

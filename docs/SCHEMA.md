@@ -39,9 +39,14 @@ the RDS CA bundle if strict verification is ever wanted.
 | `settings` | Key/value config, admin-editable. |
 | `scoring_rules` | Points per answer, admin-editable. |
 | `tiers` | HOT/WARM/LOW score bands, admin-editable. |
+| `activity_log` | One row per action a person or the system took - who, what, when, and what would otherwise be overwritten. Add-only: a trigger refuses every update and delete. Migration 006, `AUDIT.md`. |
+| `webhook_events` | Every request EZ Texting and Twilio sent, as it arrived. Add-only. Migration 006, `AUDIT.md`. |
 
-Everything hangs off `leads.id` with `ON DELETE CASCADE`, so deleting a lead
-removes its whole history.
+Everything hangs off `leads.id`. **A lead with history cannot be deleted** -
+migration 006, 2026-10-01. The foreign keys were `ON DELETE CASCADE`, so
+deleting a lead would have removed its texts, calls and notes with it; the
+company keeps data as proof, so the database now refuses the delete instead
+(`AUDIT.md`). To reset a local database, `TRUNCATE` - see that doc.
 
 ## Things worth knowing
 

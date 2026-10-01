@@ -133,6 +133,7 @@
 .timeline__entry--note { border-left-color: var(--color-warm); }
 .timeline__entry--callback { border-left-color: var(--color-accent); }
 .timeline__entry--disposition { border-left-color: var(--color-success); }
+.timeline__entry--activity { border-left-color: var(--color-border-strong); }
 .timeline__entry--system { border-left-color: transparent; }
 
 .timeline__entry--system .timeline__text {

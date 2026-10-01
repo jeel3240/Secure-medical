@@ -28,6 +28,7 @@ const LABEL: Record<TimelineKind, string> = {
   note: 'NOTE',
   callback: 'CB',
   disposition: 'DISP',
+  activity: 'LOG',
 };
 
 const dayFormat = new Intl.DateTimeFormat(undefined, {
@@ -61,6 +62,59 @@ export function callText(detail: Record<string, unknown>): string {
   if (typeof outcome !== 'string') return 'Outbound call · in progress';
   if (outcome === 'answered') return `Outbound call · answered · ${duration(detail.durationSec)}`;
   return `Outbound call · ${CALL_OUTCOME[outcome] ?? outcome.replace(/_/g, ' ')}`;
+}
+
+const CALL_REFUSAL: Record<string, string> = {
+  not_holder: 'the lead was not picked up',
+  blocked: 'the number is on the do-not-call list',
+  not_found: 'the lead could not be found',
+};
+
+/** `40 min`, `2 h 5 min` - how long a lead was held. */
+function heldFor(sinceIso: unknown, untilIso: string): string | null {
+  if (typeof sinceIso !== 'string') return null;
+  const minutes = Math.round((Date.parse(untilIso) - Date.parse(sinceIso)) / 60_000);
+  if (!Number.isFinite(minutes) || minutes < 0) return null;
+  if (minutes < 1) return 'under a minute';
+  return minutes < 60 ? `${minutes} min` : `${Math.floor(minutes / 60)} h ${minutes % 60} min`;
+}
+
+/**
+ * An activity-log entry in words - AUDIT.md. These are the actions that leave
+ * no row of their own: who held the lead and for how long, a callback that was
+ * moved, a text or a call that was refused. `at` is when it happened, which a
+ * release needs to say how long the lead had been held.
+ */
+export function activityText(detail: Record<string, unknown>, at: string): string {
+  const subject = typeof detail.subject === 'string' ? detail.subject : null;
+  const when = (iso: unknown) => {
+    const date = typeof iso === 'string' ? new Date(iso) : null;
+    return date ? `${dayFormat.format(date)} ${formatTime(date)}` : 'an unknown time';
+  };
+
+  switch (detail.action) {
+    case 'lead.picked_up':
+      return 'Picked up the lead';
+    case 'lead.released': {
+      const held = heldFor(detail.heldSince, at);
+      const how = detail.forced
+        ? `Released the lead from ${subject ?? 'another agent'}`
+        : detail.because === 'outcome'
+          ? 'Lead released - outcome saved'
+          : 'Put the lead back in the queue';
+      return held ? `${how} · held ${held}` : how;
+    }
+    case 'callback.rescheduled':
+      return `Callback moved from ${when(detail.from)} to ${when(detail.to)}`;
+    case 'callback.reopened':
+      return 'Callback reopened - it had been marked done';
+    case 'sms.blocked':
+      return 'Text not sent - the number is on the do-not-call list';
+    case 'call.refused':
+      return `Call not placed - ${CALL_REFUSAL[String(detail.reason)] ?? 'it was refused'}`;
+    default:
+      return String(detail.action ?? 'Activity');
+  }
 }
 
 /** The words for a system event - shared with the workspace conversation. */
@@ -97,6 +151,8 @@ function entryText(entry: TimelineEntry): string {
       const value = d.value as Disposition;
       return `Disposition: ${DISPOSITION_LABEL[value] ?? value}`;
     }
+    case 'activity':
+      return activityText(d, entry.at);
     default:
       return typeof d.body === 'string' ? d.body : '';
   }

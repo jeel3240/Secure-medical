@@ -9,6 +9,7 @@
  * AGENT-WORKSPACE.md, "Agent SMS".
  */
 
+import { recordActivity } from './activity';
 import { pool } from './pool';
 import { SEGMENT_LIMIT } from '../core/messages';
 import { errText, log } from '../lib/log';
@@ -73,6 +74,9 @@ export async function sendAgentSms(
     eztMessageId = sent.id ?? null;
   } catch (err) {
     if (err instanceof ezt.BlockedNumberError) {
+      // Nothing was sent and no message row is kept, so this is the only
+      // record that an agent tried to text a blocked number - docs/AUDIT.md.
+      await recordActivity(pool, { action: 'sms.blocked', actorId: agentId, leadId });
       return { ok: false, reason: 'blocked', phone };
     }
     const detail =
@@ -84,6 +88,7 @@ export async function sendAgentSms(
     // eslint-disable-next-line @typescript-eslint/no-require-imports
     const { recordFailedSend } = require('./failed-sends') as typeof import('./failed-sends');
     await recordFailedSend(leadId, body, agentId);
+    await recordActivity(pool, { action: 'sms.failed', actorId: agentId, leadId });
     return { ok: false, reason: 'send_failed', detail: typeof detail === 'string' ? detail : 'send failed' };
   }
 
@@ -119,6 +124,14 @@ export async function sendAgentSms(
     );
 
     const who = await client.query('SELECT name FROM users WHERE id = $1', [agentId]);
+
+    await recordActivity(client, {
+      action: 'sms.sent',
+      actorId: agentId,
+      leadId,
+      // `tookOver`: this text is the one that stopped the automated questions.
+      detail: { messageId: rows[0].id, tookOver: took.rowCount === 1 },
+    });
 
     await client.query('COMMIT');
 

@@ -10,6 +10,7 @@
  * AGENT-WORKSPACE.md, "The timeline"; DESIGN-PROMPT.md section 3.
  */
 
+import type { ActivityAction } from '../core/activity';
 import { pool } from './pool';
 
 export type TimelineKind =
@@ -20,7 +21,9 @@ export type TimelineKind =
   | 'call'
   | 'note'
   | 'callback'
-  | 'disposition';
+  | 'disposition'
+  /** From the activity log: an action with no row of its own - AUDIT.md. */
+  | 'activity';
 
 export interface TimelineEntry {
   kind: TimelineKind;
@@ -30,6 +33,19 @@ export interface TimelineEntry {
   /** Free-form per kind; the screen knows what to read. */
   detail: Record<string, unknown>;
 }
+
+/**
+ * The activity-log actions the timeline shows: the ones that leave no row in
+ * any other table, so the log is the only place they can come from.
+ */
+const TIMELINE_ACTIONS: ActivityAction[] = [
+  'lead.picked_up',
+  'lead.released',
+  'callback.rescheduled',
+  'callback.reopened',
+  'sms.blocked',
+  'call.refused',
+];
 
 /**
  * Rows from the five tables. Each query returns the same shape so they can be
@@ -87,6 +103,20 @@ const QUERIES: { kind: TimelineKind; sql: string }[] = [
       FROM dispositions d
       LEFT JOIN users u ON u.id = d.agent_id
       WHERE d.lead_id = $1
+    `,
+  },
+  {
+    // Only the actions that appear nowhere else. A note, an outcome, a call and
+    // a booked callback are already here from their own tables; listing them
+    // again from the log would say everything twice.
+    kind: 'activity',
+    sql: `
+      SELECT a.at, u.name AS author, a.action, a.detail, s.name AS subject_name
+      FROM activity_log a
+      LEFT JOIN users u ON u.id = a.actor_id
+      LEFT JOIN users s ON s.id = a.subject_user_id
+      WHERE a.lead_id = $1
+        AND a.action IN (${TIMELINE_ACTIONS.map((action) => `'${action}'`).join(', ')})
     `,
   },
 ];
@@ -196,6 +226,9 @@ interface TimelineRow {
   scheduled_at?: Date | null;
   done_at?: Date | null;
   value?: string;
+  action?: string;
+  detail?: Record<string, unknown>;
+  subject_name?: string | null;
 }
 
 function toEntry(kind: TimelineKind, row: TimelineRow): TimelineEntry {
@@ -224,6 +257,15 @@ function toEntry(kind: TimelineKind, row: TimelineRow): TimelineEntry {
       };
     case 'note':
       return { kind, at, author: row.author, detail: { body: row.body } };
+    case 'activity':
+      return {
+        kind,
+        at,
+        author: row.author,
+        // `subject`: whose claim was released or whose callback was moved, when
+        // that is not the person who did it.
+        detail: { ...row.detail, action: row.action, subject: row.subject_name ?? null },
+      };
     case 'callback':
       return {
         kind,
@@ -265,7 +307,7 @@ async function buildTimeline(leadId: number): Promise<TimelineEntry[]> {
   // the score it earned, which shares its timestamp.
   const rank = (e: TimelineEntry): number => {
     if (e.kind === 'system') return e.detail.event === 'lead_received' ? -1 : 6;
-    return { inbound: 0, sms: 1, agent_sms: 1, call: 2, note: 3, callback: 4, disposition: 5 }[
+    return { inbound: 0, sms: 1, agent_sms: 1, call: 2, note: 3, callback: 4, disposition: 5, activity: 5 }[
       e.kind
     ]!;
   };

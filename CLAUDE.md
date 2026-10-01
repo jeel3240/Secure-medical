@@ -207,6 +207,9 @@ you change something the docs describe, update the doc in the same commit.
     src/db/leads.ts         Admin > Leads SQL
     src/db/lead-state.ts    closed and worked, shared by the queue and Admin > Leads
     src/db/sql.ts           LIKE escaping and the expiry-days reader, shared by every query
+    src/core/activity.ts    every action the activity log records
+    src/db/activity.ts      writes the activity log and the raw webhook archive
+    scripts/activity-live-check.ts  proves every action is recorded, and that the log cannot be altered
     src/db/holder.ts        who holds a lead - checked before every write on it
     src/db/failed-sends.ts  keeps a message EZ Texting refused, marked failed
     scripts/admin-leads-live-check.ts  proves the Admin > Leads statuses
@@ -245,6 +248,7 @@ you change something the docs describe, update the doc in the same commit.
   docs/
     LEAD-FLOW.md            a lead's whole life on one page - start here
     AUTH.md  POLLER.md  WORKFLOW.md  WEBHOOKS.md  ADMIN-LEADS.md  STATE-MACHINE.md  TWILIO.md
+    AUDIT.md                the activity log: nothing is lost
     QUEUE.md  AGENT-WORKSPACE.md  ADMIN.md  LOGGING.md  FRONTEND.md
 ```
 
@@ -280,6 +284,7 @@ of truth and `docs/SCHEMA.md` explains it. It differs from the list above:
 - **calls** also has `ended_at`.
 - **leads.previous_lead_id** exists but is unused and expected to be dropped - see §6.
 - **leads.assigned_at** records when an agent claimed the lead. Claims do not expire; it is what lets a superadmin see one held too long. Added 2026-09-15.
+- **activity_log** and **webhook_events** - migration 006, 2026-10-01. The company keeps data as proof: every action is one add-only row, and every inbound webhook is kept as received. The foreign keys to `leads` no longer cascade, so a lead with history cannot be deleted. `docs/AUDIT.md`.
 
 ---
 
@@ -494,7 +499,7 @@ retry, the end-to-end script, and a README with how to test and known limits.
 - **Source always reads "API" in production** - it is how the contact was
   added to EZ Texting, not which partner sent it. Keep the column, or find the
   partner elsewhere.
-- **Deploy:** `npm run migrate` applies 002, 003, 004 and 005 on the server (005, 2026-09-29: poll every 30s). Production also needs `EZT_WEBHOOK_TOKEN` set, or the API will not start - it is already set there.
+- **Deploy:** `npm run migrate` applies 002 to 006 on the server (005, 2026-09-29: poll every 30s; 006, 2026-10-01: the activity log, the raw webhook archive, and leads that cannot be deleted - `docs/AUDIT.md`). Production also needs `EZT_WEBHOOK_TOKEN` set, or the API will not start - it is already set there.
 
 Task 29 found nothing to fix in the app: all three bugs the end-to-end script
 surfaced were in the script itself. Two apparent failures were the app being
@@ -725,6 +730,7 @@ were taken on trust and the poller silently ingested nothing.
 - Read `docs/STATE-MACHINE.md` before any Week 2 work. It is the flow spec and overrides the mockup where they differ.
 - Read `docs/AUTH.md` before touching sign-in, sessions, roles or the users table.
 - Read `docs/TWILIO.md` before touching calls, Twilio's webhooks or the Call button.
+- Read `docs/AUDIT.md` before adding anything a person or the system can do. **Nothing may be lost** (Jeel, 2026-10-01): a new action records itself in the activity log, in the same statement or transaction, and nothing overwrites the only record of something.
 - Read `docs/POLLER.md` before changing the worker loop, and `docs/WORKFLOW.md` for branches, migrations and deploys.
 - **Every area has one doc, and it is updated in the same commit as the change.**
   Not afterwards, not in a follow-up. `docs/README.md` maps each doc to what

@@ -6,6 +6,7 @@
  */
 
 import { startOfTodaySql } from './sql';
+import { activityInsertSql } from './activity';
 import { pool } from './pool';
 
 export type CallbackWhen = 'today' | 'upcoming' | 'overdue' | 'all';
@@ -84,7 +85,9 @@ async function readCallback(id: number): Promise<Callback | null> {
 export async function createCallback(
   leadId: number,
   agentId: number,
-  scheduledAt: Date
+  scheduledAt: Date,
+  /** Who booked it. The agent it is for, unless a superadmin booked it for them. */
+  actorId: number = agentId
 ): Promise<CreateResult> {
   const lead = await pool.query(`SELECT 1 FROM leads WHERE id = $1`, [leadId]);
   if (lead.rowCount === 0) return { ok: false, reason: 'lead_not_found' };
@@ -92,9 +95,20 @@ export async function createCallback(
   const agent = await pool.query(`SELECT 1 FROM users WHERE id = $1 AND is_active`, [agentId]);
   if (agent.rowCount === 0) return { ok: false, reason: 'agent_not_found' };
 
+  // The callback and its record in one statement - docs/AUDIT.md.
   const { rows } = await pool.query(
-    `INSERT INTO callbacks (lead_id, agent_id, scheduled_at) VALUES ($1, $2, $3) RETURNING id`,
-    [leadId, agentId, scheduledAt]
+    `WITH booked AS (
+       INSERT INTO callbacks (lead_id, agent_id, scheduled_at) VALUES ($1, $2, $3)
+       RETURNING id, scheduled_at
+     ),
+     logged AS (
+       ${activityInsertSql}
+       SELECT $4::int, 'callback.booked', $1, $2,
+              jsonb_build_object('callbackId', id, 'scheduledAt', scheduled_at)
+       FROM booked
+     )
+     SELECT id FROM booked`,
+    [leadId, agentId, scheduledAt, actorId]
   );
 
   return { ok: true, callback: (await readCallback(rows[0].id))! };
@@ -123,16 +137,43 @@ export async function updateCallback(
     return { ok: false, reason: 'not_yours', ownerName: existing.agentName };
   }
 
+  // The update overwrites the time and the done mark, so the statement records
+  // what they were: one row per thing that actually changed, none when nothing
+  // did. Until 2026-10-01 a rescheduled callback kept no trace of its original
+  // time - docs/AUDIT.md.
   await pool.query(
-    `UPDATE callbacks
-     SET scheduled_at = COALESCE($2, scheduled_at),
-         done_at = CASE
-           WHEN $3::boolean IS TRUE THEN COALESCE(done_at, now())
-           WHEN $3::boolean IS FALSE THEN NULL
-           ELSE done_at
-         END
-     WHERE id = $1`,
-    [id, patch.scheduledAt ?? null, patch.done ?? null]
+    `WITH prev AS (
+       SELECT id, scheduled_at, done_at FROM callbacks WHERE id = $1 FOR UPDATE
+     ),
+     changed AS (
+       UPDATE callbacks c
+       SET scheduled_at = COALESCE($2, prev.scheduled_at),
+           done_at = CASE
+             WHEN $3::boolean IS TRUE THEN COALESCE(prev.done_at, now())
+             WHEN $3::boolean IS FALSE THEN NULL
+             ELSE prev.done_at
+           END
+       FROM prev
+       WHERE c.id = prev.id
+       RETURNING c.id, c.lead_id, c.agent_id, c.scheduled_at, c.done_at,
+                 prev.scheduled_at AS old_scheduled_at, prev.done_at AS old_done_at
+     ),
+     logged AS (
+       ${activityInsertSql}
+       SELECT $4::int, 'callback.rescheduled', lead_id, agent_id,
+              jsonb_build_object('callbackId', id, 'from', old_scheduled_at, 'to', scheduled_at)
+       FROM changed WHERE scheduled_at IS DISTINCT FROM old_scheduled_at
+       UNION ALL
+       SELECT $4::int, 'callback.done', lead_id, agent_id,
+              jsonb_build_object('callbackId', id, 'scheduledAt', scheduled_at)
+       FROM changed WHERE old_done_at IS NULL AND done_at IS NOT NULL
+       UNION ALL
+       SELECT $4::int, 'callback.reopened', lead_id, agent_id,
+              jsonb_build_object('callbackId', id, 'wasDoneAt', old_done_at)
+       FROM changed WHERE old_done_at IS NOT NULL AND done_at IS NULL
+     )
+     SELECT 1 FROM changed`,
+    [id, patch.scheduledAt ?? null, patch.done ?? null, actorId]
   );
 
   return { ok: true, callback: (await readCallback(id))! };

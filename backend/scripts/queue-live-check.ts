@@ -202,7 +202,6 @@ async function main() {
   await pool.query(`UPDATE callbacks SET done_at = now() WHERE lead_id = $1`, [promised]);
   check('once done, nothing to say', (await listQueue({ limit: 200 })).leads.find((l) => l.id === promised)?.tag, null);
   check('as an inbound reply', withWrote.leads.find((l) => l.id === wrote)?.tag, { kind: 'inbound_reply' });
-  await pool.query(`DELETE FROM leads WHERE id = $1`, [wrote]);
 
   console.log(failures ? `\n${failures} FAILED` : '\nall checks passed');
   await pool.end();
