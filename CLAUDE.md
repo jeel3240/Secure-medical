@@ -421,7 +421,7 @@ onto them:
 | 1 | Week 1 | Done |
 | 2 | Week 2 | Done, approved 2026-09-23 |
 | 3 | Week 3 **and all of Week 4 except Twilio** | Done 2026-09-28, merged into `main` |
-| 4 | Week 4 items 1-4, Twilio calling | Built 2026-10-01 - `docs/TWILIO.md`. Awaiting a real test call and merge |
+| 4 | Week 4 items 1-4, Twilio calling | Done 2026-10-01 - `docs/TWILIO.md`. A real call placed and recorded the same day |
 
 **Phase 3 is everything that is left except calling.** That means the Week 3
 list below, plus Week 4 items 5-9: error handling and retries, logging, the

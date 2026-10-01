@@ -198,6 +198,10 @@ way Twilio signs, sent through the tunnel, was refused unsigned (403),
 connected for the agent holding the lead, refused for another agent, and its
 end-of-call report saved as answered, 42 seconds.
 
+**A real call, 2026-10-01:** Jeel picked up a lead that was his own phone and
+pressed Call. The phone rang showing the client's number, was answered, and the
+call was saved as `answered`, 15 seconds, with its start and end times.
+
 **Every call on a paid account is a real call that costs money.** Test to your
 own phone.
 
