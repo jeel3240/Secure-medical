@@ -1,7 +1,7 @@
 import { NavLink, Outlet } from 'react-router-dom';
 import { useAuth } from '../auth/store';
 import { BrandMark } from '../components/BrandMark';
-import { IncomingCallBar } from './IncomingCallBar';
+import { IncomingCall } from './IncomingCall';
 import { UserMenu } from './UserMenu';
 
 export function AppShell() {
@@ -41,7 +41,7 @@ export function AppShell() {
       </main>
 
       {/* A lead calling in can arrive on any screen - TWILIO.md, "Incoming calls". */}
-      <IncomingCallBar />
+      <IncomingCall />
     </div>
   );
 }

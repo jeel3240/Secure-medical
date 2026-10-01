@@ -12,7 +12,7 @@ import { incomingReducer, NO_CALL, type IncomingEvent, type IncomingState } from
  * A store rather than a page's state because a call can arrive on any screen,
  * and because the lead's own Call button must know a call is under way
  * (`CallControl.tsx`). The app shell starts it and draws it
- * (`layout/IncomingCallBar.tsx`); the rules are `lib/incoming-state.ts`.
+ * (`layout/IncomingCall.tsx`); the rules are `lib/incoming-state.ts`.
  */
 
 interface IncomingCallStore {
@@ -49,14 +49,14 @@ export const useIncomingCall = create<IncomingCallStore>((set, get) => {
           stop = listenForCalls({
             onRing: (incoming) => {
               const before = get().state;
-              send({ type: 'ring', caller: incoming.lead });
+              send({ type: 'ring', caller: incoming.lead, at: Date.now() });
               // Shown, or turned away because this agent is already on a call.
               if (get().state !== before) ring = incoming;
             },
             onRingOver: (incoming) => {
               if (ring !== incoming) return;
               ring = null;
-              send({ type: 'ring_over' });
+              send({ type: 'ring_over', at: Date.now() });
             },
           });
         })

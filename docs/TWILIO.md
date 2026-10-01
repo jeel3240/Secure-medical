@@ -107,7 +107,7 @@ available right now, and will call you back shortly. Goodbye." Then:
 | **The call is saved** | `calls` row with `direction = 'inbound'`, `outcome = 'missed'`, whatever Twilio called it (no-answer, busy, canceled). `agent_id` is the agent it rang, or null when it rang nobody |
 | **The lead is texted** | `message_missed_call` from `settings`, sent through EZ Texting like every other text and saved in `messages`: "Secure Medical: Sorry we missed your call. Our team member is not available right now and will call you back shortly." Once per call. Not sent to a blocked number - the do-not-call check is inside the sender |
 | **The lead goes to the queue** | Tagged **Missed call**, in bold, above an unread reply. A closed lead is reopened by it. `QUEUE.md`, "The tag" |
-| **The agent is told** | The bar on their screen changes to "Missed call · they were told we will call back", with **Open lead**. It stays until dismissed |
+| **The agent is told** | The card on their screen becomes a notice: "Missed call · Leo M. · Rang for 20s", with **Call back**. It stays until dismissed |
 | **The lead's page says so** | A banner: "They called and nobody answered. They were told we would call back." And a line on the timeline: "Missed call · told we will call back" |
 
 **It stops being a missed call when someone gets back to them:** an agent
@@ -125,30 +125,65 @@ nothing.
 
 ### On the screen
 
-`layout/IncomingCallBar.tsx`, mounted once in the app shell, so it appears on
-whichever page the agent is on. The same dark bar, in the same place, as an
-outgoing call.
+`layout/IncomingCall.tsx`, mounted once in the app shell, so it appears on
+whichever page the agent is on.
 
-- **Ringing:** the lead's name and number, "Incoming call", **Decline** and
-  **Answer**. The browser plays Twilio's ringtone. Focus is not moved to the
-  bar - an agent typing a text must not answer with the space bar.
-- **Answer:** the call connects, the lead is picked up for the agent if it
-  is not already theirs, and its page opens. The bar is then the ordinary
-  call bar - clock, Mute, Keypad, End - and becomes the note box when the
-  call ends.
-- **Decline:** the lead gets the missed-call message and text. The bar goes
+**A card in the top right corner, which says who it is before the agent
+picks up** - Jeel's design, 2026-10-01, replacing the first version's bar at
+the foot of the screen that showed only a name and a number.
+
+```
+● INCOMING CALL                         0:09
+[LM] Leo M.                           [WARM]
+     (555) 010-0014
+📞 Calling back · you tried 2× today
+SCORE       INTEREST     FLOW
+45 / 100    Both         Stopped at Q2
+[ Decline ]              [ Accept ]
+Accepting opens Leo's workspace and assigns the lead to you.
+```
+
+| On the card | From |
+|---|---|
+| Name, number | Sent with the call, so they show the instant it rings |
+| How long it has rung | Counted in the browser |
+| Tier, score, interest (question 1), flow | The lead card, `GET /api/leads/:id`, fetched as it starts to ring. The same words as the lead's page |
+| "Calling back · you tried 2× today" | The lead's timeline: calls we placed today, by this agent or - named - by another; otherwise when we last called. Nothing when we never have. `lib/caller-context.ts` |
+| The last line | Drops "and assigns the lead to you" when the agent already holds it |
+
+The card is up at once and the details fill in a moment later; if they cannot
+be loaded it still rings and can still be accepted.
+
+- **Accept:** the call connects, the lead is picked up for the agent if it is
+  not already theirs, and its page opens. From here it is an ordinary call:
+  the call bar at the foot of the screen - clock, Mute, Keypad, End - and
+  then the note box.
+- **Decline:** the lead gets the missed-call message and text. The card goes
   away rather than saying "missed" - the agent chose it - but the lead is
   tagged Missed call in the queue all the same.
+- **Not picked up:** the card becomes a small notice in the same corner -
+  "Missed call · Leo M. · Rang for 20s · texted that we will call back" - with
+  **Call back** and a close button. It stays until one is pressed. Call back
+  picks the lead up, opens its page and dials. If another agent picked the
+  lead up first, the page opens read-only, says who, and nothing is dialled.
+- **Focus is not moved to the card.** An agent typing a text must not answer
+  a call with the space bar.
 - **One call at a time.** While an agent is on a call, a second caller is not
   shown to them and gets the missed-call path. The lead's own Call button is
   off while an incoming call is ringing or live.
 
-The states are `lib/incoming-state.ts`, pure and tested; the store that joins
-them to Twilio is `lib/incoming-call.ts`.
+The browser plays Twilio's ringtone. The states are `lib/incoming-state.ts`,
+pure and tested; the store that joins them to Twilio is `lib/incoming-call.ts`.
 
 **A browser will not play sound on a page nobody has clicked on.** After a
-reload, the bar still appears but the ringtone may be silent until the agent
+reload, the card still appears but the ringtone may be silent until the agent
 clicks anywhere. Signing in counts as a click.
+
+**Not from the design: the "Unknown caller" card.** The design also shows a
+card for a number that is not in our leads, with "You can create one after the
+call". It is not built. A caller we hold no lead for rings nobody - there is no
+agent whose call it is - and the app has no way to create a lead by hand:
+leads come from EZ Texting. Both are decisions, not styling.
 
 ### What it needs on the Twilio account
 
@@ -329,7 +364,7 @@ microphone. `lib/calling.ts` is the only file that touches the SDK.
 | Every route, refusals, a database failure, the missed-call text sent once | `src/api/__tests__/calls.test.ts` |
 | The SQL: who may call, DNC, retries, the timeline; who an incoming call rings, a missed call, and its effect on the queue and Admin > Leads | `scripts/calls-live-check.ts` - against a real Postgres |
 | Call states, wording, error sentences | `frontend/src/lib/call-state.test.ts`, `lib/calling.test.ts` |
-| Incoming: ringing, answered, missed, declined, one call at a time | `frontend/src/lib/incoming-state.test.ts`, `layout/IncomingCallBar.test.tsx` |
+| Incoming: ringing, answered, missed, declined, one call at a time; what the card shows; Call back | `frontend/src/lib/incoming-state.test.ts`, `lib/caller-context.test.ts`, `layout/IncomingCall.test.tsx` |
 
 **Locally a real call needs a public address**, because Twilio must reach the
 voice webhook:

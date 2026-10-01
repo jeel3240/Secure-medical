@@ -9,6 +9,9 @@ import { callReducer, IDLE, isActive, type CallEvent, type CallState } from './c
  *                +--> missed -> none        it rang out, or the lead hung up
  *                +--> none                  the agent declined
  *
+ * Timestamps are passed in with the event, as in `call-state.ts`, so this
+ * stays a pure function.
+ *
  * Once answered it is an ordinary call, so that part is `call-state.ts`'s
  * reducer and the same call bar draws it. No Twilio in here: `lib/calling.ts`
  * raises the events and `lib/incoming-call.ts` holds the state.
@@ -24,14 +27,15 @@ export interface Caller {
 
 export type IncomingState =
   | { phase: 'none' }
-  | { phase: 'ringing'; caller: Caller }
+  /** Ringing since `since`, ms - the card shows how long. */
+  | { phase: 'ringing'; caller: Caller; since: number }
   | { phase: 'call'; caller: Caller; call: CallState }
-  /** Nobody picked up. Stays until the agent has seen it. */
-  | { phase: 'missed'; caller: Caller };
+  /** Nobody picked up, after ringing `rangSeconds`. Stays until the agent has seen it. */
+  | { phase: 'missed'; caller: Caller; rangSeconds: number };
 
 export type IncomingEvent =
-  | { type: 'ring'; caller: Caller }
-  | { type: 'ring_over' }
+  | { type: 'ring'; caller: Caller; at: number }
+  | { type: 'ring_over'; at: number }
   | { type: 'declined' }
   | { type: 'answer' }
   /** Something happened on the answered call. */
@@ -51,10 +55,16 @@ export function incomingReducer(state: IncomingState, event: IncomingEvent): Inc
       // A second caller while one is ringing or being spoken to is not shown;
       // they hear that we will call back. A missed call, or a finished one
       // still showing its note box, gives way to the phone that is ringing now.
-      return isBusy(state) ? state : { phase: 'ringing', caller: event.caller };
+      return isBusy(state) ? state : { phase: 'ringing', caller: event.caller, since: event.at };
 
     case 'ring_over':
-      return state.phase === 'ringing' ? { phase: 'missed', caller: state.caller } : state;
+      return state.phase === 'ringing'
+        ? {
+            phase: 'missed',
+            caller: state.caller,
+            rangSeconds: Math.max(0, Math.round((event.at - state.since) / 1000)),
+          }
+        : state;
 
     case 'declined':
       return state.phase === 'ringing' ? NO_CALL : state;

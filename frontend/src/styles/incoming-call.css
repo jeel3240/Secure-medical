@@ -1,0 +1,296 @@
+/* A lead calling in - layout/IncomingCall.tsx, Jeel's design, 2026-10-01. A
+   card in the top right corner while it rings, and a small notice in the same
+   corner if nobody picked up. An accepted call is the call bar, call-bar.css.
+   Loaded by global.css, in its order: a later file can override an earlier one. */
+
+.incoming {
+  position: fixed;
+  top: calc(var(--appbar-height) + var(--space-3));
+  right: var(--space-5);
+  z-index: 50;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface);
+  box-shadow: var(--shadow-lg);
+  animation: incoming-in 200ms ease-out;
+}
+
+/* Drops in from the corner it sits in. */
+@keyframes incoming-in {
+  from {
+    opacity: 0;
+    transform: translateY(calc(-1 * var(--space-3)));
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.incoming--ringing {
+  width: min(384px, calc(100vw - var(--space-8)));
+  overflow: hidden;
+}
+
+.incoming__head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-4);
+  background: var(--color-appbar);
+  color: var(--color-appbar-text-active);
+}
+
+.incoming__pulse {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--color-appbar-accent);
+  animation: incoming-pulse 1.2s ease-in-out infinite;
+}
+
+@keyframes incoming-pulse {
+  50% {
+    box-shadow: 0 0 0 5px rgba(94, 234, 212, 0.25);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .incoming,
+  .incoming__pulse {
+    animation: none;
+  }
+}
+
+.incoming__label {
+  font-size: var(--text-small);
+  font-weight: var(--weight-semibold);
+  letter-spacing: var(--tracking-label);
+  text-transform: uppercase;
+}
+
+.incoming__timer {
+  margin-left: auto;
+  color: var(--color-appbar-text);
+  font-size: var(--text-small);
+}
+
+.incoming__body {
+  display: grid;
+  gap: var(--space-3);
+  padding: var(--space-4);
+}
+
+.incoming__who {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.incoming__avatar {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  flex: none;
+  border-radius: 50%;
+  background: var(--color-low-soft);
+  color: var(--color-primary);
+  font-size: var(--text-body);
+  font-weight: var(--weight-semibold);
+}
+
+.incoming__id {
+  min-width: 0;
+  margin-right: auto;
+}
+
+.incoming__name {
+  margin: 0;
+  overflow: hidden;
+  font-size: var(--text-title);
+  font-weight: var(--weight-semibold);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.incoming__phone {
+  margin: 2px 0 0;
+  color: var(--color-text-muted);
+  font-size: var(--text-body);
+}
+
+/* The tier, outlined: the card is about the person, and the tier is one fact. */
+.incoming__tier {
+  padding: 2px var(--space-2);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-sm);
+  color: var(--color-low);
+  font-size: var(--text-small);
+  font-weight: var(--weight-semibold);
+  letter-spacing: var(--tracking-label);
+  text-transform: uppercase;
+}
+
+.incoming__tier--hot {
+  border-color: var(--color-hot);
+  color: var(--color-hot);
+}
+
+.incoming__tier--warm {
+  border-color: var(--color-warm);
+  color: var(--color-warm);
+}
+
+.incoming__context {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin: 0;
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-hover);
+  font-size: var(--text-body);
+}
+
+.incoming__facts {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: var(--space-3);
+  margin: 0;
+}
+
+.incoming__fact dt {
+  color: var(--color-text-muted);
+  font-size: var(--text-small);
+  font-weight: var(--weight-semibold);
+  letter-spacing: var(--tracking-label);
+  text-transform: uppercase;
+}
+
+.incoming__fact dd {
+  margin: 2px 0 0;
+  font-size: var(--text-body);
+  font-weight: var(--weight-semibold);
+}
+
+.incoming__actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-2);
+}
+
+.incoming__button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-4);
+  border: 1px solid transparent;
+  border-radius: var(--radius-md);
+  font: inherit;
+  font-size: var(--text-body);
+  font-weight: var(--weight-semibold);
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.incoming__button:focus-visible,
+.incoming__close:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
+
+.incoming__button--decline {
+  border-color: var(--color-border-strong);
+  background: var(--color-surface);
+  color: var(--color-text);
+}
+
+.incoming__button--decline:hover {
+  background: var(--color-surface-hover);
+}
+
+/* Accept is green: the colour a phone uses for it. */
+.incoming__button--accept {
+  background: var(--color-success);
+  color: var(--color-on-primary);
+}
+
+.incoming__button--accept:hover {
+  filter: brightness(1.08);
+}
+
+.incoming__button--navy {
+  background: var(--color-primary);
+  color: var(--color-on-primary);
+}
+
+.incoming__button--navy:hover {
+  background: var(--color-primary-hover);
+}
+
+/* The handset laid flat: "end", or "missed". */
+.incoming__icon--down {
+  transform: rotate(135deg);
+}
+
+.incoming__hint {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: var(--text-small);
+  text-align: center;
+}
+
+/* Nobody picked up: one line in the same corner, until it is dismissed. */
+.incoming--missed {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  max-width: calc(100vw - var(--space-8));
+  padding: var(--space-3) var(--space-4);
+}
+
+.incoming__missed-icon {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  flex: none;
+  border-radius: 50%;
+  background: var(--color-low-soft);
+  color: var(--color-primary);
+}
+
+.incoming__missed-text {
+  min-width: 0;
+  margin-right: var(--space-2);
+}
+
+.incoming__missed-title {
+  margin: 0;
+  font-size: var(--text-body);
+  font-weight: var(--weight-semibold);
+}
+
+.incoming__missed-meta {
+  margin: 2px 0 0;
+  color: var(--color-text-muted);
+  font-size: var(--text-small);
+}
+
+.incoming__close {
+  padding: 0 var(--space-1);
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: none;
+  color: var(--color-text-muted);
+  font: inherit;
+  font-size: var(--text-heading);
+  line-height: 1;
+  cursor: pointer;
+}
+
+.incoming__close:hover {
+  color: var(--color-text);
+}

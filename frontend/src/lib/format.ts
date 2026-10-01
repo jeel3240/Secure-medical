@@ -98,6 +98,12 @@ export function leadName(lead: { firstName: string | null; lastName: string | nu
   return [first, last ? `${last[0].toUpperCase()}.` : null].filter(Boolean).join(' ');
 }
 
+/** The same, from a full name as stored: `Leo Martinez` -> `Leo M.`. Empty stays empty. */
+export function shortName(full: string): string {
+  const [first, ...rest] = full.trim().split(/\s+/);
+  return leadName({ firstName: first || null, lastName: rest[rest.length - 1] ?? null }).replace(/^Unknown$/, '');
+}
+
 /**
  * The words behind a stored answer choice.
  *

@@ -230,7 +230,8 @@ you change something the docs describe, update the doc in the same commit.
     src/lib/calling.ts      the only file that uses Twilio's Voice SDK
     src/lib/incoming-state.ts  a lead calling in: ringing, answered, missed - pure
     src/lib/incoming-call.ts   the store that joins those states to Twilio
-    src/layout/IncomingCallBar.tsx  the incoming-call bar, on every screen
+    src/layout/IncomingCall.tsx  the incoming-call card and missed-call notice, on every screen
+    src/lib/caller-context.ts  "Calling back · you tried 2× today", pure
     src/lib/useSecond.ts    a clock that re-renders every second
     src/components/Timeline.tsx      shared by the workspace and the timeline page
     src/components/QueueStatus.tsx   the queue's STATUS column: icon and words

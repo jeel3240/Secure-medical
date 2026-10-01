@@ -22,7 +22,7 @@ import type { LeadCall } from './useLeadCall';
  * Nothing is shown while no call is being placed, is live, or has just ended.
  *
  * Also the bar for a call a lead placed to us, once it is answered
- * (`layout/IncomingCallBar.tsx`): from there on it is the same call, so it is
+ * (`layout/IncomingCall.tsx`): from there on it is the same call, so it is
  * the same bar. That is why it takes a name and a number, not a lead.
  *
  * **No Hold.** The design has one. A real hold - the lead hears music and is

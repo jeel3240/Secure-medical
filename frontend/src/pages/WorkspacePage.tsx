@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Link, useNavigate, useParams } from 'react-router-dom';
+import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { toApiError } from '../api/client';
 import { claimLead, listQueue, releaseLead } from '../api/leads';
 import { usePolling } from '../api/usePolling';
@@ -82,8 +82,8 @@ export function WorkspacePage() {
   // shows it. Leaving the lead ends the call - `useLeadCall`.
   const reloadAfterCall = useCallback(() => void refreshAll(), [refreshAll]);
   const call = useLeadCall(leadId, reloadAfterCall);
-  // An incoming call's bar sits in the same place; the page leaves it room too.
-  const incomingBar = useIncomingCall((s) => s.state.phase !== 'none');
+  // An answered incoming call's bar sits in the same place; the page leaves it room too.
+  const incomingBar = useIncomingCall((s) => s.state.phase === 'call');
 
   /**
    * "Lead 3 of 12" - where this one sits in the queue an agent is working
@@ -125,6 +125,21 @@ export function WorkspacePage() {
         .catch(() => undefined);
     }
   }, [mine, lead?.id, lead?.flags.unread, refresh]);
+
+  /**
+   * Arrived from a missed call's **Call back** (`layout/IncomingCall.tsx`):
+   * dial as soon as the lead is theirs. Once - the flag is taken off the
+   * history entry, so a reload or Back does not ring the lead again. If
+   * someone else holds the lead, nothing is dialled and the page says who.
+   */
+  const location = useLocation();
+  const callBack = Boolean((location.state as { callBack?: boolean } | null)?.callBack);
+  const startCall = call.start;
+  useEffect(() => {
+    if (!callBack || !lead) return;
+    navigate(location.pathname, { replace: true, state: null });
+    if (mine && !lead.flags.dnc) startCall();
+  }, [callBack, lead, mine, startCall, navigate, location.pathname]);
 
   /** Pick from inside the page: the lead becomes yours and the actions wake up. */
   const pick = async () => {

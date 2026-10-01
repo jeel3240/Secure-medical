@@ -322,10 +322,12 @@ left below, on open and after each of three new messages.
 **A call lives in a bar at the foot of the screen - Jeel's design,
 2026-10-01.** The header has a Call button; the call itself - who, the clock,
 Mute, Keypad, End - is `CallBar.tsx`, which slides up and stays in view, and
-becomes a note box when the call ends. A lead calling in uses the same bar,
-from `layout/IncomingCallBar.tsx` in the app shell, so it appears on any
-screen: Answer and Decline while it rings, "Missed call" if nobody picks up
-(`TWILIO.md`, "Incoming calls"). `styles/call-bar.css`; `TWILIO.md`,
+becomes a note box when the call ends. A lead calling in is a card in the top
+right corner, from `layout/IncomingCall.tsx` in the app shell, so it appears
+on any screen: who it is, tier, score, answers and how often we tried them,
+with Accept and Decline; a "Missed call" notice with Call back if nobody picks
+up; and that same call bar once accepted (`TWILIO.md`, "Incoming calls").
+`styles/incoming-call.css`. `styles/call-bar.css`; `TWILIO.md`,
 "The screen".
 
 **The centre column is a conversation, not a log.** `workspace/Conversation.tsx`
