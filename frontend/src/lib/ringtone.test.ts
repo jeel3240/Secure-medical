@@ -6,6 +6,9 @@ class FakeAudio {
   static allowed = true;
   loop = false;
   muted = false;
+  volume = 1;
+  /** Whether anything would have been heard at any moment it was playing. */
+  heard = false;
   preload = '';
   currentTime = 0;
   playing = false;
@@ -15,6 +18,7 @@ class FakeAudio {
   play = vi.fn(() => {
     if (!FakeAudio.allowed) return Promise.reject(new Error('NotAllowedError'));
     this.playing = true;
+    if (!this.muted && this.volume > 0) this.heard = true;
     return Promise.resolve();
   });
   pause = vi.fn(() => {
@@ -78,11 +82,22 @@ describe('ringing', () => {
     return { ...ringtone, audio: FakeAudio.made[0] };
   }
 
+  it('one click fires several events, and plays it only once', async () => {
+    const { armRingtone } = await fresh();
+    armRingtone();
+    ['pointerdown', 'mousedown', 'click'].forEach((name) => window.dispatchEvent(new Event(name)));
+    await settle();
+    expect(FakeAudio.made[0].play).toHaveBeenCalledTimes(1);
+    expect(FakeAudio.made[0].heard).toBe(false);
+  });
+
   it('the first click plays it silently for an instant, which is what lets it ring later', async () => {
     const { audio, canRing } = await clicked();
     expect(audio.play).toHaveBeenCalledTimes(1);
     expect(audio.playing).toBe(false);
-    expect(audio.muted).toBe(false);
+    // Nothing was heard: muted and at zero volume, and left that way until it rings.
+    expect(audio.heard).toBe(false);
+    expect([audio.muted, audio.volume]).toEqual([true, 0]);
     expect(canRing()).toBe(true);
 
     window.dispatchEvent(new Event('keydown'));
@@ -93,7 +108,7 @@ describe('ringing', () => {
     const { audio, startRinging } = await clicked();
     const stop = startRinging();
     expect(audio.playing).toBe(true);
-    expect([audio.loop, audio.muted, audio.currentTime]).toEqual([true, false, 0]);
+    expect([audio.loop, audio.muted, audio.volume, audio.currentTime]).toEqual([true, false, 1, 0]);
     stop();
     expect(audio.playing).toBe(false);
   });
@@ -122,6 +137,7 @@ describe('ringing', () => {
     const stop = startRinging();
     await settle();
     expect(FakeAudio.made[0].playing).toBe(true);
+    expect([FakeAudio.made[0].muted, FakeAudio.made[0].volume]).toEqual([false, 1]);
     stop();
   });
 

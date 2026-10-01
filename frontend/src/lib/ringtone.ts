@@ -86,6 +86,8 @@ let element: HTMLAudioElement | null = null;
 let unlocked = false;
 /** A call is ringing right now. */
 let ringing = false;
+/** The silent first play is under way: one click fires several events, and one play is enough. */
+let unlocking = false;
 
 function player(): HTMLAudioElement | null {
   if (typeof Audio === 'undefined' || typeof URL.createObjectURL !== 'function') return null;
@@ -99,6 +101,7 @@ function player(): HTMLAudioElement | null {
 
 function play(audio: HTMLAudioElement): void {
   audio.muted = false;
+  audio.volume = 1;
   audio.currentTime = 0;
   // A refusal is the browser still wanting a click; it stays silent.
   void audio.play()?.catch(() => undefined);
@@ -114,7 +117,7 @@ const GESTURES = ['pointerdown', 'mousedown', 'click', 'touchend', 'keydown'] as
 export function armRingtone(): () => void {
   const unlock = () => {
     const audio = player();
-    if (!audio || unlocked) return;
+    if (!audio || unlocked || unlocking) return;
     // A call is ringing and this is the click it was waiting for: ring.
     if (ringing) {
       unlocked = true;
@@ -123,17 +126,29 @@ export function armRingtone(): () => void {
     }
     // Otherwise play it silently for an instant. Having played once inside a
     // click is what allows it to play aloud later with nobody clicking.
+    //
+    // Muted and at zero volume, both: Safari let the first notes through with
+    // `muted` alone, so the agent's first click anywhere played the ringtone
+    // (Jeel, 2026-10-01). They are restored only when it really rings.
+    unlocking = true;
     audio.muted = true;
+    audio.volume = 0;
     void audio
       .play()
       ?.then(() => {
+        unlocking = false;
         unlocked = true;
-        if (ringing) return;
+        if (ringing) {
+          // A call came in during that instant: this is now the ring.
+          play(audio);
+          return;
+        }
         audio.pause();
         audio.currentTime = 0;
-        audio.muted = false;
       })
-      .catch(() => undefined);
+      .catch(() => {
+        unlocking = false;
+      });
   };
   GESTURES.forEach((gesture) => window.addEventListener(gesture, unlock));
   return () => GESTURES.forEach((gesture) => window.removeEventListener(gesture, unlock));
@@ -149,7 +164,8 @@ export function startRinging(): () => void {
   const audio = player();
   if (!audio) return () => undefined;
   ringing = true;
-  play(audio);
+  // Not while the silent first play is finishing: it hands over to the ring itself.
+  if (!unlocking) play(audio);
   return () => {
     ringing = false;
     audio.pause();
