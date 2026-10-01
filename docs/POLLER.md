@@ -17,9 +17,10 @@ question 1 is `backend/src/worker/opener.ts`, shared with the opener retry
 (2026-09-28; each had its own copy until then).
 API behaviour it depends on: `docs/EZTEXTING-API.md`.
 
-The worker tick does two things: this poll, then the expiry sweep in
-`worker/expiry.ts`, each in its own try/catch so a failure on one does not stop
-the other. Expiring is local work that must keep happening while EZ Texting is
+The worker tick does three things: this poll, the retry of openers that never
+went out (`worker/retry-openers.ts`, "Retrying a failed opener" below), then
+the expiry sweep in `worker/expiry.ts` - each in its own try/catch so a failure
+on one does not stop the others. Expiring is local work that must keep happening while EZ Texting is
 unreachable. The sweep's rules are in STATE-MACHINE.md, "Expiry"; what the
 poller owns is setting `expires_at` when the opener goes out.
 
@@ -45,7 +46,7 @@ filter would have done server-side.
    - confirm it is really in the group, by exact name against `groups[]`
    - normalise the phone to E.164
    - if `optOut`, or the phone is on `dnc_list`: insert the lead with a
-     `suppressed` conversation and add it to `dnc_list`
+     `suppressed` conversation and add it to `dnc_list` if it has no row there
    - otherwise insert the lead with an `open` conversation at step 1, then send
      question 1 and record it as an outbound message
 6. If the page was not the last, request the next one.
@@ -75,7 +76,8 @@ untouched, so the next cycle re-covers the same ground rather than skipping it.
 every error from `sendOpener`. The lead is already committed by then, so throwing would abandon the
 rest of the page and leave the checkpoint behind, re-polling every later contact
 because one send failed. The refused opener is kept as a failed message
-(`db/failed-sends.ts`), so the lead's thread shows it with a red "!", and
+(`db/outbound.ts` marks its row failed; `db/failed-sends.ts` is the agent's
+own texts), so the lead's thread shows it with a red "!", and
 `openers` in the `poll.tick` line will be lower than `inserted`. *(Until 2026-09-28 it
 was not kept, and a lead with no opener showed only as a conversation with no
 outbound message.)*
@@ -109,8 +111,23 @@ is still visible:
 
 | Check | What happens |
 |---|---|
-| EZ Texting has the contact `optOut: true` | Lead saved with a `suppressed` conversation, added to `dnc_list` with reason `ezt_opt_out`, nothing sent |
+| EZ Texting has the contact `optOut: true` | Lead saved with a `suppressed` conversation, added to `dnc_list` with reason `ezt_opt_out` if the number has no row there, nothing sent |
 | The phone is on our `dnc_list`, not released | Lead saved with a `suppressed` conversation, nothing sent |
+
+**The poller writes `dnc_list` with its own insert, not through `db/dnc.ts`** -
+`ON CONFLICT (phone) DO NOTHING`. Two consequences, both known gaps as of
+2026-10-01:
+
+- A number whose block was released by START, and which then arrives from EZ
+  Texting opted out, keeps its released row: it is not blocked again. The
+  conversation is still `suppressed`, so nothing automated is sent, but an
+  agent could text or call it.
+- No `dnc.blocked` row is written to the activity log (`AUDIT.md`).
+
+Routing it through `blockNumber` would fix both, but that function overwrites
+the row's reason, and the poller reaches this branch for a number already
+blocked for another reason as well; it needs to tell the two cases apart
+first. Not done.
 
 In practice EZ Texting also removes an opted-out contact from every group, so
 the poller usually never sees one at all - observed 2026-09-22, when a number
@@ -175,11 +192,18 @@ used to count, giving a lead up after five minutes; and a lead who replied
 anyway could be sent question 1 again, their next answer then scored against
 question 2.
 
+**The text after a missed call is an automated row too** (`sent_by` null,
+`db/missed-call-text.ts`). It cannot reach a lead still waiting on question 1
+in normal use - a lead rings us back after an agent has called - but if it
+did, a sent one would count as a text of ours that went out and end the
+retries, and a refused one would count as an attempt.
+
 **Sent through `db/outbound.ts`**, which writes the row as `sending` before the
 send and records EZ Texting's id after. A text that went out is never marked
 refused and never retried because a database write after it failed - until
 2026-09-28 that case became a "failed" row and the retry sent the opener
-again. The poller's own opener and the reply flow use the same helper.
+again. The poller's own opener, the reply flow and the missed-call text use
+the same helper.
 
 **The backoff,** each wait counted from the *last failed attempt*:
 
@@ -233,7 +257,7 @@ Oldest lead first: they have been silent the longest.
 **EZ Texting unreachable mid-poll** was already safe and stays as it is: the
 checkpoint advances only when the whole cycle succeeds, so a throw leaves it
 untouched and the next tick re-covers the same ground. Nothing is lost; the
-leads simply arrive a minute later.
+leads simply arrive a poll later - 30 seconds.
 
 **Duplicate webhooks** were already handled - `WEBHOOKS.md`. EZ Texting retries,
 and the `(from_number, received_at)` unique index with `ON CONFLICT DO NOTHING`

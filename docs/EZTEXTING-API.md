@@ -113,7 +113,7 @@ is not evidence a filter is working.
 | `source` | `source` | Only accept `API`. *(2026-09-14: configurable via `EZT_SOURCE`, default `API`; test contacts added by hand are `WebInterface`.)* |
 | `createdAt` | `ezt_added_at` | ISO 8601 with seconds. This is the checkpoint field. |
 | `optOut` | conversation `suppressed` + `dnc_list` | If true, never text. |
-| `groups[].id`, `groups[].name` | `group_id`, `group_name` | Store both. Filter on name (API constraint), verify by id in code. |
+| `groups[].id`, `groups[].name` | `group_id`, `group_name` | Store both. Filter on name (API constraint), and verify in code by exact name against `groups[]` (`isInGroup`, `integrations/ezt-client.ts`). |
 | `values` | ignore | Custom fields. |
 
 No `state`, no consent ref, no partner lead id come through. Do not design around them.
@@ -154,8 +154,8 @@ Rules:
 
 *As implemented, 2026-09-14* - `docs/POLLER.md` describes the real code. It
 differs from the sketch above in three ways: the interval is 60 seconds by
-default (30 since migration 005, 2026-09-29) and read from `settings` each tick; there is no job queue, and the
-opener is not sent yet; and the source filter comes from `EZT_SOURCE` rather
+default (30 since migration 005, 2026-09-29) and read from `settings` each tick; there is no job queue (the
+opener has been sent in the same cycle since 2026-09-15); and the source filter comes from `EZT_SOURCE` rather
 than being fixed to `API`.
 
 ## Send message
@@ -165,7 +165,7 @@ POST /v1/messages
 ```
 - `toNumbers` without `+` (matches how contacts come back). Confirm in sandbox whether `+1...` is also accepted.
 - Response includes a message id. Store in `messages.ezt_message_id`.
-- Delivery type (Standard 130 / Express 160) still unconfirmed with client. The opener is 151 characters for a four-letter name and 158 at its longest, so it is one segment on Express and two on Standard - worth settling before real volume.
+- Delivery type (Standard 130 / Express 160) still unconfirmed with client. The opener is 147 characters plus the first name - 151 for a four-letter name, up to 160 for a thirteen-letter one; a longer name is dropped for "there" so it never goes over (`core/messages.ts`, `SEGMENT_LIMIT`) - so it is one segment on Express and two on Standard - worth settling before real volume.
 
 ## Inbound webhook
 
@@ -226,6 +226,7 @@ callback path is the fallback - see WEBHOOKS.md.
 | `message` | What they typed. |
 | `received` | Arrival time, with milliseconds. |
 | `optOut` | If true, suppress them. |
+| `optIn` | If true, release their block - the same as a START. |
 | `id` | **Not an id for the reply** - see below. |
 
 ### `id` is the outbound message being replied to

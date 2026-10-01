@@ -34,6 +34,15 @@ describe('attempts', () => {
     expect(summary.calls).toBe(1);
   });
 
+  it('a call the lead placed is not one of our attempts, and is contact from them', () => {
+    const summary = summarise([
+      entry('call', '09:20', { outcome: 'no_answer', durationSec: 0, direction: 'outbound' }, 'Rae'),
+      entry('call', '09:40', { outcome: 'missed', durationSec: 0, direction: 'inbound' }),
+    ]);
+    expect(summary.calls).toBe(1);
+    expect(summary.lastContact).toMatchObject({ inbound: true });
+  });
+
   it('is all zeros for a lead nothing has happened to', () => {
     const summary = summarise([entry('system', '09:00', { event: 'lead_received' })]);
     expect(summary).toMatchObject({ calls: 0, smsOut: 0, smsIn: 0, lastContact: null });

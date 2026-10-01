@@ -62,7 +62,8 @@ export function summarise(entries: TimelineEntry[]): Summary {
   for (const entry of entries) {
     switch (entry.kind) {
       case 'call':
-        summary.calls++;
+        // Attempts are ours: a call the lead placed is not one.
+        if (entry.detail.direction !== 'inbound') summary.calls++;
         break;
       case 'sms':
       case 'agent_sms':
@@ -93,7 +94,8 @@ export function summarise(entries: TimelineEntry[]): Summary {
     // Anything that went out or came in counts as contact; a note or a
     // disposition is our own record, not a conversation.
     if (entry.kind === 'sms' || entry.kind === 'agent_sms' || entry.kind === 'inbound' || entry.kind === 'call') {
-      summary.lastContact = { at: entry.at, inbound: entry.kind === 'inbound' };
+      const fromLead = entry.kind === 'inbound' || (entry.kind === 'call' && entry.detail.direction === 'inbound');
+      summary.lastContact = { at: entry.at, inbound: fromLead };
     }
   }
 
@@ -125,9 +127,8 @@ export function LeadTimelinePage() {
 
   const summary = useMemo(() => summarise(entries ?? []), [entries]);
 
-  // The same three states as a queue row, decided by id here because the lead
-  // endpoint returns the holder's id - lib/lock.ts explains why the queue has
-  // to match on name instead.
+  // The same three states as a queue row, decided by the holder's id, as the
+  // queue does - lib/lock.ts.
   const mine = Boolean(lead?.claimedBy && me && lead.claimedBy.id === me.id);
   const heldByOther = Boolean(lead?.claimedBy) && !mine;
 

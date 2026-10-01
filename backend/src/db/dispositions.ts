@@ -102,6 +102,16 @@ export async function setDisposition(
     const blockedNumber = value === DNC_DISPOSITION;
     if (blockedNumber) {
       await blockNumber(client, lead.rows[0].phone, DNC_REASONS.agentDisposition, agentId);
+      // The same end state as a STOP reply: a question flow still under way is
+      // over. AGENT-WORKSPACE.md said so from the start; until 2026-10-01 the
+      // conversation was left open - nothing could be sent, the block saw to
+      // that, but it sat open until it expired and a later START was read as
+      // an unclear answer to a question nobody was asking.
+      await client.query(
+        `UPDATE conversations SET status = 'suppressed', updated_at = now()
+         WHERE lead_id = $1 AND status = 'open'`,
+        [leadId]
+      );
     }
 
     await client.query(

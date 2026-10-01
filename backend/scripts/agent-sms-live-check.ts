@@ -240,6 +240,24 @@ async function main(): Promise<void> {
     check('and nothing is sent', sent.length, 0);
   }
 
+  console.log('\ntexting a lead back returns their missed call');
+  {
+    const { leadId } = await makeLeadMidFlow('+15550000606');
+    await pool.query(`UPDATE leads SET assigned_to = $2, assigned_at = now() WHERE id = $1`, [leadId, maya]);
+    await pool.query(
+      `INSERT INTO callbacks (lead_id, agent_id, scheduled_at, reason) VALUES ($1, $2, now(), 'missed_call'), ($1, $2, now() + interval '1 day', 'booked')`,
+      [leadId, maya]
+    );
+    await sendAgentSms(leadId, maya, 'Sorry we missed you - calling shortly.');
+    const rows = (await pool.query(`SELECT reason, done_at IS NOT NULL AS done FROM callbacks WHERE lead_id = $1 ORDER BY id`, [leadId])).rows;
+    check('the missed call\'s callback is finished; one the agent booked is not', rows, [
+      { reason: 'missed_call', done: true },
+      { reason: 'booked', done: false },
+    ]);
+    const log = (await pool.query(`SELECT actor_id, detail->>'because' AS because FROM activity_log WHERE lead_id = $1 AND action = 'callback.done'`, [leadId])).rows;
+    check('recorded, with who texted', log, [{ actor_id: maya, because: 'texted_back' }]);
+  }
+
   console.log(failures === 0 ? '\nall checks passed' : `\n${failures} check(s) FAILED`);
   await pool.end();
   process.exit(failures === 0 ? 0 : 1);

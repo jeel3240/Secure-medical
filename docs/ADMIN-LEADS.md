@@ -9,10 +9,11 @@ Spec: `DESIGN-PROMPT.md` section 6g. Code: `frontend/src/pages/admin/LeadsPage.t
 ## Why it is separate from the queue
 
 The Priority Queue shows only leads who need a person - completed, needs
-review, an inbound reply, or one being worked - because agents should spend
+review, an inbound reply, an unreturned missed call, or one being worked - because agents should spend
 their time on people who have given them a reason to. *(2026-09-28: a lead
 partway through the questions is no longer in the queue, so this page, under
-Answering, is the only place it appears.)* This page shows everyone, so a superadmin
+Answering, is the only place it appears - unless an agent holds it, it has an
+unread text, or it rang us and was missed: `QUEUE.md`, "Who is in it".)* This page shows everyone, so a superadmin
 can confirm leads are arriving and see where they drop off, without
 non-responders burying HOT leads in the agents' view. That list is `QUEUE.md`.
 
@@ -33,8 +34,8 @@ with Needs review, Expired and Opted out as the other ways the SMS part can end.
 | Status | Tab | Condition |
 |---|---|---|
 | `opted_out` | Opted out | On `dnc_list`, or newest conversation `suppressed` |
-| `closed` | Closed | An agent pressed Closed, and nothing has reopened it since: no unread text from the lead, no callback booked after it, no missed call from them that nobody has returned (2026-10-01) |
-| `working` | Working | An agent holds it, or has left any trace on it: a note, a callback, a disposition, a call, or an SMS of their own |
+| `closed` | Closed | An agent pressed Closed, and nothing has reopened it since: no unread text from the lead, no callback booked after it, no missed call from them that nobody has got back to (2026-10-01) |
+| `working` | Working | An agent holds it, or has left any trace on it: a note, a callback, a disposition, a call they placed or answered, or an SMS of their own. A missed incoming call is the lead's doing, not a trace - though the callback it books for an agent is one |
 | `needs_review` | Needs review | Conversation `review` |
 | `ready` | Ready | Conversation `completed` - answered all three - and no agent has touched it |
 | `expired` | Expired | Conversation `expired` |
@@ -94,6 +95,11 @@ that day it read Closed the moment its reply was read, while the queue showed
 "Working – Maya". A lead with an active holder is never closed
 (`db/lead-state.ts`); saving an outcome releases it, and it reads Closed again.
 
+**A closed lead that rings and gets no answer is Working again** - 2026-10-01 -
+until someone gets back to them: a call, a text, answering when they ring
+again, or a new outcome (`TWILIO.md`, "A missed call"). Then it is Closed once
+more.
+
 **A callback booked after closing makes it Working again**, until the callback
 is done. One booked before closing is marked done by the close itself
 (2026-09-29), and Wrap up does not allow one in the same Save.
@@ -108,8 +114,9 @@ between. Those details are the timeline's, not the status's.
 clears `assigned_to` and `assigned_at`, so no trace is left and the lead is
 Ready again. That is deliberate: nothing happened to it.
 
-**Not Working:** a claim by a deactivated agent (the queue ignores it too), and
-our own automated messages - only an SMS with `sent_by` set is an agent's.
+**Not Working:** a claim by a deactivated agent (the queue ignores it too), our
+own automated messages - only an SMS with `sent_by` set is an agent's - and an
+incoming call nobody answered, taken by itself.
 
 **The status follows the conversation, not the message log.** A lead who has
 answered moves to `answering` or `ready` because the state machine
@@ -176,7 +183,9 @@ finds `+16026203572`.
 `scripts/admin-leads-live-check.ts` proves the statuses against a real
 database: every SMS status, each kind of agent trace on its own, Closed and a
 lead closed under a retired value, reopening by a later callback or a text,
-and the tab counts. Last run 2026-09-28: 22 checks, all passing.
+and the tab counts - 30 checks as of 2026-10-01, all passing. A missed call
+reopening a closed lead, and an outcome settling it, are in
+`scripts/calls-live-check.ts`.
 
 Score and tier are the running values, returned at every stage. Scoring starts
 at the first reply, so a lead part-way through has a real score - 10 for

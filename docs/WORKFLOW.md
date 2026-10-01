@@ -35,6 +35,7 @@ cd backend && npx tsc --noEmit    # must be clean
 npm test                          # must pass
 npm run lint                      # must pass - ESLint for the backend
 cd ../frontend && npm run build   # type-checks and builds the frontend
+npm test                          # must pass - Vitest
 npm run lint                      # ESLint for the frontend
 cd ..
 docker compose build api worker   # catches what a local node_modules hides
@@ -93,6 +94,12 @@ not run it again - the runner remembers files by name. A local database that
 ran the old 003 but never 004 misses the second part; rebuild it, or run the
 second part's SQL there once.
 
+*(The `004` on disk today, `004_conversation_completed_at.sql`, is a later and
+unrelated file. As of 2026-10-01 the files are 001 to 008: `main` holds 001 to
+005, and 006 to 008 - the activity log, incoming calls, and the callback a
+missed call books - are on `dev`. `npm run migrate` applies whatever the
+database has not run, in order.)*
+
 Run migrations through `npm run migrate`, not by piping SQL into psql.
 Piping applies the schema without recording it, so the runner will try to apply
 the same file again later and fail.
@@ -112,9 +119,12 @@ docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
 docker compose exec api npm run migrate
 ```
 
-**If `PUBLIC_URL` or the Twilio settings changed,** also run
-`docker compose exec api npm run twilio:configure`, which points the TwiML App
-at this server - `TWILIO.md`, "Deploying it".
+**Calling: run `docker compose exec api npm run twilio:configure`** on the
+first deploy that has calling, whenever `PUBLIC_URL` or a Twilio setting
+changes, and after anyone has run it locally against the same number - the
+phone number rings only one deployment. It points the TwiML App and the phone
+number at this server, and refuses a number that rings somewhere else unless
+`--take-over` is passed. `TWILIO.md`, "Deploying it".
 
 **`docker compose logs` returns nothing on the server.** The production
 override sets the `awslogs` log driver on api, worker and caddy, so container
@@ -145,9 +155,11 @@ prints a one-time temporary password:
 docker compose exec api npm run create-superadmin -- you@example.com "Your Name"
 ```
 
-The API refuses to start in production if `JWT_SECRET` in the server's `.env`
-is a placeholder or shorter than 32 characters. Generate one with
-`openssl rand -hex 32`.
+The API refuses to start in production on any of three things, logging
+`api.refused_start` with the `reason` (`api/startup-checks.ts`): `JWT_SECRET`
+a placeholder or shorter than 32 characters - generate one with
+`openssl rand -hex 32`; `EZT_WEBHOOK_TOKEN` missing or shorter than 16; or the
+seven Twilio settings only partly set - all or none.
 
 Production runs compiled `dist/`, not ts-node. The `caddy` service is built
 from `frontend/Dockerfile`, which compiles the React app and copies it into the

@@ -51,8 +51,9 @@ it.
 | `sms.sent`, `sms.failed`, `sms.blocked` | An agent's own text. `blocked` leaves no message row, so the log is its only record | `messageId`, `tookOver` |
 | `call.started`, `call.ended`, `call.refused` | A call. A refused call leaves no `calls` row, so the log is its only record | `callSid`, `outcome`, `durationSec`, `reason` |
 | `call.incoming` | A lead rings our number and an agent is rung - the subject is that agent. From a number we hold no lead for there is no `calls` row, so the log is its only record | `callId`, `callSid`; for an unknown number, `phone` and `known: false` |
-| `call.missed` | An incoming call nobody answered | `callId`, `callSid`, and `because: 'no_agent'` when there was nobody to ring |
-| `dnc.blocked`, `dnc.released` | A number is blocked or released, by a STOP, a START or an agent | `phone`, `reason`, and `previous` - what the row said before a re-block overwrote it |
+| `call.missed` | An incoming call nobody answered. The subject is the agent it rang | `callId`, `callSid`; `direction`, `outcome`, `durationSec` when a ring went unanswered; `because: 'no_agent'` when there was nobody to ring |
+| `dnc.blocked` | A number is blocked, by a STOP reply or an agent's DNC outcome | `phone`, `reason`, and `previous` - what the row said before a re-block overwrote it |
+| `dnc.released` | A block is lifted, by a START reply - the only thing that releases one | `phone`, `releaseReason`, `blockReason`, `blockedAt` |
 | `auth.signed_in`, `auth.signed_out`, `auth.password_changed` | | |
 | `auth.sign_in_failed` | A refused sign-in | The `email` tried and `why`. Never the password |
 | `user.created`, `user.updated`, `user.password_reset` | A superadmin changes an agent's account | `changes`: each field as `{ from, to }`. Never a password |
@@ -74,7 +75,9 @@ or miss something that was not. So:
   in that same statement (`db/claims.ts`), and the race rule is unchanged -
   `scripts/claims-live-check.ts` still passes.
 - **The same transaction** where the action is several statements: an outcome
-  (`db/dispositions.ts`), an agent's text, starting a call.
+  (`db/dispositions.ts`), an agent's text, starting a call, a lead calling in.
+  The end of a call is one statement that writes the call's end, the callback
+  a missed call books, and all three records (`db/calls.ts`, `finishCall`).
 - **Sign-ins and account changes** go through `deps.activity` in the routes.
   These are written just after the change, not atomically with it - the user
   store is an interface the tests replace.
@@ -153,7 +156,10 @@ labelled `LOG`:
 - "Call not placed - the lead was not picked up"
 
 Notes, outcomes, calls and booked callbacks are already on the timeline from
-their own tables and are not repeated. The workspace conversation does not show
+their own tables and are not repeated. That includes an incoming or missed
+call, and the callback the system books for one ("Callback added · missed
+call", then "Missed call returned") - `call.incoming`, `call.missed` and
+`callback.done` are in the log, not shown as `LOG` entries. The workspace conversation does not show
 `LOG` entries: it stays the text thread.
 
 Everything else in the log - sign-ins, account changes, DNC history - is in the
@@ -161,6 +167,11 @@ database and has no screen yet.
 
 ## What this does not cover
 
+- **The poller's block.** A contact that arrives already opted out on EZ
+  Texting is put on `dnc_list` by the poller's own insert, not through
+  `db/dnc.ts`, so it leaves no `dnc.blocked` row. The block is in `dnc_list`
+  with reason `ezt_opt_out`; that it happened, and when, is not in the log.
+  A known gap - `POLLER.md`.
 - **Call audio.** No recording. Awaiting Jeel's decision; some US states need
   everyone on the call to consent.
 - **Backups.** The log protects against the app and against edits. It does not
@@ -181,6 +192,8 @@ database and has no screen yet.
 | What | Where |
 |---|---|
 | Every action leaves its record; nothing is recorded when nothing changed; the log and the archive refuse edits and deletes; a lead with history cannot be deleted | `scripts/activity-live-check.ts` |
+| Calls: `call.incoming`, `call.missed`, the callback the system books and what finishes it (`called_back`, `answered`) | `scripts/calls-live-check.ts` |
+| `callback.done` with `texted_back` | `scripts/agent-sms-live-check.ts` |
 | The claim race still holds with the record in the statement | `scripts/claims-live-check.ts` |
 | Sign-ins, failures and account changes, and that no password is ever recorded | `src/api/__tests__/activity.test.ts` |
 | The archive: kept for an ignored request, not kept for a wrong token | `src/api/__tests__/webhooks.test.ts`, `calls.test.ts` |

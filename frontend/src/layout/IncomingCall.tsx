@@ -34,7 +34,9 @@ import { questionsLabel } from '../pages/workspace/LeadHeader';
  *   accepted  the ordinary call bar at the foot of the screen, then its note
  *             box - `CallBar.tsx`
  *   missed    a small notice in the same corner: "Missed call · Leo M. ·
- *             Rang for 20s", with Call back
+ *             Rang for 20s", with Call back. It does not say the lead was
+ *             texted: a blocked number, or EZ Texting refusing, means they
+ *             were not
  *
  * Mounted once, in the app shell, and it is also what makes this browser
  * ringable: it starts listening when someone is signed in and stops when they
@@ -134,7 +136,7 @@ export function IncomingCall() {
       </span>
       <div className="incoming__missed-text">
         <p className="incoming__missed-title">Missed call · {shownName(caller)}</p>
-        <p className="incoming__missed-meta">Rang for {state.rangSeconds}s · texted that we will call back</p>
+        <p className="incoming__missed-meta">Rang for {state.rangSeconds}s</p>
       </div>
       {caller.id > 0 && (
         <button type="button" className="incoming__button incoming__button--navy" onClick={() => void callBack()}>

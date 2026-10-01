@@ -44,13 +44,13 @@ Role is set at login. Navigation adapts to role.
 **App shell**
 - Top bar, 56px, full width: product mark left ("SM Call Center"), primary nav center, status indicators + user menu right.
 - Primary nav items: **Queue**, **My Callbacks**, **Admin** (superadmin only).
-- Status indicators (right side): EZ Texting connection (green dot / red dot + label), Twilio connection (green dot / red dot + label), current agent name with avatar initial and role badge.
+- Status indicators (right side): EZ Texting connection (green dot / red dot + label), Twilio connection (green dot / red dot + label), current agent name with avatar initial and role badge. *(2026-10-01, as built: the app bar has only the user menu - name and role in plain text. No connection dots; system status is on Admin > Overview.)*
 - No left sidebar. Content is full-width below the top bar with a max content width of ~1440px, centred.
 
 **Global components**
-- Toast notifications (bottom-right): new HOT lead arrived, SMS sent, call ended, save confirmed, errors.
+- Toast notifications (bottom-right): new HOT lead arrived, SMS sent, call ended, save confirmed, errors. *(2026-10-01, as built: no toasts. A save is confirmed in place; the one corner notice is the incoming-call card and its Missed call notice, top right.)*
 - Confirm dialog (destructive actions: mark DNC, deactivate agent, recalculate scores).
-- Keyboard shortcuts overlay (`?`): agents will live on the keyboard.
+- Keyboard shortcuts overlay (`?`): agents will live on the keyboard. *(2026-10-01, as built: not built. The only keys handled are Enter in the message box and Escape to close a menu or dialog.)*
 
 ---
 
@@ -70,7 +70,7 @@ Role is set at login. Navigation adapts to role.
 
 **Header row**
 - Three tier counters as pill-buttons that also act as filters: `HOT 4`, `WARM 7`, `LOW 12`. Selected state shows which tiers are visible. *(2026-09-28, Jeel's mockup: one segmented switcher - **All · Hot · Warm · Low**, each with its count - and one choice at a time, not several. The filters and the table sit together in one card.)*
-- Filters: **Source** (multi-select dropdown: e.g. CORE-G-27, CORE-G-31), **Time window** (Last 1h / 24h / 7d / All).
+- Filters: **Source** (multi-select dropdown: e.g. CORE-G-27, CORE-G-31), **Time window** (Last 1h / 24h / 7d / All). *(2026-10-01, as built: Source is a single-choice dropdown, here and on Admin > Leads.)*
 - Search box: name or phone.
 - "Live" indicator with last-updated timestamp.
 
@@ -94,16 +94,16 @@ Role is set at login. Navigation adapts to role.
    - `Inbound reply` (lead texted after conversation ended – unread indicator)
    - `Seen before, stopped at Q2` (resold lead with history) - *2026-09-19: does not occur until repeat-lead handling is built, a future item.*
 
-   *(2026-09-28, Jeel: only three of these are shown - `Working – {agent name}` (renamed from In progress, to match Admin > Leads), `Inbound reply` and `Needs review`. Any other row shows `-`. `New`, `Attempted` and `Callback` are dropped: that history is the working agent's to remember, on My Callbacks and the lead's timeline, and on the home page it made every row say something. `QUEUE.md`, "The tag".)* *(2026-09-29, Jeel: `Callback – {agent name} · {time}` is back, naming whose call it is, so another agent does not call first. Four statuses in all.)*
-11. **Actions** – "Open" button; on hover, quick "Call" and "SMS" icons. *(2026-09-28, Jeel: the button is **Pick**, not Open. Clicking it assigns the lead to the agent - `leads.assigned_to` - and "Open" said nothing about that, so an agent could take a lead without realising they had. It has four states, since "may click" and "may claim" are different questions: **Pick** when nobody holds it, **Resume** when you do, **View** when a superadmin looks at someone else's, and no button at all for an agent on someone else's. `QUEUE.md`, "What the button offers". Same wording on the My Callbacks row and the Lead Timeline header, which claim the same way.)*
+   *(2026-09-28, Jeel: only three of these are shown - `Working – {agent name}` (renamed from In progress, to match Admin > Leads), `Inbound reply` and `Needs review`. Any other row shows `-`. `New`, `Attempted` and `Callback` are dropped: that history is the working agent's to remember, on My Callbacks and the lead's timeline, and on the home page it made every row say something. `QUEUE.md`, "The tag".)* *(2026-09-29, Jeel: `Callback – {agent name} · {time}` is back, naming whose call it is, so another agent does not call first. Four statuses in all.)* *(2026-10-01: a fifth, `Missed call` - the lead rang our number and nobody answered. Bold, ranks second after Working, and stays until someone gets back to them. `TWILIO.md`, "A missed call".)*
+11. **Actions** – "Open" button; on hover, quick "Call" and "SMS" icons. *(2026-09-28, Jeel: the button is **Pick**, not Open. Clicking it assigns the lead to the agent - `leads.assigned_to` - and "Open" said nothing about that, so an agent could take a lead without realising they had. It has four states, since "may click" and "may claim" are different questions: **Pick** when nobody holds it, **Resume** when you do, **View** when a superadmin looks at someone else's, and no button at all for an agent on someone else's. `QUEUE.md`, "What the button offers". Same wording on the My Callbacks row and the Lead Timeline header, which claim the same way.)* *(Renamed **Pick up** later the same day, on every screen that picks.)*
 
 **Row behaviour**
 - Click row → opens Agent Workspace for that lead. *(2026-09-28, Jeel: no - opening a lead must not assign it. A row click opens the same Agent Workspace, read-only: actions switched off, with Pick at the top; only the **Pick** button assigns the lead. The row click used to pick, so an agent glancing at a lead took it and locked everyone else out without meaning to.)*
 - Locked rows (In progress by another agent) are visually muted and not clickable, with a tooltip.
-- New rows animate in at their sorted position.
-- Rows with `Inbound reply` show a small unread dot.
+- New rows animate in at their sorted position. *(2026-10-01, as built: only Admin > Leads highlights a new row; the queue does not animate.)*
+- Rows with `Inbound reply` show a small unread dot. *(2026-10-01, as built: no dot - an icon, and the words in bold. Missed call is bold the same way.)*
 
-**States:** loading skeleton, empty ("No leads in this view"), connection lost banner ("Live updates paused – reconnecting").
+**States:** loading skeleton, empty ("No leads in this view"), connection lost banner ("Live updates paused – reconnecting"). *(2026-10-01, as built: a spinner, not a skeleton, except on Admin > Agents.)*
 
 ### 3. Agent Workspace (single lead)
 
@@ -125,7 +125,7 @@ Role is set at login. Navigation adapts to role.
 - "Back to queue" and "Next lead" links at the top.
 
 **Actions panel**
-- **CALL** button (primary, large). States:
+- **CALL** button (primary, large). States: *(2026-10-01, as built: built. A Call button in the lead header; the call itself is a bar docked at the foot of the screen - who, clock, Mute, Keypad, End - which becomes a note box when the call ends. The button is off, with the reason as a tooltip, when the number is blocked, calling is not set up, or the lead is not picked up. There is no "Twilio disconnected" state and no auto-filled outcome. A lead calling in - not in this brief - is a card in the top right corner on every screen, with a Missed call notice if nobody picks up. `TWILIO.md`.)*
   - Idle: "Call (602) 555-0142"
   - Connecting: spinner, "Connecting…"
   - Active: green state, live timer `00:00`, Mute, Hang up. Shows "Calling from (480) 555-0100 · browser call".
@@ -147,7 +147,7 @@ Role is set at login. Navigation adapts to role.
 - Timestamps right-aligned; day separators.
 
 **Right column**
-- **Note** – textarea, auto-saves draft, "Add note".
+- **Note** – textarea, auto-saves draft, "Add note". *(2026-10-01, as built: no draft auto-save; the note is saved with Save, or from the call bar's note box after a call.)*
 - **Callback** – date + time picker, quick chips (In 1h / Tomorrow 10am / Tomorrow 3pm), "Assign to" (defaults to me; superadmin can pick any agent).
 - **Disposition** – single-select as a segmented/radio group: `Interested` · `Callback set` · `No answer` · `Voicemail` · `Not interested` · `Wrong number` · `DNC`. DNC requires confirm dialog and shows a red warning ("Suppresses this number for SMS and calls everywhere"). *(2026-09-28, Jeel: two outcomes only - **Closed** and **DNC** - then the callback and the note. Closed takes the lead out of the queue; "no answer" or "call back Friday" goes in the note or a callback. `AGENT-WORKSPACE.md`, "Dispositions".)*
 - **Save** and **Save & next lead** (primary). Save & next loads the next highest lead automatically. *(2026-09-28, Jeel: Save & next is dropped - Save only, and the agent leaves with Back to queue. `FRONTEND.md`, "One button".)*
@@ -157,7 +157,7 @@ Role is set at login. Navigation adapts to role.
 
 **Purpose:** full history of one lead, opened from the queue, a callback, or a report. Same timeline component as the workspace, but full-width with a summary sidebar.
 
-**Header:** name, tier + score, state · phone · source, Call and SMS buttons (open the workspace).
+**Header:** name, tier + score, state · phone · source, Call and SMS buttons (open the workspace). *(2026-10-01, as built: the timeline page's header has one button - Pick up or Resume - or a "Held by name" badge; calling and texting are done from the workspace.)*
 
 **Timeline:** as above, full history across all lead records for this phone (resold leads show earlier history in a collapsed "Previous lead – Jun 2026" section).
 
@@ -173,6 +173,8 @@ Role is set at login. Navigation adapts to role.
 
 ### 5. My Callbacks
 
+*(As built, 2026-09-28: one card with a Today · Upcoming · Overdue · All switcher and counts; columns Due, Lead (phone under the name), Tier, Agent (when viewing all agents) and Last note; Pick up / Resume / View beside a "⋯" holding Reschedule and Mark done; an overdue callback is flagged in amber, not a tinted row. 2026-10-01: a missed call is a row too - "Missed call" or "Missed 3 calls", under Today - booked by the system for the agent the call rang. `FRONTEND.md`, "My Callbacks".)*
+
 **Purpose:** the agent's scheduled callbacks.
 
 - Tabs: **Today** · **Upcoming** · **Overdue** (overdue count as a red badge)
@@ -182,7 +184,7 @@ Role is set at login. Navigation adapts to role.
 
 ### 6. Admin (superadmin only)
 
-Left sub-navigation within the page: **Overview** · **Leads** · **Scoring** · **Messages** · **Agents** · **DNC list** · **Settings**.
+Left sub-navigation within the page: **Overview** · **Leads** · **Scoring** · **Messages** · **Agents** · **DNC list** · **Settings**. *(2026-10-01, as built: Overview · Leads · Agents · Configuration · DNC list. Scoring and Messages are one read-only Configuration page; Settings is not built.)*
 
 **6a. Overview**
 - KPI cards for the selected period (Today / 7d / 30d): Leads received, Responded %, Completed %, HOT count, Calls made, Reached %, Callbacks set, DNC added.
@@ -208,7 +210,7 @@ Left sub-navigation within the page: **Overview** · **Leads** · **Scoring** ·
 
 **6c. Messages (SMS copy)**
 
-*(2026-09-23, Jeel: read-only, and shown on the same Configuration page as the score table. The copy is displayed with its character and segment counts; nothing is editable, so the placeholder chips and the editing affordances below do not apply. The phone-frame preview is still worth having.)*
+*(2026-09-23, Jeel: read-only, and shown on the same Configuration page as the score table. The copy is displayed with its character and segment counts; nothing is editable, so the placeholder chips and the editing affordances below do not apply. The phone-frame preview is still worth having.)* *(2026-10-01: nine messages are listed - the ninth is the text sent after a call to us that nobody answered, migration 007.)*
 - Editable text for: Opener (Q1), Q2, Q3, Completion message, Clarification message, Review message, STOP confirmation.
 - *Update 2026-09-19:* the clarification is three messages, one per question, each repeating that question's options - edit them as three fields. The STOP confirmation is sent by EZ Texting, not by this app, so it is not editable here; show it read-only with that explanation or leave it out. See `docs/STATE-MACHINE.md`.
 - Each field shows live character count and segment count; warning when over the configured limit (130 or 160).
@@ -223,13 +225,13 @@ Left sub-navigation within the page: **Overview** · **Leads** · **Scoring** ·
 **6e. DNC list**
 
 *(2026-09-23, Jeel: read-only - no manual add. A number is blocked by an agent's DNC disposition, an SMS STOP or an EZ Texting opt-out. The list must show rows released by START as released, not hide them.)*
-- Table: Phone, Reason (SMS STOP / Agent DNC / Imported), Added by, Date.
+- Table: Phone, Reason (SMS STOP / Agent DNC / Imported), Added by, Date. *(2026-10-01, as built: the columns are Lead, Reason, Added and State. There is no "Added by" - the agent behind a DNC outcome is in the activity log - and Export CSV is not built.)*
 - Search by phone. Add manually. Export CSV. *(2026-09-28: the page is built in the other admin pages' card style, with the navy All / Blocked / Released switcher - `ADMIN.md`, "DNC list".)*
 - No delete in v1 (compliance) – show a note explaining this.
 
 **6f. Settings**
 
-*(2026-09-23, Jeel: not built. Conversation expiry stays 7 days and is shown on the Configuration page; delivery type, lead group, poll interval and the Twilio caller ID stay environment variables.)*
+*(2026-09-23, Jeel: not built. Conversation expiry stays 7 days and is shown on the Configuration page; delivery type, lead group, poll interval and the Twilio caller ID stay environment variables.)* *(Corrected 2026-10-01: the lead group and the Twilio caller ID are environment variables; the poll interval is a `settings` row, 30 seconds since migration 005; the segment limit is a constant, 160.)*
 - Conversation expiry (days, default 7).
 - Delivery type (Standard 130 / Express 160) – affects message limits.
 - Lead group filter (EZ Texting group name to poll).
@@ -285,7 +287,7 @@ Left sub-navigation within the page: **Overview** · **Leads** · **Scoring** ·
 
 ## Interaction details that matter
 
-- Every table row is keyboard-navigable (↑ ↓ Enter).
+- Every table row is keyboard-navigable (↑ ↓ Enter). *(2026-10-01, as built: not built; rows are reached with Tab like any other control.)*
 - In the workspace: `C` = call, `S` = SMS, `N` = note, `1–7` = disposition, `Cmd/Ctrl+Enter` = Save & next *(dropped with the button, 2026-09-28)*.
 - Ticking timers must not cause layout shift – fixed-width tabular numbers.
 - When a lead gets locked by another agent while you're viewing the queue, its row updates in place with the tag – no full refresh.

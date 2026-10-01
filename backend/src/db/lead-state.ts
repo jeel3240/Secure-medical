@@ -45,6 +45,15 @@ const closingList = CLOSING_DISPOSITIONS.map((value) => {
  * ends. If that call ends unanswered it is a missed call itself, and the flag
  * is back. Only a recent one counts, so a row whose end Twilio never reported
  * cannot hide a missed call for good.
+ *
+ * **An outcome settles it too** - found in the doc review the same day. An
+ * agent who saves Closed or DNC after the missed call has decided what happens
+ * to the lead; without this the lead stayed in the queue as Missed call and
+ * read Working, while its callback was already finished by the outcome. The
+ * rule since 2026-09-29: a closed lead leaves the queue.
+ *
+ * **A text EZ Texting refused does not count.** It never reached the lead, so
+ * nobody has got back to them.
  */
 export const MISSED_CALL_SQL = `(
   EXISTS (
@@ -62,6 +71,11 @@ export const MISSED_CALL_SQL = `(
       AND NOT EXISTS (
         SELECT 1 FROM messages am
         WHERE am.lead_id = l.id AND am.sent_by IS NOT NULL AND am.created_at > mc.created_at
+          AND am.delivery_status IS DISTINCT FROM 'failed'
+      )
+      AND NOT EXISTS (
+        SELECT 1 FROM dispositions od
+        WHERE od.lead_id = l.id AND od.created_at > mc.created_at
       )
   )
 )`;

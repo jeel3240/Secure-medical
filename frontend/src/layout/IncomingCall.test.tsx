@@ -237,7 +237,7 @@ describe('nobody picked up', () => {
     act(() => twilio!.onRingOver(ring));
 
     expect(screen.getByText('Missed call · Priya S.')).toBeDefined();
-    expect(screen.getByText(/^Rang for \d+s · texted that we will call back$/)).toBeDefined();
+    expect(screen.getByText(/^Rang for \d+s$/)).toBeDefined();
     expect(screen.queryByRole('button', { name: 'Accept' })).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: 'Dismiss' }));
     expect(screen.queryByText(/Missed call/)).toBeNull();
