@@ -1,7 +1,8 @@
 # Database schema
 
-`backend/src/db/migrations/001_init.sql` is the source of truth for exact
-columns, types and constraints. This explains what the tables are for and the
+The migrations in `backend/src/db/migrations/` - `001` to `008`, in order -
+are the source of truth for exact columns, types and constraints. `001_init.sql`
+is the starting schema; the seven after it add columns, tables and constraints. This explains what the tables are for and the
 parts that are not obvious from reading the SQL.
 
 Migrations are plain numbered `.sql` files run by `backend/scripts/migrate.js`,
@@ -27,14 +28,14 @@ the RDS CA bundle if strict verification is ever wanted.
 
 | Table | Holds |
 |---|---|
-| `users` | Agents and superadmins. bcrypt hash, role, active flag, last sign-in, session version. |
+| `users` | Agents and superadmins. bcrypt hash, role, active flag, must-change-password flag, last sign-in, session version. |
 | `leads` | One person, pulled from EZ Texting. |
 | `conversations` | The 3-question SMS flow for a lead, plus its score and tier. |
 | `messages` | Every SMS in or out. |
-| `calls` | Twilio calls, with duration and outcome. Written since Phase 4 - `TWILIO.md`, "What is saved". `direction` says who called whom; an incoming call that rang nobody has no `agent_id` (migration 007). |
+| `calls` | Twilio calls, with duration and outcome. Written since Phase 4 - `TWILIO.md`, "What is saved". `direction` says who called whom. `twilio_call_sid` is the call's first leg: the browser's for a call we placed, the lead's for one we received. An incoming call that rang nobody has no `agent_id`; an outgoing one always has - the `calls_outbound_has_agent` check (migration 007). |
 | `dispositions` | What an agent decided after contact. |
 | `notes` | Free text an agent wrote about a lead. |
-| `callbacks` | Scheduled follow-ups. `reason` is `booked` - a person booked it - or `missed_call`, booked by the system for the agent a missed call rang (migration 008). |
+| `callbacks` | Scheduled follow-ups. `reason` is `booked` - a person booked it - or `missed_call`, booked by the system for the agent a missed call rang (migration 008). One open `missed_call` callback per lead is a rule in the SQL that books it (`db/calls.ts`), not a constraint; the partial index `idx_callbacks_open_missed_call` serves that lookup. |
 | `dnc_list` | Phones that must never be contacted. |
 | `settings` | Key/value config, admin-editable. |
 | `scoring_rules` | Points per answer, admin-editable. |
@@ -75,14 +76,14 @@ blocked and when, if they are ever asked to prove it.
 A block is lifted by filling in `released_at` and `released_reason`
 (`002_dnc_release.sql`), not by deleting the row, so both dates survive. **Only
 a row with `released_at IS NULL` blocks anything**; every read - the poller,
-`sendMessage`, the Admin > Leads status - filters on it. Today the only thing
+`sendMessage`, the Admin > Leads status, placing a call, and the callback a
+missed call would book - filters on it. Today the only thing
 that releases a row is a lead texting START; see STATE-MACHINE.md, "Opting back
 in".
 
-It has no `added_by` yet. The Admin > DNC list page in the design brief shows
-who added each number, which only matters once an agent can mark a number DNC
-after a call. That column arrives in Week 4 with the agent DNC disposition,
-alongside a third `reason` value for it.
+It has no `added_by`, and none is planned. An agent can now mark a number DNC
+(reason `agent_disposition`); who did is the actor of the `dnc.blocked` row in
+`activity_log` (`AUDIT.md`), not a column here.
 
 **A `dnc_list` row needs no lead.** The webhook writes one for a STOP from a
 number we hold no lead for, because the subscription covers the whole EZ Texting
@@ -164,22 +165,25 @@ a lead off someone who stepped away, and manual reassignment is enough.
 `assigned_at` is still needed so a superadmin can tell a lead claimed two
 minutes ago from one held since last week - without it both look identical.
 
-*(2026-09-22: designed, not built. The columns exist and the queue query reads
-`assigned_to` to tag a lead In progress, but nothing writes either one -
-claiming is Week 3.)*
+*(Built in Phase 3: `db/claims.ts` sets both on Pick up and clears both on
+release.)*
 
-A released lead carries no marker. Context comes from the timeline, which
-already shows calls, messages, notes and dispositions for the lead. A lead that
+A released lead carries no marker on its row. The release itself - who held it,
+since when, and whether it was forced - is a `lead.released` row in
+`activity_log` and a line on the timeline, beside the calls, messages, notes
+and dispositions. A lead that
 is genuinely bad should get a disposition rather than being released.
 
-**Four columns are unconstrained free text.** Every other categorical column has
-a CHECK; these do not, because their permitted values are not settled yet:
+**Four columns are unconstrained free text** among the tables agents work
+with; the others have a CHECK. (`activity_log.action`, `webhook_events.source`
+and `dnc_list.released_reason` are free text too - their values are fixed in
+code: `core/activity.ts`, `db/activity.ts`, `db/dnc.ts`.)
 
 | Column | Written by | Status |
 |---|---|---|
 | `dispositions.value` | Agent, Phase 3 | The seven values are listed in `DESIGN-PROMPT.md` section 3: Interested, Callback set, No answer, Voicemail, Not interested, Wrong number, DNC. *(2026-09-23: they did not have to come from Jeel after all - the design brief already had them.)* *(2026-09-28: new rows are `closed` or `dnc` only; the seven above are retired, and old rows keep them - `core/dispositions.ts`. No migration: the column has no constraint to change.)* |
 | `calls.outcome` | Twilio's end-of-call callback, Phase 4 | `answered`, `no_answer`, `busy`, `failed`, `canceled` - mapped from Twilio's statuses in `core/calls.ts` - and `missed`, for an incoming call nobody answered. Null while a call is in progress. No constraint on the column. |
-| `dnc_list.reason` | Poller and webhook | Poller writes `ezt_opt_out` for a contact already opted out in EZ Texting; the webhook writes `sms_stop` for a STOP reply. An agent DNC disposition adds `agent_dnc` in Phase 3 - `AGENT-WORKSPACE.md`. |
+| `dnc_list.reason` | Poller, webhook and the DNC outcome | Poller writes `ezt_opt_out` for a contact already opted out in EZ Texting; the webhook writes `sms_stop` for a STOP reply. An agent's DNC outcome writes `agent_disposition` (`db/dnc.ts`), since Phase 3 - `AGENT-WORKSPACE.md`. |
 | `messages.delivery_status` | Send path | Whatever EZ Texting returns. Unverified - we have never read a delivery status back. *(2026-09-28: we write two values. `failed` - a send EZ Texting refused, with no `ezt_message_id`. `sending` - an automated text between its row being written and EZ Texting's id being recorded, `db/outbound.ts`; it stays `sending` only if the write after a successful send failed, and counts as sent. Everything else is NULL.)* |
 
 Each should get a CHECK once its values are known. Until then anything is
@@ -204,8 +208,9 @@ STATE-MACHINE.md rule 2b is the authority.
 It is a timestamp rather than a boolean because the timeline has to show when
 the handoff happened, and deliberately not a status - the conversation keeps the
 one it had, so the queue tabs, Admin > Leads and expiry are all unaffected.
-Opt-out is checked before it and is unaffected either way. Added in `003`; the
-column is unused until the agent SMS endpoint exists (Phase 3 task 9).
+Opt-out is checked before it and is unaffected either way. Added in `003`; set by
+`db/agent-sms.ts` on an agent's first text to a lead whose conversation is
+still open, and read by the reply flow and the lead card.
 
 **`conversations.completed_at`** - migration `004`, 2026-09-28 - is when the
 lead's third answer arrived. `api/reply-flow.ts` stamps it the first time the
@@ -230,9 +235,13 @@ object to in a first message.
 from the mockup: Responded +10, Completed +10, Q1 5/10/15, Q2 30/20/5,
 Q3 35/25/10, and HOT 75-100 / WARM 45-74 / LOW 1-44. It also seeds the question
 and reply copy, the 60s poll interval (30s since migration 005) and the 5 minute poll overlap.
+Migration 007 adds one more message, `message_missed_call`: the text sent after
+a call to us that nobody answered.
 
-All three tables are meant to be edited by a superadmin at runtime, so treat
-the seeds as starting values rather than constants.
+All three tables were meant to be edited by a superadmin at runtime. They are
+not: since 2026-09-23 Admin shows them and a migration changes them
+(CLAUDE.md §10). The worker and the state machine still read them on every
+use, so a migration takes effect without a restart.
 
 ### LOW is mostly for partial conversations
 
