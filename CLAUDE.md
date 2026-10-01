@@ -294,12 +294,12 @@ is local only; production layers `docker-compose.prod.yml` on top of it.
 Rule: **only one `open` conversation per phone number, ever.**
 
 **As built, 2026-09-14.** The migrations in `backend/src/db/migrations/` - 001
-to 008 as of 2026-10-01 - are the source of truth and `docs/SCHEMA.md` explains
+to 009 as of 2026-10-01 - are the source of truth and `docs/SCHEMA.md` explains
 them. It differs from the list above:
 
 - **users** also has `session_version` and `last_login_at`.
 - **leads** has `group_id`, `group_name` and `ezt_added_at` instead of `group` and `ezt_contact_id`; EZ Texting returns no contact id.
-- **conversations** also has `agent_took_over_at` (003) and `completed_at` (004).
+- **conversations** also has `agent_took_over_at` (003), `completed_at` (004), and `q1_label` to `q3_label` (009): the word the lead chose, kept with the number, so renaming a choice never renames an earlier answer.
 - **dnc_list** also has `released_at` and `released_reason` (002): a block is lifted, never deleted.
 - **settings** gained `message_missed_call` (007); `poll_interval_seconds` is 30 since 005.
 - **messages** also has `in_reply_to_ezt_id`, `from_number` and `received_at`; `ezt_message_id` is unique for outbound only.
@@ -528,7 +528,7 @@ retry, the end-to-end script, and a README with how to test and known limits.
 - **Source always reads "API" in production** - it is how the contact was
   added to EZ Texting, not which partner sent it. Keep the column, or find the
   partner elsewhere.
-- **Deploy:** `npm run migrate` applies whatever the server has not run, up to 008. `main` holds 001 to 005, so a deploy of today's `dev` adds 006 to 008 (005, 2026-09-29: poll every 30s; 006, 2026-10-01: the activity log, the raw webhook archive, and leads that cannot be deleted - `docs/AUDIT.md`; 007 and 008, the same day: incoming calls and the callback a missed call books - `docs/TWILIO.md`). Calling also needs the seven Twilio settings - all or none, a partly set group stops the API starting - and `npm run twilio:configure` run on the server, last: the phone number rings only one deployment. Production also needs `EZT_WEBHOOK_TOKEN` set, or the API will not start - it is already set there.
+- **Deploy:** `npm run migrate` applies whatever the server has not run, up to 009. `main` holds 001 to 005, so a deploy of today's `dev` adds 006 to 009 (009: the word kept with each answer - `docs/STATE-MACHINE.md`; 005, 2026-09-29: poll every 30s; 006, 2026-10-01: the activity log, the raw webhook archive, and leads that cannot be deleted - `docs/AUDIT.md`; 007 and 008, the same day: incoming calls and the callback a missed call books - `docs/TWILIO.md`). Calling also needs the seven Twilio settings - all or none, a partly set group stops the API starting - and `npm run twilio:configure` run on the server, last: the phone number rings only one deployment. Production also needs `EZT_WEBHOOK_TOKEN` set, or the API will not start - it is already set there.
 
 Task 29 found nothing to fix in the app: all three bugs the end-to-end script
 surfaced were in the script itself. Two apparent failures were the app being

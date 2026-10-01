@@ -553,6 +553,11 @@ with a contact (`EZTEXTING-API.md`), so every row would read "-" forever. Left
 out rather than given permanent space in a table the brief asks to keep dense.
 Decided 2026-09-26. It goes back in if the partner ever sends state.
 
+**The queue's answer words come from the server** since 2026-10-01 -
+`q1Label` to `q3Label`, saved with each answer. `answerLabel` in
+`lib/format.ts`, the list of names written into the frontend, is now only the
+fallback for an answer with no saved word. `QUEUE.md`, "The response".
+
 **Age ticks on its own timer, not on the poll.** Once a second, from
 `lib/useSecond.ts`; `formatAge` in `lib/format.ts` words it. A number that only moved when the data refreshed would be wrong
 for up to five seconds at a time, and age is the queue's signal for how long
@@ -634,7 +639,7 @@ page forgot them.
 
 ## Tests
 
-`npm test` in `frontend/`. Vitest with jsdom, 256 tests in 24 files (2026-10-01).
+`npm test` in `frontend/`. Vitest with jsdom, 259 tests in 25 files (2026-10-01).
 
 Logic first, by agreement - a screen is easy to judge by eye, and a dropped
 response or an off-by-one age threshold is not:

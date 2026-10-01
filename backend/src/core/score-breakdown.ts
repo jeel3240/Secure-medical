@@ -4,7 +4,8 @@
  *
  * Pure - the caller loads `scoring_rules` and passes them in.
  *
- * The words come from `scoring_rules.label`, which reads `Q1: Both`. That is
+ * The words are the ones saved with each answer (`conversations.q1_label`,
+ * migration 009). Those in turn come from `scoring_rules.label`, which reads `Q1: Both`. That is
  * the only place the choice numbers are already paired with words and with the
  * points they earn, so the screen does not have to know that 3 means "Both".
  * The alternative was parsing the question copy in `settings`, which is prose
@@ -31,8 +32,26 @@ export interface AnsweredConversation {
   q1: string | null;
   q2: string | null;
   q3: string | null;
+  /**
+   * The word the lead chose, kept with the answer since migration 009 - so a
+   * choice renamed later does not rename what an earlier lead picked. Absent
+   * only on a row answered before a name existed for it; the current name is
+   * used then.
+   */
+  q1Label?: string | null;
+  q2Label?: string | null;
+  q3Label?: string | null;
   status: string;
   score: number;
+}
+
+/** Each question's answer and the word saved with it, in order. */
+function answersOf(c: AnsweredConversation): [number, string | null, string | null][] {
+  return [
+    [1, c.q1, c.q1Label ?? null],
+    [2, c.q2, c.q2Label ?? null],
+    [3, c.q3, c.q3Label ?? null],
+  ];
 }
 
 /**
@@ -71,13 +90,10 @@ export function scoreBreakdown(
   // score above zero means - see STATE-MACHINE.md, "Scoring".
   if (conversation.score > 0) push('responded', 'Responded');
 
-  const answers: [number, string | null][] = [
-    [1, conversation.q1],
-    [2, conversation.q2],
-    [3, conversation.q3],
-  ];
-  for (const [question, choice] of answers) {
-    if (choice) push(`q${question}_${choice}`);
+  // The word saved with the answer, where there is one; the points are the
+  // rule's as it stands.
+  for (const [question, choice, saved] of answersOf(conversation)) {
+    if (choice) push(`q${question}_${choice}`, saved ?? undefined);
   }
 
   if (conversation.status === 'completed') push('completed', 'Completed');
@@ -117,18 +133,13 @@ export interface AnswerChip {
 
 export function answerChips(conversation: AnsweredConversation, rules: ScoringRule[]): AnswerChip[] {
   const byCode = new Map(rules.map((r) => [r.code, r]));
-  const answers: [number, string | null][] = [
-    [1, conversation.q1],
-    [2, conversation.q2],
-    [3, conversation.q3],
-  ];
-
-  return answers.map(([question, choice]) => {
+  return answersOf(conversation).map(([question, choice, saved]) => {
     const rule = choice ? byCode.get(`q${question}_${choice}`) : undefined;
     return {
       question,
       heading: CHIP_HEADINGS[question],
-      answer: rule ? answerLabel(rule.label) : null,
+      // What they chose, as it was called when they chose it.
+      answer: choice ? (saved ?? (rule ? answerLabel(rule.label) : null)) : null,
       choice: choice ?? null,
     };
   });

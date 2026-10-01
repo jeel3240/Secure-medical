@@ -1,8 +1,8 @@
 # Database schema
 
-The migrations in `backend/src/db/migrations/` - `001` to `008`, in order -
+The migrations in `backend/src/db/migrations/` - `001` to `009`, in order -
 are the source of truth for exact columns, types and constraints. `001_init.sql`
-is the starting schema; the seven after it add columns, tables and constraints. This explains what the tables are for and the
+is the starting schema; the ones after it add columns, tables and constraints. This explains what the tables are for and the
 parts that are not obvious from reading the SQL.
 
 Migrations are plain numbered `.sql` files run by `backend/scripts/migrate.js`,
@@ -30,7 +30,7 @@ the RDS CA bundle if strict verification is ever wanted.
 |---|---|
 | `users` | Agents and superadmins. bcrypt hash, role, active flag, must-change-password flag, last sign-in, session version. |
 | `leads` | One person, pulled from EZ Texting. |
-| `conversations` | The 3-question SMS flow for a lead, plus its score and tier. |
+| `conversations` | The 3-question SMS flow for a lead, plus its score and tier. `q1`-`q3` are the numbers the lead chose; `q1_label`-`q3_label` are the words for them, saved when the answer was given (migration 009) so renaming a choice never renames an earlier lead's answer. |
 | `messages` | Every SMS in or out. |
 | `calls` | Twilio calls, with duration and outcome. Written since Phase 4 - `TWILIO.md`, "What is saved". `direction` says who called whom. `twilio_call_sid` is the call's first leg: the browser's for a call we placed, the lead's for one we received. An incoming call that rang nobody has no `agent_id`; an outgoing one always has - the `calls_outbound_has_agent` check (migration 007). |
 | `dispositions` | What an agent decided after contact. |

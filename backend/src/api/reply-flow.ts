@@ -11,6 +11,7 @@
 import { readExpiryDays, type Querier } from '../db/sql';
 import type { PoolClient } from 'pg';
 import { renderMessage } from '../core/messages';
+import { answerLabel } from '../core/score-breakdown';
 import {
   step,
   type Conversation,
@@ -72,9 +73,9 @@ export async function loadNewestConversation(
  * cached: all three are admin-editable, and a change should apply to the next
  * reply rather than after a restart.
  */
-export async function loadRules(client: PoolClient): Promise<Rules> {
+export async function loadRules(client: PoolClient): Promise<Rules & { labels: AnswerLabels }> {
   const [scoring, tiers, settings] = await Promise.all([
-    client.query(`SELECT code, question, choice, points FROM scoring_rules`),
+    client.query(`SELECT code, label, question, choice, points FROM scoring_rules`),
     client.query(`SELECT name, min_score, max_score FROM tiers ORDER BY sort_order`),
     client.query(`SELECT value FROM settings WHERE key = 'max_invalid_before_review'`),
   ]);
@@ -94,10 +95,39 @@ export async function loadRules(client: PoolClient): Promise<Rules> {
       maxScore: r.max_score,
     })),
     maxInvalidBeforeReview: Number.isFinite(limit) ? limit : 1,
+    labels: new Map(scoring.rows.map((r) => [r.code, answerLabel(r.label ?? '')])),
   };
 }
 
-async function saveConversation(client: PoolClient, id: number, c: Conversation): Promise<void> {
+/** A choice's name as it is right now, by rule code: `q1_3` -> `Both`. */
+type AnswerLabels = Map<string, string>;
+
+/**
+ * The word for each answer this reply has just given - null for a question it
+ * did not answer.
+ *
+ * Kept with the answer because the choices can be renamed (migration 009): a
+ * lead who chose "Supplements" must still read "Supplements" after choice 1 is
+ * called something else. Taken at the moment the answer is accepted, from the
+ * names as they are then, and never rewritten.
+ */
+export function newAnswerLabels(
+  before: Conversation,
+  after: Conversation,
+  labels: AnswerLabels
+): [string | null, string | null, string | null] {
+  const word = (question: 1 | 2 | 3, was: string | null, is: string | null) =>
+    is !== null && is !== was ? (labels.get(`q${question}_${is}`) || null) : null;
+  return [word(1, before.q1, after.q1), word(2, before.q2, after.q2), word(3, before.q3, after.q3)];
+}
+
+async function saveConversation(
+  client: PoolClient,
+  id: number,
+  c: Conversation,
+  /** The words for the answers given by this reply - `newAnswerLabels`. */
+  words: [string | null, string | null, string | null]
+): Promise<void> {
   // expires_at is not touched here. It is the window the lead has to reply to a
   // message, so it moves only once that message has actually gone out - see
   // bumpExpiry, called after the send succeeds.
@@ -105,13 +135,19 @@ async function saveConversation(client: PoolClient, id: number, c: Conversation)
   // completed_at is stamped the first time the conversation is saved as
   // completed, and kept after - migration 004, for Admin > Overview's
   // "Answered all 3".
+  //
+  // A word is written only with the answer it belongs to, and kept after: a
+  // later save passes null for it and leaves what is there.
   await client.query(
     `UPDATE conversations
      SET status = $2, step = $3, q1 = $4, q2 = $5, q3 = $6,
          invalid_count = $7, score = $8, tier = $9, updated_at = now(),
+         q1_label = COALESCE($10, q1_label),
+         q2_label = COALESCE($11, q2_label),
+         q3_label = COALESCE($12, q3_label),
          completed_at = CASE WHEN $2 = 'completed' THEN COALESCE(completed_at, now()) ELSE completed_at END
      WHERE id = $1`,
-    [id, c.status, c.step, c.q1, c.q2, c.q3, c.invalidCount, c.score, c.tier]
+    [id, c.status, c.step, c.q1, c.q2, c.q3, c.invalidCount, c.score, c.tier, ...words]
   );
 }
 
@@ -149,7 +185,12 @@ export async function applyReply(
   const rules = await loadRules(client);
   const result = step(conversation, reply, rules);
 
-  await saveConversation(client, conversation.id, result.conversation);
+  await saveConversation(
+    client,
+    conversation.id,
+    result.conversation,
+    newAnswerLabels(conversation, result.conversation, rules.labels)
+  );
 
   // The send is handed back as a closure so the caller can commit first.
   return {

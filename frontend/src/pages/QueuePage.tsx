@@ -48,8 +48,13 @@ const TIER_OPTIONS: { key: string; label: string }[] = [
 /** What a blank cell shows. A plain hyphen - Jeel, 2026-09-28. */
 const EMPTY = '-';
 
-const answer = (question: 1 | 2 | 3, choice: string | null) =>
-  choice ? answerLabel(question, choice) : EMPTY;
+/**
+ * The word for an answer: the one saved with it (migration 009), so a choice
+ * renamed later does not rename what this lead picked. `answerLabel`'s built-in
+ * names are only for a row that somehow has an answer and no saved word.
+ */
+export const answer = (question: 1 | 2 | 3, choice: string | null, saved: string | null) =>
+  choice ? (saved ?? answerLabel(question, choice)) : EMPTY;
 
 const SINCE: { key: string; label: string }[] = [
   { key: '1h', label: 'Last hour' },
@@ -253,9 +258,9 @@ export function QueuePage() {
                         <span className="cell-name">{leadName(lead)}</span>
                         <span className="cell-sub">{formatPhone(lead.phone)}</span>
                       </td>
-                      <td>{answer(1, lead.q1)}</td>
-                      <td>{answer(2, lead.q2)}</td>
-                      <td>{answer(3, lead.q3)}</td>
+                      <td>{answer(1, lead.q1, lead.q1Label)}</td>
+                      <td>{answer(2, lead.q2, lead.q2Label)}</td>
+                      <td>{answer(3, lead.q3, lead.q3Label)}</td>
                       <td className="right tabular cell-strong">{lead.score}</td>
                       {/* One style for every waiting time - Jeel, 2026-09-28.
                           It used to turn bold for an overdue HOT lead, which

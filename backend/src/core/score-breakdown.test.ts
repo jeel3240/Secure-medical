@@ -135,3 +135,30 @@ describe('answerChips', () => {
     expect(chips[1].answer).toBeNull();
   });
 });
+
+describe('the word kept with an answer - migration 009', () => {
+  // Choice 1 was "Supplements" when this lead picked it. It has since been
+  // renamed; RULES still says Supplements, so a different saved word proves
+  // which one is shown.
+  const saved = conversation({ q1: '1', q1Label: 'Vitamins', q2: '2', score: 35 });
+
+  it('is what the chips show, not the choice\'s current name', () => {
+    const chips = answerChips(saved, RULES);
+    expect(chips[0]).toMatchObject({ answer: 'Vitamins', choice: '1' });
+  });
+
+  it('and what the breakdown shows, with the rule\'s points', () => {
+    const line = scoreBreakdown(saved, RULES).find((l) => l.code === 'q1_1');
+    expect(line).toMatchObject({ label: 'Vitamins' });
+    expect(line?.points).toBe(RULES.find((r) => r.code === 'q1_1')?.points);
+  });
+
+  it('an answer with no saved word falls back to the current name', () => {
+    const chips = answerChips(saved, RULES);
+    expect(chips[1].answer).toBe(answerLabel(RULES.find((r) => r.code === 'q2_2')!.label));
+  });
+
+  it('a saved word without an answer is not shown', () => {
+    expect(answerChips(conversation({ q1: null, q1Label: 'Vitamins' }), RULES)[0].answer).toBeNull();
+  });
+});

@@ -22,6 +22,9 @@ const lead = (tag: QueueTag | null): QueueLead => ({
   q1: '3',
   q2: '1',
   q3: '1',
+  q1Label: 'Both',
+  q2Label: 'Today',
+  q3Label: 'Call me now',
   conversationStatus: 'completed',
   tag,
 });
