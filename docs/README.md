@@ -151,8 +151,10 @@ Things that are true today and will surprise someone who assumes otherwise.
 **Calling is simple.** Agents call leads from the browser (`TWILIO.md`, built
 2026-10-01). A lead who rings the number back rings one agent's browser - the
 one holding them, or who last called them - and otherwise gets a message, a
-text and a place in the queue as a missed call; there is no call queue and no
-voicemail (`TWILIO.md`, "Incoming calls"). There is no recording, voicemail
+text and a place in the queue as a missed call, and the agent it rang gets a
+callback; there is no call queue and no voicemail (`TWILIO.md`, "Incoming
+calls"). An agent's browser must be open and signed in to ring, and a number
+we hold no lead for rings nobody. There is no recording, voicemail
 drop, transfer or hold. The phone number rings only one deployment: after
 testing locally with it, run `twilio:configure` on the server again. Admin > Overview shows no call totals - removed on 2026-09-28
 (`ADMIN.md`, "Overview") - though every call is on its lead's timeline.

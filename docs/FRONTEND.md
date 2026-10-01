@@ -325,7 +325,8 @@ Mute, Keypad, End - is `CallBar.tsx`, which slides up and stays in view, and
 becomes a note box when the call ends. A lead calling in is a card in the top
 right corner, from `layout/IncomingCall.tsx` in the app shell, so it appears
 on any screen: who it is, tier, score, answers and how often we tried them,
-with Accept and Decline; a "Missed call" notice with Call back if nobody picks
+with Accept and Decline, the app's own ringtone (`lib/ringtone.ts`) and a
+desktop notification (`lib/call-notification.ts`); a "Missed call" notice with Call back if nobody picks
 up; and that same call bar once accepted (`TWILIO.md`, "Incoming calls").
 `styles/incoming-call.css`. `styles/call-bar.css`; `TWILIO.md`,
 "The screen".
