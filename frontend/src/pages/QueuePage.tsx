@@ -149,7 +149,7 @@ export function QueuePage() {
       <div className="page-header">
         <div>
           <h1 className="page-title">Priority queue</h1>
-          <p className="page-subtitle">Highest score first, then longest waiting.</p>
+          <p className="page-subtitle">Highest score first, then newest.</p>
         </div>
         <LiveStatus updatedAt={updatedAt} paused={Boolean(error)} />
       </div>

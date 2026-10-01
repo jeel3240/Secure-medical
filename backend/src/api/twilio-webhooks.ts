@@ -8,8 +8,8 @@
  *
  * Unauthenticated, like the EZ Texting webhook, but unlike it Twilio signs
  * every request (X-Twilio-Signature), so anything unsigned or mis-signed is
- * refused before it reaches the database. With calling not set up, both routes
- * answer 404, as if they did not exist.
+ * refused before it reaches the database. With calling not set up, all four
+ * routes answer 404, as if they did not exist.
  *
  * Twilio posts form-encoded fields, not JSON, so this router parses its own
  * bodies.

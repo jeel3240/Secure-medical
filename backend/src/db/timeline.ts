@@ -53,9 +53,8 @@ const TIMELINE_ACTIONS: ActivityAction[] = [
  */
 const QUERIES: { kind: TimelineKind; sql: string }[] = [
   {
-    // Outbound splits on sent_by: null is one of ours, an id is an agent's.
-    // Nothing writes it yet - agent SMS is task 9 - so every outbound row is
-    // automated today, and this is ready for when that changes.
+    // Outbound splits on sent_by: null is automated, an id is an agent's own
+    // text (db/agent-sms.ts) and comes out as `agent_sms` below.
     kind: 'sms',
     sql: `
       SELECT m.created_at AS at,

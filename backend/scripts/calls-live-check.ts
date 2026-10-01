@@ -355,6 +355,32 @@ async function main(): Promise<void> {
       ['booked', false],
     ]);
 
+    // What else settles a missed call, and what does not.
+    const settled = await makeLead('+15550000620', 'Settled', maya);
+    const miss = async (sid: string) => {
+      await pool.query(`UPDATE leads SET assigned_to = $2 WHERE id = $1`, [settled, maya]);
+      await startIncomingCall({ callSid: sid, fromPhone: '+15550000620' });
+      await finishCall({ callSid: sid, outcome: 'no_answer', durationSec: 0 });
+    };
+    const flag = async () => (await getLeadDetail(settled))?.flags.missedCall;
+    await miss('IN-30');
+    await pool.query(
+      `INSERT INTO messages (lead_id, direction, body, sent_by, delivery_status, created_at)
+       VALUES ($1, 'outbound', 'hi', $2, 'failed', now() + interval '1 second')`,
+      [settled, maya]
+    );
+    check('a text EZ Texting refused has not got back to them', await flag(), true);
+    await pool.query(
+      `INSERT INTO dispositions (lead_id, agent_id, value, created_at) VALUES ($1, $2, 'closed', now() + interval '2 seconds')`,
+      [settled, maya]
+    );
+    await pool.query(`UPDATE leads SET assigned_to = NULL, assigned_at = NULL WHERE id = $1`, [settled]);
+    check('an outcome saved afterwards settles it: closed, and out of the queue', [
+      await flag(),
+      (await listAdminLeads({ pageSize: 200 })).leads.find((l) => l.id === settled)?.status,
+      (await listQueue({ limit: 200 })).leads.some((l) => l.id === settled),
+    ], [false, 'closed', false]);
+
     const blocked = await makeLead('+15550000618', 'BlockedCaller', maya);
     await pool.query(`INSERT INTO dnc_list (phone, reason) VALUES ('+15550000618', 'agent')`);
     await startIncomingCall({ callSid: 'IN-24', fromPhone: '+15550000618' });

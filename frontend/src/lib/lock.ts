@@ -41,7 +41,7 @@ export function lockHolder(lead: QueueLead, me: PublicUser | null): string | nul
  *   it "Pick" implies taking something you already have.
  * - **view** - someone else holds it and you are a superadmin. You may look -
  *   that is why the row is not muted - but you may not claim it, so the action
- *   opens the read-only timeline rather than the workspace. Taking it off the
+ *   opens the workspace read-only. Taking it off the
  *   agent is a release, a separate and deliberate act.
  * - **locked** - someone else holds it and you are an agent. No action at all.
  *

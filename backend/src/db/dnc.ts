@@ -6,8 +6,12 @@
  * another:
  *
  *   - a STOP reply, or EZ Texting's own `optOut` flag - `api/webhooks.ts`
- *   - the poller finding a contact already opted out on EZ Texting's side
- *   - an agent setting the `DNC` disposition - `api/dispositions.ts`
+ *   - an agent setting the `DNC` disposition - `db/dispositions.ts`
+ *
+ * **The poller is the exception.** A contact that arrives already opted out is
+ * written by `worker/poller.ts` with its own insert, `ON CONFLICT DO NOTHING`:
+ * it leaves an existing row alone, does not re-block a released number, and
+ * writes no `dnc.blocked` record. Known gap - docs/POLLER.md, docs/AUDIT.md.
  *
  * These functions were `webhooks.ts` locals until task 8 needed the second
  * caller. Moved rather than copied: a compliance table with two insert
