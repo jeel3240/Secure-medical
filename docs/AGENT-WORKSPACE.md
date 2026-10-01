@@ -176,7 +176,9 @@ that is the point of it.
 **A missed call books one by itself - Jeel, 2026-10-01.** When a lead rings our
 number and the agent it rang does not pick up, the server books that agent a
 callback due at that moment, `reason = 'missed_call'`. My Callbacks shows it as
-**Missed call** rather than Overdue, and it is marked done when anyone calls or
+**Missed call** rather than Overdue, **under Today** - it is due the second it
+is booked, so by the rule above it would be overdue at once and never be on
+the tab an agent opens; it moves to Overdue only when the day ends - and it is marked done when anyone calls or
 texts the lead back, or answers when they ring again. Every other callback is
 `reason = 'booked'` and is finished only by a person or by an outcome.
 `TWILIO.md`, "A missed call".

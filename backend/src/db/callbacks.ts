@@ -226,14 +226,22 @@ export async function updateCallback(
  * 3pm is overdue, and showing it under both would hide that it was missed.
  * `overdue` is everything past its time and still not done.
  *
+ * **A call missed today is under Today, not Overdue** - Jeel, 2026-10-01. Its
+ * callback is due the moment the call was missed, so by the rule above it
+ * would be overdue a second later and never appear on the tab an agent opens.
+ * It is today's work: it stays under Today, first in the list, until the day
+ * ends, and only then is it overdue.
+ *
  * Days are the viewer's, from `timeZone` - `db/sql.ts`, `startOfTodaySql`.
  */
 function whenSql(timeZone?: string): Record<Exclude<CallbackWhen, 'all'>, string> {
-  const tomorrow = `${startOfTodaySql(timeZone)} + interval '1 day'`;
+  const today = startOfTodaySql(timeZone);
+  const tomorrow = `${today} + interval '1 day'`;
+  const missedToday = `(cb.reason = 'missed_call' AND cb.scheduled_at >= ${today} AND cb.scheduled_at < ${tomorrow})`;
   return {
-    today: `cb.done_at IS NULL AND cb.scheduled_at >= now() AND cb.scheduled_at < ${tomorrow}`,
+    today: `cb.done_at IS NULL AND ((cb.scheduled_at >= now() AND cb.scheduled_at < ${tomorrow}) OR ${missedToday})`,
     upcoming: `cb.done_at IS NULL AND cb.scheduled_at >= ${tomorrow}`,
-    overdue: `cb.done_at IS NULL AND cb.scheduled_at < now()`,
+    overdue: `cb.done_at IS NULL AND cb.scheduled_at < now() AND NOT ${missedToday}`,
   };
 }
 

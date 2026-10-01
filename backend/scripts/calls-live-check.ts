@@ -313,8 +313,15 @@ async function main(): Promise<void> {
     check('recorded as booked by the system, for them', await logged('callback.booked'), [
       { actor_id: null, subject_user_id: maya, because: 'missed_call' },
     ]);
-    const mine = await listCallbacks({ agentId: maya, when: 'overdue' });
-    check('on their My Callbacks, marked as a missed call', mine.callbacks.find((c) => c.leadId === lead)?.reason, 'missed_call');
+    const tab = async (when: 'today' | 'overdue') =>
+      (await listCallbacks({ agentId: maya, when })).callbacks.find((c) => c.leadId === lead)?.reason ?? 'absent';
+    check('on their My Callbacks under Today, marked as a missed call', await tab('today'), 'missed_call');
+    check('and not under Overdue, though its time has passed', await tab('overdue'), 'absent');
+    const counts = (await listCallbacks({ agentId: maya, when: 'today' })).counts;
+    check('the tab counts agree', [counts.today >= 1, counts.overdue], [true, 0]);
+    await pool.query(`UPDATE callbacks SET scheduled_at = now() - interval '2 days' WHERE lead_id = $1`, [lead]);
+    check('one from an earlier day is overdue', [await tab('today'), await tab('overdue')], ['absent', 'missed_call']);
+    await pool.query(`UPDATE callbacks SET scheduled_at = now() WHERE lead_id = $1`, [lead]);
 
     await startIncomingCall({ callSid: 'IN-21', fromPhone: '+15550000617' });
     await finishCall({ callSid: 'IN-21', outcome: 'no_answer', durationSec: 0 });
