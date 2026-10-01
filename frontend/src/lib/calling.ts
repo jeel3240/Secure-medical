@@ -157,7 +157,29 @@ function announce(call: Call, handlers: IncomingHandlers): void {
 
 /** Joins a call's events to the handlers, and returns its controls. */
 function wire(call: Call, handlers: CallHandlers): CallHandle {
-  return wire(call, handlers);
+  let over = false;
+  const end = () => {
+    if (over) return;
+    over = true;
+    handlers.onEnded();
+  };
+
+  call.on('ringing', () => handlers.onRinging());
+  call.on('accept', () => handlers.onAnswered());
+  call.on('mute', (muted: boolean) => handlers.onMuted(muted));
+  call.on('disconnect', end);
+  call.on('cancel', end);
+  call.on('reject', end);
+  call.on('error', (err: unknown) => {
+    discardDevice();
+    handlers.onFailed(describeCallError(err));
+  });
+
+  return {
+    hangUp: () => call.disconnect(),
+    setMuted: (muted) => call.mute(muted),
+    sendDigits: (digits) => call.sendDigits(digits),
+  };
 }
 
 /** Twilio's error codes that an agent can do something about. */
