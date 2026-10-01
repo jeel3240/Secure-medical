@@ -95,9 +95,9 @@ ran the old 003 but never 004 misses the second part; rebuild it, or run the
 second part's SQL there once.
 
 *(The `004` on disk today, `004_conversation_completed_at.sql`, is a later and
-unrelated file. As of 2026-10-01 the files are 001 to 008: `main` holds 001 to
-005, and 006 to 008 - the activity log, incoming calls, and the callback a
-missed call books - are on `dev`. `npm run migrate` applies whatever the
+unrelated file. As of 2026-10-01 the files are 001 to 009: `main` holds 001 to
+005, and 006 to 009 - the activity log, incoming calls, the callback a
+missed call books, and the word kept with each answer - are on `dev`. `npm run migrate` applies whatever the
 database has not run, in order.)*
 
 Run migrations through `npm run migrate`, not by piping SQL into psql.

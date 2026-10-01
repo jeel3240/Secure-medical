@@ -83,6 +83,10 @@ export interface QueueLead {
   q1: string | null;
   q2: string | null;
   q3: string | null;
+  /** The word the lead chose for each, as it was called when they chose it. Null where unanswered. */
+  q1Label: string | null;
+  q2Label: string | null;
+  q3Label: string | null;
   conversationStatus: 'open' | 'completed' | 'review' | 'expired';
   /** `null` when there is nothing to say: the lead is waiting to be picked up. */
   tag: QueueTag | null;

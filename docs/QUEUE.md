@@ -203,9 +203,13 @@ every other filter, so the selected tiers add up to it.
 `receivedAt` is `ezt_added_at`, falling back to `created_at` - when the lead
 reached us, which is what the ticking Waiting column counts from.
 
-`q1`-`q3` are the raw choices, `"1"`, `"2"`, `"3"`. The screen maps them to the
-INTEREST / TIMING / PREFERENCE words, because the wording belongs to the
-question copy in `settings`, which a superadmin can edit.
+`q1`-`q3` are the raw choices, `"1"`, `"2"`, `"3"`. `q1Label`-`q3Label` are the
+words for them, saved with each answer when it was given (migration 009), and
+are what the INTEREST / TIMING / PREFERENCE columns show - so a choice renamed
+later does not rename what an earlier lead picked. `STATE-MACHINE.md`, "The
+word is kept with the answer". Until 2026-10-01 the screen mapped the number to
+a word from a list written into the frontend; that list is now only the
+fallback for an answer with no saved word.
 
 ## What this does not cover
 

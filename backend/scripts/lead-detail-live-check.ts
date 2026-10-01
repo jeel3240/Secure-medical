@@ -14,7 +14,9 @@
  *     EZT_USERNAME=x EZT_PASSWORD=x EZT_GROUP=x npx ts-node --transpile-only scripts/lead-detail-live-check.ts
  */
 import { pool } from '../src/db/pool';
+import { applyReply } from '../src/api/reply-flow';
 import { getLeadDetail } from '../src/db/lead-detail';
+import { listQueue } from '../src/db/queue';
 
 let failures = 0;
 
@@ -183,6 +185,66 @@ async function main(): Promise<void> {
 
   console.log('\na lead that does not exist');
   check('is null', await getLeadDetail(999999), null);
+
+  console.log('\nthe word a lead chose is kept with their answer');
+  {
+    // A real reply, through the path the webhook takes.
+    const reply = async (leadId: number, text: string) => {
+      const client = await pool.connect();
+      try {
+        await client.query('BEGIN');
+        await applyReply(client, leadId, '+15550000299', 'Wordy', { text, optOut: false });
+        await client.query('COMMIT');
+      } finally {
+        client.release();
+      }
+    };
+    const fresh = async (phone: string) => {
+      const lead = await makeLead(phone);
+      await pool.query(`INSERT INTO conversations (lead_id, status, step) VALUES ($1, 'open', 1)`, [lead]);
+      return lead;
+    };
+    const words = async (lead: number) =>
+      (await pool.query(`SELECT q1, q1_label, q2, q2_label, q3_label FROM conversations WHERE lead_id = $1`, [lead])).rows[0];
+    const chip = async (lead: number) => (await getLeadDetail(lead))?.chips[0].answer;
+
+    const early = await fresh('+15550000230');
+    await reply(early, '1');
+    check('saved with the number, when the answer is given', await words(early), {
+      q1: '1',
+      q1_label: 'Supplements',
+      q2: null,
+      q2_label: null,
+      q3_label: null,
+    });
+    await reply(early, 'not sure');
+    check('an unclear reply saves no word', (await words(early)).q2_label, null);
+    await reply(early, '2');
+    check('the next answer adds its own and leaves the first', await words(early), {
+      q1: '1',
+      q1_label: 'Supplements',
+      q2: '2',
+      q2_label: 'This week',
+      q3_label: null,
+    });
+
+    // The client renames choice 1.
+    await pool.query(`UPDATE scoring_rules SET label = 'Q1: Vitamins' WHERE code = 'q1_1'`);
+    const late = await fresh('+15550000231');
+    await reply(late, '1');
+    check('a lead who answers after a rename gets the new word', await chip(late), 'Vitamins');
+    check('one who answered before it keeps the word they chose', await chip(early), 'Supplements');
+    const breakdown = (await getLeadDetail(early))?.breakdown.find((l) => l.code === 'q1_1');
+    check('in the score breakdown too', breakdown?.label, 'Supplements');
+    // The queue holds finished leads; finish these two so it lists them.
+    await pool.query(`UPDATE conversations SET status = 'completed' WHERE lead_id = ANY($1)`, [[early, late]]);
+    const queue = (await listQueue({ limit: 200 })).leads;
+    check('and in the queue', [queue.find((l) => l.id === early)?.q1Label, queue.find((l) => l.id === late)?.q1Label], [
+      'Supplements',
+      'Vitamins',
+    ]);
+    await pool.query(`UPDATE scoring_rules SET label = 'Q1: Supplements' WHERE code = 'q1_1'`);
+  }
 
   console.log(failures === 0 ? '\nall checks passed' : `\n${failures} check(s) FAILED`);
   await pool.end();

@@ -280,6 +280,37 @@ An unclear reply still earns the "responded" points - see "Scoring".
 
 ---
 
+## The word is kept with the answer
+
+Added 2026-10-01, migration 009. An answer is stored as the number the lead
+chose - `q1 = '1'` - because that is what scoring reads. Since this migration
+the choice's name at that moment is stored beside it: `q1_label = 'Supplements'`.
+
+**Why.** Every screen used to turn the number into a word by looking up the
+choice's *current* name. The client wants to rename choices and add new ones;
+from that day a lead who chose "Supplements" last week would have read as
+whatever choice 1 is called this week. Once a name changes there is no way to
+recover what an earlier lead was offered, so the word is kept from before any
+name is touched.
+
+- **Written once**, when the reply is accepted as an answer, from
+  `scoring_rules.label` as it is then (`api/reply-flow.ts`, `newAnswerLabels`).
+  An unclear reply, or one after the questions ended, writes none.
+- **Never rewritten.** Renaming a choice afterwards changes what new leads get,
+  not what earlier ones have.
+- **What the screens show**: the queue, the lead card and its score breakdown,
+  the incoming-call card, and the conversation view. A row with an answer and
+  no saved word falls back to the current name.
+- **Existing answers were filled in by the migration** with today's names,
+  which are the true ones for them: no name had ever been changed.
+
+Not kept: the *points* an answer earned. The conversation's score is stored, so
+it does not move, but the breakdown lists each answer's points from the rules
+as they stand - if points are changed later, an old lead's breakdown will no
+longer add up to their score. To settle when points become editable.
+
+Nothing else about the flow changes: three questions, three choices each.
+
 ## Scoring
 
 Rules come from `scoring_rules`; tiers from `tiers`. Both are read when the

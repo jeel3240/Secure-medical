@@ -369,6 +369,12 @@ axios rather than `sendMessage`, so the real `dnc_list` check stays in the path
 
 `db/lead-detail.ts` for the query, `core/score-breakdown.ts` for the words.
 
+**The answer words are the ones saved with each answer** (`q1_label` to
+`q3_label`, migration 009), not the choices' current names - so the chips, the
+breakdown and the incoming-call card keep showing what the lead actually
+picked after a choice is renamed. `STATE-MACHINE.md`, "The word is kept with
+the answer".
+
 **The newest conversation is the card.** A lateral join picks it, the same way
 the queue and Admin > Leads do. Earlier ones stay on the lead as history; the
 flags follow the newest, so a lead whose old conversation expired but whose new
