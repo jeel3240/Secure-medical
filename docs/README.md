@@ -69,7 +69,7 @@ docker compose exec postgres psql -U app -d leads \
 | | *Update 2026-09-14:* the account is a test account and `weightloss` is the test group. Set this to `weightloss` and sending is unlocked. See below. |
 | `REDIS_URL` | Not read by any code (2026-09-28). Redis runs in the compose files for a planned job queue; the `bull` and `redis` packages were removed as unused. |
 | `NODE_ENV` | `production` turns on the Secure cookie flag, RDS SSL, and the `JWT_SECRET` strength check. Set by the compose files; no need to change it in `.env`. |
-| `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_API_KEY`, `TWILIO_API_SECRET`, `TWILIO_TWIML_APP_SID`, `TWILIO_PHONE_NUMBER` | Browser calling, Phase 4. Not read by any code yet. Where each comes from is in `.env.example`. |
+| `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_API_KEY`, `TWILIO_API_SECRET`, `TWILIO_TWIML_APP_SID`, `TWILIO_PHONE_NUMBER`, `PUBLIC_URL` | Browser calling (`TWILIO.md`). All empty: calling is off and everything else works. All set: calling is on. Some set: off locally with a warning, and **the API refuses to start in production**. Where each comes from is in `.env.example`. |
 | `CADDY_DOMAIN` | Not read by anything. The production `Caddyfile` names `dailyleadhub.com` directly. |
 
 Never commit `.env`.
@@ -148,10 +148,14 @@ own number to the test group, as "Sending" above describes.
 
 Things that are true today and will surprise someone who assumes otherwise.
 
-**Calling is not built.** Twilio is Phase 4. The Call button is visible and
-disabled and call entries render on the timeline, but nothing writes the
-`calls` table, and Admin > Overview shows no call figures at all - they were
-removed on 2026-09-28 rather than shown as zeros (`ADMIN.md`, "Overview").
+**Calling is outgoing only.** Agents call leads from the browser (`TWILIO.md`,
+built 2026-10-01). There is no recording, voicemail drop, transfer or hold, and
+a lead who rings the number back reaches whatever the number does in Twilio, not
+the app. Admin > Overview shows no call totals - removed on 2026-09-28
+(`ADMIN.md`, "Overview") - though every call is on its lead's timeline.
+
+**A real call needs a public address.** Twilio must reach our voice webhook, so
+calling locally means a tunnel and `PUBLIC_URL` - `TWILIO.md`, "Testing".
 
 **The message copy is the mockup's placeholder.** It has never been approved for
 real leads. Nothing has been sent to anyone outside the test group, and the
@@ -208,6 +212,7 @@ commit.
 | `SCHEMA.md` | Database tables and why | A migration |
 | `POLLER.md` | How leads are pulled in | The poller or worker loop |
 | `WEBHOOKS.md` | How replies are received | The webhook handler |
+| `TWILIO.md` | Browser calling: how a call works, what is saved, settings, testing, deploying | Anything about calls, Twilio's webhooks or the Call button |
 | `ADMIN-LEADS.md` | The superadmin Leads page | That page or its API |
 | `QUEUE.md` | The agents' priority queue API: who is in it, the order, the tags | `GET /api/leads`, the queue query or the tag rules |
 | `AGENT-WORKSPACE.md` | The agent screens: claiming, timeline, notes, callbacks, dispositions, agent SMS | Any of those endpoints or screens |
@@ -220,7 +225,7 @@ commit.
 | `DESIGN-PROMPT.md` | Frontend design brief | The design direction |
 | `Secure-Medical-Call-Center-Mockup.pdf` | All screens. Page 3 sketches the flow, but STATE-MACHINE.md is the authority for it | — |
 
-Docs still to write, as the code arrives: `TWILIO.md` (Phase 4), `DEPLOYMENT.md`.
+Docs still to write, as the code arrives: `DEPLOYMENT.md`.
 
 ## Troubleshooting
 

@@ -197,7 +197,7 @@ where the lead stands. What they said is covered elsewhere:
 | Was | Now |
 |---|---|
 | Callback set | Booking the callback, section 2 - it is its own record and on My Callbacks |
-| No answer, Voicemail | The note - and from Phase 4, every call is a row in `calls` |
+| No answer, Voicemail | The note - and every call is a row in `calls`, with how it ended (`TWILIO.md`) |
 | Interested | The note, or a callback |
 | Sold, Not interested, Wrong number | **Closed**, with the note saying why |
 
@@ -471,7 +471,7 @@ events against a real database.
   data. EZ Texting sends neither - `EZTEXTING-API.md`. They cannot be filled.
 - **Seen before** and the timeline's "Previous lead" section need repeat-lead
   handling, still blocked - CLAUDE.md §10, "Future".
-- **The Call button** is built disabled until Phase 4.
+- ~~**The Call button** is built disabled until Phase 4.~~ *Done 2026-10-01 - `TWILIO.md`.*
 - ~~**Answer chips** and the score breakdown need the choice numbers mapped to
   words.~~ *Done 2026-09-26, `core/score-breakdown.ts`.* The words come from
   `scoring_rules.label` - `Q1: Both` with the prefix stripped - not from the

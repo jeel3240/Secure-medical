@@ -13,6 +13,8 @@
     "migrate": "node scripts/migrate.js",
     "create-superadmin": "node dist/cli/create-superadmin.js",
     "dev:create-superadmin": "ts-node src/cli/create-superadmin.ts",
+    "twilio:configure": "node dist/cli/twilio-configure.js",
+    "dev:twilio:configure": "ts-node src/cli/twilio-configure.ts",
     "test": "jest",
     "e2e": "ts-node --transpile-only scripts/end-to-end.ts",
     "lint": "eslint src scripts"
