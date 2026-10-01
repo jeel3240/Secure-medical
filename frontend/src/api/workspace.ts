@@ -188,6 +188,8 @@ export interface CallbackRow extends Callback {
   latestNote: string | null;
   /** Who holds the lead right now, if anyone. */
   holder: { id: number; name: string } | null;
+  /** A missed call's callback: how many calls it stands for, and when the latest was. */
+  missedCalls: { count: number; lastAt: string } | null;
 }
 
 export type CallbackWhen = 'today' | 'upcoming' | 'overdue' | 'all';

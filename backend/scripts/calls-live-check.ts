@@ -326,6 +326,9 @@ async function main(): Promise<void> {
     await startIncomingCall({ callSid: 'IN-21', fromPhone: '+15550000617' });
     await finishCall({ callSid: 'IN-21', outcome: 'no_answer', durationSec: 0 });
     check('a second missed call is not a second callback', (await open()).length, 1);
+    const row = (await listCallbacks({ agentId: maya, when: 'today' })).callbacks.find((c) => c.leadId === lead)!;
+    const last = (await pool.query(`SELECT started_at FROM calls WHERE twilio_call_sid = 'IN-21'`)).rows[0].started_at;
+    check('but the row says two, and when the latest was', row.missedCalls, { count: 2, lastAt: last.toISOString() });
 
     await startCall({ callSid: 'CA-40', leadId: lead, agentId: maya });
     check('calling them back finishes it', (await open())[0].done, true);

@@ -216,7 +216,10 @@ export function CallbacksPage() {
               <tbody>
                 {data.callbacks.map((row) => {
                   const late = overdueNow(row);
-                  const scheduled = new Date(row.scheduledAt);
+                  // A missed call's row shows when they last rang, not when
+                  // they first did: that is the call being returned.
+                  const missed = row.reason === 'missed_call' ? row.missedCalls : null;
+                  const scheduled = new Date(missed?.lastAt ?? row.scheduledAt);
 
                   return (
                     <tr key={row.id}>
@@ -230,7 +233,7 @@ export function CallbacksPage() {
                         {row.reason === 'missed_call' && !row.doneAt ? (
                           <span className="status status--strong callbacks__flag">
                             <StatusIcon name="missed" />
-                            Missed call
+                            {missed && missed.count > 1 ? `Missed ${missed.count} calls` : 'Missed call'}
                           </span>
                         ) : (
                           late && (
