@@ -13,7 +13,8 @@ cd ../frontend && npm install
 cd ..
 
 # Configure
-cp .env.example .env       # then fill in the EZT_* values
+cp .env.example .env       # then fill in the EZT_* values. The Twilio lines
+                           # are empty: calling is off until all seven are set
 
 # Start services
 docker compose up -d
@@ -38,7 +39,7 @@ runs postgres, redis, api and worker only; Caddy is used in production.
 frontend with Ctrl+C. On Colima, `colima stop` frees the VM's memory. Next time:
 `colima start`, `docker compose up -d`, `cd frontend && npm run dev`.
 
-The worker logs a line each minute, as JSON - `LOGGING.md` lists every event:
+The worker logs a line on every poll - every 30 seconds by default - as JSON - `LOGGING.md` lists every event:
 
 ```
 {"ts":"2026-09-28T23:50:24.426Z","level":"info","event":"poll.tick","svc":"worker","fetched":2,"inserted":0,"skipped":2,"suppressed":0,"openers":0,"ms":336}
@@ -65,11 +66,12 @@ docker compose exec postgres psql -U app -d leads \
 | `EZT_GROUP` | Contact group the poller reads. Required - the account holds ~120k real contacts, so every query is scoped to one group. |
 | `EZT_SOURCE` | Defaults to `API`, which is how partner leads arrive. Set to `WebInterface` to test with a contact added by hand in the dashboard. |
 | `EZT_SEND_GROUP` | Leave unset. `sendMessage` refuses to send without it - see below. |
-| `EZT_WEBHOOK_TOKEN` | Random string forming the last segment of the inbound webhook path. Optional locally, where unset accepts the plain path. **Required in production**: the API refuses to start without one of at least 16 characters (2026-09-29). See WEBHOOKS.md. |
 | | *Update 2026-09-14:* the account is a test account and `weightloss` is the test group. Set this to `weightloss` and sending is unlocked. See below. |
+| `EZT_WEBHOOK_TOKEN` | Random string forming the last segment of the inbound webhook path. Optional locally, where unset accepts the plain path. **Required in production**: the API refuses to start without one of at least 16 characters (2026-09-29). See WEBHOOKS.md. |
 | `REDIS_URL` | Not read by any code (2026-09-28). Redis runs in the compose files for a planned job queue; the `bull` and `redis` packages were removed as unused. |
-| `NODE_ENV` | `production` turns on the Secure cookie flag, RDS SSL, and the `JWT_SECRET` strength check. Set by the compose files; no need to change it in `.env`. |
+| `NODE_ENV` | `production` turns on the Secure cookie flag, RDS SSL, and the three start-up refusals: a weak `JWT_SECRET`, no `EZT_WEBHOOK_TOKEN`, and Twilio settings only partly set. Set by the compose files; no need to change it in `.env`. |
 | `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_API_KEY`, `TWILIO_API_SECRET`, `TWILIO_TWIML_APP_SID`, `TWILIO_PHONE_NUMBER`, `PUBLIC_URL` | Browser calling (`TWILIO.md`). All empty: calling is off and everything else works. All set: calling is on. Some set: off locally with a warning, and **the API refuses to start in production**. Where each comes from is in `.env.example`. |
+| `PORT`, `SERVICE_NAME` | Not in `.env.example`; set by the compose files where needed. `PORT` is the API's port, 3000 by default. `SERVICE_NAME` is the `svc` field on every log line (`api`, `worker`). |
 | `CADDY_DOMAIN` | Not read by anything. The production `Caddyfile` names `dailyleadhub.com` directly. |
 
 Never commit `.env`.
@@ -100,22 +102,22 @@ opted out is refused however the send was triggered.
 
 **Update 2026-09-15:** sending is live. The poller now sends question 1 when it
 creates a lead and records it in `messages`, so with `EZT_SEND_GROUP` set, a new
-contact in the group gets a text within a poll interval. The `openers` count in
-the `poll.tick` line's `openers` says how many went out. POLLER.md has the detail.
+contact in the group gets a text within a poll interval. `openers` in the
+`poll.tick` line says how many went out. POLLER.md has the detail.
 
 ## How to test
 
 ```bash
-cd backend  && npm test && npm run lint    # 526 tests
-cd frontend && npm test && npm run lint    # 189 tests
+cd backend  && npm test && npm run lint    # 547 tests
+cd frontend && npm test && npm run lint    # 256 tests   (counts as of 2026-10-01)
 ```
 
 **Unit and route tests** mock the database and cover behaviour in isolation.
 
 **Live checks** prove the SQL against a real Postgres, because a mocked pool
 says nothing about aggregates, date windows, transactions or races. Each one
-refuses to run against a database that holds leads, and its header comment
-gives the exact command:
+refuses to run against a database that holds leads. Its header comment gives
+the command to run it from the host; from inside the containers it is:
 
 ```bash
 docker compose exec postgres psql -U app -d postgres -c 'CREATE DATABASE scratch'
@@ -124,8 +126,9 @@ docker compose exec -e DATABASE_URL=postgres://app:app@postgres:5432/scratch api
 docker compose exec -e DATABASE_URL=postgres://app:app@postgres:5432/scratch api   npx ts-node --transpile-only scripts/queue-live-check.ts
 ```
 
-There are twelve, covering the queue, claims, the read flag, the lead card, the
-timeline, callbacks, dispositions, agent SMS, the admin read models, health and
+There are fourteen, covering the queue, claims, the read flag, the lead card,
+the timeline, callbacks, dispositions, agent SMS, calls (outgoing, incoming and
+missed), the activity log, Admin > Leads, the admin read models, health and
 the opener retry.
 
 **The end-to-end script** runs the whole system in one go - a lead arrives,
@@ -156,7 +159,10 @@ callback; there is no call queue and no voicemail (`TWILIO.md`, "Incoming
 calls"). An agent's browser must be open and signed in to ring, and a number
 we hold no lead for rings nobody. There is no recording, voicemail
 drop, transfer or hold. The phone number rings only one deployment: after
-testing locally with it, run `twilio:configure` on the server again. Admin > Overview shows no call totals - removed on 2026-09-28
+testing locally with it, run `twilio:configure` on the server again
+(locally: `docker compose exec api npm run dev:twilio:configure`). It points
+both the TwiML App and the phone number at `PUBLIC_URL`, and leaves a number
+that rings somewhere else alone unless `--take-over` is passed. Admin > Overview shows no call totals - removed on 2026-09-28
 (`ADMIN.md`, "Overview") - though every call is on its lead's timeline.
 
 **A real call needs a public address.** Twilio must reach our voice webhook, so
@@ -195,8 +201,10 @@ both are shown as "-" or a note rather than left off the screen.
 
 ## Architecture
 
-- **Backend**: Node + Express + Postgres + Redis
+- **Backend**: Node + Express + Postgres + Redis (Redis runs; nothing uses it)
 - **Frontend**: React + Vite
+- **Calling**: Twilio - the `twilio` library on the server, `@twilio/voice-sdk`
+  in the browser. Audio goes browser to Twilio, never through our server
 - **Deployment**: EC2 (Caddy + Docker Compose) + RDS
 
 *As of 2026-09-14:* all API routes are under `/api`, which is the only path
@@ -217,7 +225,7 @@ commit.
 | `SCHEMA.md` | Database tables and why | A migration |
 | `POLLER.md` | How leads are pulled in | The poller or worker loop |
 | `WEBHOOKS.md` | How replies are received | The webhook handler |
-| `TWILIO.md` | Browser calling: how a call works, incoming calls and missed calls, what is saved, settings, testing, deploying | Anything about calls, Twilio's webhooks, the Call button or the incoming-call bar |
+| `TWILIO.md` | Browser calling: how a call works, incoming calls and missed calls, what is saved, settings, testing, deploying | Anything about calls, Twilio's webhooks, the Call button, the incoming-call card or the call bar |
 | `AUDIT.md` | The activity log and the raw webhook archive: what is recorded, why nothing can be edited or deleted, what it does not cover | **Any new action a person or the system can take** - it records itself, or this doc says why not |
 | `ADMIN-LEADS.md` | The superadmin Leads page | That page or its API |
 | `QUEUE.md` | The agents' priority queue API: who is in it, the order, the tags | `GET /api/leads`, the queue query or the tag rules |
