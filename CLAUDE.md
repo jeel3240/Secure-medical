@@ -233,6 +233,7 @@ you change something the docs describe, update the doc in the same commit.
     src/layout/IncomingCall.tsx  the incoming-call card and missed-call notice, on every screen
     src/lib/caller-context.ts  "Calling back · you tried 2× today", pure
     src/lib/ringtone.ts        the ring of an incoming call, made in the browser
+    src/lib/call-notification.ts  the desktop notification for an incoming call
     src/lib/useSecond.ts    a clock that re-renders every second
     src/components/Timeline.tsx      shared by the workspace and the timeline page
     src/components/QueueStatus.tsx   the queue's STATUS column: icon and words

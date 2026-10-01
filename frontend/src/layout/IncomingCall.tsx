@@ -4,6 +4,7 @@ import { claimLead } from '../api/leads';
 import { getLead, getTimeline, type LeadDetail, type TimelineEntry } from '../api/workspace';
 import { useAuth } from '../auth/store';
 import { callClock } from '../lib/call-state';
+import { askToNotify, notifyIncomingCall } from '../lib/call-notification';
 import { callerContext } from '../lib/caller-context';
 import { formatPhone, shortName } from '../lib/format';
 import { useIncomingCall } from '../lib/incoming-call';
@@ -49,11 +50,20 @@ export function IncomingCall() {
 
   useEffect(() => listen(), [listen]);
   useEffect(() => armRingtone(), []);
+  useEffect(() => (ringable ? askToNotify() : undefined), [ringable]);
 
   // It rings for as long as the card is up, and stops the moment it is
   // accepted, declined or missed.
   const ringing = state.phase === 'ringing';
   useEffect(() => (ringing ? startRinging() : undefined), [ringing]);
+
+  // And a desktop notification, which reaches an agent whose browser is
+  // behind another window, or is not yet allowed to play sound.
+  const ringingCaller = state.phase === 'ringing' ? state.caller : null;
+  useEffect(() => {
+    if (!ringingCaller) return;
+    return notifyIncomingCall(shownName(ringingCaller), ringingCaller.name ? formatPhone(ringingCaller.phone) : '');
+  }, [ringingCaller]);
 
   // The tab says so too, for an agent looking at another one.
   useEffect(() => {

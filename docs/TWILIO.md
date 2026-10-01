@@ -113,7 +113,10 @@ available right now, and will call you back shortly. Goodbye." Then:
 **It stops being a missed call when someone gets back to them:** an agent
 calls the lead, or texts them, after it. Until then the tag and the banner
 stay. Reading the lead's page does not clear it - they asked for a person, and
-looking is not answering. `MISSED_CALL_SQL` in `db/lead-state.ts` is the one
+looking is not answering. A call under way with them also counts, so an agent
+talking to the lead is not shown "nobody answered" (found on the first real
+answered call); if that call ends unanswered the flag is back.
+`MISSED_CALL_SQL` in `db/lead-state.ts` is the one
 definition; the queue, Admin > Leads and the lead card all read it.
 
 **Recorded twice over, on purpose.** How the ring ended is reported by Twilio
@@ -185,8 +188,12 @@ counts as a click; a reload does not. So after a reload the corner shows
 clicks or presses a key, and then it goes. A call arriving before that click
 still shows its card, silently.
 
-**Not covered:** a notification outside the browser. An agent with the
-browser minimised hears the ring but sees nothing until they return to it.
+**And a desktop notification** - `lib/call-notification.ts`: "Incoming call ·
+Leo M.", shown by the operating system with its own sound. It reaches an
+agent whose browser is behind another window or minimised, and one whose page
+cannot ring yet. The browser asks the agent's permission once, on their first
+click after signing in; refused, the card and the ring still work. It closes
+when the ring ends, and clicking it brings the app to the front.
 
 **Not from the design: the "Unknown caller" card.** The design also shows a
 card for a number that is not in our leads, with "You can create one after the
@@ -374,7 +381,7 @@ microphone. `lib/calling.ts` is the only file that touches the SDK.
 | The SQL: who may call, DNC, retries, the timeline; who an incoming call rings, a missed call, and its effect on the queue and Admin > Leads | `scripts/calls-live-check.ts` - against a real Postgres |
 | Call states, wording, error sentences | `frontend/src/lib/call-state.test.ts`, `lib/calling.test.ts` |
 | The join to Twilio's SDK itself, against a stand-in for it: placing a call, being rung, accept, decline, sign-out. Added after Accept failed on the first real incoming call - the function joining a call's events to the screen called itself, and no test ran it | `frontend/src/lib/calling.device.test.ts` |
-| The ring: starts, repeats, stops, stays silent while the browser blocks sound | `frontend/src/lib/ringtone.test.ts` |
+| The ring: starts, repeats, stops, stays silent while the browser blocks sound; the desktop notification | `frontend/src/lib/ringtone.test.ts`, `lib/call-notification.test.ts` |
 | Incoming: ringing, answered, missed, declined, one call at a time; what the card shows; Call back | `frontend/src/lib/incoming-state.test.ts`, `lib/caller-context.test.ts`, `layout/IncomingCall.test.tsx` |
 
 **Locally a real call needs a public address**, because Twilio must reach the

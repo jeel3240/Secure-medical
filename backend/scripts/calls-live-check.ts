@@ -18,6 +18,7 @@
  */
 import { pool } from '../src/db/pool';
 import { finishCall, startCall, startIncomingCall } from '../src/db/calls';
+import { getLeadDetail } from '../src/db/lead-detail';
 import { listQueue } from '../src/db/queue';
 import { blockNumber, DNC_REASONS } from '../src/db/dnc';
 import { listAdminLeads } from '../src/db/leads';
@@ -263,6 +264,18 @@ async function main(): Promise<void> {
     await pool.query(`UPDATE leads SET assigned_to = NULL, assigned_at = NULL WHERE id = $1`, [lead]);
     await finishCall({ callSid: 'IN-9', outcome: 'no_answer', durationSec: 0 });
     check('their missed call brings them back, marked', await inQueue(), { kind: 'missed_call' });
+
+    // They ring again and this time it is ringing through: while that call is
+    // under way nobody should be told the lead went unanswered.
+    await pool.query(`UPDATE leads SET assigned_to = $2 WHERE id = $1`, [lead, maya]);
+    await startIncomingCall({ callSid: 'IN-10', fromPhone: '+15550000616' });
+    check('a call under way is not a missed call', (await getLeadDetail(lead))?.flags.missedCall, false);
+    await pool.query(`UPDATE calls SET started_at = now() - interval '3 hours' WHERE twilio_call_sid = 'IN-10'`);
+    check('unless it is a stale row whose end never arrived', (await getLeadDetail(lead))?.flags.missedCall, true);
+    await pool.query(`UPDATE calls SET started_at = now() WHERE twilio_call_sid = 'IN-10'`);
+    await finishCall({ callSid: 'IN-10', outcome: 'no_answer', durationSec: 0 });
+    check('and if it too goes unanswered, the lead is missed again', (await getLeadDetail(lead))?.flags.missedCall, true);
+    await pool.query(`UPDATE leads SET assigned_to = NULL, assigned_at = NULL WHERE id = $1`, [lead]);
     const admin = async () => (await listAdminLeads({ pageSize: 200 })).leads.find((l) => l.id === lead)?.status;
     check('and it is no longer Closed on Admin > Leads', await admin(), 'working');
 

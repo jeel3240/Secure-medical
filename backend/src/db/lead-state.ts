@@ -38,6 +38,13 @@ const closingList = CLOSING_DISPOSITIONS.map((value) => {
  *
  * The automated "we will call you back" text does not clear it: that text is
  * the promise, not the call back.
+ *
+ * **A call under way counts as returning it** - found on the first real
+ * answered call, 2026-10-01: the agent was talking to the lead under a banner
+ * saying nobody had answered them, because a call has no outcome until it
+ * ends. If that call ends unanswered it is a missed call itself, and the flag
+ * is back. Only a recent one counts, so a row whose end Twilio never reported
+ * cannot hide a missed call for good.
  */
 export const MISSED_CALL_SQL = `(
   EXISTS (
@@ -46,7 +53,11 @@ export const MISSED_CALL_SQL = `(
       AND NOT EXISTS (
         SELECT 1 FROM calls rc
         WHERE rc.lead_id = l.id AND rc.id > mc.id
-          AND (rc.direction = 'outbound' OR rc.outcome = 'answered')
+          AND (
+            rc.direction = 'outbound'
+            OR rc.outcome = 'answered'
+            OR (rc.outcome IS NULL AND rc.started_at > now() - interval '2 hours')
+          )
       )
       AND NOT EXISTS (
         SELECT 1 FROM messages am

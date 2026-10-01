@@ -15,7 +15,8 @@
 const TONES_HZ = [440, 480];
 const ON_SECONDS = 1;
 const EVERY_MS = 3000;
-const VOLUME = 0.12;
+// Loud enough to hear across a desk on laptop speakers; two tones add up.
+const VOLUME = 0.3;
 
 let context: AudioContext | null = null;
 
