@@ -15,22 +15,37 @@ how they want to be contacted: a lead who has not reached it has not asked for
 a call, and one still answering would be interrupted by it. Agents contact
 people who have given them a reason to.
 
-A lead is in the queue when it has replied, its number is not blocked, and one
-of the reasons below holds (five since 2026-10-01, when a missed call joined
-them):
+A lead is in the queue when its number is not blocked and it needs a person.
+`db/queue.ts`, `INCLUDED`, is the rule; rewritten here 2026-10-01 to say what
+that SQL says - the two tables it replaced ("always" and "one of") had drifted
+from it.
 
-| Always | Why |
+| Never, whatever else is true | Why |
 |---|---|
-| Score above 0, **or an unread message** | Scoring starts at the first reply, so a score is the mark of a responder. An unread message counts too (2026-09-28, from review): a lead who never answered a question has a score of 0, so one who texts "please call me" on day 9 - or STOPs, STARTs, then writes - was flagged for a person and then kept out of the queue, where nobody would see it |
 | No live `dnc_list` row for the phone | An opt-out is absolute. A row released by START (`released_at` set) does not count - `STATE-MACHINE.md`, "Opting back in". |
 
-| And one of | Why a person is needed |
+**Three reasons stand on their own** - no score needed, and they keep even a
+closed lead in:
+
+| Reason | Why a person is needed |
+|---|---|
+| An active agent holds it | Being worked. A lead must never vanish from under the agent working it, whatever its conversation says |
+| `has_unread_inbound` | Texted something the questions cannot handle - after the conversation ended, or to an agent who took it over. `STATE-MACHINE.md`, "Which replies need a person" |
+| An unreturned **missed call** | They rang our number and nobody answered - 2026-10-01. This one needs no reply and no score: a lead who has never texted is in the queue for it. `TWILIO.md`, "A missed call" |
+
+**Three more need a score above 0 and a lead that is not closed.** Scoring
+starts at the first reply, so a score is the mark of a responder:
+
+| Reason | Why a person is needed |
 |---|---|
 | Newest conversation `completed` | Answered all three, including how to contact them |
 | Newest conversation `review` | Replied, and we could not understand it |
-| An unreturned **missed call** | They rang our number and nobody answered - 2026-10-01. This one needs no reply and no score: a lead who has never texted is in the queue for it. `TWILIO.md`, "A missed call" |
-| `has_unread_inbound` | Texted something the questions cannot handle - after the conversation ended, or to an agent who took it over. `STATE-MACHINE.md`, "Which replies need a person" |
-| An active agent holds it, or a callback is booked | Being worked. A lead must never vanish from under the agent working it, whatever its conversation says - this is also what keeps an expired lead with a callback, as the 2026-09-19 rule intended |
+| A callback is booked and not done | An agent promised a call. This is also what keeps an expired lead with a callback in reach |
+
+*(The unread message became a reason of its own on 2026-09-28, from review: a
+lead who never answered a question has a score of 0, so one who texts "please
+call me" on day 9 - or STOPs, STARTs, then writes - was flagged for a person
+and then kept out of the queue, where nobody would see it.)*
 
 **Holding a lead needs no score - Jeel, 2026-09-29.** Everything else in the
 queue has replied (score above 0) or has an unread message. A held lead did
@@ -40,8 +55,8 @@ Holding now stands on its own (`db/queue.ts`, `INCLUDED`); once let go, such a
 lead leaves until it replies.
 
 **A closed lead leaves - Jeel, 2026-09-28.** Once an agent presses Closed,
-none of the four reasons above keeps the lead - not completing, not needing
-review, not a callback booked before it was closed. Saving the outcome also
+the three scored reasons above no longer keep the lead - not completing, not
+needing review, not a callback booked before it was closed. Saving the outcome also
 releases the lead, so it leaves the moment Closed is saved (Jeel, 2026-09-29;
 until then it stayed as "Working – name" until the agent pressed Back to
 queue, though nobody needed to pick it up). Four things still keep one in:
@@ -50,7 +65,7 @@ queue, though nobody needed to pick it up). Four things still keep one in:
 |---|---|
 | An agent picks it up again | Someone is deliberately working it again |
 | `has_unread_inbound` | The lead texted after closing, and a person has to read it. It shows as Inbound reply |
-| A missed call nobody has returned | The lead rang after closing and got no answer. It shows as Missed call until an agent calls or texts them (2026-10-01) |
+| A missed call nobody has returned | The lead rang after closing and got no answer. It shows as Missed call until an agent calls or texts them, answers when they ring again, or saves an outcome (2026-10-01; `TWILIO.md`, "A missed call") |
 | A callback booked after closing, not yet done | It is not finished after all - "call me Friday". That reopens the lead altogether |
 
 "Closed" is defined once, in `backend/src/db/lead-state.ts`, and Admin > Leads
@@ -59,7 +74,8 @@ did not read `dispositions` at all, so a finished lead stayed at the top for
 the next agent to call again.
 
 A lead partway through the questions is on Admin > Leads, under *Answering*,
-and nowhere an agent works from. Someone who stops for good expires after the
+and nowhere an agent works from - unless an agent holds it, it has an unread
+text, or it rang us and nobody answered. Someone who stops for good expires after the
 reply window and never reaches the queue - accepted: they never said how, or
 whether, they wanted to be contacted.
 
@@ -74,6 +90,11 @@ the first one having expired.
 Score first is the point of the screen. Freshest next, because speed to contact
 is what the score is for - `DESIGN-PROMPT.md` section 2, "sorted by score then
 freshness". Id last so the order never wobbles between two identical rows.
+The page says so: "Highest score first, then newest."
+
+A lead with no score - held before it answered, or one who rang us and was
+missed - sorts to the bottom. The list stops at 100 rows, so in a queue that
+long it would not be shown; at 50-100 leads a day it has not come close.
 
 ## The tag
 
@@ -96,7 +117,7 @@ why is it here? When several apply, the first wins:
 | # | `kind` | Shown when | Carries |
 |---|---|---|---|
 | 1 | `working` | An **active** agent holds the lead | `agentId`, `agentName` |
-| 2 | `missed_call` | The lead rang us, nobody answered, and no agent has called or texted them since. Bold | |
+| 2 | `missed_call` | The lead rang us, nobody answered, and nobody has got back to them since - `MISSED_CALL_SQL`, `TWILIO.md`. Bold. A held lead still reads Working | |
 | 3 | `inbound_reply` | The lead has texted and nobody has read it | |
 | 4 | `callback` | A callback is booked and not done - the soonest one. "Callback – Maya Chen · 8:13 PM", with the date when not today. Does not lock the row | `agentId`, `agentName`, `at` |
 | 5 | `needs_review` | Conversation `review`: replies we could not read | |
@@ -109,15 +130,17 @@ answers the first of the two questions - is somebody already on this? It ranks
 below an unread reply, which needs reading whoever's call it is.
 
 **What was dropped, and why.** There were three more: `new` ("New"),
-`attempted` ("Attempted 2x") and `callback` ("Callback 3:00 PM"). Call history
+`attempted` ("Attempted 2x") and `callback` ("Callback 3:00 PM") - the last
+came back the next day, above. Call history
 and callback times belong to the agent working the lead - their callbacks are on
 My Callbacks, every call is in the lead's timeline - and on the home page they
 gave every row something to say, so nothing stood out. `new` went with them:
 without the other two, a lead called twice by nobody currently holding it would
 have read "New" again.
 
-A booked callback still keeps a lead **in** the queue ("Who is in it" above),
-unless the lead is closed. It no longer changes what the row says.
+A booked callback keeps a lead **in** the queue ("Who is in it" above), unless
+the lead is closed, and shows as Callback – name · time unless a higher tag
+applies.
 
 *(Earlier the same day there was also a `stalled` tag - "Stalled at Q1 / Q2" -
 for a lead partway through. Partway leads are no longer in the queue, so it
@@ -178,7 +201,7 @@ limit cut the list short. It costs no extra query: the tier counts already carry
 every other filter, so the selected tiers add up to it.
 
 `receivedAt` is `ezt_added_at`, falling back to `created_at` - when the lead
-reached us, which is what the ticking AGE column counts from.
+reached us, which is what the ticking Waiting column counts from.
 
 `q1`-`q3` are the raw choices, `"1"`, `"2"`, `"3"`. The screen maps them to the
 INTEREST / TIMING / PREFERENCE words, because the wording belongs to the
@@ -189,8 +212,9 @@ question copy in `settings`, which a superadmin can edit.
 - **The STATE column in the mockup is not returned.** EZ Texting sends no state
   with a contact - `EZTEXTING-API.md` - so there is nothing to return. It needs
   a source for that field before the column can be built.
-- **No live updates yet.** The screen is specified as updating without a
-  refresh, and this is a plain request. *(2026-09-23, Jeel: new leads appear by
+- ~~**No live updates yet.**~~ Built - the note at the end of this item. The
+  screen was specified as updating without a refresh, and this was a plain
+  request. *(2026-09-23, Jeel: new leads appear by
   themselves. Done by polling this endpoint every 5 seconds, the way
   `ADMIN-LEADS.md` already does - at 50-100 leads a day an agent cannot tell it
   from a push, and it needs nothing new on the server. The fetching goes in one
@@ -216,17 +240,18 @@ The tag rules and the route have unit tests (`queue-tags.test.ts`,
 where most of the rules above actually live, so
 `backend/scripts/queue-live-check.ts` seeds one lead per case in a scratch
 database and asserts what comes back - inclusion, exclusion, order, every tag,
-each filter, the counts. The header of that file says how to run it. Last run
-2026-09-28: 39 checks, all passing - including a partway lead kept out, and
-three partway leads kept in because they are held, booked, or taken over and
-replied to; and a booked callback and two call attempts that keep or leave a
-lead in the queue but show no tag. Removing any one of the four reasons fails
-it.
+each filter, the counts. The header of that file says how to run it. 47 checks
+as of 2026-10-01, all passing - including a partway lead kept out, and partway
+leads kept in because they are held, booked, or taken over and replied to; a
+booked callback shows Callback, and call attempts show no tag. The missed call
+- in the queue with no score, reopening a closed lead, its tag, and what
+settles it - is proved in `scripts/calls-live-check.ts`.
 
 ## The polling hook
 
 `frontend/src/api/usePolling.ts`. Every live screen fetches through it: the
-queue, the workspace, the timeline, My Callbacks and the three admin pages.
+queue, the workspace, the timeline, My Callbacks and four admin pages (Leads,
+Overview, Configuration, DNC).
 
 ```ts
 const fetcher = useCallback(() => listQueue({ tier, source, since, q }), [tier, source, since, q]);
@@ -292,7 +317,7 @@ question - what may this person actually do:
 |---|---|---|---|
 | `pick` | Nobody holds it | **Pick up** | Claims it, opens the workspace |
 | `resume` | You hold it | **Resume** | Back into your own lead. Re-claiming your own lead succeeds, but "Pick" implies taking something you already have. While it checks, the button reads *Opening...*, not *Picking...* |
-| `view` | Someone else holds it, you are a superadmin | **View** | Opens the read-only timeline. Claims nothing, and the holder keeps the lead |
+| `view` | Someone else holds it, you are a superadmin | **View** | Opens the workspace read-only. Claims nothing, and the holder keeps the lead |
 | `locked` | Someone else holds it, you are an agent | *Locked* | No action |
 
 **Resume still asks the server, and changes nothing.** It sends the same claim

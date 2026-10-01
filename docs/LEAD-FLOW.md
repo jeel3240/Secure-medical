@@ -66,13 +66,13 @@ highest in this list wins.
 | Status | Means | In the queue? |
 |---|---|---|
 | **Opted out** | Texted STOP, or an agent pressed DNC. The number is blocked | No |
-| **Closed** | An agent pressed Closed | No |
-| **Working** | An agent holds it, or has left a note, callback, call, SMS or outcome on it | Yes |
+| **Closed** | An agent pressed Closed | No, until something reopens it - "Ways back", below |
+| **Working** | An agent holds it, or has left a note, a callback, a call they placed or answered, an SMS or an outcome on it | Yes |
 | **Needs review** | Two replies we could not understand | Yes |
 | **Ready** | Answered all three, nobody has touched it | Yes |
-| **Expired** | Went quiet during the questions | No, unless they text us |
-| **Answering** | Partway through the questions | No |
-| **Awaiting reply** | Has not answered question 1 | No |
+| **Expired** | Went quiet during the questions | No, unless they text or ring us |
+| **Answering** | Partway through the questions | No, unless an agent holds it or they ring us and nobody answers |
+| **Awaiting reply** | Has not answered question 1 | No, with the same two exceptions |
 
 Working outranks the SMS statuses: an expired or needs-review lead that an
 agent is handling reads Working.
@@ -121,8 +121,8 @@ There is no reason to pick when closing. The note says why, if anything does.
 |---|---|
 | An expired lead texts us | Back as **Inbound reply** |
 | A closed lead texts us | Back as **Inbound reply**. Once read, it is Closed again |
-| A lead calls our number and nobody answers | Back as **Missed call**, closed or not, until an agent calls or texts them. The agent it rang also gets it on My Callbacks. `TWILIO.md`, "Incoming calls" |
-| An agent books a callback after closing a lead | Back as **Working**, until the callback is done |
+| A lead calls our number and nobody answers | Back as **Missed call**, closed or not, until an agent calls or texts them, answers when they ring again, or saves an outcome. If the call rang an agent, that agent also gets it on My Callbacks. `TWILIO.md`, "A missed call" |
+| An agent books a callback after closing a lead | Back as **Callback – name · time** in the queue (Working on Admin > Leads), until the callback is done |
 | An opted-out lead texts START | Unblocked, and back as **Inbound reply** for a person to read. The questions do not restart - `STATE-MACHINE.md`, "Opting back in" |
 | An agent picks a lead and puts it back without doing anything | Back to **Ready** |
 
@@ -138,6 +138,18 @@ The flow above replaced a looser one the same day:
 | "In progress" meant two things | Answering (SMS) and Working (agent) |
 | Eight outcomes, none of which removed a lead | Closed and DNC. Closed removes it |
 | Save and Save & next lead | Save. An outcome releases the lead and returns to the queue (2026-09-29) |
+
+## What changed on 2026-10-01
+
+Calling was built, both ways - `TWILIO.md`:
+
+| Before | After |
+|---|---|
+| The Call button was a placeholder | Agents call a lead they hold from the browser; every call is on the timeline |
+| A lead who rang our number reached nothing | They ring the browser of the agent holding them, or who last called them |
+| - | A call nobody answers: the lead hears a message and is texted, the queue says **Missed call**, and the agent it rang gets a callback |
+| Four queue statuses | Five: Missed call ranks second, after Working |
+| A callback was only ever booked by a person | The system books one for a missed call, and finishes it when the lead is got back to |
 
 ## What changed on 2026-09-29
 
