@@ -1,14 +1,20 @@
 # Browser calling (Twilio)
 
 Phase 4, built 2026-10-01. An agent clicks **Call** in the workspace and talks
-to the lead from the browser. The lead sees Secure Medical's number. Every call
-is saved to `calls` and shows on the lead's timeline.
+to the lead from the browser. The lead sees Secure Medical's number. A lead who
+rings that number back rings their agent's browser, and a call nobody answers
+becomes a text to the lead, a tag in the queue and a callback for that agent -
+"Incoming calls", below. Every call, either way, is saved to `calls` and shows
+on the lead's timeline.
 
 Code: `backend/src/core/calls.ts` (the rules, pure), `db/calls.ts` (the SQL),
 `integrations/twilio.ts` (the only file that uses the twilio library),
 `api/calls.ts` (the browser's routes), `api/twilio-webhooks.ts` (Twilio's
 routes), `twilio-settings.ts` (the settings). Screen: `frontend/src/lib/call-state.ts`,
-`lib/calling.ts`, `pages/workspace/useLeadCall.ts`, `pages/workspace/CallControl.tsx`.
+`lib/calling.ts`, `pages/workspace/useLeadCall.ts`, `pages/workspace/CallControl.tsx`,
+`CallBar.tsx`; for incoming calls `db/missed-call-text.ts`, `lib/incoming-state.ts`,
+`lib/incoming-call.ts`, `lib/ringtone.ts`, `lib/call-notification.ts`,
+`lib/caller-context.ts` and `layout/IncomingCall.tsx`.
 
 ## How a call works
 

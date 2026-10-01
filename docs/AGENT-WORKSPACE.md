@@ -101,7 +101,7 @@ the agent SMS box is disabled on a DNC lead rather than failing at send time.
 
 | Method | Path | Does |
 |---|---|---|
-| `GET` | `/api/leads/:id` | Lead card: name, phone, source, age, score, tier, answer chips, score breakdown, holder, flags (DNC, needs review, unread, expired). Read-only - see below. |
+| `GET` | `/api/leads/:id` | Lead card: name, phone, source, age, score, tier, answer chips, score breakdown, holder, flags (DNC, needs review, unread, expired, missed call). Read-only - see below. |
 | `GET` | `/api/leads/:id/timeline` | Every event for the lead, oldest first: system, outbound SMS, inbound reply, agent SMS, call, note, callback, disposition. |
 | `POST` | `/api/leads/:id/read` | Clears `has_unread_inbound`. 204, idempotent. |
 | `POST` | `/api/leads/:id/claim` | Claims it. 409 `already_claimed` with the holder's name when someone else has it. |
