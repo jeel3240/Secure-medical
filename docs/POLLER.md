@@ -46,7 +46,8 @@ filter would have done server-side.
    - confirm it is really in the group, by exact name against `groups[]`
    - normalise the phone to E.164
    - if `optOut`, or the phone is on `dnc_list`: insert the lead with a
-     `suppressed` conversation and add it to `dnc_list` if it has no row there
+     `suppressed` conversation, and - when EZ Texting has it opted out and we
+     hold no live block for it - block the number
    - otherwise insert the lead with an `open` conversation at step 1, then send
      question 1 and record it as an outbound message
 6. If the page was not the last, request the next one.
@@ -111,23 +112,23 @@ is still visible:
 
 | Check | What happens |
 |---|---|
-| EZ Texting has the contact `optOut: true` | Lead saved with a `suppressed` conversation, added to `dnc_list` with reason `ezt_opt_out` if the number has no row there, nothing sent |
+| EZ Texting has the contact `optOut: true` | Lead saved with a `suppressed` conversation, blocked with reason `ezt_opt_out` unless we already hold a live block for it, recorded in the activity log, nothing sent |
 | The phone is on our `dnc_list`, not released | Lead saved with a `suppressed` conversation, nothing sent |
 
-**The poller writes `dnc_list` with its own insert, not through `db/dnc.ts`** -
-`ON CONFLICT (phone) DO NOTHING`. Two consequences, both known gaps as of
-2026-10-01:
+**The block goes through `db/dnc.ts`, like every other - Jeel, 2026-10-01.**
+The company keeps a record of everything that happens (`AUDIT.md`), and this
+was the one block that left none: the poller had its own insert, `ON CONFLICT
+DO NOTHING`. It now calls `blockNumber` inside the lead's transaction, so the
+lead, its suppressed conversation, the block and a `dnc.blocked` record commit
+together. Two things follow:
 
-- A number whose block was released by START, and which then arrives from EZ
-  Texting opted out, keeps its released row: it is not blocked again. The
-  conversation is still `suppressed`, so nothing automated is sent, but an
-  agent could text or call it.
-- No `dnc.blocked` row is written to the activity log (`AUDIT.md`).
+- A number whose block was released by START, and which EZ Texting then
+  delivers opted out, is blocked again, and the record keeps what the row said
+  before.
+- A number we already hold a live block for is left exactly as it is - its
+  own reason stands, and nothing is recorded because nothing changed.
 
-Routing it through `blockNumber` would fix both, but that function overwrites
-the row's reason, and the poller reaches this branch for a number already
-blocked for another reason as well; it needs to tell the two cases apart
-first. Not done.
+`scripts/activity-live-check.ts` runs the real poll for all three cases.
 
 In practice EZ Texting also removes an opted-out contact from every group, so
 the poller usually never sees one at all - observed 2026-09-22, when a number

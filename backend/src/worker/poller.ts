@@ -1,3 +1,4 @@
+import { blockNumber, DNC_REASONS } from '../db/dnc';
 import { pool } from '../db/pool';
 import { config } from '../config';
 import {
@@ -106,7 +107,9 @@ async function isOnDnc(phone: string): Promise<boolean> {
 async function insertLead(
   contact: EztContact,
   phone: string,
-  status: 'open' | 'suppressed'
+  status: 'open' | 'suppressed',
+  /** EZ Texting has the contact opted out and we hold no live block for it: block it. */
+  blockAsOptedOut = false
 ): Promise<number | null> {
   const group = findGroup(contact, config.ezt.group);
   const client = await pool.connect();
@@ -143,12 +146,17 @@ async function insertLead(
       [leadId, status, status === 'open' ? 1 : null]
     );
 
-    if (status === 'suppressed') {
-      await client.query(
-        `INSERT INTO dnc_list (phone, reason) VALUES ($1, 'ezt_opt_out')
-         ON CONFLICT (phone) DO NOTHING`,
-        [phone]
-      );
+    // Through db/dnc.ts, like every other block - Jeel, 2026-10-01. Until then
+    // this was the poller's own insert, `ON CONFLICT DO NOTHING`, which wrote no
+    // `dnc.blocked` record (docs/AUDIT.md: nothing may be lost) and left a
+    // number released by START unblocked when EZ Texting delivered it opted out
+    // again. In the lead's own transaction, so the lead, its suppressed
+    // conversation, the block and its record commit together.
+    //
+    // Only when the number is not already blocked: a live block has its own
+    // reason and record, and re-blocking would overwrite the reason with ours.
+    if (blockAsOptedOut) {
+      await blockNumber(client, phone, DNC_REASONS.eztOptOut);
     }
 
     await client.query('COMMIT');
@@ -262,8 +270,9 @@ export async function pollOnce(): Promise<PollStats> {
       // TODO (Phase 2): this branches on optOut vs not. It needs a third case
       // for a phone we already hold, keyed on that lead's newest conversation
       // status - see the note on insertLead.
-      if (contact.optOut || (await isOnDnc(phone))) {
-        const leadId = await insertLead(contact, phone, 'suppressed');
+      const alreadyBlocked = await isOnDnc(phone);
+      if (contact.optOut || alreadyBlocked) {
+        const leadId = await insertLead(contact, phone, 'suppressed', Boolean(contact.optOut) && !alreadyBlocked);
         if (leadId === null) {
           stats.skipped += 1;
         } else {

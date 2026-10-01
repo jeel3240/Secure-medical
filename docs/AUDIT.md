@@ -5,7 +5,7 @@ instruction that day: whatever action happens, all of it should be tracked.
 
 Code: `backend/src/core/activity.ts` (the list of actions), `db/activity.ts`
 (the writer), migration `006_activity_log.sql`. Proof:
-`scripts/activity-live-check.ts`, 35 checks against a real Postgres.
+`scripts/activity-live-check.ts`, 42 checks against a real Postgres.
 
 ## What was being lost
 
@@ -52,7 +52,7 @@ it.
 | `call.started`, `call.ended`, `call.refused` | A call. A refused call leaves no `calls` row, so the log is its only record | `callSid`, `outcome`, `durationSec`, `reason` |
 | `call.incoming` | A lead rings our number and an agent is rung - the subject is that agent. From a number we hold no lead for there is no `calls` row, so the log is its only record | `callId`, `callSid`; for an unknown number, `phone` and `known: false` |
 | `call.missed` | An incoming call nobody answered. The subject is the agent it rang | `callId`, `callSid`; `direction`, `outcome`, `durationSec` when a ring went unanswered; `because: 'no_agent'` when there was nobody to ring |
-| `dnc.blocked` | A number is blocked, by a STOP reply or an agent's DNC outcome | `phone`, `reason`, and `previous` - what the row said before a re-block overwrote it |
+| `dnc.blocked` | A number is blocked: by a STOP reply, by an agent's DNC outcome, or because a contact arrived from EZ Texting already opted out (2026-10-01 - until then that one left no record) | `phone`, `reason`, and `previous` - what the row said before a re-block overwrote it |
 | `dnc.released` | A block is lifted, by a START reply - the only thing that releases one | `phone`, `releaseReason`, `blockReason`, `blockedAt` |
 | `auth.signed_in`, `auth.signed_out`, `auth.password_changed` | | |
 | `auth.sign_in_failed` | A refused sign-in | The `email` tried and `why`. Never the password |
@@ -167,11 +167,6 @@ database and has no screen yet.
 
 ## What this does not cover
 
-- **The poller's block.** A contact that arrives already opted out on EZ
-  Texting is put on `dnc_list` by the poller's own insert, not through
-  `db/dnc.ts`, so it leaves no `dnc.blocked` row. The block is in `dnc_list`
-  with reason `ezt_opt_out`; that it happened, and when, is not in the log.
-  A known gap - `POLLER.md`.
 - **Call audio.** No recording. Awaiting Jeel's decision; some US states need
   everyone on the call to consent.
 - **Backups.** The log protects against the app and against edits. It does not
@@ -191,7 +186,7 @@ database and has no screen yet.
 
 | What | Where |
 |---|---|
-| Every action leaves its record; nothing is recorded when nothing changed; the log and the archive refuse edits and deletes; a lead with history cannot be deleted | `scripts/activity-live-check.ts` |
+| Every action leaves its record, the poller's block of an opted-out arrival included; nothing is recorded when nothing changed; the log and the archive refuse edits and deletes; a lead with history cannot be deleted | `scripts/activity-live-check.ts` |
 | Calls: `call.incoming`, `call.missed`, the callback the system books and what finishes it (`called_back`, `answered`) | `scripts/calls-live-check.ts` |
 | `callback.done` with `texted_back` | `scripts/agent-sms-live-check.ts` |
 | The claim race still holds with the record in the statement | `scripts/claims-live-check.ts` |

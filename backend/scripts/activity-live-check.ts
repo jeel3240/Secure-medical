@@ -22,6 +22,11 @@ import { setDisposition } from '../src/db/dispositions';
 import { blockNumber, DNC_REASONS, releaseNumber } from '../src/db/dnc';
 import { addNote } from '../src/db/notes';
 import { markLeadRead } from '../src/db/read-flag';
+import * as eztClientModule from '../src/integrations/ezt-client';
+import { pollOnce } from '../src/worker/poller';
+
+/** The module the poller reads EZ Texting through, so a check can supply its answer. */
+const eztClient = eztClientModule as unknown as { listContacts: (...args: unknown[]) => Promise<unknown> };
 
 let failures = 0;
 
@@ -213,6 +218,62 @@ async function main(): Promise<void> {
     await blockNumber(pool, '+15559990000', DNC_REASONS.eztOptOut);
     const { rows: orphan } = await pool.query(`SELECT lead_id, detail->>'phone' AS phone FROM activity_log WHERE detail->>'phone' = '+15559990000'`);
     check('a number with no lead is still recorded, by its phone', orphan, [{ lead_id: null, phone: '+15559990000' }]);
+  }
+
+  console.log('\na contact that arrives from EZ Texting already opted out');
+  {
+    // The real poll, with EZ Texting's answer supplied here. Only opted-out
+    // contacts, so nothing is ever sent.
+    const arrive = async (phone: string) => {
+      eztClient.listContacts = async () => ({
+        content: [
+          {
+            phoneNumber: phone.slice(1),
+            firstName: 'Opted',
+            source: process.env.EZT_SOURCE ?? 'API',
+            createdAt: new Date().toISOString(),
+            optOut: true,
+            groups: [{ id: 'g1', name: process.env.EZT_GROUP! }],
+          },
+        ],
+        last: true,
+      });
+      return pollOnce();
+    };
+    const dnc = async (phone: string) =>
+      (await pool.query(`SELECT reason, released_at IS NULL AS live FROM dnc_list WHERE phone = $1`, [phone])).rows[0];
+    const blocks = async (phone: string) =>
+      (
+        await pool.query(
+          `SELECT actor_id, lead_id IS NOT NULL AS has_lead, detail->>'reason' AS reason,
+                  detail->'previous'->>'reason' AS previous
+           FROM activity_log WHERE action = 'dnc.blocked' AND detail->>'phone' = $1 ORDER BY id`,
+          [phone]
+        )
+      ).rows;
+
+    const stats = await arrive('+15550000750');
+    check('is saved suppressed', stats.suppressed, 1);
+    check('is blocked', await dnc('+15550000750'), { reason: 'ezt_opt_out', live: true });
+    check('and the block is recorded, against its lead, as the system\'s doing', await blocks('+15550000750'), [
+      { actor_id: null, has_lead: true, reason: 'ezt_opt_out', previous: null },
+    ]);
+
+    // STOP, then START, then EZ Texting delivers them opted out again.
+    await blockNumber(pool, '+15550000751', DNC_REASONS.smsStop);
+    await releaseNumber(pool, '+15550000751');
+    await arrive('+15550000751');
+    check('a number released by START is blocked again', await dnc('+15550000751'), { reason: 'ezt_opt_out', live: true });
+    check('recorded, with what the row said before', (await blocks('+15550000751')).map((b) => [b.reason, b.previous]), [
+      ['sms_stop', null],
+      ['ezt_opt_out', 'sms_stop'],
+    ]);
+
+    // Already blocked for its own reason: that reason and its record stand.
+    await blockNumber(pool, '+15550000752', DNC_REASONS.smsStop);
+    await arrive('+15550000752');
+    check('a number already blocked keeps its own reason', await dnc('+15550000752'), { reason: 'sms_stop', live: true });
+    check('and nothing more is recorded, since nothing changed', (await blocks('+15550000752')).length, 1);
   }
 
   console.log('\ncalls');

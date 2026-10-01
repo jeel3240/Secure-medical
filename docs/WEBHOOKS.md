@@ -159,10 +159,10 @@ because it holds the keyword list; the core decides what that means.
 They were locals here until task 8 gave them a second caller - an agent's DNC
 disposition, `AGENT-WORKSPACE.md`. Moved rather than copied: a compliance table
 with two insert statements is a table that eventually holds two shapes of row.
-A STOP reply and an agent's disposition write the same upsert, and only a
-row with `released_at IS NULL` blocks anything. The poller, finding a contact
-already opted out, is the exception: it has its own insert, which leaves an
-existing row alone - `POLLER.md` has the two gaps that leaves. The keyword lists and the
+Every path that blocks a number - a STOP reply, the poller finding a contact
+already opted out, an agent's disposition - writes the same upsert, and only a
+row with `released_at IS NULL` blocks anything. (The poller joined them on
+2026-10-01; it had its own insert until then - `POLLER.md`.) The keyword lists and the
 decision of what counts as an opt-out stay here.
 
 A send to a number on `dnc_list` is refused inside `sendMessage`, so a reply
