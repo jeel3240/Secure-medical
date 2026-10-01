@@ -181,7 +181,7 @@ you change something the docs describe, update the doc in the same commit.
     src/db/callbacks.ts     callbacks, and the today/upcoming/overdue windows
     src/db/dispositions.ts  setting a disposition, and the DNC block
     src/core/dispositions.ts  Closed and DNC, pure
-    src/db/dnc.ts           blocking and releasing a number - the webhook and the DNC outcome use it; the poller has its own insert (docs/POLLER.md)
+    src/db/dnc.ts           blocking and releasing a number - every path uses it
     src/db/agent-sms.ts     agent SMS, and the rule 2b take-over timestamp
     src/core/score-breakdown.ts  answer chips and the score breakdown, pure
     scripts/claims-live-check.ts  proves that SQL, including the claim race
