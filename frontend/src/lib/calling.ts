@@ -70,7 +70,10 @@ const MESSAGE_FOR_CODE: Record<number, string> = {
   31401: 'Allow microphone access for this site in your browser, then call again.',
   31402: 'No microphone was found. Plug one in, or check your sound settings, then call again.',
   20104: 'Your calling session expired. Call again.',
-  31005: 'The connection to the calling service dropped. Check your internet and call again.',
+  // Twilio sends 31005 both when the line drops and when the number cannot be
+  // dialled at all (an invalid number - found 2026-10-01 calling a test lead's
+  // made-up 555 number, where "check your internet" pointed the wrong way).
+  31005: 'The call did not connect. The number may not be reachable, or the connection dropped.',
   31009: 'Could not reach the calling service. Check your internet and call again.',
 };
 
