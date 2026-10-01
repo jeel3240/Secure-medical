@@ -22,9 +22,11 @@ change only the shape.
 ```
 
 - `event` is a dotted name, and is the field everything is grouped by:
-  `poll.tick`, `webhook.received`, `webhook.ignored`, `sms.sent`,
-  `sms.failed`, `conversation.advanced`, `conversation.expired`,
-  `lead.created`, `auth.login_failed`.
+  `poll.tick`, `webhook.ignored`, `sms.sent`, `sms.failed`,
+  `conversation.advanced`, `conversation.expired`. The full list is "Events in
+  use", below. (This list first named three that were never built -
+  `webhook.received`, `lead.created`, `auth.login_failed`; a failed sign-in is
+  in the activity log, `AUDIT.md`, not here.)
 - `level` is `info`, `warn` or `error`. An alarm on `level=error` is the
   cheapest useful alarm there is.
 - Identifiers go in their own fields (`leadId`, `conversationId`) so a single
@@ -77,11 +79,13 @@ firing a real webhook: the number appears nowhere in the output.
 
 | Event | Where |
 |---|---|
-| `api.started`, `api.refused_start` | `api/index.ts`. `refused_start` carries `reason`: `weak_jwt_secret` or `no_webhook_token` (`api/startup-checks.ts`) |
+| `api.started`, `api.refused_start` | `api/index.ts`. `refused_start` carries `reason`: `weak_jwt_secret`, `no_webhook_token` or `twilio_incomplete` - the last with `missing`, the settings not set (`api/startup-checks.ts`) |
 | `worker.started`, `poll.tick`, `poll.failed` | `worker/index.ts` |
 | `conversation.expired`, `expiry.failed` | `worker/index.ts` |
-| `call.token_issued`, `call.started`, `call.refused`, `call.failed_to_start`, `call.finished`, `twilio.webhook_rejected`, `calling.off` | `api/calls.ts`, `api/twilio-webhooks.ts`, `api/index.ts` - browser calling, `TWILIO.md`. `call.refused` carries `reason`; `twilio.webhook_rejected` usually means `PUBLIC_URL` is not the address Twilio calls |
+| `call.token_issued`, `call.started`, `call.refused`, `call.failed_to_start`, `call.finished`, `call.incoming`, `call.incoming_failed`, `call.missed_not_recorded`, `twilio.webhook_rejected`, `twilio.archive_failed`, `calling.off` | `api/calls.ts`, `api/twilio-webhooks.ts`, `api/index.ts` - browser calling, `TWILIO.md`. `call.refused` carries `reason`; `twilio.webhook_rejected` usually means `PUBLIC_URL` is not the address Twilio calls |
 | `sms.sent`, `sms.failed`, `sms.no_template`, `sms.name_dropped`, `sms.record_failed` | `worker/poller.ts`, `worker/retry-openers.ts`, `worker/opener.ts` (`sms.name_dropped`), `api/reply-flow.ts`, `db/agent-sms.ts`, `db/outbound.ts` (`sms.record_failed`) |
+| | The text after a missed call logs the same events with `key: message_missed_call` (`db/missed-call-text.ts`). Its `sms.failed` is at `warn`, a real refusal by EZ Texting included, so an alarm on `level=error` alone does not catch it |
+| `opener.retry`, `opener.retry_failed`, `opener.gave_up` | `worker/retry-openers.ts` - `POLLER.md`, "Retrying a failed opener" |
 | `webhook.rejected`, `webhook.ignored`, `webhook.failed` | `api/webhooks.ts` |
 | `conversation.advanced` | `api/webhooks.ts` |
 | `dnc.blocked`, `dnc.released` | `api/webhooks.ts` |
@@ -94,7 +98,8 @@ the logs will never know to look for it.
 
 ### What is deliberately not structured
 
-`src/cli/create-superadmin.ts` and `src/config.ts` still use `console`. The CLI
+`src/cli/create-superadmin.ts`, `src/cli/twilio-configure.ts`,
+`scripts/migrate.js` and `src/config.ts` still use `console`. The CLI
 prints a one-time password to a human's terminal - that must never become a
 shipped JSON log line - and `config.ts` runs before anything else exists, to say
 which env var is missing.
@@ -102,14 +107,15 @@ which env var is missing.
 ## Health endpoint
 
 `GET /api/health` exists and answers `{"status":"ok"}`. It only proves the API
-process is alive - it never touches the database or the worker, so it stays as
-it is for Caddy and container checks.
+process is alive - it never touches the database or the worker. It is there
+for a Caddy or container check; none is configured today.
 
 Phase 3 adds a deeper one, superadmin-only, for the Admin > Overview panel and
 for anything watching the system from outside:
 
 `GET /api/admin/health` - the database round-trip, the last successful poll and
-how long ago, the last inbound webhook, the count of conversations due to expire
+how long ago, the last inbound reply we stored (not every webhook - a request
+we ignored, and Twilio's, do not move it), the count of conversations due to expire
 but not yet swept, and whether `EZT_SEND_GROUP` is set.
 
 The worker is a separate process with no HTTP server, so its health has to be
@@ -126,7 +132,7 @@ Five checks, each with its own `status`, a `message` when it is degraded, and a
 | `database` | `SELECT 1` fails. Nothing below runs; the response returns early rather than letting four more queries fail in turn |
 | `poller` | The last poll was over 6 minutes ago, or there has never been one |
 | `webhook` | Never - its status is `info`, not `ok`: a quiet night is not a broken webhook, so it has no verdict. Reports the last reply's time for a human to read |
-| `expiry` | An open conversation is more than 10 minutes past its `expires_at`. The worker sweeps about once a minute, so that is several missed sweeps, not one slow one |
+| `expiry` | An open conversation is more than 10 minutes past its `expires_at`. The worker sweeps on every poll, every 30 seconds by default, so that is many missed sweeps, not one slow one |
 | `sending` | `EZT_SEND_GROUP` is unset, which makes `sendMessage` refuse every send - **or** the newest send attempt of the last day was refused by EZ Texting. Reports the day's failures and the last successful send |
 
 *(2026-09-28, Jeel: "i want all real". Until then `webhook` and `expiry` always
@@ -137,7 +143,7 @@ whole report degraded.)*
 
 **The poller's liveness is `settings.updated_at`, not the checkpoint's value.**
 The value is the newest contact's `createdAt`, so on a quiet account it stands
-still while the worker polls happily every minute - reading it would report a
+still while the worker polls happily every 30 seconds - reading it would report a
 healthy system as dead every time leads stop arriving. `updated_at` moves on
 every successful poll. Both are in the response, so the two are not confused.
 *(2026-09-28: that last sentence was not true until this date. The poller wrote
@@ -153,9 +159,15 @@ The 6-minute threshold is six times the old 60s interval (twelve of the 30s one 
 a slow EZ Texting page or a restart is not a false alarm, short enough that a
 dead worker is noticed within the working hour.
 
-**The webhook and expiry checks never set the verdict.** Leads reply when they
-reply, and a quiet night is not a broken webhook; a few unswept expiries between
-sweeps are normal. They are numbers for a human, not alarms.
+**Only the webhook check never sets the verdict.** Leads reply when they
+reply, and a quiet night is not a broken webhook: it is a time for a human to
+read. Expiry does set it - any conversation more than 10 minutes past its
+`expires_at` makes the report degraded, as the table says. (This paragraph
+said neither did; that was true until 2026-09-28.)
+
+**Calling has no check.** Nothing here says whether Twilio is reachable or
+whether the phone number still points at this server. A call that fails shows
+as `call.*` errors in the log.
 
 **It answers 200 even when degraded.** The report is the point, and the body's
 `status` is the verdict. A monitoring tool reading only the status code would
@@ -166,10 +178,10 @@ session, so an uptime service cannot poll this URL as it stands. That follows
 this doc's original decision, and the response does say how the business is
 doing rather than just whether a process is up. If external monitoring is wanted
 later it should get a separate unauthenticated route returning less - not this
-guard removed. Worth settling with Jeel before Phase 4.
+guard removed. Still open after Phase 4 - CLAUDE.md §10.
 
 `GET /api/health` is untouched and still open: `{"status":"ok"}`, no database
-access, for Caddy and the container check. A test asserts it never reaches the
+access, for a Caddy or container check if one is added. A test asserts it never reaches the
 database, since that is the whole difference between the two.
 
 ## The two ways this system goes quiet

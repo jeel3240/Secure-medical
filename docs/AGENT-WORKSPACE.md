@@ -91,7 +91,10 @@ conversation over, because nothing reached the lead. Before that nothing was
 kept and the agent retyped the text. `db/failed-sends.ts`; `FRONTEND.md`.
 
 **The DNC disposition blocks the number** for SMS and calls: it writes
-`dnc_list` with reason `agent_disposition` and suppresses any open conversation, the
+`dnc_list` with reason `agent_disposition` and suppresses any open conversation
+*(the suppressing was specified here from the start but only built on
+2026-10-01, found in the doc review; until then the conversation stayed open
+until it expired)*, the
 same end state as an SMS STOP. It is the only way a number reaches that list by
 hand - there is no manual add screen (Jeel, 2026-09-23). It needs a confirm
 dialog, and it cannot be undone from the app.
@@ -321,7 +324,7 @@ the transaction, that blocking reuses the single row a number is allowed, that a
 blocked lead leaves the queue and a released one returns, that re-blocking
 after a release clears the release columns - and that Closed takes a lead out,
 the retired closing values still do, and what keeps or brings a closed one
-back - 41 checks as of 2026-10-01, all passing.
+back - 43 checks as of 2026-10-01, all passing.
 
 
 ## Agent SMS

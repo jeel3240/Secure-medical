@@ -8,6 +8,12 @@ EZ Texting has no session.
 
 Code: `backend/src/api/webhooks.ts`. Payload shape: `docs/EZTEXTING-API.md`.
 
+**This doc is EZ Texting's webhook only.** Twilio's four - a call being placed,
+a lead calling in, and how each ended - are in `TWILIO.md`. They differ in one
+way that matters: Twilio signs every request, so those are checked by
+signature rather than by a secret in the path. Both kinds are kept as received
+in `webhook_events` (`AUDIT.md`).
+
 ## What it does
 
 0. **Keep the request as it arrived** - `webhook_events`, 2026-10-01. Before
@@ -19,7 +25,8 @@ Code: `backend/src/api/webhooks.ts`. Payload shape: `docs/EZTEXTING-API.md`.
    stops retrying.
 2. Normalise `fromNumber` to E.164.
 3. Find the lead by phone. **If there is none, stop**: log it, opt the number
-   out if the reply was a STOP, return 200, and create nothing - see below.
+   out if the reply was a STOP - or release its block if it was a START -
+   return 200, and create nothing else - see below.
 4. Insert the message, deduped on `(from_number, received_at)`.
 5. ~~Set `leads.has_unread_inbound`.~~ *(2026-09-28: set only when a person has
    to read the reply, and after the state machine has run, since it decides -
@@ -31,7 +38,7 @@ Code: `backend/src/api/webhooks.ts`. Payload shape: `docs/EZTEXTING-API.md`.
 7. If it is an opt-in - START, UNSTOP, YES, SUBSCRIBE, or the payload's `optIn`
    flag - release the block instead, keeping the row. The conversation is left
    as it is. See STATE-MACHINE.md, "Opting back in".
-7. Return 200.
+8. Return 200.
 
 All of it runs in one transaction.
 
@@ -49,8 +56,9 @@ question was being answered.
 ## Replies from numbers we hold no lead for
 
 **They are ignored.** Nothing is created: no lead, no conversation, no message.
-The handler logs the number, returns 200 so EZ Texting stops retrying, and
-moves on.
+The handler logs `webhook.ignored` with reason `no_lead` - never the number,
+which the logger would redact anyway - returns 200 so EZ Texting stops
+retrying, and moves on.
 
 This is the important one. **The subscription is registered per EZ Texting
 account, not per group or per sending number**, so every reply to every campaign
@@ -115,8 +123,10 @@ one. Locally the callback is an ngrok URL, which changes each time ngrok
 restarts, so the subscription has to be re-registered per session and deleted
 afterwards.
 
-**The account already has other subscriptions of this type** - one pointing at
-Zapier, one at webhook.site. Several can coexist. Do not delete them.
+**The account already has other subscriptions of this type.** Several can
+coexist. Two are permanent - the client's Zapier one and production's (the
+list further down); the webhook.site one seen here earlier is gone. Do not
+delete the permanent ones.
 
 ## Status codes
 
@@ -130,7 +140,7 @@ retrying safe.
 
 After storing the message, the handler calls `applyReply` in
 `api/reply-flow.ts`, which loads the lead's newest conversation and the
-admin-editable rules, runs the pure `step` from `core/state-machine.ts`, and
+scoring rules and tiers (changed only by migration since 2026-09-23), runs the pure `step` from `core/state-machine.ts`, and
 saves the result. STATE-MACHINE.md is the authority for what each reply does.
 
 Two details matter here:
@@ -149,9 +159,10 @@ because it holds the keyword list; the core decides what that means.
 They were locals here until task 8 gave them a second caller - an agent's DNC
 disposition, `AGENT-WORKSPACE.md`. Moved rather than copied: a compliance table
 with two insert statements is a table that eventually holds two shapes of row.
-Every path that blocks a number - a STOP reply, the poller finding a contact
-already opted out, an agent's disposition - writes the same upsert, and only a
-row with `released_at IS NULL` blocks anything. The keyword lists and the
+A STOP reply and an agent's disposition write the same upsert, and only a
+row with `released_at IS NULL` blocks anything. The poller, finding a contact
+already opted out, is the exception: it has its own insert, which leaves an
+existing row alone - `POLLER.md` has the two gaps that leaves. The keyword lists and the
 decision of what counts as an opt-out stay here.
 
 A send to a number on `dnc_list` is refused inside `sendMessage`, so a reply
@@ -198,3 +209,12 @@ curl -X DELETE -u "$EZT_USERNAME:$EZT_PASSWORD" \
 ```
 
 Two are permanent and must stay: the client's Zapier one and production.
+
+## A reply to the missed-call text
+
+The text sent after a call nobody answered (`TWILIO.md`, "A missed call") is
+an ordinary outbound message, and a reply to it is an ordinary inbound one: it
+takes the steps above and then the state machine. From a lead whose questions
+are finished it is stored and flagged for a person, which is what is wanted.
+From a lead still partway through the questions it is read as an answer to the
+current one. `STATE-MACHINE.md`, "The missed-call text".

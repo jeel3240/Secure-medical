@@ -208,6 +208,14 @@ async function main(): Promise<void> {
     // So the DNC screen can tell an agent's decision from a lead's own opt-out.
     check('recorded as the agent\'s decision', row?.reason, DNC_REASONS.agentDisposition);
     check('and the lead leaves the queue', await inQueue(lead), false);
+    check('a finished conversation is left as it was', (await pool.query(`SELECT status FROM conversations WHERE lead_id = $1`, [lead])).rows[0].status, 'completed');
+
+    // A lead still being asked the questions: the flow is over, as after a STOP.
+    const midFlow = await makeQueuedLead('+15550000529', 'MidFlow');
+    await pool.query(`UPDATE conversations SET status = 'open', step = 2 WHERE lead_id = $1`, [midFlow]);
+    await pool.query(`UPDATE leads SET assigned_to = $2, assigned_at = now() WHERE id = $1`, [midFlow, maya]);
+    await setDisposition(midFlow, maya, 'dnc');
+    check('an open conversation is suppressed', (await pool.query(`SELECT status FROM conversations WHERE lead_id = $1`, [midFlow])).rows[0].status, 'suppressed');
   }
 
   console.log('\nthe same row a STOP writes');
