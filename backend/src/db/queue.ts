@@ -9,7 +9,7 @@
  */
 
 import { queueTag, type QueueTag } from '../core/queue-tags';
-import { CLOSED_SQL } from './lead-state';
+import { CLOSED_SQL, MISSED_CALL_SQL } from './lead-state';
 import { likeLiteral } from './sql';
 import { pool } from './pool';
 
@@ -120,6 +120,7 @@ const INCLUDED = `
   AND (
     u.id IS NOT NULL
     OR l.has_unread_inbound
+    OR ${MISSED_CALL_SQL}
     OR (
       c.score > 0
       AND NOT ${CLOSED_SQL}
@@ -184,6 +185,7 @@ interface QueueDbRow {
   agent_id: number | null;
   agent_name: string | null;
   has_unread_inbound: boolean;
+  missed_call: boolean;
   callback_agent_id: number | null;
   callback_agent_name: string | null;
   callback_at: Date | null;
@@ -208,6 +210,7 @@ export async function listQueue(query: QueueQuery = {}): Promise<QueuePage> {
             ${RECEIVED} AS received_at,
             c.score, c.tier, c.status, c.q1, c.q2, c.q3,
             u.id AS agent_id, u.name AS agent_name, l.has_unread_inbound,
+            ${MISSED_CALL_SQL} AS missed_call,
             ncb.agent_id AS callback_agent_id, ncb.agent_name AS callback_agent_name,
             ncb.scheduled_at AS callback_at
      ${BASE}
@@ -272,6 +275,7 @@ export async function listQueue(query: QueueQuery = {}): Promise<QueuePage> {
         conversationStatus: r.status,
         holder: r.agent_id === null ? null : { id: r.agent_id, name: r.agent_name ?? 'Another agent' },
         hasUnreadInbound: r.has_unread_inbound,
+        missedCall: r.missed_call,
         nextCallback:
           r.callback_agent_id === null || !r.callback_at
             ? null

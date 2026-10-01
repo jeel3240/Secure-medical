@@ -7,7 +7,7 @@
  */
 
 import { pool } from './pool';
-import { CLOSED_SQL } from './lead-state';
+import { CLOSED_SQL, MISSED_CALL_SQL } from './lead-state';
 import { answerChips, scoreBreakdown, type ScoringRule } from '../core/score-breakdown';
 import type { AnswerChip, BreakdownLine } from '../core/score-breakdown';
 
@@ -54,6 +54,8 @@ export interface LeadDetail {
     unread: boolean;
     /** Went quiet past its deadline. */
     expired: boolean;
+    /** The lead rang us, nobody answered, and nobody has called or texted back. */
+    missedCall: boolean;
   };
 }
 
@@ -76,6 +78,7 @@ const SQL = `
     l.assigned_at,
     (d.id IS NOT NULL) AS on_dnc,
     ${CLOSED_SQL} AS is_closed,
+    ${MISSED_CALL_SQL} AS missed_call,
     od.created_at AS outcome_at,
     ou.name AS outcome_by
   FROM leads l
@@ -163,6 +166,7 @@ export async function getLeadDetail(leadId: number): Promise<LeadDetail | null> 
       needsReview: r.status === 'review',
       unread: r.has_unread_inbound,
       expired: r.status === 'expired',
+      missedCall: r.missed_call,
     },
   };
 }

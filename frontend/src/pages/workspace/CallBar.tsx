@@ -1,9 +1,9 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { toApiError } from '../../api/client';
-import { addNote, type LeadDetail } from '../../api/workspace';
+import { addNote } from '../../api/workspace';
 import { useEscape } from '../../components/useDismiss';
 import { callClock, endedText, type CallState } from '../../lib/call-state';
-import { formatPhone, leadName } from '../../lib/format';
+import { formatPhone } from '../../lib/format';
 import type { LeadCall } from './useLeadCall';
 
 /**
@@ -21,19 +21,34 @@ import type { LeadCall } from './useLeadCall';
  *
  * Nothing is shown while no call is being placed, is live, or has just ended.
  *
+ * Also the bar for a call a lead placed to us, once it is answered
+ * (`layout/IncomingCall.tsx`): from there on it is the same call, so it is
+ * the same bar. That is why it takes a name and a number, not a lead.
+ *
  * **No Hold.** The design has one. A real hold - the lead hears music and is
  * brought back - needs the call set up as a conference on the server, which
  * Phase 4 did not build; a button that only muted would be a lie. TWILIO.md,
  * "Not built".
  */
+export interface CallParty {
+  /** The lead a note about the call is saved to. */
+  leadId: number;
+  /** As shown; empty when the lead has no name. */
+  name: string;
+  phone: string;
+}
+
+/** What the bar needs of a call: the workspace's own, or an answered incoming one. */
+export type BarCall = Pick<LeadCall, 'state' | 'hangUp' | 'setMuted' | 'sendDigits' | 'dismiss'>;
+
 export function CallBar({
-  lead,
+  who,
   call,
   now,
   onNoteSaved,
 }: {
-  lead: LeadDetail;
-  call: LeadCall;
+  who: CallParty;
+  call: BarCall;
   /** Ticks every second, for the clock. */
   now: Date;
   /** A note was saved from the bar: reload what the page shows. */
@@ -46,13 +61,13 @@ export function CallBar({
     <div className={`call-bar call-bar--${state.phase}`} role="region" aria-label="Call">
       <div className="call-bar__who">
         <span className="call-bar__avatar" aria-hidden="true">
-          {initials(lead)}
+          {initials(who.name)}
           <span className={`call-bar__presence call-bar__presence--${presence(state)}`} />
         </span>
         <div className="call-bar__id">
           <p className="call-bar__name">
-            {leadName(lead)}
-            <span className="call-bar__phone tabular">{formatPhone(lead.phone)}</span>
+            {who.name}
+            <span className="call-bar__phone tabular">{formatPhone(who.phone)}</span>
           </p>
           <p className="call-bar__state" role="status">
             {stateText(state)}
@@ -60,7 +75,7 @@ export function CallBar({
         </div>
       </div>
 
-      {state.phase === 'ended' && <AfterCall lead={lead} onDone={call.dismiss} onSaved={onNoteSaved} />}
+      {state.phase === 'ended' && <AfterCall leadId={who.leadId} onDone={call.dismiss} onSaved={onNoteSaved} />}
 
       {state.phase === 'failed' && (
         <button type="button" className="call-bar__button call-bar__button--plain" onClick={call.dismiss}>
@@ -75,11 +90,12 @@ export function CallBar({
   );
 }
 
-/** `Maria Reyes` -> `MR`. */
-function initials(lead: LeadDetail): string {
-  const letters = [lead.firstName, lead.lastName]
-    .filter(Boolean)
-    .map((part) => (part as string).trim()[0]?.toUpperCase() ?? '')
+/** `Maria Reyes` and `Maria R.` -> `MR`. */
+export function initials(name: string): string {
+  const letters = name
+    .split(/\s+/)
+    // Letters only: a lead with no name is shown by number, which has no initials.
+    .map((part) => (/^\p{L}/u.test(part) ? part[0].toUpperCase() : ''))
     .join('')
     .slice(0, 2);
   return letters || '#';
@@ -108,7 +124,7 @@ function stateText(state: CallState): string {
 }
 
 /** The clock and the controls, while a call is being placed or is live. */
-function InCall({ state, call, now }: { state: CallState; call: LeadCall; now: Date }) {
+function InCall({ state, call, now }: { state: CallState; call: BarCall; now: Date }) {
   const [keypad, setKeypad] = useState(false);
   const live = state.phase === 'live';
   const seconds = live ? Math.max(0, (now.getTime() - state.since) / 1000) : 0;
@@ -202,7 +218,7 @@ function Keypad({ onDigit }: { onDigit: (digit: string) => void }) {
  * the same note Wrap up writes - so it shows in the Notes card at once. Skip
  * is always there: not every call needs a note.
  */
-function AfterCall({ lead, onDone, onSaved }: { lead: LeadDetail; onDone: () => void; onSaved: () => void }) {
+function AfterCall({ leadId, onDone, onSaved }: { leadId: number; onDone: () => void; onSaved: () => void }) {
   const [note, setNote] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -217,7 +233,7 @@ function AfterCall({ lead, onDone, onSaved }: { lead: LeadDetail; onDone: () => 
     setSaving(true);
     setError(null);
     try {
-      await addNote(lead.id, body);
+      await addNote(leadId, body);
       onSaved();
       onDone();
     } catch (err) {

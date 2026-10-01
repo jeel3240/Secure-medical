@@ -28,6 +28,45 @@ const closingList = CLOSING_DISPOSITIONS.map((value) => {
 }).join(', ');
 
 /**
+ * A missed call nobody has returned - Jeel, 2026-10-01. The lead rang our
+ * number and no agent answered, and since then nobody has called them, spoken
+ * to them, or texted them themselves.
+ *
+ * It needs a person, so it puts the lead in the queue and reopens a closed one,
+ * the way an unread text does. Returning the call - or an agent texting them -
+ * is what clears it; nothing has to be marked.
+ *
+ * The automated "we will call you back" text does not clear it: that text is
+ * the promise, not the call back.
+ *
+ * **A call under way counts as returning it** - found on the first real
+ * answered call, 2026-10-01: the agent was talking to the lead under a banner
+ * saying nobody had answered them, because a call has no outcome until it
+ * ends. If that call ends unanswered it is a missed call itself, and the flag
+ * is back. Only a recent one counts, so a row whose end Twilio never reported
+ * cannot hide a missed call for good.
+ */
+export const MISSED_CALL_SQL = `(
+  EXISTS (
+    SELECT 1 FROM calls mc
+    WHERE mc.lead_id = l.id AND mc.direction = 'inbound' AND mc.outcome = 'missed'
+      AND NOT EXISTS (
+        SELECT 1 FROM calls rc
+        WHERE rc.lead_id = l.id AND rc.id > mc.id
+          AND (
+            rc.direction = 'outbound'
+            OR rc.outcome = 'answered'
+            OR (rc.outcome IS NULL AND rc.started_at > now() - interval '2 hours')
+          )
+      )
+      AND NOT EXISTS (
+        SELECT 1 FROM messages am
+        WHERE am.lead_id = l.id AND am.sent_by IS NOT NULL AND am.created_at > mc.created_at
+      )
+  )
+)`;
+
+/**
  * Closed: the newest disposition is `closed` (or a retired value that meant
  * the same - `core/dispositions.ts`), and nothing has reopened it since. Two
  * things reopen a closed lead:
@@ -35,6 +74,8 @@ const closingList = CLOSING_DISPOSITIONS.map((value) => {
  * - **The lead writes to us.** A person has to read it, so it returns to the
  *   queue as an inbound reply - `has_unread_inbound`, STATE-MACHINE.md rule 2.
  *   Once read, it is closed again, without anyone pressing Closed twice.
+ * - **The lead rings us and nobody answers** - `MISSED_CALL_SQL`, 2026-10-01.
+ *   Closed again once the call is returned.
  * - **An agent books a callback after closing it** - and it is not done yet. A
  *   closed lead who texts back "actually, call me Friday" has to stay in
  *   reach, and a callback is the action that says "this is not finished".
@@ -68,6 +109,7 @@ export const CLOSED_SQL = `(
       )
   )
   AND NOT l.has_unread_inbound
+  AND NOT ${MISSED_CALL_SQL}
   AND NOT EXISTS (SELECT 1 FROM users hu WHERE hu.id = l.assigned_to AND hu.is_active)
 )`;
 
@@ -84,6 +126,11 @@ export const WORKED_SQL = `(
   OR EXISTS (SELECT 1 FROM notes wn WHERE wn.lead_id = l.id)
   OR EXISTS (SELECT 1 FROM callbacks wc WHERE wc.lead_id = l.id)
   OR EXISTS (SELECT 1 FROM dispositions wd WHERE wd.lead_id = l.id)
-  OR EXISTS (SELECT 1 FROM calls wk WHERE wk.lead_id = l.id)
+  -- A call an agent placed or answered. A missed incoming call is the lead's
+  -- doing, not an agent's work.
+  OR EXISTS (
+    SELECT 1 FROM calls wk
+    WHERE wk.lead_id = l.id AND (wk.direction = 'outbound' OR wk.outcome = 'answered')
+  )
   OR EXISTS (SELECT 1 FROM messages wm WHERE wm.lead_id = l.id AND wm.sent_by IS NOT NULL)
 )`;

@@ -1,8 +1,10 @@
 /**
  * Twilio's webhooks for browser calling - Phase 4, TWILIO.md.
  *
- *   POST /api/webhooks/twilio/voice   how to connect a call the browser started
- *   POST /api/webhooks/twilio/status  how the lead's side of that call ended
+ *   POST /api/webhooks/twilio/voice           how to connect a call the browser started
+ *   POST /api/webhooks/twilio/status          how a call ended - outgoing or incoming
+ *   POST /api/webhooks/twilio/incoming        a lead is calling our number
+ *   POST /api/webhooks/twilio/incoming/after  ringing the agent is over: what to say
  *
  * Unauthenticated, like the EZ Texting webhook, but unlike it Twilio signs
  * every request (X-Twilio-Signature), so anything unsigned or mis-signed is
@@ -15,7 +17,7 @@
 
 import express, { type NextFunction, type Request, type Response, Router } from 'express';
 import { agentIdFromIdentity, outcomeForStatus, REFUSAL_SPEECH, talkSeconds } from '../core/calls';
-import { dialTwiml, isFromTwilio, refusalTwiml } from '../integrations/twilio';
+import { dialTwiml, emptyTwiml, isFromTwilio, missedCallTwiml, refusalTwiml, ringAgentTwiml } from '../integrations/twilio';
 import { errText, log } from '../lib/log';
 import type { AppDeps } from './deps';
 import { asyncHandler } from './http';
@@ -37,6 +39,11 @@ function archive() {
   // eslint-disable-next-line @typescript-eslint/no-require-imports
   const { archiveWebhook } = require('../db/activity') as typeof import('../db/activity');
   return { pool, archiveWebhook };
+}
+
+function missedText() {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  return require('../db/missed-call-text') as typeof import('../db/missed-call-text');
 }
 
 const field = (body: Record<string, unknown>, key: string): string =>
@@ -111,24 +118,94 @@ export function twilioWebhooksRouter(deps: AppDeps): Router {
     })
   );
 
+  /**
+   * Saves how a call ended and, when that made it a missed call, texts the
+   * lead that we will call back. Safe to call for every report of the same
+   * call: only the first is recorded, and only that one sends the text.
+   */
+  const recordEnd = async (callSid: string, status: unknown, duration: unknown): Promise<void> => {
+    const outcome = outcomeForStatus(status);
+    if (!callSid || !outcome) return;
+    const durationSec = talkSeconds(outcome, duration);
+    const { recorded, missedLeadId } = await db().finishCall({ callSid, outcome, durationSec });
+    log.info('call.finished', { callSid, outcome, durationSec, recorded, missed: missedLeadId !== null });
+    if (missedLeadId !== null) await missedText().sendMissedCallText(missedLeadId);
+  };
+
   router.post(
     '/status',
     asyncHandler(async (req, res) => {
       const body = (req.body ?? {}) as Record<string, unknown>;
-      // The callback is on the lead's leg; our row is keyed by the browser's
+      // The callback is on the far leg - the lead's for a call we placed, the
+      // agent's browser for one we received; our row is keyed by the first
       // leg, which Twilio sends as the parent.
-      const callSid = field(body, 'ParentCallSid');
-      const outcome = outcomeForStatus(body.CallStatus);
-
-      if (callSid && outcome) {
-        const durationSec = talkSeconds(outcome, body.CallDuration);
-        const recorded = await db().finishCall({ callSid, outcome, durationSec });
-        log.info('call.finished', { callSid, outcome, durationSec, recorded });
-      }
+      await recordEnd(field(body, 'ParentCallSid'), body.CallStatus, body.CallDuration);
 
       // Always 204: there is nothing for Twilio to retry, even for a status we
       // do not record.
       res.sendStatus(204);
+    })
+  );
+
+  router.post(
+    '/incoming',
+    asyncHandler(async (req, res) => {
+      const body = (req.body ?? {}) as Record<string, unknown>;
+      const callSid = field(body, 'CallSid');
+      const fromPhone = field(body, 'From');
+      res.type('text/xml');
+
+      // Whatever goes wrong, the lead hears that we will call back rather than
+      // Twilio's "application error".
+      let incoming: Awaited<ReturnType<ReturnType<typeof db>['startIncomingCall']>>;
+      try {
+        incoming = await db().startIncomingCall({ callSid, fromPhone });
+      } catch (err) {
+        log.error('call.incoming_failed', { callSid, err: errText(err) });
+        res.send(missedCallTwiml());
+        return;
+      }
+
+      if (incoming.kind === 'ring') {
+        log.info('call.incoming', { callSid, leadId: incoming.lead.id, agentId: incoming.agentId });
+        res.send(ringAgentTwiml(deps.twilio!, incoming.agentId, incoming.lead));
+        return;
+      }
+
+      log.info('call.incoming', { callSid, missed: true, known: incoming.kind === 'missed' });
+      if (incoming.kind === 'missed' && incoming.firstReport) {
+        await missedText().sendMissedCallText(incoming.leadId);
+      }
+      res.send(missedCallTwiml());
+    })
+  );
+
+  // Twilio comes here when ringing the agent ends. If they talked, there is
+  // nothing to add, and /status saves the call with its length. Otherwise the
+  // lead is still on the line and hears that we will call back.
+  //
+  // The missed call is recorded here as well as by /status. /status fires
+  // whoever ended it - including a lead who hung up, which never reaches here -
+  // but it reports on the agent's leg, and an agent whose browser is closed
+  // may have no leg to report on. Whichever arrives first records it.
+  router.post(
+    '/incoming/after',
+    asyncHandler(async (req, res) => {
+      const body = (req.body ?? {}) as Record<string, unknown>;
+      const status = field(body, 'DialCallStatus');
+      res.type('text/xml');
+
+      if (status === 'completed' || status === 'answered') {
+        res.send(emptyTwiml());
+        return;
+      }
+      try {
+        await recordEnd(field(body, 'CallSid'), status, 0);
+      } catch (err) {
+        // The lead is listening: they still hear the message.
+        log.error('call.missed_not_recorded', { callSid: field(body, 'CallSid'), err: errText(err) });
+      }
+      res.send(missedCallTwiml());
     })
   );
 

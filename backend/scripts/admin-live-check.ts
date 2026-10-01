@@ -98,7 +98,7 @@ async function main(): Promise<void> {
     const config = await getAdminConfig();
 
     // Against the rows seeded by 001_init.sql.
-    check('the three questions and more are shown', config.messages.length, 8);
+    check('the three questions and more are shown', config.messages.length, 9);
     check('including the review message, sent after a second unclear reply', config.messages.some((m) => m.key === 'message_review'), true);
     check('the opener is first', config.messages[0].key, 'question_1');
     check('and is personalised', config.messages[0].personalised, true);

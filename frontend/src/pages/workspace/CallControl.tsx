@@ -4,6 +4,8 @@ import type { LeadDetail } from '../../api/workspace';
 import { Button } from '../../components/Button';
 import { callBlockedReason, isActive } from '../../lib/call-state';
 import { formatPhone } from '../../lib/format';
+import { useIncomingCall } from '../../lib/incoming-call';
+import { isBusy } from '../../lib/incoming-state';
 import type { LeadCall } from './useLeadCall';
 
 /**
@@ -43,7 +45,9 @@ export function CallControl({
     };
   }, []);
 
-  const onCall = isActive(call.state);
+  // A call a lead placed to us counts: one agent, one call at a time.
+  const receiving = useIncomingCall((s) => isBusy(s.state));
+  const onCall = isActive(call.state) || receiving;
   const blocked = callBlockedReason({
     enabled: config ? config.enabled : null,
     holdsLead: mine,

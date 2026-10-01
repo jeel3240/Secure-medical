@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Link, useNavigate, useParams } from 'react-router-dom';
+import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { toApiError } from '../api/client';
 import { claimLead, listQueue, releaseLead } from '../api/leads';
 import { usePolling } from '../api/usePolling';
@@ -17,7 +17,8 @@ import { LeadHeader } from './workspace/LeadHeader';
 import { LeadNotes } from './workspace/LeadNotes';
 import { SmsCompose } from './workspace/SmsCompose';
 import { useLeadCall } from './workspace/useLeadCall';
-import { formatTime } from '../lib/format';
+import { formatTime, leadName } from '../lib/format';
+import { useIncomingCall } from '../lib/incoming-call';
 import { useSecond } from '../lib/useSecond';
 
 /**
@@ -81,6 +82,8 @@ export function WorkspacePage() {
   // shows it. Leaving the lead ends the call - `useLeadCall`.
   const reloadAfterCall = useCallback(() => void refreshAll(), [refreshAll]);
   const call = useLeadCall(leadId, reloadAfterCall);
+  // An answered incoming call's bar sits in the same place; the page leaves it room too.
+  const incomingBar = useIncomingCall((s) => s.state.phase === 'call');
 
   /**
    * "Lead 3 of 12" - where this one sits in the queue an agent is working
@@ -122,6 +125,21 @@ export function WorkspacePage() {
         .catch(() => undefined);
     }
   }, [mine, lead?.id, lead?.flags.unread, refresh]);
+
+  /**
+   * Arrived from a missed call's **Call back** (`layout/IncomingCall.tsx`):
+   * dial as soon as the lead is theirs. Once - the flag is taken off the
+   * history entry, so a reload or Back does not ring the lead again. If
+   * someone else holds the lead, nothing is dialled and the page says who.
+   */
+  const location = useLocation();
+  const callBack = Boolean((location.state as { callBack?: boolean } | null)?.callBack);
+  const startCall = call.start;
+  useEffect(() => {
+    if (!callBack || !lead) return;
+    navigate(location.pathname, { replace: true, state: null });
+    if (mine && !lead.flags.dnc) startCall();
+  }, [callBack, lead, mine, startCall, navigate, location.pathname]);
 
   /** Pick from inside the page: the lead becomes yours and the actions wake up. */
   const pick = async () => {
@@ -183,7 +201,7 @@ export function WorkspacePage() {
   ).length;
 
   return (
-    <section className={`workspace${call.state.phase === 'idle' ? '' : ' workspace--call-bar'}`}>
+    <section className={`workspace${call.state.phase === 'idle' && !incomingBar ? '' : ' workspace--call-bar'}`}>
       <div className="workspace__top">
         <div className="workspace__top-left">
           <Button variant="ghost" onClick={() => void backToQueue()} loading={releasing}>
@@ -241,6 +259,9 @@ export function WorkspacePage() {
       <div className="workspace__flags">
         {lead.closed && <Badge tone="muted">Closed</Badge>}
         {lead.flags.dnc && <Badge tone="muted">DNC</Badge>}
+        {/* The queue's own words for it. A badge, like every other state of
+            the lead - not a sentence across the page. */}
+        {lead.flags.missedCall && <Badge tone="warning">Missed call</Badge>}
         {lead.flags.needsReview && <Badge tone="warning">Needs review</Badge>}
         {lead.flags.expired && <Badge tone="muted">Expired</Badge>}
         {lead.conversation?.agentTookOverAt && (
@@ -288,7 +309,12 @@ export function WorkspacePage() {
           <ActionsPanel lead={lead} refresh={refreshAll} canAct={mine} />
         </div>
       </div>
-      <CallBar lead={lead} call={call} now={now} onNoteSaved={reloadAfterCall} />
+      <CallBar
+        who={{ leadId: lead.id, name: leadName(lead), phone: lead.phone }}
+        call={call}
+        now={now}
+        onNoteSaved={reloadAfterCall}
+      />
     </section>
   );
 }

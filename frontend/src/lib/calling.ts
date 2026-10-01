@@ -3,19 +3,26 @@ import { toApiError } from '../api/client';
 import { getCallToken } from '../api/calls';
 
 /**
- * Placing a call from the browser - Phase 4, TWILIO.md.
+ * Calls in the browser, placed and received - Phase 4, TWILIO.md.
  *
  * The only file that touches Twilio's Voice SDK. It turns the SDK's events into
  * the plain callbacks `lib/call-state.ts` understands, so nothing above it
  * knows Twilio exists.
  *
- * The SDK is loaded on the first call, not with the app: it is large, and most
- * page loads - the queue, admin, an agent who texts - never place one.
+ * The SDK is its own chunk, fetched after the app is on screen rather than
+ * with it: it is large, and the queue should not wait for it.
  *
  * One Device for the whole session. It holds the microphone and the connection
  * to Twilio, and it refreshes its own token before the hour runs out. If
  * anything goes wrong it is thrown away, so the next call starts clean rather
  * than reusing a device in an unknown state.
+ *
+ * **Receiving.** A lead who calls our number rings the browser of one agent
+ * (TWILIO.md, "Incoming calls"). That only works while this Device is
+ * registered with Twilio, so `listenForCalls` registers it as soon as an agent
+ * is signed in and checks every half minute that it still is - a laptop that
+ * slept, a token that could not be refreshed, a device discarded after a
+ * failed call all end the registration without anyone being told.
  */
 
 export interface CallHandlers {
@@ -37,7 +44,26 @@ export interface CallHandle {
   sendDigits: (digits: string) => void;
 }
 
+/** A lead ringing this browser, not yet answered. */
+export interface IncomingRing {
+  lead: { id: number; name: string; phone: string };
+  /** Pick up. Everything after that arrives through the handlers. */
+  answer: (handlers: CallHandlers) => CallHandle;
+  /** Send them to the "we will call you back" message instead. */
+  decline: () => void;
+}
+
+export interface IncomingHandlers {
+  onRing: (ring: IncomingRing) => void;
+  /** It stopped ringing unanswered: the lead hung up, or it rang out. */
+  onRingOver: (ring: IncomingRing) => void;
+}
+
+const REGISTRATION_CHECK_MS = 30_000;
+
 let devicePromise: Promise<Device> | null = null;
+/** Set while someone is signed in and calling is on: this browser can be rung. */
+let listener: IncomingHandlers | null = null;
 
 function getDevice(): Promise<Device> {
   devicePromise ??= (async () => {
@@ -51,6 +77,12 @@ function getDevice(): Promise<Device> {
         .then((fresh) => device.updateToken(fresh))
         .catch(() => undefined);
     });
+    device.on('incoming', (call: Call) => listener && announce(call, listener));
+    // The ring is ours - lib/ringtone.ts. Twilio's own did not sound on real calls.
+    device.audio?.incoming(false);
+    // Without a listener the SDK throws a registration error as uncaught. The
+    // half-minute check is what puts it right.
+    device.on('error', () => undefined);
     return device;
   })().catch((err) => {
     devicePromise = null;
@@ -63,6 +95,93 @@ function discardDevice(): void {
   const stale = devicePromise;
   devicePromise = null;
   void stale?.then((device) => device.destroy()).catch(() => undefined);
+}
+
+/** Registers the device if it is not; replaces one that has been destroyed. */
+async function keepRegistered(): Promise<void> {
+  if (!listener) return;
+  try {
+    const device = await getDevice();
+    if (device.state === 'destroyed') discardDevice();
+    else if (device.state === 'unregistered') await device.register();
+  } catch {
+    // Offline, signed out, or Twilio unreachable. Start clean at the next check.
+    discardDevice();
+  }
+}
+
+/**
+ * Lets this browser be rung, until the returned function is called. One
+ * listener at a time - the app shell's.
+ */
+export function listenForCalls(handlers: IncomingHandlers): () => void {
+  listener = handlers;
+  void keepRegistered();
+  const timer = window.setInterval(() => void keepRegistered(), REGISTRATION_CHECK_MS);
+  return () => {
+    window.clearInterval(timer);
+    listener = null;
+    // Signed out: this browser must stop ringing for them.
+    discardDevice();
+  };
+}
+
+/** Who is calling, from what the server attached to the call - `ringAgentTwiml`. */
+export function incomingLead(params: Map<string, string>, from: string | undefined): IncomingRing['lead'] {
+  const id = Number(params.get('leadId'));
+  return {
+    id: Number.isInteger(id) && id > 0 ? id : 0,
+    name: params.get('leadName')?.trim() ?? '',
+    phone: params.get('leadPhone') || from || '',
+  };
+}
+
+function announce(call: Call, handlers: IncomingHandlers): void {
+  let answered = false;
+  const ring: IncomingRing = {
+    lead: incomingLead(call.customParameters, call.parameters.From),
+    answer: (callHandlers) => {
+      answered = true;
+      const handle = wire(call, callHandlers);
+      call.accept();
+      return handle;
+    },
+    decline: () => {
+      answered = true;
+      call.reject();
+    },
+  };
+  // Before it is answered, the ring ending is a missed call. Once it is, the
+  // call's own handlers report how it ended.
+  call.on('cancel', () => !answered && handlers.onRingOver(ring));
+  handlers.onRing(ring);
+}
+
+/** Joins a call's events to the handlers, and returns its controls. */
+function wire(call: Call, handlers: CallHandlers): CallHandle {
+  let over = false;
+  const end = () => {
+    if (over) return;
+    over = true;
+    handlers.onEnded();
+  };
+
+  call.on('ringing', () => handlers.onRinging());
+  call.on('accept', () => handlers.onAnswered());
+  call.on('mute', (muted: boolean) => handlers.onMuted(muted));
+  call.on('disconnect', end);
+  call.on('cancel', end);
+  call.on('reject', end);
+  call.on('error', (err: unknown) => {
+    discardDevice();
+    handlers.onFailed(describeCallError(err));
+  });
+
+  return {
+    hangUp: () => call.disconnect(),
+    setMuted: (muted) => call.mute(muted),
+    sendDigits: (digits) => call.sendDigits(digits),
+  };
 }
 
 /** Twilio's error codes that an agent can do something about. */
@@ -113,27 +232,5 @@ export async function placeCall(leadId: number, handlers: CallHandlers): Promise
     throw err;
   }
 
-  let over = false;
-  const end = () => {
-    if (over) return;
-    over = true;
-    handlers.onEnded();
-  };
-
-  call.on('ringing', () => handlers.onRinging());
-  call.on('accept', () => handlers.onAnswered());
-  call.on('mute', (muted: boolean) => handlers.onMuted(muted));
-  call.on('disconnect', end);
-  call.on('cancel', end);
-  call.on('reject', end);
-  call.on('error', (err: unknown) => {
-    discardDevice();
-    handlers.onFailed(describeCallError(err));
-  });
-
-  return {
-    hangUp: () => call.disconnect(),
-    setMuted: (muted) => call.mute(muted),
-    sendDigits: (digits) => call.sendDigits(digits),
-  };
+  return wire(call, handlers);
 }

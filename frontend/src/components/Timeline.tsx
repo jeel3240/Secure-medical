@@ -59,6 +59,13 @@ const CALL_OUTCOME: Record<string, string> = {
 
 export function callText(detail: Record<string, unknown>): string {
   const { outcome } = detail;
+  // A lead calling us. Missed says it all; an answered one has a length.
+  if (detail.direction === 'inbound') {
+    if (typeof outcome !== 'string') return 'Incoming call · ringing';
+    if (outcome === 'missed') return 'Missed call · told we will call back';
+    if (outcome === 'answered') return `Incoming call · answered · ${duration(detail.durationSec)}`;
+    return `Incoming call · ${CALL_OUTCOME[outcome] ?? outcome.replace(/_/g, ' ')}`;
+  }
   if (typeof outcome !== 'string') return 'Outbound call · in progress';
   if (outcome === 'answered') return `Outbound call · answered · ${duration(detail.durationSec)}`;
   return `Outbound call · ${CALL_OUTCOME[outcome] ?? outcome.replace(/_/g, ' ')}`;
@@ -145,6 +152,8 @@ function entryText(entry: TimelineEntry): string {
     case 'callback': {
       const at = typeof d.scheduledAt === 'string' ? new Date(d.scheduledAt) : null;
       const when = at ? `${dayFormat.format(at)} ${formatTime(at)}` : 'unscheduled';
+      // One the system booked because their call was missed has no chosen time.
+      if (d.reason === 'missed_call') return d.doneAt ? 'Missed call returned' : 'Callback added · missed call';
       return d.doneAt ? `Callback completed (was ${when})` : `Callback scheduled for ${when}`;
     }
     case 'disposition': {

@@ -108,6 +108,15 @@ describe('calls', () => {
     expect(screen.getByText(text)).toBeDefined();
   });
 
+  it.each([
+    ['missed', 0, 'Missed call · told we will call back'],
+    ['answered', 75, 'Incoming call · answered · 1:15'],
+    [null, null, 'Incoming call · ringing'],
+  ])('a lead calling us, %s: says so', (outcome, durationSec, text) => {
+    render(<Timeline entries={[entry({ kind: 'call', detail: { outcome, durationSec, direction: 'inbound' } })]} />);
+    expect(screen.getByText(text)).toBeDefined();
+  });
+
   it('a call with no outcome yet is in progress', () => {
     render(<Timeline entries={[entry({ kind: 'call', detail: { outcome: null, durationSec: null } })]} />);
     expect(screen.getByText('Outbound call · in progress')).toBeDefined();
@@ -115,6 +124,15 @@ describe('calls', () => {
 });
 
 describe('callbacks and dispositions', () => {
+  it.each([
+    [null, 'Callback added · missed call'],
+    ['done', 'Missed call returned'],
+  ])('a callback the system booked for a missed call (%s) says so, not a time', (done, text) => {
+    const detail = { scheduledAt: at('15:30:00'), doneAt: done ? at('15:40:00') : null, reason: 'missed_call' };
+    render(<Timeline entries={[entry({ kind: 'callback', detail })]} />);
+    expect(screen.getByText(text)).toBeDefined();
+  });
+
   it('says when a callback is due', () => {
     render(
       <Timeline

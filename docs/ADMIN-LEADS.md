@@ -33,7 +33,7 @@ with Needs review, Expired and Opted out as the other ways the SMS part can end.
 | Status | Tab | Condition |
 |---|---|---|
 | `opted_out` | Opted out | On `dnc_list`, or newest conversation `suppressed` |
-| `closed` | Closed | An agent pressed Closed, and nothing has reopened it since: no unread text from the lead, no callback booked after it |
+| `closed` | Closed | An agent pressed Closed, and nothing has reopened it since: no unread text from the lead, no callback booked after it, no missed call from them that nobody has returned (2026-10-01) |
 | `working` | Working | An agent holds it, or has left any trace on it: a note, a callback, a disposition, a call, or an SMS of their own |
 | `needs_review` | Needs review | Conversation `review` |
 | `ready` | Ready | Conversation `completed` - answered all three - and no agent has touched it |

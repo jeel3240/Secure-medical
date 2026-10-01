@@ -8,6 +8,16 @@ const facts = (over: Partial<QueueFacts> = {}): QueueFacts => ({
 });
 
 describe('what an agent sees against a lead', () => {
+  it('flags a call from the lead that nobody answered', () => {
+    expect(queueTag(facts({ missedCall: true }))).toEqual({ kind: 'missed_call' });
+  });
+
+  it('a missed call outranks an unread text and a callback, but not someone working the lead', () => {
+    const nextCallback = { agentId: 21, agentName: 'Maya Chen', at: '2026-09-29T03:13:00.000Z' };
+    expect(queueTag(facts({ missedCall: true, hasUnreadInbound: true, nextCallback }))?.kind).toBe('missed_call');
+    expect(queueTag(facts({ missedCall: true, holder: { id: 7, name: 'Michael' } }))?.kind).toBe('working');
+  });
+
   it('names whose callback it is, and when', () => {
     const nextCallback = { agentId: 21, agentName: 'Maya Chen', at: '2026-09-29T03:13:00.000Z' };
     expect(queueTag(facts({ nextCallback }))).toEqual({ kind: 'callback', ...nextCallback });

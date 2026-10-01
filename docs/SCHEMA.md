@@ -31,10 +31,10 @@ the RDS CA bundle if strict verification is ever wanted.
 | `leads` | One person, pulled from EZ Texting. |
 | `conversations` | The 3-question SMS flow for a lead, plus its score and tier. |
 | `messages` | Every SMS in or out. |
-| `calls` | Twilio calls, with duration and outcome. Written since Phase 4 - `TWILIO.md`, "What is saved". |
+| `calls` | Twilio calls, with duration and outcome. Written since Phase 4 - `TWILIO.md`, "What is saved". `direction` says who called whom; an incoming call that rang nobody has no `agent_id` (migration 007). |
 | `dispositions` | What an agent decided after contact. |
 | `notes` | Free text an agent wrote about a lead. |
-| `callbacks` | Scheduled follow-ups. |
+| `callbacks` | Scheduled follow-ups. `reason` is `booked` - a person booked it - or `missed_call`, booked by the system for the agent a missed call rang (migration 008). |
 | `dnc_list` | Phones that must never be contacted. |
 | `settings` | Key/value config, admin-editable. |
 | `scoring_rules` | Points per answer, admin-editable. |
@@ -178,7 +178,7 @@ a CHECK; these do not, because their permitted values are not settled yet:
 | Column | Written by | Status |
 |---|---|---|
 | `dispositions.value` | Agent, Phase 3 | The seven values are listed in `DESIGN-PROMPT.md` section 3: Interested, Callback set, No answer, Voicemail, Not interested, Wrong number, DNC. *(2026-09-23: they did not have to come from Jeel after all - the design brief already had them.)* *(2026-09-28: new rows are `closed` or `dnc` only; the seven above are retired, and old rows keep them - `core/dispositions.ts`. No migration: the column has no constraint to change.)* |
-| `calls.outcome` | Twilio's end-of-call callback, Phase 4 | `answered`, `no_answer`, `busy`, `failed`, `canceled` - mapped from Twilio's statuses in `core/calls.ts`. Null while a call is in progress. No constraint on the column. |
+| `calls.outcome` | Twilio's end-of-call callback, Phase 4 | `answered`, `no_answer`, `busy`, `failed`, `canceled` - mapped from Twilio's statuses in `core/calls.ts` - and `missed`, for an incoming call nobody answered. Null while a call is in progress. No constraint on the column. |
 | `dnc_list.reason` | Poller and webhook | Poller writes `ezt_opt_out` for a contact already opted out in EZ Texting; the webhook writes `sms_stop` for a STOP reply. An agent DNC disposition adds `agent_dnc` in Phase 3 - `AGENT-WORKSPACE.md`. |
 | `messages.delivery_status` | Send path | Whatever EZ Texting returns. Unverified - we have never read a delivery status back. *(2026-09-28: we write two values. `failed` - a send EZ Texting refused, with no `ezt_message_id`. `sending` - an automated text between its row being written and EZ Texting's id being recorded, `db/outbound.ts`; it stays `sending` only if the write after a successful send failed, and counts as sent. Everything else is NULL.)* |
 

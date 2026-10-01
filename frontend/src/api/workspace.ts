@@ -54,6 +54,8 @@ export interface LeadDetail {
     needsReview: boolean;
     unread: boolean;
     expired: boolean;
+    /** They rang us, nobody answered, and nobody has called or texted back. */
+    missedCall: boolean;
   };
 }
 
@@ -166,6 +168,8 @@ export interface Callback {
   agentName: string;
   scheduledAt: string;
   doneAt: string | null;
+  /** `missed_call`: booked by the system because the lead rang and this agent did not pick up. */
+  reason: 'booked' | 'missed_call';
 }
 
 /**
@@ -184,6 +188,8 @@ export interface CallbackRow extends Callback {
   latestNote: string | null;
   /** Who holds the lead right now, if anyone. */
   holder: { id: number; name: string } | null;
+  /** A missed call's callback: how many calls it stands for, and when the latest was. */
+  missedCalls: { count: number; lastAt: string } | null;
 }
 
 export type CallbackWhen = 'today' | 'upcoming' | 'overdue' | 'all';

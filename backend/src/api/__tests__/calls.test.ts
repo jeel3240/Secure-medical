@@ -7,16 +7,24 @@
 import request from 'supertest';
 import twilio from 'twilio';
 import type { TwilioSettings } from '../../twilio-settings';
-import type { StartCallResult } from '../../db/calls';
+import type { FinishedCall, IncomingCall, StartCallResult } from '../../db/calls';
 import { buildApp, seedUser, signIn } from './helpers';
 
 type StartArgs = Parameters<typeof import('../../db/calls').startCall>;
 type FinishArgs = Parameters<typeof import('../../db/calls').finishCall>;
 const startCall = jest.fn<Promise<StartCallResult>, StartArgs>();
-const finishCall = jest.fn<Promise<boolean>, FinishArgs>();
+type IncomingArgs = Parameters<typeof import('../../db/calls').startIncomingCall>;
+const finishCall = jest.fn<Promise<FinishedCall>, FinishArgs>();
+const startIncomingCall = jest.fn<Promise<IncomingCall>, IncomingArgs>();
 jest.mock('../../db/calls', () => ({
   startCall: (...a: StartArgs) => startCall(...a),
   finishCall: (...a: FinishArgs) => finishCall(...a),
+  startIncomingCall: (...a: IncomingArgs) => startIncomingCall(...a),
+}));
+
+const sendMissedCallText = jest.fn<Promise<boolean>, [number]>();
+jest.mock('../../db/missed-call-text', () => ({
+  sendMissedCallText: (leadId: number) => sendMissedCallText(leadId),
 }));
 
 // The raw archive writes through the pool; here it only has to be called.
@@ -26,7 +34,9 @@ jest.mock('../../db/pool', () => ({ pool: { query: (...a: [string, unknown[]?]) 
 beforeEach(() => {
   poolQuery.mockClear();
   startCall.mockReset().mockResolvedValue({ ok: true, phone: '+16026203572' });
-  finishCall.mockReset().mockResolvedValue(true);
+  finishCall.mockReset().mockResolvedValue({ recorded: true, missedLeadId: null });
+  startIncomingCall.mockReset().mockResolvedValue({ kind: 'unknown' });
+  sendMissedCallText.mockReset().mockResolvedValue(true);
 });
 
 const SETTINGS: TwilioSettings = {
@@ -180,5 +190,114 @@ describe('recording how a call ended', () => {
     const res = await fromTwilio(app, STATUS, { ParentCallSid: 'CA100', CallStatus: 'ringing' });
     expect(res.status).toBe(204);
     expect(finishCall).not.toHaveBeenCalled();
+  });
+});
+
+describe('a lead calling our number', () => {
+  const INCOMING = '/api/webhooks/twilio/incoming';
+  const AFTER = '/api/webhooks/twilio/incoming/after';
+  const A_RING = { CallSid: 'CA300', From: '+16026203572', To: '+14804708259' };
+
+  it('rings the lead’s agent, saying who is calling', async () => {
+    startIncomingCall.mockResolvedValue({
+      kind: 'ring',
+      agentId: 21,
+      lead: { id: 7, name: 'Priya Sharma', phone: '+16026203572' },
+    });
+    const { app } = await buildApp({ twilio: SETTINGS });
+    const res = await fromTwilio(app, INCOMING, A_RING);
+
+    expect(res.type).toBe('text/xml');
+    expect(res.text).toContain('<Identity>agent-21</Identity>');
+    expect(res.text).toContain('<Parameter name="leadId" value="7"/>');
+    expect(startIncomingCall).toHaveBeenCalledWith({ callSid: 'CA300', fromPhone: '+16026203572' });
+    expect(sendMissedCallText).not.toHaveBeenCalled();
+  });
+
+  it('with no agent to ring: says we will call back, and texts the lead', async () => {
+    startIncomingCall.mockResolvedValue({ kind: 'missed', leadId: 7, firstReport: true });
+    const { app } = await buildApp({ twilio: SETTINGS });
+    const res = await fromTwilio(app, INCOMING, A_RING);
+
+    expect(res.text).toContain('will call you back');
+    expect(res.text).not.toContain('<Dial');
+    expect(sendMissedCallText).toHaveBeenCalledWith(7);
+  });
+
+  it('a retried webhook does not text the lead a second time', async () => {
+    startIncomingCall.mockResolvedValue({ kind: 'missed', leadId: 7, firstReport: false });
+    const { app } = await buildApp({ twilio: SETTINGS });
+    await fromTwilio(app, INCOMING, A_RING);
+    expect(sendMissedCallText).not.toHaveBeenCalled();
+  });
+
+  it('from a number we hold no lead for: the message, and no text', async () => {
+    const { app } = await buildApp({ twilio: SETTINGS });
+    const res = await fromTwilio(app, INCOMING, A_RING);
+    expect(res.text).toContain('will call you back');
+    expect(sendMissedCallText).not.toHaveBeenCalled();
+  });
+
+  it('a database failure is still the message, not Twilio’s error', async () => {
+    startIncomingCall.mockRejectedValue(new Error('connection refused'));
+    const { app } = await buildApp({ twilio: SETTINGS });
+    const res = await fromTwilio(app, INCOMING, A_RING);
+    expect(res.status).toBe(200);
+    expect(res.text).toContain('will call you back');
+  });
+
+  it('is refused unsigned, like every Twilio webhook', async () => {
+    const { app } = await buildApp({ twilio: SETTINGS });
+    expect((await request(app).post(INCOMING).type('form').send(A_RING)).status).toBe(403);
+    expect(startIncomingCall).not.toHaveBeenCalled();
+  });
+
+  describe('once ringing the agent is over', () => {
+    it.each(['no-answer', 'busy', 'failed', 'canceled'])('%s: the lead hears that we will call back', async (status) => {
+      const { app } = await buildApp({ twilio: SETTINGS });
+      const res = await fromTwilio(app, AFTER, { CallSid: 'CA300', DialCallStatus: status });
+      expect(res.text).toContain('will call you back');
+    });
+
+    it('records the missed call itself - an agent with no browser open sends no report of their own', async () => {
+      finishCall.mockResolvedValue({ recorded: true, missedLeadId: 7 });
+      const { app } = await buildApp({ twilio: SETTINGS });
+      await fromTwilio(app, AFTER, { CallSid: 'CA300', DialCallStatus: 'no-answer' });
+      expect(finishCall).toHaveBeenCalledWith({ callSid: 'CA300', outcome: 'no_answer', durationSec: 0 });
+      expect(sendMissedCallText).toHaveBeenCalledWith(7);
+    });
+
+    it('the lead still hears the message when that record fails', async () => {
+      finishCall.mockRejectedValue(new Error('connection refused'));
+      const { app } = await buildApp({ twilio: SETTINGS });
+      const res = await fromTwilio(app, AFTER, { CallSid: 'CA300', DialCallStatus: 'no-answer' });
+      expect(res.status).toBe(200);
+      expect(res.text).toContain('will call you back');
+    });
+
+    it('answered: nothing more is said', async () => {
+      const { app } = await buildApp({ twilio: SETTINGS });
+      const res = await fromTwilio(app, AFTER, { CallSid: 'CA300', DialCallStatus: 'completed' });
+      expect(res.text).not.toContain('<Say>');
+      expect(finishCall).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('the end-of-call report', () => {
+    it('for a call nobody answered: texts the lead that we will call back', async () => {
+      finishCall.mockResolvedValue({ recorded: true, missedLeadId: 7 });
+      const { app } = await buildApp({ twilio: SETTINGS });
+      const res = await fromTwilio(app, STATUS, { ParentCallSid: 'CA300', CallStatus: 'no-answer', CallDuration: '0' });
+      expect(res.status).toBe(204);
+      expect(sendMissedCallText).toHaveBeenCalledWith(7);
+    });
+
+    it('for an answered call, or a repeat report: sends nothing', async () => {
+      const { app } = await buildApp({ twilio: SETTINGS });
+      await fromTwilio(app, STATUS, { ParentCallSid: 'CA300', CallStatus: 'completed', CallDuration: '30' });
+      finishCall.mockResolvedValue({ recorded: false, missedLeadId: null });
+      await fromTwilio(app, STATUS, { ParentCallSid: 'CA300', CallStatus: 'no-answer', CallDuration: '0' });
+      expect(sendMissedCallText).not.toHaveBeenCalled();
+    });
   });
 });

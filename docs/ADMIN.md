@@ -43,9 +43,10 @@ returned as `longestFirstName` - or the `there` fallback when that is shorter,
 with `longestNameIsFallback` set so the page says which it is rather than
 showing "there" as a name (2026-09-29).
 
-**Eight messages**, in the order a lead meets them: three questions, three
-clarifications, the review message sent after a second unclear reply, and the
-thanks. The review message was missing until 2026-09-29 - leads received it,
+**Nine messages**, in the order a lead meets them: three questions, three
+clarifications, the review message sent after a second unclear reply, the
+thanks, and - since 2026-10-01 - the text sent after a call to us that nobody
+answered. The review message was missing until 2026-09-29 - leads received it,
 but it could not be seen here.
 A message that fits in one segment for "Jo" and not for "Christopher" is one
 that costs two segments for some leads, and the page has to show that.

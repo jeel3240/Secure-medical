@@ -7,7 +7,7 @@
  */
 
 import twilio from 'twilio';
-import { identityFor } from '../core/calls';
+import { identityFor, INCOMING_RING_SECONDS, MISSED_CALL_SPEECH } from '../core/calls';
 import type { TwilioSettings } from '../twilio-settings';
 
 /** An hour: long enough for a shift's calls, refreshed by the browser before it lapses. */
@@ -15,11 +15,14 @@ export const TOKEN_TTL_SECONDS = 60 * 60;
 
 export const VOICE_PATH = '/api/webhooks/twilio/voice';
 export const STATUS_PATH = '/api/webhooks/twilio/status';
+/** A lead calling our number. The phone number's Voice URL points here. */
+export const INCOMING_PATH = '/api/webhooks/twilio/incoming';
+/** Where Twilio goes once ringing the agent is over, to ask what to say to the lead. */
+export const INCOMING_AFTER_PATH = '/api/webhooks/twilio/incoming/after';
 
 /**
- * The browser's permission to place calls through our TwiML App, as one agent.
- * Outgoing only: no grant to receive calls, because nothing in the app answers
- * them.
+ * The browser's permission to place calls through our TwiML App, as one agent,
+ * and to be rung as that agent when one of their leads calls back.
  */
 export function mintCallToken(settings: TwilioSettings, userId: number): { token: string; identity: string } {
   const identity = identityFor(userId);
@@ -30,7 +33,7 @@ export function mintCallToken(settings: TwilioSettings, userId: number): { token
   token.addGrant(
     new twilio.jwt.AccessToken.VoiceGrant({
       outgoingApplicationSid: settings.twimlAppSid,
-      incomingAllow: false,
+      incomingAllow: true,
     })
   );
   return { token: token.toJwt(), identity };
@@ -72,6 +75,52 @@ export function dialTwiml(settings: TwilioSettings, phone: string): string {
     phone
   );
   return response.toString();
+}
+
+/**
+ * Ring one agent's browser for a lead who is calling us.
+ *
+ * The lead's id, name and number ride along as parameters, so the browser can
+ * say who is calling without a round trip. The status callback on the agent's
+ * leg reports how it ended - answered, not answered, declined, or the lead
+ * hanging up first - and `action` is where Twilio asks what to say to the lead
+ * if the agent did not pick up.
+ */
+export function ringAgentTwiml(
+  settings: TwilioSettings,
+  agentId: number,
+  lead: { id: number; name: string; phone: string }
+): string {
+  const response = new twilio.twiml.VoiceResponse();
+  const dial = response.dial({
+    timeout: INCOMING_RING_SECONDS,
+    answerOnBridge: true,
+    action: settings.publicUrl + INCOMING_AFTER_PATH,
+    method: 'POST',
+  });
+  const client = dial.client({
+    statusCallback: settings.publicUrl + STATUS_PATH,
+    statusCallbackMethod: 'POST',
+    statusCallbackEvent: ['completed'],
+  });
+  client.identity(identityFor(agentId));
+  client.parameter({ name: 'leadId', value: String(lead.id) });
+  client.parameter({ name: 'leadName', value: lead.name });
+  client.parameter({ name: 'leadPhone', value: lead.phone });
+  return response.toString();
+}
+
+/** Nobody answered: tell the lead we will call back, then end the call. */
+export function missedCallTwiml(): string {
+  const response = new twilio.twiml.VoiceResponse();
+  response.say(MISSED_CALL_SPEECH);
+  response.hangup();
+  return response.toString();
+}
+
+/** Nothing more to say - the call was answered and is over. */
+export function emptyTwiml(): string {
+  return new twilio.twiml.VoiceResponse().toString();
 }
 
 /** Tell the agent why, then end the call. */

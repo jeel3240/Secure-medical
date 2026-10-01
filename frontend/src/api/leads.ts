@@ -58,7 +58,7 @@ export async function listAdminLeads(query: AdminLeadsQuery): Promise<AdminLeads
 }
 
 /** Mirrors QueueTag in backend/src/core/queue-tags.ts. */
-export type QueueTagKind = 'working' | 'inbound_reply' | 'callback' | 'needs_review';
+export type QueueTagKind = 'working' | 'missed_call' | 'inbound_reply' | 'callback' | 'needs_review';
 
 export interface QueueTag {
   kind: QueueTagKind;

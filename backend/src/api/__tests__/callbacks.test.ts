@@ -41,6 +41,7 @@ const A_CALLBACK = {
   agentName: 'Maya',
   scheduledAt: AT,
   doneAt: null,
+  reason: 'booked' as const,
 };
 
 beforeEach(() => {

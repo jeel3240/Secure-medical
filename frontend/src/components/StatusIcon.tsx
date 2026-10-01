@@ -18,6 +18,7 @@ export type StatusIconName =
   | 'half'
   | 'check'
   | 'inbound'
+  | 'missed'
   | 'warning'
   | 'ban'
   | 'hourglass'
@@ -60,6 +61,13 @@ const PATHS: Record<StatusIconName, ReactNode> = {
     <>
       <path d="M3 5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H9l-6 4z" />
       <path d="M16 10H8M11 7l-3 3 3 3" />
+    </>
+  ),
+  // A call came in and nobody took it: a handset with an arrow that turned away.
+  missed: (
+    <>
+      <path d="M5 4h3l1.5 4-2 1.5a11 11 0 0 0 5 5l1.5-2 4 1.5v3a2 2 0 0 1-2 2A15 15 0 0 1 3 6a2 2 0 0 1 2-2z" />
+      <path d="M15 4l2.5 2.5L20 4M17.5 6.5V3" />
     </>
   ),
   // A person has to look.

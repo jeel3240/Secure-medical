@@ -4,7 +4,6 @@
  */
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import type { LeadDetail } from '../../api/workspace';
 import type { CallState } from '../../lib/call-state';
 import { CallBar } from './CallBar';
 import type { LeadCall } from './useLeadCall';
@@ -12,7 +11,7 @@ import type { LeadCall } from './useLeadCall';
 const addNote = vi.fn();
 vi.mock('../../api/workspace', () => ({ addNote: (...args: unknown[]) => addNote(...args) }));
 
-const LEAD = { id: 7, firstName: 'Priya', lastName: 'Sharma', phone: '+15550100016' } as LeadDetail;
+const WHO = { leadId: 7, name: 'Priya S.', phone: '+15550100016' };
 const NOW = new Date('2026-10-01T15:00:42Z');
 const SINCE = NOW.getTime() - 42_000;
 
@@ -26,7 +25,7 @@ function show(state: CallState) {
     dismiss: vi.fn(),
   };
   const onNoteSaved = vi.fn();
-  const view = render(<CallBar lead={LEAD} call={call} now={NOW} onNoteSaved={onNoteSaved} />);
+  const view = render(<CallBar who={WHO} call={call} now={NOW} onNoteSaved={onNoteSaved} />);
   return { call, onNoteSaved, ...view };
 }
 

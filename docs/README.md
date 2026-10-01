@@ -148,10 +148,13 @@ own number to the test group, as "Sending" above describes.
 
 Things that are true today and will surprise someone who assumes otherwise.
 
-**Calling is outgoing only.** Agents call leads from the browser (`TWILIO.md`,
-built 2026-10-01). There is no recording, voicemail drop, transfer or hold, and
-a lead who rings the number back reaches whatever the number does in Twilio, not
-the app. Admin > Overview shows no call totals - removed on 2026-09-28
+**Calling is simple.** Agents call leads from the browser (`TWILIO.md`, built
+2026-10-01). A lead who rings the number back rings one agent's browser - the
+one holding them, or who last called them - and otherwise gets a message, a
+text and a place in the queue as a missed call; there is no call queue and no
+voicemail (`TWILIO.md`, "Incoming calls"). There is no recording, voicemail
+drop, transfer or hold. The phone number rings only one deployment: after
+testing locally with it, run `twilio:configure` on the server again. Admin > Overview shows no call totals - removed on 2026-09-28
 (`ADMIN.md`, "Overview") - though every call is on its lead's timeline.
 
 **A real call needs a public address.** Twilio must reach our voice webhook, so
@@ -212,7 +215,7 @@ commit.
 | `SCHEMA.md` | Database tables and why | A migration |
 | `POLLER.md` | How leads are pulled in | The poller or worker loop |
 | `WEBHOOKS.md` | How replies are received | The webhook handler |
-| `TWILIO.md` | Browser calling: how a call works, what is saved, settings, testing, deploying | Anything about calls, Twilio's webhooks or the Call button |
+| `TWILIO.md` | Browser calling: how a call works, incoming calls and missed calls, what is saved, settings, testing, deploying | Anything about calls, Twilio's webhooks, the Call button or the incoming-call bar |
 | `AUDIT.md` | The activity log and the raw webhook archive: what is recorded, why nothing can be edited or deleted, what it does not cover | **Any new action a person or the system can take** - it records itself, or this doc says why not |
 | `ADMIN-LEADS.md` | The superadmin Leads page | That page or its API |
 | `QUEUE.md` | The agents' priority queue API: who is in it, the order, the tags | `GET /api/leads`, the queue query or the tag rules |

@@ -58,18 +58,205 @@ Agent's browser                 Our API                         Twilio          
 Audio goes browser ↔ Twilio ↔ phone. It never passes through our server
 (CLAUDE.md §2), so the server's size has no bearing on call quality.
 
+## Incoming calls
+
+Built 2026-10-01, the simple version Jeel asked for: when a lead calls our
+number, show it to their agent; if the agent does not pick up, text the lead
+that we will call back and show on screen that the call was missed. There is no
+call queue and no ringing several agents - that is a later phase.
+
+```
+lead dials (480) 470-8259
+   │
+   ▼
+Twilio ── POST /api/webhooks/twilio/incoming ──► who is this, and whose lead?
+   │                                             (db/calls.ts, startIncomingCall)
+   ├─ an agent to ring ──► that agent's browser rings for 20 seconds
+   │        ├─ Answer ──► they talk; saved as answered, with its length
+   │        └─ no answer, Decline, or the lead hangs up ──► missed
+   └─ nobody to ring, or a number we hold no lead for ──► missed at once
+```
+
+### Who rings
+
+One agent, never several:
+
+1. **The agent holding the lead** - they are working it right now.
+2. Otherwise **the agent who last called that lead** - the lead is most likely
+   returning that call.
+3. Otherwise nobody. A lead no agent has ever held or called has nobody whose
+   call it is; it goes straight to missed and into the queue.
+
+A deactivated agent is never rung. The caller is matched to a lead by phone
+number; **a number we hold no lead for** hears the same message, is not
+texted, and leaves no `calls` row - only a `call.incoming` entry in the
+activity log with the number, and Twilio's request in `webhook_events`.
+
+**The agent's browser must be open and signed in.** The app registers with
+Twilio as soon as someone signs in (`lib/calling.ts`, `listenForCalls`) and
+checks every 30 seconds that it still is. A closed laptop is a missed call.
+There is no ringing of a mobile phone.
+
+### A missed call
+
+The lead hears: "Thank you for calling Secure Medical. Our team member is not
+available right now, and will call you back shortly. Goodbye." Then:
+
+| | |
+|---|---|
+| **The call is saved** | `calls` row with `direction = 'inbound'`, `outcome = 'missed'`, whatever Twilio called it (no-answer, busy, canceled). `agent_id` is the agent it rang, or null when it rang nobody |
+| **The lead is texted** | `message_missed_call` from `settings`, sent through EZ Texting like every other text and saved in `messages`: "Secure Medical: Sorry we missed your call. Our team member is not available right now and will call you back shortly." Once per call. Not sent to a blocked number - the do-not-call check is inside the sender |
+| **The lead goes to the queue** | Tagged **Missed call**, in bold, above an unread reply. A closed lead is reopened by it. `QUEUE.md`, "The tag" |
+| **The agent gets a callback** | One row on their My Callbacks, under Today, first in the list and marked **Missed call** (Overdue only from the next day) - `callbacks.reason = 'missed_call'`, migration 008. The queue tag says a lead needs calling; this says whose job it is. One per lead however many times they ring. Not booked when the call rang nobody (the lead waits in the queue for anyone), for a deactivated agent, or for a number on the do-not-call list. An agent who pressed Decline gets it too: the lead was still told we would call back |
+| **The agent is told** | The card on their screen becomes a notice: "Missed call · Leo M. · Rang for 20s", with **Call back**. It stays until dismissed |
+| **The lead's page says so** | A **Missed call** badge beside the lead's other states, in the queue's words, and a line on the timeline: "Missed call · told we will call back". It was a sentence in a yellow banner for a day; Jeel, 2026-10-01: a state of the lead is a badge, like Closed and Needs review |
+
+**It stops being a missed call when someone gets back to them:** an agent
+calls the lead, or texts them, after it. The same moment finishes the callback,
+whichever agent did it - nobody ticks it off by hand - and so does the lead
+ringing again and being answered. A callback an agent booked themselves is
+never finished for them. Until then the tag and the badge
+stay. Reading the lead's page does not clear it - they asked for a person, and
+looking is not answering. A call under way with them also counts, so an agent
+talking to the lead is not shown Missed call (found on the first real
+answered call); if that call ends unanswered the flag is back.
+`MISSED_CALL_SQL` in `db/lead-state.ts` is the one
+definition; the queue, Admin > Leads and the lead card all read it.
+
+**Recorded twice over, on purpose.** How the ring ended is reported by Twilio
+on the agent's leg (`/status`) and again when it asks what to say to the lead
+(`/incoming/after`). An agent with no browser open may have no leg to report
+on, and a lead who hangs up never reaches the second. Whichever arrives first
+records the missed call and sends the text; the other finds it done and does
+nothing.
+
+### On the screen
+
+`layout/IncomingCall.tsx`, mounted once in the app shell, so it appears on
+whichever page the agent is on.
+
+**A card in the top right corner, which says who it is before the agent
+picks up** - Jeel's design, 2026-10-01, replacing the first version's bar at
+the foot of the screen that showed only a name and a number.
+
+```
+● INCOMING CALL                         0:09
+[LM] Leo M.                           [WARM]
+     (555) 010-0014
+📞 Calling back · you tried 2× today
+Score       Interest     Flow
+45 / 100    Both         Stopped at Q2
+[ Decline ]              [ Accept ]
+Accepting opens Leo's workspace and assigns the lead to you.
+```
+
+| On the card | From |
+|---|---|
+| Name, number | Sent with the call, so they show the instant it rings |
+| How long it has rung | Counted in the browser |
+| Tier, score, interest (question 1), flow | The lead card, `GET /api/leads/:id`, fetched as it starts to ring. The same words as the lead's page |
+| "Calling back · you tried 2× today" | The lead's timeline: calls we placed today, by this agent or - named - by another; otherwise when we last called. Nothing when we never have. `lib/caller-context.ts` |
+| The last line | Drops "and assigns the lead to you" when the agent already holds it |
+
+The card is up at once and the details fill in a moment later; if they cannot
+be loaded it still rings and can still be accepted.
+
+- **Accept:** the call connects, the lead is picked up for the agent if it is
+  not already theirs, and its page opens. From here it is an ordinary call:
+  the call bar at the foot of the screen - clock, Mute, Keypad, End - and
+  then the note box.
+- **Decline:** the lead gets the missed-call message and text. The card goes
+  away rather than saying "missed" - the agent chose it - but the lead is
+  tagged Missed call in the queue all the same.
+- **Not picked up:** the card becomes a small notice in the same corner -
+  "Missed call · Leo M. · Rang for 20s · texted that we will call back" - with
+  **Call back** and a close button. It stays until one is pressed. Call back
+  picks the lead up, opens its page and dials. If another agent picked the
+  lead up first, the page opens read-only, says who, and nothing is dialled.
+- **Focus is not moved to the card.** An agent typing a text must not answer
+  a call with the space bar.
+- **One call at a time.** While an agent is on a call, a second caller is not
+  shown to them and gets the missed-call path. The lead's own Call button is
+  off while an incoming call is ringing or live.
+
+**It rings.** `lib/ringtone.ts` plays the app's own ringtone - a short melody
+of eight soft, mallet-like notes, a pause, and again - for as long as the card
+is up. (The first version played a phone line's two-tone ring, which to the
+agent sounded like *they* were calling someone - Jeel, 2026-10-01. The tune is
+our own and is made in the browser; there is no sound file.) Meanwhile
+the browser tab's title reads "Incoming call". Twilio's built-in ringtone is
+switched off: it did not sound on the first real calls (2026-10-01), and a
+call the agent cannot hear is a missed call. The states are `lib/incoming-state.ts`,
+pure and tested; the store that joins them to Twilio is `lib/incoming-call.ts`.
+
+**How it is played, and why - Safari.** The melody is computed once into a WAV
+in memory and looped by an ordinary `<audio>` element. It was first played
+through the Web Audio API, note by note: that rang in Chrome and was silent in
+Safari, which showed its speaker icon and played nothing, whether the audio
+was created before the first click or inside it (two attempts, 2026-10-01).
+An audio element is what every browser plays the same way. The first click
+anywhere - the sign-in button counts, `main.tsx` arms it for the whole app -
+plays it muted for an instant, which is what lets it play aloud later with
+nobody clicking. Checked in Chrome: it decodes, rings, loops and stops. Confirmed by ear in Safari by
+Jeel, the same day.
+
+**A browser will not play sound on a page nobody has clicked on.** Signing in
+counts as a click; a reload does not. So after a reload the corner shows
+"Call sound off · click to turn on" until the agent
+clicks or presses a key, and then it goes. A call arriving before that click
+still shows its card, silently.
+
+**And a desktop notification** - `lib/call-notification.ts`: "Incoming call ·
+Leo M.", shown by the operating system with its own sound. It reaches an
+agent whose browser is behind another window or minimised, and one whose page
+cannot ring yet. The browser asks the agent's permission once, on their first
+click after signing in; refused, the card and the ring still work. It closes
+when the ring ends, and clicking it brings the app to the front.
+
+**Not from the design: the "Unknown caller" card.** The design also shows a
+card for a number that is not in our leads, with "You can create one after the
+call". It is not built. A caller we hold no lead for rings nobody - there is no
+agent whose call it is - and the app has no way to create a lead by hand:
+leads come from EZ Texting. Both are decisions, not styling.
+
+### What it needs on the Twilio account
+
+The phone number's Voice URL must be `PUBLIC_URL/api/webhooks/twilio/incoming`.
+`npm run twilio:configure` sets it, along with the TwiML App. A number that
+already sends its calls somewhere else is left alone unless `--take-over` is
+passed.
+
+**One number rings one deployment.** Running `twilio:configure` locally
+against the number production uses takes production's incoming calls until it
+is run there again. Run it on the server after any local testing with that
+number.
+
+### Not covered
+
+- **Voicemail.** A missed caller hears the message and the call ends. Nothing
+  is recorded.
+- **Nobody is rung for a lead no agent has touched.** It becomes a missed call
+  and waits in the queue. Ringing whoever is free needs agent presence, which
+  is the later queue work.
+- **A second device.** An agent signed in on two browsers rings on both;
+  the first to answer takes it.
+- **A stale ring.** If neither of Twilio's two reports arrives, the row keeps
+  `ended_at` null and reads "Incoming call · ringing". Not seen in testing.
+
 ## What is saved
 
-One row in `calls` per call. No migration was needed - the table has been in
-`001_init.sql` since Week 1.
+One row in `calls` per call. Outgoing calls needed no migration - the table
+has been in `001_init.sql` since Week 1. Incoming calls added `direction` and
+made `agent_id` optional for them (migration 007).
 
 | Column | Value |
 |---|---|
 | `twilio_call_sid` | Twilio's id for the **browser's** leg. Unique, which is what makes a retried webhook safe |
-| `agent_id`, `lead_id` | Who called whom |
+| `direction` | `outbound` - an agent called the lead - or `inbound`, the lead called us |
+| `agent_id`, `lead_id` | Who called whom. For an incoming call, the agent it rang - null when it rang nobody. An outgoing call always has an agent; the database refuses one without |
 | `started_at` | When Twilio asked us how to connect it |
 | `ended_at` | When Twilio reported the lead's leg ended. Null while the call is in progress |
-| `outcome` | `answered`, `no_answer`, `busy`, `failed` or `canceled` - `core/calls.ts`. Null while in progress |
+| `outcome` | `answered`, `no_answer`, `busy`, `failed` or `canceled` - `core/calls.ts` - and `missed` for an incoming call nobody answered. Null while in progress |
 | `duration_sec` | Seconds of conversation. 0 unless answered |
 
 | Twilio says | We record |
@@ -85,7 +272,7 @@ answer. A repeated voice request carries the same CallSid: the insert does
 nothing and the call is connected again. A repeated or late status report
 finds `ended_at` already set and changes nothing - the first outcome stands.
 
-**A call makes its lead Working** on Admin > Leads, and counts as the agent's
+**A call an agent placed or answered makes its lead Working** on Admin > Leads (a missed call alone does not - nobody has worked it), and counts as the agent's
 latest activity on Overview. Both already read `calls` (`db/lead-state.ts`,
 `db/admin-overview.ts`); nothing was added for it. Overview shows no call
 totals - they were removed on 2026-09-28 at Jeel's request and are not back.
@@ -131,8 +318,8 @@ Console.
 | **on** | All seven are set and well-formed | Calling works |
 | **incomplete** | Some are set, or one is malformed | Locally: calling is off and the API logs `calling.off` naming what is missing. **In production the API refuses to start** (`twilio_incomplete`), because a half-set configuration looks fine and fails every call |
 
-**Point the TwiML App at the server** once `PUBLIC_URL` is set, and again
-whenever it changes:
+**Point Twilio at the server** once `PUBLIC_URL` is set, and again whenever it
+changes:
 
 ```bash
 docker compose exec api npm run dev:twilio:configure   # local
@@ -140,7 +327,9 @@ docker compose exec api npm run twilio:configure       # production
 ```
 
 It sets the TwiML App's Voice URL to `PUBLIC_URL/api/webhooks/twilio/voice`
-and changes nothing else on the account.
+and the phone number's to `PUBLIC_URL/api/webhooks/twilio/incoming`, and
+changes nothing else on the account. "Incoming calls" above has the one thing
+to watch: a number rings only one deployment.
 
 ## The screen
 
@@ -191,8 +380,9 @@ left; closing the tab mid-call asks first. The page owns the call
 "Outbound call · answered · 2:14 · Maya Chen · 3:02 PM" - and on the Lead
 Timeline. Only an answered call shows a length.
 
-**Twilio's SDK loads on the first call,** as its own file (about 47 KB
-gzipped), not with the app.
+**Twilio's SDK is its own file** (about 47 KB gzipped), fetched after the app
+is on screen. Until incoming calls it loaded on the first call; a browser that
+can be rung has to load it at sign-in.
 
 The states are a pure reducer, `lib/call-state.ts`, tested without a
 microphone. `lib/calling.ts` is the only file that touches the SDK.
@@ -205,9 +395,12 @@ microphone. `lib/calling.ts` is the only file that touches the SDK.
 | Settings: off, on, incomplete, malformed values | `src/twilio-settings.test.ts` |
 | Identity, outcomes, talk time | `src/core/calls.test.ts` |
 | The token's claims, the TwiML, the signature check | `src/integrations/twilio.test.ts` |
-| The four routes, refusals, a database failure | `src/api/__tests__/calls.test.ts` |
-| The SQL: who may call, DNC, retries, the timeline | `scripts/calls-live-check.ts` - 18 checks against a real Postgres |
+| Every route, refusals, a database failure, the missed-call text sent once | `src/api/__tests__/calls.test.ts` |
+| The SQL: who may call, DNC, retries, the timeline; who an incoming call rings, a missed call, its effect on the queue and Admin > Leads, and its callback - booked once, finished by a call, a text or an answer | `scripts/calls-live-check.ts` - against a real Postgres |
 | Call states, wording, error sentences | `frontend/src/lib/call-state.test.ts`, `lib/calling.test.ts` |
+| The join to Twilio's SDK itself, against a stand-in for it: placing a call, being rung, accept, decline, sign-out. Added after Accept failed on the first real incoming call - the function joining a call's events to the screen called itself, and no test ran it | `frontend/src/lib/calling.device.test.ts` |
+| The ring: starts, repeats, stops, stays silent while the browser blocks sound; the desktop notification | `frontend/src/lib/ringtone.test.ts`, `lib/call-notification.test.ts` |
+| Incoming: ringing, answered, missed, declined, one call at a time; what the card shows; Call back | `frontend/src/lib/incoming-state.test.ts`, `lib/caller-context.test.ts`, `layout/IncomingCall.test.tsx` |
 
 **Locally a real call needs a public address**, because Twilio must reach the
 voice webhook:
@@ -235,9 +428,12 @@ own phone.
 ## Deploying it
 
 1. Set the seven variables in the server's `.env`. `PUBLIC_URL=https://dailyleadhub.com`.
-2. Deploy as usual (`WORKFLOW.md`, "Deploying"). No migration.
-3. `docker compose exec api npm run twilio:configure`.
+2. Deploy as usual (`WORKFLOW.md`, "Deploying"), including `npm run migrate` -
+   incoming calls need migrations 007 and 008.
+3. `docker compose exec api npm run twilio:configure`. Run it last, and again
+   after anyone has tested locally with the same number.
 4. Sign in, pick up a lead that is your own phone, press Call.
+5. Call the number from that phone: the browser rings.
 
 ## What is kept as proof
 
@@ -245,6 +441,8 @@ own phone.
   `webhook_events`, before the handler runs.
 - **`call.started`, `call.ended` and `call.refused`** go to the activity log. A
   refused call has no `calls` row, so the log is its only record.
+- **`call.incoming` and `call.missed`** likewise. A call from a number we hold
+  no lead for has no `calls` row either.
 
 `AUDIT.md` has the whole picture.
 
@@ -256,8 +454,8 @@ own phone.
   that only muted would mislead.
 - **Recording, voicemail drop, transfer.** Not in the plan. Recording needs the
   lead's consent, and is waiting on Jeel's decision.
-- **Incoming calls.** A lead who rings the number back reaches whatever the
-  number is configured to do in Twilio, not the app.
+- **A call queue for incoming calls.** One agent is rung, or nobody -
+  "Incoming calls", above.
 - **A stale call is not closed.** If Twilio's end-of-call report never arrives,
   the row keeps `ended_at` null and the timeline says "in progress". Not seen
   in testing; Twilio retries its callbacks.
