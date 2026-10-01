@@ -19,7 +19,12 @@ jest.mock('../../db/calls', () => ({
   finishCall: (...a: FinishArgs) => finishCall(...a),
 }));
 
+// The raw archive writes through the pool; here it only has to be called.
+const poolQuery = jest.fn(async (_sql: string, _values?: unknown[]) => ({ rows: [], rowCount: 1 }));
+jest.mock('../../db/pool', () => ({ pool: { query: (...a: [string, unknown[]?]) => poolQuery(...a) } }));
+
 beforeEach(() => {
+  poolQuery.mockClear();
   startCall.mockReset().mockResolvedValue({ ok: true, phone: '+16026203572' });
   finishCall.mockReset().mockResolvedValue(true);
 });
@@ -88,6 +93,22 @@ describe('Twilio’s webhooks are only Twilio’s', () => {
     expect((await request(app).post(VOICE).type('form').send(A_CALL)).status).toBe(403);
     expect((await fromTwilio(app, VOICE, A_CALL, '0'.repeat(32))).status).toBe(403);
     expect(startCall).not.toHaveBeenCalled();
+    expect(poolQuery).not.toHaveBeenCalled();
+  });
+
+  it('keep a signed request exactly as it arrived, in the raw archive', async () => {
+    const { app } = await buildApp({ twilio: SETTINGS });
+    await fromTwilio(app, VOICE, A_CALL);
+    const [sql, values] = poolQuery.mock.calls[0];
+    expect(sql).toMatch(/INSERT INTO webhook_events/);
+    expect(values).toEqual(['twilio', VOICE, JSON.stringify(A_CALL)]);
+  });
+
+  it('still connect the call when the archive cannot be written', async () => {
+    poolQuery.mockRejectedValueOnce(new Error('disk full'));
+    const { app } = await buildApp({ twilio: SETTINGS });
+    const res = await fromTwilio(app, VOICE, A_CALL);
+    expect(res.text).toContain('<Dial');
   });
 });
 

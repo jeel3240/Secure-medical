@@ -54,15 +54,28 @@ export function authRouter(deps: AppDeps): Router {
       }
 
       const user = await deps.users.findByEmail(normalizeEmail(email));
+      // A refused sign-in is recorded with the email that was tried - never the
+      // password - and why, so a run of failures on one account can be seen
+      // afterwards. AUDIT.md.
+      const refuse = async (why: 'unknown_email' | 'inactive' | 'wrong_password') => {
+        await deps.activity.record({
+          action: 'auth.sign_in_failed',
+          actorId: null,
+          subjectUserId: user?.id ?? null,
+          detail: { email: normalizeEmail(email), why },
+        });
+        return invalidCredentials();
+      };
       if (!user || !user.isActive) {
         await burnPasswordCheck(password);
-        throw invalidCredentials();
+        throw await refuse(user ? 'inactive' : 'unknown_email');
       }
       if (!(await verifyPassword(password, user.passwordHash))) {
-        throw invalidCredentials();
+        throw await refuse('wrong_password');
       }
 
       await deps.users.recordLogin(user.id);
+      await deps.activity.record({ action: 'auth.signed_in', actorId: user.id });
       res.cookie(
         SESSION_COOKIE,
         signSession(user.id, user.sessionVersion, deps.jwtSecret),
@@ -84,6 +97,7 @@ export function authRouter(deps: AppDeps): Router {
         const user = await deps.users.findById(claims.userId);
         if (user && user.sessionVersion === claims.sessionVersion) {
           await deps.users.update(user.id, { bumpSession: true });
+          await deps.activity.record({ action: 'auth.signed_out', actorId: user.id });
         }
       }
       res.clearCookie(SESSION_COOKIE, clearSessionCookieOptions(deps.secureCookies));
@@ -134,6 +148,7 @@ export function authRouter(deps: AppDeps): Router {
       if (!updated) {
         throw new HttpError(401, 'unauthenticated', 'Sign in to continue.');
       }
+      await deps.activity.record({ action: 'auth.password_changed', actorId: user.id });
 
       res.cookie(
         SESSION_COOKIE,

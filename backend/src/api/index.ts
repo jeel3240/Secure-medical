@@ -1,4 +1,6 @@
 import { config } from '../config';
+import { recordActivity } from '../db/activity';
+import { pool } from '../db/pool';
 import { pgUserStore } from '../db/users';
 import { createApp } from './app';
 import { log } from '../lib/log';
@@ -32,6 +34,7 @@ const app = createApp({
   jwtSecret: config.jwtSecret,
   secureCookies: isProduction,
   twilio: config.twilio.status === 'on' ? config.twilio.settings : null,
+  activity: { record: (entry) => recordActivity(pool, entry) },
 });
 
 const port = process.env.PORT || 3000;

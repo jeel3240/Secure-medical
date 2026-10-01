@@ -11,6 +11,7 @@
  * agent's activity on Admin > Overview; nothing here needs to know that.
  */
 
+import { activityInsertSql, recordActivity } from './activity';
 import { pool } from './pool';
 import type { CallOutcome, CallRefusal } from '../core/calls';
 
@@ -50,16 +51,36 @@ export async function startCall(opts: {
     const lead = rows[0];
     const refusal: CallRefusal | null = !lead ? 'not_found' : !lead.holds ? 'not_holder' : lead.blocked ? 'blocked' : null;
     if (refusal) {
-      await client.query('ROLLBACK');
+      // A refused call leaves no `calls` row, so the log is its only record.
+      // Committed, not rolled back: nothing else was written in this
+      // transaction. An unknown lead has no row to point at; its id is kept in
+      // the detail instead.
+      await recordActivity(client, {
+        action: 'call.refused',
+        actorId: opts.agentId,
+        leadId: lead ? opts.leadId : null,
+        detail: { reason: refusal, callSid: opts.callSid, ...(lead ? {} : { leadId: opts.leadId }) },
+      });
+      await client.query('COMMIT');
       return { ok: false, reason: refusal };
     }
 
-    await client.query(
+    const inserted = await client.query(
       `INSERT INTO calls (lead_id, agent_id, twilio_call_sid, started_at)
        VALUES ($1, $2, $3, now())
-       ON CONFLICT (twilio_call_sid) DO NOTHING`,
+       ON CONFLICT (twilio_call_sid) DO NOTHING
+       RETURNING id`,
       [opts.leadId, opts.agentId, opts.callSid]
     );
+    // Only the first request starts the call; a retry from Twilio records nothing more.
+    if (inserted.rowCount === 1) {
+      await recordActivity(client, {
+        action: 'call.started',
+        actorId: opts.agentId,
+        leadId: opts.leadId,
+        detail: { callId: inserted.rows[0].id, callSid: opts.callSid },
+      });
+    }
 
     await client.query('COMMIT');
     return { ok: true, phone: lead.phone };
@@ -81,10 +102,23 @@ export async function finishCall(opts: {
   outcome: CallOutcome;
   durationSec: number;
 }): Promise<boolean> {
+  // Twilio reported it, so there is no actor; the agent who placed the call is
+  // the subject.
   const { rowCount } = await pool.query(
-    `UPDATE calls
-     SET outcome = $2, duration_sec = $3, ended_at = now()
-     WHERE twilio_call_sid = $1 AND ended_at IS NULL`,
+    `WITH ended AS (
+       UPDATE calls
+       SET outcome = $2, duration_sec = $3, ended_at = now()
+       WHERE twilio_call_sid = $1 AND ended_at IS NULL
+       RETURNING id, lead_id, agent_id
+     ),
+     logged AS (
+       ${activityInsertSql}
+       SELECT NULL, 'call.ended', lead_id, agent_id,
+              jsonb_build_object('callId', id, 'callSid', $1::text,
+                                 'outcome', $2::text, 'durationSec', $3::int)
+       FROM ended
+     )
+     SELECT 1 FROM ended`,
     [opts.callSid, opts.outcome, opts.durationSec]
   );
   return (rowCount ?? 0) > 0;

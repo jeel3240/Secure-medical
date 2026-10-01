@@ -24,6 +24,12 @@ agent claiming the same lead gets a 409 and sees the row as "Working -
 {name}" in the queue. Claims never expire - `SCHEMA.md` says why - so a
 superadmin can force a release.
 
+**Every pick-up and release is kept** - 2026-10-01. Releasing clears
+`assigned_to` and `assigned_at`, which used to leave no trace of who had held
+the lead or for how long. The same statement now writes `lead.picked_up` and
+`lead.released` to the activity log, with `heldSince`, and the Lead Timeline
+shows them. So does a rescheduled callback, with both times. `AUDIT.md`.
+
 *(2026-09-28: the release endpoint accepts a superadmin releasing anyone's
 claim, but no screen calls it that way, so force-release is not reachable. In
 practice a claim clears when the agent leaves the workspace. A superadmin's

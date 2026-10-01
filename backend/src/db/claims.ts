@@ -8,6 +8,7 @@
  * AGENT-WORKSPACE.md, "Rules", is the spec.
  */
 
+import { activityInsertSql } from './activity';
 import { pool } from './pool';
 
 export interface Claim {
@@ -45,23 +46,43 @@ export type ReleaseResult =
  * because opening a lead twice is not a new claim.
  */
 export async function claimLead(leadId: number, agentId: number): Promise<ClaimResult> {
+  // One statement, so the claim and its record cannot come apart and the race
+  // rule above still holds. The row is locked first, so `prev` is the holder at
+  // the moment of the claim - what the record needs, and what the UPDATE below
+  // overwrites. Resuming a lead you already hold is not a new pick-up and
+  // writes no record.
   const claimed = await pool.query(
-    `UPDATE leads l
-     SET assigned_to = $2,
-         assigned_at = COALESCE(
-           CASE WHEN l.assigned_to = $2 THEN l.assigned_at END,
-           now()
-         ),
-         updated_at = now()
-     WHERE l.id = $1
-       AND (
-         l.assigned_to IS NULL
-         OR l.assigned_to = $2
-         OR NOT EXISTS (
-           SELECT 1 FROM users u WHERE u.id = l.assigned_to AND u.is_active
+    `WITH prev AS (
+       SELECT id, assigned_to, assigned_at FROM leads WHERE id = $1 FOR UPDATE
+     ),
+     claimed AS (
+       UPDATE leads l
+       SET assigned_to = $2,
+           assigned_at = COALESCE(
+             CASE WHEN prev.assigned_to = $2 THEN prev.assigned_at END,
+             now()
+           ),
+           updated_at = now()
+       FROM prev
+       WHERE l.id = prev.id
+         AND (
+           prev.assigned_to IS NULL
+           OR prev.assigned_to = $2
+           OR NOT EXISTS (
+             SELECT 1 FROM users u WHERE u.id = prev.assigned_to AND u.is_active
+           )
          )
-       )
-     RETURNING l.assigned_at`,
+       RETURNING l.assigned_at, prev.assigned_to AS previous_holder
+     ),
+     logged AS (
+       ${activityInsertSql}
+       SELECT $2, 'lead.picked_up', $1, NULL,
+              -- Set only when the lead was taken over from a deactivated agent.
+              jsonb_strip_nulls(jsonb_build_object('tookOverFrom', previous_holder))
+       FROM claimed
+       WHERE previous_holder IS DISTINCT FROM $2
+     )
+     SELECT assigned_at FROM claimed`,
     [leadId, agentId]
   );
 
@@ -108,12 +129,31 @@ export async function releaseLead(
   agentId: number,
   isSuperadmin: boolean
 ): Promise<ReleaseResult> {
+  // One statement, like the claim. Releasing clears who held the lead and
+  // since when, so both go into the record first: after this, the log is the
+  // only place that says Maya held it from 2:00 to 2:40. `forced` is a
+  // superadmin releasing someone else's. Releasing a lead nobody holds changes
+  // nothing and records nothing.
   const released = await pool.query(
-    `UPDATE leads
-     SET assigned_to = NULL, assigned_at = NULL, updated_at = now()
-     WHERE id = $1
-       AND ($3 OR assigned_to IS NULL OR assigned_to = $2)
-     RETURNING id`,
+    `WITH prev AS (
+       SELECT id, assigned_to, assigned_at FROM leads WHERE id = $1 FOR UPDATE
+     ),
+     released AS (
+       UPDATE leads l
+       SET assigned_to = NULL, assigned_at = NULL, updated_at = now()
+       FROM prev
+       WHERE l.id = prev.id
+         AND ($3 OR prev.assigned_to IS NULL OR prev.assigned_to = $2)
+       RETURNING prev.assigned_to AS holder, prev.assigned_at AS held_since
+     ),
+     logged AS (
+       ${activityInsertSql}
+       SELECT $2, 'lead.released', $1, holder,
+              jsonb_build_object('heldSince', held_since, 'forced', holder <> $2)
+       FROM released
+       WHERE holder IS NOT NULL
+     )
+     SELECT 1 FROM released`,
     [leadId, agentId, isSuperadmin]
   );
 

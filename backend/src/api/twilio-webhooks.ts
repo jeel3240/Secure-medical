@@ -30,6 +30,15 @@ function db() {
   return require('../db/calls') as typeof import('../db/calls');
 }
 
+/** The raw archive's writer and the pool it writes on - loaded lazily, as above. */
+function archive() {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const { pool } = require('../db/pool') as typeof import('../db/pool');
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const { archiveWebhook } = require('../db/activity') as typeof import('../db/activity');
+  return { pool, archiveWebhook };
+}
+
 const field = (body: Record<string, unknown>, key: string): string =>
   typeof body[key] === 'string' ? (body[key] as string) : '';
 
@@ -54,7 +63,14 @@ export function twilioWebhooksRouter(deps: AppDeps): Router {
       res.status(403).json({ error: 'forbidden', message: 'Request is not signed by Twilio.' });
       return;
     }
-    next();
+
+    // Kept as it arrived, once it is known to be Twilio's - AUDIT.md. Not
+    // allowed to stop the call: if the archive write fails the handler still
+    // runs, and the failure is logged.
+    archive()
+      .archiveWebhook(archive().pool, { source: 'twilio', path: req.originalUrl, payload: req.body ?? {} })
+      .catch((err: unknown) => log.error('twilio.archive_failed', { path: req.path, err: errText(err) }))
+      .finally(next);
   });
 
   router.post(

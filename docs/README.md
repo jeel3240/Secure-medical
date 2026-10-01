@@ -106,8 +106,8 @@ the `poll.tick` line's `openers` says how many went out. POLLER.md has the detai
 ## How to test
 
 ```bash
-cd backend  && npm test && npm run lint    # 470 tests
-cd frontend && npm test && npm run lint    # 140 tests
+cd backend  && npm test && npm run lint    # 526 tests
+cd frontend && npm test && npm run lint    # 177 tests
 ```
 
 **Unit and route tests** mock the database and cover behaviour in isolation.
@@ -213,6 +213,7 @@ commit.
 | `POLLER.md` | How leads are pulled in | The poller or worker loop |
 | `WEBHOOKS.md` | How replies are received | The webhook handler |
 | `TWILIO.md` | Browser calling: how a call works, what is saved, settings, testing, deploying | Anything about calls, Twilio's webhooks or the Call button |
+| `AUDIT.md` | The activity log and the raw webhook archive: what is recorded, why nothing can be edited or deleted, what it does not cover | **Any new action a person or the system can take** - it records itself, or this doc says why not |
 | `ADMIN-LEADS.md` | The superadmin Leads page | That page or its API |
 | `QUEUE.md` | The agents' priority queue API: who is in it, the order, the tags | `GET /api/leads`, the queue query or the tag rules |
 | `AGENT-WORKSPACE.md` | The agent screens: claiming, timeline, notes, callbacks, dispositions, agent SMS | Any of those endpoints or screens |

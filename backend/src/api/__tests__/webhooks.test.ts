@@ -166,6 +166,28 @@ beforeEach(() => {
   poolQuery.mockClear();
 });
 
+describe('the raw archive - AUDIT.md', () => {
+  const archived = () => poolQuery.mock.calls.filter(([sql]) => /INSERT INTO webhook_events/i.test(String(sql)));
+
+  it('keeps every request as it arrived, even one we go on to ignore', async () => {
+    const odd = { type: 'something.else', fromNumber: '15551230000' };
+    const res = await request(buildApp()).post('/api/webhooks/eztexting').send(odd);
+
+    expect(res.status).toBe(200);
+    expect(archived()).toHaveLength(1);
+    const [, values] = archived()[0] as unknown as [string, unknown[]];
+    // The path is stored without the secret segment.
+    expect(values).toEqual(['eztexting', '/api/webhooks/eztexting', JSON.stringify(odd)]);
+  });
+
+  it('keeps nothing from a request with the wrong token', async () => {
+    fakeConfig.config.ezt.webhookToken = 'the-real-token';
+    const res = await request(buildApp()).post('/api/webhooks/eztexting/a-guess').send(reply());
+    expect(res.status).toBe(404);
+    expect(archived()).toHaveLength(0);
+  });
+});
+
 describe('a reply from a number with no lead', () => {
   it('is ignored: no lead, no conversation, no message', async () => {
     const { client, calls } = fakeClient({ leadId: null });
@@ -194,7 +216,10 @@ describe('a reply from a number with no lead', () => {
 
     const dnc = calls.find((c) => /INSERT INTO dnc_list/i.test(c.sql));
     expect(dnc).toBeDefined();
-    expect(dnc?.values).toEqual(['+15551230000', 'sms_stop']);
+    // The third value is who did it: nobody, for a STOP - the lead's own doing.
+    expect(dnc?.values).toEqual(['+15551230000', 'sms_stop', null]);
+    // And the block records itself in the activity log, in the same statement.
+    expect(dnc?.sql).toMatch(/INSERT INTO activity_log[\s\S]*'dnc\.blocked'/);
     expect(sqlOf(calls)).not.toMatch(/INSERT INTO leads/i);
   });
 
@@ -220,7 +245,8 @@ describe('START, a lead asking to hear from us again', () => {
     expect(release?.sql).toMatch(/released_at = now\(\)/);
     // Only live blocks, and the row is never deleted.
     expect(release?.sql).toMatch(/released_at IS NULL/);
-    expect(release?.values).toEqual(['+15551230000', 'sms_start']);
+    expect(release?.values).toEqual(['+15551230000', 'sms_start', null]);
+    expect(release?.sql).toMatch(/INSERT INTO activity_log[\s\S]*'dnc\.released'/);
     expect(sqlOf(calls)).not.toMatch(/DELETE FROM dnc_list/i);
   });
 
@@ -370,6 +396,7 @@ describe('a reply from a lead we hold', () => {
     expect(calls.find((c) => /INSERT INTO dnc_list/i.test(c.sql))?.values).toEqual([
       '+15551230000',
       'sms_stop',
+      null,
     ]);
     expect(savedConversation(calls)?.status).toBe('suppressed');
     expect(sendMessage).not.toHaveBeenCalled();

@@ -10,6 +10,10 @@ Code: `backend/src/api/webhooks.ts`. Payload shape: `docs/EZTEXTING-API.md`.
 
 ## What it does
 
+0. **Keep the request as it arrived** - `webhook_events`, 2026-10-01. Before
+   anything below, and outside the handler's transaction, so a request that is
+   ignored or fails is still on record. A request with the wrong path token is
+   not kept. `AUDIT.md`, "The raw webhook archive".
 1. Ignore anything whose `type` is not `inbound_text.received`, and any payload
    missing `fromNumber`, `received` or `message`. Both return 200 so EZ Texting
    stops retrying.

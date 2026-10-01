@@ -71,7 +71,9 @@ export type TimelineKind =
   | 'call'
   | 'note'
   | 'callback'
-  | 'disposition';
+  | 'disposition'
+  /** From the activity log: a pick-up, a release, a moved callback - AUDIT.md. */
+  | 'activity';
 
 export interface TimelineEntry {
   kind: TimelineKind;

@@ -212,6 +212,15 @@ own phone.
 3. `docker compose exec api npm run twilio:configure`.
 4. Sign in, pick up a lead that is your own phone, press Call.
 
+## What is kept as proof
+
+- **Every signed request from Twilio** is stored as it arrived in
+  `webhook_events`, before the handler runs.
+- **`call.started`, `call.ended` and `call.refused`** go to the activity log. A
+  refused call has no `calls` row, so the log is its only record.
+
+`AUDIT.md` has the whole picture.
+
 ## Not built
 
 - **Recording, voicemail drop, transfer, hold.** Not in the plan. Recording
