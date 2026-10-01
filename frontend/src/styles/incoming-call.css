@@ -160,18 +160,24 @@
   margin: 0;
 }
 
+/* The lead header's own style for these: a quiet sentence-case label over a
+   plain value. Only the score is weighted - it is the one figure to read. */
 .incoming__fact dt {
   color: var(--color-text-muted);
   font-size: var(--text-small);
-  font-weight: var(--weight-semibold);
-  letter-spacing: var(--tracking-label);
-  text-transform: uppercase;
 }
 
 .incoming__fact dd {
   margin: 2px 0 0;
   font-size: var(--text-body);
+}
+
+.incoming__score {
   font-weight: var(--weight-semibold);
+}
+
+.incoming__of {
+  color: var(--color-text-muted);
 }
 
 .incoming__actions {

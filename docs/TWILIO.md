@@ -137,7 +137,7 @@ the foot of the screen that showed only a name and a number.
 [LM] Leo M.                           [WARM]
      (555) 010-0014
 📞 Calling back · you tried 2× today
-SCORE       INTEREST     FLOW
+Score       Interest     Flow
 45 / 100    Both         Stopped at Q2
 [ Decline ]              [ Accept ]
 Accepting opens Leo's workspace and assigns the lead to you.

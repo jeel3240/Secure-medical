@@ -128,7 +128,8 @@ describe('a lead rings', () => {
   it('then what we know about them: tier, score, interest, where the questions stopped, and our tries today', async () => {
     await show();
     act(() => twilio!.onRing(aRing().ring));
-    await waitFor(() => expect(screen.getByText('45 / 100')).toBeDefined());
+    await waitFor(() => expect(screen.getByText('45')).toBeDefined());
+    expect(screen.getByText('/ 100')).toBeDefined();
     expect(screen.getByText('WARM')).toBeDefined();
     expect(screen.getByText('Both')).toBeDefined();
     expect(screen.getByText('Stopped at Q2')).toBeDefined();

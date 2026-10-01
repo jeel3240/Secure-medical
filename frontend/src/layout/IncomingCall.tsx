@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { claimLead } from '../api/leads';
 import { getLead, getTimeline, type LeadDetail, type TimelineEntry } from '../api/workspace';
@@ -23,7 +23,7 @@ import { questionsLabel } from '../pages/workspace/LeadHeader';
  *   [LM] Leo M.                           [WARM]
  *        (555) 010-0014
  *   Calling back · you tried 2× today
- *   SCORE       INTEREST     FLOW
+ *   Score       Interest     Flow
  *   45 / 100    Both         Stopped at Q2
  *   [ Decline ]              [ Accept ]
  *
@@ -182,7 +182,16 @@ function RingingCard({
 
         {caller.id > 0 && (
           <dl className="incoming__facts">
-            <Fact label="Score">{lead?.conversation ? `${lead.conversation.score} / 100` : '–'}</Fact>
+            <Fact label="Score">
+              {lead?.conversation ? (
+                <>
+                  <span className="incoming__score">{lead.conversation.score}</span>
+                  <span className="incoming__of"> / 100</span>
+                </>
+              ) : (
+                '–'
+              )}
+            </Fact>
             <Fact label="Interest">{lead?.chips.find((chip) => chip.question === 1)?.answer ?? '–'}</Fact>
             <Fact label="Flow">{lead ? questionsLabel(lead.conversation) : '–'}</Fact>
           </dl>
@@ -211,7 +220,7 @@ function RingingCard({
   );
 }
 
-function Fact({ label, children }: { label: string; children: string }) {
+function Fact({ label, children }: { label: string; children: ReactNode }) {
   return (
     <div className="incoming__fact">
       <dt>{label}</dt>
