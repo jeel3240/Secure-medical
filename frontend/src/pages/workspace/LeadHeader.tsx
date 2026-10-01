@@ -1,6 +1,7 @@
 import type { LeadDetail } from '../../api/workspace';
 import { formatAge, formatPhone } from '../../lib/format';
 import { CallControl } from './CallControl';
+import type { LeadCall } from './useLeadCall';
 
 /**
  * The workspace's full-width header card: who the lead is, then the two facts
@@ -16,7 +17,8 @@ import { CallControl } from './CallControl';
  * Call button that explains itself on hover.
  *
  * **The Call button is real - Phase 4.** It was a greyed-out placeholder until
- * browser calling was built; it is now `CallControl.tsx`.
+ * browser calling was built; it is now `CallControl.tsx`. Once pressed, the
+ * call itself is in the call bar at the foot of the screen, `CallBar.tsx`.
  *
  * **No tier and no Send SMS - Jeel, the same day.** The score beside it already
  * says how strong the lead is, and Send SMS only moved the cursor to the
@@ -61,14 +63,14 @@ export function LeadHeader({
   lead,
   mine,
   now,
-  onCallOver,
+  call,
 }: {
   lead: LeadDetail;
   /** The viewer holds the lead - only then may they call it. */
   mine: boolean;
   now: Date;
-  /** A call ended: reload what the page shows. */
-  onCallOver: () => void;
+  /** This lead's call - owned by the page, which also shows it in the call bar. */
+  call: LeadCall;
 }) {
   const score = lead.conversation?.score ?? 0;
   const source = sourceLabel(lead.source);
@@ -102,7 +104,7 @@ export function LeadHeader({
       </dl>
 
       <div className="lead-head__buttons">
-        <CallControl lead={lead} mine={mine} now={now} onCallOver={onCallOver} />
+        <CallControl lead={lead} mine={mine} call={call} />
       </div>
     </article>
   );

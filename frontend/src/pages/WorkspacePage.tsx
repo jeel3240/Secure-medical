@@ -12,9 +12,11 @@ import { Spinner } from '../components/Spinner';
 import { ActionsPanel } from './workspace/ActionsPanel';
 import { Conversation } from './workspace/Conversation';
 import { LeadAnswers } from './workspace/LeadAnswers';
+import { CallBar } from './workspace/CallBar';
 import { LeadHeader } from './workspace/LeadHeader';
 import { LeadNotes } from './workspace/LeadNotes';
 import { SmsCompose } from './workspace/SmsCompose';
+import { useLeadCall } from './workspace/useLeadCall';
 import { formatTime } from '../lib/format';
 import { useSecond } from '../lib/useSecond';
 
@@ -34,7 +36,8 @@ import { useSecond } from '../lib/useSecond';
  * there. The server refuses a write from anyone who does not hold the lead, so
  * the switched-off controls are a courtesy, not the lock - AGENT-WORKSPACE.md.
  *
- * The header card is `workspace/LeadHeader.tsx`, the left column
+ * A call, once placed, is in `workspace/CallBar.tsx`, docked at the foot of the
+ * screen. The header card is `workspace/LeadHeader.tsx`, the left column
  * `workspace/LeadAnswers.tsx` and `workspace/LeadNotes.tsx`, the SMS box `SmsCompose.tsx` and the wrap-up
  * `ActionsPanel.tsx`. This page holds the data, picking and releasing, and the
  * layout.
@@ -72,6 +75,12 @@ export function WorkspacePage() {
   const refreshAll = useCallback(async () => {
     await Promise.all([refresh(), refreshTimeline()]);
   }, [refresh, refreshTimeline]);
+
+  // This lead's call. Owned here because two parts of the page use it: the
+  // header's Call button starts it, and the call bar at the foot of the screen
+  // shows it. Leaving the lead ends the call - `useLeadCall`.
+  const reloadAfterCall = useCallback(() => void refreshAll(), [refreshAll]);
+  const call = useLeadCall(leadId, reloadAfterCall);
 
   /**
    * "Lead 3 of 12" - where this one sits in the queue an agent is working
@@ -174,7 +183,7 @@ export function WorkspacePage() {
   ).length;
 
   return (
-    <section className="workspace">
+    <section className={`workspace${call.state.phase === 'idle' ? '' : ' workspace--call-bar'}`}>
       <div className="workspace__top">
         <div className="workspace__top-left">
           <Button variant="ghost" onClick={() => void backToQueue()} loading={releasing}>
@@ -227,7 +236,7 @@ export function WorkspacePage() {
         </Banner>
       )}
 
-      <LeadHeader lead={lead} mine={mine} now={now} onCallOver={() => void refreshAll()} />
+      <LeadHeader lead={lead} mine={mine} now={now} call={call} />
 
       <div className="workspace__flags">
         {lead.closed && <Badge tone="muted">Closed</Badge>}
@@ -279,6 +288,7 @@ export function WorkspacePage() {
           <ActionsPanel lead={lead} refresh={refreshAll} canAct={mine} />
         </div>
       </div>
+      <CallBar lead={lead} call={call} now={now} onNoteSaved={reloadAfterCall} />
     </section>
   );
 }

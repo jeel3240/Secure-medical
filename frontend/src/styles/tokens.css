@@ -22,6 +22,8 @@
   --color-appbar-text: #b6c3d1;
   --color-appbar-text-active: #ffffff;
   --color-appbar-accent: #5eead4;
+  /* A connected call's dot, on the dark call bar - bright enough to read there. */
+  --color-call-live: #22c55e;
 
   /* Actions */
   --color-primary: #0f2942;

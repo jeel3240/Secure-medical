@@ -1,0 +1,313 @@
+/* The call bar - CallBar.tsx, Jeel's design, 2026-10-01. A dark bar docked at
+   the foot of the screen while a call is placed, live, or just over.
+   Loaded by global.css, in its order: a later file can override an earlier one. */
+
+.call-bar {
+  position: fixed;
+  left: 50%;
+  bottom: var(--space-5);
+  z-index: 40;
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  width: min(880px, calc(100vw - var(--space-8)));
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-lg);
+  background: var(--color-appbar);
+  color: var(--color-appbar-text-active);
+  box-shadow: var(--shadow-lg);
+  transform: translateX(-50%);
+  animation: call-bar-in 220ms ease-out;
+}
+
+/* Slides up into place, so it reads as arriving rather than appearing. */
+@keyframes call-bar-in {
+  from {
+    opacity: 0;
+    transform: translate(-50%, var(--space-5));
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, 0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .call-bar {
+    animation: none;
+  }
+}
+
+.call-bar__who {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-width: 0;
+  margin-right: auto;
+}
+
+.call-bar__avatar {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  flex: none;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.12);
+  font-size: var(--text-body);
+  font-weight: var(--weight-semibold);
+}
+
+/* Bottom-right of the avatar: green once connected, amber while dialling. */
+.call-bar__presence {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  width: 10px;
+  height: 10px;
+  border: 2px solid var(--color-appbar);
+  border-radius: 50%;
+  background: var(--color-appbar-text);
+}
+
+.call-bar__presence--live {
+  background: var(--color-call-live);
+}
+
+.call-bar__presence--dialing {
+  background: var(--color-warm);
+}
+
+.call-bar__id {
+  min-width: 0;
+}
+
+.call-bar__name {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+  margin: 0;
+  font-size: var(--text-body);
+  font-weight: var(--weight-semibold);
+  white-space: nowrap;
+}
+
+.call-bar__phone {
+  color: var(--color-appbar-text);
+  font-weight: var(--weight-regular);
+}
+
+.call-bar__state {
+  margin: 2px 0 0;
+  color: var(--color-appbar-text);
+  font-size: var(--text-small);
+}
+
+/* A failure is a sentence, so it wraps; the lead's name stays on one line. */
+.call-bar--failed .call-bar__state {
+  color: var(--color-danger-border);
+  white-space: normal;
+}
+
+.call-bar__clock {
+  font-size: var(--text-heading);
+  font-weight: var(--weight-semibold);
+}
+
+.call-bar__tools {
+  display: flex;
+  gap: var(--space-1);
+  padding-left: var(--space-4);
+  border-left: 1px solid rgba(255, 255, 255, 0.16);
+}
+
+/* An icon over its word, as drawn. */
+.call-bar__tool {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  min-width: 56px;
+  padding: var(--space-1) var(--space-2);
+  border: 0;
+  border-radius: var(--radius-md);
+  background: none;
+  color: var(--color-appbar-text-active);
+  font: inherit;
+  font-size: var(--text-small);
+  cursor: pointer;
+}
+
+.call-bar__tool:hover:not(:disabled),
+.call-bar__tool[aria-pressed='true'] {
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.call-bar__tool:disabled {
+  color: var(--color-appbar-text);
+  opacity: 0.5;
+  cursor: default;
+}
+
+.call-bar__button {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-4);
+  border: 1px solid transparent;
+  border-radius: var(--radius-md);
+  font: inherit;
+  font-size: var(--text-body);
+  font-weight: var(--weight-semibold);
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.call-bar__button--end {
+  background: var(--color-danger);
+  color: var(--color-on-primary);
+}
+
+.call-bar__button--end:hover {
+  background: var(--color-danger-hover);
+}
+
+.call-bar__button--save {
+  background: var(--color-surface);
+  color: var(--color-primary);
+}
+
+.call-bar__button--save:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.call-bar__button--plain {
+  border-color: rgba(255, 255, 255, 0.24);
+  background: none;
+  color: var(--color-appbar-text-active);
+}
+
+.call-bar__button--plain:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.call-bar__tool:focus-visible,
+.call-bar__button:focus-visible,
+.call-bar__key:focus-visible {
+  outline: 2px solid var(--color-appbar-accent);
+  outline-offset: 2px;
+}
+
+/* The keypad, above the bar's right-hand end. */
+.call-bar__keypad {
+  position: absolute;
+  right: var(--space-4);
+  bottom: calc(100% + var(--space-2));
+  width: 208px;
+  padding: var(--space-3);
+  border-radius: var(--radius-lg);
+  background: var(--color-appbar);
+  box-shadow: var(--shadow-lg);
+}
+
+.call-bar__dialed {
+  min-height: 24px;
+  margin: 0 0 var(--space-2);
+  overflow: hidden;
+  font-size: var(--text-title);
+  text-align: center;
+  white-space: pre;
+}
+
+.call-bar__keys {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: var(--space-2);
+}
+
+.call-bar__key {
+  height: 44px;
+  border: 0;
+  border-radius: var(--radius-md);
+  background: rgba(255, 255, 255, 0.1);
+  color: var(--color-appbar-text-active);
+  font: inherit;
+  font-size: var(--text-title);
+  font-weight: var(--weight-semibold);
+  cursor: pointer;
+}
+
+.call-bar__key:hover {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+/* After the call: the bar is a note box. */
+.call-bar__after {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.call-bar__note-wrap {
+  flex: 1;
+  min-width: 0;
+}
+
+.call-bar__note {
+  width: 100%;
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid rgba(255, 255, 255, 0.24);
+  border-radius: var(--radius-md);
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--color-appbar-text-active);
+  font: inherit;
+  font-size: var(--text-body);
+}
+
+.call-bar__note::placeholder {
+  color: var(--color-appbar-text);
+}
+
+.call-bar__note:focus {
+  border-color: var(--color-appbar-accent);
+  outline: none;
+}
+
+.call-bar__error {
+  margin: var(--space-1) 0 0;
+  color: var(--color-danger-border);
+  font-size: var(--text-small);
+}
+
+/* Room at the foot of the workspace, so the bar never sits on Save. */
+.workspace--call-bar {
+  padding-bottom: calc(var(--space-8) * 3);
+}
+
+/* Narrow screens: the bar wraps into two rows rather than squeezing. */
+@media (max-width: 720px) {
+  .call-bar {
+    flex-wrap: wrap;
+    bottom: var(--space-2);
+    width: calc(100vw - var(--space-4));
+  }
+
+  .call-bar__tools {
+    padding-left: 0;
+    border-left: 0;
+  }
+
+  .call-bar__after {
+    flex-basis: 100%;
+    flex-wrap: wrap;
+  }
+
+  /* The note gets a row to itself; Save and Skip sit under it. */
+  .call-bar__note-wrap {
+    flex-basis: 100%;
+  }
+}

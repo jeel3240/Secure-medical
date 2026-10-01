@@ -33,6 +33,8 @@ export interface CallHandlers {
 export interface CallHandle {
   hangUp: () => void;
   setMuted: (muted: boolean) => void;
+  /** Keypad tones, for a phone menu or an extension: digits, * and #. */
+  sendDigits: (digits: string) => void;
 }
 
 let devicePromise: Promise<Device> | null = null;
@@ -129,5 +131,6 @@ export async function placeCall(leadId: number, handlers: CallHandlers): Promise
   return {
     hangUp: () => call.disconnect(),
     setMuted: (muted) => call.mute(muted),
+    sendDigits: (digits) => call.sendDigits(digits),
   };
 }

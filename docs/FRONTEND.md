@@ -319,6 +319,12 @@ box's padding, so the newest message's name and time sat below the edge and a
 sent text looked as if it had not arrived - Jeel. Measured after the fix: 0px
 left below, on open and after each of three new messages.
 
+**A call lives in a bar at the foot of the screen - Jeel's design,
+2026-10-01.** The header has a Call button; the call itself - who, the clock,
+Mute, Keypad, End - is `CallBar.tsx`, which slides up and stays in view, and
+becomes a note box when the call ends. `styles/call-bar.css`; `TWILIO.md`,
+"The screen".
+
 **The centre column is a conversation, not a log.** `workspace/Conversation.tsx`
 shows the SMS thread and the system markers only - inbound on the left, ours on
 the right, automated sends marked `Auto` and an agent's own send carrying their
