@@ -189,14 +189,20 @@ switched off: it did not sound on the first real calls (2026-10-01), and a
 call the agent cannot hear is a missed call. The states are `lib/incoming-state.ts`,
 pure and tested; the store that joins them to Twilio is `lib/incoming-call.ts`.
 
-**Safari: the audio is created inside the first click, never before.** Found
-2026-10-01: Safari showed its speaker icon while the card was up and nothing
-was heard. The ring's audio had been created while the page loaded and woken
-later; Safari reports that as running and plays silence. It is now created
-and started inside the first real click - the sign-in button counts, since
-`main.tsx` arms it for the whole app - with the one-sample silent buffer that
-makes Safari commit to it. Measured in Chrome before and after; **not yet
-confirmed by ear in Safari**.
+**How it is played, and why - Safari.** The melody is computed once into a WAV
+in memory and looped by an ordinary `<audio>` element. It was first played
+through the Web Audio API, note by note: that rang in Chrome and was silent in
+Safari, which showed its speaker icon and played nothing, whether the audio
+was created before the first click or inside it (two attempts, 2026-10-01).
+An audio element is what every browser plays the same way. The first click
+anywhere - the sign-in button counts, `main.tsx` arms it for the whole app -
+plays it muted for an instant, which is what lets it play aloud later with
+nobody clicking. Checked in Chrome: it decodes, rings, loops and stops.
+**Not yet confirmed by ear in Safari.**
+
+**Test ring**, in the user menu, plays it once - for an agent checking that
+they will hear a call, and the quickest way to tell a sound problem from a
+call problem.
 
 **A browser will not play sound on a page nobody has clicked on.** Signing in
 counts as a click; a reload does not. So after a reload the corner shows

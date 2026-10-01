@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import type { PublicUser } from '../api/types';
 import { useAuth } from '../auth/store';
 import { useEscape } from '../components/useDismiss';
+import { testRing } from '../lib/ringtone';
 
 export function UserMenu({ user }: { user: PublicUser }) {
   const logout = useAuth((s) => s.logout);
@@ -49,6 +50,10 @@ export function UserMenu({ user }: { user: PublicUser }) {
           <Link className="user-menu__item" role="menuitem" to="/change-password" onClick={close}>
             Change password
           </Link>
+          {/* For an agent checking they will hear an incoming call. */}
+          <button type="button" className="user-menu__item" role="menuitem" onClick={testRing}>
+            Test ring
+          </button>
           <button type="button" className="user-menu__item" role="menuitem" onClick={() => void logout()}>
             Sign out
           </button>
