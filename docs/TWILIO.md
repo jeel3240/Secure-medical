@@ -175,8 +175,11 @@ be loaded it still rings and can still be accepted.
   shown to them and gets the missed-call path. The lead's own Call button is
   off while an incoming call is ringing or live.
 
-**It rings.** `lib/ringtone.ts` plays the app's own ring - the two tones of a
-US phone line, one second on and two off - for as long as the card is up, and
+**It rings.** `lib/ringtone.ts` plays the app's own ringtone - a short melody
+of eight soft, mallet-like notes, a pause, and again - for as long as the card
+is up. (The first version played a phone line's two-tone ring, which to the
+agent sounded like *they* were calling someone - Jeel, 2026-10-01. The tune is
+our own and is made in the browser; there is no sound file.) Meanwhile
 the browser tab's title reads "Incoming call". Twilio's built-in ringtone is
 switched off: it did not sound on the first real calls (2026-10-01), and a
 call the agent cannot hear is a missed call. The states are `lib/incoming-state.ts`,

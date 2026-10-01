@@ -2,9 +2,16 @@
  * The sound of an incoming call - TWILIO.md, "Incoming calls".
  *
  * Our own, made in the browser, rather than the ringtone Twilio's SDK plays:
- * that one did not sound on the first real calls (Jeel, 2026-10-01), and a
- * call an agent cannot hear is a missed call. Two tones, the pair a US phone
- * line rings with, one second on and two off, until it is stopped.
+ * a call an agent cannot hear is a missed call, and this one we control.
+ *
+ * **A ringtone, not a phone line's ring** - Jeel, 2026-10-01. The first
+ * version played the two tones a caller hears while the other end rings, so
+ * to the agent it sounded as if they were calling someone. Now a short
+ * melody, the way a mobile rings: eight soft mallet-like notes rising and
+ * falling, a pause, and again until it is stopped. The tune is our own.
+ *
+ * No sound file: each note is a sine wave with a quick strike and a fading
+ * tail, plus a quiet overtone two octaves up that gives it the wooden knock.
  *
  * **A browser will not play sound on a page nobody has touched.** `armRingtone`
  * wakes the audio on the first click or key press anywhere, so by the time a
@@ -12,11 +19,14 @@
  * `canRing()` says so, and the app shows a line asking for one click.
  */
 
-const TONES_HZ = [440, 480];
-const ON_SECONDS = 1;
-const EVERY_MS = 3000;
-// Loud enough to hear across a desk on laptop speakers; two tones add up.
-const VOLUME = 0.3;
+/** E major, up and back: E5 G#5 B5 E6, B5 G#5 B5 E6 - in Hz. */
+const MELODY_HZ = [659.25, 830.61, 987.77, 1318.51, 987.77, 830.61, 987.77, 1318.51];
+const NOTE_EVERY_SECONDS = 0.16;
+const NOTE_RINGS_SECONDS = 0.45;
+/** The melody takes 1.3s; then a breath before it comes round again. */
+const EVERY_MS = 2400;
+// Loud enough to hear across a desk on laptop speakers.
+const VOLUME = 0.35;
 
 let context: AudioContext | null = null;
 
@@ -43,22 +53,34 @@ export function canRing(): boolean {
   return ctx !== null && ctx.state === 'running';
 }
 
-function burst(ctx: AudioContext): void {
+/** One note: struck at once, fading out, with its overtone. */
+function note(ctx: AudioContext, hz: number, at: number): void {
   const gain = ctx.createGain();
-  const start = ctx.currentTime;
-  // A short fade each side, so the tone does not click on and off.
-  gain.gain.setValueAtTime(0, start);
-  gain.gain.linearRampToValueAtTime(VOLUME, start + 0.03);
-  gain.gain.setValueAtTime(VOLUME, start + ON_SECONDS - 0.05);
-  gain.gain.linearRampToValueAtTime(0, start + ON_SECONDS);
+  gain.gain.setValueAtTime(0, at);
+  gain.gain.linearRampToValueAtTime(VOLUME, at + 0.008);
+  gain.gain.exponentialRampToValueAtTime(0.001, at + NOTE_RINGS_SECONDS);
   gain.connect(ctx.destination);
-  for (const hz of TONES_HZ) {
+
+  const overtone = ctx.createGain();
+  overtone.gain.value = 0.18;
+  overtone.connect(gain);
+
+  for (const [frequency, into] of [
+    [hz, gain],
+    [hz * 4, overtone],
+  ] as const) {
     const tone = ctx.createOscillator();
-    tone.frequency.value = hz;
-    tone.connect(gain);
-    tone.start(start);
-    tone.stop(start + ON_SECONDS);
+    tone.type = 'sine';
+    tone.frequency.value = frequency;
+    tone.connect(into);
+    tone.start(at);
+    tone.stop(at + NOTE_RINGS_SECONDS);
   }
+}
+
+/** The melody, once through. */
+function burst(ctx: AudioContext): void {
+  MELODY_HZ.forEach((hz, i) => note(ctx, hz, ctx.currentTime + i * NOTE_EVERY_SECONDS));
 }
 
 /** Rings until the returned function is called. */

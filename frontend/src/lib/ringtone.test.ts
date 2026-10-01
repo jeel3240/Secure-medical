@@ -12,12 +12,12 @@ class FakeAudio {
   }
   resume = vi.fn(async () => undefined);
   createGain = () => ({
-    gain: { setValueAtTime: vi.fn(), linearRampToValueAtTime: vi.fn() },
+    gain: { value: 0, setValueAtTime: vi.fn(), linearRampToValueAtTime: vi.fn(), exponentialRampToValueAtTime: vi.fn() },
     connect: vi.fn(),
   });
   createOscillator = () => {
     this.tones += 1;
-    return { frequency: { value: 0 }, connect: vi.fn(), start: vi.fn(), stop: vi.fn() };
+    return { type: '', frequency: { value: 0 }, connect: vi.fn(), start: vi.fn(), stop: vi.fn() };
   };
 }
 
@@ -37,19 +37,21 @@ afterEach(() => {
 });
 
 describe('the ring of an incoming call', () => {
-  it('rings at once, again every three seconds, and stops when told', async () => {
+  it('plays its melody, again after a pause, and stops when told', async () => {
     const { startRinging } = await fresh();
     const stop = startRinging();
     const audio = FakeAudio.made[0];
     audio.state = 'running';
-    vi.advanceTimersByTime(3000);
-    expect(audio.tones).toBe(2);
-    vi.advanceTimersByTime(3000);
-    expect(audio.tones).toBe(4);
+    vi.advanceTimersByTime(2400);
+    const once = audio.tones;
+    // Eight notes, each a tone and its overtone.
+    expect(once).toBe(16);
+    vi.advanceTimersByTime(2400);
+    expect(audio.tones).toBe(once * 2);
 
     stop();
     vi.advanceTimersByTime(9000);
-    expect(audio.tones).toBe(4);
+    expect(audio.tones).toBe(once * 2);
   });
 
   it('stays silent, without failing, while the browser refuses sound', async () => {
