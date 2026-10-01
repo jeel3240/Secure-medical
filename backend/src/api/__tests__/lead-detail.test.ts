@@ -42,7 +42,7 @@ const A_LEAD: LeadDetail = {
   ],
   claimedBy: null,
   closed: null,
-  flags: { dnc: false, needsReview: false, unread: false, expired: false },
+  flags: { dnc: false, needsReview: false, unread: false, expired: false, missedCall: false },
 };
 
 beforeEach(() => {
@@ -106,7 +106,7 @@ describe('the lead card', () => {
     const { agent } = await setup();
     getLeadDetail.mockResolvedValue({
       ...A_LEAD,
-      flags: { dnc: true, needsReview: true, unread: true, expired: true },
+      flags: { dnc: true, needsReview: true, unread: true, expired: true, missedCall: true },
     });
 
     const res = await agent.get('/api/leads/7');
@@ -115,6 +115,7 @@ describe('the lead card', () => {
       needsReview: true,
       unread: true,
       expired: true,
+      missedCall: true,
     });
   });
 

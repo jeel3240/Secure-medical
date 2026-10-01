@@ -92,34 +92,155 @@ export async function startCall(opts: {
   }
 }
 
+export interface FinishedCall {
+  /** False when no unfinished call has that CallSid - another app's call, or a repeat report. */
+  recorded: boolean;
+  /** The lead whose incoming call this report turned into a missed call. Null otherwise. */
+  missedLeadId: number | null;
+}
+
 /**
  * Records how the call ended. Only the first report counts: a retried or late
- * callback cannot overwrite an outcome already saved. False when no unfinished
- * call has that CallSid - a call from another app on the account, or a repeat.
+ * callback cannot overwrite an outcome already saved.
+ *
+ * An incoming call that was not answered is saved as `missed`, whatever Twilio
+ * called it - no answer, declined, the agent not signed in, the lead hanging
+ * up first. `missedLeadId` tells the caller that this report is the one that
+ * made it a missed call, so the lead is texted once and only once.
  */
 export async function finishCall(opts: {
   callSid: string;
   outcome: CallOutcome;
   durationSec: number;
-}): Promise<boolean> {
-  // Twilio reported it, so there is no actor; the agent who placed the call is
-  // the subject.
-  const { rowCount } = await pool.query(
+}): Promise<FinishedCall> {
+  // Twilio reported it, so there is no actor; the agent on the call is the
+  // subject.
+  const { rows } = await pool.query<{ lead_id: number; missed: boolean }>(
     `WITH ended AS (
        UPDATE calls
-       SET outcome = $2, duration_sec = $3, ended_at = now()
+       SET outcome = CASE WHEN direction = 'inbound' AND $2 <> 'answered' THEN 'missed' ELSE $2 END,
+           duration_sec = $3,
+           ended_at = now()
        WHERE twilio_call_sid = $1 AND ended_at IS NULL
-       RETURNING id, lead_id, agent_id
+       RETURNING id, lead_id, agent_id, direction, outcome
      ),
      logged AS (
        ${activityInsertSql}
-       SELECT NULL, 'call.ended', lead_id, agent_id,
-              jsonb_build_object('callId', id, 'callSid', $1::text,
-                                 'outcome', $2::text, 'durationSec', $3::int)
+       SELECT NULL, CASE WHEN outcome = 'missed' THEN 'call.missed' ELSE 'call.ended' END, lead_id, agent_id,
+              jsonb_build_object('callId', id, 'callSid', $1::text, 'direction', direction,
+                                 'outcome', outcome, 'durationSec', $3::int)
        FROM ended
      )
-     SELECT 1 FROM ended`,
+     SELECT lead_id, outcome = 'missed' AS missed FROM ended`,
     [opts.callSid, opts.outcome, opts.durationSec]
   );
-  return (rowCount ?? 0) > 0;
+  const ended = rows[0];
+  return { recorded: Boolean(ended), missedLeadId: ended?.missed ? ended.lead_id : null };
+}
+
+export type IncomingCall =
+  /** Ring this agent's browser. */
+  | { kind: 'ring'; agentId: number; lead: { id: number; name: string; phone: string } }
+  /**
+   * A lead we hold, but no agent to ring. Already saved as missed. `firstReport`
+   * is false on a retried webhook, so the lead is not texted twice.
+   */
+  | { kind: 'missed'; leadId: number; firstReport: boolean }
+  /** Nobody we know. Nothing to ring and no lead to record it against. */
+  | { kind: 'unknown' };
+
+/**
+ * A lead is calling our number: decides whose browser rings, and records the
+ * call - Jeel, 2026-10-01.
+ *
+ * **Whose.** The agent holding the lead; failing that, the agent who last
+ * called them, since theirs is the call being returned. Only an active agent
+ * counts. With neither, nobody rings: there is no "everyone" to ring yet - a
+ * shared incoming queue is a later piece of work - and the call is saved as
+ * missed straight away, so the lead is texted and shows in the queue.
+ *
+ * A number we hold no lead for is `unknown`. `calls` needs a lead, so that call
+ * is kept only in the activity log, by its phone number.
+ *
+ * Idempotent like `startCall`: a retried webhook finds the row and rings again.
+ */
+export async function startIncomingCall(opts: { callSid: string; fromPhone: string }): Promise<IncomingCall> {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+
+    const { rows } = await client.query<{
+      id: number;
+      first_name: string | null;
+      last_name: string | null;
+      phone: string;
+      agent_id: number | null;
+    }>(
+      `SELECT l.id, l.first_name, l.last_name, l.phone,
+              COALESCE(
+                (SELECT u.id FROM users u WHERE u.id = l.assigned_to AND u.is_active),
+                (SELECT c.agent_id FROM calls c
+                 JOIN users u ON u.id = c.agent_id AND u.is_active
+                 WHERE c.lead_id = l.id AND c.direction = 'outbound'
+                 ORDER BY c.id DESC LIMIT 1)
+              ) AS agent_id
+       FROM leads l
+       WHERE l.phone = $1
+       FOR UPDATE OF l`,
+      [opts.fromPhone]
+    );
+    const lead = rows[0];
+
+    if (!lead) {
+      await recordActivity(client, {
+        action: 'call.incoming',
+        actorId: null,
+        detail: { callSid: opts.callSid, phone: opts.fromPhone, known: false },
+      });
+      await client.query('COMMIT');
+      return { kind: 'unknown' };
+    }
+
+    // With nobody to ring it is over before it starts: saved as missed now.
+    const nobody = lead.agent_id === null;
+    const inserted = await client.query(
+      `INSERT INTO calls (lead_id, agent_id, twilio_call_sid, started_at, direction, outcome, duration_sec, ended_at)
+       VALUES ($1, $2, $3, now(), 'inbound',
+               CASE WHEN $4::boolean THEN 'missed' END,
+               CASE WHEN $4::boolean THEN 0 END,
+               CASE WHEN $4::boolean THEN now() END)
+       ON CONFLICT (twilio_call_sid) DO NOTHING
+       RETURNING id`,
+      [lead.id, lead.agent_id, opts.callSid, nobody]
+    );
+    if (inserted.rowCount === 1) {
+      await recordActivity(client, {
+        action: nobody ? 'call.missed' : 'call.incoming',
+        actorId: null,
+        leadId: lead.id,
+        subjectUserId: lead.agent_id,
+        detail: { callId: inserted.rows[0].id, callSid: opts.callSid, ...(nobody ? { because: 'no_agent' } : {}) },
+      });
+    }
+
+    await client.query('COMMIT');
+
+    if (nobody) {
+      return { kind: 'missed', leadId: lead.id, firstReport: inserted.rowCount === 1 };
+    }
+    return {
+      kind: 'ring',
+      agentId: lead.agent_id!,
+      lead: {
+        id: lead.id,
+        name: [lead.first_name, lead.last_name].filter(Boolean).join(' '),
+        phone: lead.phone,
+      },
+    };
+  } catch (err) {
+    await client.query('ROLLBACK');
+    throw err;
+  } finally {
+    client.release();
+  }
 }

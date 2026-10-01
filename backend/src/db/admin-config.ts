@@ -14,7 +14,8 @@ import { pool } from './pool';
 import { NAME_FALLBACK, SEGMENT_LIMIT } from '../core/messages';
 
 /**
- * The eight messages the page shows, in the order a lead meets them.
+ * The nine messages the page shows, in the order a lead meets them, the
+ * missed-call text last (Phase 4: sent when a lead rings and nobody answers).
  * `message_review` - sent after a second unclear reply - was missing until
  * 2026-09-29: the lead received it, but nobody could see it here.
  */
@@ -27,6 +28,7 @@ const MESSAGE_KEYS = [
   'message_clarify_3',
   'message_review',
   'message_thanks',
+  'message_missed_call',
 ] as const;
 
 export interface ConfiguredMessage {

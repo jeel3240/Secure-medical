@@ -22,8 +22,13 @@ export function agentIdFromIdentity(raw: unknown): number | null {
   return match ? Number(match[1]) : null;
 }
 
-/** What a finished call is recorded as, in `calls.outcome`. */
-export const CALL_OUTCOMES = ['answered', 'no_answer', 'busy', 'failed', 'canceled'] as const;
+/**
+ * What a finished call is recorded as, in `calls.outcome`. `missed` is an
+ * incoming call nobody answered, whatever the reason - the agent was away,
+ * declined, was not signed in, or the lead hung up first. For the lead and for
+ * the agent who has to ring back, those are all the same thing.
+ */
+export const CALL_OUTCOMES = ['answered', 'no_answer', 'busy', 'failed', 'canceled', 'missed'] as const;
 export type CallOutcome = (typeof CALL_OUTCOMES)[number];
 
 /**
@@ -56,6 +61,17 @@ export function talkSeconds(outcome: CallOutcome, rawDuration: unknown): number 
  * the server is the lock - the same split as every other write on a lead.
  */
 export type CallRefusal = 'not_found' | 'not_holder' | 'blocked' | 'bad_request';
+
+/**
+ * How long an incoming call rings the agent before it is a missed call. Long
+ * enough to finish a sentence and click; short enough that the lead is not
+ * left listening to ringing.
+ */
+export const INCOMING_RING_SECONDS = 20;
+
+/** Said to a lead whose call nobody answered. A text saying the same follows - `message_missed_call`. */
+export const MISSED_CALL_SPEECH =
+  'Thank you for calling Secure Medical. Our team member is not available right now, and will call you back shortly. Goodbye.';
 
 /** Spoken to the agent in the browser, then the call ends. Short: they are listening, not reading. */
 export const REFUSAL_SPEECH: Record<CallRefusal, string> = {

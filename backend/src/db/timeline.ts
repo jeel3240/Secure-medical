@@ -71,7 +71,7 @@ const QUERIES: { kind: TimelineKind; sql: string }[] = [
     sql: `
       SELECT COALESCE(c.started_at, c.created_at) AS at,
              u.name AS author,
-             c.outcome, c.duration_sec
+             c.outcome, c.duration_sec, c.direction
       FROM calls c
       LEFT JOIN users u ON u.id = c.agent_id
       WHERE c.lead_id = $1
@@ -217,6 +217,7 @@ interface TimelineRow {
   at: Date;
   /** Every query selects it: the agent, or null for our own and the lead's. */
   author: string | null;
+  /** Messages and calls: which way it went. */
   direction?: 'inbound' | 'outbound';
   sent_by?: number | null;
   body?: string;
@@ -253,7 +254,7 @@ function toEntry(kind: TimelineKind, row: TimelineRow): TimelineEntry {
         kind,
         at,
         author: row.author,
-        detail: { outcome: row.outcome, durationSec: row.duration_sec },
+        detail: { outcome: row.outcome, durationSec: row.duration_sec, direction: row.direction },
       };
     case 'note':
       return { kind, at, author: row.author, detail: { body: row.body } };

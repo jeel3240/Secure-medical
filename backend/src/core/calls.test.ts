@@ -26,6 +26,11 @@ describe('how a call ended', () => {
     expect(outcomeForStatus(status)).toBe(outcome);
   });
 
+  it('Twilio never says missed - that is ours, for an incoming call nobody answered', () => {
+    expect(outcomeForStatus('missed')).toBeNull();
+    expect(talkSeconds('missed', '12')).toBe(0);
+  });
+
   it('a status on the way is not an ending', () => {
     expect(outcomeForStatus('ringing')).toBeNull();
     expect(outcomeForStatus('in-progress')).toBeNull();

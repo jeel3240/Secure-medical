@@ -24,10 +24,13 @@ export const ACTIVITY_ACTIONS = [
   'sms.sent',
   'sms.failed',
   'sms.blocked',
-  // Calls. A refused call leaves no `calls` row, so this is its only record.
+  // Calls. A refused call leaves no `calls` row, so this is its only record;
+  // so does an incoming call from a number we hold no lead for.
   'call.started',
   'call.ended',
   'call.refused',
+  'call.incoming',
+  'call.missed',
   // The do-not-call list. Re-blocking a number overwrites its row.
   'dnc.blocked',
   'dnc.released',
