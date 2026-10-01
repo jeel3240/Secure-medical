@@ -59,6 +59,13 @@ const CALL_OUTCOME: Record<string, string> = {
 
 export function callText(detail: Record<string, unknown>): string {
   const { outcome } = detail;
+  // A lead calling us. Missed says it all; an answered one has a length.
+  if (detail.direction === 'inbound') {
+    if (typeof outcome !== 'string') return 'Incoming call · ringing';
+    if (outcome === 'missed') return 'Missed call · told we will call back';
+    if (outcome === 'answered') return `Incoming call · answered · ${duration(detail.durationSec)}`;
+    return `Incoming call · ${CALL_OUTCOME[outcome] ?? outcome.replace(/_/g, ' ')}`;
+  }
   if (typeof outcome !== 'string') return 'Outbound call · in progress';
   if (outcome === 'answered') return `Outbound call · answered · ${duration(detail.durationSec)}`;
   return `Outbound call · ${CALL_OUTCOME[outcome] ?? outcome.replace(/_/g, ' ')}`;

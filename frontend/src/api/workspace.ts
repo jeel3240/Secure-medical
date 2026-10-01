@@ -54,6 +54,8 @@ export interface LeadDetail {
     needsReview: boolean;
     unread: boolean;
     expired: boolean;
+    /** They rang us, nobody answered, and nobody has called or texted back. */
+    missedCall: boolean;
   };
 }
 

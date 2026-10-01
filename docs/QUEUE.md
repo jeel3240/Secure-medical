@@ -16,7 +16,8 @@ a call, and one still answering would be interrupted by it. Agents contact
 people who have given them a reason to.
 
 A lead is in the queue when it has replied, its number is not blocked, and one
-of the four reasons below holds:
+of the reasons below holds (five since 2026-10-01, when a missed call joined
+them):
 
 | Always | Why |
 |---|---|
@@ -27,6 +28,7 @@ of the four reasons below holds:
 |---|---|
 | Newest conversation `completed` | Answered all three, including how to contact them |
 | Newest conversation `review` | Replied, and we could not understand it |
+| An unreturned **missed call** | They rang our number and nobody answered - 2026-10-01. This one needs no reply and no score: a lead who has never texted is in the queue for it. `TWILIO.md`, "A missed call" |
 | `has_unread_inbound` | Texted something the questions cannot handle - after the conversation ended, or to an agent who took it over. `STATE-MACHINE.md`, "Which replies need a person" |
 | An active agent holds it, or a callback is booked | Being worked. A lead must never vanish from under the agent working it, whatever its conversation says - this is also what keeps an expired lead with a callback, as the 2026-09-19 rule intended |
 
@@ -42,12 +44,13 @@ none of the four reasons above keeps the lead - not completing, not needing
 review, not a callback booked before it was closed. Saving the outcome also
 releases the lead, so it leaves the moment Closed is saved (Jeel, 2026-09-29;
 until then it stayed as "Working – name" until the agent pressed Back to
-queue, though nobody needed to pick it up). Three things still keep one in:
+queue, though nobody needed to pick it up). Four things still keep one in:
 
 | Keeps a closed lead in | Why |
 |---|---|
 | An agent picks it up again | Someone is deliberately working it again |
 | `has_unread_inbound` | The lead texted after closing, and a person has to read it. It shows as Inbound reply |
+| A missed call nobody has returned | The lead rang after closing and got no answer. It shows as Missed call until an agent calls or texts them (2026-10-01) |
 | A callback booked after closing, not yet done | It is not finished after all - "call me Friday". That reopens the lead altogether |
 
 "Closed" is defined once, in `backend/src/db/lead-state.ts`, and Admin > Leads
@@ -93,9 +96,10 @@ why is it here? When several apply, the first wins:
 | # | `kind` | Shown when | Carries |
 |---|---|---|---|
 | 1 | `working` | An **active** agent holds the lead | `agentId`, `agentName` |
-| 2 | `inbound_reply` | The lead has texted and nobody has read it | |
-| 3 | `callback` | A callback is booked and not done - the soonest one. "Callback – Maya Chen · 8:13 PM", with the date when not today. Does not lock the row | `agentId`, `agentName`, `at` |
-| 4 | `needs_review` | Conversation `review`: replies we could not read | |
+| 2 | `missed_call` | The lead rang us, nobody answered, and no agent has called or texted them since. Bold | |
+| 3 | `inbound_reply` | The lead has texted and nobody has read it | |
+| 4 | `callback` | A callback is booked and not done - the soonest one. "Callback – Maya Chen · 8:13 PM", with the date when not today. Does not lock the row | `agentId`, `agentName`, `at` |
+| 5 | `needs_review` | Conversation `review`: replies we could not read | |
 | - | `null` | None of those: the lead is waiting to be picked up. The screen shows a hyphen | |
 
 **Callback came back - Jeel, 2026-09-29.** Testing showed the cost of

@@ -79,12 +79,13 @@ agent is handling reads Working.
 
 ## What agents see in the queue
 
-The queue's STATUS column shows at most one of four things, in this order when
+The queue's STATUS column shows at most one of five things, in this order when
 more than one applies. Most rows show none.
 
 | STATUS | Means |
 |---|---|
 | **Working – karm** | karm is holding the lead right now. Others see it locked |
+| **Missed call** | The lead rang our number and nobody answered. They were told, and texted, that we will call back |
 | **Inbound reply** | The lead texted us and nobody has read it |
 | **Callback – karm · 3:00 PM** | karm has a callback booked on it. Not locked, but it is karm's call to make |
 | **Needs review** | We could not understand their replies |
@@ -120,6 +121,7 @@ There is no reason to pick when closing. The note says why, if anything does.
 |---|---|
 | An expired lead texts us | Back as **Inbound reply** |
 | A closed lead texts us | Back as **Inbound reply**. Once read, it is Closed again |
+| A lead calls our number and nobody answers | Back as **Missed call**, closed or not, until an agent calls or texts them. `TWILIO.md`, "Incoming calls" |
 | An agent books a callback after closing a lead | Back as **Working**, until the callback is done |
 | An opted-out lead texts START | Unblocked, and back as **Inbound reply** for a person to read. The questions do not restart - `STATE-MACHINE.md`, "Opting back in" |
 | An agent picks a lead and puts it back without doing anything | Back to **Ready** |

@@ -79,7 +79,7 @@ async function main(): Promise<void> {
       d?.breakdown.reduce((n, l) => n + l.points, 0),
       100
     );
-    check('no flags raised', d?.flags, { dnc: false, needsReview: false, unread: false, expired: false });
+    check('no flags raised', d?.flags, { dnc: false, needsReview: false, unread: false, expired: false, missedCall: false });
   }
 
   console.log('\nthe newest conversation wins');

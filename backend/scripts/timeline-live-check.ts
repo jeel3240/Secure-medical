@@ -195,7 +195,7 @@ async function main(): Promise<void> {
     check(
       'a call carries its outcome and length',
       t.find((e) => e.kind === 'call')?.detail,
-      { outcome: 'no_answer', durationSec: 34 }
+      { outcome: 'no_answer', durationSec: 34, direction: 'outbound' }
     );
   }
 

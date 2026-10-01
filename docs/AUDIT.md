@@ -50,6 +50,8 @@ it.
 | `callback.reopened` | A done callback is un-done | `wasDoneAt` |
 | `sms.sent`, `sms.failed`, `sms.blocked` | An agent's own text. `blocked` leaves no message row, so the log is its only record | `messageId`, `tookOver` |
 | `call.started`, `call.ended`, `call.refused` | A call. A refused call leaves no `calls` row, so the log is its only record | `callSid`, `outcome`, `durationSec`, `reason` |
+| `call.incoming` | A lead rings our number and an agent is rung - the subject is that agent. From a number we hold no lead for there is no `calls` row, so the log is its only record | `callId`, `callSid`; for an unknown number, `phone` and `known: false` |
+| `call.missed` | An incoming call nobody answered | `callId`, `callSid`, and `because: 'no_agent'` when there was nobody to ring |
 | `dnc.blocked`, `dnc.released` | A number is blocked or released, by a STOP, a START or an agent | `phone`, `reason`, and `previous` - what the row said before a re-block overwrote it |
 | `auth.signed_in`, `auth.signed_out`, `auth.password_changed` | | |
 | `auth.sign_in_failed` | A refused sign-in | The `email` tried and `why`. Never the password |

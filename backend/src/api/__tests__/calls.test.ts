@@ -259,10 +259,27 @@ describe('a lead calling our number', () => {
       expect(res.text).toContain('will call you back');
     });
 
+    it('records the missed call itself - an agent with no browser open sends no report of their own', async () => {
+      finishCall.mockResolvedValue({ recorded: true, missedLeadId: 7 });
+      const { app } = await buildApp({ twilio: SETTINGS });
+      await fromTwilio(app, AFTER, { CallSid: 'CA300', DialCallStatus: 'no-answer' });
+      expect(finishCall).toHaveBeenCalledWith({ callSid: 'CA300', outcome: 'no_answer', durationSec: 0 });
+      expect(sendMissedCallText).toHaveBeenCalledWith(7);
+    });
+
+    it('the lead still hears the message when that record fails', async () => {
+      finishCall.mockRejectedValue(new Error('connection refused'));
+      const { app } = await buildApp({ twilio: SETTINGS });
+      const res = await fromTwilio(app, AFTER, { CallSid: 'CA300', DialCallStatus: 'no-answer' });
+      expect(res.status).toBe(200);
+      expect(res.text).toContain('will call you back');
+    });
+
     it('answered: nothing more is said', async () => {
       const { app } = await buildApp({ twilio: SETTINGS });
       const res = await fromTwilio(app, AFTER, { CallSid: 'CA300', DialCallStatus: 'completed' });
       expect(res.text).not.toContain('<Say>');
+      expect(finishCall).not.toHaveBeenCalled();
     });
   });
 

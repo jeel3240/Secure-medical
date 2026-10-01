@@ -170,9 +170,10 @@ you change something the docs describe, update the doc in the same commit.
     src/db/notes.ts         agent notes, append-only
     src/api/callbacks.ts    My Callbacks: list, reschedule, mark done
     src/api/calls.ts        browser calling: whether it is set up, and the call token
-    src/api/twilio-webhooks.ts  Twilio's signed webhooks: connect a call, record how it ended
+    src/api/twilio-webhooks.ts  Twilio's signed webhooks: connect a call, a lead calling in, how it ended
     src/core/calls.ts       call rules, pure: identity, outcomes, refusals
-    src/db/calls.ts         may this call be placed, and recording it
+    src/db/calls.ts         may this call be placed, who an incoming call rings, and recording it
+    src/db/missed-call-text.ts  the text sent after a call to us nobody answered
     src/integrations/twilio.ts  the only file that uses the twilio library
     src/twilio-settings.ts  calling's settings: off, on or incomplete
     scripts/calls-live-check.ts  proves the call SQL: holder, DNC, retries
@@ -227,6 +228,9 @@ you change something the docs describe, update the doc in the same commit.
     src/api/calls.ts        calling config and token
     src/lib/call-state.ts   a call's states, pure
     src/lib/calling.ts      the only file that uses Twilio's Voice SDK
+    src/lib/incoming-state.ts  a lead calling in: ringing, answered, missed - pure
+    src/lib/incoming-call.ts   the store that joins those states to Twilio
+    src/layout/IncomingCallBar.tsx  the incoming-call bar, on every screen
     src/lib/useSecond.ts    a clock that re-renders every second
     src/components/Timeline.tsx      shared by the workspace and the timeline page
     src/components/QueueStatus.tsx   the queue's STATUS column: icon and words
@@ -281,7 +285,7 @@ of truth and `docs/SCHEMA.md` explains it. It differs from the list above:
 - **users** also has `session_version` and `last_login_at`.
 - **leads** has `group_id`, `group_name` and `ezt_added_at` instead of `group` and `ezt_contact_id`; EZ Texting returns no contact id.
 - **messages** also has `in_reply_to_ezt_id`, `from_number` and `received_at`; `ezt_message_id` is unique for outbound only.
-- **calls** also has `ended_at`.
+- **calls** also has `ended_at`, and since migration 007 (2026-10-01) `direction`; an incoming call that rang nobody has no `agent_id`.
 - **leads.previous_lead_id** exists but is unused and expected to be dropped - see §6.
 - **leads.assigned_at** records when an agent claimed the lead. Claims do not expire; it is what lets a superadmin see one held too long. Added 2026-09-15.
 - **activity_log** and **webhook_events** - migration 006, 2026-10-01. The company keeps data as proof: every action is one add-only row, and every inbound webhook is kept as received. The foreign keys to `leads` no longer cascade, so a lead with history cannot be deleted. `docs/AUDIT.md`.
@@ -426,7 +430,7 @@ onto them:
 | 1 | Week 1 | Done |
 | 2 | Week 2 | Done, approved 2026-09-23 |
 | 3 | Week 3 **and all of Week 4 except Twilio** | Done 2026-09-28, merged into `main` |
-| 4 | Week 4 items 1-4, Twilio calling | Done 2026-10-01 - `docs/TWILIO.md`. A real call placed and recorded the same day |
+| 4 | Week 4 items 1-4, Twilio calling | Done 2026-10-01 - `docs/TWILIO.md`. A real call placed and recorded the same day. Incoming calls - ring one agent, text the lead on a missed call - are on `feat/incoming-calls`, not in `dev` until Jeel has tested them |
 
 **Phase 3 is everything that is left except calling.** That means the Week 3
 list below, plus Week 4 items 5-9: error handling and retries, logging, the

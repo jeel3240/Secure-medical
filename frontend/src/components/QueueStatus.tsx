@@ -24,6 +24,9 @@ import { StatusIcon, type StatusIconName } from './StatusIcon';
  * Inbound reply is also bold, because a lead has written to us and nobody has
  * read it.
  *
+ * **Missed call - 2026-10-01.** The lead rang our number and nobody picked up.
+ * Bold for the same reason, and it stays until someone calls or texts back.
+ *
  * **Callback is back - Jeel, 2026-09-29**, naming whose it is: "Callback –
  * Maya Chen · 8:13 PM", with the date as well when it is not today. Without it
  * another agent could pick the lead up and call first.
@@ -42,6 +45,8 @@ export function tagText(tag: QueueTag): string {
       // "Working", not "In progress" - Jeel, 2026-09-28: the same word as
       // Admin > Leads. The API's `kind` was renamed to match the same day.
       return tag.agentName ? `Working – ${tag.agentName}` : 'Working';
+    case 'missed_call':
+      return 'Missed call';
     case 'inbound_reply':
       return 'Inbound reply';
     case 'callback':
@@ -54,14 +59,18 @@ export function tagText(tag: QueueTag): string {
 /** The shared icon for each status - `StatusIcon.tsx`. */
 const ICON: Record<QueueTag['kind'], StatusIconName> = {
   working: 'half',
+  missed_call: 'missed',
   inbound_reply: 'inbound',
   callback: 'clock',
   needs_review: 'warning',
 };
 
+/** The lead reached out and nobody has answered them yet: these are bold. */
+const WAITING_ON_US = new Set<QueueTag['kind']>(['inbound_reply', 'missed_call']);
+
 export function QueueStatus({ tag }: { tag: QueueTag }) {
   return (
-    <span className={`status${tag.kind === 'inbound_reply' ? ' status--strong' : ''}`}>
+    <span className={`status${WAITING_ON_US.has(tag.kind) ? ' status--strong' : ''}`}>
       <StatusIcon name={ICON[tag.kind]} />
       {tagText(tag)}
     </span>

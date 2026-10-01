@@ -108,6 +108,15 @@ describe('calls', () => {
     expect(screen.getByText(text)).toBeDefined();
   });
 
+  it.each([
+    ['missed', 0, 'Missed call · told we will call back'],
+    ['answered', 75, 'Incoming call · answered · 1:15'],
+    [null, null, 'Incoming call · ringing'],
+  ])('a lead calling us, %s: says so', (outcome, durationSec, text) => {
+    render(<Timeline entries={[entry({ kind: 'call', detail: { outcome, durationSec, direction: 'inbound' } })]} />);
+    expect(screen.getByText(text)).toBeDefined();
+  });
+
   it('a call with no outcome yet is in progress', () => {
     render(<Timeline entries={[entry({ kind: 'call', detail: { outcome: null, durationSec: null } })]} />);
     expect(screen.getByText('Outbound call · in progress')).toBeDefined();

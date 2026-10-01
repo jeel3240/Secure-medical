@@ -118,24 +118,28 @@ export function twilioWebhooksRouter(deps: AppDeps): Router {
     })
   );
 
+  /**
+   * Saves how a call ended and, when that made it a missed call, texts the
+   * lead that we will call back. Safe to call for every report of the same
+   * call: only the first is recorded, and only that one sends the text.
+   */
+  const recordEnd = async (callSid: string, status: unknown, duration: unknown): Promise<void> => {
+    const outcome = outcomeForStatus(status);
+    if (!callSid || !outcome) return;
+    const durationSec = talkSeconds(outcome, duration);
+    const { recorded, missedLeadId } = await db().finishCall({ callSid, outcome, durationSec });
+    log.info('call.finished', { callSid, outcome, durationSec, recorded, missed: missedLeadId !== null });
+    if (missedLeadId !== null) await missedText().sendMissedCallText(missedLeadId);
+  };
+
   router.post(
     '/status',
     asyncHandler(async (req, res) => {
       const body = (req.body ?? {}) as Record<string, unknown>;
-      // The callback is on the lead's leg; our row is keyed by the browser's
+      // The callback is on the far leg - the lead's for a call we placed, the
+      // agent's browser for one we received; our row is keyed by the first
       // leg, which Twilio sends as the parent.
-      const callSid = field(body, 'ParentCallSid');
-      const outcome = outcomeForStatus(body.CallStatus);
-
-      if (callSid && outcome) {
-        const durationSec = talkSeconds(outcome, body.CallDuration);
-        const { recorded, missedLeadId } = await db().finishCall({ callSid, outcome, durationSec });
-        log.info('call.finished', { callSid, outcome, durationSec, recorded, missed: missedLeadId !== null });
-
-        // An incoming call nobody answered: the lead is told we will call back.
-        // Only the report that made it a missed call sends the text.
-        if (missedLeadId !== null) await missedText().sendMissedCallText(missedLeadId);
-      }
+      await recordEnd(field(body, 'ParentCallSid'), body.CallStatus, body.CallDuration);
 
       // Always 204: there is nothing for Twilio to retry, even for a status we
       // do not record.
@@ -177,13 +181,33 @@ export function twilioWebhooksRouter(deps: AppDeps): Router {
   );
 
   // Twilio comes here when ringing the agent ends. If they talked, there is
-  // nothing to add; otherwise the lead is still on the line and hears that we
-  // will call back. The missed call itself is recorded by /status, which fires
-  // whoever ended it - including a lead who hung up, which never reaches here.
-  router.post('/incoming/after', (req, res) => {
-    const status = field((req.body ?? {}) as Record<string, unknown>, 'DialCallStatus');
-    res.type('text/xml').send(status === 'completed' || status === 'answered' ? emptyTwiml() : missedCallTwiml());
-  });
+  // nothing to add, and /status saves the call with its length. Otherwise the
+  // lead is still on the line and hears that we will call back.
+  //
+  // The missed call is recorded here as well as by /status. /status fires
+  // whoever ended it - including a lead who hung up, which never reaches here -
+  // but it reports on the agent's leg, and an agent whose browser is closed
+  // may have no leg to report on. Whichever arrives first records it.
+  router.post(
+    '/incoming/after',
+    asyncHandler(async (req, res) => {
+      const body = (req.body ?? {}) as Record<string, unknown>;
+      const status = field(body, 'DialCallStatus');
+      res.type('text/xml');
+
+      if (status === 'completed' || status === 'answered') {
+        res.send(emptyTwiml());
+        return;
+      }
+      try {
+        await recordEnd(field(body, 'CallSid'), status, 0);
+      } catch (err) {
+        // The lead is listening: they still hear the message.
+        log.error('call.missed_not_recorded', { callSid: field(body, 'CallSid'), err: errText(err) });
+      }
+      res.send(missedCallTwiml());
+    })
+  );
 
   return router;
 }
