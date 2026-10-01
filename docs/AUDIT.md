@@ -44,9 +44,9 @@ it.
 | `reply.read` | An unread reply is opened - once, by whoever cleared it | |
 | `note.added` | A note is saved | `noteId` - the text stays in `notes`, not copied |
 | `outcome.set` | Closed or DNC is saved | `value`, `dispositionId` |
-| `callback.booked` | A callback is booked. Actor is who booked it, subject who it is for | `callbackId`, `scheduledAt` |
+| `callback.booked` | A callback is booked. Actor is who booked it, subject who it is for. No actor when the system booked it for a missed call | `callbackId`, `scheduledAt`, `because: 'missed_call'` |
 | `callback.rescheduled` | Its time changes | `from`, `to` |
-| `callback.done` | Marked done, or finished by an outcome | `scheduledAt`, `because: 'outcome'` |
+| `callback.done` | Marked done, finished by an outcome, or - a missed call's callback - by the lead being got back to. Actor is who did that | `scheduledAt`, `because`: `outcome`, `called_back`, `texted_back` or `answered` |
 | `callback.reopened` | A done callback is un-done | `wasDoneAt` |
 | `sms.sent`, `sms.failed`, `sms.blocked` | An agent's own text. `blocked` leaves no message row, so the log is its only record | `messageId`, `tookOver` |
 | `call.started`, `call.ended`, `call.refused` | A call. A refused call leaves no `calls` row, so the log is its only record | `callSid`, `outcome`, `durationSec`, `reason` |

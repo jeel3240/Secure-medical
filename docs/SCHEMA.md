@@ -34,7 +34,7 @@ the RDS CA bundle if strict verification is ever wanted.
 | `calls` | Twilio calls, with duration and outcome. Written since Phase 4 - `TWILIO.md`, "What is saved". `direction` says who called whom; an incoming call that rang nobody has no `agent_id` (migration 007). |
 | `dispositions` | What an agent decided after contact. |
 | `notes` | Free text an agent wrote about a lead. |
-| `callbacks` | Scheduled follow-ups. |
+| `callbacks` | Scheduled follow-ups. `reason` is `booked` - a person booked it - or `missed_call`, booked by the system for the agent a missed call rang (migration 008). |
 | `dnc_list` | Phones that must never be contacted. |
 | `settings` | Key/value config, admin-editable. |
 | `scoring_rules` | Points per answer, admin-editable. |

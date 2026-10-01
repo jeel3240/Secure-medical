@@ -288,6 +288,7 @@ of truth and `docs/SCHEMA.md` explains it. It differs from the list above:
 - **users** also has `session_version` and `last_login_at`.
 - **leads** has `group_id`, `group_name` and `ezt_added_at` instead of `group` and `ezt_contact_id`; EZ Texting returns no contact id.
 - **messages** also has `in_reply_to_ezt_id`, `from_number` and `received_at`; `ezt_message_id` is unique for outbound only.
+- **callbacks** also has `reason` (migration 008, 2026-10-01): `booked`, or `missed_call` for one the system books for the agent a missed call rang.
 - **calls** also has `ended_at`, and since migration 007 (2026-10-01) `direction`; an incoming call that rang nobody has no `agent_id`.
 - **leads.previous_lead_id** exists but is unused and expected to be dropped - see §6.
 - **leads.assigned_at** records when an agent claimed the lead. Claims do not expire; it is what lets a superadmin see one held too long. Added 2026-09-15.

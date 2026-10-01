@@ -173,6 +173,14 @@ carries all four numbers.
 click on Save should not rewrite it. Rescheduling, by contrast, does overwrite -
 that is the point of it.
 
+**A missed call books one by itself - Jeel, 2026-10-01.** When a lead rings our
+number and the agent it rang does not pick up, the server books that agent a
+callback due at that moment, `reason = 'missed_call'`. My Callbacks shows it as
+**Missed call** rather than Overdue, and it is marked done when anyone calls or
+texts the lead back, or answers when they ring again. Every other callback is
+`reason = 'booked'` and is finished only by a person or by an outcome.
+`TWILIO.md`, "A missed call".
+
 **Whose callback it is.** An agent sees and changes only their own; a superadmin
 may list another agent's and may change one, which is how a callback left by
 someone off sick gets moved. A refusal names the owner so the screen can say who

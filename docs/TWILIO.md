@@ -107,11 +107,15 @@ available right now, and will call you back shortly. Goodbye." Then:
 | **The call is saved** | `calls` row with `direction = 'inbound'`, `outcome = 'missed'`, whatever Twilio called it (no-answer, busy, canceled). `agent_id` is the agent it rang, or null when it rang nobody |
 | **The lead is texted** | `message_missed_call` from `settings`, sent through EZ Texting like every other text and saved in `messages`: "Secure Medical: Sorry we missed your call. Our team member is not available right now and will call you back shortly." Once per call. Not sent to a blocked number - the do-not-call check is inside the sender |
 | **The lead goes to the queue** | Tagged **Missed call**, in bold, above an unread reply. A closed lead is reopened by it. `QUEUE.md`, "The tag" |
+| **The agent gets a callback** | One row on their My Callbacks, due now and marked **Missed call** - `callbacks.reason = 'missed_call'`, migration 008. The queue tag says a lead needs calling; this says whose job it is. One per lead however many times they ring. Not booked when the call rang nobody (the lead waits in the queue for anyone), for a deactivated agent, or for a number on the do-not-call list. An agent who pressed Decline gets it too: the lead was still told we would call back |
 | **The agent is told** | The card on their screen becomes a notice: "Missed call · Leo M. · Rang for 20s", with **Call back**. It stays until dismissed |
 | **The lead's page says so** | A **Missed call** badge beside the lead's other states, in the queue's words, and a line on the timeline: "Missed call · told we will call back". It was a sentence in a yellow banner for a day; Jeel, 2026-10-01: a state of the lead is a badge, like Closed and Needs review |
 
 **It stops being a missed call when someone gets back to them:** an agent
-calls the lead, or texts them, after it. Until then the tag and the badge
+calls the lead, or texts them, after it. The same moment finishes the callback,
+whichever agent did it - nobody ticks it off by hand - and so does the lead
+ringing again and being answered. A callback an agent booked themselves is
+never finished for them. Until then the tag and the badge
 stay. Reading the lead's page does not clear it - they asked for a person, and
 looking is not answering. A call under way with them also counts, so an agent
 talking to the lead is not shown Missed call (found on the first real
@@ -381,7 +385,7 @@ microphone. `lib/calling.ts` is the only file that touches the SDK.
 | Identity, outcomes, talk time | `src/core/calls.test.ts` |
 | The token's claims, the TwiML, the signature check | `src/integrations/twilio.test.ts` |
 | Every route, refusals, a database failure, the missed-call text sent once | `src/api/__tests__/calls.test.ts` |
-| The SQL: who may call, DNC, retries, the timeline; who an incoming call rings, a missed call, and its effect on the queue and Admin > Leads | `scripts/calls-live-check.ts` - against a real Postgres |
+| The SQL: who may call, DNC, retries, the timeline; who an incoming call rings, a missed call, its effect on the queue and Admin > Leads, and its callback - booked once, finished by a call, a text or an answer | `scripts/calls-live-check.ts` - against a real Postgres |
 | Call states, wording, error sentences | `frontend/src/lib/call-state.test.ts`, `lib/calling.test.ts` |
 | The join to Twilio's SDK itself, against a stand-in for it: placing a call, being rung, accept, decline, sign-out. Added after Accept failed on the first real incoming call - the function joining a call's events to the screen called itself, and no test ran it | `frontend/src/lib/calling.device.test.ts` |
 | The ring: starts, repeats, stops, stays silent while the browser blocks sound; the desktop notification | `frontend/src/lib/ringtone.test.ts`, `lib/call-notification.test.ts` |
@@ -414,7 +418,7 @@ own phone.
 
 1. Set the seven variables in the server's `.env`. `PUBLIC_URL=https://dailyleadhub.com`.
 2. Deploy as usual (`WORKFLOW.md`, "Deploying"), including `npm run migrate` -
-   incoming calls need migration 007.
+   incoming calls need migrations 007 and 008.
 3. `docker compose exec api npm run twilio:configure`. Run it last, and again
    after anyone has tested locally with the same number.
 4. Sign in, pick up a lead that is your own phone, press Call.

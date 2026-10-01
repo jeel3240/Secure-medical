@@ -121,7 +121,7 @@ There is no reason to pick when closing. The note says why, if anything does.
 |---|---|
 | An expired lead texts us | Back as **Inbound reply** |
 | A closed lead texts us | Back as **Inbound reply**. Once read, it is Closed again |
-| A lead calls our number and nobody answers | Back as **Missed call**, closed or not, until an agent calls or texts them. `TWILIO.md`, "Incoming calls" |
+| A lead calls our number and nobody answers | Back as **Missed call**, closed or not, until an agent calls or texts them. The agent it rang also gets it on My Callbacks. `TWILIO.md`, "Incoming calls" |
 | An agent books a callback after closing a lead | Back as **Working**, until the callback is done |
 | An opted-out lead texts START | Unblocked, and back as **Inbound reply** for a person to read. The questions do not restart - `STATE-MACHINE.md`, "Opting back in" |
 | An agent picks a lead and puts it back without doing anything | Back to **Ready** |

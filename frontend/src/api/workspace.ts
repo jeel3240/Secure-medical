@@ -168,6 +168,8 @@ export interface Callback {
   agentName: string;
   scheduledAt: string;
   doneAt: string | null;
+  /** `missed_call`: booked by the system because the lead rang and this agent did not pick up. */
+  reason: 'booked' | 'missed_call';
 }
 
 /**

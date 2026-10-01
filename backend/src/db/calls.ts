@@ -12,6 +12,7 @@
  */
 
 import { activityInsertSql, recordActivity } from './activity';
+import { finishMissedCallCallbacks } from './callbacks';
 import { pool } from './pool';
 import type { CallOutcome, CallRefusal } from '../core/calls';
 
@@ -80,6 +81,8 @@ export async function startCall(opts: {
         leadId: opts.leadId,
         detail: { callId: inserted.rows[0].id, callSid: opts.callSid },
       });
+      // Calling the lead is returning their missed call, whoever's callback it was.
+      await finishMissedCallCallbacks(client, opts.leadId, opts.agentId, 'called_back');
     }
 
     await client.query('COMMIT');
@@ -107,6 +110,19 @@ export interface FinishedCall {
  * called it - no answer, declined, the agent not signed in, the lead hanging
  * up first. `missedLeadId` tells the caller that this report is the one that
  * made it a missed call, so the lead is texted once and only once.
+ *
+ * **A missed call becomes a callback for the agent it rang** - Jeel,
+ * 2026-10-01 - due now, so it is at the top of their My Callbacks. The queue's
+ * Missed call tag says a lead needs calling; this says whose job it is. Not
+ * booked when the lead already has one open (three missed calls are one call
+ * to return), when the agent has since been deactivated, or when the number
+ * is on the do-not-call list, which a call back would be refused for anyway.
+ *
+ * **And an incoming call that is answered finishes that callback**: the lead
+ * rang again and got through, so there is nothing left to return.
+ *
+ * All of it is one statement, so the call, its callback and their records
+ * are written together or not at all.
  */
 export async function finishCall(opts: {
   callSid: string;
@@ -124,12 +140,41 @@ export async function finishCall(opts: {
        WHERE twilio_call_sid = $1 AND ended_at IS NULL
        RETURNING id, lead_id, agent_id, direction, outcome
      ),
+     booked AS (
+       INSERT INTO callbacks (lead_id, agent_id, scheduled_at, reason)
+       SELECT e.lead_id, e.agent_id, now(), 'missed_call'
+       FROM ended e
+       JOIN leads l ON l.id = e.lead_id
+       JOIN users u ON u.id = e.agent_id AND u.is_active
+       WHERE e.outcome = 'missed'
+         AND NOT EXISTS (
+           SELECT 1 FROM callbacks cb
+           WHERE cb.lead_id = e.lead_id AND cb.done_at IS NULL AND cb.reason = 'missed_call'
+         )
+         AND NOT EXISTS (SELECT 1 FROM dnc_list d WHERE d.phone = l.phone AND d.released_at IS NULL)
+       RETURNING id, lead_id, agent_id, scheduled_at
+     ),
+     returned AS (
+       UPDATE callbacks cb SET done_at = now()
+       FROM ended e
+       WHERE e.direction = 'inbound' AND e.outcome = 'answered'
+         AND cb.lead_id = e.lead_id AND cb.done_at IS NULL AND cb.reason = 'missed_call'
+       RETURNING cb.id, cb.lead_id, cb.agent_id, cb.scheduled_at, e.agent_id AS answered_by
+     ),
      logged AS (
        ${activityInsertSql}
-       SELECT NULL, CASE WHEN outcome = 'missed' THEN 'call.missed' ELSE 'call.ended' END, lead_id, agent_id,
+       SELECT NULL::int, CASE WHEN outcome = 'missed' THEN 'call.missed' ELSE 'call.ended' END, lead_id, agent_id,
               jsonb_build_object('callId', id, 'callSid', $1::text, 'direction', direction,
                                  'outcome', outcome, 'durationSec', $3::int)
        FROM ended
+       UNION ALL
+       SELECT NULL::int, 'callback.booked', lead_id, agent_id,
+              jsonb_build_object('callbackId', id, 'scheduledAt', scheduled_at, 'because', 'missed_call')
+       FROM booked
+       UNION ALL
+       SELECT answered_by, 'callback.done', lead_id, agent_id,
+              jsonb_build_object('callbackId', id, 'scheduledAt', scheduled_at, 'because', 'answered')
+       FROM returned
      )
      SELECT lead_id, outcome = 'missed' AS missed FROM ended`,
     [opts.callSid, opts.outcome, opts.durationSec]

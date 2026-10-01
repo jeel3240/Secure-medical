@@ -10,6 +10,7 @@
  */
 
 import { recordActivity } from './activity';
+import { finishMissedCallCallbacks } from './callbacks';
 import { pool } from './pool';
 import { SEGMENT_LIMIT } from '../core/messages';
 import { errText, log } from '../lib/log';
@@ -132,6 +133,9 @@ export async function sendAgentSms(
       // `tookOver`: this text is the one that stopped the automated questions.
       detail: { messageId: rows[0].id, tookOver: took.rowCount === 1 },
     });
+
+    // Texting the lead is getting back to them after a missed call.
+    await finishMissedCallCallbacks(client, leadId, agentId, 'texted_back');
 
     await client.query('COMMIT');
 

@@ -152,6 +152,8 @@ function entryText(entry: TimelineEntry): string {
     case 'callback': {
       const at = typeof d.scheduledAt === 'string' ? new Date(d.scheduledAt) : null;
       const when = at ? `${dayFormat.format(at)} ${formatTime(at)}` : 'unscheduled';
+      // One the system booked because their call was missed has no chosen time.
+      if (d.reason === 'missed_call') return d.doneAt ? 'Missed call returned' : 'Callback added · missed call';
       return d.doneAt ? `Callback completed (was ${when})` : `Callback scheduled for ${when}`;
     }
     case 'disposition': {

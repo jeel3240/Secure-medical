@@ -18,6 +18,7 @@
  */
 import { pool } from '../src/db/pool';
 import { finishCall, startCall, startIncomingCall } from '../src/db/calls';
+import { createCallback, listCallbacks } from '../src/db/callbacks';
 import { getLeadDetail } from '../src/db/lead-detail';
 import { listQueue } from '../src/db/queue';
 import { blockNumber, DNC_REASONS } from '../src/db/dnc';
@@ -283,6 +284,76 @@ async function main(): Promise<void> {
     await startCall({ callSid: 'CA-30', leadId: lead, agentId: maya });
     await pool.query(`UPDATE leads SET assigned_to = NULL, assigned_at = NULL WHERE id = $1`, [lead]);
     check('calling them back clears it: closed again, out of the queue', [await inQueue(), await admin()], ['absent', 'closed']);
+  }
+
+  console.log('\na missed call becomes a callback for the agent it rang');
+  {
+    const lead = await makeLead('+15550000617', 'OwedACall', maya);
+    const open = async () =>
+      (
+        await pool.query(
+          `SELECT agent_id, reason, done_at IS NOT NULL AS done, scheduled_at <= now() AS due
+           FROM callbacks WHERE lead_id = $1 ORDER BY id`,
+          [lead]
+        )
+      ).rows;
+    const logged = async (action: string) =>
+      (
+        await pool.query(
+          `SELECT actor_id, subject_user_id, detail->>'because' AS because
+           FROM activity_log WHERE lead_id = $1 AND action = $2 ORDER BY id`,
+          [lead, action]
+        )
+      ).rows;
+
+    await startIncomingCall({ callSid: 'IN-20', fromPhone: '+15550000617' });
+    check('nothing is booked while it rings', await open(), []);
+    await finishCall({ callSid: 'IN-20', outcome: 'no_answer', durationSec: 0 });
+    check('missed: one callback, theirs, due now', await open(), [{ agent_id: maya, reason: 'missed_call', done: false, due: true }]);
+    check('recorded as booked by the system, for them', await logged('callback.booked'), [
+      { actor_id: null, subject_user_id: maya, because: 'missed_call' },
+    ]);
+    const mine = await listCallbacks({ agentId: maya, when: 'overdue' });
+    check('on their My Callbacks, marked as a missed call', mine.callbacks.find((c) => c.leadId === lead)?.reason, 'missed_call');
+
+    await startIncomingCall({ callSid: 'IN-21', fromPhone: '+15550000617' });
+    await finishCall({ callSid: 'IN-21', outcome: 'no_answer', durationSec: 0 });
+    check('a second missed call is not a second callback', (await open()).length, 1);
+
+    await startCall({ callSid: 'CA-40', leadId: lead, agentId: maya });
+    check('calling them back finishes it', (await open())[0].done, true);
+    check('recorded, with who called', await logged('callback.done'), [
+      { actor_id: maya, subject_user_id: maya, because: 'called_back' },
+    ]);
+    await finishCall({ callSid: 'CA-40', outcome: 'no_answer', durationSec: 0 });
+
+    // Missed again; this time the lead rings once more and gets through.
+    await startIncomingCall({ callSid: 'IN-22', fromPhone: '+15550000617' });
+    await finishCall({ callSid: 'IN-22', outcome: 'no_answer', durationSec: 0 });
+    check('a later missed call books a new one', (await open()).map((c) => c.done), [true, false]);
+    await startIncomingCall({ callSid: 'IN-23', fromPhone: '+15550000617' });
+    await finishCall({ callSid: 'IN-23', outcome: 'answered', durationSec: 40 });
+    check('answering when they ring again finishes it', (await open()).map((c) => c.done), [true, true]);
+    check('recorded as answered', (await logged('callback.done'))[1], { actor_id: maya, subject_user_id: maya, because: 'answered' });
+
+    // A callback the agent booked themselves is theirs to finish.
+    await createCallback(lead, maya, new Date(Date.now() + 3600_000));
+    await startCall({ callSid: 'CA-41', leadId: lead, agentId: maya });
+    check('a callback an agent booked is never finished for them', (await open()).map((c) => [c.reason, c.done]), [
+      ['missed_call', true],
+      ['missed_call', true],
+      ['booked', false],
+    ]);
+
+    const blocked = await makeLead('+15550000618', 'BlockedCaller', maya);
+    await pool.query(`INSERT INTO dnc_list (phone, reason) VALUES ('+15550000618', 'agent')`);
+    await startIncomingCall({ callSid: 'IN-24', fromPhone: '+15550000618' });
+    await finishCall({ callSid: 'IN-24', outcome: 'no_answer', durationSec: 0 });
+    check('no callback for a number on the do-not-call list', (await pool.query(`SELECT 1 FROM callbacks WHERE lead_id = $1`, [blocked])).rowCount, 0);
+
+    const nobody = await makeLead('+15550000619', 'RangNobody', null);
+    await startIncomingCall({ callSid: 'IN-25', fromPhone: '+15550000619' });
+    check('nor when the call rang nobody: it waits in the queue', (await pool.query(`SELECT 1 FROM callbacks WHERE lead_id = $1`, [nobody])).rowCount, 0);
   }
 
   console.log(failures === 0 ? '\nall checks passed' : `\n${failures} check(s) FAILED`);

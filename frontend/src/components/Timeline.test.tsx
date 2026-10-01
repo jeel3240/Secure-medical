@@ -124,6 +124,15 @@ describe('calls', () => {
 });
 
 describe('callbacks and dispositions', () => {
+  it.each([
+    [null, 'Callback added · missed call'],
+    ['done', 'Missed call returned'],
+  ])('a callback the system booked for a missed call (%s) says so, not a time', (done, text) => {
+    const detail = { scheduledAt: at('15:30:00'), doneAt: done ? at('15:40:00') : null, reason: 'missed_call' };
+    render(<Timeline entries={[entry({ kind: 'callback', detail })]} />);
+    expect(screen.getByText(text)).toBeDefined();
+  });
+
   it('says when a callback is due', () => {
     render(
       <Timeline

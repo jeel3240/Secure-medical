@@ -36,6 +36,11 @@ import { formatDateTime, formatPhone, formatTime, leadName, toLocalInput } from 
  * Counts for every tab come back whichever tab is open, so the overdue badge is
  * always right.
  *
+ * **A missed call is on the list too - Jeel, 2026-10-01.** When a lead rings
+ * and the agent does not pick up, the server books them a callback due at that
+ * moment (`TWILIO.md`, "A missed call"). It shows as **Missed call**, and is
+ * marked done by itself when the lead is called or texted back.
+ *
  * **Rebuilt in the other pages' style - Jeel, 2026-09-28.** One card with the
  * navy switcher, the smooth switch, the phone under the name and the tier as
  * bars; Reschedule and Mark done behind the row's "⋯", Pick up beside it. A
@@ -219,11 +224,21 @@ export function CallbacksPage() {
                         <span className="tabular">
                           {when === 'today' ? formatTime(scheduled) : formatDateTime(scheduled)}
                         </span>
-                        {late && (
-                          <span className="status status--warning callbacks__flag">
-                            <StatusIcon name="clock" />
-                            Overdue
+                        {/* A call they missed is owed from the moment it was
+                            missed, so "Overdue" would say nothing: it says
+                            what it is instead, in the queue's words. */}
+                        {row.reason === 'missed_call' && !row.doneAt ? (
+                          <span className="status status--strong callbacks__flag">
+                            <StatusIcon name="missed" />
+                            Missed call
                           </span>
+                        ) : (
+                          late && (
+                            <span className="status status--warning callbacks__flag">
+                              <StatusIcon name="clock" />
+                              Overdue
+                            </span>
+                          )
                         )}
                         {row.doneAt && (
                           <span className="status status--muted callbacks__flag">

@@ -6,10 +6,17 @@
  */
 
 import { startOfTodaySql } from './sql';
-import { activityInsertSql } from './activity';
+import { activityInsertSql, type ActivityWriter } from './activity';
 import { pool } from './pool';
 
 export type CallbackWhen = 'today' | 'upcoming' | 'overdue' | 'all';
+
+/**
+ * Why a callback exists. `booked`: a person booked it. `missed_call`: the lead
+ * rang, the agent it rang did not pick up, and the system booked it for them -
+ * `db/calls.ts`, `finishCall`.
+ */
+export type CallbackReason = 'booked' | 'missed_call';
 
 export interface Callback {
   id: number;
@@ -18,6 +25,7 @@ export interface Callback {
   agentName: string;
   scheduledAt: string;
   doneAt: string | null;
+  reason: CallbackReason;
 }
 
 /** A row on My Callbacks: the callback, plus enough of the lead to act on it. */
@@ -52,7 +60,7 @@ export type UpdateResult =
 
 async function readCallback(id: number): Promise<Callback | null> {
   const { rows } = await pool.query(
-    `SELECT cb.id, cb.lead_id, cb.agent_id, cb.scheduled_at, cb.done_at, u.name
+    `SELECT cb.id, cb.lead_id, cb.agent_id, cb.scheduled_at, cb.done_at, cb.reason, u.name
      FROM callbacks cb
      LEFT JOIN users u ON u.id = cb.agent_id
      WHERE cb.id = $1`,
@@ -67,7 +75,39 @@ async function readCallback(id: number): Promise<Callback | null> {
     agentName: r.name ?? '',
     scheduledAt: r.scheduled_at.toISOString(),
     doneAt: r.done_at?.toISOString() ?? null,
+    reason: r.reason,
   };
+}
+
+/**
+ * Finishes the callback a missed call left, because the lead has now been
+ * got back to: an agent called them, texted them, or answered when they rang
+ * again - the same three things that clear the Missed call tag
+ * (`db/lead-state.ts`, `MISSED_CALL_SQL`).
+ *
+ * Only the system's own callbacks. One an agent booked themselves is theirs to
+ * finish. `q` is the caller's transaction, so the callback and the call or
+ * text that finished it commit together; the record is in the same statement.
+ */
+export async function finishMissedCallCallbacks(
+  q: ActivityWriter,
+  leadId: number,
+  /** Who got back to the lead. */
+  actorId: number,
+  because: 'called_back' | 'texted_back'
+): Promise<void> {
+  await q.query(
+    `WITH finished AS (
+       UPDATE callbacks SET done_at = now()
+       WHERE lead_id = $1 AND done_at IS NULL AND reason = 'missed_call'
+       RETURNING id, lead_id, agent_id, scheduled_at
+     )
+     ${activityInsertSql}
+     SELECT $2::int, 'callback.done', lead_id, agent_id,
+            jsonb_build_object('callbackId', id, 'scheduledAt', scheduled_at, 'because', $3::text)
+     FROM finished`,
+    [leadId, actorId, because]
+  );
 }
 
 /**
@@ -220,7 +260,7 @@ export async function listCallbacks(opts: {
   const params = everyone ? [] : [opts.agentId];
 
   const { rows } = await pool.query(
-    `SELECT cb.id, cb.lead_id, cb.agent_id, cb.scheduled_at, cb.done_at,
+    `SELECT cb.id, cb.lead_id, cb.agent_id, cb.scheduled_at, cb.done_at, cb.reason,
             u.name AS agent_name,
             l.phone, l.first_name, l.last_name, l.source,
             c.tier,
@@ -262,6 +302,7 @@ export async function listCallbacks(opts: {
       agentName: r.agent_name ?? '',
       scheduledAt: r.scheduled_at.toISOString(),
       doneAt: r.done_at?.toISOString() ?? null,
+      reason: r.reason,
       lead: {
         phone: r.phone,
         firstName: r.first_name,

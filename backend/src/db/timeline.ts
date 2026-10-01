@@ -90,7 +90,7 @@ const QUERIES: { kind: TimelineKind; sql: string }[] = [
     kind: 'callback',
     sql: `
       SELECT cb.created_at AS at, u.name AS author,
-             cb.scheduled_at, cb.done_at
+             cb.scheduled_at, cb.done_at, cb.reason
       FROM callbacks cb
       LEFT JOIN users u ON u.id = cb.agent_id
       WHERE cb.lead_id = $1
@@ -225,6 +225,7 @@ interface TimelineRow {
   outcome?: string | null;
   duration_sec?: number | null;
   scheduled_at?: Date | null;
+  reason?: string | null;
   done_at?: Date | null;
   value?: string;
   action?: string;
@@ -272,7 +273,7 @@ function toEntry(kind: TimelineKind, row: TimelineRow): TimelineEntry {
         kind,
         at,
         author: row.author,
-        detail: { scheduledAt: iso(row.scheduled_at), doneAt: iso(row.done_at) },
+        detail: { scheduledAt: iso(row.scheduled_at), doneAt: iso(row.done_at), reason: row.reason ?? 'booked' },
       };
     case 'disposition':
       return { kind, at, author: row.author, detail: { value: row.value } };
