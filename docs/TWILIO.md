@@ -189,6 +189,15 @@ switched off: it did not sound on the first real calls (2026-10-01), and a
 call the agent cannot hear is a missed call. The states are `lib/incoming-state.ts`,
 pure and tested; the store that joins them to Twilio is `lib/incoming-call.ts`.
 
+**Safari: the audio is created inside the first click, never before.** Found
+2026-10-01: Safari showed its speaker icon while the card was up and nothing
+was heard. The ring's audio had been created while the page loaded and woken
+later; Safari reports that as running and plays silence. It is now created
+and started inside the first real click - the sign-in button counts, since
+`main.tsx` arms it for the whole app - with the one-sample silent buffer that
+makes Safari commit to it. Measured in Chrome before and after; **not yet
+confirmed by ear in Safari**.
+
 **A browser will not play sound on a page nobody has clicked on.** Signing in
 counts as a click; a reload does not. So after a reload the corner shows
 "Click anywhere to turn on the ring for incoming calls." until the agent

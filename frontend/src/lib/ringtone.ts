@@ -30,27 +30,47 @@ const VOLUME = 0.35;
 
 let context: AudioContext | null = null;
 
+const supported = (): boolean => typeof AudioContext !== 'undefined';
+
 function audio(): AudioContext | null {
-  if (typeof AudioContext === 'undefined') return null;
+  if (!supported()) return null;
   context ??= new AudioContext();
   return context;
 }
 
-/** Wakes the audio on the first click or key press. Returns how to stop listening. */
+/** Every event a browser counts as the user touching the page - they differ on which. */
+const GESTURES = ['pointerdown', 'mousedown', 'click', 'touchend', 'keydown'] as const;
+
+/**
+ * Wakes the audio on the first click or key press. Returns how to stop listening.
+ *
+ * **The audio is created here, inside the click, and not before** - found in
+ * Safari, 2026-10-01: a context created while the page loads can be resumed
+ * later and report itself running, and Safari shows its speaker icon, yet
+ * nothing is heard. Created and started inside a real click it plays. The
+ * one-sample silent buffer is the long-standing way to make Safari commit to
+ * that.
+ */
 export function armRingtone(): () => void {
-  const wake = () => void audio()?.resume().catch(() => undefined);
-  window.addEventListener('pointerdown', wake);
-  window.addEventListener('keydown', wake);
-  return () => {
-    window.removeEventListener('pointerdown', wake);
-    window.removeEventListener('keydown', wake);
+  const wake = () => {
+    const ctx = audio();
+    if (!ctx) return;
+    void ctx.resume().catch(() => undefined);
+    const silence = ctx.createBufferSource();
+    silence.buffer = ctx.createBuffer(1, 1, ctx.sampleRate);
+    silence.connect(ctx.destination);
+    silence.start();
   };
+  GESTURES.forEach((gesture) => window.addEventListener(gesture, wake));
+  return () => GESTURES.forEach((gesture) => window.removeEventListener(gesture, wake));
 }
 
-/** False while the browser is still refusing sound: nobody has clicked on the page yet. */
+/**
+ * False while the browser is still refusing sound: nobody has clicked on the
+ * page yet. Does not create the audio - see `armRingtone`.
+ */
 export function canRing(): boolean {
-  const ctx = audio();
-  return ctx !== null && ctx.state === 'running';
+  return context !== null && context.state === 'running';
 }
 
 /** One note: struck at once, fading out, with its overtone. */
@@ -83,14 +103,18 @@ function burst(ctx: AudioContext): void {
   MELODY_HZ.forEach((hz, i) => note(ctx, hz, ctx.currentTime + i * NOTE_EVERY_SECONDS));
 }
 
-/** Rings until the returned function is called. */
+/**
+ * Rings until the returned function is called.
+ *
+ * Uses the audio a click made and never makes its own, for the reason above.
+ * If nobody has clicked yet it is silent, and starts at the next round once
+ * they do.
+ */
 export function startRinging(): () => void {
-  const ctx = audio();
-  if (!ctx) return () => undefined;
-  // In case this is the moment it is allowed to: a refusal just stays silent.
-  void ctx.resume().catch(() => undefined);
-
-  const ring = () => ctx.state === 'running' && burst(ctx);
+  if (!supported()) return () => undefined;
+  const ring = () => {
+    if (context?.state === 'running') burst(context);
+  };
   ring();
   const timer = window.setInterval(ring, EVERY_MS);
   return () => window.clearInterval(timer);

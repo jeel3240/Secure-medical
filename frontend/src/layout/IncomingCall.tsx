@@ -8,7 +8,7 @@ import { askToNotify, notifyIncomingCall } from '../lib/call-notification';
 import { callerContext } from '../lib/caller-context';
 import { formatPhone, shortName } from '../lib/format';
 import { useIncomingCall } from '../lib/incoming-call';
-import { armRingtone, canRing, startRinging } from '../lib/ringtone';
+import { canRing, startRinging } from '../lib/ringtone';
 import type { Caller } from '../lib/incoming-state';
 import { useSecond } from '../lib/useSecond';
 import { CallBar, initials } from '../pages/workspace/CallBar';
@@ -49,7 +49,6 @@ export function IncomingCall() {
   const navigate = useNavigate();
 
   useEffect(() => listen(), [listen]);
-  useEffect(() => armRingtone(), []);
   useEffect(() => (ringable ? askToNotify() : undefined), [ringable]);
 
   // It rings for as long as the card is up, and stops the moment it is

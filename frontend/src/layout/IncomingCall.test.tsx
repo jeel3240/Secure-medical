@@ -29,7 +29,6 @@ const canRing = vi.fn(() => true);
 const stopRinging = vi.fn();
 const startRinging = vi.fn(() => stopRinging);
 vi.mock('../lib/ringtone', () => ({
-  armRingtone: () => () => undefined,
   canRing: () => canRing(),
   startRinging: () => startRinging(),
 }));

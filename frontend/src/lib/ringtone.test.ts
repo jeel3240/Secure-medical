@@ -11,6 +11,10 @@ class FakeAudio {
     FakeAudio.made.push(this);
   }
   resume = vi.fn(async () => undefined);
+  sampleRate = 44100;
+  createBuffer = vi.fn(() => ({}));
+  silence = { buffer: null as unknown, connect: vi.fn(), start: vi.fn() };
+  createBufferSource = () => this.silence;
   createGain = () => ({
     gain: { value: 0, setValueAtTime: vi.fn(), linearRampToValueAtTime: vi.fn(), exponentialRampToValueAtTime: vi.fn() },
     connect: vi.fn(),
@@ -37,37 +41,64 @@ afterEach(() => {
 });
 
 describe('the ring of an incoming call', () => {
-  it('plays its melody, again after a pause, and stops when told', async () => {
-    const { startRinging } = await fresh();
-    const stop = startRinging();
+  /** A page that has been clicked on: its audio exists and is running. */
+  async function clicked() {
+    const ringtone = await fresh();
+    ringtone.armRingtone();
+    window.dispatchEvent(new Event('click'));
     const audio = FakeAudio.made[0];
     audio.state = 'running';
-    vi.advanceTimersByTime(2400);
-    const once = audio.tones;
+    return { ...ringtone, audio };
+  }
+
+  it('plays its melody, again after a pause, and stops when told', async () => {
+    const { startRinging, audio } = await clicked();
+    const stop = startRinging();
     // Eight notes, each a tone and its overtone.
-    expect(once).toBe(16);
+    expect(audio.tones).toBe(16);
     vi.advanceTimersByTime(2400);
-    expect(audio.tones).toBe(once * 2);
+    expect(audio.tones).toBe(32);
 
     stop();
     vi.advanceTimersByTime(9000);
-    expect(audio.tones).toBe(once * 2);
+    expect(audio.tones).toBe(32);
   });
 
-  it('stays silent, without failing, while the browser refuses sound', async () => {
-    const { startRinging, canRing } = await fresh();
+  it('on a page nobody has clicked: silent, makes no audio of its own, and starts once they click', async () => {
+    const { startRinging, armRingtone, canRing } = await fresh();
+    armRingtone();
     const stop = startRinging();
-    vi.advanceTimersByTime(6000);
-    expect(FakeAudio.made[0].tones).toBe(0);
+    vi.advanceTimersByTime(4800);
+    expect(FakeAudio.made).toHaveLength(0);
     expect(canRing()).toBe(false);
+
+    window.dispatchEvent(new Event('click'));
+    FakeAudio.made[0].state = 'running';
+    vi.advanceTimersByTime(2400);
+    expect(FakeAudio.made[0].tones).toBe(16);
     stop();
   });
 
-  it('is woken by the first click anywhere on the page', async () => {
-    const { armRingtone } = await fresh();
+  it('creates no audio while the page loads - Safari plays nothing from one made before a click', async () => {
+    const { armRingtone, canRing } = await fresh();
     const disarm = armRingtone();
-    window.dispatchEvent(new Event('pointerdown'));
-    expect(FakeAudio.made[0].resume).toHaveBeenCalled();
+    expect(canRing()).toBe(false);
+    expect(FakeAudio.made).toHaveLength(0);
+    disarm();
+  });
+
+  it('is made and woken by the first click anywhere on the page, with the silent buffer Safari needs', async () => {
+    const { armRingtone, canRing } = await fresh();
+    const disarm = armRingtone();
+    window.dispatchEvent(new Event('click'));
+    const audio = FakeAudio.made[0];
+    expect(audio.resume).toHaveBeenCalled();
+    expect(audio.silence.start).toHaveBeenCalled();
+    audio.state = 'running';
+    expect(canRing()).toBe(true);
+
+    window.dispatchEvent(new Event('keydown'));
+    expect(FakeAudio.made).toHaveLength(1);
     disarm();
   });
 
