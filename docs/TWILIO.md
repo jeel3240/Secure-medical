@@ -108,13 +108,13 @@ available right now, and will call you back shortly. Goodbye." Then:
 | **The lead is texted** | `message_missed_call` from `settings`, sent through EZ Texting like every other text and saved in `messages`: "Secure Medical: Sorry we missed your call. Our team member is not available right now and will call you back shortly." Once per call. Not sent to a blocked number - the do-not-call check is inside the sender |
 | **The lead goes to the queue** | Tagged **Missed call**, in bold, above an unread reply. A closed lead is reopened by it. `QUEUE.md`, "The tag" |
 | **The agent is told** | The card on their screen becomes a notice: "Missed call · Leo M. · Rang for 20s", with **Call back**. It stays until dismissed |
-| **The lead's page says so** | A banner: "They called and nobody answered. They were told we would call back." And a line on the timeline: "Missed call · told we will call back" |
+| **The lead's page says so** | A **Missed call** badge beside the lead's other states, in the queue's words, and a line on the timeline: "Missed call · told we will call back". It was a sentence in a yellow banner for a day; Jeel, 2026-10-01: a state of the lead is a badge, like Closed and Needs review |
 
 **It stops being a missed call when someone gets back to them:** an agent
-calls the lead, or texts them, after it. Until then the tag and the banner
+calls the lead, or texts them, after it. Until then the tag and the badge
 stay. Reading the lead's page does not clear it - they asked for a person, and
 looking is not answering. A call under way with them also counts, so an agent
-talking to the lead is not shown "nobody answered" (found on the first real
+talking to the lead is not shown Missed call (found on the first real
 answered call); if that call ends unanswered the flag is back.
 `MISSED_CALL_SQL` in `db/lead-state.ts` is the one
 definition; the queue, Admin > Leads and the lead card all read it.

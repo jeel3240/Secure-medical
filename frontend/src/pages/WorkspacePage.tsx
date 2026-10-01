@@ -248,11 +248,6 @@ export function WorkspacePage() {
           This number is on the do-not-call list. Calling and texting are blocked.
         </Banner>
       )}
-      {lead.flags.missedCall && (
-        <Banner tone="warning">
-          They called and nobody answered. They were told we would call back.
-        </Banner>
-      )}
       {lead.flags.needsReview && (
         <Banner tone="warning">
           Unclear replies - read the raw messages below before acting.
@@ -264,6 +259,9 @@ export function WorkspacePage() {
       <div className="workspace__flags">
         {lead.closed && <Badge tone="muted">Closed</Badge>}
         {lead.flags.dnc && <Badge tone="muted">DNC</Badge>}
+        {/* The queue's own words for it. A badge, like every other state of
+            the lead - not a sentence across the page. */}
+        {lead.flags.missedCall && <Badge tone="warning">Missed call</Badge>}
         {lead.flags.needsReview && <Badge tone="warning">Needs review</Badge>}
         {lead.flags.expired && <Badge tone="muted">Expired</Badge>}
         {lead.conversation?.agentTookOverAt && (
