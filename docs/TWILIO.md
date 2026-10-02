@@ -313,6 +313,9 @@ and Twilio posts its verdict to `POST /api/webhooks/twilio/answered-by`.
 
 - **The agent hears no difference.** They are connected the moment the phone
   picks up; detection runs beside the call. What changes is what is saved.
+  Twilio's documentation does not say whether detection delays the connection
+  on a dialled number, so it was checked on a real answered call, 2026-10-02:
+  no pause, both sides heard each other at once.
 - **The verdict and the end of the call arrive in either order.** Detection
   takes a few seconds, and a short call can be over first. `finishCall` reads
   a verdict that is already there; `recordAnsweredBy` corrects an `answered`
