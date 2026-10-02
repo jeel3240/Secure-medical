@@ -70,9 +70,16 @@ const QUERIES: { kind: TimelineKind; sql: string }[] = [
     sql: `
       SELECT COALESCE(c.started_at, c.created_at) AS at,
              u.name AS author,
-             c.outcome, c.duration_sec, c.direction
+             c.outcome, c.duration_sec, c.direction,
+             t.status AS transcript_status, t.sentences AS transcript_lines
       FROM calls c
       LEFT JOIN users u ON u.id = c.agent_id
+      -- Its transcript, if the call was recorded - TWILIO.md, "Recordings and
+      -- transcripts". One per recording; the newest if a call ever had two.
+      LEFT JOIN LATERAL (
+        SELECT ct.status, ct.sentences FROM call_transcripts ct
+        WHERE ct.call_id = c.id ORDER BY ct.id DESC LIMIT 1
+      ) t ON true
       WHERE c.lead_id = $1
     `,
   },
@@ -225,6 +232,8 @@ interface TimelineRow {
   duration_sec?: number | null;
   scheduled_at?: Date | null;
   reason?: string | null;
+  transcript_status?: string | null;
+  transcript_lines?: unknown[] | null;
   done_at?: Date | null;
   value?: string;
   action?: string;
@@ -254,7 +263,15 @@ function toEntry(kind: TimelineKind, row: TimelineRow): TimelineEntry {
         kind,
         at,
         author: row.author,
-        detail: { outcome: row.outcome, durationSec: row.duration_sec, direction: row.direction },
+        detail: {
+          outcome: row.outcome,
+          durationSec: row.duration_sec,
+          direction: row.direction,
+          // Absent when the call was not recorded.
+          ...(row.transcript_status
+            ? { transcript: { status: row.transcript_status, lines: row.transcript_lines ?? [] } }
+            : {}),
+        },
       };
     case 'note':
       return { kind, at, author: row.author, detail: { body: row.body } };

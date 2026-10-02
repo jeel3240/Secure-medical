@@ -17,6 +17,9 @@
  * `--take-over` is passed. Reads only the Twilio variables, so it runs without
  * a database.
  *
+ * `--transcription` also makes the transcription service that call transcripts
+ * go through, if there is none yet, and prints its id for `.env`.
+ *
  * **One number, one deployment.** The number can ring only one address. Run
  * locally against the number production uses and production stops receiving
  * calls until this is run there again.
@@ -40,7 +43,39 @@ async function main(): Promise<number> {
   const client = twilio(accountSid, authToken);
 
   await pointTwimlApp(client, twimlAppSid, publicUrl + VOICE_PATH);
-  return pointNumber(client, callerId, publicUrl + INCOMING_PATH, process.argv.includes('--take-over'));
+  const numberResult = await pointNumber(client, callerId, publicUrl + INCOMING_PATH, process.argv.includes('--take-over'));
+  if (process.argv.includes('--transcription')) await ensureTranscriptionService(client, result.settings.transcriptionServiceSid ?? null);
+  return numberResult;
+}
+
+/** One per account, found again by this name rather than made twice. */
+const SERVICE_NAME = 'secure-medical-call-transcripts';
+
+/**
+ * The transcription service calls are transcribed through - TWILIO.md,
+ * "Recordings and transcripts". Made once, with `--transcription`; its id then
+ * goes in TWILIO_TRANSCRIPTION_SERVICE_SID. US English. Twilio's own "data
+ * logging" - using our calls to train its models - is left off; it cannot be
+ * switched on through the API anyway.
+ */
+async function ensureTranscriptionService(client: Client, configured: string | null): Promise<void> {
+  if (configured) {
+    console.log(`Transcription service ${configured} is set. Nothing changed.`);
+    return;
+  }
+  const existing = (await client.intelligence.v2.services.list({ limit: 50 })).find((s) => s.uniqueName === SERVICE_NAME);
+  const service =
+    existing ??
+    (await client.intelligence.v2.services.create({
+      uniqueName: SERVICE_NAME,
+      friendlyName: 'Secure Medical call transcripts',
+      languageCode: 'en-US',
+      autoTranscribe: false,
+      dataLogging: false,
+    }));
+  console.log(`Transcription service "${service.uniqueName}" ${existing ? 'already exists' : 'created'}.`);
+  console.log(`Put this in .env, then restart the api and worker:`);
+  console.log(`  TWILIO_TRANSCRIPTION_SERVICE_SID=${service.sid}`);
 }
 
 type Client = ReturnType<typeof twilio>;

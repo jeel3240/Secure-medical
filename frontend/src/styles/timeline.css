@@ -300,3 +300,51 @@
   font-size: var(--text-body);
   color: var(--color-text-muted);
 }
+
+/* A call's transcript, under the call - CallTranscript.tsx. Closed by default,
+   in the quiet type of the line above it. */
+.transcript {
+  margin: var(--space-1) 0 0;
+  font-size: var(--text-small);
+  color: var(--color-text-muted);
+}
+
+.transcript summary {
+  width: max-content;
+  cursor: pointer;
+}
+
+.transcript summary:hover {
+  color: var(--color-primary);
+}
+
+.transcript__lines {
+  display: grid;
+  gap: var(--space-1);
+  margin: var(--space-2) 0 0;
+  padding: var(--space-2) var(--space-3);
+  border-left: 2px solid var(--color-border);
+  list-style: none;
+  font-size: var(--text-body);
+  color: var(--color-text);
+  text-align: left;
+}
+
+.transcript__speaker {
+  margin-right: var(--space-2);
+  font-weight: var(--weight-semibold);
+}
+
+.transcript__line--lead .transcript__speaker {
+  color: var(--color-primary);
+}
+
+.transcript__state {
+  margin: var(--space-1) 0 0;
+  font-size: var(--text-small);
+  color: var(--color-text-subtle);
+}
+
+.convo__call {
+  text-align: center;
+}

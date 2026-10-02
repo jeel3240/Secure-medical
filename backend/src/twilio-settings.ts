@@ -28,7 +28,21 @@ export interface TwilioSettings {
    * this rather than from request headers a proxy may have rewritten.
    */
   publicUrl: string;
+  /**
+   * The transcription service, GA... Optional, and apart from the seven:
+   * without it calls work exactly as before and are neither recorded nor
+   * transcribed. With it, every call is recorded and transcribed - TWILIO.md,
+   * "Recordings and transcripts". `npm run twilio:configure -- --transcription`
+   * creates one.
+   */
+  transcriptionServiceSid?: string | null;
 }
+
+/** The seven that switch calling on - all or none. */
+type RequiredKey = Exclude<keyof TwilioSettings, 'transcriptionServiceSid'>;
+
+export const TRANSCRIPTION_VARIABLE = 'TWILIO_TRANSCRIPTION_SERVICE_SID';
+const TRANSCRIPTION_SHAPE = /^GA[0-9a-f]{32}$/;
 
 const VARIABLES = {
   accountSid: 'TWILIO_ACCOUNT_SID',
@@ -38,7 +52,7 @@ const VARIABLES = {
   twimlAppSid: 'TWILIO_TWIML_APP_SID',
   callerId: 'TWILIO_PHONE_NUMBER',
   publicUrl: 'PUBLIC_URL',
-} as const satisfies Record<keyof TwilioSettings, string>;
+} as const satisfies Record<RequiredKey, string>;
 
 export type TwilioSettingsResult =
   | { status: 'off' }
@@ -47,7 +61,7 @@ export type TwilioSettingsResult =
   | { status: 'incomplete'; missing: readonly string[] };
 
 /** What each value must look like. A typo here is a call that fails later, with a worse error. */
-const SHAPES: Record<keyof TwilioSettings, RegExp> = {
+const SHAPES: Record<RequiredKey, RegExp> = {
   accountSid: /^AC[0-9a-f]{32}$/,
   authToken: /^[0-9a-f]{32}$/,
   apiKey: /^SK[0-9a-f]{32}$/,
@@ -58,17 +72,27 @@ const SHAPES: Record<keyof TwilioSettings, RegExp> = {
 };
 
 export function readTwilioSettings(env: Record<string, string | undefined>): TwilioSettingsResult {
-  const keys = Object.keys(VARIABLES) as (keyof TwilioSettings)[];
+  const keys = Object.keys(VARIABLES) as RequiredKey[];
   const values = Object.fromEntries(
     keys.map((key) => [key, (env[VARIABLES[key]] ?? '').trim()])
-  ) as Record<keyof TwilioSettings, string>;
+  ) as Record<RequiredKey, string>;
 
   // PUBLIC_URL alone is not a Twilio setting; it does not switch calling on.
   const twilioKeys = keys.filter((key) => key !== 'publicUrl');
   if (twilioKeys.every((key) => values[key] === '')) return { status: 'off' };
 
-  const missing = keys.filter((key) => !SHAPES[key].test(values[key])).map((key) => VARIABLES[key]);
+  const missing: string[] = keys.filter((key) => !SHAPES[key].test(values[key])).map((key) => VARIABLES[key]);
+  // Optional, but a typo is still a failure later, with a worse error.
+  const transcription = (env[TRANSCRIPTION_VARIABLE] ?? '').trim();
+  if (transcription !== '' && !TRANSCRIPTION_SHAPE.test(transcription)) missing.push(TRANSCRIPTION_VARIABLE);
   if (missing.length > 0) return { status: 'incomplete', missing };
 
-  return { status: 'on', settings: { ...values, publicUrl: values.publicUrl.replace(/\/+$/, '') } };
+  return {
+    status: 'on',
+    settings: {
+      ...values,
+      publicUrl: values.publicUrl.replace(/\/+$/, ''),
+      transcriptionServiceSid: transcription || null,
+    },
+  };
 }

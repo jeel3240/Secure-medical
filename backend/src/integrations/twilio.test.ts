@@ -54,6 +54,17 @@ describe('telling Twilio how to connect', () => {
     expect(xml).toContain('amdStatusCallbackMethod="POST"');
   });
 
+  it('does not record without a transcription service', () => {
+    expect(dialTwiml(SETTINGS, '+16026203572', 'CA100')).not.toContain('record=');
+  });
+
+  it('with one, records the call in two channels and says which call the recording is for', () => {
+    const xml = dialTwiml({ ...SETTINGS, transcriptionServiceSid: `GA${'4'.repeat(32)}` }, '+16026203572', 'CA100');
+    expect(xml).toContain('record="record-from-answer-dual"');
+    expect(xml).toContain('recordingStatusCallback="https://calls.example.com/api/webhooks/twilio/recording?call=CA100"');
+    expect(xml).toContain('recordingStatusCallbackEvent="completed"');
+  });
+
   it('a refusal says why, then hangs up', () => {
     expect(refusalTwiml('Pick up this lead first.')).toMatch(/<Say>Pick up this lead first\.<\/Say><Hangup\/>/);
   });
@@ -61,7 +72,7 @@ describe('telling Twilio how to connect', () => {
 
 describe('a lead calling our number', () => {
   it('rings one agent’s browser for 20 seconds, saying who is calling', () => {
-    const xml = ringAgentTwiml(SETTINGS, 21, { id: 7, name: 'Priya Sharma', phone: '+16026203572' });
+    const xml = ringAgentTwiml(SETTINGS, 21, { id: 7, name: 'Priya Sharma', phone: '+16026203572' }, 'CA300');
     expect(xml).toContain('timeout="20"');
     expect(xml).toContain('<Identity>agent-21</Identity>');
     expect(xml).toContain('<Parameter name="leadId" value="7"/>');
@@ -70,6 +81,14 @@ describe('a lead calling our number', () => {
     // Reported when it ends, and asked what to say if nobody picked up.
     expect(xml).toContain('statusCallback="https://calls.example.com/api/webhooks/twilio/status"');
     expect(xml).toContain('action="https://calls.example.com/api/webhooks/twilio/incoming/after"');
+  });
+
+  it('records an incoming call too, when there is a transcription service', () => {
+    const lead = { id: 7, name: 'Priya Sharma', phone: '+16026203572' };
+    const xml = ringAgentTwiml({ ...SETTINGS, transcriptionServiceSid: `GA${'4'.repeat(32)}` }, 21, lead, 'CA300');
+    expect(xml).toContain('record="record-from-answer-dual"');
+    expect(xml).toContain('/api/webhooks/twilio/recording?call=CA300');
+    expect(ringAgentTwiml(SETTINGS, 21, lead, 'CA300')).not.toContain('record=');
   });
 
   it('unanswered, tells the lead we will call back and hangs up', () => {

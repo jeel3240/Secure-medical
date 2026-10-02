@@ -18,6 +18,9 @@
  */
 import { pool } from '../src/db/pool';
 import { finishCall, recordAnsweredBy, startCall, startIncomingCall } from '../src/db/calls';
+import { saveRecording } from '../src/db/transcripts';
+import * as transcriptClient from '../src/integrations/twilio-transcripts';
+import { advanceTranscripts } from '../src/worker/transcripts';
 import { createCallback, listCallbacks } from '../src/db/callbacks';
 import { getLeadDetail } from '../src/db/lead-detail';
 import { listQueue } from '../src/db/queue';
@@ -239,6 +242,85 @@ async function main(): Promise<void> {
 
     const entry = (await getTimeline(lead))!.filter((e) => e.kind === 'call').map((e) => e.detail.outcome);
     check('the timeline says which was which', entry, ['voicemail', 'voicemail', 'answered', 'answered', 'no_answer']);
+  }
+
+  console.log('\nrecordings and transcripts');
+  {
+    // The worker reads calling's settings from the environment; the Twilio
+    // transcription service is answered here instead of asked.
+    Object.assign(process.env, {
+      TWILIO_ACCOUNT_SID: `AC${'a'.repeat(32)}`,
+      TWILIO_AUTH_TOKEN: 'a'.repeat(32),
+      TWILIO_API_KEY: `SK${'a'.repeat(32)}`,
+      TWILIO_API_SECRET: 'A'.repeat(32),
+      TWILIO_TWIML_APP_SID: `AP${'a'.repeat(32)}`,
+      TWILIO_PHONE_NUMBER: '+14804708259',
+      PUBLIC_URL: 'https://calls.example.com',
+      TWILIO_TRANSCRIPTION_SERVICE_SID: `GA${'a'.repeat(32)}`,
+    });
+    const twilioTranscripts = transcriptClient as unknown as {
+      requestTranscript: (...a: unknown[]) => Promise<string>;
+      readTranscript: (...a: unknown[]) => Promise<unknown>;
+    };
+    let requests = 0;
+    twilioTranscripts.requestTranscript = async () => `GT${String(++requests).padStart(32, '0')}`;
+    let ready = false;
+    twilioTranscripts.readTranscript = async () =>
+      ready
+        ? {
+            state: 'completed',
+            sentences: [
+              { mediaChannel: 2, transcript: 'Yes, this is Priya.', startTime: '2.1' },
+              { mediaChannel: 1, transcript: 'Hi Priya, it is Maya.', startTime: '0.5' },
+            ],
+          }
+        : { state: 'waiting' };
+
+    const lead = await makeLead('+15550000660', 'Recorded', maya);
+    await startCall({ callSid: 'CA-60', leadId: lead, agentId: maya });
+    await finishCall({ callSid: 'CA-60', outcome: 'answered', durationSec: 40 });
+    const recording = { callSid: 'CA-60', recordingSid: `RE${'6'.repeat(32)}`, durationSec: 40, channels: 2 };
+    check('a finished recording is kept', await saveRecording(recording), true);
+    check('Twilio retrying the callback keeps it once', await saveRecording(recording), false);
+    const transcript = async () =>
+      (await pool.query(`SELECT status, transcript_sid IS NOT NULL AS sent, sentences FROM call_transcripts WHERE call_id = (SELECT id FROM calls WHERE twilio_call_sid = 'CA-60')`)).rows;
+    check('and its transcript is in line', (await transcript()).map((t) => t.status), ['pending']);
+    check('a recording for a call we never placed is ignored', await saveRecording({ ...recording, callSid: 'CA-none', recordingSid: `RE${'7'.repeat(32)}` }), false);
+
+    const first = await advanceTranscripts();
+    check('the worker asks Twilio for it', [first.requested, (await transcript())[0].status, (await transcript())[0].sent], [1, 'queued', true]);
+    check('and waits while Twilio works', (await advanceTranscripts()).waiting, 1);
+    ready = true;
+    check('then stores it', (await advanceTranscripts()).completed, 1);
+    // Read back in a fixed key order: JSONB keeps its own.
+    const said = ((await transcript())[0].sentences as { speaker: string; text: string; startSec: number }[]).map(
+      ({ speaker, text, startSec }) => ({ speaker, text, startSec })
+    );
+    check('who said what, in order: we called, so channel 1 is the agent', said, [
+      { speaker: 'agent', text: 'Hi Priya, it is Maya.', startSec: 0.5 },
+      { speaker: 'lead', text: 'Yes, this is Priya.', startSec: 2.1 },
+    ]);
+    check('nothing is asked again once it is done', (await advanceTranscripts()).requested + requests, 1);
+
+    const entry = (await getTimeline(lead))!.find((e) => e.kind === 'call');
+    check('the timeline carries it under the call', (entry?.detail.transcript as { status: string } | undefined)?.status, 'completed');
+    const log = (await pool.query(`SELECT action FROM activity_log WHERE lead_id = $1 AND action LIKE 'call.%' ORDER BY id`, [lead])).rows.map((r) => r.action);
+    check('and the activity log has each step', log.filter((a) => a === 'call.recorded' || a === 'call.transcribed'), ['call.recorded', 'call.transcribed']);
+
+    // Twilio refusing to start it: tried again, then given up, and said so.
+    const refused = await makeLead('+15550000661', 'Refused', maya);
+    await startCall({ callSid: 'CA-61', leadId: refused, agentId: maya });
+    await finishCall({ callSid: 'CA-61', outcome: 'answered', durationSec: 10 });
+    await saveRecording({ ...recording, callSid: 'CA-61', recordingSid: `RE${'8'.repeat(32)}` });
+    twilioTranscripts.requestTranscript = async () => {
+      throw new Error('Twilio said no');
+    };
+    for (let i = 0; i < 4; i++) await advanceTranscripts();
+    check('a refusal is tried again', (await pool.query(`SELECT status, attempts FROM call_transcripts WHERE call_id = (SELECT id FROM calls WHERE twilio_call_sid = 'CA-61')`)).rows[0], { status: 'pending', attempts: 4 });
+    await advanceTranscripts();
+    check('and given up after five', (await pool.query(`SELECT status FROM call_transcripts WHERE call_id = (SELECT id FROM calls WHERE twilio_call_sid = 'CA-61')`)).rows[0].status, 'failed');
+    const failedEntry = (await getTimeline(refused))!.find((e) => e.kind === 'call');
+    check('which the timeline says', (failedEntry?.detail.transcript as { status: string } | undefined)?.status, 'failed');
   }
 
   console.log('\na lead calling our number: who rings');

@@ -33,6 +33,10 @@ export const ACTIVITY_ACTIONS = [
   'call.missed',
   /** Twilio's verdict on who picked up a call we placed - a person or a machine. */
   'call.answered_by',
+  /** A call's recording is in, and its transcript is in line. */
+  'call.recorded',
+  'call.transcribed',
+  'call.transcript_failed',
   // The do-not-call list. Re-blocking a number overwrites its row.
   'dnc.blocked',
   'dnc.released',

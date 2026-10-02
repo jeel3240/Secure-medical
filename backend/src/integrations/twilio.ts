@@ -7,6 +7,7 @@
  */
 
 import twilio from 'twilio';
+import type VoiceResponse from 'twilio/lib/twiml/VoiceResponse';
 import { identityFor, INCOMING_RING_SECONDS, MISSED_CALL_SPEECH } from '../core/calls';
 import type { TwilioSettings } from '../twilio-settings';
 
@@ -16,6 +17,29 @@ export const TOKEN_TTL_SECONDS = 60 * 60;
 export const VOICE_PATH = '/api/webhooks/twilio/voice';
 export const STATUS_PATH = '/api/webhooks/twilio/status';
 /** A lead calling our number. The phone number's Voice URL points here. */
+/** A call's recording is ready - TWILIO.md, "Recordings and transcripts". */
+export const RECORDING_PATH = '/api/webhooks/twilio/recording';
+
+/**
+ * Recording, for a `<Dial>` - only when a transcription service is set, since
+ * a recording is kept for its transcript.
+ *
+ * `record-from-answer-dual`: from the moment it is answered, in two channels,
+ * the call's first leg on channel 1 and the dialled leg on channel 2 - the
+ * agent and the lead apart, so the transcript can say who said what. The
+ * call's own id rides in the callback address, as for answering machine
+ * detection: our row is keyed by the first leg.
+ */
+function recordingAttributes(settings: TwilioSettings, callSid: string): Partial<VoiceResponse.DialAttributes> {
+  if (!settings.transcriptionServiceSid) return {};
+  return {
+    record: 'record-from-answer-dual',
+    recordingStatusCallback: `${settings.publicUrl}${RECORDING_PATH}?call=${encodeURIComponent(callSid)}`,
+    recordingStatusCallbackMethod: 'POST',
+    recordingStatusCallbackEvent: ['completed'],
+  };
+}
+
 /** Twilio's verdict on who picked up a call we placed: a person or a machine. */
 export const AMD_PATH = '/api/webhooks/twilio/answered-by';
 export const INCOMING_PATH = '/api/webhooks/twilio/incoming';
@@ -74,7 +98,11 @@ export function isFromTwilio(
  */
 export function dialTwiml(settings: TwilioSettings, phone: string, callSid: string): string {
   const response = new twilio.twiml.VoiceResponse();
-  const dial = response.dial({ callerId: settings.callerId, answerOnBridge: true });
+  const dial = response.dial({
+    callerId: settings.callerId,
+    answerOnBridge: true,
+    ...recordingAttributes(settings, callSid),
+  });
   dial.number(
     {
       statusCallback: settings.publicUrl + STATUS_PATH,
@@ -101,7 +129,9 @@ export function dialTwiml(settings: TwilioSettings, phone: string, callSid: stri
 export function ringAgentTwiml(
   settings: TwilioSettings,
   agentId: number,
-  lead: { id: number; name: string; phone: string }
+  lead: { id: number; name: string; phone: string },
+  /** The lead's call - our row for it, and what its recording is reported against. */
+  callSid: string
 ): string {
   const response = new twilio.twiml.VoiceResponse();
   const dial = response.dial({
@@ -109,6 +139,7 @@ export function ringAgentTwiml(
     answerOnBridge: true,
     action: settings.publicUrl + INCOMING_AFTER_PATH,
     method: 'POST',
+    ...recordingAttributes(settings, callSid),
   });
   const client = dial.client({
     statusCallback: settings.publicUrl + STATUS_PATH,
