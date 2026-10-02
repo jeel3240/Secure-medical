@@ -27,8 +27,13 @@ export function agentIdFromIdentity(raw: unknown): number | null {
  * incoming call nobody answered, whatever the reason - the agent was away,
  * declined, was not signed in, or the lead hung up first. For the lead and for
  * the agent who has to ring back, those are all the same thing.
+ *
+ * `voicemail` is a call we placed that was picked up by a machine, not a
+ * person - `answeredBy`, below. Twilio never reports it as an ending; it
+ * reports `completed`, and the detection verdict is what turns `answered`
+ * into `voicemail`.
  */
-export const CALL_OUTCOMES = ['answered', 'no_answer', 'busy', 'failed', 'canceled', 'missed'] as const;
+export const CALL_OUTCOMES = ['answered', 'voicemail', 'no_answer', 'busy', 'failed', 'canceled', 'missed'] as const;
 export type CallOutcome = (typeof CALL_OUTCOMES)[number];
 
 /**
@@ -53,6 +58,29 @@ export function talkSeconds(outcome: CallOutcome, rawDuration: unknown): number 
   if (outcome !== 'answered') return 0;
   const seconds = Number(rawDuration);
   return Number.isInteger(seconds) && seconds >= 0 ? seconds : 0;
+}
+
+/**
+ * Who picked up a call we placed, from Twilio's answering machine detection -
+ * approved 2026-10-02. Twilio's values are finer than we need: every
+ * `machine_*` is a machine. `unknown` is Twilio not being sure, and is kept as
+ * that rather than guessed either way.
+ */
+export const ANSWERED_BY = ['human', 'machine', 'fax', 'unknown'] as const;
+export type AnsweredBy = (typeof ANSWERED_BY)[number];
+
+export function answeredByFor(raw: unknown): AnsweredBy | null {
+  if (typeof raw !== 'string') return null;
+  if (raw.startsWith('machine')) return 'machine';
+  return (ANSWERED_BY as readonly string[]).includes(raw) ? (raw as AnsweredBy) : null;
+}
+
+/**
+ * True when nobody was there to talk to. A fax line counts: it picked up, and
+ * it is not the lead.
+ */
+export function tookByMachine(answeredBy: AnsweredBy | null): boolean {
+  return answeredBy === 'machine' || answeredBy === 'fax';
 }
 
 /**

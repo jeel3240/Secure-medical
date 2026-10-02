@@ -14,7 +14,7 @@
 import { activityInsertSql, recordActivity } from './activity';
 import { finishMissedCallCallbacks } from './callbacks';
 import { pool } from './pool';
-import type { CallOutcome, CallRefusal } from '../core/calls';
+import type { AnsweredBy, CallOutcome, CallRefusal } from '../core/calls';
 
 export type StartCallResult = { ok: true; phone: string } | { ok: false; reason: CallRefusal };
 
@@ -134,7 +134,12 @@ export async function finishCall(opts: {
   const { rows } = await pool.query<{ lead_id: number; missed: boolean }>(
     `WITH ended AS (
        UPDATE calls
-       SET outcome = CASE WHEN direction = 'inbound' AND $2 <> 'answered' THEN 'missed' ELSE $2 END,
+       SET outcome = CASE
+             WHEN direction = 'inbound' AND $2 <> 'answered' THEN 'missed'
+             -- Picked up, but by a machine: the verdict got here first.
+             WHEN $2 = 'answered' AND answered_by IN ('machine', 'fax') THEN 'voicemail'
+             ELSE $2
+           END,
            duration_sec = $3,
            ended_at = now()
        WHERE twilio_call_sid = $1 AND ended_at IS NULL
@@ -181,6 +186,50 @@ export async function finishCall(opts: {
   );
   const ended = rows[0];
   return { recorded: Boolean(ended), missedLeadId: ended?.missed ? ended.lead_id : null };
+}
+
+/**
+ * Records who picked up a call we placed - a person or a machine - and, when it
+ * was a machine, saves the call as `voicemail` rather than `answered`.
+ *
+ * The verdict and the end of the call arrive in either order: detection takes
+ * a few seconds, and a short call can be over before it reports. So this
+ * corrects an `answered` call that has already ended, and `finishCall` reads
+ * the verdict for one that has not. Only the first verdict counts.
+ *
+ * Changing `answered` to `voicemail` overwrites what the row said, so the
+ * record keeps both - docs/AUDIT.md. One statement: the row and its record
+ * are written together.
+ */
+export async function recordAnsweredBy(opts: { callSid: string; answeredBy: AnsweredBy }): Promise<boolean> {
+  const { rowCount } = await pool.query(
+    `WITH prev AS (
+       SELECT id, outcome FROM calls
+       WHERE twilio_call_sid = $1 AND direction = 'outbound' AND answered_by IS NULL
+       FOR UPDATE
+     ),
+     verdict AS (
+       UPDATE calls c
+       SET answered_by = $2,
+           outcome = CASE WHEN prev.outcome = 'answered' AND $2 IN ('machine', 'fax') THEN 'voicemail' ELSE c.outcome END
+       FROM prev
+       WHERE c.id = prev.id
+       RETURNING c.id, c.lead_id, c.agent_id, c.outcome, prev.outcome AS outcome_was
+     ),
+     logged AS (
+       ${activityInsertSql}
+       SELECT NULL::int, 'call.answered_by', lead_id, agent_id,
+              jsonb_strip_nulls(jsonb_build_object(
+                'callId', id, 'callSid', $1::text, 'answeredBy', $2::text,
+                'outcome', outcome,
+                'outcomeWas', CASE WHEN outcome IS DISTINCT FROM outcome_was THEN outcome_was END
+              ))
+       FROM verdict
+     )
+     SELECT 1 FROM verdict`,
+    [opts.callSid, opts.answeredBy]
+  );
+  return rowCount === 1;
 }
 
 export type IncomingCall =

@@ -31,6 +31,8 @@ export const ACTIVITY_ACTIONS = [
   'call.refused',
   'call.incoming',
   'call.missed',
+  /** Twilio's verdict on who picked up a call we placed - a person or a machine. */
+  'call.answered_by',
   // The do-not-call list. Re-blocking a number overwrites its row.
   'dnc.blocked',
   'dnc.released',

@@ -292,6 +292,52 @@ number.
 - **The lead's place in the queue.** A lead with no score who rings is in the
   queue, at the bottom; past 100 rows it would be cut off.
 
+## Voicemail
+
+Approved by leadership 2026-10-02, after a real test call that went to
+voicemail was saved as `answered`. To Twilio a phone that picks up has
+answered, whoever or whatever picked up.
+
+**Twilio's answering machine detection** listens to the first seconds after
+the lead's phone picks up and reports who it was. It is switched on for every
+call we place, on the `<Number>` in the TwiML (`machineDetection="Enable"`),
+and Twilio posts its verdict to `POST /api/webhooks/twilio/answered-by`.
+
+| Twilio says | Saved as `answered_by` | The call's outcome |
+|---|---|---|
+| `human` | `human` | `answered` |
+| `machine_start` (any `machine_*`) | `machine` | **`voicemail`** |
+| `fax` | `fax` | **`voicemail`** - it picked up, and it is not the lead |
+| `unknown` | `unknown` | `answered` - Twilio was not sure, and we do not guess |
+| nothing - nobody picked up | null | `no_answer`, `busy`, `failed`, `canceled`, as before |
+
+- **The agent hears no difference.** They are connected the moment the phone
+  picks up; detection runs beside the call. What changes is what is saved.
+- **The verdict and the end of the call arrive in either order.** Detection
+  takes a few seconds, and a short call can be over first. `finishCall` reads
+  a verdict that is already there; `recordAnsweredBy` corrects an `answered`
+  call that has already ended. Only the first verdict counts.
+- **Which call it is about is in the URL.** The report is made on the lead's
+  leg and our row is keyed by the browser's, so the browser leg's id is put in
+  the callback address (`?call=`). The address is part of what Twilio signs,
+  so it cannot be pointed at another call.
+- **`duration_sec` is kept** for a voicemail: it is how long the agent's
+  message ran.
+- **On screen:** the timeline and the conversation read "Outbound call ·
+  voicemail". The call bar still says "Call ended · 0:22" - the browser is
+  not told the verdict.
+- **A voicemail is still a call the agent placed:** it makes the lead Working,
+  and it returns a missed call.
+- **Recorded:** `call.answered_by` in the activity log, with the verdict and -
+  when it changed an `answered` call to `voicemail` - what the row said before.
+- **It costs** Twilio's detection fee on every call we place, about $0.0075.
+- **It can be wrong.** Twilio says so: a two-second greeting can be taken for
+  a person, and a person who answers with a long sentence for a machine. The
+  verdict is kept as `answered_by` so a wrong one can be seen.
+
+Not covered: leaving a recorded message automatically (voicemail drop), and
+anything for calls a lead places to us.
+
 ## What is saved
 
 One row in `calls` per call. Outgoing calls needed no migration - the table
@@ -306,11 +352,12 @@ made `agent_id` optional for them (migration 007).
 | `started_at` | When Twilio asked us how to connect it |
 | `ended_at` | When Twilio reported the far leg ended - the lead's for a call we placed, the agent's for one we received - or at once for an incoming call that rang nobody. Null while the call is in progress |
 | `outcome` | `answered`, `no_answer`, `busy`, `failed` or `canceled` - `core/calls.ts` - and `missed` for an incoming call nobody answered. Null while in progress |
+| `answered_by` | Who picked up a call we placed: `human`, `machine`, `fax` or `unknown` - "Voicemail", above. Null for an incoming call, one nobody picked up, or one from before migration 010 |
 | `duration_sec` | Seconds of conversation. 0 unless answered |
 
 | Twilio says | We record |
 |---|---|
-| `completed` | `answered` |
+| `completed` | `answered` - or `voicemail`, when detection says a machine picked up |
 | `no-answer` | `no_answer` |
 | `busy` | `busy` |
 | `failed` | `failed` |
@@ -345,7 +392,7 @@ as `twilio.webhook_rejected` in the logs and calls that end at once.
 we signed, inside a request Twilio signed, so the agent id in it can be
 trusted without a session.
 
-With calling not set up, all four webhook routes answer 404.
+With calling not set up, every Twilio webhook route answers 404.
 
 ## Settings
 
@@ -481,7 +528,7 @@ own phone.
 
 1. Set the seven variables in the server's `.env`. `PUBLIC_URL=https://dailyleadhub.com`.
 2. Deploy as usual (`WORKFLOW.md`, "Deploying"), including `npm run migrate` -
-   incoming calls need migrations 007 and 008.
+   incoming calls need migrations 007 and 008, voicemail detection 010.
 3. `docker compose exec api npm run twilio:configure`. Run it last, and again
    after anyone has tested locally with the same number.
 4. Sign in, pick up a lead that is your own phone, press Call.
@@ -504,7 +551,8 @@ own phone.
   real hold - the lead hears music and is brought back - needs the call set up
   as a conference on the server, which Phase 4 did not build, and a button
   that only muted would mislead.
-- **Recording, voicemail drop, transfer.** Not in the plan. Recording needs the
+- **Recording, voicemail drop, transfer.** Not in the plan. (Voicemail
+  *detection* is built - "Voicemail", above.) Recording needs the
   lead's consent, and is waiting on Jeel's decision.
 - **A call queue for incoming calls.** One agent is rung, or nobody -
   "Incoming calls", above.

@@ -51,6 +51,8 @@ function duration(seconds: unknown): string {
  * no outcome yet is still going, or Twilio has not reported back.
  */
 const CALL_OUTCOME: Record<string, string> = {
+  // A machine picked up, not the lead - Twilio's detection, TWILIO.md "Voicemail".
+  voicemail: 'voicemail',
   no_answer: 'no answer',
   busy: 'busy',
   failed: 'failed',

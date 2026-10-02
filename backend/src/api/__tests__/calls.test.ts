@@ -16,10 +16,13 @@ const startCall = jest.fn<Promise<StartCallResult>, StartArgs>();
 type IncomingArgs = Parameters<typeof import('../../db/calls').startIncomingCall>;
 const finishCall = jest.fn<Promise<FinishedCall>, FinishArgs>();
 const startIncomingCall = jest.fn<Promise<IncomingCall>, IncomingArgs>();
+type AnsweredArgs = Parameters<typeof import('../../db/calls').recordAnsweredBy>;
+const recordAnsweredBy = jest.fn<Promise<boolean>, AnsweredArgs>();
 jest.mock('../../db/calls', () => ({
   startCall: (...a: StartArgs) => startCall(...a),
   finishCall: (...a: FinishArgs) => finishCall(...a),
   startIncomingCall: (...a: IncomingArgs) => startIncomingCall(...a),
+  recordAnsweredBy: (...a: AnsweredArgs) => recordAnsweredBy(...a),
 }));
 
 const sendMissedCallText = jest.fn<Promise<boolean>, [number]>();
@@ -36,6 +39,7 @@ beforeEach(() => {
   startCall.mockReset().mockResolvedValue({ ok: true, phone: '+16026203572' });
   finishCall.mockReset().mockResolvedValue({ recorded: true, missedLeadId: null });
   startIncomingCall.mockReset().mockResolvedValue({ kind: 'unknown' });
+  recordAnsweredBy.mockReset().mockResolvedValue(true);
   sendMissedCallText.mockReset().mockResolvedValue(true);
 });
 
@@ -131,6 +135,8 @@ describe('connecting a call', () => {
     expect(res.text).toContain('callerId="+14804708259"');
     expect(res.text).toMatch(/<Number[^>]*>\+16026203572<\/Number>/);
     expect(startCall).toHaveBeenCalledWith({ callSid: 'CA100', leadId: 7, agentId: 21 });
+    // Twilio is asked who picks up, and told which call to report it against.
+    expect(res.text).toContain('amdStatusCallback="https://calls.example.com/api/webhooks/twilio/answered-by?call=CA100"');
   });
 
   it.each([
@@ -190,6 +196,45 @@ describe('recording how a call ended', () => {
     const res = await fromTwilio(app, STATUS, { ParentCallSid: 'CA100', CallStatus: 'ringing' });
     expect(res.status).toBe(204);
     expect(finishCall).not.toHaveBeenCalled();
+  });
+});
+
+describe('who picked up a call we placed', () => {
+  const ANSWERED_BY = '/api/webhooks/twilio/answered-by?call=CA100';
+
+  it.each([
+    ['machine_start', 'machine'],
+    ['human', 'human'],
+    ['fax', 'fax'],
+    ['unknown', 'unknown'],
+  ])('Twilio says %s: saved against the call named in the URL', async (raw, verdict) => {
+    const { app } = await buildApp({ twilio: SETTINGS });
+    const res = await fromTwilio(app, ANSWERED_BY, { CallSid: 'CA200', AnsweredBy: raw });
+    expect(res.status).toBe(204);
+    // CA100, the browser's leg our row is keyed by - not CA200, the lead's leg the report is made on.
+    expect(recordAnsweredBy).toHaveBeenCalledWith({ callSid: 'CA100', answeredBy: verdict });
+  });
+
+  it('a verdict we do not know, or no call named, records nothing and still answers 204', async () => {
+    const { app } = await buildApp({ twilio: SETTINGS });
+    expect((await fromTwilio(app, ANSWERED_BY, { CallSid: 'CA200', AnsweredBy: 'robot' })).status).toBe(204);
+    const bare = '/api/webhooks/twilio/answered-by';
+    expect((await fromTwilio(app, bare, { CallSid: 'CA200', AnsweredBy: 'human' })).status).toBe(204);
+    expect(recordAnsweredBy).not.toHaveBeenCalled();
+  });
+
+  it('is refused unsigned - and signed for another call, since the call is in the signed URL', async () => {
+    const { app } = await buildApp({ twilio: SETTINGS });
+    const params = { CallSid: 'CA200', AnsweredBy: 'machine_start' };
+    expect((await request(app).post(ANSWERED_BY).type('form').send(params)).status).toBe(403);
+    const forOther = twilio.getExpectedTwilioSignature(
+      SETTINGS.authToken,
+      `${SETTINGS.publicUrl}/api/webhooks/twilio/answered-by?call=CA999`,
+      params
+    );
+    const res = await request(app).post(ANSWERED_BY).type('form').set('X-Twilio-Signature', forOther).send(params);
+    expect(res.status).toBe(403);
+    expect(recordAnsweredBy).not.toHaveBeenCalled();
   });
 });
 
