@@ -2,6 +2,7 @@ import { useEffect, useRef } from 'react';
 import type { TimelineEntry, TimelineKind } from '../api/workspace';
 import { DISPOSITION_LABEL, type Disposition } from '../api/workspace';
 import { formatTime } from '../lib/format';
+import { CallTranscript } from './CallTranscript';
 
 /**
  * The lead's history: one ordered list built from messages, calls, notes,
@@ -218,6 +219,7 @@ export function Timeline({
                   {entry.author && <span className="timeline__author">{entry.author}</span>}
                   {failed && <span className="timeline__failed">Delivery failed</span>}
                 </p>
+                {entry.kind === 'call' && <CallTranscript detail={entry.detail} agentName={entry.author} />}
               </div>
 
               <time className="timeline__time tabular" dateTime={entry.at}>

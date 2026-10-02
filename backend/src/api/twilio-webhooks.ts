@@ -4,6 +4,7 @@
  *   POST /api/webhooks/twilio/voice           how to connect a call the browser started
  *   POST /api/webhooks/twilio/status          how a call ended - outgoing or incoming
  *   POST /api/webhooks/twilio/answered-by     who picked up a call we placed: a person or a machine
+ *   POST /api/webhooks/twilio/recording       a call's recording is ready, for its transcript
  *   POST /api/webhooks/twilio/incoming        a lead is calling our number
  *   POST /api/webhooks/twilio/incoming/after  ringing the agent is over: what to say
  *
@@ -40,6 +41,11 @@ function archive() {
   // eslint-disable-next-line @typescript-eslint/no-require-imports
   const { archiveWebhook } = require('../db/activity') as typeof import('../db/activity');
   return { pool, archiveWebhook };
+}
+
+function recordings() {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  return require('../db/transcripts') as typeof import('../db/transcripts');
 }
 
 function missedText() {
@@ -166,6 +172,26 @@ export function twilioWebhooksRouter(deps: AppDeps): Router {
     })
   );
 
+  // A call's recording is ready. Kept, and its transcript put in line for the
+  // worker - which talks to Twilio's transcription service, so this answers
+  // at once. TWILIO.md, "Recordings and transcripts".
+  router.post(
+    '/recording',
+    asyncHandler(async (req, res) => {
+      const body = (req.body ?? {}) as Record<string, unknown>;
+      const callSid = typeof req.query.call === 'string' ? req.query.call : '';
+      const recordingSid = field(body, 'RecordingSid');
+
+      if (callSid && recordingSid && field(body, 'RecordingStatus') === 'completed') {
+        const durationSec = Math.max(0, Math.round(Number(field(body, 'RecordingDuration')) || 0));
+        const channels = Math.max(1, Math.round(Number(field(body, 'RecordingChannels')) || 1));
+        const saved = await recordings().saveRecording({ callSid, recordingSid, durationSec, channels });
+        log.info('call.recorded', { callSid, recordingSid, durationSec, saved });
+      }
+      res.sendStatus(204);
+    })
+  );
+
   router.post(
     '/incoming',
     asyncHandler(async (req, res) => {
@@ -187,7 +213,7 @@ export function twilioWebhooksRouter(deps: AppDeps): Router {
 
       if (incoming.kind === 'ring') {
         log.info('call.incoming', { callSid, leadId: incoming.lead.id, agentId: incoming.agentId });
-        res.send(ringAgentTwiml(deps.twilio!, incoming.agentId, incoming.lead));
+        res.send(ringAgentTwiml(deps.twilio!, incoming.agentId, incoming.lead, callSid));
         return;
       }
 

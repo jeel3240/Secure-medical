@@ -25,6 +25,10 @@ jest.mock('../../db/calls', () => ({
   recordAnsweredBy: (...a: AnsweredArgs) => recordAnsweredBy(...a),
 }));
 
+type RecordingArgs = Parameters<typeof import('../../db/transcripts').saveRecording>;
+const saveRecording = jest.fn<Promise<boolean>, RecordingArgs>();
+jest.mock('../../db/transcripts', () => ({ saveRecording: (...a: RecordingArgs) => saveRecording(...a) }));
+
 const sendMissedCallText = jest.fn<Promise<boolean>, [number]>();
 jest.mock('../../db/missed-call-text', () => ({
   sendMissedCallText: (leadId: number) => sendMissedCallText(leadId),
@@ -40,6 +44,7 @@ beforeEach(() => {
   finishCall.mockReset().mockResolvedValue({ recorded: true, missedLeadId: null });
   startIncomingCall.mockReset().mockResolvedValue({ kind: 'unknown' });
   recordAnsweredBy.mockReset().mockResolvedValue(true);
+  saveRecording.mockReset().mockResolvedValue(true);
   sendMissedCallText.mockReset().mockResolvedValue(true);
 });
 
@@ -235,6 +240,31 @@ describe('who picked up a call we placed', () => {
     const res = await request(app).post(ANSWERED_BY).type('form').set('X-Twilio-Signature', forOther).send(params);
     expect(res.status).toBe(403);
     expect(recordAnsweredBy).not.toHaveBeenCalled();
+  });
+});
+
+describe('a call\'s recording is ready', () => {
+  const RECORDING = '/api/webhooks/twilio/recording?call=CA100';
+  const DONE = { RecordingSid: `RE${'5'.repeat(32)}`, RecordingStatus: 'completed', RecordingDuration: '42', RecordingChannels: '2' };
+
+  it('is kept against the call named in the URL, for its transcript', async () => {
+    const { app } = await buildApp({ twilio: SETTINGS });
+    const res = await fromTwilio(app, RECORDING, DONE);
+    expect(res.status).toBe(204);
+    expect(saveRecording).toHaveBeenCalledWith({ callSid: 'CA100', recordingSid: DONE.RecordingSid, durationSec: 42, channels: 2 });
+  });
+
+  it('only once it is complete, and only with a call named', async () => {
+    const { app } = await buildApp({ twilio: SETTINGS });
+    await fromTwilio(app, RECORDING, { ...DONE, RecordingStatus: 'in-progress' });
+    await fromTwilio(app, '/api/webhooks/twilio/recording', DONE);
+    expect(saveRecording).not.toHaveBeenCalled();
+  });
+
+  it('is refused unsigned', async () => {
+    const { app } = await buildApp({ twilio: SETTINGS });
+    expect((await request(app).post(RECORDING).type('form').send(DONE)).status).toBe(403);
+    expect(saveRecording).not.toHaveBeenCalled();
   });
 });
 

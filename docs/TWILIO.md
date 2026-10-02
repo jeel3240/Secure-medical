@@ -354,6 +354,72 @@ would have filed a real conversation as voicemail.
 Not covered: leaving a recorded message automatically (voicemail drop), and
 anything for calls a lead places to us.
 
+## Recordings and transcripts
+
+Asked for by the client, 2026-10-02 ("let have them transcribed"). Every call,
+placed or received, is recorded by Twilio and turned into text, and the text
+shows under the call - in the workspace conversation and on the Lead Timeline,
+closed until someone opens it:
+
+```
+Outbound call · answered · 0:47 · Maya Chen · 4:23 PM
+▾ Transcript
+  Maya Chen   Hi Priya, it's Maya from Secure Medical.
+  Lead        Yes, I filled in the form. What do you provide?
+```
+
+**Switched on by one optional setting,** `TWILIO_TRANSCRIPTION_SERVICE_SID` -
+Twilio's transcription service, `GA…`. It is apart from the seven: without it
+calls work exactly as before and nothing is recorded. `npm run
+twilio:configure -- --transcription` creates the service once (US English,
+Twilio's "data logging" left off - our calls are not used to train its models)
+and prints the id for `.env`.
+
+**How a call becomes text:**
+
+1. The `<Dial>` records from the moment the call is answered, in two channels:
+   the call's first leg on channel 1, the dialled leg on channel 2. The agent
+   and the lead are apart, so the transcript can say who said what.
+2. Twilio posts `POST /api/webhooks/twilio/recording?call=<sid>` when the
+   recording is ready. We keep its id against the call (`call_recordings`) and
+   put a transcript in line (`call_transcripts`, `pending`). The webhook only
+   writes those two rows, so it answers Twilio at once.
+3. The worker, every 30 seconds (`worker/transcripts.ts`), asks Twilio's
+   transcription service for any `pending` one, then asks after it until it
+   is done - in testing, under a minute for a 47-second call. The sentences are
+   stored with their speaker, worked out from the channel and who called whom
+   (`core/transcripts.ts`): a call we placed has the agent on channel 1, a call
+   the lead placed has the lead there.
+4. If Twilio will not start one, it is tried again on each tick, five times,
+   then marked failed. One Twilio is still working on after six hours is given
+   up. The screen then says "Transcript not available".
+
+**What is kept where.** The audio stays at Twilio; we keep its id
+(`recording_sid`) and length. The text is kept in our database, so the
+timeline does not ask Twilio each time. Neither row is rewritten once
+complete. Every step - recorded, transcribed, failed - is in the activity log.
+
+**No recording announcement - Jeel's decision, 2026-10-02.** Leads are not
+told the call is recorded. Some US states require everyone on a call to agree
+to being recorded; this was raised and decided knowingly. Adding one later is
+a `<Say>` before the call connects.
+
+**Cost**, Twilio's US prices on 2026-10-02: recording $0.0025 a minute,
+storage $0.0005 a minute a month, transcription $0.024 a minute - about three
+cents for each minute of call.
+
+**First real call, 2026-10-02:** Jeel called his own phone and played both
+sides. The recording and the transcript came through, with each side under the
+right name. Both sides were in one room, so each microphone also picked up the
+other: some sentences appear twice, once under each speaker. On a real call,
+in two places, that does not happen.
+
+**Not covered:** playing the audio in the app (the recording is at Twilio, and
+playing it needs a proxy route - not asked for); recording a call that rang
+nobody (there is nothing to record); a transcript in any language but US
+English; redacting card numbers or other personal details from the text
+(Twilio can, `autoRedaction` on the service - not switched on).
+
 ## What is saved
 
 One row in `calls` per call. Outgoing calls needed no migration - the table
@@ -544,7 +610,9 @@ own phone.
 
 1. Set the seven variables in the server's `.env`. `PUBLIC_URL=https://dailyleadhub.com`.
 2. Deploy as usual (`WORKFLOW.md`, "Deploying"), including `npm run migrate` -
-   incoming calls need migrations 007 and 008, voicemail detection 010.
+   incoming calls need migrations 007 and 008, voicemail detection 010,
+   recordings and transcripts 011 - and for those, `TWILIO_TRANSCRIPTION_SERVICE_SID`
+   in the server's `.env`, the same service as the one already made.
 3. `docker compose exec api npm run twilio:configure`. Run it last, and again
    after anyone has tested locally with the same number.
 4. Sign in, pick up a lead that is your own phone, press Call.
@@ -567,8 +635,8 @@ own phone.
   real hold - the lead hears music and is brought back - needs the call set up
   as a conference on the server, which Phase 4 did not build, and a button
   that only muted would mislead.
-- **Recording, voicemail drop, transfer.** Not in the plan. (Voicemail
-  *detection* is built - "Voicemail", above.) Recording needs the
+- **Voicemail drop, transfer, playing a recording in the app.** Not in the
+  plan. (Recording, transcripts and voicemail *detection* are built - above.) Recording needs the
   lead's consent, and is waiting on Jeel's decision.
 - **A call queue for incoming calls.** One agent is rung, or nobody -
   "Incoming calls", above.

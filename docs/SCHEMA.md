@@ -1,6 +1,6 @@
 # Database schema
 
-The migrations in `backend/src/db/migrations/` - `001` to `010`, in order -
+The migrations in `backend/src/db/migrations/` - `001` to `011`, in order -
 are the source of truth for exact columns, types and constraints. `001_init.sql`
 is the starting schema; the ones after it add columns, tables and constraints. This explains what the tables are for and the
 parts that are not obvious from reading the SQL.
@@ -36,6 +36,8 @@ the RDS CA bundle if strict verification is ever wanted.
 | `dispositions` | What an agent decided after contact. |
 | `notes` | Free text an agent wrote about a lead. |
 | `callbacks` | Scheduled follow-ups. `reason` is `booked` - a person booked it - or `missed_call`, booked by the system for the agent a missed call rang (migration 008). One open `missed_call` callback per lead is a rule in the SQL that books it (`db/calls.ts`), not a constraint; the partial index `idx_callbacks_open_missed_call` serves that lookup. |
+| `call_recordings` | A call's recording at Twilio: its id (`RE…`), length and channels. The audio stays at Twilio. Migration 011, `TWILIO.md`, "Recordings and transcripts". |
+| `call_transcripts` | The text of a recording: `pending` → `queued` → `completed` or `failed`, and once completed the sentences, each with its speaker (`agent` or `lead`). Written by the worker. Migration 011. |
 | `dnc_list` | Phones that must never be contacted. |
 | `settings` | Key/value config, admin-editable. |
 | `scoring_rules` | Points per answer, admin-editable. |

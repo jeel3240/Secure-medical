@@ -41,4 +41,22 @@ describe('browser calling settings', () => {
   ])('call %s incomplete, by name', (_, override, name) => {
     expect(readTwilioSettings({ ...FULL, ...override })).toEqual({ status: 'incomplete', missing: [name] });
   });
+
+  it('transcription is optional and apart from the seven: unset, calls work and nothing is recorded', () => {
+    const result = readTwilioSettings(FULL);
+    expect(result.status === 'on' && result.settings.transcriptionServiceSid).toBeNull();
+  });
+
+  it('transcription switches on with a well-formed service id', () => {
+    const sid = `GA${hex(32)}`;
+    const result = readTwilioSettings({ ...FULL, TWILIO_TRANSCRIPTION_SERVICE_SID: sid });
+    expect(result.status === 'on' && result.settings.transcriptionServiceSid).toBe(sid);
+  });
+
+  it('a malformed one is named, like any other setting', () => {
+    expect(readTwilioSettings({ ...FULL, TWILIO_TRANSCRIPTION_SERVICE_SID: 'IS123' })).toEqual({
+      status: 'incomplete',
+      missing: ['TWILIO_TRANSCRIPTION_SERVICE_SID'],
+    });
+  });
 });

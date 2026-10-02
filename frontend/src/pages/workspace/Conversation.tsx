@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react';
 import type { AnswerChip, TimelineEntry } from '../../api/workspace';
+import { CallTranscript } from '../../components/CallTranscript';
 import { callText, systemText } from '../../components/Timeline';
 import { formatTime } from '../../lib/format';
 
@@ -155,10 +156,13 @@ export function Conversation({
 
         if (entry.kind === 'call') {
           return (
-            <p className="convo__system" key={`${entry.at}-${index}`}>
-              {callText(entry.detail)}
-              {entry.author ? ` · ${entry.author}` : ''} · {time}
-            </p>
+            <div className="convo__call" key={`${entry.at}-${index}`}>
+              <p className="convo__system">
+                {callText(entry.detail)}
+                {entry.author ? ` · ${entry.author}` : ''} · {time}
+              </p>
+              <CallTranscript detail={entry.detail} agentName={entry.author} leadName={leadFirstName} />
+            </div>
           );
         }
 

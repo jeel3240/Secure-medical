@@ -71,6 +71,7 @@ docker compose exec postgres psql -U app -d leads \
 | `REDIS_URL` | Not read by any code (2026-09-28). Redis runs in the compose files for a planned job queue; the `bull` and `redis` packages were removed as unused. |
 | `NODE_ENV` | `production` turns on the Secure cookie flag, RDS SSL, and the three start-up refusals: a weak `JWT_SECRET`, no `EZT_WEBHOOK_TOKEN`, and Twilio settings only partly set. Set by the compose files; no need to change it in `.env`. |
 | `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_API_KEY`, `TWILIO_API_SECRET`, `TWILIO_TWIML_APP_SID`, `TWILIO_PHONE_NUMBER`, `PUBLIC_URL` | Browser calling (`TWILIO.md`). All empty: calling is off and everything else works. All set: calling is on. Some set: off locally with a warning, and **the API refuses to start in production**. Where each comes from is in `.env.example`. |
+| `TWILIO_TRANSCRIPTION_SERVICE_SID` | Optional, apart from the seven. Set, every call is recorded and transcribed (`TWILIO.md`, "Recordings and transcripts"); empty, nothing is recorded. `npm run twilio:configure -- --transcription` creates the service and prints the id. Needed by both the api and the worker |
 | `PORT`, `SERVICE_NAME` | Not in `.env.example`; set by the compose files where needed. `PORT` is the API's port, 3000 by default. `SERVICE_NAME` is the `svc` field on every log line (`api`, `worker`). |
 | `CADDY_DOMAIN` | Not read by anything. The production `Caddyfile` names `dailyleadhub.com` directly. |
 
@@ -108,8 +109,8 @@ contact in the group gets a text within a poll interval. `openers` in the
 ## How to test
 
 ```bash
-cd backend  && npm test && npm run lint    # 584 tests
-cd frontend && npm test && npm run lint    # 260 tests   (counts as of 2026-10-02)
+cd backend  && npm test && npm run lint    # 597 tests
+cd frontend && npm test && npm run lint    # 267 tests   (counts as of 2026-10-02)
 ```
 
 **Unit and route tests** mock the database and cover behaviour in isolation.
@@ -157,9 +158,12 @@ one holding them, or who last called them - and otherwise gets a message, a
 text and a place in the queue as a missed call, and the agent it rang gets a
 callback; there is no call queue and no voicemail (`TWILIO.md`, "Incoming
 calls"). An agent's browser must be open and signed in to ring, and a number
-we hold no lead for rings nobody. A call that reaches voicemail is saved as
+we hold no lead for rings nobody. Calls are recorded and transcribed when the
+transcription service is set - with no announcement to the lead, a
+deliberate choice (`TWILIO.md`). A call that reaches voicemail is saved as
 voicemail, by Twilio's detection, which is not always right. There is no
-recording, voicemail drop, transfer or hold. The phone number rings only one deployment: after
+voicemail drop, transfer or hold, and the recording's audio is not played in
+the app. The phone number rings only one deployment: after
 testing locally with it, run `twilio:configure` on the server again
 (locally: `docker compose exec api npm run dev:twilio:configure`). It points
 both the TwiML App and the phone number at `PUBLIC_URL`, and leaves a number
