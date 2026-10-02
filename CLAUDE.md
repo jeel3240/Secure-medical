@@ -175,7 +175,8 @@ you change something the docs describe, update the doc in the same commit.
     src/core/calls.ts       call rules, pure: identity, outcomes, refusals
     src/db/calls.ts         may this call be placed, who an incoming call rings, and recording it
     src/db/missed-call-text.ts  the text sent after a call to us nobody answered
-    src/integrations/twilio.ts  the only file that uses the twilio library
+    src/integrations/twilio.ts  the only file that uses the twilio library (with twilio-health.ts and the configure CLI)
+    src/integrations/twilio-health.ts  the health report's calling check: do the number and the TwiML App point here
     src/twilio-settings.ts  calling's settings: off, on or incomplete
     scripts/calls-live-check.ts  proves the call SQL: holder, DNC, retries
     src/db/callbacks.ts     callbacks, and the today/upcoming/overdue windows

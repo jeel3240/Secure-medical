@@ -273,7 +273,9 @@ passed.
 
 **One number rings one deployment.** Running `twilio:configure` locally
 against the number production uses takes production's incoming calls until it
-is run there again. Run it on the server after any local testing with that
+is run there again. Admin > Overview shows it: the **Calling** check turns
+Degraded within a minute when the number or the TwiML App stops pointing at
+the server (`LOGGING.md`, "Health endpoint"). Run it on the server after any local testing with that
 number.
 
 ### Not covered
