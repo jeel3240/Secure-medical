@@ -335,6 +335,17 @@ and Twilio posts its verdict to `POST /api/webhooks/twilio/answered-by`.
   a person, and a person who answers with a long sentence for a machine. The
   verdict is kept as `answered_by` so a wrong one can be seen.
 
+**Two real calls, 2026-10-02**, from the browser to Jeel's own phone:
+
+| Call | Twilio's verdict | After | Saved as |
+|---|---|---|---|
+| Sent to voicemail with the side button | `machine_start` | 3.4 s | `voicemail`, 22 s |
+| Answered, "hello", a few words | `unknown` | 5.8 s | `answered`, 13 s |
+
+The second is worth knowing: a real person was not reported as `human` but as
+`unknown`. That is why `unknown` stays `answered` - treating it as a machine
+would have filed a real conversation as voicemail.
+
 Not covered: leaving a recorded message automatically (voicemail drop), and
 anything for calls a lead places to us.
 
