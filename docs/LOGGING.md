@@ -134,6 +134,7 @@ Five checks, each with its own `status`, a `message` when it is degraded, and a
 | `webhook` | Never - its status is `info`, not `ok`: a quiet night is not a broken webhook, so it has no verdict. Reports the last reply's time for a human to read |
 | `expiry` | An open conversation is more than 10 minutes past its `expires_at`. The worker sweeps on every poll, every 30 seconds by default, so that is many missed sweeps, not one slow one |
 | `sending` | `EZT_SEND_GROUP` is unset, which makes `sendMessage` refuse every send - **or** the newest send attempt of the last day was refused by EZ Texting. Reports the day's failures and the last successful send |
+| `calling` | The phone number, or the TwiML App, does not point at this server - or the number is not on the account, or Twilio could not be asked. With calling not set up it is `info`: no verdict |
 
 *(2026-09-28, Jeel: "i want all real". Until then `webhook` and `expiry` always
 said `ok`, and `sending` said `ok` while EZ Texting refused every text, because
@@ -165,9 +166,22 @@ read. Expiry does set it - any conversation more than 10 minutes past its
 `expires_at` makes the report degraded, as the table says. (This paragraph
 said neither did; that was true until 2026-09-28.)
 
-**Calling has no check.** Nothing here says whether Twilio is reachable or
-whether the phone number still points at this server. A call that fails shows
-as `call.*` errors in the log.
+**Calling is checked against Twilio, not the database** - added 2026-10-02.
+Calling fails silently in one way: Twilio asks two addresses how to handle a
+call - the TwiML App's Voice URL for a call a browser places, the phone
+number's for a lead calling in - and if either points somewhere else, calls
+simply stop arriving. Nothing crashes and nothing is logged, because the
+request never reaches us. The usual cause is `twilio:configure` run from a
+laptop against the number production uses. So the check asks Twilio where both
+point and compares them with `PUBLIC_URL`; the message says which is wrong and
+to run `npm run twilio:configure` on this server.
+
+`integrations/twilio-health.ts`. The route adds it to the database's report
+(`api/admin/health.ts`), since it is not a database check. Twilio is asked at
+most once a minute - the Overview page polls every five seconds - so a fix
+shows within a minute. It reports where the two point, never a credential.
+
+It does not place a call: it proves the wiring, not that a phone rings.
 
 **It answers 200 even when degraded.** The report is the point, and the body's
 `status` is the verdict. A monitoring tool reading only the status code would
