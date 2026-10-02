@@ -348,3 +348,8 @@
 .convo__call {
   text-align: center;
 }
+
+/* Under the call's pill, the Transcript link is centred like it. */
+.convo__call .transcript summary {
+  margin: 0 auto;
+}

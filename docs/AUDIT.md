@@ -53,6 +53,8 @@ it.
 | `call.incoming` | A lead rings our number and an agent is rung - the subject is that agent. From a number we hold no lead for there is no `calls` row, so the log is its only record | `callId`, `callSid`; for an unknown number, `phone` and `known: false` |
 | `call.missed` | An incoming call nobody answered. The subject is the agent it rang | `callId`, `callSid`; `direction`, `outcome`, `durationSec` when a ring went unanswered; `because: 'no_agent'` when there was nobody to ring |
 | `call.answered_by` | Twilio's verdict on who picked up a call we placed | `callId`, `callSid`, `answeredBy`, `outcome`; and `outcomeWas` when the verdict changed an `answered` call to `voicemail` - the row is overwritten, so this is what it said |
+| `call.recorded` | A call's recording is ready, and its transcript is put in line | `callId`, `callSid`, `recordingSid`, `durationSec` |
+| `call.transcribed`, `call.transcript_failed` | The transcript is in, or given up | `callId`, `transcriptSid` and the number of `lines`; or the `reason` |
 | `dnc.blocked` | A number is blocked: by a STOP reply, by an agent's DNC outcome, or because a contact arrived from EZ Texting already opted out (2026-10-01 - until then that one left no record) | `phone`, `reason`, and `previous` - what the row said before a re-block overwrote it |
 | `dnc.released` | A block is lifted, by a START reply - the only thing that releases one | `phone`, `releaseReason`, `blockReason`, `blockedAt` |
 | `auth.signed_in`, `auth.signed_out`, `auth.password_changed` | | |

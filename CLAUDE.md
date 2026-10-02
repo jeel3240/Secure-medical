@@ -100,7 +100,7 @@ went a different way:
 | Auth | bcrypt (cost 12) and a JWT in an httpOnly, SameSite=Strict cookie. See `docs/AUTH.md`. |
 | Frontend | React 18, Vite 4, React Router 6, zustand, plain CSS with design tokens. |
 | Production web server | The `caddy` service is built from `frontend/Dockerfile`: the React build copied into a `caddy:2` image. |
-| Calling | Built 2026-10-01: the `twilio` library on the server, `@twilio/voice-sdk` in the browser. Outgoing calls, and incoming calls to one agent's browser. `docs/TWILIO.md`. |
+| Calling | Built 2026-10-01: the `twilio` library on the server, `@twilio/voice-sdk` in the browser. Outgoing calls, and incoming calls to one agent's browser; voicemail detection, recordings and transcripts, 2026-10-02. `docs/TWILIO.md`. |
 
 **EZ Texting API notes**
 - Quick start: https://developers.eztexting.com/docs/quick-start-guide
@@ -177,6 +177,8 @@ you change something the docs describe, update the doc in the same commit.
     src/db/missed-call-text.ts  the text sent after a call to us nobody answered
     src/integrations/twilio.ts  the only file that uses the twilio library (with twilio-health.ts and the configure CLI)
     src/integrations/twilio-health.ts  the health report's calling check: do the number and the TwiML App point here
+    src/integrations/twilio-transcripts.ts  Twilio's transcription service; src/core/transcripts.ts who said what, pure
+    src/db/transcripts.ts   call recordings and transcripts; src/worker/transcripts.ts fetches them
     src/twilio-settings.ts  calling's settings: off, on or incomplete
     scripts/calls-live-check.ts  proves the call SQL: holder, DNC, retries
     src/db/callbacks.ts     callbacks, and the today/upcoming/overdue windows
@@ -240,6 +242,7 @@ you change something the docs describe, update the doc in the same commit.
     src/lib/caller-context.ts  "Calling back · you tried 2× today", pure
     src/lib/ringtone.ts        the ring of an incoming call, made in the browser
     src/lib/call-notification.ts  the desktop notification for an incoming call
+    src/components/CallTranscript.tsx  a call's transcript, under the call
     src/lib/useSecond.ts    a clock that re-renders every second
     src/App.tsx, src/main.tsx  the routes; the entry point, which also arms the ringtone
     src/auth/               the session store and the route guards
@@ -295,7 +298,7 @@ is local only; production layers `docker-compose.prod.yml` on top of it.
 Rule: **only one `open` conversation per phone number, ever.**
 
 **As built, 2026-09-14.** The migrations in `backend/src/db/migrations/` - 001
-to 010 as of 2026-10-02 - are the source of truth and `docs/SCHEMA.md` explains
+to 011 as of 2026-10-02 - are the source of truth and `docs/SCHEMA.md` explains
 them. It differs from the list above:
 
 - **users** also has `session_version` and `last_login_at`.
@@ -308,6 +311,7 @@ them. It differs from the list above:
 - **calls** also has `ended_at`, and since migration 007 (2026-10-01) `direction`; an incoming call that rang nobody has no `agent_id`. Since 010 (2026-10-02) `answered_by`: who picked up a call we placed, a person or a machine - a machine makes the outcome `voicemail`.
 - **leads.previous_lead_id** exists but is unused and expected to be dropped - see §6.
 - **leads.assigned_at** records when an agent claimed the lead. Claims do not expire; it is what lets a superadmin see one held too long. Added 2026-09-15.
+- **call_recordings** and **call_transcripts** - migration 011, 2026-10-02. A call's recording id at Twilio, and its transcript with who said what. `docs/TWILIO.md`, "Recordings and transcripts".
 - **activity_log** and **webhook_events** - migration 006, 2026-10-01. The company keeps data as proof: every action is one add-only row, and every inbound webhook is kept as received. The foreign keys to `leads` no longer cascade, so a lead with history cannot be deleted. `docs/AUDIT.md`.
 
 ---
@@ -529,7 +533,7 @@ retry, the end-to-end script, and a README with how to test and known limits.
 - **Source always reads "API" in production** - it is how the contact was
   added to EZ Texting, not which partner sent it. Keep the column, or find the
   partner elsewhere.
-- **Deploy:** `npm run migrate` applies whatever the server has not run, up to 010. `main` holds 001 to 005, so a deploy of today's `dev` adds 006 to 010 (010: voicemail detection - `docs/TWILIO.md`; 009: the word kept with each answer - `docs/STATE-MACHINE.md`; 005, 2026-09-29: poll every 30s; 006, 2026-10-01: the activity log, the raw webhook archive, and leads that cannot be deleted - `docs/AUDIT.md`; 007 and 008, the same day: incoming calls and the callback a missed call books - `docs/TWILIO.md`). Calling also needs the seven Twilio settings - all or none, a partly set group stops the API starting - and `npm run twilio:configure` run on the server, last: the phone number rings only one deployment. Production also needs `EZT_WEBHOOK_TOKEN` set, or the API will not start - it is already set there.
+- **Deploy:** `npm run migrate` applies whatever the server has not run, up to 011. `main` holds 001 to 005, so a deploy of today's `dev` adds 006 to 011 (011: call recordings and transcripts, which also need `TWILIO_TRANSCRIPTION_SERVICE_SID` - `docs/TWILIO.md`; 010: voicemail detection; 009: the word kept with each answer - `docs/STATE-MACHINE.md`; 005, 2026-09-29: poll every 30s; 006, 2026-10-01: the activity log, the raw webhook archive, and leads that cannot be deleted - `docs/AUDIT.md`; 007 and 008, the same day: incoming calls and the callback a missed call books - `docs/TWILIO.md`). Calling also needs the seven Twilio settings - all or none, a partly set group stops the API starting - and `npm run twilio:configure` run on the server, last: the phone number rings only one deployment. Production also needs `EZT_WEBHOOK_TOKEN` set, or the API will not start - it is already set there.
 
 Task 29 found nothing to fix in the app: all three bugs the end-to-end script
 surfaced were in the script itself. Two apparent failures were the app being

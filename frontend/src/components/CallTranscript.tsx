@@ -45,6 +45,15 @@ export function CallTranscript({
     return <p className="transcript__state">Nothing was said</p>;
   }
 
+  // Twilio splits speech into short sentences; one speaker's run reads as one
+  // line, as it would in a chat.
+  const turns = transcript.lines.reduce<Line[]>((all, line) => {
+    const last = all[all.length - 1];
+    if (last && last.speaker === line.speaker) last.text = `${last.text} ${line.text}`;
+    else all.push({ speaker: line.speaker, text: line.text });
+    return all;
+  }, []);
+
   const name = (speaker: Line['speaker']) =>
     speaker === 'agent' ? agentName || 'Agent' : leadName || 'Lead';
 
@@ -52,7 +61,7 @@ export function CallTranscript({
     <details className="transcript">
       <summary>Transcript</summary>
       <ol className="transcript__lines">
-        {transcript.lines.map((line, i) => (
+        {turns.map((line, i) => (
           <li key={i} className={`transcript__line transcript__line--${line.speaker}`}>
             <span className="transcript__speaker">{name(line.speaker)}</span>
             {line.text}

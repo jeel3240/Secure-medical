@@ -362,6 +362,7 @@ needs to know:
 | The ringtone: a WAV made in memory, looped by an `<audio>` element, armed from `main.tsx` so the first click - sign-in included - lets it play. "Call sound off · click to turn on" shows until then | `lib/ringtone.ts` |
 | The desktop notification, and the tab title "Incoming call" | `lib/call-notification.ts` |
 | Once accepted: the same call bar, which is why `CallBar` takes `who: { leadId, name, phone }` rather than a lead. It lives in the shell, so it survives moving between pages | `CallBar.tsx` |
+| A call's transcript, closed under the call in the conversation and on the timeline; one speaker's sentences joined into one line | `components/CallTranscript.tsx` |
 | Missed: a notice with **Call back**, which takes the lead and opens it with router state `callBack`; the workspace dials once and clears the state, so a reload does not ring them again | `IncomingCall.tsx`, `WorkspacePage.tsx` |
 | The lead's page: a **Missed call** badge beside Closed and Needs review, from `flags.missedCall` | `WorkspacePage.tsx` |
 

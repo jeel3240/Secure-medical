@@ -16,6 +16,20 @@ describe('a call\'s transcript', () => {
     expect(items).toEqual(['MayaHi Priya, it is Maya from Secure Medical.', 'PriyaYes, I filled in the form.']);
   });
 
+  it('joins one speaker\'s run of sentences into one line', () => {
+    const split = [
+      { speaker: 'lead', text: 'Can you please tell me', startSec: 1 },
+      { speaker: 'lead', text: 'what you provide?', startSec: 2 },
+      { speaker: 'agent', text: 'Sure.', startSec: 3 },
+    ];
+    render(<CallTranscript detail={{ transcript: { status: 'completed', lines: split } }} />);
+    fireEvent.click(screen.getByText('Transcript'));
+    expect(screen.getAllByRole('listitem').map((li) => li.textContent)).toEqual([
+      'LeadCan you please tell me what you provide?',
+      'AgentSure.',
+    ]);
+  });
+
   it('says Agent and Lead when it does not know the names', () => {
     render(<CallTranscript detail={{ transcript: { status: 'completed', lines } }} />);
     expect(screen.getByText('Agent')).toBeDefined();
