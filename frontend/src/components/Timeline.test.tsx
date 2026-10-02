@@ -100,6 +100,7 @@ describe('calls', () => {
     ['answered', 134, 'Outbound call · answered · 2:14'],
     ['answered', 34, 'Outbound call · answered · 34s'],
     ['no_answer', 0, 'Outbound call · no answer'],
+    ['voicemail', 22, 'Outbound call · voicemail'],
     ['busy', 0, 'Outbound call · busy'],
     ['failed', 0, 'Outbound call · failed'],
     ['canceled', 0, 'Outbound call · cancelled'],

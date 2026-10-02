@@ -108,8 +108,8 @@ contact in the group gets a text within a poll interval. `openers` in the
 ## How to test
 
 ```bash
-cd backend  && npm test && npm run lint    # 556 tests
-cd frontend && npm test && npm run lint    # 259 tests   (counts as of 2026-10-01)
+cd backend  && npm test && npm run lint    # 573 tests
+cd frontend && npm test && npm run lint    # 260 tests   (counts as of 2026-10-02)
 ```
 
 **Unit and route tests** mock the database and cover behaviour in isolation.
@@ -157,8 +157,9 @@ one holding them, or who last called them - and otherwise gets a message, a
 text and a place in the queue as a missed call, and the agent it rang gets a
 callback; there is no call queue and no voicemail (`TWILIO.md`, "Incoming
 calls"). An agent's browser must be open and signed in to ring, and a number
-we hold no lead for rings nobody. There is no recording, voicemail
-drop, transfer or hold. The phone number rings only one deployment: after
+we hold no lead for rings nobody. A call that reaches voicemail is saved as
+voicemail, by Twilio's detection, which is not always right. There is no
+recording, voicemail drop, transfer or hold. The phone number rings only one deployment: after
 testing locally with it, run `twilio:configure` on the server again
 (locally: `docker compose exec api npm run dev:twilio:configure`). It points
 both the TwiML App and the phone number at `PUBLIC_URL`, and leaves a number

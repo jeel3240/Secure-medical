@@ -17,7 +17,7 @@
  * Re-running needs a fresh database: DROP and re-migrate.
  */
 import { pool } from '../src/db/pool';
-import { finishCall, startCall, startIncomingCall } from '../src/db/calls';
+import { finishCall, recordAnsweredBy, startCall, startIncomingCall } from '../src/db/calls';
 import { createCallback, listCallbacks } from '../src/db/callbacks';
 import { getLeadDetail } from '../src/db/lead-detail';
 import { listQueue } from '../src/db/queue';
@@ -183,6 +183,62 @@ async function main(): Promise<void> {
     await pool.query(`UPDATE leads SET assigned_to = NULL, assigned_at = NULL WHERE id = $1`, [lead]);
     const admin = await listAdminLeads({ pageSize: 200 });
     check('and its lead reads Working on Admin > Leads', admin.leads.find((l) => l.id === lead)?.status, 'working');
+  }
+
+  console.log('\nvoicemail: a machine picked up, not the lead');
+  {
+    const lead = await makeLead('+15550000640', 'Voicemail', maya);
+    const row = async (sid: string) =>
+      (await pool.query(`SELECT outcome, answered_by, duration_sec FROM calls WHERE twilio_call_sid = $1`, [sid])).rows[0];
+    const log = async (sid: string) =>
+      (
+        await pool.query(
+          `SELECT detail->>'answeredBy' AS by, detail->>'outcome' AS outcome, detail->>'outcomeWas' AS was
+           FROM activity_log WHERE action = 'call.answered_by' AND detail->>'callSid' = $1`,
+          [sid]
+        )
+      ).rows;
+
+    // The verdict arrives while the call is still up - the usual order.
+    await startCall({ callSid: 'CA-50', leadId: lead, agentId: maya });
+    check('the verdict is saved', await recordAnsweredBy({ callSid: 'CA-50', answeredBy: 'machine' }), true);
+    check('with no outcome yet - the call is not over', await row('CA-50'), { outcome: null, answered_by: 'machine', duration_sec: null });
+    await finishCall({ callSid: 'CA-50', outcome: 'answered', durationSec: 22 });
+    check('when it ends it is voicemail, not answered, with the length of the message left', await row('CA-50'), {
+      outcome: 'voicemail',
+      answered_by: 'machine',
+      duration_sec: 22,
+    });
+
+    // A short call: it is over before detection reports.
+    await startCall({ callSid: 'CA-51', leadId: lead, agentId: maya });
+    await finishCall({ callSid: 'CA-51', outcome: 'answered', durationSec: 4 });
+    check('saved as answered until the verdict comes', (await row('CA-51')).outcome, 'answered');
+    await recordAnsweredBy({ callSid: 'CA-51', answeredBy: 'machine' });
+    check('then corrected to voicemail', (await row('CA-51')).outcome, 'voicemail');
+    check('and the record keeps what it said before', await log('CA-51'), [{ by: 'machine', outcome: 'voicemail', was: 'answered' }]);
+
+    await startCall({ callSid: 'CA-52', leadId: lead, agentId: maya });
+    await recordAnsweredBy({ callSid: 'CA-52', answeredBy: 'human' });
+    await finishCall({ callSid: 'CA-52', outcome: 'answered', durationSec: 90 });
+    check('a person picking up is answered', await row('CA-52'), { outcome: 'answered', answered_by: 'human', duration_sec: 90 });
+
+    await startCall({ callSid: 'CA-53', leadId: lead, agentId: maya });
+    await recordAnsweredBy({ callSid: 'CA-53', answeredBy: 'unknown' });
+    await finishCall({ callSid: 'CA-53', outcome: 'answered', durationSec: 30 });
+    check('Twilio not being sure is left as answered, not guessed', (await row('CA-53')).outcome, 'answered');
+
+    await startCall({ callSid: 'CA-54', leadId: lead, agentId: maya });
+    await recordAnsweredBy({ callSid: 'CA-54', answeredBy: 'machine' });
+    await finishCall({ callSid: 'CA-54', outcome: 'no_answer', durationSec: 0 });
+    check('a call nobody picked up is not voicemail, whatever the verdict', (await row('CA-54')).outcome, 'no_answer');
+
+    check('only the first verdict counts', await recordAnsweredBy({ callSid: 'CA-52', answeredBy: 'machine' }), false);
+    check('and the call stays as it was', (await row('CA-52')).outcome, 'answered');
+    check('a verdict for a call we never placed is ignored', await recordAnsweredBy({ callSid: 'CA-nope', answeredBy: 'machine' }), false);
+
+    const entry = (await getTimeline(lead))!.filter((e) => e.kind === 'call').map((e) => e.detail.outcome);
+    check('the timeline says which was which', entry, ['voicemail', 'voicemail', 'answered', 'answered', 'no_answer']);
   }
 
   console.log('\na lead calling our number: who rings');

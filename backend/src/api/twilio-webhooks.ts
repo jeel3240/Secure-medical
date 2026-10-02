@@ -3,20 +3,21 @@
  *
  *   POST /api/webhooks/twilio/voice           how to connect a call the browser started
  *   POST /api/webhooks/twilio/status          how a call ended - outgoing or incoming
+ *   POST /api/webhooks/twilio/answered-by     who picked up a call we placed: a person or a machine
  *   POST /api/webhooks/twilio/incoming        a lead is calling our number
  *   POST /api/webhooks/twilio/incoming/after  ringing the agent is over: what to say
  *
  * Unauthenticated, like the EZ Texting webhook, but unlike it Twilio signs
  * every request (X-Twilio-Signature), so anything unsigned or mis-signed is
- * refused before it reaches the database. With calling not set up, all four
- * routes answer 404, as if they did not exist.
+ * refused before it reaches the database. With calling not set up, every
+ * route answers 404, as if they did not exist.
  *
  * Twilio posts form-encoded fields, not JSON, so this router parses its own
  * bodies.
  */
 
 import express, { type NextFunction, type Request, type Response, Router } from 'express';
-import { agentIdFromIdentity, outcomeForStatus, REFUSAL_SPEECH, talkSeconds } from '../core/calls';
+import { agentIdFromIdentity, answeredByFor, outcomeForStatus, REFUSAL_SPEECH, talkSeconds } from '../core/calls';
 import { dialTwiml, emptyTwiml, isFromTwilio, missedCallTwiml, refusalTwiml, ringAgentTwiml } from '../integrations/twilio';
 import { errText, log } from '../lib/log';
 import type { AppDeps } from './deps';
@@ -114,7 +115,7 @@ export function twilioWebhooksRouter(deps: AppDeps): Router {
       }
 
       log.info('call.started', { agentId, leadId, callSid });
-      res.send(dialTwiml(settings, result.phone));
+      res.send(dialTwiml(settings, result.phone, callSid));
     })
   );
 
@@ -143,6 +144,24 @@ export function twilioWebhooksRouter(deps: AppDeps): Router {
 
       // Always 204: there is nothing for Twilio to retry, even for a status we
       // do not record.
+      res.sendStatus(204);
+    })
+  );
+
+  // Twilio's verdict on who picked up: a person, or the lead's voicemail. The
+  // call it is about is named in the URL we gave Twilio, because this report
+  // is made on the lead's leg and our row is keyed by the browser's.
+  router.post(
+    '/answered-by',
+    asyncHandler(async (req, res) => {
+      const callSid = typeof req.query.call === 'string' ? req.query.call : '';
+      const answeredBy = answeredByFor(((req.body ?? {}) as Record<string, unknown>).AnsweredBy);
+
+      if (callSid && answeredBy) {
+        const recorded = await db().recordAnsweredBy({ callSid, answeredBy });
+        log.info('call.answered_by', { callSid, answeredBy, recorded });
+      }
+      // 204 whatever happened: there is nothing here for Twilio to retry.
       res.sendStatus(204);
     })
   );

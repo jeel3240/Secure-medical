@@ -1,6 +1,6 @@
 # Database schema
 
-The migrations in `backend/src/db/migrations/` - `001` to `009`, in order -
+The migrations in `backend/src/db/migrations/` - `001` to `010`, in order -
 are the source of truth for exact columns, types and constraints. `001_init.sql`
 is the starting schema; the ones after it add columns, tables and constraints. This explains what the tables are for and the
 parts that are not obvious from reading the SQL.
@@ -182,7 +182,7 @@ code: `core/activity.ts`, `db/activity.ts`, `db/dnc.ts`.)
 | Column | Written by | Status |
 |---|---|---|
 | `dispositions.value` | Agent, Phase 3 | The seven values are listed in `DESIGN-PROMPT.md` section 3: Interested, Callback set, No answer, Voicemail, Not interested, Wrong number, DNC. *(2026-09-23: they did not have to come from Jeel after all - the design brief already had them.)* *(2026-09-28: new rows are `closed` or `dnc` only; the seven above are retired, and old rows keep them - `core/dispositions.ts`. No migration: the column has no constraint to change.)* |
-| `calls.outcome` | Twilio's end-of-call callback, Phase 4 | `answered`, `no_answer`, `busy`, `failed`, `canceled` - mapped from Twilio's statuses in `core/calls.ts` - and `missed`, for an incoming call nobody answered. Null while a call is in progress. No constraint on the column. |
+| `calls.outcome` | Twilio's end-of-call callback, Phase 4 | `answered`, `no_answer`, `busy`, `failed`, `canceled` - mapped from Twilio's statuses in `core/calls.ts` - `missed`, for an incoming call nobody answered, and `voicemail`, for a call we placed that a machine picked up (`calls.answered_by`, migration 010). Null while a call is in progress. No constraint on the column. |
 | `dnc_list.reason` | Poller, webhook and the DNC outcome | Poller writes `ezt_opt_out` for a contact already opted out in EZ Texting; the webhook writes `sms_stop` for a STOP reply. An agent's DNC outcome writes `agent_disposition` (`db/dnc.ts`), since Phase 3 - `AGENT-WORKSPACE.md`. |
 | `messages.delivery_status` | Send path | Whatever EZ Texting returns. Unverified - we have never read a delivery status back. *(2026-09-28: we write two values. `failed` - a send EZ Texting refused, with no `ezt_message_id`. `sending` - an automated text between its row being written and EZ Texting's id being recorded, `db/outbound.ts`; it stays `sending` only if the write after a successful send failed, and counts as sent. Everything else is NULL.)* |
 

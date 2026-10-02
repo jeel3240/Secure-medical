@@ -16,6 +16,8 @@ export const TOKEN_TTL_SECONDS = 60 * 60;
 export const VOICE_PATH = '/api/webhooks/twilio/voice';
 export const STATUS_PATH = '/api/webhooks/twilio/status';
 /** A lead calling our number. The phone number's Voice URL points here. */
+/** Twilio's verdict on who picked up a call we placed: a person or a machine. */
+export const AMD_PATH = '/api/webhooks/twilio/answered-by';
 export const INCOMING_PATH = '/api/webhooks/twilio/incoming';
 /** Where Twilio goes once ringing the agent is over, to ask what to say to the lead. */
 export const INCOMING_AFTER_PATH = '/api/webhooks/twilio/incoming/after';
@@ -62,8 +64,15 @@ export function isFromTwilio(
  * the browser leg showing connected while the phone is still ringing.
  * The status callback on the lead's leg reports how the call ended, however it
  * ends - either side hanging up, no answer, busy, a bad number.
+ *
+ * `machineDetection` has Twilio listen to the first seconds after the phone
+ * picks up and tell us, at `amdStatusCallback`, whether a person or a
+ * voicemail answered (TWILIO.md, "Voicemail"). The agent is connected at once
+ * either way: detection runs beside the call, not in front of it. The call's
+ * own id rides in that URL because the report is made on the lead's leg, and
+ * our row is keyed by the browser's.
  */
-export function dialTwiml(settings: TwilioSettings, phone: string): string {
+export function dialTwiml(settings: TwilioSettings, phone: string, callSid: string): string {
   const response = new twilio.twiml.VoiceResponse();
   const dial = response.dial({ callerId: settings.callerId, answerOnBridge: true });
   dial.number(
@@ -71,6 +80,9 @@ export function dialTwiml(settings: TwilioSettings, phone: string): string {
       statusCallback: settings.publicUrl + STATUS_PATH,
       statusCallbackMethod: 'POST',
       statusCallbackEvent: ['completed'],
+      machineDetection: 'Enable',
+      amdStatusCallback: `${settings.publicUrl}${AMD_PATH}?call=${encodeURIComponent(callSid)}`,
+      amdStatusCallbackMethod: 'POST',
     },
     phone
   );

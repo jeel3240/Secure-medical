@@ -40,11 +40,18 @@ describe('the browser call token', () => {
 
 describe('telling Twilio how to connect', () => {
   it('dials the lead from our number, rings until answered, and reports how it ended', () => {
-    const xml = dialTwiml(SETTINGS, '+16026203572');
+    const xml = dialTwiml(SETTINGS, '+16026203572', 'CA100');
     expect(xml).toContain('callerId="+14804708259"');
     expect(xml).toContain('answerOnBridge="true"');
     expect(xml).toContain('statusCallback="https://calls.example.com/api/webhooks/twilio/status"');
     expect(xml).toMatch(/<Number[^>]*>\+16026203572<\/Number>/);
+  });
+
+  it('asks Twilio whether a person or a machine picks up, and to say which call it was', () => {
+    const xml = dialTwiml(SETTINGS, '+16026203572', 'CA100');
+    expect(xml).toContain('machineDetection="Enable"');
+    expect(xml).toContain('amdStatusCallback="https://calls.example.com/api/webhooks/twilio/answered-by?call=CA100"');
+    expect(xml).toContain('amdStatusCallbackMethod="POST"');
   });
 
   it('a refusal says why, then hangs up', () => {
