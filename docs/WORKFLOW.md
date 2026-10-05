@@ -121,9 +121,11 @@ docker compose exec api npm run migrate
 ```
 
 **Calling: run `docker compose exec api npm run twilio:configure`** on the
-first deploy that has calling, whenever `PUBLIC_URL` or a Twilio setting
-changes, and after anyone has run it locally against the same number - the
-phone number rings only one deployment. It points the TwiML App and the phone
+first deploy that has calling, and whenever `PUBLIC_URL` or a Twilio setting
+changes. **Only ever on the server.** Run from a laptop with production's
+number, it moves production's calls to that laptop (2026-10-05; `TWILIO.md`,
+"What it needs on the Twilio account") - local testing uses its own number
+and TwiML App. It points the TwiML App and the phone
 number at this server, and refuses a number that rings somewhere else unless
 `--take-over` is passed. `TWILIO.md`, "Deploying it".
 
