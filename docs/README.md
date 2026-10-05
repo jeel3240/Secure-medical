@@ -163,11 +163,11 @@ transcription service is set - with no announcement to the lead, a
 deliberate choice (`TWILIO.md`). A call that reaches voicemail is saved as
 voicemail, by Twilio's detection, which is not always right. There is no
 voicemail drop, transfer or hold, and the recording's audio is not played in
-the app. The phone number rings only one deployment: after
-testing locally with it, run `twilio:configure` on the server again
-(locally: `docker compose exec api npm run dev:twilio:configure`). It points
-both the TwiML App and the phone number at `PUBLIC_URL`, and leaves a number
-that rings somewhere else alone unless `--take-over` is passed. Admin > Overview shows no call totals - removed on 2026-09-28
+the app. **Never run `twilio:configure` locally with production's phone number or
+TwiML App** (2026-10-05): it points both at the laptop and production calling
+stops, silently, until it is run on the server again. Local testing needs its
+own Twilio number and TwiML App in the local `.env` - `TWILIO.md`, "What it
+needs on the Twilio account". Admin > Overview shows no call totals - removed on 2026-09-28
 (`ADMIN.md`, "Overview") - though every call is on its lead's timeline.
 
 **A real call needs a public address.** Twilio must reach our voice webhook, so

@@ -271,12 +271,29 @@ The phone number's Voice URL must be `PUBLIC_URL/api/webhooks/twilio/incoming`.
 already sends its calls somewhere else is left alone unless `--take-over` is
 passed.
 
-**One number rings one deployment.** Running `twilio:configure` locally
-against the number production uses takes production's incoming calls until it
-is run there again. Admin > Overview shows it: the **Calling** check turns
-Degraded within a minute when the number or the TwiML App stops pointing at
-the server (`LOGGING.md`, "Health endpoint"). Run it on the server after any local testing with that
-number.
+**One number rings one deployment**, and so does one TwiML App.
+
+**Never run `twilio:configure` locally with production's number - Jeel,
+2026-10-05.** Production is live on (480) 470-8259 and the TwiML App
+`secure-medical-calling`. The command points *both* at whatever `PUBLIC_URL`
+says, so run from a laptop it moves them to that laptop's tunnel: leads who
+call the number ring nobody in production, and calls agents place fail, until
+it is run on the server again. Nothing errors while that happens.
+
+- **The command's own guard does not stop this.** It leaves alone a number
+  that rings *another app*; a laptop and production are the same app, with the
+  same webhook path, so it goes straight through. `--take-over` is not needed
+  for the damage.
+- **To test calling locally, use a different Twilio number and a different
+  TwiML App**, and put those in the local `.env` as `TWILIO_PHONE_NUMBER` and
+  `TWILIO_TWIML_APP_SID`. A local `.env` must never hold production's two
+  values. The account SID, auth token and API key can be shared.
+- **If it happens anyway:** Admin > Overview shows **Calling** as Degraded
+  within a minute. Fix it by running `npm run twilio:configure` on the server.
+- Up to 2026-10-02, before production took calls, local testing did use this
+  number - the test notes in this doc are from then. That is over.
+
+`LOGGING.md`, "Health endpoint", has how the Calling check works.
 
 ### Not covered
 
@@ -584,7 +601,9 @@ microphone. `lib/calling.ts` is the only file that touches the SDK.
 | Incoming: ringing, answered, missed, declined, one call at a time; what the card shows; Call back | `frontend/src/lib/incoming-state.test.ts`, `lib/caller-context.test.ts`, `layout/IncomingCall.test.tsx` |
 
 **Locally a real call needs a public address**, because Twilio must reach the
-voice webhook:
+voice webhook - **and its own Twilio number and TwiML App, never
+production's** ("What it needs on the Twilio account", above). With those in
+the local `.env`:
 
 ```bash
 cloudflared tunnel --url http://localhost:3000     # prints an https address
@@ -613,8 +632,9 @@ own phone.
    incoming calls need migrations 007 and 008, voicemail detection 010,
    recordings and transcripts 011 - and for those, `TWILIO_TRANSCRIPTION_SERVICE_SID`
    in the server's `.env`, the same service as the one already made.
-3. `docker compose exec api npm run twilio:configure`. Run it last, and again
-   after anyone has tested locally with the same number.
+3. `docker compose exec api npm run twilio:configure`. Run it last. Nobody
+   runs it anywhere else with this number - "What it needs on the Twilio
+   account", above.
 4. Sign in, pick up a lead that is your own phone, press Call.
 5. Call the number from that phone: the browser rings.
 

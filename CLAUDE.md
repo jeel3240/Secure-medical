@@ -394,7 +394,7 @@ Frontend dev: `cd frontend && npm run dev` (Vite on :5173, proxies /api to :3000
 - Postgres is on host port **5433**, not 5432.
 - After migrating, create the first account: `docker compose exec api npm run dev:create-superadmin -- you@example.com "Your Name"`.
 - Colima works in place of Docker Desktop.
-- **Twilio locally (2026-10-01):** nothing is pasted into Twilio by hand. Set `PUBLIC_URL` to the tunnel's address and run `docker compose exec api npm run dev:twilio:configure`; it points the TwiML App and the phone number at it. The number rings only one deployment, so run `twilio:configure` on the server again afterwards. `docs/TWILIO.md`, "Testing".
+- **Twilio locally:** nothing is pasted into Twilio by hand; `docker compose exec api npm run dev:twilio:configure` points the TwiML App and the phone number at `PUBLIC_URL`. **Never run it locally with production's number or TwiML App (Jeel, 2026-10-05)** - production is live on them, and it would move production's calls to the laptop, silently. Local testing needs a different Twilio number and TwiML App in the local `.env`. `docs/TWILIO.md`, "What it needs on the Twilio account".
 
 ---
 
@@ -765,7 +765,7 @@ were taken on trust and the poller silently ingested nothing.
 - Read `docs/QUEUE.md`, `docs/AGENT-WORKSPACE.md`, `docs/ADMIN.md` or `docs/ADMIN-LEADS.md` before touching the queue, a lead's actions, or an admin screen; `docs/LOGGING.md` before adding a log line or touching health.
 - Read `docs/STATE-MACHINE.md` before touching the SMS flow. It is the flow spec and overrides the mockup where they differ.
 - Read `docs/AUTH.md` before touching sign-in, sessions, roles or the users table.
-- Read `docs/TWILIO.md` before touching calls, Twilio's webhooks or the Call button.
+- Read `docs/TWILIO.md` before touching calls, Twilio's webhooks or the Call button. **Do not run `twilio:configure` (or `dev:twilio:configure`) from a local machine while the local `.env` holds production's phone number** - check `TWILIO_PHONE_NUMBER` first, and if it is (480) 470-8259, stop and say so.
 - Read `docs/AUDIT.md` before adding anything a person or the system can do. **Nothing may be lost** (Jeel, 2026-10-01): a new action records itself in the activity log, in the same statement or transaction, and nothing overwrites the only record of something.
 - Read `docs/POLLER.md` before changing the worker loop, and `docs/WORKFLOW.md` for branches, migrations and deploys.
 - **Every area has one doc, and it is updated in the same commit as the change.**
