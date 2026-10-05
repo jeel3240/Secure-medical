@@ -9,7 +9,7 @@
  */
 
 import { queueTag, type QueueTag } from '../core/queue-tags';
-import { CLOSED_SQL } from './lead-state';
+import { CLOSED_SQL, MISSED_CALL_SQL } from './lead-state';
 import { likeLiteral } from './sql';
 import { pool } from './pool';
 
@@ -27,6 +27,13 @@ export interface QueueRow {
   q1: string | null;
   q2: string | null;
   q3: string | null;
+  /**
+   * The word the lead chose for each, as it was called when they chose it -
+   * migration 009. Null where unanswered.
+   */
+  q1Label: string | null;
+  q2Label: string | null;
+  q3Label: string | null;
   conversationStatus: 'open' | 'completed' | 'review' | 'expired';
   /** `null` when there is nothing to say: the lead is waiting to be picked up. */
   tag: QueueTag | null;
@@ -63,7 +70,7 @@ const MAX_LIMIT = 500;
 const BASE = `
   FROM leads l
   JOIN LATERAL (
-    SELECT c.status, c.step, c.q1, c.q2, c.q3, c.score, c.tier
+    SELECT c.status, c.step, c.q1, c.q2, c.q3, c.q1_label, c.q2_label, c.q3_label, c.score, c.tier
     FROM conversations c
     WHERE c.lead_id = l.id
     ORDER BY c.created_at DESC, c.id DESC
@@ -120,6 +127,7 @@ const INCLUDED = `
   AND (
     u.id IS NOT NULL
     OR l.has_unread_inbound
+    OR ${MISSED_CALL_SQL}
     OR (
       c.score > 0
       AND NOT ${CLOSED_SQL}
@@ -181,9 +189,13 @@ interface QueueDbRow {
   q1: string | null;
   q2: string | null;
   q3: string | null;
+  q1_label: string | null;
+  q2_label: string | null;
+  q3_label: string | null;
   agent_id: number | null;
   agent_name: string | null;
   has_unread_inbound: boolean;
+  missed_call: boolean;
   callback_agent_id: number | null;
   callback_agent_name: string | null;
   callback_at: Date | null;
@@ -206,8 +218,9 @@ export async function listQueue(query: QueueQuery = {}): Promise<QueuePage> {
   const rows = await pool.query<QueueDbRow>(
     `SELECT l.id, l.phone, l.first_name, l.last_name, l.source,
             ${RECEIVED} AS received_at,
-            c.score, c.tier, c.status, c.q1, c.q2, c.q3,
+            c.score, c.tier, c.status, c.q1, c.q2, c.q3, c.q1_label, c.q2_label, c.q3_label,
             u.id AS agent_id, u.name AS agent_name, l.has_unread_inbound,
+            ${MISSED_CALL_SQL} AS missed_call,
             ncb.agent_id AS callback_agent_id, ncb.agent_name AS callback_agent_name,
             ncb.scheduled_at AS callback_at
      ${BASE}
@@ -267,11 +280,15 @@ export async function listQueue(query: QueueQuery = {}): Promise<QueuePage> {
       q1: r.q1,
       q2: r.q2,
       q3: r.q3,
+      q1Label: r.q1_label,
+      q2Label: r.q2_label,
+      q3Label: r.q3_label,
       conversationStatus: r.status,
       tag: queueTag({
         conversationStatus: r.status,
         holder: r.agent_id === null ? null : { id: r.agent_id, name: r.agent_name ?? 'Another agent' },
         hasUnreadInbound: r.has_unread_inbound,
+        missedCall: r.missed_call,
         nextCallback:
           r.callback_agent_id === null || !r.callback_at
             ? null

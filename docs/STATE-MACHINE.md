@@ -24,7 +24,7 @@ expiry). Related: WEBHOOKS.md, POLLER.md, SCHEMA.md, the plan's §6.
 | `core/answers.ts` | `matchAnswer()` - the numbers and the word lists |
 | `api/reply-flow.ts` | Loads the conversation and rules, runs `step`, saves, sends |
 | `core/state-machine.test.ts` | 54 tests, one per case in "Tests the state machine needs", plus which replies need a person |
-| `api/__tests__/webhooks.test.ts` | 41, including the flow advancing through the webhook and flagging a reply for a person |
+| `api/__tests__/webhooks.test.ts` | 43, including the flow advancing through the webhook and flagging a reply for a person |
 
 A reply now advances the conversation. Verified against the live account on
 2026-09-21: replies of 3, 1, 1 walked a lead from step 1 to `completed`, score
@@ -52,8 +52,11 @@ The core is a pure function, no database and no network, so every branch below
 is unit-testable:
 
 ```
-step(conversation, reply, rules) -> { conversation', send: messageKey | null, blockNumber: boolean }
+step(conversation, reply, rules) -> { conversation', send: messageKey | null, blockNumber: boolean, needsPerson: boolean }
 ```
+
+`needsPerson` is what sets `has_unread_inbound` - "Which replies need a
+person", below.
 
 - `conversation` - the current row: status, step, q1-q3, invalid_count, score, tier.
 - `reply` - the inbound text and the payload's `optOut` flag.
@@ -81,7 +84,7 @@ Answer matching is a separate pure function the state machine calls:
 
 ## States
 
-| Status | Meaning | Automated messages? |
+| Status | Meaning | Automated questions? |
 |---|---|---|
 | `open` | Waiting for the answer to question `step` (1-3) | Yes |
 | `completed` | All three answered, scored and tiered | No |
@@ -90,6 +93,9 @@ Answer matching is a separate pure function the state machine calls:
 | `expired` | Went quiet past the expiry window | No |
 
 Only `open` is ever advanced. The other four are final for that conversation.
+
+*(2026-10-01: the column says questions, not messages, because one automated
+text now sits outside this flow - "The missed-call text", below.)*
 Today a number that comes back is skipped; the decided rules for restarting it
 are under "A number that comes back", not built yet.
 
@@ -138,7 +144,7 @@ belongs to. From then on:
 - no automated text of any kind goes to that number;
 - if the number is delivered again as a new lead, the poller saves it as
   suppressed and sends nothing;
-- agents cannot call or text it, once calling and agent SMS exist, and the
+- agents cannot call or text it, and the
   queue never shows a number that is on `dnc_list`, whatever its conversation
   status;
 - Admin > Leads shows it as Opted out;
@@ -274,10 +280,43 @@ An unclear reply still earns the "responded" points - see "Scoring".
 
 ---
 
+## The word is kept with the answer
+
+Added 2026-10-01, migration 009. An answer is stored as the number the lead
+chose - `q1 = '1'` - because that is what scoring reads. Since this migration
+the choice's name at that moment is stored beside it: `q1_label = 'Supplements'`.
+
+**Why.** Every screen used to turn the number into a word by looking up the
+choice's *current* name. The client wants to rename choices and add new ones;
+from that day a lead who chose "Supplements" last week would have read as
+whatever choice 1 is called this week. Once a name changes there is no way to
+recover what an earlier lead was offered, so the word is kept from before any
+name is touched.
+
+- **Written once**, when the reply is accepted as an answer, from
+  `scoring_rules.label` as it is then (`api/reply-flow.ts`, `newAnswerLabels`).
+  An unclear reply, or one after the questions ended, writes none.
+- **Never rewritten.** Renaming a choice afterwards changes what new leads get,
+  not what earlier ones have.
+- **What the screens show**: the queue, the lead card and its score breakdown,
+  the incoming-call card, and the conversation view. A row with an answer and
+  no saved word falls back to the current name.
+- **Existing answers were filled in by the migration** with today's names,
+  which are the true ones for them: no name had ever been changed.
+
+Not kept: the *points* an answer earned. The conversation's score is stored, so
+it does not move, but the breakdown lists each answer's points from the rules
+as they stand - if points are changed later, an old lead's breakdown will no
+longer add up to their score. To settle when points become editable.
+
+Nothing else about the flow changes: three questions, three choices each.
+
 ## Scoring
 
-Rules come from `scoring_rules`; tiers from `tiers`. Both are admin-editable, so
-they are read when the reply is processed, never cached across replies.
+Rules come from `scoring_rules`; tiers from `tiers`. Both are read when the
+reply is processed, never cached across replies, so a change takes effect on
+the next reply. *(They were to be admin-editable; since 2026-09-23 they are
+changed only by a migration - CLAUDE.md §10.)*
 
 | Award | Code | When |
 |---|---|---|
@@ -303,8 +342,9 @@ for responding, and so reads as LOW.
 
 ## Expiry
 
-- A send that **succeeds** sets `expires_at = now + settings.expiry_days`
-  (seeded 7). A send that fails leaves it where it was, so a lead who was never
+- A send of the opener or of a message in this flow that **succeeds** sets
+  `expires_at = now + settings.expiry_days` (seeded 7). An agent's own text and
+  the missed-call text do not move it. A send that fails leaves it where it was, so a lead who was never
   actually messaged expires on schedule rather than a week late.
 - Each worker tick marks `open` conversations past `expires_at` as `expired`.
   Nothing is sent to the lead.
@@ -345,7 +385,9 @@ left sitting unseen:
 *(2026-09-22: the last bullet is not built. `api/webhooks.ts` sets
 `has_unread_inbound` and nothing anywhere unsets it, so such a lead stays in
 the queue tagged Inbound reply instead of leaving it. Opening a lead is the
-agent workspace, Week 3 - that is where the clear belongs.)*
+agent workspace, Week 3 - that is where the clear belongs.)* *(Built in Phase
+3: `db/read-flag.ts`, when the holder opens the lead, and saving an outcome
+clears it too.)*
 
 This applies whether or not the lead ever answered before: texting us is
 interest either way. A number on `dnc_list` never comes back, whatever it
@@ -379,7 +421,8 @@ left it `expired`, set `has_unread_inbound`, and sent nothing.
 ## Sending
 
 - **Every send checks `dnc_list` immediately before sending**, automated or
-  not: the opener, every reply in the flow, and later an agent's manual SMS.
+  not: the opener, every reply in the flow, an agent's manual SMS, and the
+  missed-call text.
   Built 2026-09-21: `sendMessage` in `integrations/ezt-client.ts` queries
   `dnc_list` and throws `BlockedNumberError` before calling the API, so no
   caller can forget. A bare number is normalised to E.164 first - comparing
@@ -413,7 +456,37 @@ left it `expired`, set `has_unread_inbound`, and sent nothing.
 at any hour - this is how it is built today, and it stays that way. There is no
 sending-hours window.
 
-A failed opener is not retried. POLLER.md records the gap.
+A failed opener is retried - up to four times over about nine hours, and never
+more than 24 hours after the lead arrived (2026-09-28). POLLER.md, "Retrying a
+failed opener".
+
+---
+
+## The missed-call text
+
+Added 2026-10-01 with incoming calls - `TWILIO.md`, "A missed call". It is the
+one automated text that is not part of this flow, so its rules are stated here
+once:
+
+- **When.** A lead rings our number and nobody answers. `message_missed_call`
+  from `settings` is sent, once per call (`db/missed-call-text.ts`).
+- **To whom.** Any lead, whatever their conversation's status - `open`,
+  `completed`, `review`, `expired`, or `suppressed` with the block since
+  released. Only a live `dnc_list` row stops it, through the same check every
+  send makes.
+- **It changes nothing in the conversation.** It is recorded like any automated
+  text (`sent_by` null). It does not advance a step, does not take the
+  conversation over, and does not move `expires_at`.
+- **A reply to it is an ordinary reply**, handled by the rules above:
+  - conversation ended - stored and flagged for a person (rule 2). This is the
+    usual case and the right outcome: "ok, call me after 5" reaches an agent;
+  - conversation taken over by an agent - stored and flagged (rule 2b);
+  - conversation still `open` - **read as an answer to the current question.**
+    "ok thanks" gets the clarification, and a second such reply sends the
+    conversation to review; a bare "1" is scored. Not handled specially. It
+    needs a lead who is mid-questions *and* was rung by an agent *and* rang
+    back - unusual, since agents call leads who have finished - and the
+    result, at worst, is a lead in Needs review, which a person reads.
 
 ---
 
@@ -481,7 +554,10 @@ someone who asked us not to.
   and Admin > Leads all check.
 - **The conversation is not reopened.** A `suppressed` conversation is finished.
   The START itself is stored and flags the lead, and anything the lead sends
-  next is stored too and reaches an agent as an inbound reply (rule 2). The
+  next is stored too and reaches an agent as an inbound reply (rule 2). (An
+  agent's DNC outcome suppresses an open conversation the same way a STOP
+  does - since 2026-10-01; before that it was left open, and a START after it
+  was read as an unclear answer.) The
   questions do not restart.
 - **Opting out again re-blocks the same row**, clearing the release dates, so a
   number never accumulates rows.

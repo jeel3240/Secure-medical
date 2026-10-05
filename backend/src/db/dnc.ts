@@ -6,8 +6,10 @@
  * another:
  *
  *   - a STOP reply, or EZ Texting's own `optOut` flag - `api/webhooks.ts`
- *   - the poller finding a contact already opted out on EZ Texting's side
- *   - an agent setting the `DNC` disposition - `api/dispositions.ts`
+ *   - the poller finding a contact already opted out on EZ Texting's side -
+ *     `worker/poller.ts` (through here since 2026-10-01; before that it had
+ *     its own insert, which wrote no record)
+ *   - an agent setting the `DNC` disposition - `db/dispositions.ts`
  *
  * These functions were `webhooks.ts` locals until task 8 needed the second
  * caller. Moved rather than copied: a compliance table with two insert
@@ -16,6 +18,8 @@
  * Only a row with `released_at IS NULL` blocks anything. The queue, the lead
  * card, Admin > Leads and `sendMessage` all check it that way.
  */
+
+import { activityInsertSql } from './activity';
 
 /** Anything with a `query` method: the pool, or a client inside a transaction. */
 export interface Queryable {
@@ -50,13 +54,40 @@ export const RELEASE_REASONS = {
  * again and the release columns are cleared, so the row reads as currently
  * blocked with the newest reason.
  */
-export async function blockNumber(client: Queryable, phone: string, reason: string): Promise<void> {
+export async function blockNumber(
+  client: Queryable,
+  phone: string,
+  reason: string,
+  /** The agent who pressed DNC. Null when a STOP reply or EZ Texting did it. */
+  actorId: number | null = null
+): Promise<void> {
+  // Re-blocking reuses the row, which overwrites when and why the number was
+  // blocked before and that it was ever released. `previous` keeps that - the
+  // activity log is the only place the earlier block survives. docs/AUDIT.md.
   await client.query(
-    `INSERT INTO dnc_list (phone, reason) VALUES ($1, $2)
-     ON CONFLICT (phone) DO UPDATE
-     SET reason = EXCLUDED.reason, added_at = now(),
-         released_at = NULL, released_reason = NULL`,
-    [phone, reason]
+    `WITH previous AS (
+       SELECT reason, added_at AS "blockedAt", released_at AS "releasedAt",
+              released_reason AS "releaseReason"
+       FROM dnc_list WHERE phone = $1
+     ),
+     blocked AS (
+       INSERT INTO dnc_list (phone, reason) VALUES ($1, $2)
+       ON CONFLICT (phone) DO UPDATE
+       SET reason = EXCLUDED.reason, added_at = now(),
+           released_at = NULL, released_reason = NULL
+       RETURNING phone
+     ),
+     logged AS (
+       ${activityInsertSql}
+       SELECT $3, 'dnc.blocked', (SELECT id FROM leads WHERE phone = $1), NULL,
+              jsonb_strip_nulls(jsonb_build_object(
+                'phone', phone, 'reason', $2::text,
+                'previous', (SELECT to_jsonb(previous) FROM previous)
+              ))
+       FROM blocked
+     )
+     SELECT 1 FROM blocked`,
+    [phone, reason, actorId]
   );
 }
 
@@ -74,13 +105,25 @@ export async function blockNumber(client: Queryable, phone: string, reason: stri
 export async function releaseNumber(
   client: Queryable,
   phone: string,
-  reason: string = RELEASE_REASONS.smsStart
+  reason: string = RELEASE_REASONS.smsStart,
+  actorId: number | null = null
 ): Promise<number> {
   const { rowCount } = await client.query(
-    `UPDATE dnc_list
-     SET released_at = now(), released_reason = $2
-     WHERE phone = $1 AND released_at IS NULL`,
-    [phone, reason]
+    `WITH released AS (
+       UPDATE dnc_list
+       SET released_at = now(), released_reason = $2
+       WHERE phone = $1 AND released_at IS NULL
+       RETURNING phone, reason, added_at
+     ),
+     logged AS (
+       ${activityInsertSql}
+       SELECT $3, 'dnc.released', (SELECT id FROM leads WHERE phone = $1), NULL,
+              jsonb_build_object('phone', phone, 'releaseReason', $2::text,
+                                 'blockReason', reason, 'blockedAt', added_at)
+       FROM released
+     )
+     SELECT 1 FROM released`,
+    [phone, reason, actorId]
   );
   return rowCount ?? 0;
 }

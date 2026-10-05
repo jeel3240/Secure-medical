@@ -5,6 +5,7 @@
  * AGENT-WORKSPACE.md, "Dispositions"; DESIGN-PROMPT.md section 3, right column.
  */
 
+import { recordActivity } from './activity';
 import { pool } from './pool';
 import { blockNumber, DNC_REASONS } from './dnc';
 import { DNC_DISPOSITION, type Disposition } from '../core/dispositions';
@@ -75,7 +76,10 @@ export async function setDisposition(
 
     // Locked, so the phone cannot change under the block between reading it
     // and writing dnc_list. Also gives the clean 404 for an unknown lead.
-    const lead = await client.query('SELECT id, phone FROM leads WHERE id = $1 FOR UPDATE', [leadId]);
+    const lead = await client.query(
+      'SELECT id, phone, assigned_to, assigned_at FROM leads WHERE id = $1 FOR UPDATE',
+      [leadId]
+    );
     if (!lead.rowCount) {
       await client.query('ROLLBACK');
       return { ok: false, reason: 'lead_not_found' };
@@ -88,9 +92,26 @@ export async function setDisposition(
       [leadId, agentId, value]
     );
 
+    await recordActivity(client, {
+      action: 'outcome.set',
+      actorId: agentId,
+      leadId,
+      detail: { value, dispositionId: rows[0].id },
+    });
+
     const blockedNumber = value === DNC_DISPOSITION;
     if (blockedNumber) {
-      await blockNumber(client, lead.rows[0].phone, DNC_REASONS.agentDisposition);
+      await blockNumber(client, lead.rows[0].phone, DNC_REASONS.agentDisposition, agentId);
+      // The same end state as a STOP reply: a question flow still under way is
+      // over. AGENT-WORKSPACE.md said so from the start; until 2026-10-01 the
+      // conversation was left open - nothing could be sent, the block saw to
+      // that, but it sat open until it expired and a later START was read as
+      // an unclear answer to a question nobody was asking.
+      await client.query(
+        `UPDATE conversations SET status = 'suppressed', updated_at = now()
+         WHERE lead_id = $1 AND status = 'open'`,
+        [leadId]
+      );
     }
 
     await client.query(
@@ -99,10 +120,33 @@ export async function setDisposition(
       [leadId]
     );
 
-    await client.query(
-      `UPDATE callbacks SET done_at = now() WHERE lead_id = $1 AND done_at IS NULL`,
+    // The outcome let go of the lead: the same record a release writes, so the
+    // log always says how long a lead was held, whichever way it was let go.
+    const { assigned_to: holder, assigned_at: heldSince } = lead.rows[0];
+    if (holder !== null) {
+      await recordActivity(client, {
+        action: 'lead.released',
+        actorId: agentId,
+        leadId,
+        subjectUserId: holder,
+        detail: { heldSince, forced: holder !== agentId, because: 'outcome' },
+      });
+    }
+
+    const finished = await client.query(
+      `UPDATE callbacks SET done_at = now() WHERE lead_id = $1 AND done_at IS NULL
+       RETURNING id, agent_id, scheduled_at`,
       [leadId]
     );
+    for (const callback of finished.rows) {
+      await recordActivity(client, {
+        action: 'callback.done',
+        actorId: agentId,
+        leadId,
+        subjectUserId: callback.agent_id,
+        detail: { callbackId: callback.id, scheduledAt: callback.scheduled_at, because: 'outcome' },
+      });
+    }
 
     // The agent's own name, for the timeline entry the screen appends without
     // refetching. Read inside the transaction; it cannot have changed.

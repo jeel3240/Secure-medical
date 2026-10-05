@@ -8,7 +8,7 @@
 import { render, screen } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
 import type { TimelineEntry } from '../api/workspace';
-import { Timeline } from './Timeline';
+import { activityText, Timeline } from './Timeline';
 
 const at = (iso: string) => `2026-09-26T${iso}.000Z`;
 
@@ -95,22 +95,45 @@ describe('messages', () => {
 });
 
 describe('calls', () => {
-  it('reads outcome and length', () => {
-    render(
-      <Timeline
-        entries={[entry({ kind: 'call', author: 'Rae', detail: { outcome: 'no_answer', durationSec: 34 } })]}
-      />
-    );
-    expect(screen.getByText('Outbound call · no answer · 34s')).toBeDefined();
+  // The outcomes are the ones the server records from Twilio - core/calls.ts.
+  it.each([
+    ['answered', 134, 'Outbound call · answered · 2:14'],
+    ['answered', 34, 'Outbound call · answered · 34s'],
+    ['no_answer', 0, 'Outbound call · no answer'],
+    ['voicemail', 22, 'Outbound call · voicemail'],
+    ['busy', 0, 'Outbound call · busy'],
+    ['failed', 0, 'Outbound call · failed'],
+    ['canceled', 0, 'Outbound call · cancelled'],
+  ])('%s reads as it went, with a length only when answered', (outcome, durationSec, text) => {
+    render(<Timeline entries={[entry({ kind: 'call', author: 'Rae', detail: { outcome, durationSec } })]} />);
+    expect(screen.getByText(text)).toBeDefined();
   });
 
-  it('shows a long call as m:ss', () => {
-    render(<Timeline entries={[entry({ kind: 'call', detail: { outcome: 'completed', durationSec: 134 } })]} />);
-    expect(screen.getByText('Outbound call · completed · 2:14')).toBeDefined();
+  it.each([
+    ['missed', 0, 'Missed call · told we will call back'],
+    ['answered', 75, 'Incoming call · answered · 1:15'],
+    [null, null, 'Incoming call · ringing'],
+  ])('a lead calling us, %s: says so', (outcome, durationSec, text) => {
+    render(<Timeline entries={[entry({ kind: 'call', detail: { outcome, durationSec, direction: 'inbound' } })]} />);
+    expect(screen.getByText(text)).toBeDefined();
+  });
+
+  it('a call with no outcome yet is in progress', () => {
+    render(<Timeline entries={[entry({ kind: 'call', detail: { outcome: null, durationSec: null } })]} />);
+    expect(screen.getByText('Outbound call · in progress')).toBeDefined();
   });
 });
 
 describe('callbacks and dispositions', () => {
+  it.each([
+    [null, 'Callback added · missed call'],
+    ['done', 'Missed call returned'],
+  ])('a callback the system booked for a missed call (%s) says so, not a time', (done, text) => {
+    const detail = { scheduledAt: at('15:30:00'), doneAt: done ? at('15:40:00') : null, reason: 'missed_call' };
+    render(<Timeline entries={[entry({ kind: 'callback', detail })]} />);
+    expect(screen.getByText(text)).toBeDefined();
+  });
+
   it('says when a callback is due', () => {
     render(
       <Timeline
@@ -185,3 +208,32 @@ describe('the list', () => {
     expect(container.querySelectorAll('.timeline__day')).toHaveLength(1);
   });
 });
+
+describe('what the activity log adds - AUDIT.md', () => {
+  const at = '2026-10-01T15:40:00Z';
+
+  it.each([
+    [{ action: 'lead.picked_up' }, 'Picked up the lead'],
+    [{ action: 'lead.released', heldSince: '2026-10-01T15:00:00Z', forced: false }, 'Put the lead back in the queue · held 40 min'],
+    [{ action: 'lead.released', heldSince: '2026-10-01T13:35:00Z', forced: false, because: 'outcome' }, 'Lead released - outcome saved · held 2 h 5 min'],
+    [{ action: 'lead.released', heldSince: '2026-10-01T15:39:50Z', forced: true, subject: 'Maya Chen' }, 'Released the lead from Maya Chen · held under a minute'],
+    [{ action: 'callback.reopened' }, 'Callback reopened - it had been marked done'],
+    [{ action: 'sms.blocked' }, 'Text not sent - the number is on the do-not-call list'],
+    [{ action: 'call.refused', reason: 'not_holder' }, 'Call not placed - the lead was not picked up'],
+  ])('%j', (detail, text) => {
+    expect(activityText(detail, at)).toBe(text);
+  });
+
+  it('a moved callback says where from and where to', () => {
+    const text = activityText({ action: 'callback.rescheduled', from: '2026-10-01T17:00:00Z', to: '2026-10-03T17:00:00Z' }, at);
+    expect(text).toMatch(/^Callback moved from .+ to .+$/);
+    expect(text.split(' to ')[0]).not.toBe(text.split(' to ')[1]);
+  });
+
+  it('shows on the timeline under LOG, with who did it', () => {
+    render(<Timeline entries={[entry({ kind: 'activity', author: 'Maya Chen', detail: { action: 'lead.picked_up' } })]} />);
+    expect(screen.getByText('Picked up the lead')).toBeDefined();
+    expect(screen.getByText('LOG')).toBeDefined();
+  });
+});
+

@@ -4,6 +4,7 @@ import { expireStaleConversations } from './expiry';
 import { pollOnce } from './poller';
 import { errText, log } from '../lib/log';
 import { retryFailedOpeners } from './retry-openers';
+import { advanceTranscripts } from './transcripts';
 
 // The same as migration 005 sets; used only if the setting is missing.
 const DEFAULT_POLL_INTERVAL_SECONDS = 30;
@@ -71,6 +72,15 @@ async function loop(): Promise<void> {
       }
     } catch (err) {
       log.error('opener.retry_failed', { err: errText(err) });
+    }
+
+    // Call transcripts - TWILIO.md, "Recordings and transcripts". Apart from
+    // the rest for the same reason: Twilio being slow must not hold up leads.
+    try {
+      const t = await advanceTranscripts();
+      if (t.requested + t.completed + t.failed > 0) log.info('transcript.tick', { ...t });
+    } catch (err) {
+      log.error('transcript.tick_failed', { err: errText(err) });
     }
 
     let waitMs = DEFAULT_POLL_INTERVAL_SECONDS * 1000;

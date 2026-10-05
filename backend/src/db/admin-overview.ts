@@ -139,8 +139,12 @@ export async function getOverview(period: OverviewPeriod, timeZone?: string): Pr
           SELECT max(at) FROM (
             SELECT max(created_at) AS at FROM dispositions WHERE agent_id = u.id
             UNION ALL SELECT max(created_at) FROM notes WHERE agent_id = u.id
-            UNION ALL SELECT max(created_at) FROM callbacks WHERE agent_id = u.id
-            UNION ALL SELECT max(started_at) FROM calls WHERE agent_id = u.id
+            -- What the agent did, not what was done to them: a callback the
+            -- system booked for a missed call, and a call that only rang them,
+            -- are not their activity.
+            UNION ALL SELECT max(created_at) FROM callbacks WHERE agent_id = u.id AND reason = 'booked'
+            UNION ALL SELECT max(started_at) FROM calls
+              WHERE agent_id = u.id AND (direction = 'outbound' OR outcome = 'answered')
             UNION ALL SELECT max(created_at) FROM messages
               WHERE sent_by = u.id AND delivery_status IS DISTINCT FROM 'failed'
           ) acts
@@ -177,7 +181,8 @@ export async function getOverview(period: OverviewPeriod, timeZone?: string): Pr
         FROM callbacks cb
         JOIN leads l ON l.id = cb.lead_id
         LEFT JOIN users u ON u.id = cb.agent_id
-        WHERE cb.created_at >= ${since}
+        -- Booked by a person. One the system books for a missed call is not an agent's action.
+        WHERE cb.created_at >= ${since} AND cb.reason = 'booked'
 
         UNION ALL
         SELECT 'agent_sms', m.created_at, u.name, l.id, l.first_name, l.last_name,

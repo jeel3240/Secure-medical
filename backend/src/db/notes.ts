@@ -9,6 +9,7 @@
  * AGENT-WORKSPACE.md, "Endpoints".
  */
 
+import { activityInsertSql } from './activity';
 import { pool } from './pool';
 
 export interface Note {
@@ -35,10 +36,19 @@ export async function addNote(leadId: number, agentId: number, body: string): Pr
   const lead = await pool.query(`SELECT 1 FROM leads WHERE id = $1`, [leadId]);
   if (lead.rowCount === 0) return { ok: false, reason: 'not_found' };
 
+  // The log points at the note rather than copying its text: the note row is
+  // already permanent, and one copy of what an agent wrote is enough.
   const { rows } = await pool.query(
-    `INSERT INTO notes (lead_id, agent_id, body)
-     VALUES ($1, $2, $3)
-     RETURNING id, created_at`,
+    `WITH added AS (
+       INSERT INTO notes (lead_id, agent_id, body)
+       VALUES ($1, $2, $3)
+       RETURNING id, created_at
+     ),
+     logged AS (
+       ${activityInsertSql}
+       SELECT $2, 'note.added', $1, NULL, jsonb_build_object('noteId', id) FROM added
+     )
+     SELECT id, created_at FROM added`,
     [leadId, agentId, body]
   );
 

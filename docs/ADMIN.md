@@ -22,13 +22,14 @@ rather than something that erodes.
 One page, because neither half has actions any more and they are read together:
 here is what we ask, here is what each answer is worth.
 
-- The three questions, the three clarifications and the thanks message, exactly
+- The nine messages - three questions, three clarifications, the review
+  message, the thanks and the missed-call text - exactly
   as they sit in `settings`, each with its character and segment count so it is
   obvious when a message costs two segments.
 - The scoring table: response, completion, and the three points per answer for
   each question, with the maximum possible.
 - The tier bands.
-- Conversation expiry, fixed at 7 days.
+- Conversation expiry, read from `settings.expiry_days` - 7.
 
 `GET /api/admin/config` returns all of it from `settings`, `scoring_rules` and
 `tiers`, so the page always shows what the state machine is actually using
@@ -43,9 +44,10 @@ returned as `longestFirstName` - or the `there` fallback when that is shorter,
 with `longestNameIsFallback` set so the page says which it is rather than
 showing "there" as a name (2026-09-29).
 
-**Eight messages**, in the order a lead meets them: three questions, three
-clarifications, the review message sent after a second unclear reply, and the
-thanks. The review message was missing until 2026-09-29 - leads received it,
+**Nine messages**, in the order a lead meets them: three questions, three
+clarifications, the review message sent after a second unclear reply, the
+thanks, and - since 2026-10-01 - the text sent after a call to us that nobody
+answered. The review message was missing until 2026-09-29 - leads received it,
 but it could not be seen here.
 A message that fits in one segment for "Jo" and not for "Christopher" is one
 that costs two segments for some leads, and the page has to show that.
@@ -96,8 +98,8 @@ complex".** The page and the API now hold only what a superadmin acts on:
 | Part | Shows |
 |---|---|
 | Totals | Leads in · Replied · Answered all 3 · Closed - for Today, 7 days or 30 days, chosen on the navy switcher |
-| Agents | Per active agent: **Working now** (leads they hold), **Closed** in the period, **Due today**, **Last active** (their newest note, callback, outcome, call or SMS) |
-| System | Database, EZ Texting sync, the expiry sweep, sending - each OK or Degraded - and incoming replies, which shows its last reply with no verdict. From the health endpoint |
+| Agents | Per active agent: **Working now** (leads they hold), **Closed** in the period, **Due today**, **Last active** (their newest note, callback they booked, outcome, call they placed or answered, or SMS that went out) |
+| System | Database, EZ Texting sync, the expiry sweep, sending and calling - each OK or Degraded - and incoming replies, which shows its last reply with no verdict. Calling is Degraded when the phone number or the TwiML App no longer points at this server (2026-10-02), and reads "not set up", with no verdict, where calling is off. From the health endpoint |
 
 **Every number counts what happened in the period - Jeel, 2026-09-28, "i want
 all real":**
@@ -126,7 +128,9 @@ card, louder, and looked generated.
 new ones land - `usePolling`'s `keepPreviousData`, QUEUE.md - rather than
 blanking for a spinner. Checked by sampling the page every 20ms through a
 switch: it never went blank.
-| Recent activity | "karm closed Omar Haddad", newest first, the lead's name linking to its timeline |
+
+**Recent activity** sits under the cards: "karm closed Omar Haddad", newest
+first, the lead's name linking to its timeline.
 
 **Removed:** the funnel, which drew the same numbers as the cards as bars; the
 HOT, Callbacks set and DNC added cards; and every call figure - Calls made,
@@ -140,9 +144,10 @@ Closed counts `closed` and the retired `sold`, `not_interested` and
 `wrong_number`, so leads closed under the old list still count
 (`AGENT-WORKSPACE.md`, "Dispositions").
 
-**Live system status** - last poll, last inbound webhook, worker health - comes
-from the health endpoint in `LOGGING.md` rather than this route, so that
-anything monitoring the system from outside reads exactly what the screen does.
+**Live system status** - last poll, last inbound reply, worker health - comes
+from the health endpoint in `LOGGING.md` rather than this route, so the screen
+and that endpoint cannot disagree. The endpoint is superadmin-only, so nothing
+outside can poll it - `README.md`, "Known limits".
 
 The per-agent table and the activity feed are the only place one agent's work is
 visible to anyone but themselves. Agents cannot reach this page: `AUTH.md`.
@@ -161,12 +166,17 @@ lead closed today about last week's lead lands in today's figures.
 The activity feed is a four-way UNION over `dispositions`, `notes`, `callbacks`
 and agent-sent `messages`, newest first, capped at 50. Agent actions only: the
 automated flow is already visible per lead on the timeline, and this feed
-answers "what are my agents doing".
+answers "what are my agents doing". For the same reason a callback the system
+books for a missed call (`callbacks.reason = 'missed_call'`) is not in the
+feed, and neither it nor a call that only rang an agent moves their Last
+active (2026-10-01).
 
 ## DNC list (6e)
 
-`GET /api/admin/dnc?q=&page=` - phone, reason, who added it, when, and whether
-it was released.
+`GET /api/admin/dnc?q=&page=&state=` - phone, reason, when it was added, the
+lead if we hold one, and whether and why it was released. There is no "who
+added it": `dnc_list` has no such column; the agent behind a DNC outcome is in
+the activity log (`AUDIT.md`).
 
 Read-only, and there is no manual add (Jeel, 2026-09-23): a number reaches the
 list through an agent's DNC disposition, an SMS STOP, or an EZ Texting opt-out
@@ -213,5 +223,6 @@ add without Jeel saying so. Not built.
 
 `scripts/admin-live-check.ts` proves all three read models against a real
 database: the config against the rows seeded by `001_init.sql` and against an
-edited rule, the overview's period windows, funnel and per-agent aggregates,
+edited rule, the overview's period windows, totals, per-agent aggregates and
+activity feed,
 and the DNC list's states, search escaping and lead-less rows.

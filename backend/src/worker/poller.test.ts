@@ -91,9 +91,24 @@ describe('a contact EZ Texting has marked opted out', () => {
 
     expect(stats).toMatchObject({ fetched: 1, inserted: 0, suppressed: 1, openersSent: 0 });
     expect(conversationInsert()?.values).toEqual([42, 'suppressed', null]);
-    expect(sqlOf()).toMatch(/INSERT INTO dnc_list/i);
-    expect(recorded.find((r) => /INSERT INTO dnc_list/i.test(r.sql))?.sql).toMatch(/ezt_opt_out/);
+    // Blocked through db/dnc.ts, so the block and its activity-log record are
+    // one statement - docs/AUDIT.md.
+    const block = recorded.find((r) => /INSERT INTO dnc_list/i.test(r.sql));
+    expect(block?.values).toEqual(['+15551230000', 'ezt_opt_out', null]);
+    expect(block?.sql).toMatch(/INSERT INTO activity_log/i);
+    expect(block?.sql).toMatch(/'dnc\.blocked'/);
     expect(sendMessage).not.toHaveBeenCalled();
+  });
+
+  it('is not blocked a second time when we already hold a live block for it', async () => {
+    dncRows = { rows: [{ '?column?': 1 }], rowCount: 1 };
+    listContacts.mockResolvedValue({ content: [contact({ optOut: true })], last: true });
+
+    const stats = await pollOnce();
+
+    // Suppressed all the same, but the existing block keeps its own reason.
+    expect(stats).toMatchObject({ suppressed: 1 });
+    expect(sqlOf()).not.toMatch(/INSERT INTO dnc_list/i);
   });
 });
 
@@ -106,6 +121,8 @@ describe('a phone already on our do-not-call list', () => {
     expect(stats).toMatchObject({ suppressed: 1, inserted: 0, openersSent: 0 });
     expect(conversationInsert()?.values).toEqual([42, 'suppressed', null]);
     expect(sendMessage).not.toHaveBeenCalled();
+    // Not opted out on EZ Texting's side: the poller blocks nothing itself.
+    expect(sqlOf()).not.toMatch(/INSERT INTO dnc_list/i);
   });
 
   it('only counts live blocks, not released ones', async () => {

@@ -47,6 +47,7 @@ const CHECK_LABEL: Record<string, string> = {
   webhook: 'Incoming replies',
   expiry: 'Expiry sweep',
   sending: 'Sending',
+  calling: 'Calling',
 };
 
 /** "karm closed Omar Haddad". */
@@ -79,6 +80,8 @@ function checkDetail(check: Health['checks'][number]): string | null {
       ? `last reply ${formatRelative(check.detail.lastInboundAt)}`
       : 'no replies yet';
   }
+  // No verdict when calling is switched off: say so, instead of a blank.
+  if (check.name === 'calling' && check.detail.enabled === false) return 'not set up';
   return null;
 }
 

@@ -97,7 +97,9 @@ always remains.
 **Production refuses a weak `JWT_SECRET`.** With `NODE_ENV=production` the API
 will not start if the secret is one of the placeholders in this repo or shorter
 than 32 characters, since anyone who has read the repo could forge a token
-signed with one. Generate one with `openssl rand -hex 32`.
+signed with one. Generate one with `openssl rand -hex 32`. (The API has two
+more start-up refusals that are not about sign-in - the webhook token and
+partly set Twilio settings - `WORKFLOW.md`.)
 
 ## Frontend
 
@@ -123,9 +125,17 @@ they need no database. They cover every row in the session table above,
 rate limiting, validation, and access control. The Postgres store itself is
 exercised by running the app locally.
 
+## What is recorded
+
+Since migration 006 (2026-10-01) every sign-in and account change is a row in
+the activity log - `AUDIT.md`: `auth.signed_in`, `auth.signed_out`,
+`auth.password_changed`, `auth.sign_in_failed` (the email tried and why, never
+the password), and `user.created`, `user.updated` with each changed field's
+old and new value, and `user.password_reset`. There is no screen for them yet;
+they are read in the database.
+
 ## Not done yet
 
 - The admin Agents table has no search or pagination. Fine at ~10 accounts.
-- No audit trail of who created, reset or deactivated whom.
 - Sessions are not listed or individually revocable; the options are sign out
   everywhere (password change) or deactivate.

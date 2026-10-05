@@ -1,6 +1,7 @@
 import type { LeadDetail } from '../../api/workspace';
-import { Button } from '../../components/Button';
 import { formatAge, formatPhone } from '../../lib/format';
+import { CallControl } from './CallControl';
+import type { LeadCall } from './useLeadCall';
 
 /**
  * The workspace's full-width header card: who the lead is, then the two facts
@@ -14,6 +15,10 @@ import { formatAge, formatPhone } from '../../lib/format';
  * Now: the full name at heading size, one quiet line of phone, source and age,
  * two facts with sentence-case labels in the body face, and a plain disabled
  * Call button that explains itself on hover.
+ *
+ * **The Call button is real - Phase 4.** It was a greyed-out placeholder until
+ * browser calling was built; it is now `CallControl.tsx`. Once pressed, the
+ * call itself is in the call bar at the foot of the screen, `CallBar.tsx`.
  *
  * **No tier and no Send SMS - Jeel, the same day.** The score beside it already
  * says how strong the lead is, and Send SMS only moved the cursor to the
@@ -54,7 +59,19 @@ function fullName(lead: LeadDetail): string {
   return [lead.firstName, lead.lastName].filter(Boolean).join(' ') || formatPhone(lead.phone);
 }
 
-export function LeadHeader({ lead, now }: { lead: LeadDetail; now: Date }) {
+export function LeadHeader({
+  lead,
+  mine,
+  now,
+  call,
+}: {
+  lead: LeadDetail;
+  /** The viewer holds the lead - only then may they call it. */
+  mine: boolean;
+  now: Date;
+  /** This lead's call - owned by the page, which also shows it in the call bar. */
+  call: LeadCall;
+}) {
   const score = lead.conversation?.score ?? 0;
   const source = sourceLabel(lead.source);
   const facts = [formatPhone(lead.phone), source, lead.receivedAt ? `${formatAge(lead.receivedAt, now)} ago` : null];
@@ -87,19 +104,7 @@ export function LeadHeader({ lead, now }: { lead: LeadDetail; now: Date }) {
       </dl>
 
       <div className="lead-head__buttons">
-        {/* Twilio calling is Phase 4. Visible but inert, so the screen keeps its
-            shape; the reason is a tooltip, not a line agents have to read. */}
-        <Button
-          variant="secondary"
-          disabled
-          title={
-            lead.flags.dnc
-              ? 'This number is on the do-not-call list.'
-              : 'Calling from the browser is not available yet.'
-          }
-        >
-          Call
-        </Button>
+        <CallControl lead={lead} mine={mine} call={call} />
       </div>
     </article>
   );

@@ -3,7 +3,7 @@ import { requireAuth, requirePasswordChanged, requireRole } from '../auth/middle
 import { generateTemporaryPassword, hashPassword } from '../auth/password';
 import type { AppDeps } from '../deps';
 import { asyncHandler, HttpError } from '../http';
-import { assertNotSelfLockout, parseCreateUser, parseUpdateUser, parseUserId } from './rules';
+import { accountChanges, assertNotSelfLockout, parseCreateUser, parseUpdateUser, parseUserId } from './rules';
 import { EmailTakenError, toPublicUser } from './types';
 
 function notFound(): HttpError {
@@ -35,6 +35,12 @@ export function usersRouter(deps: AppDeps): Router {
           passwordHash: await hashPassword(temporaryPassword),
           mustChangePassword: true,
         });
+        await deps.activity.record({
+          action: 'user.created',
+          actorId: req.user!.id,
+          subjectUserId: user.id,
+          detail: { email: user.email, name: user.name, role: user.role },
+        });
         res.status(201).json({ user: toPublicUser(user), temporaryPassword });
       } catch (err) {
         if (err instanceof EmailTakenError) {
@@ -54,8 +60,21 @@ export function usersRouter(deps: AppDeps): Router {
 
       // Deactivating ends the user's sessions immediately. Role and name changes
       // need no bump: requireAuth re-reads the row on every request anyway.
+      // The update overwrites the old values, so they are read first: the log
+      // keeps what each changed field was and what it became. AUDIT.md.
+      const before = await deps.users.findById(id);
       const updated = await deps.users.update(id, { ...patch, bumpSession: patch.isActive === false });
-      if (!updated) throw notFound();
+      if (!before || !updated) throw notFound();
+
+      const changes = accountChanges(before, updated);
+      if (Object.keys(changes).length > 0) {
+        await deps.activity.record({
+          action: 'user.updated',
+          actorId: req.user!.id,
+          subjectUserId: id,
+          detail: { changes },
+        });
+      }
       res.json({ user: toPublicUser(updated) });
     })
   );
@@ -75,6 +94,8 @@ export function usersRouter(deps: AppDeps): Router {
         bumpSession: true,
       });
       if (!updated) throw notFound();
+      // That it was reset, and by whom - never the password itself.
+      await deps.activity.record({ action: 'user.password_reset', actorId: req.user!.id, subjectUserId: id });
       res.json({ user: toPublicUser(updated), temporaryPassword });
     })
   );

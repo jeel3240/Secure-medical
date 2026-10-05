@@ -6,9 +6,17 @@
  */
 
 import { startOfTodaySql } from './sql';
+import { activityInsertSql, type ActivityWriter } from './activity';
 import { pool } from './pool';
 
 export type CallbackWhen = 'today' | 'upcoming' | 'overdue' | 'all';
+
+/**
+ * Why a callback exists. `booked`: a person booked it. `missed_call`: the lead
+ * rang, the agent it rang did not pick up, and the system booked it for them -
+ * `db/calls.ts`, `finishCall`.
+ */
+export type CallbackReason = 'booked' | 'missed_call';
 
 export interface Callback {
   id: number;
@@ -17,6 +25,7 @@ export interface Callback {
   agentName: string;
   scheduledAt: string;
   doneAt: string | null;
+  reason: CallbackReason;
 }
 
 /** A row on My Callbacks: the callback, plus enough of the lead to act on it. */
@@ -36,6 +45,14 @@ export interface CallbackListRow extends Callback {
    * anyone else. Added 2026-09-29.
    */
   holder: { id: number; name: string } | null;
+  /**
+   * For a missed call's callback: how many calls it stands for, and when the
+   * latest was. A lead who rings three times is one callback, and the row
+   * should say three and show the last time, not the first. Read from `calls`
+   * rather than written onto the callback, so nothing is overwritten. Null for
+   * a callback a person booked.
+   */
+  missedCalls: { count: number; lastAt: string } | null;
 }
 
 export type CreateResult =
@@ -51,7 +68,7 @@ export type UpdateResult =
 
 async function readCallback(id: number): Promise<Callback | null> {
   const { rows } = await pool.query(
-    `SELECT cb.id, cb.lead_id, cb.agent_id, cb.scheduled_at, cb.done_at, u.name
+    `SELECT cb.id, cb.lead_id, cb.agent_id, cb.scheduled_at, cb.done_at, cb.reason, u.name
      FROM callbacks cb
      LEFT JOIN users u ON u.id = cb.agent_id
      WHERE cb.id = $1`,
@@ -66,7 +83,39 @@ async function readCallback(id: number): Promise<Callback | null> {
     agentName: r.name ?? '',
     scheduledAt: r.scheduled_at.toISOString(),
     doneAt: r.done_at?.toISOString() ?? null,
+    reason: r.reason,
   };
+}
+
+/**
+ * Finishes the callback a missed call left, because the lead has now been
+ * got back to: an agent called them, texted them, or answered when they rang
+ * again - the same three things that clear the Missed call tag
+ * (`db/lead-state.ts`, `MISSED_CALL_SQL`).
+ *
+ * Only the system's own callbacks. One an agent booked themselves is theirs to
+ * finish. `q` is the caller's transaction, so the callback and the call or
+ * text that finished it commit together; the record is in the same statement.
+ */
+export async function finishMissedCallCallbacks(
+  q: ActivityWriter,
+  leadId: number,
+  /** Who got back to the lead. */
+  actorId: number,
+  because: 'called_back' | 'texted_back'
+): Promise<void> {
+  await q.query(
+    `WITH finished AS (
+       UPDATE callbacks SET done_at = now()
+       WHERE lead_id = $1 AND done_at IS NULL AND reason = 'missed_call'
+       RETURNING id, lead_id, agent_id, scheduled_at
+     )
+     ${activityInsertSql}
+     SELECT $2::int, 'callback.done', lead_id, agent_id,
+            jsonb_build_object('callbackId', id, 'scheduledAt', scheduled_at, 'because', $3::text)
+     FROM finished`,
+    [leadId, actorId, because]
+  );
 }
 
 /**
@@ -84,7 +133,9 @@ async function readCallback(id: number): Promise<Callback | null> {
 export async function createCallback(
   leadId: number,
   agentId: number,
-  scheduledAt: Date
+  scheduledAt: Date,
+  /** Who booked it. The agent it is for, unless a superadmin booked it for them. */
+  actorId: number = agentId
 ): Promise<CreateResult> {
   const lead = await pool.query(`SELECT 1 FROM leads WHERE id = $1`, [leadId]);
   if (lead.rowCount === 0) return { ok: false, reason: 'lead_not_found' };
@@ -92,9 +143,20 @@ export async function createCallback(
   const agent = await pool.query(`SELECT 1 FROM users WHERE id = $1 AND is_active`, [agentId]);
   if (agent.rowCount === 0) return { ok: false, reason: 'agent_not_found' };
 
+  // The callback and its record in one statement - docs/AUDIT.md.
   const { rows } = await pool.query(
-    `INSERT INTO callbacks (lead_id, agent_id, scheduled_at) VALUES ($1, $2, $3) RETURNING id`,
-    [leadId, agentId, scheduledAt]
+    `WITH booked AS (
+       INSERT INTO callbacks (lead_id, agent_id, scheduled_at) VALUES ($1, $2, $3)
+       RETURNING id, scheduled_at
+     ),
+     logged AS (
+       ${activityInsertSql}
+       SELECT $4::int, 'callback.booked', $1, $2,
+              jsonb_build_object('callbackId', id, 'scheduledAt', scheduled_at)
+       FROM booked
+     )
+     SELECT id FROM booked`,
+    [leadId, agentId, scheduledAt, actorId]
   );
 
   return { ok: true, callback: (await readCallback(rows[0].id))! };
@@ -123,16 +185,43 @@ export async function updateCallback(
     return { ok: false, reason: 'not_yours', ownerName: existing.agentName };
   }
 
+  // The update overwrites the time and the done mark, so the statement records
+  // what they were: one row per thing that actually changed, none when nothing
+  // did. Until 2026-10-01 a rescheduled callback kept no trace of its original
+  // time - docs/AUDIT.md.
   await pool.query(
-    `UPDATE callbacks
-     SET scheduled_at = COALESCE($2, scheduled_at),
-         done_at = CASE
-           WHEN $3::boolean IS TRUE THEN COALESCE(done_at, now())
-           WHEN $3::boolean IS FALSE THEN NULL
-           ELSE done_at
-         END
-     WHERE id = $1`,
-    [id, patch.scheduledAt ?? null, patch.done ?? null]
+    `WITH prev AS (
+       SELECT id, scheduled_at, done_at FROM callbacks WHERE id = $1 FOR UPDATE
+     ),
+     changed AS (
+       UPDATE callbacks c
+       SET scheduled_at = COALESCE($2, prev.scheduled_at),
+           done_at = CASE
+             WHEN $3::boolean IS TRUE THEN COALESCE(prev.done_at, now())
+             WHEN $3::boolean IS FALSE THEN NULL
+             ELSE prev.done_at
+           END
+       FROM prev
+       WHERE c.id = prev.id
+       RETURNING c.id, c.lead_id, c.agent_id, c.scheduled_at, c.done_at,
+                 prev.scheduled_at AS old_scheduled_at, prev.done_at AS old_done_at
+     ),
+     logged AS (
+       ${activityInsertSql}
+       SELECT $4::int, 'callback.rescheduled', lead_id, agent_id,
+              jsonb_build_object('callbackId', id, 'from', old_scheduled_at, 'to', scheduled_at)
+       FROM changed WHERE scheduled_at IS DISTINCT FROM old_scheduled_at
+       UNION ALL
+       SELECT $4::int, 'callback.done', lead_id, agent_id,
+              jsonb_build_object('callbackId', id, 'scheduledAt', scheduled_at)
+       FROM changed WHERE old_done_at IS NULL AND done_at IS NOT NULL
+       UNION ALL
+       SELECT $4::int, 'callback.reopened', lead_id, agent_id,
+              jsonb_build_object('callbackId', id, 'wasDoneAt', old_done_at)
+       FROM changed WHERE old_done_at IS NOT NULL AND done_at IS NULL
+     )
+     SELECT 1 FROM changed`,
+    [id, patch.scheduledAt ?? null, patch.done ?? null, actorId]
   );
 
   return { ok: true, callback: (await readCallback(id))! };
@@ -145,14 +234,22 @@ export async function updateCallback(
  * 3pm is overdue, and showing it under both would hide that it was missed.
  * `overdue` is everything past its time and still not done.
  *
+ * **A call missed today is under Today, not Overdue** - Jeel, 2026-10-01. Its
+ * callback is due the moment the call was missed, so by the rule above it
+ * would be overdue a second later and never appear on the tab an agent opens.
+ * It is today's work: it stays under Today, first in the list, until the day
+ * ends, and only then is it overdue.
+ *
  * Days are the viewer's, from `timeZone` - `db/sql.ts`, `startOfTodaySql`.
  */
 function whenSql(timeZone?: string): Record<Exclude<CallbackWhen, 'all'>, string> {
-  const tomorrow = `${startOfTodaySql(timeZone)} + interval '1 day'`;
+  const today = startOfTodaySql(timeZone);
+  const tomorrow = `${today} + interval '1 day'`;
+  const missedToday = `(cb.reason = 'missed_call' AND cb.scheduled_at >= ${today} AND cb.scheduled_at < ${tomorrow})`;
   return {
-    today: `cb.done_at IS NULL AND cb.scheduled_at >= now() AND cb.scheduled_at < ${tomorrow}`,
+    today: `cb.done_at IS NULL AND ((cb.scheduled_at >= now() AND cb.scheduled_at < ${tomorrow}) OR ${missedToday})`,
     upcoming: `cb.done_at IS NULL AND cb.scheduled_at >= ${tomorrow}`,
-    overdue: `cb.done_at IS NULL AND cb.scheduled_at < now()`,
+    overdue: `cb.done_at IS NULL AND cb.scheduled_at < now() AND NOT ${missedToday}`,
   };
 }
 
@@ -179,12 +276,13 @@ export async function listCallbacks(opts: {
   const params = everyone ? [] : [opts.agentId];
 
   const { rows } = await pool.query(
-    `SELECT cb.id, cb.lead_id, cb.agent_id, cb.scheduled_at, cb.done_at,
+    `SELECT cb.id, cb.lead_id, cb.agent_id, cb.scheduled_at, cb.done_at, cb.reason,
             u.name AS agent_name,
             l.phone, l.first_name, l.last_name, l.source,
             c.tier,
             n.body AS latest_note,
-            h.id AS holder_id, h.name AS holder_name
+            h.id AS holder_id, h.name AS holder_name,
+            mc.count AS missed_count, mc.last_at AS missed_last_at
      FROM callbacks cb
      JOIN leads l ON l.id = cb.lead_id
      LEFT JOIN users u ON u.id = cb.agent_id
@@ -197,6 +295,16 @@ export async function listCallbacks(opts: {
        SELECT n.body FROM notes n
        WHERE n.lead_id = l.id ORDER BY n.created_at DESC, n.id DESC LIMIT 1
      ) n ON true
+     -- The missed calls this callback stands for: from the one that booked it
+     -- (ended in the same statement, so the same instant) until it was done.
+     LEFT JOIN LATERAL (
+       SELECT count(*)::int AS count, max(k.started_at) AS last_at
+       FROM calls k
+       WHERE cb.reason = 'missed_call' AND k.lead_id = cb.lead_id
+         AND k.direction = 'inbound' AND k.outcome = 'missed'
+         AND k.ended_at >= cb.created_at
+         AND (cb.done_at IS NULL OR k.ended_at <= cb.done_at)
+     ) mc ON true
      WHERE ${whose} AND ${where}
      ORDER BY cb.scheduled_at`,
     params
@@ -221,6 +329,7 @@ export async function listCallbacks(opts: {
       agentName: r.agent_name ?? '',
       scheduledAt: r.scheduled_at.toISOString(),
       doneAt: r.done_at?.toISOString() ?? null,
+      reason: r.reason,
       lead: {
         phone: r.phone,
         firstName: r.first_name,
@@ -230,6 +339,7 @@ export async function listCallbacks(opts: {
       },
       latestNote: r.latest_note,
       holder: r.holder_id ? { id: r.holder_id, name: r.holder_name } : null,
+      missedCalls: r.missed_count > 0 ? { count: r.missed_count, lastAt: r.missed_last_at.toISOString() } : null,
     })),
     counts: countRows.rows[0],
   };

@@ -15,6 +15,9 @@
  *     EZT_USERNAME=x EZT_PASSWORD=x EZT_GROUP=x npx ts-node --transpile-only scripts/timeline-live-check.ts
  */
 import { pool } from '../src/db/pool';
+import { createCallback, updateCallback } from '../src/db/callbacks';
+import { claimLead, releaseLead } from '../src/db/claims';
+import { addNote } from '../src/db/notes';
 import { getTimeline } from '../src/db/timeline';
 
 let failures = 0;
@@ -116,6 +119,30 @@ async function main(): Promise<void> {
     check('scored is placed when the flow finished', scored && Date.parse(hi!.at) - Date.parse(scored.at) > 50 * 60_000, true);
   }
 
+  console.log('\nwho held the lead, and a callback that moved - from the activity log');
+  {
+    // These leave no row in any other table, so the log is where the timeline
+    // gets them - AUDIT.md.
+    const lead = await makeLead('+15550000310', '1 hour');
+    await claimLead(lead, maya);
+    const made = await createCallback(lead, maya, new Date(Date.now() + 3600_000));
+    await updateCallback(made.ok ? made.callback.id : 0, maya, false, { scheduledAt: new Date(Date.now() + 7200_000) });
+    await addNote(lead, maya, 'Asked to be called later.');
+    await releaseLead(lead, maya, false);
+
+    const t = (await getTimeline(lead))!;
+    const acts = t.filter((e) => e.kind === 'activity').map((e) => (e.detail as any).action);
+    check('pick-up, the moved callback and the release are on the timeline', acts, [
+      'lead.picked_up',
+      'callback.rescheduled',
+      'lead.released',
+    ]);
+    check('each says who did it', t.filter((e) => e.kind === 'activity').every((e) => e.author === 'Maya'), true);
+    check('the note is there once, from its own table, not again from the log', t.filter((e) => e.kind === 'note').length, 1);
+    const moved = t.find((e) => (e.detail as any).action === 'callback.rescheduled')!.detail as any;
+    check('the move carries both times', typeof moved.from === 'string' && typeof moved.to === 'string' && moved.from !== moved.to, true);
+  }
+
   console.log('\nordering across every table');
   {
     const lead = await makeLead('+15550000302', '3 hours');
@@ -168,7 +195,7 @@ async function main(): Promise<void> {
     check(
       'a call carries its outcome and length',
       t.find((e) => e.kind === 'call')?.detail,
-      { outcome: 'no_answer', durationSec: 34 }
+      { outcome: 'no_answer', durationSec: 34, direction: 'outbound' }
     );
   }
 

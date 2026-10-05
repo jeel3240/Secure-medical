@@ -7,7 +7,7 @@
  */
 
 import { pool } from './pool';
-import { CLOSED_SQL } from './lead-state';
+import { CLOSED_SQL, MISSED_CALL_SQL } from './lead-state';
 import { answerChips, scoreBreakdown, type ScoringRule } from '../core/score-breakdown';
 import type { AnswerChip, BreakdownLine } from '../core/score-breakdown';
 
@@ -54,6 +54,8 @@ export interface LeadDetail {
     unread: boolean;
     /** Went quiet past its deadline. */
     expired: boolean;
+    /** The lead rang us, nobody answered, and nobody has called or texted back. */
+    missedCall: boolean;
   };
 }
 
@@ -69,19 +71,20 @@ const SQL = `
     COALESCE(l.ezt_added_at, l.created_at) AS received_at,
     l.has_unread_inbound,
     c.id   AS conversation_id,
-    c.status, c.step, c.q1, c.q2, c.q3, c.score, c.tier,
+    c.status, c.step, c.q1, c.q2, c.q3, c.q1_label, c.q2_label, c.q3_label, c.score, c.tier,
     c.expires_at, c.agent_took_over_at,
     u.id   AS holder_id,
     u.name AS holder_name,
     l.assigned_at,
     (d.id IS NOT NULL) AS on_dnc,
     ${CLOSED_SQL} AS is_closed,
+    ${MISSED_CALL_SQL} AS missed_call,
     od.created_at AS outcome_at,
     ou.name AS outcome_by
   FROM leads l
   LEFT JOIN LATERAL (
-    SELECT c.id, c.status, c.step, c.q1, c.q2, c.q3, c.score, c.tier,
-           c.expires_at, c.agent_took_over_at
+    SELECT c.id, c.status, c.step, c.q1, c.q2, c.q3, c.q1_label, c.q2_label, c.q3_label,
+           c.score, c.tier, c.expires_at, c.agent_took_over_at
     FROM conversations c
     WHERE c.lead_id = l.id
     ORDER BY c.created_at DESC, c.id DESC
@@ -123,7 +126,16 @@ export async function getLeadDetail(leadId: number): Promise<LeadDetail | null> 
   // A lead with no conversation has nothing to score or chip. That happens
   // today only in test data, but the card must not fall over on it.
   const conversation = r.conversation_id
-    ? { q1: r.q1, q2: r.q2, q3: r.q3, status: r.status, score: r.score }
+    ? {
+        q1: r.q1,
+        q2: r.q2,
+        q3: r.q3,
+        q1Label: r.q1_label,
+        q2Label: r.q2_label,
+        q3Label: r.q3_label,
+        status: r.status,
+        score: r.score,
+      }
     : null;
 
   return {
@@ -163,6 +175,7 @@ export async function getLeadDetail(leadId: number): Promise<LeadDetail | null> 
       needsReview: r.status === 'review',
       unread: r.has_unread_inbound,
       expired: r.status === 'expired',
+      missedCall: r.missed_call,
     },
   };
 }

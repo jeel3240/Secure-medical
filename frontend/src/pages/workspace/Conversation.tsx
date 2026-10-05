@@ -1,14 +1,17 @@
 import { useEffect, useRef } from 'react';
 import type { AnswerChip, TimelineEntry } from '../../api/workspace';
-import { systemText } from '../../components/Timeline';
+import { CallTranscript } from '../../components/CallTranscript';
+import { callText, systemText } from '../../components/Timeline';
 import { formatTime } from '../../lib/format';
 
 /**
  * The workspace centre column: the SMS thread, read as a conversation rather
  * than a log. Redesign of 2026-09-28 - the mockup Jeel supplied.
  *
- * **Messages and system markers only.** Notes, callbacks, dispositions and
- * calls are on the Lead Timeline, which the header links to. An agent mid-call
+ * **Messages, calls and system markers.** Notes, callbacks and dispositions are
+ * on the Lead Timeline, which the header links to. Calls joined the thread in
+ * Phase 4, as a quiet line: an agent who has just called wants to see that it
+ * was recorded, and the next one that it happened. An agent mid-call
  * wants to see what the lead actually said, not a merged audit trail; the
  * timeline page still shows everything, and `Timeline.tsx` is unchanged and
  * still used there.
@@ -19,7 +22,7 @@ import { formatTime } from '../../lib/format';
  */
 
 
-const SHOWN = new Set<TimelineEntry['kind']>(['sms', 'inbound', 'agent_sms', 'system']);
+const SHOWN = new Set<TimelineEntry['kind']>(['sms', 'inbound', 'agent_sms', 'call', 'system']);
 
 /**
  * Pairs each inbound reply with the answer it was recorded as, so `3` can be
@@ -148,6 +151,18 @@ export function Conversation({
             <p className="convo__system" key={`${entry.at}-${index}`}>
               {systemText(entry.detail)} · {time}
             </p>
+          );
+        }
+
+        if (entry.kind === 'call') {
+          return (
+            <div className="convo__call" key={`${entry.at}-${index}`}>
+              <p className="convo__system">
+                {callText(entry.detail)}
+                {entry.author ? ` · ${entry.author}` : ''} · {time}
+              </p>
+              <CallTranscript detail={entry.detail} agentName={entry.author} leadName={leadFirstName} />
+            </div>
           );
         }
 

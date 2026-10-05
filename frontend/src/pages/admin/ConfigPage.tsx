@@ -39,6 +39,7 @@ const MESSAGE_HEADING: Record<string, { name: string; when: string }> = {
   message_clarify_3: { name: 'Clarify Q3', when: 'Unclear answer 3' },
   message_review: { name: 'Review', when: 'Second unclear answer' },
   message_thanks: { name: 'Thanks', when: 'After answer 3' },
+  message_missed_call: { name: 'Missed call', when: 'A call to us nobody answered' },
 };
 
 /** `{first_name}` marked where it sits, so the personalised part is visible. */

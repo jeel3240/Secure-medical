@@ -42,8 +42,16 @@ services:
       EZT_SOURCE: ${EZT_SOURCE:-API}
       EZT_SEND_GROUP: ${EZT_SEND_GROUP:-}
       EZT_WEBHOOK_TOKEN: ${EZT_WEBHOOK_TOKEN:-}
-      TWILIO_ACCOUNT_SID: ${TWILIO_ACCOUNT_SID}
-      TWILIO_AUTH_TOKEN: ${TWILIO_AUTH_TOKEN}
+      # Browser calling, Phase 4 - docs/TWILIO.md. All empty means calling is off.
+      TWILIO_ACCOUNT_SID: ${TWILIO_ACCOUNT_SID:-}
+      TWILIO_AUTH_TOKEN: ${TWILIO_AUTH_TOKEN:-}
+      TWILIO_API_KEY: ${TWILIO_API_KEY:-}
+      TWILIO_API_SECRET: ${TWILIO_API_SECRET:-}
+      TWILIO_TWIML_APP_SID: ${TWILIO_TWIML_APP_SID:-}
+      TWILIO_PHONE_NUMBER: ${TWILIO_PHONE_NUMBER:-}
+      PUBLIC_URL: ${PUBLIC_URL:-}
+      # Optional: set, every call is recorded and transcribed - docs/TWILIO.md.
+      TWILIO_TRANSCRIPTION_SERVICE_SID: ${TWILIO_TRANSCRIPTION_SERVICE_SID:-}
     depends_on:
       postgres:
         condition: service_healthy
@@ -67,6 +75,16 @@ services:
       EZT_GROUP: ${EZT_GROUP}
       EZT_SOURCE: ${EZT_SOURCE:-API}
       EZT_SEND_GROUP: ${EZT_SEND_GROUP:-}
+      # The worker fetches call transcripts from Twilio - docs/TWILIO.md,
+      # "Recordings and transcripts". All empty: it does nothing there.
+      TWILIO_ACCOUNT_SID: ${TWILIO_ACCOUNT_SID:-}
+      TWILIO_AUTH_TOKEN: ${TWILIO_AUTH_TOKEN:-}
+      TWILIO_API_KEY: ${TWILIO_API_KEY:-}
+      TWILIO_API_SECRET: ${TWILIO_API_SECRET:-}
+      TWILIO_TWIML_APP_SID: ${TWILIO_TWIML_APP_SID:-}
+      TWILIO_PHONE_NUMBER: ${TWILIO_PHONE_NUMBER:-}
+      PUBLIC_URL: ${PUBLIC_URL:-}
+      TWILIO_TRANSCRIPTION_SERVICE_SID: ${TWILIO_TRANSCRIPTION_SERVICE_SID:-}
     depends_on:
       postgres:
         condition: service_healthy

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Link, useNavigate, useParams } from 'react-router-dom';
+import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { toApiError } from '../api/client';
 import { claimLead, listQueue, releaseLead } from '../api/leads';
 import { usePolling } from '../api/usePolling';
@@ -12,10 +12,13 @@ import { Spinner } from '../components/Spinner';
 import { ActionsPanel } from './workspace/ActionsPanel';
 import { Conversation } from './workspace/Conversation';
 import { LeadAnswers } from './workspace/LeadAnswers';
+import { CallBar } from './workspace/CallBar';
 import { LeadHeader } from './workspace/LeadHeader';
 import { LeadNotes } from './workspace/LeadNotes';
 import { SmsCompose } from './workspace/SmsCompose';
-import { formatTime } from '../lib/format';
+import { useLeadCall } from './workspace/useLeadCall';
+import { formatTime, leadName } from '../lib/format';
+import { useIncomingCall } from '../lib/incoming-call';
 import { useSecond } from '../lib/useSecond';
 
 /**
@@ -34,7 +37,8 @@ import { useSecond } from '../lib/useSecond';
  * there. The server refuses a write from anyone who does not hold the lead, so
  * the switched-off controls are a courtesy, not the lock - AGENT-WORKSPACE.md.
  *
- * The header card is `workspace/LeadHeader.tsx`, the left column
+ * A call, once placed, is in `workspace/CallBar.tsx`, docked at the foot of the
+ * screen. The header card is `workspace/LeadHeader.tsx`, the left column
  * `workspace/LeadAnswers.tsx` and `workspace/LeadNotes.tsx`, the SMS box `SmsCompose.tsx` and the wrap-up
  * `ActionsPanel.tsx`. This page holds the data, picking and releasing, and the
  * layout.
@@ -72,6 +76,14 @@ export function WorkspacePage() {
   const refreshAll = useCallback(async () => {
     await Promise.all([refresh(), refreshTimeline()]);
   }, [refresh, refreshTimeline]);
+
+  // This lead's call. Owned here because two parts of the page use it: the
+  // header's Call button starts it, and the call bar at the foot of the screen
+  // shows it. Leaving the lead ends the call - `useLeadCall`.
+  const reloadAfterCall = useCallback(() => void refreshAll(), [refreshAll]);
+  const call = useLeadCall(leadId, reloadAfterCall);
+  // An answered incoming call's bar sits in the same place; the page leaves it room too.
+  const incomingBar = useIncomingCall((s) => s.state.phase === 'call');
 
   /**
    * "Lead 3 of 12" - where this one sits in the queue an agent is working
@@ -113,6 +125,21 @@ export function WorkspacePage() {
         .catch(() => undefined);
     }
   }, [mine, lead?.id, lead?.flags.unread, refresh]);
+
+  /**
+   * Arrived from a missed call's **Call back** (`layout/IncomingCall.tsx`):
+   * dial as soon as the lead is theirs. Once - the flag is taken off the
+   * history entry, so a reload or Back does not ring the lead again. If
+   * someone else holds the lead, nothing is dialled and the page says who.
+   */
+  const location = useLocation();
+  const callBack = Boolean((location.state as { callBack?: boolean } | null)?.callBack);
+  const startCall = call.start;
+  useEffect(() => {
+    if (!callBack || !lead) return;
+    navigate(location.pathname, { replace: true, state: null });
+    if (mine && !lead.flags.dnc) startCall();
+  }, [callBack, lead, mine, startCall, navigate, location.pathname]);
 
   /** Pick from inside the page: the lead becomes yours and the actions wake up. */
   const pick = async () => {
@@ -174,7 +201,7 @@ export function WorkspacePage() {
   ).length;
 
   return (
-    <section className="workspace">
+    <section className={`workspace${call.state.phase === 'idle' && !incomingBar ? '' : ' workspace--call-bar'}`}>
       <div className="workspace__top">
         <div className="workspace__top-left">
           <Button variant="ghost" onClick={() => void backToQueue()} loading={releasing}>
@@ -227,11 +254,14 @@ export function WorkspacePage() {
         </Banner>
       )}
 
-      <LeadHeader lead={lead} now={now} />
+      <LeadHeader lead={lead} mine={mine} now={now} call={call} />
 
       <div className="workspace__flags">
         {lead.closed && <Badge tone="muted">Closed</Badge>}
         {lead.flags.dnc && <Badge tone="muted">DNC</Badge>}
+        {/* The queue's own words for it. A badge, like every other state of
+            the lead - not a sentence across the page. */}
+        {lead.flags.missedCall && <Badge tone="warning">Missed call</Badge>}
         {lead.flags.needsReview && <Badge tone="warning">Needs review</Badge>}
         {lead.flags.expired && <Badge tone="muted">Expired</Badge>}
         {lead.conversation?.agentTookOverAt && (
@@ -279,6 +309,12 @@ export function WorkspacePage() {
           <ActionsPanel lead={lead} refresh={refreshAll} canAct={mine} />
         </div>
       </div>
+      <CallBar
+        who={{ leadId: lead.id, name: leadName(lead), phone: lead.phone }}
+        call={call}
+        now={now}
+        onNoteSaved={reloadAfterCall}
+      />
     </section>
   );
 }

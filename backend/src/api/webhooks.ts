@@ -1,6 +1,7 @@
 import { Request, Response, Router } from 'express';
 // Safe at module scope: db/dnc.ts imports nothing, taking its client as an
 // argument, so it does not drag in src/config the way db/pool does.
+import { archiveWebhook } from '../db/activity';
 import { blockNumber, DNC_REASONS, releaseNumber } from '../db/dnc';
 import { errText, log } from '../lib/log';
 import { asyncHandler } from './http';
@@ -110,6 +111,12 @@ const handleInbound = async (req: Request, res: Response) => {
   if (rejectBadToken(req, res)) return;
 
   const payload = req.body as InboundText;
+
+  // Kept exactly as it arrived, before anything is decided about it and
+  // outside the transaction below, so a request we go on to ignore - or fail
+  // on - is still on record. A failure here is a 500, which EZ Texting
+  // retries. AUDIT.md.
+  await archiveWebhook(deps().pool, { source: 'eztexting', path: '/api/webhooks/eztexting', payload });
 
   // Only inbound replies are handled. Anything else is acknowledged so EZ
   // Texting stops retrying it.

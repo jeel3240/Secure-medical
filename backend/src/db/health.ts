@@ -55,7 +55,7 @@ const POLL_STALE_MS = 6 * 60 * 1000;
 
 /**
  * How long past its `expires_at` an open conversation may sit before the expiry
- * sweep counts as stuck. The worker sweeps on every poll, about once a minute,
+ * sweep counts as stuck. The worker sweeps on every poll, every 30 seconds by default,
  * so ten minutes is several missed sweeps rather than one slow one.
  */
 const EXPIRY_GRACE = `interval '10 minutes'`;

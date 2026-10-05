@@ -27,7 +27,7 @@
  * `working` was `in_progress` until 2026-09-28: the screen says "Working –
  * name", and one state with two names was one more thing to translate.
  */
-export type QueueTagKind = 'working' | 'inbound_reply' | 'callback' | 'needs_review';
+export type QueueTagKind = 'working' | 'missed_call' | 'inbound_reply' | 'callback' | 'needs_review';
 
 export interface QueueTag {
   kind: QueueTagKind;
@@ -46,6 +46,8 @@ export interface QueueFacts {
   /** The active agent holding the lead, if any. */
   holder: { id: number; name: string } | null;
   hasUnreadInbound: boolean;
+  /** The lead rang us, nobody answered, and nobody has called or texted back since. */
+  missedCall?: boolean;
   /** The earliest callback not yet done, if any. */
   nextCallback?: { agentId: number; agentName: string; at: string } | null;
 }
@@ -54,15 +56,21 @@ export interface QueueFacts {
  * Only one status is shown per row, so the order here is the order of urgency:
  *
  * 1. someone already has it - nobody else should call;
- * 2. the lead has texted and nobody has read it;
- * 3. an agent has promised to call - it is theirs;
- * 4. their replies could not be understood, so a person must read them.
+ * 2. the lead rang us and nobody answered - they want to talk now, which
+ *    outranks a text waiting to be read (2026-10-01);
+ * 3. the lead has texted and nobody has read it;
+ * 4. an agent has promised to call - it is theirs;
+ * 5. their replies could not be understood, so a person must read them.
  *
  * Otherwise `null`: nothing to say, the lead is waiting.
  */
 export function queueTag(facts: QueueFacts): QueueTag | null {
   if (facts.holder) {
     return { kind: 'working', agentId: facts.holder.id, agentName: facts.holder.name };
+  }
+
+  if (facts.missedCall) {
+    return { kind: 'missed_call' };
   }
 
   if (facts.hasUnreadInbound) {

@@ -142,7 +142,8 @@ export function leadWorkspaceRoutes(router: Router): void {
       const result = await db.createCallback(
         leadId,
         agentId,
-        parse.parseScheduledAt(body.scheduledAt)
+        parse.parseScheduledAt(body.scheduledAt),
+        req.user!.id
       );
 
       if (!result.ok) {
@@ -246,7 +247,7 @@ export function leadWorkspaceRoutes(router: Router): void {
       const leadId = parseLeadId(req.params.id);
       await requireHolding(leadId, req.user!.id);
 
-      const result = await db.markLeadRead(leadId);
+      const result = await db.markLeadRead(leadId, req.user!.id);
       if (!result.ok) {
         throw new HttpError(404, 'not_found', 'No such lead.');
       }
