@@ -284,7 +284,14 @@ it is run on the server again. Nothing errors while that happens.
   that rings *another app*; a laptop and production are the same app, with the
   same webhook path, so it goes straight through. `--take-over` is not needed
   for the damage.
-- **To test calling locally, use a different Twilio number and a different
+- **Calling is not tested locally at all - Jeel, 2026-10-05.** Keep the
+  `TWILIO_*` lines in the local `.env` empty, so calling is off there. It is
+  not only the command: a local app signed in to the same Twilio account
+  registers its browser under the same agent identity as production's, so a
+  lead's call can ring the laptop, and a call placed locally is answered by
+  production's server. Calling changes are proved by tests and then on the
+  server.
+- **If local calling is ever needed again, use a different Twilio number and a different
   TwiML App**, and put those in the local `.env` as `TWILIO_PHONE_NUMBER` and
   `TWILIO_TWIML_APP_SID`. A local `.env` must never hold production's two
   values. The account SID, auth token and API key can be shared.
