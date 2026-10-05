@@ -394,7 +394,7 @@ Frontend dev: `cd frontend && npm run dev` (Vite on :5173, proxies /api to :3000
 - Postgres is on host port **5433**, not 5432.
 - After migrating, create the first account: `docker compose exec api npm run dev:create-superadmin -- you@example.com "Your Name"`.
 - Colima works in place of Docker Desktop.
-- **Twilio locally:** nothing is pasted into Twilio by hand; `docker compose exec api npm run dev:twilio:configure` points the TwiML App and the phone number at `PUBLIC_URL`. **Never run it locally with production's number or TwiML App (Jeel, 2026-10-05)** - production is live on them, and it would move production's calls to the laptop, silently. Local testing needs a different Twilio number and TwiML App in the local `.env`. `docs/TWILIO.md`, "What it needs on the Twilio account".
+- **Twilio locally:** nothing is pasted into Twilio by hand; `docker compose exec api npm run dev:twilio:configure` points the TwiML App and the phone number at `PUBLIC_URL`. **Never run it locally with production's number or TwiML App (Jeel, 2026-10-05)** - production is live on them, and it would move production's calls to the laptop, silently. **Calling is not tested locally at all (same day): the local `.env` keeps its `TWILIO_*` lines empty.** `docs/TWILIO.md`, "What it needs on the Twilio account".
 
 ---
 
