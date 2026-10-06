@@ -1,7 +1,8 @@
 /**
  * Admin > Configuration: what we ask, and what each answer is worth.
  *
- * Read straight from `settings`, `scoring_rules` and `tiers` on every request,
+ * Read straight from the active flow (`flows`, `flow_questions`, `flow_choices` -
+ * docs/FLOWS.md), `settings` and `tiers` on every request,
  * never from a copy in the frontend. That is the whole point of the page - not
  * documentation of what we intended, but a window on the values the state
  * machine is actually using. ADMIN.md, "Configuration".
@@ -10,29 +11,18 @@
  * migration and a PR. There is no writer here and there should not be one.
  */
 
+import { loadFlow } from './flows';
 import { pool } from './pool';
 import { NAME_FALLBACK, SEGMENT_LIMIT } from '../core/messages';
 
-/**
- * The nine messages the page shows, in the order a lead meets them, the
- * missed-call text last (Phase 4: sent when a lead rings and nobody answers).
- * `message_review` - sent after a second unclear reply - was missing until
- * 2026-09-29: the lead received it, but nobody could see it here.
- */
-const MESSAGE_KEYS = [
-  'question_1',
-  'question_2',
-  'question_3',
-  'message_clarify_1',
-  'message_clarify_2',
-  'message_clarify_3',
-  'message_review',
-  'message_thanks',
-  'message_missed_call',
-] as const;
-
 export interface ConfiguredMessage {
+  /** Stable for the page's list: `q1`, `q1_1`, `clarify_q1`, `review`, `missed_call`. */
   key: string;
+  /** What the page calls it: "Question 1", "After Q1 · Yes". */
+  name: string;
+  /** When a lead gets it: "The opener", "Unclear answer to Q2". */
+  when: string;
+  /** The text as the lead receives it - a choice's reply and the next question are one text. */
   body: string;
   /**
    * Length as stored, with `{first_name}` left in place. `worstCaseLength` is
@@ -58,12 +48,19 @@ export interface AdminConfig {
   scoring: {
     awards: { code: string; label: string | null; points: number }[];
     questions: {
+      /** The question's order in the flow. */
       question: number;
+      /** 'q1', 'offers'. */
+      key: string;
+      /** What the screens call it: 'Next step'. */
+      heading: string;
       choices: { choice: string; label: string | null; points: number }[];
     }[];
     /** Response + completion + the best answer to each question. */
     maxScore: number;
   };
+  /** The flow new leads get, which is what this page describes. Null when none is active. */
+  flow: { key: string; name: string } | null;
   tiers: { name: string; minScore: number; maxScore: number }[];
   /** Values the state machine reads that are not scoring or copy. */
   settings: { expiryDays: number; maxInvalidBeforeReview: number; segmentLimit: number };
@@ -100,24 +97,25 @@ async function longestFirstName(): Promise<string> {
 }
 
 export async function getAdminConfig(): Promise<AdminConfig> {
-  const [settingsRows, scoringRows, tierRows, name] = await Promise.all([
+  const [settingsRows, activeFlow, tierRows, name] = await Promise.all([
     pool.query(`SELECT key, value FROM settings`),
-    pool.query(`SELECT code, label, question, choice, points FROM scoring_rules ORDER BY question, choice`),
+    pool.query(`SELECT id, key, name FROM flows WHERE is_active`),
     pool.query(`SELECT name, min_score, max_score FROM tiers ORDER BY sort_order`),
     longestFirstName(),
   ]);
 
   const settings = new Map<string, string>(settingsRows.rows.map((r) => [r.key, r.value]));
+  // The page describes the flow new leads get - docs/FLOWS.md.
+  const flowRow = activeFlow.rows[0] ?? null;
+  const flow = flowRow ? await loadFlow(pool, flowRow.id) : null;
 
-  const messages: ConfiguredMessage[] = MESSAGE_KEYS.filter((key) => settings.has(key)).map((key) => {
-    const body = settings.get(key)!;
+  const message = (key: string, title: string, when: string, body: string): ConfiguredMessage => {
     const personalised = body.includes('{first_name}');
-    const worstCaseLength = personalised
-      ? body.replace(/\{first_name\}/g, name).length
-      : body.length;
-
+    const worstCaseLength = personalised ? body.replace(/\{first_name\}/g, name).length : body.length;
     return {
       key,
+      name: title,
+      when,
       body,
       length: body.length,
       worstCaseLength,
@@ -125,25 +123,71 @@ export async function getAdminConfig(): Promise<AdminConfig> {
       costsExtraSegment: worstCaseLength > SEGMENT_LIMIT,
       personalised,
     };
-  });
+  };
 
-  // question 0 is a flat award - responded, completed - rather than an answer.
-  const awards = scoringRows.rows
-    .filter((r) => r.question === 0)
-    .map((r) => ({ code: r.code, label: r.label, points: r.points }));
+  // Every text a lead can receive, as it is sent, in the order they meet them:
+  // the first question, then for each choice its reply joined to whatever
+  // question follows, then the unclear replies, and the two outside the flow.
+  const messages: ConfiguredMessage[] = [];
+  if (flow) {
+    const questions = [...flow.questions].sort((a, b) => a.position - b.position);
+    const q = (id: number | null) => questions.find((x) => x.id === id);
+    const short = (key: string) => key.toUpperCase();
 
-  const questions = [1, 2, 3].map((question) => ({
-    question,
-    choices: scoringRows.rows
-      .filter((r) => r.question === question)
-      .map((r) => ({ choice: r.choice, label: r.label, points: r.points })),
-  }));
+    const first = questions[0];
+    if (first) messages.push(message(first.key, `Question ${first.position}`, 'The opener', first.body));
 
-  // What a lead who answers everything as well as possible can reach. Computed
-  // from the rows rather than hardcoded at 100, so an edited rule shows here
-  // instead of quietly disagreeing with the tier bands below it.
+    for (const question of questions) {
+      for (const choice of question.choices) {
+        const next = q(choice.nextQuestionId);
+        const body = [choice.reply, next?.body].filter(Boolean).join(' ');
+        if (!body) continue;
+        messages.push(
+          message(
+            `${question.key}_${choice.choice}`,
+            `After ${short(question.key)} · ${choice.label}`,
+            next ? `Then ${short(next.key)}` : 'Ends the questions',
+            body
+          )
+        );
+      }
+    }
+    for (const question of questions) {
+      messages.push(
+        message(`clarify_${question.key}`, `Unclear · ${short(question.key)}`, 'A reply that is not one of the choices', question.clarifyBody)
+      );
+    }
+    messages.push(message('review', 'Review', 'Second unclear reply', flow.reviewBody));
+  }
+  const missedCall = settings.get('message_missed_call');
+  if (missedCall) {
+    messages.push(message('missed_call', 'Missed call', 'A call to us nobody answered', missedCall));
+  }
+
+  const awards = flow
+    ? [
+        { code: 'responded', label: 'Responded at all', points: flow.respondedPoints },
+        { code: 'completed', label: 'Completed the questions', points: flow.completedPoints },
+      ]
+    : [];
+
+  const questions = flow
+    ? [...flow.questions]
+        .sort((a, b) => a.position - b.position)
+        .map((question) => ({
+          question: question.position,
+          key: question.key,
+          heading: question.heading,
+          choices: question.choices.map((c) => ({ choice: c.choice, label: c.label, points: c.points })),
+        }))
+    : [];
+
+  // What a lead who answers everything as well as possible can reach: the
+  // awards plus the best answer to each question. A flow with a branch cannot
+  // reach every question in one conversation, so this is an upper bound; for
+  // the antibiotics flow it is exact, since the branch's choices earn nothing.
   const bestPerQuestion = questions.reduce(
-    (total, q) => total + Math.max(0, ...q.choices.map((c) => c.points)),
+    (total, question) => total + Math.max(0, ...question.choices.map((c) => c.points)),
     0
   );
   const maxScore = awards.reduce((total, a) => total + a.points, 0) + bestPerQuestion;
@@ -156,6 +200,7 @@ export async function getAdminConfig(): Promise<AdminConfig> {
   return {
     messages,
     scoring: { awards, questions, maxScore },
+    flow: flowRow ? { key: flowRow.key, name: flowRow.name } : null,
     tiers: tierRows.rows.map((r) => ({
       name: r.name,
       minScore: r.min_score,

@@ -13,6 +13,16 @@ import { CLOSED_SQL, MISSED_CALL_SQL } from './lead-state';
 import { likeLiteral } from './sql';
 import { pool } from './pool';
 
+/** One answer on a queue row. */
+export interface QueueAnswer {
+  /** 'q1', 'offers'. */
+  key: string;
+  /** What the screens call the question: 'Next step'. */
+  heading: string;
+  /** What they chose: 'Talk to an agent'. */
+  label: string;
+}
+
 export interface QueueRow {
   id: number;
   phone: string;
@@ -24,16 +34,11 @@ export interface QueueRow {
   score: number;
   tier: string | null;
   /** Their answers, as the choices they picked. The screen maps them to words. */
-  q1: string | null;
-  q2: string | null;
-  q3: string | null;
   /**
-   * The word the lead chose for each, as it was called when they chose it -
-   * migration 009. Null where unanswered.
+   * What the lead answered, in the flow's order - as many as their flow asked
+   * and they answered. The word is the one saved with the answer.
    */
-  q1Label: string | null;
-  q2Label: string | null;
-  q3Label: string | null;
+  answers: QueueAnswer[];
   conversationStatus: 'open' | 'completed' | 'review' | 'expired';
   /** `null` when there is nothing to say: the lead is waiting to be picked up. */
   tag: QueueTag | null;
@@ -70,7 +75,7 @@ const MAX_LIMIT = 500;
 const BASE = `
   FROM leads l
   JOIN LATERAL (
-    SELECT c.status, c.step, c.q1, c.q2, c.q3, c.q1_label, c.q2_label, c.q3_label, c.score, c.tier
+    SELECT c.id, c.status, c.step, c.score, c.tier, c.end_outcome
     FROM conversations c
     WHERE c.lead_id = l.id
     ORDER BY c.created_at DESC, c.id DESC
@@ -132,7 +137,10 @@ const INCLUDED = `
       c.score > 0
       AND NOT ${CLOSED_SQL}
       AND (
-        c.status IN ('completed', 'review')
+        -- Finished the questions - except a lead who only asked for offers:
+        -- that is a list for the client's campaigns, not a call to make.
+        (c.status = 'completed' AND c.end_outcome IS DISTINCT FROM 'offers')
+        OR c.status = 'review'
         OR EXISTS (
           SELECT 1 FROM callbacks cb WHERE cb.lead_id = l.id AND cb.done_at IS NULL
         )
@@ -186,12 +194,8 @@ interface QueueDbRow {
   score: number;
   tier: string | null;
   status: QueueRow['conversationStatus'];
-  q1: string | null;
-  q2: string | null;
-  q3: string | null;
-  q1_label: string | null;
-  q2_label: string | null;
-  q3_label: string | null;
+  end_outcome: string | null;
+  answers: QueueAnswer[] | null;
   agent_id: number | null;
   agent_name: string | null;
   has_unread_inbound: boolean;
@@ -218,7 +222,12 @@ export async function listQueue(query: QueueQuery = {}): Promise<QueuePage> {
   const rows = await pool.query<QueueDbRow>(
     `SELECT l.id, l.phone, l.first_name, l.last_name, l.source,
             ${RECEIVED} AS received_at,
-            c.score, c.tier, c.status, c.q1, c.q2, c.q3, c.q1_label, c.q2_label, c.q3_label,
+            c.score, c.tier, c.status, c.end_outcome,
+            -- What they answered, as saved, in the flow's order. One subquery
+            -- for the row, so a page of leads is still one statement.
+            (SELECT COALESCE(jsonb_agg(jsonb_build_object(
+                      'key', a.question_key, 'heading', a.heading, 'label', a.label) ORDER BY a.position), '[]'::jsonb)
+             FROM conversation_answers a WHERE a.conversation_id = c.id) AS answers,
             u.id AS agent_id, u.name AS agent_name, l.has_unread_inbound,
             ${MISSED_CALL_SQL} AS missed_call,
             ncb.agent_id AS callback_agent_id, ncb.agent_name AS callback_agent_name,
@@ -277,18 +286,14 @@ export async function listQueue(query: QueueQuery = {}): Promise<QueuePage> {
       receivedAt: r.received_at?.toISOString() ?? null,
       score: r.score,
       tier: r.tier,
-      q1: r.q1,
-      q2: r.q2,
-      q3: r.q3,
-      q1Label: r.q1_label,
-      q2Label: r.q2_label,
-      q3Label: r.q3_label,
+      answers: r.answers ?? [],
       conversationStatus: r.status,
       tag: queueTag({
         conversationStatus: r.status,
         holder: r.agent_id === null ? null : { id: r.agent_id, name: r.agent_name ?? 'Another agent' },
         hasUnreadInbound: r.has_unread_inbound,
         missedCall: r.missed_call,
+        wantsContact: r.end_outcome === 'wants_contact',
         nextCallback:
           r.callback_agent_id === null || !r.callback_at
             ? null

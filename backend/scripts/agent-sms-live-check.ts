@@ -19,6 +19,7 @@
  * call is stubbed.
  */
 import { pool } from '../src/db/pool';
+import { replyAs, startFlow } from './live-flow';
 import axios from 'axios';
 
 // Stubbed at the HTTP boundary, not at sendMessage.
@@ -87,32 +88,13 @@ async function makeLeadMidFlow(phone: string): Promise<{ leadId: number; convers
     [phone]
   );
   const leadId = lead.rows[0].id;
-  const conv = await pool.query(
-    `INSERT INTO conversations (lead_id, status, step, q1, score, tier)
-     VALUES ($1, 'open', 2, '3', 25, 'LOW') RETURNING id`,
-    [leadId]
-  );
-  return { leadId, conversationId: conv.rows[0].id };
+  // Yes on question 1: on question 2, with 30 points.
+  return { leadId, conversationId: await startFlow(leadId, ['1']) };
 }
 
 const tookOverAt = async (conversationId: number) =>
   (await pool.query(`SELECT agent_took_over_at FROM conversations WHERE id = $1`, [conversationId]))
     .rows[0].agent_took_over_at;
-
-/** Runs a reply through the real reply path, the way the webhook does. */
-async function replyAs(leadId: number, phone: string, text: string) {
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
-  const { applyReply } = require('../src/api/reply-flow') as typeof import('../src/api/reply-flow');
-  const client = await pool.connect();
-  try {
-    await client.query('BEGIN');
-    const pending = await applyReply(client, leadId, phone, 'Jordan', { text, optOut: false });
-    await client.query('COMMIT');
-    return pending;
-  } finally {
-    client.release();
-  }
-}
 
 async function main(): Promise<void> {
   await refuseIfNotEmpty();
@@ -144,27 +126,28 @@ async function main(): Promise<void> {
     const { leadId, conversationId } = await makeLeadMidFlow('+15550000602');
 
     // Before the handoff: a valid answer advances and question 3 goes out.
-    const before = await replyAs(leadId, '+15550000602', '1');
-    check('a reply before the handoff advances', before?.result.send, 'question_3');
-    check('and is scored', before?.result.conversation.score, 55);
+    const before = await replyAs(leadId, '1');
+    check('a reply before the handoff advances', before?.result.conversation.step, 3);
+    check('and is scored', before?.result.conversation.score, 45);
 
-    await pool.query(`UPDATE conversations SET step = 2, q2 = NULL, score = 25 WHERE id = $1`, [
-      conversationId,
-    ]);
-
-    await sendAgentSms(leadId, maya, 'Hi Jordan, when suits for a call?');
+    // A second lead, at the same place, whose agent then texts them.
+    const taken = await makeLeadMidFlow('+15550000612');
+    await sendAgentSms(taken.leadId, maya, 'Hi Jordan, when suits for a call?');
 
     // After: the same reply does nothing. This is the check the whole task is
     // for - the column written above has to reach the rule.
-    const after = await replyAs(leadId, '+15550000602', '1');
-    check('a reply after the handoff sends nothing', after?.result.send, null);
-    check('is not scored', after?.result.conversation.score, 25);
+    const after = await replyAs(taken.leadId, '1');
+    check('a reply after the handoff sends nothing', after?.result.send, []);
+    check('is not scored', after?.result.conversation.score, 30);
     check('and does not advance', after?.result.conversation.step, 2);
 
-    const row = await pool.query(`SELECT step, q2, score FROM conversations WHERE id = $1`, [
-      conversationId,
-    ]);
-    check('the database agrees', row.rows[0], { step: 2, q2: null, score: 25 });
+    const row = await pool.query(
+      `SELECT c.step, c.score, (SELECT count(*)::int FROM conversation_answers a WHERE a.conversation_id = c.id) AS answers
+       FROM conversations c WHERE c.id = $1`,
+      [taken.conversationId]
+    );
+    check('the database agrees: one answer, the one given before', row.rows[0], { step: 2, score: 30, answers: 1 });
+    void conversationId;
 
     // The conversation stays open, so the lead is still reachable and expiry
     // still applies - the agent's callback and disposition track it from here.

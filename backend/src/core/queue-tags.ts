@@ -27,7 +27,7 @@
  * `working` was `in_progress` until 2026-09-28: the screen says "Working –
  * name", and one state with two names was one more thing to translate.
  */
-export type QueueTagKind = 'working' | 'missed_call' | 'inbound_reply' | 'callback' | 'needs_review';
+export type QueueTagKind = 'working' | 'missed_call' | 'inbound_reply' | 'callback' | 'wants_call' | 'needs_review';
 
 export interface QueueTag {
   kind: QueueTagKind;
@@ -50,6 +50,8 @@ export interface QueueFacts {
   missedCall?: boolean;
   /** The earliest callback not yet done, if any. */
   nextCallback?: { agentId: number; agentName: string; at: string } | null;
+  /** The lead asked to hear from a rep - the flow ended `wants_contact`. */
+  wantsContact?: boolean;
 }
 
 /**
@@ -60,7 +62,9 @@ export interface QueueFacts {
  *    outranks a text waiting to be read (2026-10-01);
  * 3. the lead has texted and nobody has read it;
  * 4. an agent has promised to call - it is theirs;
- * 5. their replies could not be understood, so a person must read them.
+ * 5. the lead asked to hear from a rep - why a low-scoring lead is here at
+ *    all (2026-10-05, docs/FLOWS.md);
+ * 6. their replies could not be understood, so a person must read them.
  *
  * Otherwise `null`: nothing to say, the lead is waiting.
  */
@@ -80,6 +84,10 @@ export function queueTag(facts: QueueFacts): QueueTag | null {
   if (facts.nextCallback) {
     const { agentId, agentName, at } = facts.nextCallback;
     return { kind: 'callback', agentId, agentName, at };
+  }
+
+  if (facts.wantsContact) {
+    return { kind: 'wants_call' };
   }
 
   if (facts.conversationStatus === 'review') {

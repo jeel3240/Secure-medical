@@ -11,6 +11,7 @@
  *     EZT_USERNAME=x EZT_PASSWORD=x EZT_GROUP=x npx ts-node --transpile-only scripts/admin-leads-live-check.ts
  */
 import { pool } from '../src/db/pool';
+import { startFlow } from './live-flow';
 import { listAdminLeads } from '../src/db/leads';
 
 let failures = 0;
@@ -47,13 +48,17 @@ async function lead(
   );
   const id = rows[0].id;
   if (conversation) {
-    // The question being asked, as the state machine keeps it: one past the
-    // answers given, and 3 once finished.
+    // Through the real flow: one "1" per answer given - Yes, Yes, I know which
+    // antibiotic - so the lead has the rows a real one has. Then the status and
+    // score the case is about.
     const answered = [conversation.q1, conversation.q2, conversation.q3].filter(Boolean).length;
+    const conversationId = await startFlow(id, Array(answered).fill('1'));
     await pool.query(
-      `INSERT INTO conversations (lead_id, status, step, q1, q2, q3, score, tier)
-       VALUES ($1, $2, $7, $3, $4, $5, $6, 'HOT')`,
-      [id, conversation.status, conversation.q1 ?? null, conversation.q2 ?? null, conversation.q3 ?? null, conversation.score ?? 0, Math.min(3, answered + 1)]
+      `UPDATE conversations
+       SET status = $2, score = $3, tier = 'HOT',
+           current_question_id = CASE WHEN $2 = 'open' THEN current_question_id END
+       WHERE id = $1`,
+      [conversationId, conversation.status, conversation.score ?? 0]
     );
   }
   return id;
@@ -144,6 +149,12 @@ async function main(): Promise<void> {
   await disposition(closedThenBlocked, 'closed');
   await pool.query(`INSERT INTO dnc_list (phone, reason) SELECT phone, 'sms_stop' FROM leads WHERE id = $1`, [closedThenBlocked]);
 
+  // "No" on question 1, then the two ways that ends - docs/FLOWS.md.
+  const offersOnly = await lead('OffersOnly', null);
+  await startFlow(offersOnly, ['2', '1']);
+  const wantsRep = await lead('WantsRep', null);
+  await startFlow(wantsRep, ['2', 'learn more']);
+
   const all = await listAdminLeads({ pageSize: 200 });
   const by = Object.fromEntries(all.leads.map((l) => [l.firstName, l]));
   const status = (name: string) => by[name]?.status;
@@ -163,6 +174,8 @@ async function main(): Promise<void> {
   check('partway: answering (was in_progress)', status('Midway'), 'answering');
   check('all three, nobody has touched it: ready (was completed)', status('Ready'), 'ready');
   check('unclear: needs_review', status('Unclear'), 'needs_review');
+  check('asked for offers only: offers, not ready - there is no call to make', status('OffersOnly'), 'offers');
+  check('asked to hear from a rep: ready for an agent', status('WantsRep'), 'ready');
   check('went quiet: expired', status('Quiet'), 'expired');
   check('blocked: opted_out', status('Stopped'), 'opted_out');
 
@@ -193,10 +206,11 @@ async function main(): Promise<void> {
   const closedTab = await listAdminLeads({ status: 'closed', pageSize: 200 });
   check('the closed tab lists exactly the closed leads', closedTab.leads.map((l) => l.firstName).sort(), ['Closed', 'SoldBefore']);
   check('the counts add up per status', all.counts, {
-    all: 22,
+    all: 24,
     awaiting_reply: 2,
     answering: 1,
-    ready: 3,
+    offers: 1,
+    ready: 4,
     working: 10,
     closed: 2,
     needs_review: 1,

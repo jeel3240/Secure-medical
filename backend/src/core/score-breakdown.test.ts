@@ -1,164 +1,65 @@
-import { answerChips, answerLabel, scoreBreakdown, type ScoringRule } from './score-breakdown';
+import { answerChips, scoreBreakdown, type SavedAnswer } from './score-breakdown';
 
-/** The seeded rules, so these read as the real screen would. */
-const RULES: ScoringRule[] = [
-  { code: 'responded', label: 'Responded at all', question: 0, choice: null, points: 10 },
-  { code: 'completed', label: 'Completed all questions', question: 0, choice: null, points: 10 },
-  { code: 'q1_1', label: 'Q1: Supplements', question: 1, choice: '1', points: 5 },
-  { code: 'q1_2', label: 'Q1: Telehealth/Rx', question: 1, choice: '2', points: 10 },
-  { code: 'q1_3', label: 'Q1: Both', question: 1, choice: '3', points: 15 },
-  { code: 'q2_1', label: 'Q2: Today', question: 2, choice: '1', points: 30 },
-  { code: 'q2_2', label: 'Q2: This week', question: 2, choice: '2', points: 20 },
-  { code: 'q2_3', label: 'Q2: Just researching', question: 2, choice: '3', points: 5 },
-  { code: 'q3_1', label: 'Q3: Call me now', question: 3, choice: '1', points: 35 },
-  { code: 'q3_2', label: 'Q3: Text me', question: 3, choice: '2', points: 25 },
-  { code: 'q3_3', label: 'Q3: Contact me later', question: 3, choice: '3', points: 10 },
-];
+const yes: SavedAnswer = { questionKey: 'q1', position: 1, heading: 'Requested info', choice: '1', label: 'Yes', points: 20 };
+const tele: SavedAnswer = { questionKey: 'q2', position: 2, heading: 'Used telemedicine', choice: '2', label: 'No', points: 5 };
+const agent: SavedAnswer = { questionKey: 'q3', position: 3, heading: 'Next step', choice: '2', label: 'Talk to an agent', points: 45 };
+const no: SavedAnswer = { ...yes, choice: '2', label: 'No', points: 0 };
+const offers: SavedAnswer = { questionKey: 'offers', position: 4, heading: 'Offers', choice: '1', label: 'Special offers', points: 0 };
 
-const conversation = (over: Partial<Parameters<typeof scoreBreakdown>[0]> = {}) => ({
-  q1: null,
-  q2: null,
-  q3: null,
-  status: 'open',
-  score: 0,
-  ...over,
-});
+const AWARDS = { respondedPoints: 10, completedPoints: 10 };
 
-describe('answerLabel', () => {
-  it('strips the question prefix', () => {
-    expect(answerLabel('Q1: Both')).toBe('Both');
-    expect(answerLabel('Q2: Just researching')).toBe('Just researching');
-    expect(answerLabel('Q3: Call me now')).toBe('Call me now');
-  });
-
-  it('leaves a label with no prefix alone', () => {
-    // A rule renamed without the convention should still read sensibly rather
-    // than vanishing.
-    expect(answerLabel('Responded at all')).toBe('Responded at all');
-    expect(answerLabel('Both')).toBe('Both');
-  });
-});
-
-describe('scoreBreakdown', () => {
-  it('shows the whole line for a completed conversation', () => {
-    const lines = scoreBreakdown(
-      conversation({ q1: '3', q2: '1', q3: '1', status: 'completed', score: 100 }),
-      RULES
-    );
-
-    // The example in DESIGN-PROMPT.md section 3, in the order earned.
+describe('the score breakdown', () => {
+  it('lists what was earned, in the order it was earned, and adds up to the score', () => {
+    const lines = scoreBreakdown({ score: 90, endOutcome: 'completed', ...AWARDS }, [agent, yes, tele]);
     expect(lines).toEqual([
       { code: 'responded', label: 'Responded', points: 10 },
-      { code: 'q1_3', label: 'Both', points: 15 },
-      { code: 'q2_1', label: 'Today', points: 30 },
-      { code: 'q3_1', label: 'Call me now', points: 35 },
+      { code: 'q1_1', label: 'Yes', points: 20 },
+      { code: 'q2_2', label: 'No', points: 5 },
+      { code: 'q3_2', label: 'Talk to an agent', points: 45 },
       { code: 'completed', label: 'Completed', points: 10 },
     ]);
-    expect(lines.reduce((n, l) => n + l.points, 0)).toBe(100);
+    expect(lines.reduce((total, l) => total + l.points, 0)).toBe(90);
   });
 
-  it('shows only what a part-way lead earned', () => {
-    const lines = scoreBreakdown(conversation({ q1: '2', score: 20 }), RULES);
+  it('a lead partway through shows only what they have done', () => {
+    expect(scoreBreakdown({ score: 30, endOutcome: null, ...AWARDS }, [yes]).map((l) => l.code)).toEqual(['responded', 'q1_1']);
+  });
 
-    // Two lines, not five with zeros: the card records what happened.
-    expect(lines).toEqual([
-      { code: 'responded', label: 'Responded', points: 10 },
-      { code: 'q1_2', label: 'Telehealth/Rx', points: 10 },
+  it('a lead who has not replied shows nothing', () => {
+    expect(scoreBreakdown({ score: 0, endOutcome: null, ...AWARDS }, [])).toEqual([]);
+  });
+
+  it('"No", then offers: no completion award - they did not finish the questions', () => {
+    const lines = scoreBreakdown({ score: 10, endOutcome: 'offers', ...AWARDS }, [no, offers]);
+    expect(lines.map((l) => [l.label, l.points])).toEqual([
+      ['Responded', 10],
+      ['No', 0],
+      ['Special offers', 0],
     ]);
   });
 
-  it('credits responding even when nothing was answered', () => {
-    // An unclear reply scores 10 and answers nothing.
-    const lines = scoreBreakdown(conversation({ score: 10 }), RULES);
-    expect(lines).toEqual([{ code: 'responded', label: 'Responded', points: 10 }]);
-  });
-
-  it('is empty for a lead who never replied', () => {
-    expect(scoreBreakdown(conversation(), RULES)).toEqual([]);
-  });
-
-  it('adds the completion line only when completed', () => {
-    const open = scoreBreakdown(
-      conversation({ q1: '3', q2: '1', q3: '1', status: 'open', score: 90 }),
-      RULES
-    );
-    expect(open.map((l) => l.code)).not.toContain('completed');
-  });
-
-  it('keeps a review conversation on what it earned', () => {
-    const lines = scoreBreakdown(conversation({ status: 'review', score: 10 }), RULES);
-    expect(lines).toEqual([{ code: 'responded', label: 'Responded', points: 10 }]);
-  });
-
-  it('skips a rule that is missing rather than throwing', () => {
-    // An admin can delete a row; a lead card is not the place to fail over it.
-    const thin = RULES.filter((r) => r.code !== 'q1_3');
-    const lines = scoreBreakdown(
-      conversation({ q1: '3', q2: '1', status: 'open', score: 55 }),
-      thin
-    );
-    expect(lines.map((l) => l.code)).toEqual(['responded', 'q2_1']);
-  });
-
-  it('uses whatever points the rules carry, not the seeded ones', () => {
-    const doubled = RULES.map((r) => ({ ...r, points: r.points * 2 }));
-    const lines = scoreBreakdown(conversation({ q1: '3', score: 50 }), doubled);
-    expect(lines).toEqual([
-      { code: 'responded', label: 'Responded', points: 20 },
-      { code: 'q1_3', label: 'Both', points: 30 },
-    ]);
+  it('uses the points saved with the answer, not today\'s', () => {
+    // The answer was worth 20 when it was given; whatever the flow says now,
+    // that is what this lead earned.
+    const line = scoreBreakdown({ score: 30, endOutcome: null, ...AWARDS }, [{ ...yes, points: 20, label: 'Yes (old wording)' }])[1];
+    expect(line).toEqual({ code: 'q1_1', label: 'Yes (old wording)', points: 20 });
   });
 });
 
-describe('answerChips', () => {
-  it('names each question and the answer given', () => {
-    const chips = answerChips(conversation({ q1: '3', q2: '1', q3: '1', score: 90 }), RULES);
-    expect(chips).toEqual([
-      { question: 1, heading: 'Interest', answer: 'Both', choice: '3' },
-      { question: 2, heading: 'Timing', answer: 'Today', choice: '1' },
-      { question: 3, heading: 'Prefers', answer: 'Call me now', choice: '1' },
+describe('the answer chips', () => {
+  it('one per answered question, in the flow\'s order, with the question\'s own heading', () => {
+    expect(answerChips([agent, yes, tele])).toEqual([
+      { question: 1, key: 'q1', heading: 'Requested info', answer: 'Yes', choice: '1' },
+      { question: 2, key: 'q2', heading: 'Used telemedicine', answer: 'No', choice: '2' },
+      { question: 3, key: 'q3', heading: 'Next step', answer: 'Talk to an agent', choice: '2' },
     ]);
   });
 
-  it('returns all three even when unanswered, so the card keeps its shape', () => {
-    const chips = answerChips(conversation({ q1: '1', score: 15 }), RULES);
-    expect(chips).toEqual([
-      { question: 1, heading: 'Interest', answer: 'Supplements', choice: '1' },
-      { question: 2, heading: 'Timing', answer: null, choice: null },
-      { question: 3, heading: 'Prefers', answer: null, choice: null },
-    ]);
+  it('a question on a branch the lead never took is not shown', () => {
+    expect(answerChips([no, offers]).map((c) => c.heading)).toEqual(['Requested info', 'Offers']);
   });
 
-  it('leaves an answer null when its rule is missing', () => {
-    const thin = RULES.filter((r) => r.code !== 'q2_2');
-    const chips = answerChips(conversation({ q2: '2', score: 30 }), thin);
-    expect(chips[1].answer).toBeNull();
-  });
-});
-
-describe('the word kept with an answer - migration 009', () => {
-  // Choice 1 was "Supplements" when this lead picked it. It has since been
-  // renamed; RULES still says Supplements, so a different saved word proves
-  // which one is shown.
-  const saved = conversation({ q1: '1', q1Label: 'Vitamins', q2: '2', score: 35 });
-
-  it('is what the chips show, not the choice\'s current name', () => {
-    const chips = answerChips(saved, RULES);
-    expect(chips[0]).toMatchObject({ answer: 'Vitamins', choice: '1' });
-  });
-
-  it('and what the breakdown shows, with the rule\'s points', () => {
-    const line = scoreBreakdown(saved, RULES).find((l) => l.code === 'q1_1');
-    expect(line).toMatchObject({ label: 'Vitamins' });
-    expect(line?.points).toBe(RULES.find((r) => r.code === 'q1_1')?.points);
-  });
-
-  it('an answer with no saved word falls back to the current name', () => {
-    const chips = answerChips(saved, RULES);
-    expect(chips[1].answer).toBe(answerLabel(RULES.find((r) => r.code === 'q2_2')!.label));
-  });
-
-  it('a saved word without an answer is not shown', () => {
-    expect(answerChips(conversation({ q1: null, q1Label: 'Vitamins' }), RULES)[0].answer).toBeNull();
+  it('none for a lead who has answered nothing', () => {
+    expect(answerChips([])).toEqual([]);
   });
 });

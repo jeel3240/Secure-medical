@@ -17,6 +17,7 @@
  * 39 checks, all passing.
  */
 import { pool } from '../src/db/pool';
+import { startFlow } from './live-flow';
 import { listQueue } from '../src/db/queue';
 
 let failures = 0;
@@ -40,7 +41,8 @@ function check(label: string, actual: unknown, expected: unknown) {
 
 async function lead(opts: {
   phone: string; first: string; source: string; ageMin: number;
-  status: string; q1?: string | null; q2?: string | null; q3?: string | null;
+  /** Null: no conversation yet - the caller starts one through the real flow. */
+  status: string | null; q1?: string | null; q2?: string | null; q3?: string | null;
   score: number; tier: string | null; unread?: boolean; assignedTo?: number | null;
 }) {
   const { rows } = await pool.query(
@@ -49,9 +51,12 @@ async function lead(opts: {
     [opts.phone, opts.first, opts.source, String(opts.ageMin), opts.unread ?? false, opts.assignedTo ?? null]
   );
   const id = rows[0].id as number;
+  if (opts.status === null) return id;
+  // Placed by hand: these cases are about the queue's rules, which read the
+  // conversation's status and score. The answer columns are no longer read.
   await pool.query(
-    `INSERT INTO conversations (lead_id, status, step, q1, q2, q3, score, tier)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
+    `INSERT INTO conversations (lead_id, status, step, q1, q2, q3, score, tier, flow_id)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8, (SELECT id FROM flows WHERE is_active))`,
     [id, opts.status, 1, opts.q1 ?? null, opts.q2 ?? null, opts.q3 ?? null, opts.score, opts.tier]
   );
   return id;
@@ -189,6 +194,28 @@ async function main() {
   check('as working', withEarly.leads.find((l) => l.id === pickedEarly)?.tag?.kind, 'working');
   await pool.query(`UPDATE leads SET assigned_to = NULL, assigned_at = NULL WHERE id = $1`, [pickedEarly]);
   check('and leaves once let go', (await listQueue({ limit: 200 })).leads.some((l) => l.id === pickedEarly), false);
+
+  // "No" on question 1, through the real flow - docs/FLOWS.md.
+  const offersOnly = await lead({ phone: '+15550000196', first: 'OffersOnly', source: 'CORE-G-27', ageMin: 4, status: null, score: 0, tier: null });
+  await startFlow(offersOnly, ['2', '1']);
+  const wantsRep = await lead({ phone: '+15550000195', first: 'WantsRep', source: 'CORE-G-27', ageMin: 4, status: null, score: 0, tier: null });
+  await startFlow(wantsRep, ['2', 'learn more']);
+  const finished = await lead({ phone: '+15550000194', first: 'Finished', source: 'CORE-G-27', ageMin: 4, status: null, score: 0, tier: null });
+  await startFlow(finished, ['1', '2', '3']);
+  const afterNo = await listQueue({ limit: 200 });
+  const row = (id: number) => afterNo.leads.find((l) => l.id === id);
+  check('a lead who asked for offers only is not in the queue: no call to make', row(offersOnly), undefined);
+  check('one who asked to hear from a rep is, at its own low score', [row(wantsRep)?.score, row(wantsRep)?.tier], [10, 'LOW']);
+  check('tagged, so an agent sees why it is there', row(wantsRep)?.tag, { kind: 'wants_call' });
+  check('a row carries its answers, as many as the lead gave', row(wantsRep)?.answers, [
+    { key: 'q1', heading: 'Requested info', label: 'No' },
+    { key: 'offers', heading: 'Offers', label: 'Learn more' },
+  ]);
+  check('three for a lead who finished', row(finished)?.answers.map((a) => a.label), ['Yes', 'No', 'Order online']);
+  check('"Order online" is WARM: called, after the HOT ones', [row(finished)?.score, row(finished)?.tier], [55, 'WARM']);
+  await pool.query(`UPDATE leads SET has_unread_inbound = true WHERE id = $1`, [offersOnly]);
+  check('an offers lead who texts us is still shown to a person', (await listQueue({ limit: 200 })).leads.find((l) => l.id === offersOnly)?.tag, { kind: 'inbound_reply' });
+  await pool.query(`UPDATE leads SET has_unread_inbound = false WHERE id = $1`, [offersOnly]);
 
   // A pending callback names whose it is - 2026-09-29.
   const promised = await lead({ phone: '+15550000197', first: 'Promised', source: 'CORE-G-27', ageMin: 30, status: 'completed', score: 50, tier: 'WARM' });

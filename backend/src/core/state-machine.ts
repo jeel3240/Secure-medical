@@ -3,23 +3,79 @@
  * unit-testable. STATE-MACHINE.md is the authority for the behaviour here and
  * wins over the mockup where they differ.
  *
- * The caller (api/webhooks.ts) loads the lead's newest conversation and the
- * rules, calls `step`, saves the result, then sends whatever `send` names.
+ * **It runs any flow** - Jeel, 2026-10-05, docs/FLOWS.md. Until then it knew
+ * one script: three questions, three choices each. A flow is now data - its
+ * questions, each question's choices, and for each choice the reply, the
+ * points and where the lead goes next - and this module only follows it. A
+ * flow with two questions or five, with a branch or without, is the same code.
+ *
+ * The caller (api/reply-flow.ts) loads the lead's newest conversation and its
+ * flow, calls `step`, saves the result, then sends whatever `send` holds.
  */
 
-import { matchAnswer, type Choice } from './answers';
+import { matchChoice } from './answers';
 
 export type ConversationStatus = 'open' | 'completed' | 'expired' | 'suppressed' | 'review';
 
+/**
+ * How a flow ended, from the choice that ended it:
+ * - `completed`: the questions are answered. Agents call, by score.
+ * - `offers`: wants offers only. Not for agents.
+ * - `wants_contact`: asked to hear from a rep. Agents call.
+ */
+export type Ending = 'completed' | 'offers' | 'wants_contact';
+
+export interface FlowChoice {
+  /** What the lead types: '1'. */
+  choice: string;
+  /** What the screens show: 'Talk to an agent'. */
+  label: string;
+  words: readonly string[];
+  points: number;
+  /** Sent on this answer, in front of the next question when there is one. */
+  reply: string | null;
+  /** Where the lead goes next; null when this choice ends the flow. */
+  nextQuestionId: number | null;
+  ending: Ending | null;
+}
+
+export interface FlowQuestion {
+  id: number;
+  /** 'q1', 'offers'. */
+  key: string;
+  /** Display order; the lowest is the first question. */
+  position: number;
+  /** As the lead reads it. May contain {first_name}. */
+  body: string;
+  /** Sent when the reply is none of the choices. */
+  clarifyBody: string;
+  /** What the screens call this answer. */
+  heading: string;
+  choices: readonly FlowChoice[];
+}
+
+export interface Flow {
+  id: number;
+  key: string;
+  /** Awarded once, on the first reply of any kind. */
+  respondedPoints: number;
+  /** Awarded when the flow ends `completed`. */
+  completedPoints: number;
+  /** Sent after too many unclear replies, when a person takes over. */
+  reviewBody: string;
+  questions: readonly FlowQuestion[];
+}
+
 export interface Conversation {
   status: ConversationStatus;
+  /** The current question's position, for screens that say "On Q2". */
   step: number | null;
-  q1: string | null;
-  q2: string | null;
-  q3: string | null;
+  /** The question the lead is on. Null once the conversation is not open. */
+  currentQuestionId: number | null;
   invalidCount: number;
   score: number;
   tier: string | null;
+  endOutcome: Ending | null;
   /**
    * When an agent sent the first manual SMS, or null. Set by the agent SMS
    * endpoint, never by this module. Once it is set the questions stop - rule
@@ -35,14 +91,6 @@ export interface Reply {
   optOut: boolean;
 }
 
-/** One row of `scoring_rules`. question 0 is a flat award. */
-export interface ScoringRule {
-  code: string;
-  question: number;
-  choice: string | null;
-  points: number;
-}
-
 /** One row of `tiers`. */
 export interface Tier {
   name: string;
@@ -51,29 +99,31 @@ export interface Tier {
 }
 
 export interface Rules {
-  scoring: ScoringRule[];
+  flow: Flow;
   tiers: Tier[];
   /** `settings.max_invalid_before_review`, seeded 1. */
   maxInvalidBeforeReview: number;
 }
 
-/**
- * Which copy to send, as a `settings` key. The caller renders it with
- * core/messages.ts - the state machine never produces text.
- */
-export type MessageKey =
-  | 'question_1'
-  | 'question_2'
-  | 'question_3'
-  | 'message_clarify_1'
-  | 'message_clarify_2'
-  | 'message_clarify_3'
-  | 'message_thanks'
-  | 'message_review';
+/** An answer this reply gave: what the caller writes to `conversation_answers`. */
+export interface GivenAnswer {
+  questionId: number;
+  questionKey: string;
+  position: number;
+  heading: string;
+  choice: string;
+  label: string;
+  points: number;
+}
 
 export interface StepResult {
   conversation: Conversation;
-  send: MessageKey | null;
+  /**
+   * What to send, in order, as one text: a choice's reply and then the next
+   * question, or a clarification alone. Templates - the caller fills in
+   * {first_name}. Empty when nothing is sent.
+   */
+  send: string[];
   /** The caller adds the phone to `dnc_list`. */
   blockNumber: boolean;
   /**
@@ -85,39 +135,44 @@ export interface StepResult {
    * made every responder read as an inbound reply. Jeel, 2026-09-28.
    */
   needsPerson: boolean;
-}
-
-function points(rules: Rules, code: string): number {
-  return rules.scoring.find((r) => r.code === code)?.points ?? 0;
+  /** The answer this reply gave, or null when it gave none. */
+  answer: GivenAnswer | null;
 }
 
 /**
  * The tier whose range contains the score. A score of 0 means no reply yet and
  * carries no tier.
  */
-export function tierFor(rules: Rules, score: number): string | null {
+export function tierFor(rules: Pick<Rules, 'tiers'>, score: number): string | null {
   if (score <= 0) return null;
   return rules.tiers.find((t) => score >= t.minScore && score <= t.maxScore)?.name ?? null;
 }
 
+/** The question a new lead is sent: the one with the lowest position. */
+export function firstQuestion(flow: Flow): FlowQuestion | null {
+  return [...flow.questions].sort((a, b) => a.position - b.position)[0] ?? null;
+}
+
 /**
- * True once any answer is recorded. Used to award `responded` exactly once,
- * however many replies arrive.
- *
- * Read off the conversation rather than a flag column: on the first reply the
- * score is still 0 and no answer is stored, so both are false together.
+ * True once any reply has been scored. Used to award `respondedPoints` exactly
+ * once, however many replies arrive: on the first reply the score is still 0.
  */
 function hasRespondedBefore(c: Conversation): boolean {
   return c.score > 0;
 }
 
-function answerCode(step: number, choice: Choice): string {
-  return `q${step}_${choice}`;
-}
-
 function withScore(c: Conversation, rules: Rules, score: number): Conversation {
   return { ...c, score, tier: tierFor(rules, score) };
 }
+
+const nothing = (conversation: Conversation, over: Partial<StepResult> = {}): StepResult => ({
+  conversation,
+  send: [],
+  blockNumber: false,
+  needsPerson: false,
+  answer: null,
+  ...over,
+});
 
 /**
  * Applies one inbound reply.
@@ -131,93 +186,101 @@ export function step(conversation: Conversation, reply: Reply, rules: Rules): St
   // doing. Nothing is sent: EZ Texting sends the unsubscribe confirmation
   // itself, and a second one from us would reach the lead as a duplicate.
   if (reply.optOut) {
-    return {
-      conversation:
-        conversation.status === 'open' ? { ...conversation, status: 'suppressed' } : conversation,
-      send: null,
-      blockNumber: true,
-      needsPerson: false,
-    };
+    return nothing(
+      conversation.status === 'open'
+        ? { ...conversation, status: 'suppressed', currentQuestionId: null }
+        : conversation,
+      { blockNumber: true }
+    );
   }
 
   // 2. Not open. completed, review, expired and suppressed are final for that
   // conversation: the caller stores the message and flags the lead, and a
   // person picks it up.
   if (conversation.status !== 'open') {
-    return { conversation, send: null, blockNumber: false, needsPerson: true };
+    return nothing(conversation, { needsPerson: true });
   }
 
   // 2b. An agent has taken the conversation over - Jeel, 2026-09-23. Once an
   // agent has sent a manual SMS the questions stop: the lead is answering the
-  // agent, not us, and an automated "Question 2 of 3" landing on top of that
-  // reads as a broken system. The reply is stored and the lead is flagged
-  // unread by the caller, exactly as in rule 2; nothing is scored and nothing
-  // is sent. The score earned so far is kept as it stands.
+  // agent, not us, and an automated question landing on top of that reads as a
+  // broken system. The reply is stored and the lead is flagged unread by the
+  // caller, exactly as in rule 2; nothing is scored and nothing is sent. The
+  // score earned so far is kept as it stands.
   //
   // Below rule 1 deliberately: an opt-out can never depend on whether an agent
   // happened to text first.
   if (conversation.agentTookOverAt) {
-    return { conversation, send: null, blockNumber: false, needsPerson: true };
+    return nothing(conversation, { needsPerson: true });
   }
 
-  const current = conversation.step ?? 1;
+  const { flow } = rules;
+  const question = flow.questions.find((q) => q.id === conversation.currentQuestionId);
+  // An open conversation with no question it could be on - a flow edited from
+  // under it. Nothing here can answer the lead, so a person does.
+  if (!question) {
+    return nothing(conversation, { needsPerson: true });
+  }
 
   // Responding at all earns points, valid answer or not, but only once.
-  const respondedAward = hasRespondedBefore(conversation) ? 0 : points(rules, 'responded');
-  const choice = matchAnswer(reply.text, current);
+  const respondedAward = hasRespondedBefore(conversation) ? 0 : flow.respondedPoints;
+  const chosen = matchChoice(reply.text, question.choices);
 
-  // 4. Unclear. Handled before the valid-answer branch only in the sense that a
-  // null choice lands here; the spec's order is preserved because matchAnswer
-  // decides which of the two applies.
-  if (choice === null) {
+  // 4. Unclear: the reply is none of this question's choices.
+  if (chosen === null) {
     const scored = withScore(conversation, rules, conversation.score + respondedAward);
 
     if (scored.invalidCount < rules.maxInvalidBeforeReview) {
-      return {
-        conversation: { ...scored, invalidCount: scored.invalidCount + 1 },
-        send: `message_clarify_${current}` as MessageKey,
-        blockNumber: false,
-        needsPerson: false,
-      };
+      return nothing(
+        { ...scored, invalidCount: scored.invalidCount + 1 },
+        { send: [question.clarifyBody] }
+      );
     }
 
     // Not flagged: the review status is what brings this lead to a person, and
     // Inbound reply would outrank Needs review and hide why.
-    return {
-      conversation: { ...scored, status: 'review' },
-      send: 'message_review',
-      blockNumber: false,
-      needsPerson: false,
-    };
+    return nothing({ ...scored, status: 'review', currentQuestionId: null }, { send: [flow.reviewBody] });
   }
 
-  // 3. A valid answer. Store it, reset the unclear count - a lead who fumbles
+  // 3. A valid answer. Record it, reset the unclear count - a lead who fumbles
   // one question then answers it should not carry that into the next - and add
   // the answer's points.
-  const answered: Conversation = {
-    ...conversation,
-    invalidCount: 0,
-    [`q${current}`]: choice,
-  } as Conversation;
+  const answer: GivenAnswer = {
+    questionId: question.id,
+    questionKey: question.key,
+    position: question.position,
+    heading: question.heading,
+    choice: chosen.choice,
+    label: chosen.label,
+    points: chosen.points,
+  };
+  const scoreAfterAnswer = conversation.score + respondedAward + chosen.points;
+  const reply_ = chosen.reply ? [chosen.reply] : [];
 
-  const scoreAfterAnswer =
-    conversation.score + respondedAward + points(rules, answerCode(current, choice));
-
-  if (current < 3) {
-    const advanced = withScore({ ...answered, step: current + 1 }, rules, scoreAfterAnswer);
+  const next = flow.questions.find((q) => q.id === chosen.nextQuestionId);
+  if (next) {
     return {
-      conversation: advanced,
-      send: `question_${current + 1}` as MessageKey,
+      conversation: withScore(
+        { ...conversation, invalidCount: 0, currentQuestionId: next.id, step: next.position },
+        rules,
+        scoreAfterAnswer
+      ),
+      // The reply and the next question go out as one text, so they cannot
+      // arrive out of order.
+      send: [...reply_, next.body],
       blockNumber: false,
       needsPerson: false,
+      answer,
     };
   }
 
+  // The choice ends the flow. A choice that names a next question the flow no
+  // longer has ends it too, as completed: the lead has answered what exists.
+  const ending: Ending = chosen.ending ?? 'completed';
   const finished = withScore(
-    { ...answered, status: 'completed' },
+    { ...conversation, invalidCount: 0, status: 'completed', currentQuestionId: null, endOutcome: ending },
     rules,
-    scoreAfterAnswer + points(rules, 'completed')
+    scoreAfterAnswer + (ending === 'completed' ? flow.completedPoints : 0)
   );
-
-  return { conversation: finished, send: 'message_thanks', blockNumber: false, needsPerson: false };
+  return { conversation: finished, send: reply_, blockNumber: false, needsPerson: false, answer };
 }

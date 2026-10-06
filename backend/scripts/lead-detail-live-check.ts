@@ -14,9 +14,9 @@
  *     EZT_USERNAME=x EZT_PASSWORD=x EZT_GROUP=x npx ts-node --transpile-only scripts/lead-detail-live-check.ts
  */
 import { pool } from '../src/db/pool';
-import { applyReply } from '../src/api/reply-flow';
 import { getLeadDetail } from '../src/db/lead-detail';
 import { listQueue } from '../src/db/queue';
+import { replyAs, startFlow } from './live-flow';
 
 let failures = 0;
 
@@ -63,18 +63,15 @@ async function main(): Promise<void> {
   console.log('\na completed lead');
   {
     const lead = await makeLead('+15550000201');
-    await pool.query(
-      `INSERT INTO conversations (lead_id, status, step, q1, q2, q3, score, tier)
-       VALUES ($1, 'completed', 3, '3', '1', '1', 100, 'HOT')`,
-      [lead]
-    );
+    // Yes, Yes, Talk to an agent: 10 + 20 + 15 + 45 + 10.
+    await startFlow(lead, ['1', '1', '2']);
 
     const d = await getLeadDetail(lead);
     check('score and tier', [d?.conversation?.score, d?.conversation?.tier], [100, 'HOT']);
     check(
       'chips read as words',
       d?.chips.map((c) => `${c.heading}: ${c.answer}`),
-      ['Interest: Both', 'Timing: Today', 'Prefers: Call me now']
+      ['Requested info: Yes', 'Used telemedicine: Yes', 'Next step: Talk to an agent']
     );
     check(
       'the breakdown adds up to the score',
@@ -87,21 +84,19 @@ async function main(): Promise<void> {
   console.log('\nthe newest conversation wins');
   {
     const lead = await makeLead('+15550000202');
+    // An old conversation that answered Yes and went quiet, then a new one
+    // that answered No.
+    const old = await startFlow(lead, ['1']);
     await pool.query(
-      `INSERT INTO conversations (lead_id, status, step, q1, score, tier, created_at)
-       VALUES ($1, 'expired', 2, '1', 15, 'LOW', now() - interval '30 days')`,
-      [lead]
+      `UPDATE conversations SET status = 'expired', current_question_id = NULL, created_at = now() - interval '30 days' WHERE id = $1`,
+      [old]
     );
-    await pool.query(
-      `INSERT INTO conversations (lead_id, status, step, q1, score, tier, created_at)
-       VALUES ($1, 'open', 2, '3', 25, 'LOW', now())`,
-      [lead]
-    );
+    await startFlow(lead, ['2']);
 
     const d = await getLeadDetail(lead);
     // History stays on the lead; the card shows the conversation in play.
     check('reports the newer one', d?.conversation?.status, 'open');
-    check('and its answer', d?.chips[0].answer, 'Both');
+    check('and its answer, not the old one', d?.chips.map((c) => c.answer), ['No']);
     check('expired flag follows the newest', d?.flags.expired, false);
   }
 
@@ -163,15 +158,11 @@ async function main(): Promise<void> {
   console.log('\na part-way lead');
   {
     const lead = await makeLead('+15550000207');
-    await pool.query(
-      `INSERT INTO conversations (lead_id, status, step, q1, score, tier)
-       VALUES ($1, 'open', 2, '2', 20, 'LOW')`,
-      [lead]
-    );
+    await startFlow(lead, ['1']);
 
     const d = await getLeadDetail(lead);
-    check('shows only what was earned', d?.breakdown.map((l) => l.label), ['Responded', 'Telehealth/Rx']);
-    check('unanswered chips are null', [d?.chips[1].answer, d?.chips[2].answer], [null, null]);
+    check('shows only what was earned', d?.breakdown.map((l) => [l.label, l.points]), [['Responded', 10], ['Yes', 20]]);
+    check('one chip per question answered - none for what is still to come', d?.chips.map((c) => c.heading), ['Requested info']);
   }
 
   console.log('\na lead with no conversation');
@@ -186,64 +177,70 @@ async function main(): Promise<void> {
   console.log('\na lead that does not exist');
   check('is null', await getLeadDetail(999999), null);
 
-  console.log('\nthe word a lead chose is kept with their answer');
+  console.log('\n"No", then offers');
   {
-    // A real reply, through the path the webhook takes.
-    const reply = async (leadId: number, text: string) => {
-      const client = await pool.connect();
-      try {
-        await client.query('BEGIN');
-        await applyReply(client, leadId, '+15550000299', 'Wordy', { text, optOut: false });
-        await client.query('COMMIT');
-      } finally {
-        client.release();
-      }
-    };
-    const fresh = async (phone: string) => {
-      const lead = await makeLead(phone);
-      await pool.query(`INSERT INTO conversations (lead_id, status, step) VALUES ($1, 'open', 1)`, [lead]);
-      return lead;
-    };
-    const words = async (lead: number) =>
-      (await pool.query(`SELECT q1, q1_label, q2, q2_label, q3_label FROM conversations WHERE lead_id = $1`, [lead])).rows[0];
-    const chip = async (lead: number) => (await getLeadDetail(lead))?.chips[0].answer;
-
-    const early = await fresh('+15550000230');
-    await reply(early, '1');
-    check('saved with the number, when the answer is given', await words(early), {
-      q1: '1',
-      q1_label: 'Supplements',
-      q2: null,
-      q2_label: null,
-      q3_label: null,
-    });
-    await reply(early, 'not sure');
-    check('an unclear reply saves no word', (await words(early)).q2_label, null);
-    await reply(early, '2');
-    check('the next answer adds its own and leaves the first', await words(early), {
-      q1: '1',
-      q1_label: 'Supplements',
-      q2: '2',
-      q2_label: 'This week',
-      q3_label: null,
-    });
-
-    // The client renames choice 1.
-    await pool.query(`UPDATE scoring_rules SET label = 'Q1: Vitamins' WHERE code = 'q1_1'`);
-    const late = await fresh('+15550000231');
-    await reply(late, '1');
-    check('a lead who answers after a rename gets the new word', await chip(late), 'Vitamins');
-    check('one who answered before it keeps the word they chose', await chip(early), 'Supplements');
-    const breakdown = (await getLeadDetail(early))?.breakdown.find((l) => l.code === 'q1_1');
-    check('in the score breakdown too', breakdown?.label, 'Supplements');
-    // The queue holds finished leads; finish these two so it lists them.
-    await pool.query(`UPDATE conversations SET status = 'completed' WHERE lead_id = ANY($1)`, [[early, late]]);
-    const queue = (await listQueue({ limit: 200 })).leads;
-    check('and in the queue', [queue.find((l) => l.id === early)?.q1Label, queue.find((l) => l.id === late)?.q1Label], [
-      'Supplements',
-      'Vitamins',
+    const lead = await makeLead('+15550000209');
+    await startFlow(lead, ['2', '1']);
+    const d = await getLeadDetail(lead);
+    check('the chips are the two questions they were asked', d?.chips.map((c) => `${c.heading}: ${c.answer}`), [
+      'Requested info: No',
+      'Offers: Special offers',
     ]);
-    await pool.query(`UPDATE scoring_rules SET label = 'Q1: Supplements' WHERE code = 'q1_1'`);
+    check('no completion award: they did not finish the questions', d?.breakdown.map((l) => [l.label, l.points]), [
+      ['Responded', 10],
+      ['No', 0],
+      ['Special offers', 0],
+    ]);
+    check('and how it ended is on the card', [d?.conversation?.flow, d?.conversation?.endOutcome], ['antibiotics', 'offers']);
+  }
+
+  console.log('\nan answer keeps the word and the points it had when it was given');
+  {
+    const answersOf = async (lead: number) =>
+      (
+        await pool.query(
+          `SELECT question_key, choice, label, points FROM conversation_answers WHERE lead_id = $1 ORDER BY position`,
+          [lead]
+        )
+      ).rows;
+
+    const early = await makeLead('+15550000230');
+    await startFlow(early, ['1']);
+    check('saved as its own row, when the answer is given', await answersOf(early), [
+      { question_key: 'q1', choice: '1', label: 'Yes', points: 20 },
+    ]);
+    await replyAs(early, 'not sure');
+    check('an unclear reply saves nothing', (await answersOf(early)).length, 1);
+    await replyAs(early, '2');
+    check('the next answer adds its own row and leaves the first', (await answersOf(early)).map((a) => a.label), ['Yes', 'No']);
+
+    // The client renames choice 1 of question 1 and changes what it is worth.
+    await pool.query(
+      `UPDATE flow_choices SET label = 'Yes, I did', points = 25
+       WHERE choice = '1' AND question_id = (
+         SELECT fq.id FROM flow_questions fq JOIN flows f ON f.id = fq.flow_id WHERE f.key = 'antibiotics' AND fq.key = 'q1')`
+    );
+    const late = await makeLead('+15550000231');
+    await startFlow(late, ['1']);
+    const first = async (lead: number) => (await getLeadDetail(lead))?.breakdown.find((l) => l.code === 'q1_1');
+    check('a lead who answers after the change gets the new word and points', await first(late), { code: 'q1_1', label: 'Yes, I did', points: 25 });
+    check('one who answered before it keeps what they chose and earned', await first(early), { code: 'q1_1', label: 'Yes', points: 20 });
+
+    // The queue holds finished leads; finish these two so it lists them.
+    await replyAs(early, '2');
+    await replyAs(late, '1');
+    await replyAs(late, '2');
+    const queue = (await listQueue({ limit: 200 })).leads;
+    check('and in the queue', [queue.find((l) => l.id === early)?.answers[0].label, queue.find((l) => l.id === late)?.answers[0].label], [
+      'Yes',
+      'Yes, I did',
+    ]);
+
+    let refused = '';
+    await pool.query(`UPDATE conversation_answers SET label = 'changed' WHERE lead_id = $1`, [early]).catch((err: Error) => {
+      refused = err.message;
+    });
+    check('a saved answer cannot be edited', refused, 'conversation_answers is add-only: rows cannot be changed or deleted');
   }
 
   console.log(failures === 0 ? '\nall checks passed' : `\n${failures} check(s) FAILED`);

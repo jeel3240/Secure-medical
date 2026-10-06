@@ -37,6 +37,7 @@ let stubId = 0;
   return { data: { id: `stub-${++stubId}` } };
 };
 
+import { startConversation } from '../src/db/flows';
 import { pool } from '../src/db/pool';
 import { retryFailedOpeners } from '../src/worker/retry-openers';
 import { blockNumber, DNC_REASONS } from '../src/db/dnc';
@@ -79,10 +80,8 @@ async function leadWithFailedOpener(
   );
   const id = rows[0].id;
 
-  await pool.query(
-    `INSERT INTO conversations (lead_id, status, step, score) VALUES ($1, 'open', 1, 0)`,
-    [id]
-  );
+  // In the active flow, on its first question - as the poller leaves a new lead.
+  await startConversation(pool, id, 'open');
 
   const failedAgo = String(opts.lastFailedMinutesAgo ?? opts.minutesAgo);
   for (let i = 0; i < (opts.attempts ?? 1); i++) {
@@ -274,10 +273,10 @@ async function main(): Promise<void> {
     );
     const fine = rows[0].id;
     await pool.query(
-      `INSERT INTO conversations (lead_id, status, step, score, expires_at)
-       VALUES ($1, 'open', 1, 0, now() + interval '7 days')`,
-      [fine]
+      `SELECT 1`
     );
+    await startConversation(pool, fine, 'open');
+    await pool.query(`UPDATE conversations SET expires_at = now() + interval '7 days' WHERE lead_id = $1`, [fine]);
     await pool.query(
       `INSERT INTO messages (lead_id, direction, body, ezt_message_id)
        VALUES ($1, 'outbound', 'the opener', 'real-1')`,

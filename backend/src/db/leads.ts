@@ -22,6 +22,8 @@ export type LeadStatus =
   | 'awaiting_reply'
   | 'answering'
   | 'ready'
+  /** Asked for special offers only - not a call to make. docs/FLOWS.md. */
+  | 'offers'
   | 'working'
   | 'closed'
   | 'needs_review'
@@ -76,7 +78,7 @@ export interface AdminLeadPage {
 const BASE = `
   FROM leads l
   LEFT JOIN LATERAL (
-    SELECT c.status, c.step, c.q1, c.q2, c.q3, c.score, c.tier
+    SELECT c.id, c.status, c.step, c.score, c.tier, c.end_outcome
     FROM conversations c
     WHERE c.lead_id = l.id
     ORDER BY c.created_at DESC, c.id DESC
@@ -102,7 +104,8 @@ const BASE = `
  *    status: once a person is on a lead, what the conversation says matters
  *    less than that someone is handling it - a needs-review or expired lead an
  *    agent is working reads Working.
- * 4. the conversation: needs_review, ready, expired, then an open one
+ * 4. the conversation: needs_review, offers (asked for offers only, so not
+ *    Ready for an agent), ready, expired, then an open one
  *    split on whether any question has been answered.
  *
  * `db/lead-state.ts` defines closed and working, shared with the queue.
@@ -113,9 +116,10 @@ const STATUS_SQL = `
     WHEN ${CLOSED_SQL} THEN 'closed'
     WHEN ${WORKED_SQL} THEN 'working'
     WHEN c.status = 'review' THEN 'needs_review'
+    WHEN c.status = 'completed' AND c.end_outcome = 'offers' THEN 'offers'
     WHEN c.status = 'completed' THEN 'ready'
     WHEN c.status = 'expired' THEN 'expired'
-    WHEN c.status = 'open' AND (c.q1 IS NOT NULL OR c.q2 IS NOT NULL OR c.q3 IS NOT NULL)
+    WHEN c.status = 'open' AND EXISTS (SELECT 1 FROM conversation_answers ca WHERE ca.conversation_id = c.id)
       THEN 'answering'
     WHEN c.status = 'open' THEN 'awaiting_reply'
     ELSE NULL

@@ -116,33 +116,30 @@ export async function retryFailedOpeners(): Promise<RetryStats> {
   const startedAt = Date.now();
   const stats: RetryStats = { due: 0, sent: 0, failed: 0, abandoned: 0, tooOld: 0, durationMs: 0 };
 
-  const template = (
-    await pool.query(`SELECT value FROM settings WHERE key = 'question_1'`)
-  ).rows[0]?.value as string | undefined;
-
-  if (!template) {
-    log.error('sms.no_template', { key: 'question_1', retry: true });
-    stats.durationMs = Date.now() - startedAt;
-    return stats;
-  }
-
   // Leads whose conversation is open and has no expiry: the opener never went
   // out. A blocked number is excluded - it is not a failure to retry, it is a
   // number we must not text. Ordered oldest first so the longest-waiting lead
   // is contacted first.
   const { rows } = await pool.query(
     `SELECT l.id, l.phone, l.first_name,
+            -- The first question of the lead's own flow - docs/FLOWS.md.
+            fq.body AS template,
             (SELECT count(*)::int ${FAILED_OPENERS}) AS attempts,
             (SELECT max(m.created_at) ${FAILED_OPENERS}) AS last_failed_at,
             COALESCE(l.ezt_added_at, l.created_at) AS arrived_at
      FROM leads l
      JOIN conversations c ON c.lead_id = l.id
+     JOIN flow_questions fq ON fq.id = c.current_question_id
      WHERE c.status = 'open'
        AND c.expires_at IS NULL
-       -- Still on question 1 with nothing answered. A lead who replied anyway
-       -- has moved the conversation on, and question 1 again would be scored
-       -- as the answer to question 2 (review, 2026-09-28).
-       AND c.step = 1 AND c.score = 0
+       -- Still on the flow's first question with nothing answered. A lead who
+       -- replied anyway has moved the conversation on, and the first question
+       -- again would be scored as the answer to the next (review, 2026-09-28).
+       AND c.score = 0
+       AND NOT EXISTS (
+         SELECT 1 FROM flow_questions earlier
+         WHERE earlier.flow_id = fq.flow_id AND earlier.position < fq.position
+       )
        AND NOT EXISTS (
          SELECT 1 FROM messages m WHERE m.lead_id = l.id AND m.direction = 'inbound'
        )
@@ -188,7 +185,7 @@ export async function retryFailedOpeners(): Promise<RetryStats> {
     try {
       // Recorded around the send - db/outbound.ts - so a text that went out is
       // never retried because a write after it failed.
-      const result = await sendOpener({ id: row.id, phone: row.phone, firstName: row.first_name }, template);
+      const result = await sendOpener({ id: row.id, phone: row.phone, firstName: row.first_name }, row.template);
 
       if (!result.sent) {
         stats.failed++;
