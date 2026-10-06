@@ -213,6 +213,7 @@ you change something the docs describe, update the doc in the same commit.
     scripts/end-to-end.ts   the whole system in one run - npm run e2e
     scripts/live-checks.sh  runs every live check, each on its own scratch database
     scripts/flows-live-check.ts  proves a second, five-question flow works from rows alone; scripts/live-flow.ts answers a flow for the other checks
+    scripts/dev-ask-again.ts  local testing only: asks a held lead the questions again, so one phone can walk every path
     src/db/leads.ts         Admin > Leads SQL
     src/db/lead-state.ts    closed and worked, shared by the queue and Admin > Leads
     src/db/sql.ts           LIKE escaping and the expiry-days reader, shared by every query

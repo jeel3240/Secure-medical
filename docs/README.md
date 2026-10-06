@@ -110,7 +110,7 @@ contact in the group gets a text within a poll interval. `openers` in the
 
 ```bash
 cd backend  && npm test && npm run lint    # 599 tests
-cd frontend && npm test && npm run lint    # 267 tests   (counts as of 2026-10-05)
+cd frontend && npm test && npm run lint    # 270 tests   (counts as of 2026-10-05)
 ```
 
 **Unit and route tests** mock the database and cover behaviour in isolation.
@@ -170,12 +170,22 @@ own Twilio number and TwiML App in the local `.env` - `TWILIO.md`, "What it
 needs on the Twilio account". Admin > Overview shows no call totals - removed on 2026-09-28
 (`ADMIN.md`, "Overview") - though every call is on its lead's timeline.
 
-**A real call needs a public address.** Twilio must reach our voice webhook, so
-calling locally means a tunnel and `PUBLIC_URL` - `TWILIO.md`, "Testing".
+**Calling is not tested locally** (2026-10-05). The Twilio number is
+production's, so a local `.env` keeps the Twilio settings empty and calling
+reads "off"; a calling change is proved by tests and checked on the live
+server - `TWILIO.md`, "What it needs on the Twilio account".
 
-**The message copy is the mockup's placeholder.** It has never been approved for
-real leads. Nothing has been sent to anyone outside the test group, and the
-end-to-end script deliberately stops short of a real send.
+**The message copy is the client's antibiotics script** (2026-10-05,
+`STATE-MACHINE.md`). Four lines in it were drafted here and are waiting for the
+client's word: the reply to Special offers, the offers question's "sorry" text,
+the numbers on the offers question, and the text after a missed call. Nothing
+has been sent to anyone outside the test group, and the end-to-end script
+deliberately stops short of a real send. Two of the texts run past 160
+characters and cost two segments (`ADMIN.md`, "Configuration").
+
+**One flow for everyone.** Every new lead gets the one active flow. A flow per
+EZ Texting group, and editing a flow from the website, are not built -
+`FLOWS.md`, "What this does not cover".
 
 **A returning lead is skipped.** The poller ignores a phone it already holds, so
 a lead the partner delivers twice never starts a second conversation. Whether a

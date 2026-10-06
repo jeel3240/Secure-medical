@@ -188,3 +188,31 @@ the inactive flow `wellness`, and every answer already given was copied into
 
 `backend/scripts/live-checks.sh` runs every live check on its own scratch
 database.
+
+### Testing a flow with one phone
+
+A real walk needs a real phone, and every path of a flow is several walks. The
+poller skips a number it already holds - repeat leads are not built,
+`POLLER.md` - so a second walk would need a second phone or an emptied
+database. For local testing there is a command instead:
+
+```bash
+docker compose exec api npm run dev:ask-again -- +16025550123
+```
+
+It marks the lead's open conversation expired, if it has one, starts a new one
+in the flow new leads get, and sends the first question the way the poller
+does. Nothing is deleted: the earlier walks and their answers stay on the lead.
+
+- **Local only.** It refuses when `NODE_ENV` is `production`, and it is in
+  `scripts/`, which is not compiled into the production build.
+- It needs the lead to exist already - the first walk comes in through the
+  poller - and refuses a blocked number: after a walk that ends with STOP, text
+  START from the phone first.
+- **The lead keeps its agent history.** A lead somebody holds, closed or left a
+  note on still reads Working or Closed on Admin > Leads and in the queue
+  whatever the new walk does. For the tags and statuses of an untouched lead,
+  use a lead nobody has worked.
+- Replies reach a local API only through a tunnel and its own EZ Texting
+  subscription - `WEBHOOKS.md`, "Testing". Delete the subscription afterwards.
+
