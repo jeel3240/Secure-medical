@@ -52,6 +52,13 @@ describe('the option as the lead read it', () => {
     expect(picked('1 2')).toBeNull();
   });
 
+  it('the ways people type yes - found with a real phone: "Yea" got the "sorry"', () => {
+    for (const text of ['Yea', 'ya', 'Yeah', 'yep', 'YUP']) {
+      expect(picked(text)).toBe('1');
+      expect(picked(text, offers)).toBe('1');
+    }
+  });
+
   it('the polite forms', () => {
     expect(picked('Yes please')).toBe('1');
     expect(picked('No, thank you.')).toBe('2');

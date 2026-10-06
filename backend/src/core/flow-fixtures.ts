@@ -11,7 +11,7 @@ export const Q2 = 12;
 export const Q3 = 13;
 export const OFFERS = 14;
 
-const YES = ['yes', 'y', 'yeah', 'yep', 'yup', 'yes please', 'sure', 'ok', 'okay', 'correct'];
+const YES = ['yes', 'y', 'yeah', 'yea', 'ya', 'yep', 'yup', 'yes please', 'sure', 'ok', 'okay', 'correct'];
 const NO = ['no', 'n', 'nope', 'nah', 'no thanks', 'no thank you'];
 export const LINK = 'https://www.edrugstore.com/anti-ez';
 
@@ -43,7 +43,7 @@ export const ANTIBIOTICS: Flow = {
       clarifyBody: 'Sorry, please reply 1 for offers, 2 to learn more from a rep, 3 for no thanks, or STOP to unsubscribe.',
       heading: 'Offers',
       choices: [
-        { choice: '1', label: 'Special offers', words: ['yes', 'y', 'yes please', 'offers', 'offer'], points: 0, reply: "Thanks! You'll receive special offers from eDrugstore. Reply STOP to opt out.", nextQuestionId: null, ending: 'offers' },
+        { choice: '1', label: 'Special offers', words: ['yes', 'y', 'yeah', 'yea', 'ya', 'yep', 'yup', 'yes please', 'offers', 'offer'], points: 0, reply: "Thanks! You'll receive special offers from eDrugstore. Reply STOP to opt out.", nextQuestionId: null, ending: 'offers' },
         { choice: '2', label: 'Learn more', words: ['learn more', 'learn', 'more', 'learnmore'], points: 0, reply: 'Thanks! An eDrugstore representative will contact you shortly.', nextQuestionId: null, ending: 'wants_contact' },
         { choice: '3', label: 'No thanks', words: ['no', 'n', 'nope', 'nah', 'no thanks', 'no thank you', 'not interested'], points: 0, reply: 'No problem. Thanks for your time.', nextQuestionId: null, ending: 'declined' },
       ],
@@ -56,7 +56,7 @@ export const ANTIBIOTICS: Flow = {
       clarifyBody: 'Sorry, please reply 1 for Yes or 2 for No.',
       heading: 'Used telemedicine',
       choices: [
-        { choice: '1', label: 'Yes', words: ['yes', 'y', 'yeah', 'yep', 'yup', 'yes please', 'i have'], points: 15, reply: 'Great. eDrugstore makes the online consultation process simple.', nextQuestionId: Q3, ending: null },
+        { choice: '1', label: 'Yes', words: ['yes', 'y', 'yeah', 'yea', 'ya', 'yep', 'yup', 'yes please', 'i have'], points: 15, reply: 'Great. eDrugstore makes the online consultation process simple.', nextQuestionId: Q3, ending: null },
         { choice: '2', label: 'No', words: ['no', 'n', 'nope', 'nah', 'never', 'not yet'], points: 5, reply: 'No problem. You can complete your information online and, when required, consult with a licensed healthcare provider.', nextQuestionId: Q3, ending: null },
       ],
     },

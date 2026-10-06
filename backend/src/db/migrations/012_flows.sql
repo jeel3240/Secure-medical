@@ -257,11 +257,11 @@ INSERT INTO flow_choices (flow_id, question_id, choice, label, words, points, re
 SELECT f.id, q.id, c.choice, c.label, c.words, c.points, c.reply_body, nq.id, c.ending
 FROM flows f
 JOIN (VALUES
-  ('q1', '1', 'Yes', ARRAY['yes', 'y', 'yeah', 'yep', 'yup', 'yes please', 'sure', 'ok', 'okay', 'correct'], 20,
+  ('q1', '1', 'Yes', ARRAY['yes', 'y', 'yeah', 'yea', 'ya', 'yep', 'yup', 'yes please', 'sure', 'ok', 'okay', 'correct'], 20,
    'Great! Let''s get you started.', 'q2', NULL),
   ('q1', '2', 'No', ARRAY['no', 'n', 'nope', 'nah', 'no thanks', 'no thank you'], 0,
    'No problem.', 'q1-a', NULL),
-  ('q2', '1', 'Yes', ARRAY['yes', 'y', 'yeah', 'yep', 'yup', 'yes please', 'i have'], 15,
+  ('q2', '1', 'Yes', ARRAY['yes', 'y', 'yeah', 'yea', 'ya', 'yep', 'yup', 'yes please', 'i have'], 15,
    'Great. eDrugstore makes the online consultation process simple.', 'q3', NULL),
   ('q2', '2', 'No', ARRAY['no', 'n', 'nope', 'nah', 'never', 'not yet'], 5,
    'No problem. You can complete your information online and, when required, consult with a licensed healthcare provider.', 'q3', NULL),
@@ -271,7 +271,7 @@ JOIN (VALUES
    'Thanks! An eDrugstore representative will contact you to discuss available options, pricing and discounts.', NULL, 'completed'),
   ('q3', '3', 'Order online', ARRAY['online', 'order', 'order online'], 10,
    'Great! Start your online order and consultation here: https://www.edrugstore.com/anti-ez', NULL, 'completed'),
-  ('q1-a', '1', 'Special offers', ARRAY['yes', 'y', 'yes please', 'offers', 'offer'], 0,
+  ('q1-a', '1', 'Special offers', ARRAY['yes', 'y', 'yeah', 'yea', 'ya', 'yep', 'yup', 'yes please', 'offers', 'offer'], 0,
    'Thanks! You''ll receive special offers from eDrugstore. Reply STOP to opt out.', NULL, 'offers'),
   ('q1-a', '2', 'Learn more', ARRAY['learn more', 'learn', 'more', 'learnmore'], 0,
    'Thanks! An eDrugstore representative will contact you shortly.', NULL, 'wants_contact'),

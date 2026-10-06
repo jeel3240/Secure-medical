@@ -109,7 +109,7 @@ contact in the group gets a text within a poll interval. `openers` in the
 ## How to test
 
 ```bash
-cd backend  && npm test && npm run lint    # 632 tests
+cd backend  && npm test && npm run lint    # 633 tests
 cd frontend && npm test && npm run lint    # 273 tests   (counts as of 2026-10-06)
 ```
 

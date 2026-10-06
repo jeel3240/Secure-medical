@@ -115,10 +115,14 @@ reply, any case:
 
 | | Choice 1 | Choice 2 | Choice 3 |
 |---|---|---|---|
-| q1 | 1, yes, y, yeah, yep, yup, yes please, sure, ok, okay, correct | 2, no, n, nope, nah, no thanks, no thank you | - |
-| q2 | 1, yes, y, yeah, yep, yup, yes please, i have | 2, no, n, nope, nah, never, not yet | - |
+| q1 | 1, yes, y, yeah, yea, ya, yep, yup, yes please, sure, ok, okay, correct | 2, no, n, nope, nah, no thanks, no thank you | - |
+| q2 | 1, yes, y, yeah, yea, ya, yep, yup, yes please, i have | 2, no, n, nope, nah, never, not yet | - |
 | q3 | 1, i know, know, i know which one | 2, agent, talk, call, call me, talk to an agent | 3, online, order, order online |
-| q1-a | 1, yes, y, yes please, offers, offer | 2, learn more, learn, more, learnmore | 3, no, n, nope, nah, no thanks, no thank you, not interested |
+| q1-a | 1, yes, y, yeah, yea, ya, yep, yup, yes please, offers, offer | 2, learn more, learn, more, learnmore | 3, no, n, nope, nah, no thanks, no thank you, not interested |
+
+*(2026-10-06, from the real-phone test: "Yea" got the "sorry" text. `yea`
+and `ya` were added to every Yes, and the offers question's Yes was given the
+same list as the others.)*
 
 **The unclear-reply texts:**
 
