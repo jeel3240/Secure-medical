@@ -25,8 +25,8 @@ import { questionsLabel } from '../pages/workspace/LeadHeader';
  *   [LM] Leo M.                           [WARM]
  *        (555) 010-0014
  *   Calling back · you tried 2× today
- *   Score       Interest     Flow
- *   45 / 100    Both         Stopped at Q2
+ *   Score       Next step    Flow
+ *   45 / 100    Order online Completed
  *   [ Decline ]              [ Accept ]
  *
  * Then, by what happens:
@@ -197,6 +197,7 @@ function RingingCard({
   const firstName = caller.name.trim().split(/\s+/)[0] || 'the lead';
   const tier = lead?.conversation?.tier ?? null;
   const context = entries && me ? callerContext(entries, me.name, now) : null;
+  const lastAnswer = lead?.chips[lead.chips.length - 1];
   const mine = Boolean(lead?.claimedBy && me && lead.claimedBy.id === me.id);
 
   return (
@@ -242,7 +243,9 @@ function RingingCard({
                 '–'
               )}
             </Fact>
-            <Fact label="Interest">{lead?.chips.find((chip) => chip.question === 1)?.answer ?? '–'}</Fact>
+            {/* The last thing they told us - on the antibiotics flow, what they
+                want to do next. Whatever their flow asked last. */}
+            <Fact label={lastAnswer?.heading ?? 'Answer'}>{lastAnswer?.answer ?? '–'}</Fact>
             <Fact label="Flow">{lead ? questionsLabel(lead.conversation) : '–'}</Fact>
           </dl>
         )}

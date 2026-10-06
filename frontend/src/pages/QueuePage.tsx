@@ -12,7 +12,7 @@ import { QueueStatus } from '../components/QueueStatus';
 import { Segmented } from '../components/Segmented';
 import { TierSignal } from '../components/TierSignal';
 import { Spinner } from '../components/Spinner';
-import { answerLabel, formatAge, formatPhone, leadName } from '../lib/format';
+import { formatAge, formatPhone, leadName } from '../lib/format';
 import { useSecond } from '../lib/useSecond';
 import { rowAction } from '../lib/lock';
 
@@ -49,12 +49,17 @@ const TIER_OPTIONS: { key: string; label: string }[] = [
 const EMPTY = '-';
 
 /**
- * The word for an answer: the one saved with it (migration 009), so a choice
- * renamed later does not rename what this lead picked. `answerLabel`'s built-in
- * names are only for a row that somehow has an answer and no saved word.
+ * A lead's answers in one cell: "Yes · No · Talk to an agent". One column, not
+ * one per question - flows differ in how many questions they ask (FLOWS.md),
+ * so there is no fixed set of columns to have. Hovering names each question.
  */
-export const answer = (question: 1 | 2 | 3, choice: string | null, saved: string | null) =>
-  choice ? (saved ?? answerLabel(question, choice)) : EMPTY;
+export function answersText(answers: QueueLead['answers']): string {
+  return answers.length > 0 ? answers.map((a) => a.label).join(' · ') : EMPTY;
+}
+
+export function answersTitle(answers: QueueLead['answers']): string | undefined {
+  return answers.length > 0 ? answers.map((a) => `${a.heading}: ${a.label}`).join('\n') : undefined;
+}
 
 const SINCE: { key: string; label: string }[] = [
   { key: '1h', label: 'Last hour' },
@@ -224,9 +229,7 @@ export function QueuePage() {
                 <tr>
                   <th>Tier</th>
                   <th>Lead</th>
-                  <th>Interest</th>
-                  <th>Timing</th>
-                  <th>Preference</th>
+                  <th>Answers</th>
                   <th className="right">Score</th>
                   <th className="right">Waiting</th>
                   <th>Source</th>
@@ -258,9 +261,7 @@ export function QueuePage() {
                         <span className="cell-name">{leadName(lead)}</span>
                         <span className="cell-sub">{formatPhone(lead.phone)}</span>
                       </td>
-                      <td>{answer(1, lead.q1, lead.q1Label)}</td>
-                      <td>{answer(2, lead.q2, lead.q2Label)}</td>
-                      <td>{answer(3, lead.q3, lead.q3Label)}</td>
+                      <td title={answersTitle(lead.answers)}>{answersText(lead.answers)}</td>
                       <td className="right tabular cell-strong">{lead.score}</td>
                       {/* One style for every waiting time - Jeel, 2026-09-28.
                           It used to turn bold for an overdue HOT lead, which

@@ -20,6 +20,7 @@ export const LEAD_STATUS_LABEL: Record<Status, string> = {
   awaiting_reply: 'Awaiting reply',
   answering: 'Answering',
   ready: 'Ready',
+  offers: 'Offers',
   working: 'Working',
   closed: 'Closed',
   needs_review: 'Needs review',
@@ -31,6 +32,8 @@ const ICON: Record<Status, StatusIconName> = {
   awaiting_reply: 'clock',
   answering: 'chat',
   ready: 'circle',
+  // Wants offers by text, not a call.
+  offers: 'inbound',
   working: 'half',
   closed: 'check',
   needs_review: 'warning',
@@ -40,6 +43,7 @@ const ICON: Record<Status, StatusIconName> = {
 
 const TONE: Partial<Record<Status, 'muted' | 'danger'>> = {
   closed: 'muted',
+  offers: 'muted',
   expired: 'muted',
   opted_out: 'danger',
 };

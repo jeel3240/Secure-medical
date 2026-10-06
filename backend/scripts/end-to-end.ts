@@ -40,6 +40,7 @@ let stubId = 0;
 };
 
 import request from 'supertest';
+import { startConversation } from '../src/db/flows';
 import { pool } from '../src/db/pool';
 import { config } from '../src/config';
 import { createApp } from '../src/api/app';
@@ -157,10 +158,8 @@ async function main(): Promise<void> {
     )
   ).rows[0].id;
 
-  await pool.query(
-    `INSERT INTO conversations (lead_id, status, step, score) VALUES ($1, 'open', 1, 0)`,
-    [leadId]
-  );
+  // In the flow new leads get, on its first question - as the poller does.
+  await startConversation(pool, leadId, 'open');
 
   check('the lead is stored', leadId > 0, true);
   check('nothing is scored yet', (await getLeadDetail(leadId))?.conversation?.score, 0);
@@ -169,21 +168,21 @@ async function main(): Promise<void> {
   // ------------------------------------------------------------ 2. the flow
   step('2. The three-question flow');
 
-  check('the webhook accepts the first reply', await reply(PHONE, '3'), 200);
+  check('the webhook accepts the first reply', await reply(PHONE, 'yes'), 200);
   const c1 = await conversation(leadId);
   check('it moves to Q2', c1.step, 2);
-  check('and scores responded + Both', c1.score, 25);
+  check('and scores replying + Yes', c1.score, 30);
 
   // A word, not a number: matchAnswer accepts both.
-  await reply(PHONE, 'today', new Date(Date.now() + 1000));
+  await reply(PHONE, 'no', new Date(Date.now() + 1000));
   const c2 = await conversation(leadId);
   check('a word answer is understood', c2.step, 3);
-  check('and scores Today', c2.score, 55);
+  check('and scores that No', c2.score, 35);
 
-  await reply(PHONE, '1', new Date(Date.now() + 2000));
+  await reply(PHONE, '2', new Date(Date.now() + 2000));
   const c3 = await conversation(leadId);
   check('answering Q3 completes it', c3.status, 'completed');
-  check('the score is the maximum', c3.score, 100);
+  check('the score is replying + Yes + No + Talk to an agent + finishing', c3.score, 90);
   check('and the tier is HOT', c3.tier, 'HOT');
 
   // Three, not four: the opener is sent by the poller, and this script inserts
@@ -200,7 +199,7 @@ async function main(): Promise<void> {
   check('it is in the queue', queued !== undefined, true);
   check('at the top', queue.leads[0]?.id, leadId);
   check('as HOT', queued?.tier, 'HOT');
-  check('with its answers', [queued?.q1, queued?.q2, queued?.q3], ['3', '1', '1']);
+  check('with its answers', queued?.answers.map((a) => a.label), ['Yes', 'No', 'Talk to an agent']);
   check('and nobody holds it', queued?.tag?.kind !== 'working', true);
 
   // ------------------------------------------------------------- 4. claim
@@ -242,7 +241,7 @@ async function main(): Promise<void> {
   const sentBefore = sent.length;
   await reply(PHONE, '2', new Date(Date.now() + 3000));
   check('a later reply sends nothing', sent.length, sentBefore);
-  check('and does not change the score', (await conversation(leadId)).score, 100);
+  check('and does not change the score', (await conversation(leadId)).score, 90);
 
   const disposition = await setDisposition(leadId, agent, 'interested');
   check('a disposition is recorded', disposition.ok, true);
@@ -262,7 +261,7 @@ async function main(): Promise<void> {
   check('and the disposition', kinds.includes('disposition'), true);
 
   const scored = timeline.find((e) => e.detail.event === 'scored');
-  check('the score is shown as an event', scored?.detail.score, 100);
+  check('the score is shown as an event', scored?.detail.score, 90);
 
   // ------------------------------------------------------- 7. unread + read
   step('7. An inbound reply is flagged and cleared');

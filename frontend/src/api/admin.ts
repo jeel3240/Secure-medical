@@ -11,6 +11,10 @@ import { api, viewerTimeZone } from './client';
 /** Mirrors ConfiguredMessage in backend/src/db/admin-config.ts. */
 export interface ConfiguredMessage {
   key: string;
+  /** What the page calls it: "Question 1", "After Q1 · Yes". */
+  name: string;
+  /** When a lead gets it. */
+  when: string;
   body: string;
   length: number;
   /** Longest this can be once a name is substituted - what decides the segments. */
@@ -24,9 +28,17 @@ export interface AdminConfig {
   messages: ConfiguredMessage[];
   scoring: {
     awards: { code: string; label: string | null; points: number }[];
-    questions: { question: number; choices: { choice: string; label: string | null; points: number }[] }[];
+    questions: {
+      question: number;
+      key: string;
+      /** What the screens call the question: 'Next step'. */
+      heading: string;
+      choices: { choice: string; label: string | null; points: number }[];
+    }[];
     maxScore: number;
   };
+  /** The flow new leads get - what this page describes. */
+  flow: { key: string; name: string } | null;
   tiers: { name: string; minScore: number; maxScore: number }[];
   settings: { expiryDays: number; maxInvalidBeforeReview: number; segmentLimit: number };
   /** The longest first name on file, which drives worstCaseLength. */

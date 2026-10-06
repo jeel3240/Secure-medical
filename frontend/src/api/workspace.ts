@@ -9,12 +9,15 @@ import { api, viewerTimeZone } from './client';
 
 /** Mirrors AnswerChip in backend/src/core/score-breakdown.ts. */
 export interface AnswerChip {
+  /** The question's order in the lead's flow. */
   question: number;
+  /** 'q1', 'offers'. */
+  key: string;
   heading: string;
-  /** Null when the lead has not answered that question yet. */
-  answer: string | null;
+  /** One chip per question answered, so there is always an answer. */
+  answer: string;
   /** The raw `1`/`2`/`3` the lead sent, for labelling the conversation view. */
-  choice: string | null;
+  choice: string;
 }
 
 /** Mirrors BreakdownLine in backend/src/core/score-breakdown.ts. */
@@ -42,6 +45,10 @@ export interface LeadDetail {
     expiresAt: string | null;
     /** Set once an agent takes over - STATE-MACHINE.md 2b. */
     agentTookOverAt: string | null;
+    /** Which flow the lead is in: 'antibiotics'. FLOWS.md. */
+    flow: string | null;
+    /** How the flow ended: completed, offers, wants_contact - or null. */
+    endOutcome: string | null;
   } | null;
   chips: AnswerChip[];
   breakdown: BreakdownLine[];

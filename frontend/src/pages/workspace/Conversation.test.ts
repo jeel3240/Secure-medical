@@ -7,8 +7,9 @@ const inbound = (body: string): TimelineEntry =>
 const sent = (body: string): TimelineEntry =>
   ({ kind: 'sms', at: '2026-09-28T10:00:00Z', author: null, detail: { body } }) as TimelineEntry;
 
-const chip = (question: number, choice: string | null, answer: string | null): AnswerChip => ({
+const chip = (question: number, choice: string, answer: string): AnswerChip => ({
   question,
+  key: `q${question}`,
   heading: ['', 'Interest', 'Timing', 'Prefers'][question],
   choice,
   answer,
@@ -40,7 +41,8 @@ describe('labelling a reply with the answer it was recorded as', () => {
   it('leaves a worded answer as plain text rather than guessing', () => {
     // "today please" was accepted as Q2, but it is not the digit on record, so
     // nothing proves which answer it was - better unlabelled than wrong.
-    const chips = [chip(1, '3', 'Both'), chip(2, '1', 'Today'), chip(3, null, null)];
+    // Two answered; the third is not there - a chip exists only once a question is answered.
+    const chips = [chip(1, '3', 'Both'), chip(2, '1', 'Today')];
     const entries = [inbound('3'), inbound('today please')];
     const labels = labelReplies(entries, chips);
 
@@ -49,7 +51,7 @@ describe('labelling a reply with the answer it was recorded as', () => {
   });
 
   it('labels nothing for a lead who answered nothing', () => {
-    const chips = [chip(1, null, null), chip(2, null, null), chip(3, null, null)];
+    const chips: AnswerChip[] = [];
     expect(labelReplies([inbound('1'), inbound('2')], chips).size).toBe(0);
   });
 

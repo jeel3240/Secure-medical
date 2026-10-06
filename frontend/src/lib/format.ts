@@ -103,23 +103,3 @@ export function shortName(full: string): string {
   const [first, ...rest] = full.trim().split(/\s+/);
   return leadName({ firstName: first || null, lastName: rest[rest.length - 1] ?? null }).replace(/^Unknown$/, '');
 }
-
-/**
- * The words behind a stored answer choice.
- *
- * The state machine stores '1', '2' or '3'; `settings` holds the question copy
- * and `scoring_rules` the labels, but neither reaches the queue endpoint. These
- * are the mockup's words - DESIGN-PROMPT.md 2 - and if the client ever edits
- * the question copy these have to move with it. The Configuration page shows
- * the real copy, which is the place that would disagree first.
- */
-const ANSWERS: Record<1 | 2 | 3, Record<string, string>> = {
-  1: { '1': 'Supplements', '2': 'Telehealth/Rx', '3': 'Both' },
-  2: { '1': 'Today', '2': 'This week', '3': 'Researching' },
-  3: { '1': 'Call me now', '2': 'Text me', '3': 'Contact me later' },
-};
-
-export function answerLabel(question: 1 | 2 | 3, choice: string | null): string {
-  if (!choice) return '-';
-  return ANSWERS[question][choice] ?? choice;
-}

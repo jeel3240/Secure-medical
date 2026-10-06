@@ -41,6 +41,9 @@ export function questionsLabel(conversation: LeadDetail['conversation']): string
   const q = `Q${conversation.step ?? 1}`;
   switch (conversation.status) {
     case 'completed':
+      // A lead who said No ends on the offers question, not on the last one.
+      if (conversation.endOutcome === 'offers') return 'Offers only';
+      if (conversation.endOutcome === 'wants_contact') return 'Wants a call';
       return 'Completed';
     case 'open':
       return conversation.agentTookOverAt ? `Agent took over at ${q}` : `On ${q}`;

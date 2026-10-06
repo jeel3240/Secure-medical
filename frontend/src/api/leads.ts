@@ -5,6 +5,8 @@ export type LeadStatus =
   | 'awaiting_reply'
   | 'answering'
   | 'ready'
+  /** Asked for special offers only: not a call to make. */
+  | 'offers'
   | 'working'
   | 'closed'
   | 'needs_review'
@@ -58,7 +60,7 @@ export async function listAdminLeads(query: AdminLeadsQuery): Promise<AdminLeads
 }
 
 /** Mirrors QueueTag in backend/src/core/queue-tags.ts. */
-export type QueueTagKind = 'working' | 'missed_call' | 'inbound_reply' | 'callback' | 'needs_review';
+export type QueueTagKind = 'working' | 'missed_call' | 'inbound_reply' | 'callback' | 'wants_call' | 'needs_review';
 
 export interface QueueTag {
   kind: QueueTagKind;
@@ -80,13 +82,11 @@ export interface QueueLead {
   receivedAt: string | null;
   score: number;
   tier: string | null;
-  q1: string | null;
-  q2: string | null;
-  q3: string | null;
-  /** The word the lead chose for each, as it was called when they chose it. Null where unanswered. */
-  q1Label: string | null;
-  q2Label: string | null;
-  q3Label: string | null;
+  /**
+   * What the lead answered, in their flow's order - as many as it asked and
+   * they answered. The word is the one saved with the answer. FLOWS.md.
+   */
+  answers: { key: string; heading: string; label: string }[];
   conversationStatus: 'open' | 'completed' | 'review' | 'expired';
   /** `null` when there is nothing to say: the lead is waiting to be picked up. */
   tag: QueueTag | null;

@@ -40,6 +40,7 @@ const TABS: { key: string; label: string }[] = [
   { key: 'awaiting_reply', label: 'Awaiting reply' },
   { key: 'answering', label: 'Answering' },
   { key: 'ready', label: 'Ready' },
+  { key: 'offers', label: 'Offers' },
   { key: 'working', label: 'Working' },
   { key: 'closed', label: 'Closed' },
   { key: 'needs_review', label: 'Needs review' },
