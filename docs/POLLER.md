@@ -83,8 +83,10 @@ own texts), so the lead's thread shows it with a red "!", and
 was not kept, and a lead with no opener showed only as a conversation with no
 outbound message.)*
 
-**The opener is rendered before it is sent.** `question_1` in `settings` holds
-the copy, including `{first_name}`. `core/messages.ts` substitutes the lead's
+**The opener is rendered before it is sent.** It is the first question of the
+flow new leads get (`db/flows.ts`, `openingQuestion`; `FLOWS.md`), which holds
+the copy, including `{first_name}`. *(Until 2026-10-05: `question_1` in
+`settings`.)* `core/messages.ts` substitutes the lead's
 first name, or "there" when EZ Texting gave none, and drops the name when
 keeping it would push the text past one 160-character segment - a long name
 would otherwise cost a second segment on every send. `messages.body` stores the
@@ -217,7 +219,7 @@ the same helper.
 | 5 | 6 hours after attempt 4 failed |
 
 Then it stops, and logs `opener.gave_up` once. If attempt 1 never happened at
-all - no failed row, e.g. `question_1` was missing - the first retry is a
+all - no failed row - the first retry is a
 minute after the lead arrived.
 
 **Changed in review, 2026-09-28 - two faults found by testing, not reading:**

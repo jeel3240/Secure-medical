@@ -183,7 +183,7 @@ the foot of the screen that showed only a name and a number.
 [LM] Leo M.                           [WARM]
      (555) 010-0014
 📞 Calling back · you tried 2× today
-Score       Interest     Flow
+Score       Next step    Flow
 45 / 100    Both         Stopped at Q2
 [ Decline ]              [ Accept ]
 Accepting opens Leo's workspace and assigns the lead to you.
@@ -423,10 +423,23 @@ and prints the id for `.env`.
 timeline does not ask Twilio each time. Neither row is rewritten once
 complete. Every step - recorded, transcribed, failed - is in the activity log.
 
-**No recording announcement - Jeel's decision, 2026-10-02.** Leads are not
-told the call is recorded. Some US states require everyone on a call to agree
-to being recorded; this was raised and decided knowingly. Adding one later is
-a `<Say>` before the call connects.
+**The lead is told the call is recorded** - the client's wording, 2026-10-05:
+"This call may be recorded and transcribed for quality, training, and service
+purposes. By continuing, you consent to the recording and transcription."
+Some US states require everyone on a call to agree to being recorded.
+
+- **A call we place:** Twilio plays it on the lead's side once they pick up,
+  before the agent is connected (`<Number url>` → `POST
+  /api/webhooks/twilio/notice`). The agent keeps hearing ringing for those
+  seconds. A voicemail hears it too.
+- **A call the lead places:** they hear it first, then the agent's browser
+  rings.
+- **Only on a recorded call** - when the transcription service is set.
+- Until 2026-10-05 no notice was played, by Jeel's decision of 2026-10-02.
+- **Not yet heard on a real call.** Calling is no longer tested locally (the
+  phone number is production's), so this is covered by tests of the
+  instructions sent to Twilio and is to be checked with one call on the live
+  server.
 
 **Cost**, Twilio's US prices on 2026-10-02: recording $0.0025 a minute,
 storage $0.0005 a minute a month, transcription $0.024 a minute - about three

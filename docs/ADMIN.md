@@ -22,16 +22,15 @@ rather than something that erodes.
 One page, because neither half has actions any more and they are read together:
 here is what we ask, here is what each answer is worth.
 
-- The nine messages - three questions, three clarifications, the review
-  message, the thanks and the missed-call text - exactly
-  as they sit in `settings`, each with its character and segment count so it is
-  obvious when a message costs two segments.
-- The scoring table: response, completion, and the three points per answer for
+- Every text a lead can receive, as it is sent, each with its character and
+  segment count so it is obvious when one costs two segments.
+- The scoring table: response, completion, and the points for each choice of
   each question, with the maximum possible.
 - The tier bands.
 - Conversation expiry, read from `settings.expiry_days` - 7.
 
-`GET /api/admin/config` returns all of it from `settings`, `scoring_rules` and
+`GET /api/admin/config` returns all of it from the flow new leads get
+(`flows`, `flow_questions`, `flow_choices` - `FLOWS.md`), `settings` and
 `tiers`, so the page always shows what the state machine is actually using
 rather than a copy in the frontend. That is the point of the page: not
 documentation of what we intended, but a window on live values.
@@ -44,11 +43,17 @@ returned as `longestFirstName` - or the `there` fallback when that is shorter,
 with `longestNameIsFallback` set so the page says which it is rather than
 showing "there" as a name (2026-09-29).
 
-**Nine messages**, in the order a lead meets them: three questions, three
-clarifications, the review message sent after a second unclear reply, the
-thanks, and - since 2026-10-01 - the text sent after a call to us that nobody
-answered. The review message was missing until 2026-09-29 - leads received it,
-but it could not be seen here.
+**The messages are listed as a lead receives them** (2026-10-05): the first
+question; then, for every choice, its reply joined to the question that
+follows - one text, which is how it is sent; then each question's "sorry"
+text, the review text, and the text after a missed call. Sixteen for the
+antibiotics flow. Each carries a `name` ("After Q1 · Yes") and `when` ("Then
+Q2", "Ends the questions"), built by the server, since the list depends on the
+flow. Two of them run past 160 characters and are flagged as two segments.
+The card's heading names the flow.
+
+*(Until then: nine fixed messages - three questions, three clarifications, the
+review text, the thanks and the missed-call text.)*
 A message that fits in one segment for "Jo" and not for "Christopher" is one
 that costs two segments for some leads, and the page has to show that.
 

@@ -95,10 +95,12 @@ ran the old 003 but never 004 misses the second part; rebuild it, or run the
 second part's SQL there once.
 
 *(The `004` on disk today, `004_conversation_completed_at.sql`, is a later and
-unrelated file. As of 2026-10-01 the files are 001 to 011: `main` holds 001 to
+unrelated file. As of 2026-10-05 the files are 001 to 012: `main` holds 001 to
 005, and 006 to 011 - the activity log, incoming calls, the callback a
 missed call books, the word kept with each answer, who picked up a call, and
-call recordings and transcripts - are on `dev`. `npm run migrate` applies whatever the
+call recordings and transcripts - are on `dev`. 012, the SMS flows as rows
+with the antibiotics script (`FLOWS.md`), is on its own branch until it has
+been tested with a real phone. `npm run migrate` applies whatever the
 database has not run, in order.)*
 
 Run migrations through `npm run migrate`, not by piping SQL into psql.

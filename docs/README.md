@@ -109,8 +109,8 @@ contact in the group gets a text within a poll interval. `openers` in the
 ## How to test
 
 ```bash
-cd backend  && npm test && npm run lint    # 597 tests
-cd frontend && npm test && npm run lint    # 267 tests   (counts as of 2026-10-02)
+cd backend  && npm test && npm run lint    # 599 tests
+cd frontend && npm test && npm run lint    # 267 tests   (counts as of 2026-10-05)
 ```
 
 **Unit and route tests** mock the database and cover behaviour in isolation.
@@ -118,22 +118,22 @@ cd frontend && npm test && npm run lint    # 267 tests   (counts as of 2026-10-0
 **Live checks** prove the SQL against a real Postgres, because a mocked pool
 says nothing about aggregates, date windows, transactions or races. Each one
 refuses to run against a database that holds leads. Its header comment gives
-the command to run it from the host; from inside the containers it is:
+the command to run one by hand. To run them, each on its own scratch database:
 
 ```bash
-docker compose exec postgres psql -U app -d postgres -c 'CREATE DATABASE scratch'
-docker compose cp backend/scripts/queue-live-check.ts api:/app/scripts/
-docker compose exec -e DATABASE_URL=postgres://app:app@postgres:5432/scratch api   node scripts/migrate.js
-docker compose exec -e DATABASE_URL=postgres://app:app@postgres:5432/scratch api   npx ts-node --transpile-only scripts/queue-live-check.ts
+cd backend
+scripts/live-checks.sh              # all of them
+scripts/live-checks.sh flows queue  # just these
 ```
 
-There are fourteen, covering the queue, claims, the read flag, the lead card,
+There are fifteen, covering the SMS flows (a second flow added as rows only),
+the queue, claims, the read flag, the lead card,
 the timeline, callbacks, dispositions, agent SMS, calls (outgoing, incoming and
 missed), the activity log, Admin > Leads, the admin read models, health and
 the opener retry.
 
 **The end-to-end script** runs the whole system in one go - a lead arrives,
-answers three questions through the real webhook, is scored, reaches the queue,
+answers the antibiotics flow's questions through the real webhook, is scored, reaches the queue,
 is claimed, worked, dispositioned, and finally blocked:
 
 ```bash
@@ -159,8 +159,8 @@ text and a place in the queue as a missed call, and the agent it rang gets a
 callback; there is no call queue and no voicemail (`TWILIO.md`, "Incoming
 calls"). An agent's browser must be open and signed in to ring, and a number
 we hold no lead for rings nobody. Calls are recorded and transcribed when the
-transcription service is set - with no announcement to the lead, a
-deliberate choice (`TWILIO.md`). A call that reaches voicemail is saved as
+transcription service is set, and the lead hears a recording notice first
+(`TWILIO.md`). A call that reaches voicemail is saved as
 voicemail, by Twilio's detection, which is not always right. There is no
 voicemail drop, transfer or hold, and the recording's audio is not played in
 the app. **Never run `twilio:configure` locally with production's phone number or
@@ -237,6 +237,7 @@ commit.
 | `AGENT-WORKSPACE.md` | The agent screens: claiming, timeline, notes, callbacks, dispositions, agent SMS | Any of those endpoints or screens |
 | `ADMIN.md` | Admin Overview, Configuration and DNC list, and why admin is read-only | An admin screen other than Leads or Agents |
 | `LOGGING.md` | Log format and the health endpoints | Anything logged, or the health routes |
+| `FLOWS.md` | How SMS scripts are stored - flows, questions, choices, answers - why, and how to add one | A new or changed flow, or anything about how answers are stored |
 | `STATE-MACHINE.md` | The SMS flow: replies, scoring, expiry, sending, repeat leads. Overrides the mockup | The state machine, or any flow decision |
 | `EZTEXTING-API.md` | Verified API behaviour | You learn something new about the API |
 | `WORKFLOW.md` | Branches, PRs, migrations, deploys | The process itself |

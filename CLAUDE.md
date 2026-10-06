@@ -201,14 +201,18 @@ you change something the docs describe, update the doc in the same commit.
     scripts/queue-live-check.ts  proves that SQL against a real database
     src/api/webhooks.ts     inbound SMS from EZ Texting
     src/core/messages.ts    renders outbound copy ({first_name}, segment limit)
-    src/core/state-machine.ts  the SMS flow, pure; scoring and tiers
-    src/core/answers.ts     matches a reply to an option, pure
+    src/core/state-machine.ts  the SMS flow, pure: follows any flow's questions and choices; scoring and tiers
+    src/core/answers.ts     matches a reply to a choice of the question asked, pure
+    src/db/flows.ts         loads a flow, starts a conversation on the active one, and gives its first question
+    src/core/flow-fixtures.ts  the antibiotics flow as a constant, for tests only
     src/api/reply-flow.ts   runs the state machine for an inbound reply
     src/worker/expiry.ts    marks stale open conversations expired
     src/worker/retry-openers.ts  retries openers that never went out
     src/worker/opener.ts    sends question 1: shared by the poller and the retry
     scripts/retry-openers-live-check.ts  proves the backoff and the two must-nots
     scripts/end-to-end.ts   the whole system in one run - npm run e2e
+    scripts/live-checks.sh  runs every live check, each on its own scratch database
+    scripts/flows-live-check.ts  proves a second, five-question flow works from rows alone; scripts/live-flow.ts answers a flow for the other checks
     src/db/leads.ts         Admin > Leads SQL
     src/db/lead-state.ts    closed and worked, shared by the queue and Admin > Leads
     src/db/sql.ts           LIKE escaping and the expiry-days reader, shared by every query
@@ -298,7 +302,7 @@ is local only; production layers `docker-compose.prod.yml` on top of it.
 Rule: **only one `open` conversation per phone number, ever.**
 
 **As built, 2026-09-14.** The migrations in `backend/src/db/migrations/` - 001
-to 011 as of 2026-10-02 - are the source of truth and `docs/SCHEMA.md` explains
+to 012 as of 2026-10-05 - are the source of truth and `docs/SCHEMA.md` explains
 them. It differs from the list above:
 
 - **users** also has `session_version` and `last_login_at`.
@@ -311,12 +315,15 @@ them. It differs from the list above:
 - **calls** also has `ended_at`, and since migration 007 (2026-10-01) `direction`; an incoming call that rang nobody has no `agent_id`. Since 010 (2026-10-02) `answered_by`: who picked up a call we placed, a person or a machine - a machine makes the outcome `voicemail`.
 - **leads.previous_lead_id** exists but is unused and expected to be dropped - see §6.
 - **leads.assigned_at** records when an agent claimed the lead. Claims do not expire; it is what lets a superadmin see one held too long. Added 2026-09-15.
+- **flows**, **flow_questions**, **flow_choices** and **conversation_answers** - migration 012, 2026-10-05. The SMS script is rows, not code: a flow's questions, each question's choices with its reply, points and where the lead goes next, and one add-only row per answer given. **conversations** gained `flow_id`, `current_question_id` and `end_outcome`; its `q1`-`q3` columns and labels, `scoring_rules`, and the question and thanks rows in `settings` are no longer read. `docs/FLOWS.md`.
 - **call_recordings** and **call_transcripts** - migration 011, 2026-10-02. A call's recording id at Twilio, and its transcript with who said what. `docs/TWILIO.md`, "Recordings and transcripts".
 - **activity_log** and **webhook_events** - migration 006, 2026-10-01. The company keeps data as proof: every action is one add-only row, and every inbound webhook is kept as received. The foreign keys to `leads` no longer cascade, so a lead with history cannot be deleted. `docs/AUDIT.md`.
 
 ---
 
 ## 6. Core flows (message copy is seeded in `settings` by `001_init.sql`, and the missed-call text by `007`; the flow itself is specified in `docs/STATE-MACHINE.md`)
+
+*(2026-10-05: the script is the client's eDrugstore antibiotics flow, seeded as rows by migration 012 - the copy is in `flow_questions` and `flow_choices`, not `settings`. `docs/FLOWS.md` for how it is stored, `docs/STATE-MACHINE.md` for what it does.)*
 
 ### New lead (Worker, every 30–60s)
 1. Poll EZ Texting Contacts API for the lead group, since last checkpoint (overlap window 5 min).
@@ -346,13 +353,15 @@ ignoring numbers we hold no lead for - is in `docs/WEBHOOKS.md`.
 Responded +10 · Completed +10 · Q1: 5/10/15 · Q2: 30/20/5 · Q3: 35/25/10
 Tiers: HOT 75–100, WARM 45–74, LOW 1–44
 
+*(2026-10-05: those points were the first flow's. Points now belong to each choice of each flow - `docs/STATE-MACHINE.md`, "The antibiotics flow". Tiers are unchanged.)*
+
 ### Call (agent browser)
 1. `GET /twilio/token` → API mints Voice access token.
 2. Browser SDK dials; Twilio hits `POST /webhooks/twilio/voice` for TwiML.
 3. On end, Twilio status callback → save to `calls`.
 4. Agent sets disposition/note/callback. DNC disposition = same as SMS STOP.
 
-Queue tags (New, Attempted 1x, In progress, Callback, Needs review, Stalled at Q2, Inbound reply, Seen before) *(2026-09-28: Stalled is gone - the queue holds only leads that need a person, `docs/QUEUE.md`)* are **computed** from these tables, not stored as a status. *(2026-09-19: "Seen before" cannot occur until repeat-lead handling is built - a future item, §10.)* *(2026-09-22: built - which tag wins when several apply is in `docs/QUEUE.md`.)* *(2026-09-28: only Working – name (was In progress), Inbound reply and Needs review are shown; the rest were dropped - `docs/QUEUE.md`, "The tag".)* *(2026-09-29: Callback – name · time is back, so four.)* *(2026-10-01: Missed call - the lead rang us and nobody answered - so five. `docs/TWILIO.md`, "A missed call".)*
+Queue tags (New, Attempted 1x, In progress, Callback, Needs review, Stalled at Q2, Inbound reply, Seen before) *(2026-09-28: Stalled is gone - the queue holds only leads that need a person, `docs/QUEUE.md`)* are **computed** from these tables, not stored as a status. *(2026-09-19: "Seen before" cannot occur until repeat-lead handling is built - a future item, §10.)* *(2026-09-22: built - which tag wins when several apply is in `docs/QUEUE.md`.)* *(2026-09-28: only Working – name (was In progress), Inbound reply and Needs review are shown; the rest were dropped - `docs/QUEUE.md`, "The tag".)* *(2026-09-29: Callback – name · time is back, so four.)* *(2026-10-01: Missed call - the lead rang us and nobody answered - so five. `docs/TWILIO.md`, "A missed call".)* *(2026-10-05: Wants a call - the lead said No, then asked to hear from a rep - so six. `docs/QUEUE.md`.)*
 
 **Paths, as of 2026-09-15.** Caddy forwards only `/api/*` to the API; everything
 else is the frontend, so every route lives under `/api`. The EZ Texting webhook
@@ -461,6 +470,7 @@ onto them:
 | 2 | Week 2 | Done, approved 2026-09-23 |
 | 3 | Week 3 **and all of Week 4 except Twilio** | Done 2026-09-28, merged into `main` |
 | 4 | Week 4 items 1-4, Twilio calling | Done 2026-10-01 - `docs/TWILIO.md`. A real call placed and recorded the same day. Incoming calls - ring one agent, text the lead on a missed call, and a callback for the agent it rang - tested by Jeel with real calls and merged into `dev` the same day. Deploying them needs migrations 007 and 008, and `twilio:configure` run on the server |
+| 5 | Not in the original plan | **Flows** - decided by Jeel, 2026-10-05, before launch: the SMS questions and answers stored as rows so a group with different questions is new rows, not new code; the client's eDrugstore antibiotics script as the first flow; a recording notice on calls. Built on `feat/flows`, not merged until it has been walked with a real phone. Editing a flow from the website, and a flow per EZ Texting group, are later. `docs/FLOWS.md` |
 
 **Phase 3 is everything that is left except calling.** That means the Week 3
 list below, plus Week 4 items 5-9: error handling and retries, logging, the
@@ -533,7 +543,7 @@ retry, the end-to-end script, and a README with how to test and known limits.
 - **Source always reads "API" in production** - it is how the contact was
   added to EZ Texting, not which partner sent it. Keep the column, or find the
   partner elsewhere.
-- **Deploy:** `npm run migrate` applies whatever the server has not run, up to 011. `main` holds 001 to 005, so a deploy of today's `dev` adds 006 to 011 (011: call recordings and transcripts, which also need `TWILIO_TRANSCRIPTION_SERVICE_SID` - `docs/TWILIO.md`; 010: voicemail detection; 009: the word kept with each answer - `docs/STATE-MACHINE.md`; 005, 2026-09-29: poll every 30s; 006, 2026-10-01: the activity log, the raw webhook archive, and leads that cannot be deleted - `docs/AUDIT.md`; 007 and 008, the same day: incoming calls and the callback a missed call books - `docs/TWILIO.md`). Calling also needs the seven Twilio settings - all or none, a partly set group stops the API starting - and `npm run twilio:configure` run on the server, last: the phone number rings only one deployment. Production also needs `EZT_WEBHOOK_TOKEN` set, or the API will not start - it is already set there.
+- **Deploy:** `npm run migrate` applies whatever the server has not run, up to 011 on `dev` - and 012, the SMS flows and the antibiotics script (`docs/FLOWS.md`), once `feat/flows` is merged. `main` holds 001 to 005, so a deploy of today's `dev` adds 006 to 011 (011: call recordings and transcripts, which also need `TWILIO_TRANSCRIPTION_SERVICE_SID` - `docs/TWILIO.md`; 010: voicemail detection; 009: the word kept with each answer - `docs/STATE-MACHINE.md`; 005, 2026-09-29: poll every 30s; 006, 2026-10-01: the activity log, the raw webhook archive, and leads that cannot be deleted - `docs/AUDIT.md`; 007 and 008, the same day: incoming calls and the callback a missed call books - `docs/TWILIO.md`). Calling also needs the seven Twilio settings - all or none, a partly set group stops the API starting - and `npm run twilio:configure` run on the server, last: the phone number rings only one deployment. Production also needs `EZT_WEBHOOK_TOKEN` set, or the API will not start - it is already set there.
 
 Task 29 found nothing to fix in the app: all three bugs the end-to-end script
 surfaced were in the script itself. Two apparent failures were the app being
@@ -763,7 +773,7 @@ were taken on trust and the poller silently ingested nothing.
 - Read `docs/Secure-Medical-Call-Center-Mockup.pdf` for screen layouts and wording. Its page 3 sketches the reply flow, but `docs/STATE-MACHINE.md` overrides it (2026-09-19).
 - Read `docs/DESIGN-PROMPT.md` before any frontend work - it is the original brief - and `docs/FRONTEND.md`, which is what was actually built and why.
 - Read `docs/QUEUE.md`, `docs/AGENT-WORKSPACE.md`, `docs/ADMIN.md` or `docs/ADMIN-LEADS.md` before touching the queue, a lead's actions, or an admin screen; `docs/LOGGING.md` before adding a log line or touching health.
-- Read `docs/STATE-MACHINE.md` before touching the SMS flow. It is the flow spec and overrides the mockup where they differ.
+- Read `docs/STATE-MACHINE.md` before touching the SMS flow. It is the flow spec and overrides the mockup where they differ. Read `docs/FLOWS.md` before adding or changing a flow, or touching how answers are stored: a flow is rows, added by migration.
 - Read `docs/AUTH.md` before touching sign-in, sessions, roles or the users table.
 - Read `docs/TWILIO.md` before touching calls, Twilio's webhooks or the Call button. **Do not run `twilio:configure` (or `dev:twilio:configure`) from a local machine while the local `.env` holds production's phone number** - check `TWILIO_PHONE_NUMBER` first, and if it is (480) 470-8259, stop and say so.
 - Read `docs/AUDIT.md` before adding anything a person or the system can do. **Nothing may be lost** (Jeel, 2026-10-01): a new action records itself in the activity log, in the same statement or transaction, and nothing overwrites the only record of something.

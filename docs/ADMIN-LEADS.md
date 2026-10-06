@@ -37,9 +37,10 @@ with Needs review, Expired and Opted out as the other ways the SMS part can end.
 | `closed` | Closed | An agent pressed Closed, and nothing has reopened it since: no unread text from the lead, no callback booked after it, no missed call from them that nobody has got back to (2026-10-01) |
 | `working` | Working | An agent holds it, or has left any trace on it: a note, a callback, a disposition, a call they placed or answered, or an SMS of their own. A missed incoming call is the lead's doing, not a trace - though the callback it books for an agent is one |
 | `needs_review` | Needs review | Conversation `review` |
+| `offers` | Offers | The flow ended with the lead asking for special offers only (`end_outcome = 'offers'`, 2026-10-05). Not Ready: there is no call to make. An agent's trace on it still reads Working |
 | `ready` | Ready | Conversation `completed` - answered all three - and no agent has touched it |
 | `expired` | Expired | Conversation `expired` |
-| `answering` | Answering | Conversation `open` and at least one of q1-q3 answered |
+| `answering` | Answering | Conversation `open` and at least one question answered (a row in `conversation_answers`) |
 | `awaiting_reply` | Awaiting reply | Conversation `open`, nothing answered |
 
 The first match wins, so the order is the rule:
@@ -120,7 +121,7 @@ incoming call nobody answered, taken by itself.
 
 **The status follows the conversation, not the message log.** A lead who has
 answered moves to `answering` or `ready` because the state machine
-wrote `q1`, not because a message arrived.
+saved an answer, not because a message arrived.
 
 Until 2026-09-21 nothing advanced the conversation, so a lead who had replied
 still read as `awaiting_reply` and only the inbound arrow in Last activity

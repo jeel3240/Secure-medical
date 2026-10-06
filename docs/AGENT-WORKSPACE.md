@@ -369,8 +369,9 @@ axios rather than `sendMessage`, so the real `dnc_list` check stays in the path
 
 `db/lead-detail.ts` for the query, `core/score-breakdown.ts` for the words.
 
-**The answer words are the ones saved with each answer** (`q1_label` to
-`q3_label`, migration 009), not the choices' current names - so the chips, the
+**One chip per question the lead answered**, with the question's own heading -
+whatever their flow asked, and nothing for a branch they never took
+(2026-10-05, `FLOWS.md`). **The answer words are the ones saved with each answer** (`conversation_answers`), not the choices' current names - so the chips, the
 breakdown and the incoming-call card keep showing what the lead actually
 picked after a choice is renamed. `STATE-MACHINE.md`, "The word is kept with
 the answer".
@@ -397,9 +398,9 @@ stored choice instead and labels nothing it cannot prove.
 
 **The breakdown shows only what was earned.** A lead who stopped after question
 1 gets two lines, not five with zeros: the card records what happened rather
-than scoring what was possible. A rule missing from `scoring_rules` contributes
-nothing instead of throwing, because an admin can delete a row and a lead card
-is not the place to fail over it.
+than scoring what was possible. The lines are built from the answers saved in
+`conversation_answers`, with the label and points each had when it was given,
+plus the flow's awards for replying and for finishing.
 
 `scripts/lead-detail-live-check.ts` proves the parts that live in SQL - which
 conversation wins, the released-DNC join, the deactivated holder - against a
@@ -529,7 +530,8 @@ events against a real database.
 - ~~**The Call button** is built disabled until Phase 4.~~ *Done 2026-10-01 - `TWILIO.md`.*
 - ~~**Answer chips** and the score breakdown need the choice numbers mapped to
   words.~~ *Done 2026-09-26, `core/score-breakdown.ts`.* The words come from
-  `scoring_rules.label` - `Q1: Both` with the prefix stripped - not from the
+  the answers saved in `conversation_answers` since 2026-10-05 (`FLOWS.md`);
+  before that, `scoring_rules.label` - `Q1: Both` with the prefix stripped - not from the
   question copy in `settings`. The labels already pair each choice with the
   points it earns, so one row answers both "what did they say" and "what was it
   worth"; the question copy is prose written for a lead to read and free to be

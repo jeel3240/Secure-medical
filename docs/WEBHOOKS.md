@@ -139,9 +139,12 @@ retrying safe.
 ## The reply advances the conversation
 
 After storing the message, the handler calls `applyReply` in
-`api/reply-flow.ts`, which loads the lead's newest conversation and the
-scoring rules and tiers (changed only by migration since 2026-09-23), runs the pure `step` from `core/state-machine.ts`, and
-saves the result. STATE-MACHINE.md is the authority for what each reply does.
+`api/reply-flow.ts`, which loads the lead's newest conversation, the flow it
+is on (questions, choices and points - `FLOWS.md`) and the tiers, all changed
+only by migration, runs the pure `step` from `core/state-machine.ts`, and
+saves the result: the conversation, and the answer as its own row in
+`conversation_answers`. What goes back to the lead - the choice's reply and the
+next question - is sent as one text (2026-10-05). STATE-MACHINE.md is the authority for what each reply does.
 
 Two details matter here:
 

@@ -1,6 +1,6 @@
 # Database schema
 
-The migrations in `backend/src/db/migrations/` - `001` to `011`, in order -
+The migrations in `backend/src/db/migrations/` - `001` to `012`, in order -
 are the source of truth for exact columns, types and constraints. `001_init.sql`
 is the starting schema; the ones after it add columns, tables and constraints. This explains what the tables are for and the
 parts that are not obvious from reading the SQL.
@@ -30,7 +30,7 @@ the RDS CA bundle if strict verification is ever wanted.
 |---|---|
 | `users` | Agents and superadmins. bcrypt hash, role, active flag, must-change-password flag, last sign-in, session version. |
 | `leads` | One person, pulled from EZ Texting. |
-| `conversations` | The 3-question SMS flow for a lead, plus its score and tier. `q1`-`q3` are the numbers the lead chose; `q1_label`-`q3_label` are the words for them, saved when the answer was given (migration 009) so renaming a choice never renames an earlier lead's answer. |
+| `conversations` | Where a lead is in its SMS flow: `flow_id`, `current_question_id`, status, score, tier, and `end_outcome` once it has ended. One row per conversation. `q1`-`q3` and their label columns are retired (migration 012) - answers are rows in `conversation_answers`. `FLOWS.md`. |
 | `messages` | Every SMS in or out. |
 | `calls` | Twilio calls, with duration and outcome. Written since Phase 4 - `TWILIO.md`, "What is saved". `direction` says who called whom. `twilio_call_sid` is the call's first leg: the browser's for a call we placed, the lead's for one we received. An incoming call that rang nobody has no `agent_id`; an outgoing one always has - the `calls_outbound_has_agent` check (migration 007). |
 | `dispositions` | What an agent decided after contact. |
@@ -40,7 +40,9 @@ the RDS CA bundle if strict verification is ever wanted.
 | `call_transcripts` | The text of a recording: `pending` → `queued` → `completed` or `failed`, and once completed the sentences, each with its speaker (`agent` or `lead`). Written by the worker. Migration 011. |
 | `dnc_list` | Phones that must never be contacted. |
 | `settings` | Key/value config, admin-editable. |
-| `scoring_rules` | Points per answer, admin-editable. |
+| `scoring_rules` | Points per answer for the first, fixed flow. **No longer read** since migration 012: points are on `flow_choices`. Kept. |
+| `flows`, `flow_questions`, `flow_choices` | The SMS scripts, as rows: each flow's questions, each question's choices with the reply, the points and where the lead goes next. Migration 012, `FLOWS.md`. |
+| `conversation_answers` | One row per answer a lead gave, with the choice's label and points as they were then. Add-only. Migration 012. |
 | `tiers` | HOT/WARM/LOW score bands, admin-editable. |
 | `activity_log` | One row per action a person or the system took - who, what, when, and what would otherwise be overwritten. Add-only: a trigger refuses every update and delete. Migration 006, `AUDIT.md`. |
 | `webhook_events` | Every request EZ Texting and Twilio sent, as it arrived. Add-only. Migration 006, `AUDIT.md`. |
@@ -109,7 +111,7 @@ first saw it). The poller checkpoints on the former.
 loosely, so group membership is re-verified in code after fetching. Keeping the
 id lets that check be exact.
 
-**`scoring_rules.question = 0`** means a flat award rather than an answer to a
+*(Historical, for the retired table:)* **`scoring_rules.question = 0`** means a flat award rather than an answer to a
 question - `responded` and `completed`. Questions 1-3 carry a `choice` of
 `'1'`, `'2'` or `'3'`.
 
@@ -233,6 +235,10 @@ filled in at send time. Copy that is only the reply options would reach a lead
 as an unexplained menu from an unknown number, which is also what US carriers
 object to in a first message.
 
+**The flow new leads get is seeded by migration 012** - the eDrugstore
+antibiotics script, `STATE-MACHINE.md`. The paragraphs below describe the
+first flow's seeds, which 012 copied into the flow tables as `wellness`.
+
 `001_init.sql` seeds `settings`, `scoring_rules` and `tiers` with the defaults
 from the mockup: Responded +10, Completed +10, Q1 5/10/15, Q2 30/20/5,
 Q3 35/25/10, and HOT 75-100 / WARM 45-74 / LOW 1-44. It also seeds the question
@@ -246,6 +252,9 @@ not: since 2026-09-23 Admin shows them and a migration changes them
 use, so a migration takes effect without a restart.
 
 ### LOW is mostly for partial conversations
+
+*(Written for the first flow. On the antibiotics flow a lead who finishes
+scores 55 to 100 - never LOW; LOW is a lead partway, or one who said No.)*
 
 A completed conversation cannot score below 40: `responded` and `completed` add
 20 between them, and the cheapest answers add another 20. Of the 27 possible

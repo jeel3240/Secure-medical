@@ -119,7 +119,7 @@ Role is set at login. Navigation adapts to role.
 **Lead card**
 - Name (large), tier badge + score.
 - Phone (formatted, copy button), State, Lead age (ticking), Source.
-- Three answer chips: `Interest: Both` · `Timing: Today` · `Prefers: Call me now`.
+- Three answer chips: `Interest: Both` · `Timing: Today` · `Prefers: Call me now`. *(2026-10-05: one chip per question the lead answered, under that question's own heading - the script is the antibiotics flow now and flows differ in length. `FLOWS.md`.)*
 - Score breakdown, small text: `Responded +10 · Completed +10 · Both +15 · Today +30 · Call now +35`.
 - Flags row when relevant: `Seen before` (link to previous lead), `Needs review` (shows raw replies), `DNC` (blocks all actions), `Inbound reply` (unread).
 - "Back to queue" and "Next lead" links at the top.

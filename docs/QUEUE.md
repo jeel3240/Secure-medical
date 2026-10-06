@@ -38,7 +38,7 @@ starts at the first reply, so a score is the mark of a responder:
 
 | Reason | Why a person is needed |
 |---|---|
-| Newest conversation `completed` | Answered all three, including how to contact them |
+| Newest conversation `completed` | Finished the flow's questions, or asked to hear from a rep. **Except** one that ended `offers` - a lead who only asked for special offers is a list for the client's campaigns, not a call to make (2026-10-05, `FLOWS.md`) |
 | Newest conversation `review` | Replied, and we could not understand it |
 | A callback is booked and not done | An agent promised a call. This is also what keeps an expired lead with a callback in reach |
 
@@ -120,7 +120,8 @@ why is it here? When several apply, the first wins:
 | 2 | `missed_call` | The lead rang us, nobody answered, and nobody has got back to them since - `MISSED_CALL_SQL`, `TWILIO.md`. Bold. A held lead still reads Working | |
 | 3 | `inbound_reply` | The lead has texted and nobody has read it | |
 | 4 | `callback` | A callback is booked and not done - the soonest one. "Callback – Maya Chen · 8:13 PM", with the date when not today. Does not lock the row | `agentId`, `agentName`, `at` |
-| 5 | `needs_review` | Conversation `review`: replies we could not read | |
+| 5 | `wants_call` | The lead said No to the first question, then asked to hear from a rep - the flow ended `wants_contact` (2026-10-05). Says why a lead with 10 points is in the queue | |
+| 6 | `needs_review` | Conversation `review`: replies we could not read | |
 | - | `null` | None of those: the lead is waiting to be picked up. The screen shows a hyphen | |
 
 **Callback came back - Jeel, 2026-09-29.** Testing showed the cost of
@@ -180,7 +181,9 @@ reaches `LIKE`: a `%` in the search box is the character, not a wildcard.
 {
   "leads": [ { "id": 7, "phone": "+1…", "firstName": "…", "lastName": "…",
                "source": "CORE-G-27", "receivedAt": "…", "score": 90,
-               "tier": "HOT", "q1": "3", "q2": "1", "q3": "1",
+               "tier": "HOT",
+               "answers": [ { "key": "q1", "heading": "Requested info", "label": "Yes" },
+                            { "key": "q3", "heading": "Next step", "label": "Talk to an agent" } ],
                "conversationStatus": "completed", "tag": null } ],
   "counts":  { "all": 12, "HOT": 4, "WARM": 5, "LOW": 3 },
   "sources": ["CORE-G-27", "CORE-G-31"],
@@ -203,13 +206,16 @@ every other filter, so the selected tiers add up to it.
 `receivedAt` is `ezt_added_at`, falling back to `created_at` - when the lead
 reached us, which is what the ticking Waiting column counts from.
 
-`q1`-`q3` are the raw choices, `"1"`, `"2"`, `"3"`. `q1Label`-`q3Label` are the
-words for them, saved with each answer when it was given (migration 009), and
-are what the INTEREST / TIMING / PREFERENCE columns show - so a choice renamed
-later does not rename what an earlier lead picked. `STATE-MACHINE.md`, "The
-word is kept with the answer". Until 2026-10-01 the screen mapped the number to
-a word from a list written into the frontend; that list is now only the
-fallback for an answer with no saved word.
+`answers` is what the lead answered, in their flow's order: one entry per
+question answered, with the question's `heading` and the choice's `label` as
+they were saved with the answer (`conversation_answers`, `FLOWS.md`) - so a
+choice renamed later does not rename what an earlier lead picked. The screen
+shows them in one **Answers** column, "Yes · No · Talk to an agent", with the
+headings on hover.
+
+*(Until 2026-10-05 a row carried `q1`, `q2`, `q3` and the queue had three fixed
+columns, Interest, Timing and Preference. Flows now differ in how many
+questions they ask, so there is no fixed set of columns to have.)*
 
 ## What this does not cover
 

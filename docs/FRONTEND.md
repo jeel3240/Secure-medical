@@ -355,7 +355,7 @@ needs to know:
 
 | Piece | File |
 |---|---|
-| The card: who, how long it has rung, tier, score, their Interest answer, how far the questions got, how often we tried them today; **Accept** (takes the lead, opens its workspace) and **Decline** | `layout/IncomingCall.tsx`, `styles/incoming-call.css` |
+| The card: who, how long it has rung, tier, score, the last thing they answered (under that question's own heading), how far the questions got, how often we tried them today; **Accept** (takes the lead, opens its workspace) and **Decline** | `layout/IncomingCall.tsx`, `styles/incoming-call.css` |
 | "Calling back · you tried 2× today" | `lib/caller-context.ts`, pure |
 | The states - none, ringing, call, missed - and one call at a time | `lib/incoming-state.ts`, pure |
 | The store joining them to Twilio. A store, not page state, because a call arrives on any screen and the lead's Call button must know one is under way | `lib/incoming-call.ts` (zustand) |
@@ -554,10 +554,13 @@ with a contact (`EZTEXTING-API.md`), so every row would read "-" forever. Left
 out rather than given permanent space in a table the brief asks to keep dense.
 Decided 2026-09-26. It goes back in if the partner ever sends state.
 
-**The queue's answer words come from the server** since 2026-10-01 -
-`q1Label` to `q3Label`, saved with each answer. `answerLabel` in
-`lib/format.ts`, the list of names written into the frontend, is now only the
-fallback for an answer with no saved word. `QUEUE.md`, "The response".
+**The queue has one Answers column** - 2026-10-05. A row carries `answers`,
+as many as the lead's flow asked and they answered, and the cell reads "Yes ·
+No · Talk to an agent" with each question's heading on hover
+(`QueuePage.tsx`, `answersText`). It had three fixed columns - Interest,
+Timing, Preference - which cannot fit flows with different numbers of
+questions. The list of answer names written into `lib/format.ts` is gone:
+every word comes from the server, saved with the answer. `FLOWS.md`.
 
 **Age ticks on its own timer, not on the poll.** Once a second, from
 `lib/useSecond.ts`; `formatAge` in `lib/format.ts` words it. A number that only moved when the data refreshed would be wrong
