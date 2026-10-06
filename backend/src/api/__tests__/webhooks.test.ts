@@ -27,6 +27,7 @@ jest.mock('../../db/pool', () => ({
   pool: { connect: () => connect(), query: (...a: unknown[]) => poolQuery(...(a as [string])) },
 }));
 
+import { ANTIBIOTICS, Q1, Q2 } from '../../core/flow-fixtures';
 import { webhooksRouter } from '../webhooks';
 
 interface Recorded {
@@ -34,16 +35,38 @@ interface Recorded {
   values?: unknown[];
 }
 
-/** The seeded scoring rules and tiers, so the flow scores as production does. */
-const SCORING_ROWS = [
-  { code: 'responded', question: 0, choice: null, points: 10 },
-  { code: 'completed', question: 0, choice: null, points: 10 },
-  { code: 'q1_1', question: 1, choice: '1', points: 5 },
-  { code: 'q1_2', question: 1, choice: '2', points: 10 },
-  { code: 'q1_3', question: 1, choice: '3', points: 15 },
-  { code: 'q2_1', question: 2, choice: '1', points: 30 },
-  { code: 'q3_1', question: 3, choice: '1', points: 35 },
-];
+/**
+ * The antibiotics flow as the database would return it, so the webhook walks
+ * the real script - docs/FLOWS.md. Built from the same fixture the state
+ * machine's own tests use.
+ */
+const FLOW_ROW = {
+  id: ANTIBIOTICS.id,
+  key: ANTIBIOTICS.key,
+  responded_points: ANTIBIOTICS.respondedPoints,
+  completed_points: ANTIBIOTICS.completedPoints,
+  review_body: ANTIBIOTICS.reviewBody,
+};
+const QUESTION_ROWS = ANTIBIOTICS.questions.map((q) => ({
+  id: q.id,
+  key: q.key,
+  position: q.position,
+  body: q.body,
+  clarify_body: q.clarifyBody,
+  heading: q.heading,
+}));
+const CHOICE_ROWS = ANTIBIOTICS.questions.flatMap((q) =>
+  q.choices.map((c) => ({
+    question_id: q.id,
+    choice: c.choice,
+    label: c.label,
+    words: c.words,
+    points: c.points,
+    reply_body: c.reply,
+    next_question_id: c.nextQuestionId,
+    ending: c.ending,
+  }))
+);
 
 const TIER_ROWS = [
   { name: 'HOT', min_score: 75, max_score: 100 },
@@ -55,13 +78,17 @@ interface ConversationSeed {
   id?: number;
   status?: string;
   step?: number | null;
-  q1?: string | null;
-  q2?: string | null;
-  q3?: string | null;
+  /** The question the lead is on. Follows `step` when not given. */
+  current_question_id?: number | null;
+  end_outcome?: string | null;
   invalid_count?: number;
   score?: number;
   tier?: string | null;
   agent_took_over_at?: string | null;
+  /** Whether the text the lead has to answer has gone out. Yes, unless a test says otherwise. */
+  question_sent?: boolean;
+  /** It has not, and not just now. */
+  unsent_for_long?: boolean;
 }
 
 function fakeClient(opts: {
@@ -79,13 +106,19 @@ function fakeClient(opts: {
         : {
             id: 5,
             status: 'open',
-            step: 1,
-            q1: null,
-            q2: null,
-            q3: null,
+            flow_id: ANTIBIOTICS.id,
+            step: 10,
             invalid_count: 0,
             score: 0,
             tier: null,
+            end_outcome: null,
+            question_sent: true,
+            unsent_for_long: false,
+            // On the question its step names, unless the conversation is over.
+            current_question_id:
+              (opts.conversation.status ?? 'open') === 'open'
+                ? (ANTIBIOTICS.questions.find((q) => q.position === (opts.conversation?.step ?? 10))?.id ?? Q1)
+                : null,
             ...opts.conversation,
           };
 
@@ -104,8 +137,14 @@ function fakeClient(opts: {
       if (/FROM conversations/i.test(sql)) {
         return conversation ? { rows: [conversation], rowCount: 1 } : { rows: [], rowCount: 0 };
       }
-      if (/FROM scoring_rules/i.test(sql)) {
-        return { rows: SCORING_ROWS, rowCount: SCORING_ROWS.length };
+      if (/FROM flow_choices/i.test(sql)) {
+        return { rows: CHOICE_ROWS, rowCount: CHOICE_ROWS.length };
+      }
+      if (/FROM flow_questions/i.test(sql)) {
+        return { rows: QUESTION_ROWS, rowCount: QUESTION_ROWS.length };
+      }
+      if (/FROM flows/i.test(sql)) {
+        return { rows: [FLOW_ROW], rowCount: 1 };
       }
       if (/FROM tiers/i.test(sql)) {
         return { rows: TIER_ROWS, rowCount: TIER_ROWS.length };
@@ -127,8 +166,16 @@ function fakeClient(opts: {
 function savedConversation(calls: Recorded[]) {
   const update = calls.find((c) => /UPDATE conversations SET status/i.test(c.sql));
   if (!update?.values) return null;
-  const [, status, step, q1, q2, q3, invalidCount, score, tier] = update.values as unknown[];
-  return { status, step, q1, q2, q3, invalidCount, score, tier };
+  const [, status, step, currentQuestionId, invalidCount, score, tier, endOutcome, textOwed] = update.values as unknown[];
+  return { status, step, currentQuestionId, invalidCount, score, tier, endOutcome, textOwed };
+}
+
+/** The answer row written, if any: [conversation, lead, question, key, position, heading, choice, label, points]. */
+function savedAnswer(calls: Recorded[]) {
+  const insert = calls.find((c) => /INSERT INTO conversation_answers/i.test(c.sql));
+  if (!insert?.values) return null;
+  const [conversationId, leadId, questionId, questionKey, , , choice, label, points, messageId] = insert.values as unknown[];
+  return { conversationId, leadId, questionId, questionKey, choice, label, points, messageId };
 }
 
 function buildApp() {
@@ -151,6 +198,9 @@ function reply(over: Record<string, unknown> = {}) {
     ...over,
   };
 }
+
+/** The text of the first SMS sent. */
+const sentText = () => String((sendMessage.mock.calls[0] as unknown[] | undefined)?.[1] ?? '');
 
 /** The SQL sent through the pool, collapsed so multi-line statements match. */
 const poolSql = () => poolQuery.mock.calls.map(([sql]) => String(sql).replace(/\s+/g, ' ').trim());
@@ -337,7 +387,7 @@ describe('a reply from a lead we hold', () => {
     });
 
     it('does not flag the answer that completes the conversation', async () => {
-      const conversation = { step: 3, q1: '3', q2: '1', score: 55, tier: 'WARM' };
+      const conversation = { step: 30, score: 45, tier: 'WARM' };
       const { client, calls } = fakeClient({ leadId: 42, conversation });
       connect.mockReturnValue(client);
 
@@ -358,7 +408,7 @@ describe('a reply from a lead we hold', () => {
     });
 
     it('flags a reply to an agent who took the conversation over', async () => {
-      const conversation = { step: 2, q1: '3', score: 25, agent_took_over_at: '2026-09-28T10:00:00.000Z' };
+      const conversation = { step: 20, score: 30, agent_took_over_at: '2026-09-28T10:00:00.000Z' };
       const { client, calls } = fakeClient({ leadId: 42, conversation });
       connect.mockReturnValue(client);
 
@@ -466,34 +516,63 @@ describe('the reply advances the conversation', () => {
     const { client, calls } = fakeClient({ leadId: 42, conversation: {} });
     connect.mockReturnValue(client);
 
-    await request(buildApp()).post('/api/webhooks/eztexting').send(reply({ message: '3' }));
+    await request(buildApp()).post('/api/webhooks/eztexting').send(reply({ message: '1' }));
 
-    // 10 for responding plus 15 for q1_3.
+    // 10 for responding plus 20 for Yes.
     expect(savedConversation(calls)).toMatchObject({
       status: 'open',
-      step: 2,
-      q1: '3',
-      score: 25,
+      step: 20,
+      currentQuestionId: Q2,
+      score: 30,
       tier: 'LOW',
     });
+    // The answer is its own row, with the word and the points as they are now.
+    expect(savedAnswer(calls)).toEqual({
+      conversationId: 5,
+      leadId: 42,
+      questionId: Q1,
+      questionKey: 'q1',
+      choice: '1',
+      label: 'Yes',
+      points: 20,
+      // The stored text it was read from, so the thread can label that very message.
+      messageId: 7,
+    });
+    // The reply and the next question, as one text.
     expect(sendMessage).toHaveBeenCalledTimes(1);
+    expect(sentText()).toBe(
+      "Great! Let's get you started. Have you used telemedicine to get prescription medication before? Reply 1. Yes, 2. No."
+    );
   });
 
-  it('completes on the answer to question 3 and sends the thanks', async () => {
+  it('"No" on the first question goes to the offers question, not the second', async () => {
+    const { client, calls } = fakeClient({ leadId: 42, conversation: {} });
+    connect.mockReturnValue(client);
+
+    await request(buildApp()).post('/api/webhooks/eztexting').send(reply({ message: 'no' }));
+
+    expect(savedConversation(calls)).toMatchObject({ status: 'open', step: 11, score: 10 });
+    expect(sentText()).toMatch(/^No problem\. Would you like to receive special offers from eDrugstore\?/);
+  });
+
+  it('completes on the answer to question 3 and sends that answer\'s message', async () => {
     const { client, calls } = fakeClient({
       leadId: 42,
-      conversation: { step: 3, q1: '3', q2: '1', score: 55, tier: 'WARM' },
+      conversation: { step: 30, score: 45, tier: 'WARM' },
     });
     connect.mockReturnValue(client);
 
-    await request(buildApp()).post('/api/webhooks/eztexting').send(reply({ message: '1' }));
+    await request(buildApp()).post('/api/webhooks/eztexting').send(reply({ message: '2' }));
 
+    // 45 so far, 45 for "Talk to an agent", 10 for finishing.
     expect(savedConversation(calls)).toMatchObject({
       status: 'completed',
-      q3: '1',
+      currentQuestionId: null,
+      endOutcome: 'completed',
       score: 100,
       tier: 'HOT',
     });
+    expect(savedAnswer(calls)).toMatchObject({ questionKey: 'q3', label: 'Talk to an agent', points: 45 });
     expect(sendMessage).toHaveBeenCalledTimes(1);
   });
 
@@ -505,7 +584,8 @@ describe('the reply advances the conversation', () => {
       .post('/api/webhooks/eztexting')
       .send(reply({ message: 'what is this about' }));
 
-    expect(savedConversation(calls)).toMatchObject({ status: 'open', step: 1, invalidCount: 1 });
+    expect(savedConversation(calls)).toMatchObject({ status: 'open', step: 10, invalidCount: 1 });
+    expect(savedAnswer(calls)).toBeNull();
     expect(sendMessage).toHaveBeenCalledTimes(1);
   });
 
@@ -525,7 +605,7 @@ describe('the reply advances the conversation', () => {
   it('leaves a completed conversation alone and sends nothing', async () => {
     const { client, calls } = fakeClient({
       leadId: 42,
-      conversation: { status: 'completed', step: 3, q1: '3', q2: '1', q3: '1', score: 100, tier: 'HOT' },
+      conversation: { status: 'completed', step: 30, score: 100, tier: 'HOT', end_outcome: 'completed' },
     });
     connect.mockReturnValue(client);
 
@@ -556,7 +636,7 @@ describe('the reply advances the conversation', () => {
       return { id: 'sent-1' };
     });
 
-    await request(buildApp()).post('/api/webhooks/eztexting').send(reply({ message: '3' }));
+    await request(buildApp()).post('/api/webhooks/eztexting').send(reply({ message: '1' }));
 
     // An answer the lead has given must not be rolled back by a failed send.
     expect(committedBeforeSend).toBe(true);
@@ -566,7 +646,7 @@ describe('the reply advances the conversation', () => {
     const { client, calls } = fakeClient({ leadId: 42, conversation: {} });
     connect.mockReturnValue(client);
 
-    await request(buildApp()).post('/api/webhooks/eztexting').send(reply({ message: '3' }));
+    await request(buildApp()).post('/api/webhooks/eztexting').send(reply({ message: '1' }));
 
     const read = calls.find((c) => /SELECT .* FROM conversations/i.test(c.sql));
     expect(read?.sql).toMatch(/FOR UPDATE/i);
@@ -579,7 +659,7 @@ describe('the reply advances the conversation', () => {
     const { client } = fakeClient({ leadId: 42, conversation: {} });
     connect.mockReturnValue(client);
 
-    await request(buildApp()).post('/api/webhooks/eztexting').send(reply({ message: '3' }));
+    await request(buildApp()).post('/api/webhooks/eztexting').send(reply({ message: '1' }));
 
     const bump = poolSql().find((sql) => /UPDATE conversations SET expires_at/i.test(sql));
     expect(bump).toBeDefined();
@@ -592,13 +672,128 @@ describe('the reply advances the conversation', () => {
     connect.mockReturnValue(client);
     sendMessage.mockRejectedValue(new Error('EZ Texting down'));
 
-    await request(buildApp()).post('/api/webhooks/eztexting').send(reply({ message: '3' }));
+    await request(buildApp()).post('/api/webhooks/eztexting').send(reply({ message: '1' }));
 
     // A lead who was never actually messaged should expire on schedule, not a
     // week later. The conversation still advances.
     expect(poolSql().some((sql) => /expires_at/i.test(sql))).toBe(false);
     expect(sqlOf(calls)).not.toMatch(/expires_at/i);
-    expect(savedConversation(calls)).toMatchObject({ step: 2, q1: '3' });
+    expect(savedConversation(calls)).toMatchObject({ step: 20, currentQuestionId: Q2 });
+  });
+
+  it('flags a lead whose text did not go out, so a person sees them', async () => {
+    const { client } = fakeClient({ leadId: 42, conversation: {} });
+    connect.mockReturnValue(client);
+    sendMessage.mockRejectedValue(new Error('EZ Texting down'));
+
+    await request(buildApp()).post('/api/webhooks/eztexting').send(reply({ message: '1' }));
+
+    // They answered and heard nothing back; nothing retries a question, and a
+    // lead partway through is not in the queue. The flag is what puts them there.
+    expect(poolSql().some((sql) => /UPDATE leads SET has_unread_inbound = true/i.test(sql))).toBe(true);
+  });
+
+  it('does not flag one whose number is blocked: that text was never owed', async () => {
+    const { client } = fakeClient({ leadId: 42, conversation: {} });
+    connect.mockReturnValue(client);
+    sendMessage.mockRejectedValue(Object.assign(new Error('blocked'), { name: 'BlockedNumberError' }));
+
+    await request(buildApp()).post('/api/webhooks/eztexting').send(reply({ message: '1' }));
+
+    expect(poolSql().some((sql) => /has_unread_inbound/i.test(sql))).toBe(false);
+  });
+
+  it('hands its connection back before it sends', async () => {
+    const { client } = fakeClient({ leadId: 42, conversation: {} });
+    connect.mockReturnValue(client);
+    let releasedBeforeSend: boolean | null = null;
+    sendMessage.mockImplementation(async () => {
+      releasedBeforeSend = client.release.mock.calls.length > 0;
+      return { id: 'sent-1' };
+    });
+
+    await request(buildApp()).post('/api/webhooks/eztexting').send(reply({ message: '1' }));
+
+    // Held across the send, ten replies at once each kept one connection and
+    // waited for another to record their text, and the API stopped.
+    expect(releasedBeforeSend).toBe(true);
+    expect(client.release).toHaveBeenCalledTimes(1);
+  });
+
+  it('a STOP sends nothing', async () => {
+    const { client } = fakeClient({ leadId: 42, conversation: {} });
+    connect.mockReturnValue(client);
+
+    await request(buildApp()).post('/api/webhooks/eztexting').send(reply({ message: 'STOP' }));
+
+    expect(sendMessage).not.toHaveBeenCalled();
+    expect(client.release).toHaveBeenCalledTimes(1);
+  });
+
+  describe('a reply before our text has gone out', () => {
+    // "Yes", and a second later "yes" again: the second arrives while question
+    // 2 is still on its way, and used to be saved as the answer to it.
+    const unsent = { step: 20, score: 30, tier: 'LOW', question_sent: false };
+
+    it('is not an answer: nothing is saved, scored or sent', async () => {
+      const { client, calls } = fakeClient({ leadId: 42, conversation: unsent });
+      connect.mockReturnValue(client);
+
+      const res = await request(buildApp()).post('/api/webhooks/eztexting').send(reply({ message: 'yes' }));
+
+      expect(res.status).toBe(200);
+      expect(savedConversation(calls)).toBeNull();
+      expect(savedAnswer(calls)).toBeNull();
+      expect(sendMessage).not.toHaveBeenCalled();
+      // Kept in the thread all the same.
+      expect(sqlOf(calls)).toMatch(/INSERT INTO messages/i);
+      // A double tap is not something for a person to read.
+      expect(sqlOf(calls)).not.toMatch(/has_unread_inbound/i);
+    });
+
+    it('goes to a person when our text has been unsent for a while: it is not on its way', async () => {
+      const { client, calls } = fakeClient({ leadId: 42, conversation: { ...unsent, unsent_for_long: true } });
+      connect.mockReturnValue(client);
+
+      await request(buildApp()).post('/api/webhooks/eztexting').send(reply({ message: 'yes' }));
+
+      expect(savedAnswer(calls)).toBeNull();
+      expect(sendMessage).not.toHaveBeenCalled();
+      expect(sqlOf(calls)).toMatch(/UPDATE leads SET has_unread_inbound = true/i);
+    });
+
+    it('never holds up a STOP', async () => {
+      const { client, calls } = fakeClient({ leadId: 42, conversation: unsent });
+      connect.mockReturnValue(client);
+
+      await request(buildApp()).post('/api/webhooks/eztexting').send(reply({ message: 'STOP' }));
+
+      expect(savedConversation(calls)).toMatchObject({ status: 'suppressed' });
+      expect(sqlOf(calls)).toMatch(/INSERT INTO dnc_list/i);
+    });
+
+    it('a reply that earns a text marks it as owed, and the send marks it as gone', async () => {
+      const { client, calls } = fakeClient({ leadId: 42, conversation: {} });
+      connect.mockReturnValue(client);
+
+      await request(buildApp()).post('/api/webhooks/eztexting').send(reply({ message: '1' }));
+
+      // Saved as waiting on our text: the next reply does not count until it has gone.
+      expect(savedConversation(calls)).toMatchObject({ currentQuestionId: Q2, textOwed: true });
+      const save = calls.find((c) => /UPDATE conversations SET status/i.test(c.sql));
+      expect(save?.sql).toMatch(/question_sent_at = CASE WHEN \$9 THEN NULL ELSE question_sent_at END/);
+      // And once it has, the conversation says so.
+      expect(poolSql().find((sql) => /UPDATE conversations SET expires_at/i.test(sql))).toMatch(/question_sent_at = now\(\)/);
+    });
+
+    it('a reply that ends the questions owes nothing more', async () => {
+      const { client, calls } = fakeClient({ leadId: 42, conversation: { step: 30, score: 45, tier: 'WARM' } });
+      connect.mockReturnValue(client);
+
+      await request(buildApp()).post('/api/webhooks/eztexting').send(reply({ message: '2' }));
+
+      expect(savedConversation(calls)).toMatchObject({ status: 'completed', textOwed: false });
+    });
   });
 
   it('keeps the advanced conversation when the send fails', async () => {
@@ -606,11 +801,11 @@ describe('the reply advances the conversation', () => {
     connect.mockReturnValue(client);
     sendMessage.mockRejectedValue(new Error('EZ Texting down'));
 
-    const res = await request(buildApp()).post('/api/webhooks/eztexting').send(reply({ message: '3' }));
+    const res = await request(buildApp()).post('/api/webhooks/eztexting').send(reply({ message: '1' }));
 
     // 200, not 500: retrying would not re-send, and the answer is saved.
     expect(res.status).toBe(200);
-    expect(savedConversation(calls)).toMatchObject({ step: 2, q1: '3' });
+    expect(savedConversation(calls)).toMatchObject({ step: 20, currentQuestionId: Q2 });
     expect(sqlOf(calls)).toMatch(/COMMIT/);
   });
 });

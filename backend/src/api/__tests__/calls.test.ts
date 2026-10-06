@@ -243,6 +243,16 @@ describe('who picked up a call we placed', () => {
   });
 });
 
+describe('the recording notice', () => {
+  it('is what Twilio plays to a lead we called, and only Twilio can ask for it', async () => {
+    const { app } = await buildApp({ twilio: SETTINGS });
+    const res = await fromTwilio(app, '/api/webhooks/twilio/notice', { CallSid: 'CA200' });
+    expect(res.type).toBe('text/xml');
+    expect(res.text).toContain('This call may be recorded and transcribed');
+    expect((await request(app).post('/api/webhooks/twilio/notice').type('form').send({})).status).toBe(403);
+  });
+});
+
 describe('a call\'s recording is ready', () => {
   const RECORDING = '/api/webhooks/twilio/recording?call=CA100';
   const DONE = { RecordingSid: `RE${'5'.repeat(32)}`, RecordingStatus: 'completed', RecordingDuration: '42', RecordingChannels: '2' };

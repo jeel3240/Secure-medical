@@ -1,3 +1,4 @@
+import { questionShort } from '../core/questions';
 import { CLOSED_SQL, WORKED_SQL } from './lead-state';
 import { likeLiteral } from './sql';
 import { pool } from './pool';
@@ -22,6 +23,10 @@ export type LeadStatus =
   | 'awaiting_reply'
   | 'answering'
   | 'ready'
+  /** Asked for special offers only - not a call to make. docs/FLOWS.md. */
+  | 'offers'
+  /** Said No to the offers and to a rep: wants neither. Nothing to do. */
+  | 'declined'
   | 'working'
   | 'closed'
   | 'needs_review'
@@ -37,10 +42,12 @@ export interface AdminLeadRow {
   receivedAt: string | null;
   status: LeadStatus | null;
   /**
-   * The question the lead is on now - 1 to 3 - or `done` once all three are
-   * answered. Null when no question ever went out (blocked on arrival).
+   * The question the lead is on now, or stopped at, as the screens say it -
+   * "Q2", "Q1-a" (`core/questions.ts`) - or `done` once the questions are
+   * finished. Null for an opted-out conversation: blocked on arrival, or
+   * ended by STOP or a DNC outcome.
    */
-  step: number | 'done' | null;
+  step: string | null;
   score: number | null;
   tier: string | null;
   lastActivityAt: string | null;
@@ -65,9 +72,10 @@ export interface AdminLeadPage {
 }
 
 /**
- * A lead's newest conversation, and its most recent message. Both are
- * lateral joins so the row count stays one per lead however much history
- * accumulates.
+ * A lead and its newest conversation - a lateral join, so the row count stays
+ * one per lead however much history accumulates. Everything a status or a
+ * filter is worked out from, and nothing else: the last message is joined
+ * later, for the page's rows only (`listAdminLeads`).
  *
  * opted_out is checked against dnc_list as well as the conversation, because
  * the poller adds a suppressed contact to both and a lead can reach the list
@@ -76,22 +84,17 @@ export interface AdminLeadPage {
 const BASE = `
   FROM leads l
   LEFT JOIN LATERAL (
-    SELECT c.status, c.step, c.q1, c.q2, c.q3, c.score, c.tier
+    SELECT c.id, c.status, c.step, c.score, c.tier, c.end_outcome, c.flow_id, c.current_question_id
     FROM conversations c
     WHERE c.lead_id = l.id
     ORDER BY c.created_at DESC, c.id DESC
     LIMIT 1
   ) c ON true
-  LEFT JOIN LATERAL (
-    SELECT m.created_at, m.received_at, m.direction
-    FROM messages m
-    -- A send EZ Texting refused is not activity: nothing reached anyone.
-    WHERE m.lead_id = l.id AND m.delivery_status IS DISTINCT FROM 'failed'
-    ORDER BY COALESCE(m.received_at, m.created_at) DESC, m.id DESC
-    LIMIT 1
-  ) m ON true
   LEFT JOIN dnc_list d ON d.phone = l.phone AND d.released_at IS NULL
 `;
+
+/** When the lead reached us - the page's order, and what `since` filters on. */
+const RECEIVED = `COALESCE(l.ezt_added_at, l.created_at)`;
 
 /**
  * The first match wins, so the order is the rule:
@@ -102,7 +105,8 @@ const BASE = `
  *    status: once a person is on a lead, what the conversation says matters
  *    less than that someone is handling it - a needs-review or expired lead an
  *    agent is working reads Working.
- * 4. the conversation: needs_review, ready, expired, then an open one
+ * 4. the conversation: needs_review, offers (asked for offers only, so not
+ *    Ready for an agent), ready, expired, then an open one
  *    split on whether any question has been answered.
  *
  * `db/lead-state.ts` defines closed and working, shared with the queue.
@@ -113,31 +117,17 @@ const STATUS_SQL = `
     WHEN ${CLOSED_SQL} THEN 'closed'
     WHEN ${WORKED_SQL} THEN 'working'
     WHEN c.status = 'review' THEN 'needs_review'
+    WHEN c.status = 'completed' AND c.end_outcome = 'offers' THEN 'offers'
+    WHEN c.status = 'completed' AND c.end_outcome = 'declined' THEN 'declined'
     WHEN c.status = 'completed' THEN 'ready'
     WHEN c.status = 'expired' THEN 'expired'
-    WHEN c.status = 'open' AND (c.q1 IS NOT NULL OR c.q2 IS NOT NULL OR c.q3 IS NOT NULL)
+    -- One look-up for this conversation. Written as EXISTS it was planned as a
+    -- read of every answer ever given, once per statement.
+    WHEN c.status = 'open'
+      AND (SELECT 1 FROM conversation_answers ca WHERE ca.conversation_id = c.id LIMIT 1) IS NOT NULL
       THEN 'answering'
     WHEN c.status = 'open' THEN 'awaiting_reply'
     ELSE NULL
-  END
-`;
-
-/**
- * The question the lead is on now, from the conversation's own `step` - which
- * the state machine moves on after each valid answer - or `done` once all
- * three are answered.
- *
- * Until 2026-09-29 this was the highest question *answered*, so the column
- * always read one behind: "Answering · Q1" for a lead already answered Q1 and
- * being asked Q2, and "Ready · Q3" for one who had finished - Jeel, from a test
- * with a real lead. Now a lead that went quiet reads the question it never
- * answered, which is where it dropped off.
- */
-const STEP_SQL = `
-  CASE
-    WHEN c.status = 'completed' THEN 'done'
-    WHEN c.status = 'suppressed' THEN NULL
-    ELSE c.step::text
   END
 `;
 
@@ -157,7 +147,7 @@ function buildFilters(query: AdminLeadQuery): { sql: string; values: unknown[] }
 
   if (query.since) {
     values.push(query.since);
-    clauses.push(`COALESCE(l.ezt_added_at, l.created_at) >= $${values.length}`);
+    clauses.push(`${RECEIVED} >= $${values.length}`);
   }
 
   if (query.q) {
@@ -177,28 +167,26 @@ function buildFilters(query: AdminLeadQuery): { sql: string; values: unknown[] }
   return { sql: clauses.length ? `WHERE ${clauses.join(' AND ')}` : '', values };
 }
 
+/**
+ * One page of leads, and the count under every tab.
+ *
+ * **Two statements, each doing its work once** - 2026-10-06. There were three,
+ * and each worked out every lead's status and last message from scratch:
+ *
+ * - The tab counts come first. Nothing in them needs a message, so they no
+ *   longer look one up per lead.
+ * - The total was a third pass that always came to a number the counts already
+ *   held - the chosen tab's, or all of them. It is read from them now.
+ * - The page picks its rows first - filter, order, limit - and only then joins
+ *   each row's last message and the question it is on: fifty look-ups, not one
+ *   per lead in the table. With no status filter and the index from migration
+ *   013 it reads just those fifty leads.
+ *
+ * Timed against 50,000 leads: docs/ADMIN-LEADS.md, "How fast it is".
+ */
 export async function listAdminLeads(query: AdminLeadQuery): Promise<AdminLeadPage> {
-  const page = Math.max(1, query.page ?? 1);
+  const page = Math.max(1, Math.trunc(query.page ?? 1) || 1);
   const pageSize = Math.min(200, Math.max(1, query.pageSize ?? 50));
-
-  const { sql: where, values } = buildFilters(query);
-
-  const rows = await pool.query(
-    `SELECT l.id, l.phone, l.first_name, l.last_name, l.source,
-            COALESCE(l.ezt_added_at, l.created_at) AS received_at,
-            ${STATUS_SQL} AS status,
-            ${STEP_SQL} AS step,
-            c.score, c.tier,
-            COALESCE(m.received_at, m.created_at) AS last_activity_at,
-            m.direction AS last_activity_direction
-     ${BASE}
-     ${where}
-     ORDER BY COALESCE(l.ezt_added_at, l.created_at) DESC, l.id DESC
-     LIMIT ${pageSize} OFFSET ${(page - 1) * pageSize}`,
-    values
-  );
-
-  const totalResult = await pool.query(`SELECT count(*)::int AS total ${BASE} ${where}`, values);
 
   // Tab counts ignore the status filter but honour the others, so switching
   // tabs does not change the numbers next to them.
@@ -215,6 +203,42 @@ export async function listAdminLeads(query: AdminLeadQuery): Promise<AdminLeadPa
     if (row.status) counts[row.status] = row.n;
     counts.all += row.n;
   }
+  const total = query.status && query.status !== 'all' ? (counts[query.status] ?? 0) : counts.all;
+
+  const { sql: where, values } = buildFilters(query);
+  const rows = await pool.query(
+    `SELECT p.*,
+            COALESCE(m.received_at, m.created_at) AS last_activity_at,
+            m.direction AS last_activity_direction,
+            fq.key AS question_key, fq.heading AS question_heading
+     FROM (
+       SELECT l.id, l.phone, l.first_name, l.last_name, l.source,
+              ${RECEIVED} AS received_at,
+              ${STATUS_SQL} AS status,
+              c.status AS conversation_status, c.step, c.score, c.tier, c.flow_id, c.current_question_id
+       ${BASE}
+       ${where}
+       ORDER BY ${RECEIVED} DESC, l.id DESC
+       LIMIT ${pageSize} OFFSET ${(page - 1) * pageSize}
+     ) p
+     LEFT JOIN LATERAL (
+       SELECT m.created_at, m.received_at, m.direction
+       FROM messages m
+       -- A send EZ Texting refused is not activity: nothing reached anyone.
+       WHERE m.lead_id = p.id AND m.delivery_status IS DISTINCT FROM 'failed'
+       ORDER BY COALESCE(m.received_at, m.created_at) DESC, m.id DESC
+       LIMIT 1
+     ) m ON true
+     -- By id, or for a row that names no question, by its flow and position.
+     LEFT JOIN LATERAL (
+       SELECT q.key, q.heading FROM flow_questions q
+       WHERE q.id = p.current_question_id
+          OR (p.current_question_id IS NULL AND q.flow_id = p.flow_id AND q.position = p.step)
+       LIMIT 1
+     ) fq ON true
+     ORDER BY p.received_at DESC, p.id DESC`,
+    values
+  );
 
   return {
     leads: rows.rows.map((r) => ({
@@ -225,7 +249,7 @@ export async function listAdminLeads(query: AdminLeadQuery): Promise<AdminLeadPa
       source: r.source,
       receivedAt: r.received_at?.toISOString() ?? null,
       status: r.status,
-      step: r.step === null ? null : r.step === 'done' ? 'done' : Number(r.step),
+      step: stepLabel(r),
       // The running score, not only the final one. Scoring starts at the first
       // reply, so a lead part-way through has a real score and tier worth
       // seeing. A score of 0 means no reply yet and shows as blank rather than
@@ -235,11 +259,33 @@ export async function listAdminLeads(query: AdminLeadQuery): Promise<AdminLeadPa
       lastActivityAt: r.last_activity_at?.toISOString() ?? null,
       lastActivityDirection: r.last_activity_direction,
     })),
-    total: totalResult.rows[0].total,
+    total,
     counts,
     page,
     pageSize,
   };
+}
+
+/**
+ * The Step column: the question the lead is on now - which the state machine
+ * moves on after each valid answer - or `done` once the questions are
+ * finished. A lead that went quiet reads the question it never answered,
+ * which is where it dropped off.
+ *
+ * By the question's own name - "Q2", "Q1-a" - since 2026-10-06; it was the
+ * bare position, and the antibiotics flow's offers question, asked second of
+ * a lead who said No, read "Q4". Never worked out from the position: that is
+ * an order, not a question number.
+ */
+function stepLabel(r: {
+  conversation_status: string | null;
+  question_key: string | null;
+  question_heading: string | null;
+}): string | null {
+  if (r.conversation_status === 'completed') return 'done';
+  if (r.conversation_status === 'suppressed') return null;
+  if (r.question_key && r.question_heading) return questionShort({ key: r.question_key, heading: r.question_heading });
+  return null;
 }
 
 /** Distinct sources, for the filter dropdown. */

@@ -9,6 +9,7 @@ that doc wins if the two ever disagree:
 | Part | Owned by |
 |---|---|
 | The SMS questions, replies, scoring, expiry, STOP | `STATE-MACHINE.md` |
+| How the questions are stored, and adding another set | `FLOWS.md` |
 | The statuses and exactly how each is worked out | `ADMIN-LEADS.md`, "Status is derived, never stored" |
 | Who is in the queue, the order, the STATUS column | `QUEUE.md` |
 | Picking, Wrap up, Closed and DNC | `AGENT-WORKSPACE.md` |
@@ -22,15 +23,15 @@ that doc wins if the two ever disagree:
    ┌─────────────────┐
    │ AWAITING REPLY  │  Question 1 sent, no usable answer yet
    └────────┬────────┘
-            │ answers Q1
+            │ answers the first question
             ▼
    ┌─────────────────┐
-   │   ANSWERING     │  Answered Q1, or Q1 and Q2
+   │   ANSWERING     │  Partway through the questions
    └────────┬────────┘
-            │ answers Q3
+            │ answers the last one
             ▼
    ┌─────────────────┐
-   │     READY       │  All three answered, no agent has touched it   ◄ in the queue
+   │     READY       │  Questions finished, no agent has touched it   ◄ in the queue
    └────────┬────────┘
             │ an agent picks it up
             ▼
@@ -53,8 +54,21 @@ that doc wins if the two ever disagree:
             │
             ├── silent for 7 days ───────► EXPIRED        out of the queue
             │
-            └── texts STOP ──────────────► OPTED OUT      never contacted again
+            ├── texts STOP ──────────────► OPTED OUT      never contacted again
+            │
+            ├── says No, then asks ──────► OFFERS         out of the queue: a list for
+            │   for special offers only                   the client's campaigns
+            │
+            └── says No, then ───────────► NOT INTERESTED out of the queue: wants
+                No thanks                                 neither offers nor a rep
 ```
+
+The questions a lead gets are the **eDrugstore antibiotics** script since
+2026-10-05: did you ask about antibiotics, have you used telemedicine, how do
+you want to go on. A lead who says No to the first is asked one thing instead -
+special offers, hear from a rep, or no thanks. Offers and no thanks end there;
+**hear from a rep** is Ready, in the queue as **Wants a call**. `STATE-MACHINE.md`, "The antibiotics
+flow".
 
 An agent's DNC button leads to Opted out too, from any status.
 
@@ -65,29 +79,32 @@ highest in this list wins.
 
 | Status | Means | In the queue? |
 |---|---|---|
-| **Opted out** | Texted STOP, or an agent pressed DNC. The number is blocked | No |
+| **Opted out** | Texted STOP, or an agent pressed DNC. The number is blocked. (A lead who later texted START still reads Opted out here, though unblocked - "Ways back") | No |
 | **Closed** | An agent pressed Closed | No, until something reopens it - "Ways back", below |
 | **Working** | An agent holds it, or has left a note, a callback, a call they placed or answered, an SMS or an outcome on it | Yes |
 | **Needs review** | Two replies we could not understand | Yes |
-| **Ready** | Answered all three, nobody has touched it | Yes |
+| **Ready** | Finished the questions, or asked to hear from a rep; nobody has touched it | Yes |
+| **Offers** | Said No to the first question, then Yes to special offers. Nothing for an agent to do | No, unless they text or ring us |
+| **Not interested** | Said No to the first question, then No thanks to the offers and to a rep | No, unless they text or ring us |
 | **Expired** | Went quiet during the questions | No, unless they text or ring us |
-| **Answering** | Partway through the questions | No, unless an agent holds it or they ring us and nobody answers |
-| **Awaiting reply** | Has not answered question 1 | No, with the same two exceptions |
+| **Answering** | Partway through the questions | No, unless an agent holds it, they ring us and nobody answers, or our text to them did not go out |
+| **Awaiting reply** | Has not answered question 1 | No, with the same three exceptions |
 
 Working outranks the SMS statuses: an expired or needs-review lead that an
 agent is handling reads Working.
 
 ## What agents see in the queue
 
-The queue's STATUS column shows at most one of five things, in this order when
+The queue's STATUS column shows at most one of six things, in this order when
 more than one applies. Most rows show none.
 
 | STATUS | Means |
 |---|---|
 | **Working – karm** | karm is holding the lead right now. Others see it locked |
 | **Missed call** | The lead rang our number and nobody answered. They were told, and texted, that we will call back |
-| **Inbound reply** | The lead texted us and nobody has read it |
+| **Inbound reply** | The lead texted us and nobody has read it - or they answered and our text back failed to send |
 | **Callback – karm · 3:00 PM** | karm has a callback booked on it. Not locked, but it is karm's call to make |
+| **Wants a call** | Said No to the first question, then asked to hear from a rep |
 | **Needs review** | We could not understand their replies |
 | **-** | Waiting for someone to pick it up |
 
@@ -164,3 +181,13 @@ Found by testing the whole flow with a real phone:
 | Closing left the lead's callback open on My Callbacks | Closing marks it done |
 | Admin > Leads Step: the last question answered, one behind | The question the lead is on now, or Done |
 | Questions checked every 60 seconds | Every 30 seconds (migration 005) |
+
+## What changed on 2026-10-05
+
+| Before | After |
+|---|---|
+| One script, health and wellness: interest, timing, how to contact | The eDrugstore antibiotics script, with a second path for a lead who says No |
+| Three questions for everyone, answers in three columns | A flow is rows - as many questions as it needs. `FLOWS.md` |
+| The queue's Interest, Timing and Preference columns | One **Answers** column |
+| Everyone who finished was Ready | Offers-only leads are **Offers**, out of the queue. A lead who asked for a rep is Ready, tagged **Wants a call** |
+| A reply and the next question were two texts | One text |

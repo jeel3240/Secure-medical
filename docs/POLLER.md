@@ -17,12 +17,17 @@ question 1 is `backend/src/worker/opener.ts`, shared with the opener retry
 (2026-09-28; each had its own copy until then).
 API behaviour it depends on: `docs/EZTEXTING-API.md`.
 
-The worker tick does three things: this poll, the retry of openers that never
-went out (`worker/retry-openers.ts`, "Retrying a failed opener" below), then
-the expiry sweep in `worker/expiry.ts` - each in its own try/catch so a failure
-on one does not stop the others. Expiring is local work that must keep happening while EZ Texting is
+The worker tick does four things, in this order: this poll, the expiry sweep
+in `worker/expiry.ts`, the retry of openers that never went out
+(`worker/retry-openers.ts`, "Retrying a failed opener" below), then fetching
+call transcripts (`TWILIO.md`) - each in its own try/catch so a failure
+on one does not stop the others. **Every call to EZ Texting gives up after 30
+seconds** (2026-10-06): without a limit one hung connection stopped all four,
+with nothing in the logs. Expiring is local work that must keep happening while EZ Texting is
 unreachable. The sweep's rules are in STATE-MACHINE.md, "Expiry"; what the
-poller owns is setting `expires_at` when the opener goes out.
+poller owns is setting `expires_at` and `question_sent_at` when the opener
+goes out (`worker/opener.ts`) - the second is what lets the lead's first
+reply count as an answer, `STATE-MACHINE.md` rule 2c.
 
 ## Why polling
 
@@ -48,8 +53,8 @@ filter would have done server-side.
    - if `optOut`, or the phone is on `dnc_list`: insert the lead with a
      `suppressed` conversation, and - when EZ Texting has it opted out and we
      hold no live block for it - block the number
-   - otherwise insert the lead with an `open` conversation at step 1, then send
-     question 1 and record it as an outbound message
+   - otherwise insert the lead with an `open` conversation on its flow's first
+     question, then send that question and record it as an outbound message
 6. If the page was not the last, request the next one.
 7. Write the checkpoint to the newest `createdAt` actually seen - or, when
    nothing new arrived, write the same value again. *(2026-09-28: every
@@ -83,8 +88,10 @@ own texts), so the lead's thread shows it with a red "!", and
 was not kept, and a lead with no opener showed only as a conversation with no
 outbound message.)*
 
-**The opener is rendered before it is sent.** `question_1` in `settings` holds
-the copy, including `{first_name}`. `core/messages.ts` substitutes the lead's
+**The opener is rendered before it is sent.** It is the first question of the
+flow new leads get (`db/flows.ts`, `openingQuestion`; `FLOWS.md`), which holds
+the copy, including `{first_name}`. *(Until 2026-10-05: `question_1` in
+`settings`.)* `core/messages.ts` substitutes the lead's
 first name, or "there" when EZ Texting gave none, and drops the name when
 keeping it would push the text past one 160-character segment - a long name
 would otherwise cost a second segment on every send. `messages.body` stores the
@@ -185,7 +192,8 @@ and no successful outbound message never had one go out. No new column was
 needed. The attempt count comes from the failed message rows, so it survives a
 restart.
 
-**Only a lead still waiting on question 1 is retried** - on step 1, score 0,
+**Only a lead still waiting on question 1 is retried** - on its flow's first
+question, score 0,
 with no message from the lead and no text of ours that went out or may have
 (a `sending` row counts). **Only automated failures count as attempts** -
 `sent_by IS NULL`. Both from review, 2026-09-28: an agent's own refused texts
@@ -217,7 +225,7 @@ the same helper.
 | 5 | 6 hours after attempt 4 failed |
 
 Then it stops, and logs `opener.gave_up` once. If attempt 1 never happened at
-all - no failed row, e.g. `question_1` was missing - the first retry is a
+all - no failed row - the first retry is a
 minute after the lead arrived.
 
 **Changed in review, 2026-09-28 - two faults found by testing, not reading:**
@@ -286,5 +294,5 @@ add a contact through the API that already exists in the group, and see whether
 its `createdAt` moves.
 
 **No page cap.** A checkpoint set far in the past would walk the whole group in
-one cycle - 178 requests for a 1,773-contact group, thousands for the full
+one cycle - 36 requests for a 1,773-contact group at 50 a page, far more for the full
 account. Harmless at 50-100 leads a day, but unbounded.

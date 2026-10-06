@@ -29,17 +29,20 @@ correct as the state machine and the agents move things on.
 Awaiting reply -> Answering -> Ready -> Working -> Closed
 ```
 
-with Needs review, Expired and Opted out as the other ways the SMS part can end.
+with Offers, Not interested, Needs review, Expired and Opted out as the other
+ways the SMS part can end.
 
 | Status | Tab | Condition |
 |---|---|---|
 | `opted_out` | Opted out | On `dnc_list`, or newest conversation `suppressed` |
-| `closed` | Closed | An agent pressed Closed, and nothing has reopened it since: no unread text from the lead, no callback booked after it, no missed call from them that nobody has got back to (2026-10-01) |
+| `closed` | Closed | An agent pressed Closed, and nothing has reopened it since: no unread text from the lead, no callback booked after it, no missed call from them that nobody has got back to (2026-10-01), and no agent holding it (2026-09-29) |
 | `working` | Working | An agent holds it, or has left any trace on it: a note, a callback, a disposition, a call they placed or answered, or an SMS of their own. A missed incoming call is the lead's doing, not a trace - though the callback it books for an agent is one |
 | `needs_review` | Needs review | Conversation `review` |
-| `ready` | Ready | Conversation `completed` - answered all three - and no agent has touched it |
+| `offers` | Offers | The flow ended with the lead asking for special offers only (`end_outcome = 'offers'`, 2026-10-05). Not Ready: there is no call to make. An agent's trace on it still reads Working |
+| `declined` | Not interested | The lead said No to the first question, then No thanks to the offers and to a rep (`end_outcome = 'declined'`, 2026-10-06). Nothing to do; out of the queue. They have not opted out |
+| `ready` | Ready | Conversation `completed` - the questions are finished, or the lead asked to hear from a rep - and no agent has touched it |
 | `expired` | Expired | Conversation `expired` |
-| `answering` | Answering | Conversation `open` and at least one of q1-q3 answered |
+| `answering` | Answering | Conversation `open` and at least one question answered (a row in `conversation_answers`) |
 | `awaiting_reply` | Awaiting reply | Conversation `open`, nothing answered |
 
 The first match wins, so the order is the rule:
@@ -120,7 +123,7 @@ incoming call nobody answered, taken by itself.
 
 **The status follows the conversation, not the message log.** A lead who has
 answered moves to `answering` or `ready` because the state machine
-wrote `q1`, not because a message arrived.
+saved an answer, not because a message arrived.
 
 Until 2026-09-21 nothing advanced the conversation, so a lead who had replied
 still read as `awaiting_reply` and only the inbound arrow in Last activity
@@ -128,26 +131,43 @@ showed it. That is fixed. It can still happen for a reply the flow does not
 act on - one that arrives with no conversation on the lead - and in that case
 awaiting is the honest answer.
 
+**A lead who sent STOP and later START still reads Opted out.** The block
+itself is lifted - `dnc_list` has it released, and the lead can be texted and
+called - but the conversation STOP ended stays `suppressed`, and this page
+reads that as Opted out. The queue has it right: Inbound reply, for a person.
+Seen on the real-phone walk of 2026-10-06 and left as it is, by Jeel's
+decision that day. If it is ever changed, it is the first line of
+`STATUS_SQL` in `db/leads.ts`: `opted_out` should need a live block.
+
 ## Step
 
-**The question the lead is on now - Jeel, 2026-09-29.** Q1, Q2 or Q3 from the
-conversation's own `step`, which the state machine moves on after each valid
-answer; **Done** once all three are answered; blank when no question ever went
-out (blocked on arrival).
+**The question the lead is on now - Jeel, 2026-09-29.** The question the
+conversation is on, which the state machine moves on after each valid answer;
+**Done** once the questions are finished; a hyphen for an opted-out
+conversation - blocked on arrival, or ended by STOP or a DNC outcome.
 
 | Lead | Status · Step |
 |---|---|
 | Question 1 sent, no reply | Awaiting reply · Q1 |
 | Answered Q1, being asked Q2 | Answering · Q2 |
-| Answered all three | Ready · Done |
+| Finished the questions | Ready · Done |
 | Answered Q1, then silent 7 days | Expired · Q2 - where they dropped off |
 | Two unclear replies to Q1 | Needs review · Q1 |
+| Said No to Q1, then silent on the offers question | Expired · Q1-a |
 
-Until that day it was the highest question *answered*, so it always read one
+**By the question's own name** - 2026-10-06. A question on the main line is
+"Q2"; a sub-question is named after its parent, "Q1-a" (`core/questions.ts`,
+one rule for every screen; `FLOWS.md`, "Naming a question"). It was the bare
+position, and the antibiotics flow's offers question - asked only of a lead
+who said No to question 1 - read "Q4", as if they had answered three. The
+API's `step` is now that text (`"Q2"`, `"Q1-a"`, `"done"`) rather than a
+number, and is never worked out from the position.
+
+Until 2026-09-29 it was the highest question *answered*, so it always read one
 behind - "Answering · Q1" for a lead already past Q1, "Ready · Q3" for one who
 had finished - and said nothing about where a lead that stopped had stopped.
 The API field changed with it: `stepReached` (a number) became `step`
-(`1`-`3`, `'done'` or null). No database change: `conversations.step` already
+(then `1`-`3`, `'done'` or null; text since 2026-10-06). No database change: `conversations.step` already
 held it. `scripts/admin-leads-live-check.ts` proves each row above.
 
 ## The query
@@ -183,13 +203,14 @@ finds `+16026203572`.
 `scripts/admin-leads-live-check.ts` proves the statuses against a real
 database: every SMS status, each kind of agent trace on its own, Closed and a
 lead closed under a retired value, reopening by a later callback or a text,
-and the tab counts - 30 checks as of 2026-10-01, all passing. A missed call
+and the tab counts - 37 checks as of 2026-10-06, all passing. A missed call
 reopening a closed lead, and an outcome settling it, are in
 `scripts/calls-live-check.ts`.
 
 Score and tier are the running values, returned at every stage. Scoring starts
 at the first reply, so a lead part-way through has a real score - 10 for
-responding, 25 once question 1 is answered - and a tier that follows it.
+responding, 30 once question 1 is answered Yes (still 10 after No) - and a
+tier that follows it.
 
 They were hidden until `completed` (now Ready) until 2026-09-22, on the reasoning that a
 partial score next to a final one invites comparing them. That cost more than
@@ -221,10 +242,13 @@ The status icons follow a lead's life: a clock for Awaiting reply, a chat
 bubble for Answering, then an empty circle (Ready), a half-filled one (Working,
 the same as the queue) and a ticked one (Closed). Needs review is the queue's
 warning triangle, Opted out a barred circle in red, Expired an hourglass.
-Closed and Expired are muted: those leads are finished.
+Offers is a price tag and Not interested a circle with a line through it.
+Closed, Expired, Offers and Not interested are muted: nothing is left to do
+on those leads.
 
 Refreshes every 5 seconds. The timer refetches in place rather than showing a
-spinner, so the table does not blank out; only a filter change clears it.
+spinner, so the table does not blank out; a filter change fades the old rows until
+the new ones land.
 
 Rows that are new since the previous fetch get a 600ms highlight. Everything is
 new on the first load, so that case is deliberately excluded - otherwise the
@@ -255,3 +279,34 @@ time is the last poll.
 - **Polling, not push.** Five seconds is frequent enough at 50-100 leads a day,
   but it is a poll. If the queue screen later uses something better, this should
   follow it.
+
+## How fast it is
+
+Like the queue (`QUEUE.md`, "How fast it is"), a lead's status is worked out,
+not stored, so the page's cost grows with every lead ever received. Timed the
+same way on 2026-10-06, against 50,000 leads:
+
+| | Before | After |
+|---|---|---|
+| Every lead, first page | 3.3 s | 0.18 s |
+| One status tab | 5.7 s | 0.34 s |
+| A late page | 5.1 s | 0.27 s |
+| A name search | 0.07 s | 0.03 s |
+
+What changed, besides the index and the `jit` setting described there
+(`db/leads.ts`, `listAdminLeads`):
+
+- **Two statements, not three.** The total was a third pass that always came
+  to a number the tab counts already held; it is read from them.
+- **The counts no longer look up each lead's last message** - nothing in them
+  needs it.
+- **The page picks its rows first** - filter, order, limit - **and then** joins
+  each row's last message and question: fifty look-ups, not one per lead.
+- **Leads are indexed by when they arrived** (migration 013), so an unfiltered
+  page reads only its own rows instead of sorting every lead.
+- "Has this lead answered anything?" is one look-up for that conversation; it
+  had been planned as a read of every answer ever given.
+
+`?page=` must be a whole number from 1 (400 otherwise). It used to reach the
+statement as whatever it parsed to - `2.5` skipped 75 rows, `1e30` was a 500.
+

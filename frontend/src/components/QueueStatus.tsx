@@ -24,6 +24,9 @@ import { StatusIcon, type StatusIconName } from './StatusIcon';
  * Inbound reply is also bold, because a lead has written to us and nobody has
  * read it.
  *
+ * **Wants a call - 2026-10-05.** The lead said No to the first question and
+ * then asked to hear from a rep. It says why a low-scoring lead is in the queue.
+ *
  * **Missed call - 2026-10-01.** The lead rang our number and nobody picked up.
  * Bold for the same reason, and it stays until someone calls or texts back.
  *
@@ -51,6 +54,8 @@ export function tagText(tag: QueueTag): string {
       return 'Inbound reply';
     case 'callback':
       return `Callback – ${tag.agentName ?? 'an agent'}${tag.at ? ` · ${when(tag.at)}` : ''}`;
+    case 'wants_call':
+      return 'Wants a call';
     case 'needs_review':
       return 'Needs review';
   }
@@ -62,6 +67,7 @@ const ICON: Record<QueueTag['kind'], StatusIconName> = {
   missed_call: 'missed',
   inbound_reply: 'inbound',
   callback: 'clock',
+  wants_call: 'phone',
   needs_review: 'warning',
 };
 

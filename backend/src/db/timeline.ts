@@ -59,9 +59,13 @@ const QUERIES: { kind: TimelineKind; sql: string }[] = [
     sql: `
       SELECT m.created_at AS at,
              u.name AS author,
-             m.direction, m.body, m.delivery_status, m.sent_by
+             m.direction, m.body, m.delivery_status, m.sent_by,
+             -- The answer this very text was read as, if it was one - kept
+             -- with the answer since migration 012, so nothing is guessed.
+             a.label AS answer_label
       FROM messages m
       LEFT JOIN users u ON u.id = m.sent_by
+      LEFT JOIN conversation_answers a ON a.lead_id = m.lead_id AND a.message_id = m.id
       WHERE m.lead_id = $1
     `,
   },
@@ -152,12 +156,12 @@ async function systemEvents(leadId: number): Promise<TimelineEntry[]> {
     `SELECT
        COALESCE(l.ezt_added_at, l.created_at) AS received_at,
        l.source,
-       c.status, c.score, c.tier, c.expires_at, c.agent_took_over_at, c.completed_at,
+       c.status, c.end_outcome, c.score, c.tier, c.expires_at, c.agent_took_over_at, c.completed_at,
        (SELECT max(m.received_at) FROM messages m
         WHERE m.lead_id = l.id AND m.direction = 'inbound') AS last_reply_at
      FROM leads l
      LEFT JOIN LATERAL (
-       SELECT c.status, c.score, c.tier, c.expires_at, c.agent_took_over_at, c.completed_at
+       SELECT c.status, c.end_outcome, c.score, c.tier, c.expires_at, c.agent_took_over_at, c.completed_at
        FROM conversations c
        WHERE c.lead_id = l.id
        ORDER BY c.created_at DESC, c.id DESC
@@ -188,7 +192,9 @@ async function systemEvents(leadId: number): Promise<TimelineEntry[]> {
       kind: 'system',
       at: scoredAt.toISOString(),
       author: null,
-      detail: { event: 'scored', score: r.score, tier: r.tier, status: r.status },
+      // endOutcome: a lead who only asked for offers "completed" too, and the
+      // line should not read as if the questions were answered.
+      detail: { event: 'scored', score: r.score, tier: r.tier, status: r.status, endOutcome: r.end_outcome ?? null },
     });
   }
 
@@ -227,6 +233,8 @@ interface TimelineRow {
   direction?: 'inbound' | 'outbound';
   sent_by?: number | null;
   body?: string;
+  /** Inbound only: the choice this text was recorded as - "Yes". */
+  answer_label?: string | null;
   delivery_status?: string | null;
   outcome?: string | null;
   duration_sec?: number | null;
@@ -254,7 +262,7 @@ function toEntry(kind: TimelineKind, row: TimelineRow): TimelineEntry {
         at,
         author: inbound ? null : row.author,
         detail: inbound
-          ? { body: row.body }
+          ? { body: row.body, ...(row.answer_label ? { answer: row.answer_label } : {}) }
           : { body: row.body, deliveryStatus: row.delivery_status },
       };
     }

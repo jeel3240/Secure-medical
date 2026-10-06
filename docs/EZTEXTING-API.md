@@ -165,7 +165,7 @@ POST /v1/messages
 ```
 - `toNumbers` without `+` (matches how contacts come back). Confirm in sandbox whether `+1...` is also accepted.
 - Response includes a message id. Store in `messages.ezt_message_id`.
-- Delivery type (Standard 130 / Express 160) still unconfirmed with client. The opener is 147 characters plus the first name - 151 for a four-letter name, up to 160 for a thirteen-letter one; a longer name is dropped for "there" so it never goes over (`core/messages.ts`, `SEGMENT_LIMIT`) - so it is one segment on Express and two on Standard - worth settling before real volume.
+- Delivery type (Standard 130 / Express 160) still unconfirmed with client. The opener is 130 characters plus the first name - 134 for a four-letter name, up to 160 for a thirty-letter one (2026-10-05, the antibiotics opener; the first one was 147); a longer name is dropped for "there" so it never goes over (`core/messages.ts`, `SEGMENT_LIMIT`) - so it is one segment on Express and two on Standard - worth settling before real volume.
 
 ## Inbound webhook
 
@@ -278,7 +278,8 @@ Consequences for us:
 
 - **Never send our own STOP confirmation**; the lead would get two.
 - **"PillRx" is the brand name configured on the account**, and it appears in
-  the platform's own compliance replies. Our copy signs as "Secure Medical".
+  the platform's own compliance replies. Our copy signs as "eDrugstore" (it was
+  "Secure Medical" until 2026-10-05).
   Which name is right is the client's call.
 - The reply invites START to opt back in. Verified 2026-09-22: texting START
   sets the contact's `optOut` back to `false` on EZ Texting's side. Our own

@@ -7,8 +7,9 @@
  */
 
 import { pool } from './pool';
+import { questionShort } from '../core/questions';
 import { CLOSED_SQL, MISSED_CALL_SQL } from './lead-state';
-import { answerChips, scoreBreakdown, type ScoringRule } from '../core/score-breakdown';
+import { answerChips, scoreBreakdown, type SavedAnswer } from '../core/score-breakdown';
 import type { AnswerChip, BreakdownLine } from '../core/score-breakdown';
 
 export interface LeadDetail {
@@ -30,6 +31,15 @@ export interface LeadDetail {
     expiresAt: string | null;
     /** Set once an agent takes the conversation over - STATE-MACHINE.md 2b. */
     agentTookOverAt: string | null;
+    /**
+     * The question the lead is on, or stopped at, as the screens say it: "Q2",
+     * "Q1-a" - `core/questions.ts`. Null once the questions are finished.
+     */
+    question: string | null;
+    /** Which flow the lead is in: 'antibiotics'. */
+    flow: string | null;
+    /** How the flow ended: completed, offers, wants_contact, declined - or null. */
+    endOutcome: string | null;
   } | null;
 
   chips: AnswerChip[];
@@ -71,8 +81,15 @@ const SQL = `
     COALESCE(l.ezt_added_at, l.created_at) AS received_at,
     l.has_unread_inbound,
     c.id   AS conversation_id,
-    c.status, c.step, c.q1, c.q2, c.q3, c.q1_label, c.q2_label, c.q3_label, c.score, c.tier,
+    c.status, c.step, c.score, c.tier, c.end_outcome,
     c.expires_at, c.agent_took_over_at,
+    f.key AS flow_key, f.responded_points, f.completed_points,
+    cq.key AS question_key, cq.heading AS question_heading,
+    -- What they answered, as it was saved - docs/FLOWS.md.
+    (SELECT COALESCE(jsonb_agg(jsonb_build_object(
+              'questionKey', a.question_key, 'position', a.position, 'heading', a.heading,
+              'choice', a.choice, 'label', a.label, 'points', a.points) ORDER BY a.position), '[]'::jsonb)
+     FROM conversation_answers a WHERE a.conversation_id = c.id) AS answers,
     u.id   AS holder_id,
     u.name AS holder_name,
     l.assigned_at,
@@ -83,13 +100,21 @@ const SQL = `
     ou.name AS outcome_by
   FROM leads l
   LEFT JOIN LATERAL (
-    SELECT c.id, c.status, c.step, c.q1, c.q2, c.q3, c.q1_label, c.q2_label, c.q3_label,
+    SELECT c.id, c.status, c.step, c.flow_id, c.current_question_id, c.end_outcome,
            c.score, c.tier, c.expires_at, c.agent_took_over_at
     FROM conversations c
     WHERE c.lead_id = l.id
     ORDER BY c.created_at DESC, c.id DESC
     LIMIT 1
   ) c ON true
+  LEFT JOIN flows f ON f.id = c.flow_id
+  -- The question it is on: by id, or for a row that names none, by its flow and position.
+  LEFT JOIN LATERAL (
+    SELECT q.key, q.heading FROM flow_questions q
+    WHERE q.id = c.current_question_id
+       OR (c.current_question_id IS NULL AND q.flow_id = c.flow_id AND q.position = c.step)
+    LIMIT 1
+  ) cq ON true
   LEFT JOIN users u ON u.id = l.assigned_to AND u.is_active
   LEFT JOIN dnc_list d ON d.phone = l.phone AND d.released_at IS NULL
   LEFT JOIN LATERAL (
@@ -102,17 +127,16 @@ const SQL = `
   WHERE l.id = $1
 `;
 
-async function loadScoringRules(): Promise<ScoringRule[]> {
-  const { rows } = await pool.query(
-    `SELECT code, label, question, choice, points FROM scoring_rules`
-  );
-  return rows.map((r) => ({
-    code: r.code,
-    label: r.label,
-    question: r.question,
-    choice: r.choice,
-    points: r.points,
-  }));
+/**
+ * The question a conversation is on, or stopped at, by its own name. Null once
+ * the questions are finished, and for a row whose question cannot be found -
+ * never worked out from the bare position, which is not a question number
+ * (positions go in tens, and a sub-question sits between two of them).
+ */
+function questionLabel(r: { question_key: string | null; question_heading: string | null; status: string }): string | null {
+  if (r.status === 'completed' || r.status === 'suppressed') return null;
+  if (r.question_key && r.question_heading) return questionShort({ key: r.question_key, heading: r.question_heading });
+  return null;
 }
 
 /** Null when there is no such lead. */
@@ -121,20 +145,15 @@ export async function getLeadDetail(leadId: number): Promise<LeadDetail | null> 
   if (rows.length === 0) return null;
 
   const r = rows[0];
-  const rules = await loadScoringRules();
-
   // A lead with no conversation has nothing to score or chip. That happens
   // today only in test data, but the card must not fall over on it.
-  const conversation = r.conversation_id
+  const answers: SavedAnswer[] = r.conversation_id ? (r.answers ?? []) : [];
+  const scored = r.conversation_id
     ? {
-        q1: r.q1,
-        q2: r.q2,
-        q3: r.q3,
-        q1Label: r.q1_label,
-        q2Label: r.q2_label,
-        q3Label: r.q3_label,
-        status: r.status,
         score: r.score,
+        endOutcome: r.end_outcome,
+        respondedPoints: r.responded_points ?? 0,
+        completedPoints: r.completed_points ?? 0,
       }
     : null;
 
@@ -156,11 +175,14 @@ export async function getLeadDetail(leadId: number): Promise<LeadDetail | null> 
           tier: r.tier,
           expiresAt: r.expires_at?.toISOString() ?? null,
           agentTookOverAt: r.agent_took_over_at?.toISOString() ?? null,
+          question: questionLabel(r),
+          flow: r.flow_key ?? null,
+          endOutcome: r.end_outcome ?? null,
         }
       : null,
 
-    chips: conversation ? answerChips(conversation, rules) : [],
-    breakdown: conversation ? scoreBreakdown(conversation, rules) : [],
+    chips: answerChips(answers),
+    breakdown: scored ? scoreBreakdown(scored, answers) : [],
 
     claimedBy: r.holder_id
       ? { id: r.holder_id, name: r.holder_name, at: r.assigned_at?.toISOString() ?? '' }

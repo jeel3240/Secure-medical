@@ -18,6 +18,7 @@ import { Spinner } from '../components/Spinner';
 import { Timeline } from '../components/Timeline';
 import { formatPhone, formatRelative, leadName } from '../lib/format';
 import { toApiError } from '../api/client';
+import { questionsLabel } from './workspace/LeadHeader';
 
 /**
  * The read-only history of one lead: full width, with a summary sidebar.
@@ -209,7 +210,7 @@ export function LeadTimelinePage() {
 
           <dl className="summary">
             <dt>Status</dt>
-            <dd>{lead.conversation?.status ?? 'No conversation'}</dd>
+            <dd>{lead.conversation ? questionsLabel(lead.conversation) : 'No conversation'}</dd>
 
             <dt>Attempts</dt>
             <dd>

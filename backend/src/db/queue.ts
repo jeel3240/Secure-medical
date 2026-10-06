@@ -9,9 +9,20 @@
  */
 
 import { queueTag, type QueueTag } from '../core/queue-tags';
+import { NOT_FOR_AGENTS } from '../core/state-machine';
 import { CLOSED_SQL, MISSED_CALL_SQL } from './lead-state';
 import { likeLiteral } from './sql';
 import { pool } from './pool';
+
+/** One answer on a queue row. */
+export interface QueueAnswer {
+  /** 'q1', 'q1-a'. */
+  key: string;
+  /** What the screens call the question: 'Next step'. */
+  heading: string;
+  /** What they chose: 'Talk to an agent'. */
+  label: string;
+}
 
 export interface QueueRow {
   id: number;
@@ -23,18 +34,13 @@ export interface QueueRow {
   receivedAt: string | null;
   score: number;
   tier: string | null;
-  /** Their answers, as the choices they picked. The screen maps them to words. */
-  q1: string | null;
-  q2: string | null;
-  q3: string | null;
   /**
-   * The word the lead chose for each, as it was called when they chose it -
-   * migration 009. Null where unanswered.
+   * What the lead answered, in the flow's order - as many as their flow asked
+   * and they answered. The word is the one saved with the answer.
    */
-  q1Label: string | null;
-  q2Label: string | null;
-  q3Label: string | null;
-  conversationStatus: 'open' | 'completed' | 'review' | 'expired';
+  answers: QueueAnswer[];
+  /** `suppressed`: a lead who sent STOP, then START, and has written again. */
+  conversationStatus: 'open' | 'completed' | 'review' | 'expired' | 'suppressed';
   /** `null` when there is nothing to say: the lead is waiting to be picked up. */
   tag: QueueTag | null;
 }
@@ -70,7 +76,7 @@ const MAX_LIMIT = 500;
 const BASE = `
   FROM leads l
   JOIN LATERAL (
-    SELECT c.status, c.step, c.q1, c.q2, c.q3, c.q1_label, c.q2_label, c.q3_label, c.score, c.tier
+    SELECT c.id, c.status, c.step, c.score, c.tier, c.end_outcome
     FROM conversations c
     WHERE c.lead_id = l.id
     ORDER BY c.created_at DESC, c.id DESC
@@ -89,7 +95,8 @@ const BASE = `
  * an unread message - below), its number is not blocked (a live `dnc_list`
  * row, whatever the conversation says), and one of these holds:
  *
- * - **Completed** - answered all three, including how to contact them.
+ * - **Completed** - finished their flow's questions, except by asking only
+ *   for offers, or for nothing (`NOT_FOR_AGENTS`).
  * - **Needs review** - replied, and we could not understand it.
  * - **Inbound reply** - texted something the questions cannot handle: after
  *   the conversation ended, or to an agent who took it over. Since the same day
@@ -101,10 +108,11 @@ const BASE = `
  *
  * **A closed lead leaves** - Jeel, 2026-09-28. Once an agent has pressed
  * Closed (`db/lead-state.ts`), completing the questions, needing review or an
- * older callback no longer keeps it here. Two things still do: an agent
- * holding it, so it does not vanish while they save and move on; and a new
- * message from the lead, which a person must read. A callback booked after
- * closing reopens the lead altogether.
+ * older callback no longer keeps it here. Three things still do: an agent
+ * holding it, so it does not vanish while they save and move on; a new
+ * message from the lead, which a person must read; and a call from them
+ * that nobody answered (2026-10-01). A callback booked after closing reopens
+ * the lead altogether.
  *
  * A lead partway through the questions is on Admin > Leads only.
  *
@@ -120,6 +128,12 @@ const BASE = `
  * including for the person holding it. Holding now stands on its own; the
  * score test applies to everything else.
  */
+/** Safe to inline: a constant from this codebase, each value checked to be a plain word. */
+const notForAgents = NOT_FOR_AGENTS.map((ending) => {
+  if (!/^[a-z_]+$/.test(ending)) throw new Error(`Unexpected ending: ${ending}`);
+  return `'${ending}'`;
+}).join(', ');
+
 const INCLUDED = `
   NOT EXISTS (
     SELECT 1 FROM dnc_list d WHERE d.phone = l.phone AND d.released_at IS NULL
@@ -132,7 +146,11 @@ const INCLUDED = `
       c.score > 0
       AND NOT ${CLOSED_SQL}
       AND (
-        c.status IN ('completed', 'review')
+        -- Finished the questions - except a lead who asked only for offers
+        -- (a list for the client's campaigns) or for nothing at all: neither
+        -- is a call to make.
+        (c.status = 'completed' AND (c.end_outcome IS NULL OR c.end_outcome NOT IN (${notForAgents})))
+        OR c.status = 'review'
         OR EXISTS (
           SELECT 1 FROM callbacks cb WHERE cb.lead_id = l.id AND cb.done_at IS NULL
         )
@@ -143,18 +161,14 @@ const INCLUDED = `
 
 const RECEIVED = `COALESCE(l.ezt_added_at, l.created_at)`;
 
-function buildFilters(query: QueueQuery, values: unknown[]): string {
+/**
+ * The filters every part of the answer shares: who is in the queue, the time
+ * window and the search. Tier and source are applied after - the tier counts
+ * ignore the tier filter and the source list ignores the source filter, so
+ * they are left out of the set those are counted from.
+ */
+function buildSetFilters(query: QueueQuery, values: unknown[]): string {
   const clauses: string[] = [INCLUDED];
-
-  if (query.tier?.length) {
-    values.push(query.tier.map((t) => t.toUpperCase()));
-    clauses.push(`c.tier = ANY($${values.length}::text[])`);
-  }
-
-  if (query.source?.length) {
-    values.push(query.source);
-    clauses.push(`l.source = ANY($${values.length}::text[])`);
-  }
 
   if (query.since) {
     values.push(query.since);
@@ -176,8 +190,35 @@ function buildFilters(query: QueueQuery, values: unknown[]): string {
   return `WHERE ${clauses.join(' AND ')}`;
 }
 
+/** Tier and source, on the rows of the page. `q` is the set built above. */
+function buildPageFilters(query: QueueQuery, values: unknown[]): string {
+  const clauses: string[] = [];
+
+  if (query.tier?.length) {
+    values.push(query.tier.map((t) => t.toUpperCase()));
+    clauses.push(`q.tier = ANY($${values.length}::text[])`);
+  }
+
+  if (query.source?.length) {
+    values.push(query.source);
+    clauses.push(`q.source = ANY($${values.length}::text[])`);
+  }
+
+  return clauses.length ? `WHERE ${clauses.join(' AND ')}` : '';
+}
+
+/** How many queued leads have this tier and this source - what the pills and the dropdown are built from. */
+interface QueueGroup {
+  tier: string | null;
+  source: string | null;
+  n: number;
+}
+
 interface QueueDbRow {
-  id: number;
+  /** On every row, the same: the whole queue, counted by tier and source. */
+  groups: QueueGroup[];
+  /** Null on the one row that comes back when the page is empty. */
+  id: number | null;
   phone: string;
   first_name: string | null;
   last_name: string | null;
@@ -186,12 +227,8 @@ interface QueueDbRow {
   score: number;
   tier: string | null;
   status: QueueRow['conversationStatus'];
-  q1: string | null;
-  q2: string | null;
-  q3: string | null;
-  q1_label: string | null;
-  q2_label: string | null;
-  q3_label: string | null;
+  end_outcome: string | null;
+  answers: QueueAnswer[] | null;
   agent_id: number | null;
   agent_name: string | null;
   has_unread_inbound: boolean;
@@ -208,67 +245,107 @@ interface QueueDbRow {
  * down the list always has the highest-intent lead in front of them, and
  * between equal scores the freshest one, because speed to contact is the whole
  * point of the screen.
+ *
+ * **One statement, and one pass over the leads** - 2026-10-06. Whether a lead
+ * belongs in the queue is worked out from several tables, for every lead we
+ * hold, and this is asked every five seconds by every open browser. There
+ * were three statements - the page, the tier counts, the source list - and
+ * each worked that out from scratch. Now:
+ *
+ * - `q` is the queue, built once (`MATERIALIZED`, so it is not folded back
+ *   into each use of it).
+ * - `grouped` counts it by tier and source - a handful of rows, from which
+ *   both the tier pills and the source dropdown are read below.
+ * - `page` takes the rows to show and only then looks up what each needs: its
+ *   answers, its next callback, whether it is a missed call.
+ *
+ * `grouped` is one row, so the page hangs off it with a left join: an empty
+ * page still returns the counts, on a row with no lead.
+ *
+ * Timed against 50,000 leads: docs/QUEUE.md, "How fast it is".
  */
 export async function listQueue(query: QueueQuery = {}): Promise<QueuePage> {
   const limit = Math.min(MAX_LIMIT, Math.max(1, query.limit ?? DEFAULT_LIMIT));
 
   const values: unknown[] = [];
-  const where = buildFilters(query, values);
+  const inQueue = buildSetFilters(query, values);
+  const onPage = buildPageFilters(query, values);
 
-  const rows = await pool.query<QueueDbRow>(
-    `SELECT l.id, l.phone, l.first_name, l.last_name, l.source,
-            ${RECEIVED} AS received_at,
-            c.score, c.tier, c.status, c.q1, c.q2, c.q3, c.q1_label, c.q2_label, c.q3_label,
-            u.id AS agent_id, u.name AS agent_name, l.has_unread_inbound,
-            ${MISSED_CALL_SQL} AS missed_call,
-            ncb.agent_id AS callback_agent_id, ncb.agent_name AS callback_agent_name,
-            ncb.scheduled_at AS callback_at
-     ${BASE}
+  const { rows } = await pool.query<QueueDbRow>(
+    `WITH q AS MATERIALIZED (
+       SELECT l.id, l.phone, l.first_name, l.last_name, l.source,
+              ${RECEIVED} AS received_at,
+              c.id AS conversation_id, c.score, c.tier, c.status, c.end_outcome,
+              u.id AS agent_id, u.name AS agent_name, l.has_unread_inbound
+       ${BASE}
+       ${inQueue}
+     ),
+     grouped AS (
+       SELECT COALESCE(jsonb_agg(jsonb_build_object('tier', g.tier, 'source', g.source, 'n', g.n)), '[]'::jsonb) AS groups
+       FROM (SELECT q.tier, q.source, count(*)::int AS n FROM q GROUP BY q.tier, q.source) g
+     )
+     SELECT grouped.groups, page.*
+     FROM grouped
      LEFT JOIN LATERAL (
-       SELECT cb.agent_id, cu.name AS agent_name, cb.scheduled_at
-       FROM callbacks cb JOIN users cu ON cu.id = cb.agent_id
-       WHERE cb.lead_id = l.id AND cb.done_at IS NULL
-       ORDER BY cb.scheduled_at, cb.id
-       LIMIT 1
-     ) ncb ON true
-     ${where}
-     ORDER BY c.score DESC, ${RECEIVED} DESC, l.id DESC
-     LIMIT ${limit}`,
+       SELECT l.id, l.phone, l.first_name, l.last_name, l.source, l.received_at,
+              l.score, l.tier, l.status, l.end_outcome,
+              -- What they answered, as saved, in the flow's order.
+              (SELECT COALESCE(jsonb_agg(jsonb_build_object(
+                        'key', a.question_key, 'heading', a.heading, 'label', a.label) ORDER BY a.position), '[]'::jsonb)
+               FROM conversation_answers a WHERE a.conversation_id = l.conversation_id) AS answers,
+              l.agent_id, l.agent_name, l.has_unread_inbound,
+              ${MISSED_CALL_SQL} AS missed_call,
+              ncb.agent_id AS callback_agent_id, ncb.agent_name AS callback_agent_name,
+              ncb.scheduled_at AS callback_at
+       -- Named l, as the lead is everywhere else: the missed-call rule reads l.id.
+       FROM (
+         SELECT q.* FROM q
+         ${onPage}
+         ORDER BY q.score DESC, q.received_at DESC, q.id DESC
+         LIMIT ${limit}
+       ) l
+       LEFT JOIN LATERAL (
+         SELECT cb.agent_id, cu.name AS agent_name, cb.scheduled_at
+         FROM callbacks cb JOIN users cu ON cu.id = cb.agent_id
+         WHERE cb.lead_id = l.id AND cb.done_at IS NULL
+         ORDER BY cb.scheduled_at, cb.id
+         LIMIT 1
+       ) ncb ON true
+     ) page ON true
+     ORDER BY page.score DESC, page.received_at DESC, page.id DESC`,
     values
   );
+
+  const groups: QueueGroup[] = rows[0]?.groups ?? [];
+  const leads = rows.filter((r): r is QueueDbRow & { id: number } => r.id !== null);
 
   // The two option lists are each counted without the filter they drive: the
   // tier pills would zero each other out, and picking a source would leave
   // that source alone in the dropdown with no way back.
-  const countValues: unknown[] = [];
-  const counts = await pool.query<{ tier: string | null; n: number }>(
-    `SELECT c.tier, count(*)::int AS n ${BASE} ${buildFilters({ ...query, tier: undefined }, countValues)} GROUP BY c.tier`,
-    countValues
-  );
-
-  const sourceValues: unknown[] = [];
-  const sources = await pool.query<{ source: string }>(
-    `SELECT DISTINCT l.source ${BASE} ${buildFilters({ ...query, source: undefined }, sourceValues)}
-       AND l.source IS NOT NULL
-     ORDER BY l.source`,
-    sourceValues
-  );
+  const wantedSources = query.source?.length ? new Set(query.source) : null;
+  const wantedTiers = query.tier?.length ? new Set(query.tier.map((t) => t.toUpperCase())) : null;
 
   const byTier: Record<string, number> = { all: 0 };
-  for (const row of counts.rows) {
-    if (row.tier) byTier[row.tier] = row.n;
-    byTier.all += row.n;
+  const sources = new Set<string>();
+  for (const group of groups) {
+    if (!wantedSources || (group.source !== null && wantedSources.has(group.source))) {
+      if (group.tier) byTier[group.tier] = (byTier[group.tier] ?? 0) + group.n;
+      byTier.all += group.n;
+    }
+    if (group.source !== null && (!wantedTiers || (group.tier !== null && wantedTiers.has(group.tier)))) {
+      sources.add(group.source);
+    }
   }
 
   // How many match everything asked for, which is what the limit truncated.
   // The tier counts already have every other filter applied, so the selected
-  // tiers add up to it - no third count query.
-  const total = query.tier?.length
-    ? query.tier.reduce((sum, t) => sum + (byTier[t.toUpperCase()] ?? 0), 0)
+  // tiers add up to it.
+  const total = wantedTiers
+    ? [...wantedTiers].reduce((sum, t) => sum + (byTier[t] ?? 0), 0)
     : byTier.all;
 
   return {
-    leads: rows.rows.map((r) => ({
+    leads: leads.map((r) => ({
       id: r.id,
       phone: r.phone,
       firstName: r.first_name,
@@ -277,18 +354,14 @@ export async function listQueue(query: QueueQuery = {}): Promise<QueuePage> {
       receivedAt: r.received_at?.toISOString() ?? null,
       score: r.score,
       tier: r.tier,
-      q1: r.q1,
-      q2: r.q2,
-      q3: r.q3,
-      q1Label: r.q1_label,
-      q2Label: r.q2_label,
-      q3Label: r.q3_label,
+      answers: r.answers ?? [],
       conversationStatus: r.status,
       tag: queueTag({
         conversationStatus: r.status,
         holder: r.agent_id === null ? null : { id: r.agent_id, name: r.agent_name ?? 'Another agent' },
         hasUnreadInbound: r.has_unread_inbound,
         missedCall: r.missed_call,
+        wantsContact: r.end_outcome === 'wants_contact',
         nextCallback:
           r.callback_agent_id === null || !r.callback_at
             ? null
@@ -300,7 +373,7 @@ export async function listQueue(query: QueueQuery = {}): Promise<QueuePage> {
       }),
     })),
     counts: byTier,
-    sources: sources.rows.map((r) => r.source),
+    sources: [...sources].sort((a, b) => a.localeCompare(b)),
     total,
     limit,
   };

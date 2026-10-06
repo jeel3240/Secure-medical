@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react';
-import type { AnswerChip, TimelineEntry } from '../../api/workspace';
+import type { TimelineEntry } from '../../api/workspace';
 import { CallTranscript } from '../../components/CallTranscript';
 import { callText, systemText } from '../../components/Timeline';
 import { formatTime } from '../../lib/format';
@@ -25,30 +25,24 @@ import { formatTime } from '../../lib/format';
 const SHOWN = new Set<TimelineEntry['kind']>(['sms', 'inbound', 'agent_sms', 'call', 'system']);
 
 /**
- * Pairs each inbound reply with the answer it was recorded as, so `3` can be
- * shown as "3 Both".
+ * The answer an inbound reply was recorded as, when it is worth showing beside
+ * what the lead typed: `1` reads "1 | Yes".
  *
- * Counting inbound messages and assuming the first is question 1 is wrong the
- * moment a lead sends something unclear, so this matches the digit against the
- * choice actually stored on the conversation and walks the pointer only on a
- * match. Anything it cannot prove - a worded answer like "today please", a
- * reply the flow never accepted - is left as plain text rather than guessed.
+ * It comes from the server with the message - the answer row names the text it
+ * was read from (migration 012). Until 2026-10-06 this screen worked it out,
+ * walking the lead's answers in order and matching digits; a worded answer
+ * ("yes") was skipped, and the next digit then took its label - "1 | Yes" on a
+ * reply that meant "I know which antibiotic".
+ *
+ * Nothing is added when the lead typed the answer's own words: "Yes | Yes"
+ * says it twice.
  */
-export function labelReplies(entries: TimelineEntry[], chips: AnswerChip[]): Map<number, string> {
-  const answered = chips.filter((c) => c.choice && c.answer);
-  const labels = new Map<number, string>();
-  let next = 0;
-
-  entries.forEach((entry, index) => {
-    if (entry.kind !== 'inbound' || next >= answered.length) return;
-    const body = typeof entry.detail.body === 'string' ? entry.detail.body.trim() : '';
-    if (body === answered[next].choice) {
-      labels.set(index, answered[next].answer as string);
-      next += 1;
-    }
-  });
-
-  return labels;
+export function replyLabel(entry: TimelineEntry): string | null {
+  const answer = entry.detail.answer;
+  if (entry.kind !== 'inbound' || typeof answer !== 'string' || !answer) return null;
+  const body = typeof entry.detail.body === 'string' ? entry.detail.body : '';
+  const plain = (text: string) => text.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, ' ').trim();
+  return plain(body) === plain(answer) ? null : answer;
 }
 
 /**
@@ -113,16 +107,13 @@ function scrollParent(el: HTMLElement | null): HTMLElement | null {
 
 export function Conversation({
   entries,
-  chips,
   leadFirstName,
 }: {
   entries: TimelineEntry[];
-  chips: AnswerChip[];
   leadFirstName: string;
 }) {
   const bottom = useRef<HTMLDivElement>(null);
   const shown = entries.filter((e) => SHOWN.has(e.kind));
-  const labels = labelReplies(shown, chips);
 
   // An agent watching for a reply wants the newest in view; the timeline page
   // deliberately does not do this, so a reader is not jumped down the page.
@@ -170,7 +161,7 @@ export function Conversation({
         const failed = entry.detail.deliveryStatus === 'failed';
 
         if (entry.kind === 'inbound') {
-          const label = labels.get(index);
+          const label = replyLabel(entry);
           return (
             <div className="convo__row convo__row--in" key={`${entry.at}-${index}`}>
               <div className="convo__bubble convo__bubble--in">

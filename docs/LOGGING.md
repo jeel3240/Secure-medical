@@ -83,15 +83,18 @@ firing a real webhook: the number appears nowhere in the output.
 | `worker.started`, `poll.tick`, `poll.failed` | `worker/index.ts` |
 | `conversation.expired`, `expiry.failed` | `worker/index.ts` |
 | `call.token_issued`, `call.started`, `call.refused`, `call.failed_to_start`, `call.finished`, `call.answered_by`, `call.recorded`, `call.incoming`, `call.incoming_failed`, `call.missed_not_recorded`, `twilio.webhook_rejected`, `twilio.archive_failed`, `calling.off` | `api/calls.ts`, `api/twilio-webhooks.ts`, `api/index.ts` - browser calling, `TWILIO.md`. `call.refused` carries `reason`; `twilio.webhook_rejected` usually means `PUBLIC_URL` is not the address Twilio calls |
-| `sms.sent`, `sms.failed`, `sms.no_template`, `sms.name_dropped`, `sms.record_failed` | `worker/poller.ts`, `worker/retry-openers.ts`, `worker/opener.ts` (`sms.name_dropped`), `api/reply-flow.ts`, `db/agent-sms.ts`, `db/outbound.ts` (`sms.record_failed`) |
+| `sms.sent`, `sms.failed`, `sms.unconfirmed`, `sms.no_template`, `sms.name_dropped`, `sms.record_failed` | `worker/poller.ts`, `worker/retry-openers.ts`, `worker/opener.ts` (`sms.name_dropped`), `api/reply-flow.ts`, `db/agent-sms.ts`, `db/outbound.ts` and `db/failed-sends.ts` (`sms.record_failed`) |
+| | **Which text it was** (2026-10-05): the first question logs `key: question_1` - the opener's name in the logs, kept though the wording now comes from the lead's flow; a text sent after a reply logs `flow: antibiotics`, the flow's key, since one text can carry a reply and the next question |
 | | The text after a missed call logs the same events with `key: message_missed_call` (`db/missed-call-text.ts`). Its `sms.failed` is at `warn`, a real refusal by EZ Texting included, so an alarm on `level=error` alone does not catch it |
-| `transcript.tick`, `transcript.tick_failed`, `transcript.request_failed`, `transcript.read_failed` | `worker/transcripts.ts` - a call's transcript, `TWILIO.md`, "Recordings and transcripts". `tick` only when something moved |
-| `opener.retry`, `opener.retry_failed`, `opener.gave_up` | `worker/retry-openers.ts` - `POLLER.md`, "Retrying a failed opener" |
+| `transcript.tick`, `transcript.tick_failed`, `transcript.request_failed`, `transcript.read_failed` | `worker/index.ts` (`tick`, `tick_failed`), `worker/transcripts.ts` (`request_failed`, `read_failed`) - a call's transcript, `TWILIO.md`, "Recordings and transcripts". `tick` only when something moved |
 | `webhook.rejected`, `webhook.ignored`, `webhook.failed` | `api/webhooks.ts` |
-| `conversation.advanced` | `api/webhooks.ts` |
+| | `sms.unconfirmed` (warn, `db/outbound.ts`): a send to EZ Texting timed out, so the text may or may not have gone. It is not retried |
+| `conversation.advanced` | `api/webhooks.ts` - only when the reply produced a text to send; `parts` is how many pieces it had, `sent` whether it went |
+| `conversation.expiry_not_moved` | `api/reply-flow.ts` - a text went out but its reply window could not be saved |
+| `reply.before_our_text` | `api/reply-flow.ts` - a reply arrived before the text it would be answering had gone out, and was not counted. `forPerson: true` when that text has been unsent for over two minutes and the lead was flagged instead |
 | `dnc.blocked`, `dnc.released` | `api/webhooks.ts` |
 | `http.unhandled` | `api/http.ts` |
-| `opener.retry`, `opener.retry_failed` | `worker/index.ts` - one line per pass that had something due, with `due`, `sent`, `failed`, `abandoned`, `tooOld` |
+| `opener.retry`, `opener.retry_failed` | `worker/index.ts` - one line per pass that had something due, with `due`, `sent`, `failed`, `abandoned`, `tooOld`. `POLLER.md`, "Retrying a failed opener" |
 | `opener.gave_up` | `worker/retry-openers.ts` - once, at the failed attempt that reaches the limit. A warning: that lead will never get its first question |
 
 A new event belongs in this table as well as in the code, or whoever is querying
@@ -125,7 +128,8 @@ that it is alive, which is why the last poll time belongs in this response.
 
 **As built** - `db/health.ts`, `api/admin/health.ts`.
 
-Five checks, each with its own `status`, a `message` when it is degraded, and a
+Six checks - five from `db/health.ts`, and `calling`, added by the route -
+each with its own `status`, a `message` when it is degraded, and a
 `detail` object. The top-level `status` is `degraded` if any check is.
 
 | Check | Degrades when |

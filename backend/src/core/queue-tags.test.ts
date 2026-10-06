@@ -69,4 +69,14 @@ describe('when several could apply, the most urgent wins', () => {
       kind: 'inbound_reply',
     });
   });
+
+  it('a lead who asked to hear from a rep says so - it is why a low score is here at all', () => {
+    expect(queueTag(facts({ wantsContact: true }))).toEqual({ kind: 'wants_call' });
+  });
+
+  it('but a text of theirs, or a booked callback, comes first', () => {
+    expect(queueTag(facts({ wantsContact: true, hasUnreadInbound: true }))).toMatchObject({ kind: 'inbound_reply' });
+    const nextCallback = { agentId: 21, agentName: 'Maya Chen', at: '2026-10-06T15:00:00.000Z' };
+    expect(queueTag(facts({ wantsContact: true, nextCallback }))).toMatchObject({ kind: 'callback' });
+  });
 });

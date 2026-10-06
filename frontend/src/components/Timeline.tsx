@@ -127,13 +127,25 @@ export function activityText(detail: Record<string, unknown>, at: string): strin
   }
 }
 
+/**
+ * How the questions stood when the score was earned. A lead who asked only for
+ * offers, or to hear from a rep, has a `completed` conversation too - and
+ * "completed" alone would read as the questions answered.
+ */
+function scoredAs(detail: Record<string, unknown>): string {
+  if (detail.endOutcome === 'offers') return 'offers only';
+  if (detail.endOutcome === 'wants_contact') return 'wants a call';
+  if (detail.endOutcome === 'declined') return 'not interested';
+  return String(detail.status);
+}
+
 /** The words for a system event - shared with the workspace conversation. */
 export function systemText(detail: Record<string, unknown>): string {
   switch (detail.event) {
     case 'lead_received':
       return `Lead received${detail.source ? ` from ${detail.source}` : ''}`;
     case 'scored':
-      return `Scored ${detail.score} · ${detail.tier ?? 'no tier'} · ${detail.status}`;
+      return `Scored ${detail.score} · ${detail.tier ?? 'no tier'} · ${scoredAs(detail)}`;
     case 'agent_took_over':
       // Worth spelling out: this is why the automated questions stopped.
       return 'Agent took over - automated questions stopped';

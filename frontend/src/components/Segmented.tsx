@@ -40,10 +40,13 @@ export function Segmented<T extends string>({
   onChange,
   label,
   labelledBy,
+  dense = false,
 }: {
   options: SegmentedOption<T>[];
   value: T;
   onChange: (value: T) => void;
+  /** Tighter options, for a row of many - Admin > Leads' ten statuses. */
+  dense?: boolean;
   /** Accessible name when there is no visible label. */
   label?: string;
   /** The id of a visible label, when there is one. */
@@ -92,7 +95,7 @@ export function Segmented<T extends string>({
   return (
     <div
       ref={track}
-      className={`segmented${thumb ? ' segmented--ready' : ''}`}
+      className={`segmented${thumb ? ' segmented--ready' : ''}${dense ? ' segmented--dense' : ''}`}
       role="radiogroup"
       aria-label={label}
       aria-labelledby={labelledBy}

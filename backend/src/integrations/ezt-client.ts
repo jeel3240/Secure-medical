@@ -3,6 +3,15 @@ import { config } from '../config';
 
 const BASE_URL = 'https://a.eztexting.com/v1';
 
+/**
+ * How long a call to EZ Texting may take. Without a limit a connection that
+ * hangs is waited on for ever: the worker - one loop for the poll, the retries
+ * and the expiry sweep - stops without an error, and a webhook holds its reply.
+ * Generous, because a send that is cut off may still have gone out
+ * (`db/outbound.ts`, "unconfirmed").
+ */
+const TIMEOUT_MS = 30_000;
+
 // size outside this set returns 400.
 const ALLOWED_PAGE_SIZES = [10, 20, 50, 100, 200];
 
@@ -63,6 +72,7 @@ export async function listContacts(options: ListContactsOptions): Promise<EztPag
 
   const response = await axios.get<EztPage<EztContact>>(`${BASE_URL}/contacts`, {
     headers: { Authorization: authHeader() },
+    timeout: TIMEOUT_MS,
     params: {
       'filters[groupName][like]': groupName,
       'filters[source][eq]': source,
@@ -153,7 +163,7 @@ export async function sendMessage(toPhones: string[], message: string): Promise<
   const response = await axios.post<SendMessageResult>(
     `${BASE_URL}/messages`,
     { toNumbers: toPhones.map(fromE164), message },
-    { headers: { Authorization: authHeader() } }
+    { headers: { Authorization: authHeader() }, timeout: TIMEOUT_MS }
   );
 
   return response.data;

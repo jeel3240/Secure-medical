@@ -20,6 +20,10 @@
  * `--transcription` also makes the transcription service that call transcripts
  * go through, if there is none yet, and prints its id for `.env`.
  *
+ * **Never run this locally with production's number or TwiML App** - Jeel,
+ * 2026-10-05. Local testing uses its own. The guard below does not help: a
+ * laptop and production share the webhook path, so it sees "ours".
+ *
  * **One number, one deployment.** The number can ring only one address. Run
  * locally against the number production uses and production stops receiving
  * calls until this is run there again.

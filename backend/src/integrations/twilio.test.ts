@@ -7,6 +7,7 @@ import {
   mintCallToken,
   missedCallTwiml,
   refusalTwiml,
+  recordingNoticeTwiml,
   ringAgentTwiml,
   TOKEN_TTL_SECONDS,
 } from './twilio';
@@ -65,6 +66,13 @@ describe('telling Twilio how to connect', () => {
     expect(xml).toContain('recordingStatusCallbackEvent="completed"');
   });
 
+  it('a recorded call we place tells the lead so before connecting them; an unrecorded one says nothing', () => {
+    const recorded = dialTwiml({ ...SETTINGS, transcriptionServiceSid: `GA${'4'.repeat(32)}` }, '+16026203572', 'CA100');
+    expect(recorded).toContain('url="https://calls.example.com/api/webhooks/twilio/notice"');
+    expect(dialTwiml(SETTINGS, '+16026203572', 'CA100')).not.toContain('/notice');
+    expect(recordingNoticeTwiml()).toContain('<Say>This call may be recorded and transcribed for quality, training, and service purposes. By continuing, you consent to the recording and transcription.</Say>');
+  });
+
   it('a refusal says why, then hangs up', () => {
     expect(refusalTwiml('Pick up this lead first.')).toMatch(/<Say>Pick up this lead first\.<\/Say><Hangup\/>/);
   });
@@ -89,6 +97,14 @@ describe('a lead calling our number', () => {
     expect(xml).toContain('record="record-from-answer-dual"');
     expect(xml).toContain('/api/webhooks/twilio/recording?call=CA300');
     expect(ringAgentTwiml(SETTINGS, 21, lead, 'CA300')).not.toContain('record=');
+  });
+
+  it('a recorded incoming call: the lead hears the notice first, then the agent rings', () => {
+    const lead = { id: 7, name: 'Priya Sharma', phone: '+16026203572' };
+    const xml = ringAgentTwiml({ ...SETTINGS, transcriptionServiceSid: `GA${'4'.repeat(32)}` }, 21, lead, 'CA300');
+    expect(xml.indexOf('<Say>This call may be recorded')).toBeGreaterThan(-1);
+    expect(xml.indexOf('<Say>This call may be recorded')).toBeLessThan(xml.indexOf('<Dial'));
+    expect(ringAgentTwiml(SETTINGS, 21, lead, 'CA300')).not.toContain('<Say>');
   });
 
   it('unanswered, tells the lead we will call back and hangs up', () => {

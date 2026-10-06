@@ -41,11 +41,12 @@ export async function sendOpener(
     // never earned (the expiry sweep falls back to created_at for those), and
     // a retried lead gets its full seven days from when it was asked. This is
     // also what marks the opener as sent for the retry - an open conversation
-    // with no expires_at never had one go out.
+    // with no expires_at never had one go out. `question_sent_at` says the same
+    // to the reply flow: from now a reply can be an answer to it.
     const days = await readExpiryDays(pool);
     await pool.query(
       `UPDATE conversations
-       SET expires_at = now() + ($2 || ' days')::interval, updated_at = now()
+       SET expires_at = now() + ($2 || ' days')::interval, question_sent_at = now(), updated_at = now()
        WHERE lead_id = $1 AND status = 'open'`,
       [lead.id, String(days)]
     );

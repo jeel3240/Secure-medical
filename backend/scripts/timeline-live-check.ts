@@ -19,6 +19,8 @@ import { createCallback, updateCallback } from '../src/db/callbacks';
 import { claimLead, releaseLead } from '../src/db/claims';
 import { addNote } from '../src/db/notes';
 import { getTimeline } from '../src/db/timeline';
+import { startConversation } from '../src/db/flows';
+import { replyAs } from './live-flow';
 
 let failures = 0;
 
@@ -255,6 +257,36 @@ async function main(): Promise<void> {
     // expires_at is set on every send, so an open conversation always has a
     // future one. It has not expired, and the timeline must not say it has.
     check('does not claim it expired', events((await getTimeline(lead))!), ['lead_received']);
+  }
+
+  console.log('\neach reply, with the answer it was recorded as');
+  {
+    // The case that used to go wrong: a worded answer, then digits. The thread
+    // walked the answers in order and matched digits, so "yes" was skipped and
+    // the later "1" took question 1's label.
+    const lead = await makeLead('+15550001900', '10 minutes');
+    await startConversation(pool, lead, 'open');
+    for (const text of ['yes', 'hmm', '2', '1']) await replyAs(lead, text, { stored: true });
+    const replies = ((await getTimeline(lead)) ?? []).filter((e) => e.kind === 'inbound');
+    check(
+      'every text carries its own answer, whether typed as a word or a number',
+      replies.map((e) => [e.detail.body, e.detail.answer ?? null]),
+      [['yes', 'Yes'], ['hmm', null], ['2', 'No'], ['1', 'I know which antibiotic']]
+    );
+
+    // A second walk on the same lead: the first walk's replies keep their own answers.
+    await pool.query(`UPDATE conversations SET status = 'expired' WHERE lead_id = $1 AND status = 'open'`, [lead]);
+    await startConversation(pool, lead, 'open');
+    await replyAs(lead, 'no', { stored: true });
+    const after = ((await getTimeline(lead)) ?? []).filter((e) => e.kind === 'inbound');
+    check(
+      'a later conversation does not relabel an earlier one',
+      after.map((e) => e.detail.answer ?? null),
+      ['Yes', null, 'No', 'I know which antibiotic', 'No']
+    );
+
+    const scored = ((await getTimeline(lead)) ?? []).find((e) => e.kind === 'system' && e.detail.event === 'scored');
+    check('the scored line says how the questions ended, or that they have not', scored?.detail.endOutcome, null);
   }
 
   console.log('\na lead with no history');

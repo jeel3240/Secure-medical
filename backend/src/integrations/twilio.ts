@@ -8,7 +8,7 @@
 
 import twilio from 'twilio';
 import type VoiceResponse from 'twilio/lib/twiml/VoiceResponse';
-import { identityFor, INCOMING_RING_SECONDS, MISSED_CALL_SPEECH } from '../core/calls';
+import { identityFor, INCOMING_RING_SECONDS, MISSED_CALL_SPEECH, RECORDING_NOTICE } from '../core/calls';
 import type { TwilioSettings } from '../twilio-settings';
 
 /** An hour: long enough for a shift's calls, refreshed by the browser before it lapses. */
@@ -17,6 +17,9 @@ export const TOKEN_TTL_SECONDS = 60 * 60;
 export const VOICE_PATH = '/api/webhooks/twilio/voice';
 export const STATUS_PATH = '/api/webhooks/twilio/status';
 /** A lead calling our number. The phone number's Voice URL points here. */
+/** What the lead hears before a recorded call we placed is connected - the recording notice. */
+export const NOTICE_PATH = '/api/webhooks/twilio/notice';
+
 /** A call's recording is ready - TWILIO.md, "Recordings and transcripts". */
 export const RECORDING_PATH = '/api/webhooks/twilio/recording';
 
@@ -111,6 +114,9 @@ export function dialTwiml(settings: TwilioSettings, phone: string, callSid: stri
       machineDetection: 'Enable',
       amdStatusCallback: `${settings.publicUrl}${AMD_PATH}?call=${encodeURIComponent(callSid)}`,
       amdStatusCallbackMethod: 'POST',
+      // On a recorded call the lead is told so before the agent is connected:
+      // Twilio runs this on the lead's side once they pick up. TWILIO.md.
+      ...(settings.transcriptionServiceSid ? { url: settings.publicUrl + NOTICE_PATH, method: 'POST' } : {}),
     },
     phone
   );
@@ -134,6 +140,8 @@ export function ringAgentTwiml(
   callSid: string
 ): string {
   const response = new twilio.twiml.VoiceResponse();
+  // A recorded call: the lead hears the notice first, then the agent rings.
+  if (settings.transcriptionServiceSid) response.say(RECORDING_NOTICE);
   const dial = response.dial({
     timeout: INCOMING_RING_SECONDS,
     answerOnBridge: true,
@@ -150,6 +158,13 @@ export function ringAgentTwiml(
   client.parameter({ name: 'leadId', value: String(lead.id) });
   client.parameter({ name: 'leadName', value: lead.name });
   client.parameter({ name: 'leadPhone', value: lead.phone });
+  return response.toString();
+}
+
+/** The recording notice by itself: what Twilio plays to a lead we called, before connecting them. */
+export function recordingNoticeTwiml(): string {
+  const response = new twilio.twiml.VoiceResponse();
+  response.say(RECORDING_NOTICE);
   return response.toString();
 }
 

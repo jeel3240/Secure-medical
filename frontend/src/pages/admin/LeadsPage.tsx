@@ -31,7 +31,8 @@ const EMPTY = '-';
 
 /**
  * In the order a lead lives them - Awaiting reply, Answering, Ready,
- * Working, Closed - then the three other ways the SMS part can end. Working
+ * Working, Closed - with Offers and Not interested after Ready - then the
+ * three other ways the SMS part can end. Working
  * and Closed were added, and In progress and Completed renamed, by Jeel on
  * 2026-09-28: ADMIN-LEADS.md, "Status".
  */
@@ -40,6 +41,8 @@ const TABS: { key: string; label: string }[] = [
   { key: 'awaiting_reply', label: 'Awaiting reply' },
   { key: 'answering', label: 'Answering' },
   { key: 'ready', label: 'Ready' },
+  { key: 'offers', label: 'Offers' },
+  { key: 'declined', label: 'Not interested' },
   { key: 'working', label: 'Working' },
   { key: 'closed', label: 'Closed' },
   { key: 'needs_review', label: 'Needs review' },
@@ -134,10 +137,12 @@ export function LeadsPage() {
       <div className="card table-card">
         {/* The queue's tier switcher, so the chosen status is the brand navy
             and slides the same way - Jeel, 2026-09-28. The underline tabs it
-            replaces used the brighter link blue. */}
-        <div className="table-card__toolbar">
+            replaces used the brighter link blue. Eleven options: dense, and on
+            a screen too narrow for them the row scrolls - it never wraps. */}
+        <div className="table-card__toolbar table-card__toolbar--scroll">
           <Segmented
             label="Status"
+            dense
             value={status}
             onChange={(next) => {
               setStatus(next);
@@ -227,8 +232,10 @@ export function LeadsPage() {
                       <span className="cell-sub">{formatPhone(lead.phone)}</span>
                     </td>
                     <td>{lead.status ? <LeadStatus status={lead.status} /> : EMPTY}</td>
-                    <td className={lead.step ? 'mono' : undefined}>
-                      {lead.step === 'done' ? 'Done' : lead.step ? `Q${lead.step}` : EMPTY}
+                    {/* "Q2" and "Q1-a" in the code face, as before; "Done", and a
+                        question that goes by its heading, are words. */}
+                    <td className={lead.step && /^Q\d/.test(lead.step) ? 'mono' : undefined}>
+                      {lead.step === 'done' ? 'Done' : (lead.step ?? EMPTY)}
                     </td>
                     <td className="right tabular cell-strong">{lead.score ?? EMPTY}</td>
                     <td className="mono cell-code">{lead.source ?? EMPTY}</td>

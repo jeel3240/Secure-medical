@@ -99,7 +99,16 @@ export const INCOMING_RING_SECONDS = 20;
 
 /** Said to a lead whose call nobody answered. A text saying the same follows - `message_missed_call`. */
 export const MISSED_CALL_SPEECH =
-  'Thank you for calling Secure Medical. Our team member is not available right now, and will call you back shortly. Goodbye.';
+  'Thank you for calling eDrugstore. Our team member is not available right now, and will call you back shortly. Goodbye.';
+
+/**
+ * Said to the lead before they are connected, on every recorded call - the
+ * client's wording, 2026-10-05. Calls are recorded for their transcripts
+ * (TWILIO.md, "Recordings and transcripts"), and some US states require
+ * everyone on a call to be told. Until then no notice was played, by decision.
+ */
+export const RECORDING_NOTICE =
+  'This call may be recorded and transcribed for quality, training, and service purposes. By continuing, you consent to the recording and transcription.';
 
 /** Spoken to the agent in the browser, then the call ends. Short: they are listening, not reading. */
 export const REFUSAL_SPEECH: Record<CallRefusal, string> = {

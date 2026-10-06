@@ -69,8 +69,13 @@ const START_WORDS = new Set(['start', 'unstop', 'yes', 'subscribe']);
 
 const STOP_WORDS = new Set(['stop', 'stopall', 'unsubscribe', 'cancel', 'end', 'quit', 'revoke', 'optout']);
 
+/** A keyword is one short word. A longer message is not one, and is not scanned. */
+const MAX_KEYWORD_LENGTH = 40;
+
 function normalised(payload: InboundText): string {
-  return (payload.message ?? '').trim().toLowerCase().replace(/[.!,]+$/, '');
+  const text = (payload.message ?? '').trim();
+  if (text.length > MAX_KEYWORD_LENGTH) return '';
+  return text.toLowerCase().replace(/[.!,]+$/, '');
 }
 
 function isOptOut(payload: InboundText): boolean {
@@ -133,6 +138,13 @@ const handleInbound = async (req: Request, res: Response) => {
   const { pool, toE164, applyReply } = deps();
   const phone = toE164(payload.fromNumber);
   const client = await pool.connect();
+  // Handed back once, by whichever comes first: the commit below, or the end.
+  let released = false;
+  const release = () => {
+    if (released) return;
+    released = true;
+    client.release();
+  };
 
   try {
     await client.query('BEGIN');
@@ -215,6 +227,7 @@ const handleInbound = async (req: Request, res: Response) => {
     const pending = await applyReply(client, leadId, phone, firstName, {
       text: payload.message,
       optOut: optedOut,
+      messageId: inserted.rows[0].id,
     });
 
     // blockNumber is driven by the state machine's result, so the rule lives in
@@ -236,6 +249,14 @@ const handleInbound = async (req: Request, res: Response) => {
 
     await client.query('COMMIT');
 
+    // The connection goes back before anything is sent - 2026-10-06, from
+    // review. The send takes its own connections from the same pool to record
+    // the text, and waits on EZ Texting in between. Held across that, ten
+    // replies in flight at once each kept one connection and waited for
+    // another: nothing returned, and the whole API - sign-in, the queue,
+    // Twilio's webhooks - stopped until it was restarted.
+    release();
+
     if (optedOut) {
       log.info('dnc.blocked', {
         leadId,
@@ -246,7 +267,10 @@ const handleInbound = async (req: Request, res: Response) => {
     // After the commit, deliberately: a failed send must not roll back an
     // answer the lead has already given, and nothing should go out on the back
     // of a transaction that later fails.
-    if (pending?.result.send) {
+    // Only when there is something to send: `send` is a list, and an empty one
+    // is a reply that changed nothing - a STOP, or a text to a finished
+    // conversation.
+    if (pending && pending.result.send.length > 0) {
       const sentId = await pending.send();
       const c = pending.result.conversation;
       // Says what actually happened: a send can be refused (dnc_list) or fail
@@ -258,7 +282,9 @@ const handleInbound = async (req: Request, res: Response) => {
         step: c.step,
         score: c.score,
         tier: c.tier,
-        send: pending.result.send,
+        // How many pieces went into the one text - a reply, a question, or
+        // both. Not the wording: message bodies stay out of the logs.
+        parts: pending.result.send.length,
         // A send can be refused (dnc_list) or fail while the conversation still
         // advances; a line claiming it went out would hide the case worth seeing.
         sent: Boolean(sentId),
@@ -267,12 +293,14 @@ const handleInbound = async (req: Request, res: Response) => {
 
     return res.sendStatus(200);
   } catch (err) {
-    await client.query('ROLLBACK');
+    // Nothing to roll back once the connection has gone back: that happens
+    // only after the commit.
+    if (!released) await client.query('ROLLBACK');
     // 500 so EZ Texting retries; the dedupe makes that safe.
     log.error('webhook.failed', { err: errText(err) });
     return res.sendStatus(500);
   } finally {
-    client.release();
+    release();
   }
 };
 

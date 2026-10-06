@@ -8,8 +8,9 @@ EZ Texting has no session.
 
 Code: `backend/src/api/webhooks.ts`. Payload shape: `docs/EZTEXTING-API.md`.
 
-**This doc is EZ Texting's webhook only.** Twilio's four - a call being placed,
-a lead calling in, and how each ended - are in `TWILIO.md`. They differ in one
+**This doc is EZ Texting's webhook only.** Twilio's seven - a call being
+placed, a lead calling in, how each ended, who picked up, the recording notice
+and the recording - are in `TWILIO.md`. They differ in one
 way that matters: Twilio signs every request, so those are checked by
 signature rather than by a secret in the path. Both kinds are kept as received
 in `webhook_events` (`AUDIT.md`).
@@ -31,7 +32,9 @@ in `webhook_events` (`AUDIT.md`).
 5. ~~Set `leads.has_unread_inbound`.~~ *(2026-09-28: set only when a person has
    to read the reply, and after the state machine has run, since it decides -
    `STATE-MACHINE.md`, "Which replies need a person". An answer, an unclear
-   reply and an opt-out are never flagged.)*
+   reply and an opt-out are not flagged by the reply itself; the lead is
+   flagged if our text back fails to send, or if they reply while our text
+   has been unsent for over two minutes - 2026-10-06.)*
 6. If it is an opt-out, add to `dnc_list` and suppress any open conversation. A
    lead can opt out with no open conversation - already completed, for instance -
    and the `dnc_list` row is what blocks future contact either way.
@@ -139,9 +142,12 @@ retrying safe.
 ## The reply advances the conversation
 
 After storing the message, the handler calls `applyReply` in
-`api/reply-flow.ts`, which loads the lead's newest conversation and the
-scoring rules and tiers (changed only by migration since 2026-09-23), runs the pure `step` from `core/state-machine.ts`, and
-saves the result. STATE-MACHINE.md is the authority for what each reply does.
+`api/reply-flow.ts`, which loads the lead's newest conversation, the flow it
+is on (questions, choices and points - `FLOWS.md`) and the tiers, all changed
+only by migration, runs the pure `step` from `core/state-machine.ts`, and
+saves the result: the conversation, and the answer as its own row in
+`conversation_answers`. What goes back to the lead - the choice's reply and the
+next question - is sent as one text (2026-10-05). STATE-MACHINE.md is the authority for what each reply does.
 
 Two details matter here:
 
@@ -150,6 +156,24 @@ Two details matter here:
 logged and leaves the conversation advanced - the lead has answered, and
 re-asking a question they already answered is worse than a missing follow-up.
 For the same reason a failed send still returns 200: a retry would not re-send.
+The lead is flagged for a person instead (`STATE-MACHINE.md`, "Sending").
+
+**A reply that arrives before our last text has gone out is stored and
+nothing more** - `STATE-MACHINE.md`, rule 2c. The lead texted twice in a row;
+the second is not an answer to a question still on its way. It logs
+`reply.before_our_text`. The one exception: if our text has been unsent for
+over two minutes it is not on its way, and the lead is flagged for a person.
+
+**The handler gives its database connection back before it sends** -
+2026-10-06, from review. Sending records the text through the pool, and waits
+on EZ Texting in between. While the handler still held its own connection, ten
+replies in flight at once each kept one and waited for another: the pool of
+ten was empty, nothing returned, and the whole API - sign-in, the queue,
+Twilio's webhooks - stopped until it was restarted. Reproduced with ten
+simultaneous replies and a slow send. The connection is now released straight
+after `COMMIT`. Two more limits stand behind it: a request that cannot get a
+connection fails after ten seconds instead of waiting for ever
+(`db/pool.ts`), and a call to EZ Texting gives up after thirty.
 
 **`blockNumber` comes from the state machine's result,** not from the handler
 re-reading the text. The handler decides whether the reply *is* an opt-out,
@@ -168,6 +192,15 @@ decision of what counts as an opt-out stay here.
 A send to a number on `dnc_list` is refused inside `sendMessage`, so a reply
 arriving after a STOP from elsewhere advances the conversation but sends
 nothing. The `conversation.advanced` log line says `"sent": false` in that case.
+That line is written only when the reply produced something to send, and
+carries `parts` - how many pieces went into the one text - never the wording.
+*(Between 2026-10-05 and -06 it was written for every reply, STOP included,
+with `"sent": false`: the list of texts had replaced a single key, and an
+empty list still counted as something to send.)*
+
+**A keyword is short.** STOP, START and the rest are matched against the whole
+message only when it is 40 characters or fewer; a longer message is not a
+keyword and is not scanned.
 
 ## Not done yet
 

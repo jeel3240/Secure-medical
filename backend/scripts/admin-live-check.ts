@@ -97,22 +97,33 @@ async function main(): Promise<void> {
   {
     const config = await getAdminConfig();
 
-    // Against the rows seeded by 001_init.sql.
-    check('the three questions and more are shown', config.messages.length, 9);
-    check('including the review message, sent after a second unclear reply', config.messages.some((m) => m.key === 'message_review'), true);
-    check('the opener is first', config.messages[0].key, 'question_1');
+    // Against the antibiotics flow seeded by 012_flows.sql - docs/FLOWS.md.
+    check('it describes the flow new leads get', config.flow, { key: 'antibiotics', name: 'eDrugstore antibiotics' });
+    // The opener, ten choices, four "sorry"s, the review text, the missed-call text.
+    check('every text a lead can receive is listed', config.messages.length, 17);
+    check('the opener is first', [config.messages[0].key, config.messages[0].name], ['q1', 'Question 1']);
     check('and is personalised', config.messages[0].personalised, true);
-
-    // message_stop is deliberately absent: EZ Texting sends the unsubscribe
-    // confirmation, we never do - STATE-MACHINE.md rule 1.
-    check('the STOP copy is not shown as ours', config.messages.some((m) => m.key === 'message_stop'), false);
+    const afterYes = config.messages.find((m) => m.key === 'q1_1');
+    check('a choice is shown as the lead receives it: its reply and the next question, one text', afterYes?.body,
+      "Great! Let's get you started. Have you used telemedicine to get prescription medication before? Reply 1. Yes, 2. No.");
+    check('and says where it leads', [afterYes?.name, afterYes?.when], ['After Q1 · Yes', 'Then Q2']);
+    const afterNo = config.messages.find((m) => m.key === 'q1_2');
+    check('a sub-question is named after its parent', afterNo?.when, 'Then Q1-a');
+    // "No problem." joined to the offers question with its three options: 158 of the 160.
+    check('"No", then the offers question, is still one segment', [afterNo?.length, afterNo?.segments], [158, 1]);
+    const afterQ2No = config.messages.find((m) => m.key === 'q2_2');
+    check('one that runs past 160 characters is flagged as two segments', [afterQ2No?.segments, afterQ2No?.costsExtraSegment], [2, true]);
+    check('including the review message, sent after a second unclear reply', config.messages.some((m) => m.key === 'review'), true);
+    check('and the eDrugstore missed-call text', config.messages.find((m) => m.key === 'missed_call')?.body.startsWith('eDrugstore:'), true);
+    check('nothing still says Secure Medical', config.messages.some((m) => /secure medical/i.test(m.body)), false);
 
     check('the maximum is computed from the rules', config.scoring.maxScore, 100);
     check('the tier bands come from the table', config.tiers.map((t) => t.name), ['HOT', 'WARM', 'LOW']);
     check('HOT starts at 75', config.tiers[0].minScore, 75);
     check('expiry is 7 days', config.settings.expiryDays, 7);
     check('the flat awards are separated from the answers', config.scoring.awards.length, 2);
-    check('question 1 has three choices', config.scoring.questions[0].choices.length, 3);
+    check('each question has its own choices, in the flow\'s order', config.scoring.questions.map((q) => [q.short, q.choices.length]), [['Q1', 2], ['Q1-a', 3], ['Q2', 2], ['Q3', 3]]);
+    check('and its own heading', config.scoring.questions.map((q) => q.heading), ['Requested info', 'Offers', 'Used telemedicine', 'Next step']);
 
     // With no leads yet, the fallback name is the worst case.
     check('the worst case uses the fallback when there are no leads', config.longestFirstName, 'there');
@@ -138,12 +149,13 @@ async function main(): Promise<void> {
 
   console.log('\nConfiguration follows an edited rule');
   {
-    await pool.query(`UPDATE scoring_rules SET points = 50 WHERE code = 'q3_1'`);
+    const talk = `question_id = (SELECT fq.id FROM flow_questions fq JOIN flows f ON f.id = fq.flow_id WHERE f.key = 'antibiotics' AND fq.key = 'q3') AND choice = '2'`;
+    await pool.query(`UPDATE flow_choices SET points = 60 WHERE ${talk}`);
     const config = await getAdminConfig();
 
-    // 10 + 10 + 15 + 30 + 50. Hardcoding 100 would have hidden this.
+    // 10 + 10 + 20 + 15 + 60. Hardcoding 100 would have hidden this.
     check('the maximum is recomputed', config.scoring.maxScore, 115);
-    await pool.query(`UPDATE scoring_rules SET points = 35 WHERE code = 'q3_1'`);
+    await pool.query(`UPDATE flow_choices SET points = 45 WHERE ${talk}`);
   }
 
   console.log('\nOverview counts leads in the period');

@@ -23,7 +23,7 @@ import { formatRelative } from '../../lib/format';
  *
  * **Rebuilt in the admin card style - Jeel, 2026-09-28.** The funnel drew the
  * same numbers as the cards above it and is gone. Eight cards became four -
- * leads in, replied, answered all three, closed - because Calls made and
+ * leads in, replied, completed, closed - because Calls made and
  * Reached are zero until Twilio (Phase 4) and HOT and DNC added are not what a
  * superadmin acts on. The agent table shows what they check each morning: who
  * is holding leads, who closed what, whose callbacks are due, and who has gone
@@ -114,7 +114,7 @@ export function OverviewPage() {
   const stats = [
     { label: 'Leads in', value: kpis.leadsReceived, sub: 'Arrived from EZ Texting' },
     { label: 'Replied', value: kpis.responded, sub: 'First reply' },
-    { label: 'Answered all 3', value: kpis.completed, sub: 'Finished the questions' },
+    { label: 'Completed', value: kpis.completed, sub: 'Finished the questions' },
     { label: 'Closed', value: kpis.closed, sub: 'Leads closed by agents' },
   ];
 

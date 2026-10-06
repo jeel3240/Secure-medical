@@ -10,17 +10,14 @@ import type { LeadDetail } from '../../api/workspace';
  */
 
 /**
- * The breakdown in the mockup's words. The API's labels are the bare answer -
- * "Both", "Today" - which reads fine on a chip but is ambiguous in a list of
- * points: "Today +30" does not say what was asked. Q3 stays bare because its
- * answers already say what they are ("Call me now").
+ * One line of the breakdown. An answer is shown with what was asked - "Yes
+ * +20" alone does not say yes to what - and the heading comes from the server
+ * with the answer, since each flow asks its own questions.
  */
-function breakdownLabel(code: string, label: string): string {
-  if (code === 'responded') return 'Responded to SMS';
-  if (code === 'completed') return 'Completed flow';
-  if (code.startsWith('q1_')) return `Interest: ${label}`;
-  if (code.startsWith('q2_')) return `Timing: ${label}`;
-  return label;
+export function breakdownLabel(line: { code: string; label: string; heading?: string }): string {
+  if (line.code === 'responded') return 'Responded to SMS';
+  if (line.code === 'completed') return 'Completed flow';
+  return line.heading ? `${line.heading}: ${line.label}` : line.label;
 }
 
 /**
@@ -40,16 +37,19 @@ export function LeadAnswers({ lead }: { lead: LeadDetail }) {
     <>
       <article className="card told-us">
         <h2 className="card__title">What {lead.firstName ?? 'the lead'} told us</h2>
-        <dl className="told-us__list">
-          {lead.chips.map((chip) => (
-            <div key={chip.question}>
-              <dt>{chip.heading}</dt>
-              <dd>
-                {chip.answer ?? <span className="told-us__none">-</span>}
-              </dd>
-            </div>
-          ))}
-        </dl>
+        {/* One per question answered - as many as the lead's flow asked. */}
+        {lead.chips.length === 0 ? (
+          <p className="told-us__none">Nothing yet</p>
+        ) : (
+          <dl className="told-us__list">
+            {lead.chips.map((chip) => (
+              <div key={chip.key}>
+                <dt>{chip.heading}</dt>
+                <dd>{chip.answer}</dd>
+              </div>
+            ))}
+          </dl>
+        )}
       </article>
 
       {lead.breakdown.length > 0 && (
@@ -81,7 +81,7 @@ export function LeadAnswers({ lead }: { lead: LeadDetail }) {
             {lead.breakdown.map((line, i) => (
               <li key={line.code}>
                 <span className="breakdown__swatch" style={{ background: breakdownShade(i, lead.breakdown.length) }} />
-                <span className="breakdown__label">{breakdownLabel(line.code, line.label)}</span>
+                <span className="breakdown__label">{breakdownLabel(line)}</span>
                 <span className="breakdown__points tabular">+{line.points}</span>
               </li>
             ))}
