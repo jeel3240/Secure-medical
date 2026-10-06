@@ -30,7 +30,7 @@ the RDS CA bundle if strict verification is ever wanted.
 |---|---|
 | `users` | Agents and superadmins. bcrypt hash, role, active flag, must-change-password flag, last sign-in, session version. |
 | `leads` | One person, pulled from EZ Texting. |
-| `conversations` | Where a lead is in its SMS flow: `flow_id`, `current_question_id`, status, score, tier, and `end_outcome` once it has ended. One row per conversation. `q1`-`q3` and their label columns are retired (migration 012) - answers are rows in `conversation_answers`. `FLOWS.md`. |
+| `conversations` | Where a lead is in its SMS flow: `flow_id`, `current_question_id`, status, score, tier, `question_sent_at` (when the text the lead has to answer went out; empty while we owe them one - a reply then is not an answer, `STATE-MACHINE.md` rule 2c), and `end_outcome` once it has ended. One row per conversation. `q1`-`q3` and their label columns are retired (migration 012) - answers are rows in `conversation_answers`. `FLOWS.md`. |
 | `messages` | Every SMS in or out. |
 | `calls` | Twilio calls, with duration and outcome. Written since Phase 4 - `TWILIO.md`, "What is saved". `direction` says who called whom. `twilio_call_sid` is the call's first leg: the browser's for a call we placed, the lead's for one we received. An incoming call that rang nobody has no `agent_id`; an outgoing one always has - the `calls_outbound_has_agent` check (migration 007). |
 | `dispositions` | What an agent decided after contact. |

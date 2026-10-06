@@ -85,6 +85,10 @@ interface ConversationSeed {
   score?: number;
   tier?: string | null;
   agent_took_over_at?: string | null;
+  /** Whether the text the lead has to answer has gone out. Yes, unless a test says otherwise. */
+  question_sent?: boolean;
+  /** It has not, and not just now. */
+  unsent_for_long?: boolean;
 }
 
 function fakeClient(opts: {
@@ -108,6 +112,8 @@ function fakeClient(opts: {
             score: 0,
             tier: null,
             end_outcome: null,
+            question_sent: true,
+            unsent_for_long: false,
             // On the question its step names, unless the conversation is over.
             current_question_id:
               (opts.conversation.status ?? 'open') === 'open'
@@ -160,8 +166,8 @@ function fakeClient(opts: {
 function savedConversation(calls: Recorded[]) {
   const update = calls.find((c) => /UPDATE conversations SET status/i.test(c.sql));
   if (!update?.values) return null;
-  const [, status, step, currentQuestionId, invalidCount, score, tier, endOutcome] = update.values as unknown[];
-  return { status, step, currentQuestionId, invalidCount, score, tier, endOutcome };
+  const [, status, step, currentQuestionId, invalidCount, score, tier, endOutcome, textOwed] = update.values as unknown[];
+  return { status, step, currentQuestionId, invalidCount, score, tier, endOutcome, textOwed };
 }
 
 /** The answer row written, if any: [conversation, lead, question, key, position, heading, choice, label, points]. */
@@ -722,6 +728,72 @@ describe('the reply advances the conversation', () => {
 
     expect(sendMessage).not.toHaveBeenCalled();
     expect(client.release).toHaveBeenCalledTimes(1);
+  });
+
+  describe('a reply before our text has gone out', () => {
+    // "Yes", and a second later "yes" again: the second arrives while question
+    // 2 is still on its way, and used to be saved as the answer to it.
+    const unsent = { step: 20, score: 30, tier: 'LOW', question_sent: false };
+
+    it('is not an answer: nothing is saved, scored or sent', async () => {
+      const { client, calls } = fakeClient({ leadId: 42, conversation: unsent });
+      connect.mockReturnValue(client);
+
+      const res = await request(buildApp()).post('/api/webhooks/eztexting').send(reply({ message: 'yes' }));
+
+      expect(res.status).toBe(200);
+      expect(savedConversation(calls)).toBeNull();
+      expect(savedAnswer(calls)).toBeNull();
+      expect(sendMessage).not.toHaveBeenCalled();
+      // Kept in the thread all the same.
+      expect(sqlOf(calls)).toMatch(/INSERT INTO messages/i);
+      // A double tap is not something for a person to read.
+      expect(sqlOf(calls)).not.toMatch(/has_unread_inbound/i);
+    });
+
+    it('goes to a person when our text has been unsent for a while: it is not on its way', async () => {
+      const { client, calls } = fakeClient({ leadId: 42, conversation: { ...unsent, unsent_for_long: true } });
+      connect.mockReturnValue(client);
+
+      await request(buildApp()).post('/api/webhooks/eztexting').send(reply({ message: 'yes' }));
+
+      expect(savedAnswer(calls)).toBeNull();
+      expect(sendMessage).not.toHaveBeenCalled();
+      expect(sqlOf(calls)).toMatch(/UPDATE leads SET has_unread_inbound = true/i);
+    });
+
+    it('never holds up a STOP', async () => {
+      const { client, calls } = fakeClient({ leadId: 42, conversation: unsent });
+      connect.mockReturnValue(client);
+
+      await request(buildApp()).post('/api/webhooks/eztexting').send(reply({ message: 'STOP' }));
+
+      expect(savedConversation(calls)).toMatchObject({ status: 'suppressed' });
+      expect(sqlOf(calls)).toMatch(/INSERT INTO dnc_list/i);
+    });
+
+    it('a reply that earns a text marks it as owed, and the send marks it as gone', async () => {
+      const { client, calls } = fakeClient({ leadId: 42, conversation: {} });
+      connect.mockReturnValue(client);
+
+      await request(buildApp()).post('/api/webhooks/eztexting').send(reply({ message: '1' }));
+
+      // Saved as waiting on our text: the next reply does not count until it has gone.
+      expect(savedConversation(calls)).toMatchObject({ currentQuestionId: Q2, textOwed: true });
+      const save = calls.find((c) => /UPDATE conversations SET status/i.test(c.sql));
+      expect(save?.sql).toMatch(/question_sent_at = CASE WHEN \$9 THEN NULL ELSE question_sent_at END/);
+      // And once it has, the conversation says so.
+      expect(poolSql().find((sql) => /UPDATE conversations SET expires_at/i.test(sql))).toMatch(/question_sent_at = now\(\)/);
+    });
+
+    it('a reply that ends the questions owes nothing more', async () => {
+      const { client, calls } = fakeClient({ leadId: 42, conversation: { step: 30, score: 45, tier: 'WARM' } });
+      connect.mockReturnValue(client);
+
+      await request(buildApp()).post('/api/webhooks/eztexting').send(reply({ message: '2' }));
+
+      expect(savedConversation(calls)).toMatchObject({ status: 'completed', textOwed: false });
+    });
   });
 
   it('keeps the advanced conversation when the send fails', async () => {

@@ -19,7 +19,18 @@ export interface ConversationRow extends Conversation {
   id: number;
   /** The flow the lead is in. Null only on a row from before flows existed that no migration reached. */
   flowId: number | null;
+  /** Whether the text the lead has to answer - the question, or its "sorry" - has gone out. */
+  questionSent: boolean;
+  /** It has not, and not just now: it failed, or was never tried. */
+  unsentForLong: boolean;
 }
+
+/**
+ * How long a text of ours may be on its way before a reply stops being "too
+ * soon" and becomes "they are waiting on something that never came". A send
+ * gives up after 30 seconds, so this is well clear of one still in flight.
+ */
+const UNSENT_FOR_LONG = '2 minutes';
 
 /**
  * The newest conversation for a lead, which is the one that drives the flow.
@@ -29,10 +40,10 @@ export interface ConversationRow extends Conversation {
  * moment apart arrive as two requests at once; without the lock both could read
  * the same question, treat their text as the answer to it, and each send the
  * next question - the lead gets it twice and one of their answers is lost. The
- * lock makes the second wait, so it reads the conversation the first one left.
- * (It is then read as an answer to the question the first one moved to, which
- * the lead may not have seen yet - STATE-MACHINE.md, "Open items".) It holds
- * one lead's row, so replies from other leads are unaffected.
+ * lock makes the second wait, so it reads the conversation the first one left
+ * - which says our next text has not gone out yet, so the second is not taken
+ * for an answer to it (`repliedBeforeOurText`, below). It holds one lead's
+ * row, so replies from other leads are unaffected.
  */
 export async function loadNewestConversation(
   client: PoolClient,
@@ -40,7 +51,11 @@ export async function loadNewestConversation(
 ): Promise<ConversationRow | null> {
   const { rows } = await client.query(
     `SELECT id, flow_id, status, step, current_question_id, invalid_count, score, tier,
-            end_outcome, agent_took_over_at
+            end_outcome, agent_took_over_at,
+            question_sent_at IS NOT NULL AS question_sent,
+            -- updated_at is when it was put on this question: nothing saves
+            -- the conversation again until the text for it has gone.
+            (question_sent_at IS NULL AND updated_at < now() - interval '${UNSENT_FOR_LONG}') AS unsent_for_long
      FROM conversations
      WHERE lead_id = $1
      ORDER BY created_at DESC, id DESC
@@ -63,6 +78,8 @@ export async function loadNewestConversation(
     endOutcome: r.end_outcome,
     // Rule 2b: once this is set the state machine stops asking questions.
     agentTookOverAt: r.agent_took_over_at,
+    questionSent: r.question_sent,
+    unsentForLong: r.unsent_for_long,
   };
 }
 
@@ -89,7 +106,13 @@ export async function loadRules(client: PoolClient, flowId: number | null): Prom
   };
 }
 
-async function saveConversation(client: PoolClient, id: number, c: Conversation): Promise<void> {
+async function saveConversation(
+  client: PoolClient,
+  id: number,
+  c: Conversation,
+  /** We now owe the lead a text - a question, or a "sorry". Nothing they send counts until it has gone. */
+  textOwed: boolean
+): Promise<void> {
   // expires_at is not touched here. It is the window the lead has to reply to a
   // message, so it moves only once that message has actually gone out - see
   // bumpExpiry, called after the send succeeds.
@@ -101,9 +124,10 @@ async function saveConversation(client: PoolClient, id: number, c: Conversation)
     `UPDATE conversations
      SET status = $2, step = $3, current_question_id = $4,
          invalid_count = $5, score = $6, tier = $7, end_outcome = $8, updated_at = now(),
-         completed_at = CASE WHEN $2 = 'completed' THEN COALESCE(completed_at, now()) ELSE completed_at END
+         completed_at = CASE WHEN $2 = 'completed' THEN COALESCE(completed_at, now()) ELSE completed_at END,
+         question_sent_at = CASE WHEN $9 THEN NULL ELSE question_sent_at END
      WHERE id = $1`,
-    [id, c.status, c.step, c.currentQuestionId, c.invalidCount, c.score, c.tier, c.endOutcome]
+    [id, c.status, c.step, c.currentQuestionId, c.invalidCount, c.score, c.tier, c.endOutcome, textOwed]
   );
 }
 
@@ -179,9 +203,26 @@ export async function applyReply(
     return null;
   }
 
+  // A reply before our text - see `repliedBeforeOurText`. Nothing is saved, so
+  // `updated_at` still says when the conversation was put on this question.
+  if (repliedBeforeOurText(conversation, reply)) {
+    log.info('reply.before_our_text', { leadId, forPerson: conversation.unsentForLong });
+    return {
+      result: {
+        conversation,
+        send: [],
+        blockNumber: false,
+        needsPerson: conversation.unsentForLong,
+        answer: null,
+      },
+      send: async () => null,
+    };
+  }
+
   const result = step(conversation, reply, rules);
 
-  await saveConversation(client, conversation.id, result.conversation);
+  const textOwed = result.conversation.status === 'open' && result.send.length > 0;
+  await saveConversation(client, conversation.id, result.conversation, textOwed);
   if (result.answer) await saveAnswer(client, conversation.id, leadId, result.answer, reply.messageId ?? null);
 
   // The send is handed back as a closure so the caller can commit first.
@@ -195,7 +236,46 @@ export async function applyReply(
 }
 
 /**
- * Restarts the lead's reply window, after a message has actually gone out.
+ * **A reply before our text is not an answer to it** - Jeel, 2026-10-06.
+ *
+ * A lead texts "Yes", and a second later "yes" again - a double tap, or they
+ * thought the first had not gone. The first answers question 1 and question 2
+ * starts on its way. The second arrived while it was still on its way, and was
+ * read as the answer to it: question 2 saved as Yes by someone who had not
+ * seen it, in a record that cannot be corrected, fifteen points on a score
+ * that decides who is called first - and question 3 sent on top of question 2.
+ * Two unclear texts in a row did the same to the one "sorry" a lead is
+ * allowed, and sent them to a person.
+ *
+ * So the conversation records when the text the lead has to answer has gone
+ * out (`question_sent_at`, cleared whenever we owe them one), and a reply that
+ * arrives before then changes nothing: it is kept in the thread, nothing is
+ * scored, nothing is sent.
+ *
+ * If our text has been unsent for a while it is not on its way - it failed, or
+ * was never tried - and the lead is waiting on something that will not come.
+ * That reply is flagged for a person.
+ *
+ * Never for an opt-out: STOP works whatever state anything is in. And only for
+ * a conversation the questions are still running: a finished or taken-over one
+ * is handled by the state machine as before.
+ *
+ * What it cannot catch: a reply sent a few seconds after our text left, while
+ * that text was still on its way to the phone. Nothing here can know.
+ */
+function repliedBeforeOurText(conversation: ConversationRow, reply: { optOut: boolean }): boolean {
+  return (
+    !reply.optOut &&
+    conversation.status === 'open' &&
+    !conversation.agentTookOverAt &&
+    conversation.currentQuestionId !== null &&
+    !conversation.questionSent
+  );
+}
+
+/**
+ * Restarts the lead's reply window, after a message has actually gone out -
+ * and marks that text as sent, so the lead's next reply counts as an answer.
  *
  * Only for a conversation still `open`: a `completed` one is not waiting on the
  * lead, and `suppressed` must never change. The poller does the same thing
@@ -206,7 +286,7 @@ async function bumpExpiry(q: Querier, conversationId: number): Promise<void> {
   const days = await readExpiryDays(q);
   await q.query(
     `UPDATE conversations
-     SET expires_at = now() + ($2 || ' days')::interval, updated_at = now()
+     SET expires_at = now() + ($2 || ' days')::interval, question_sent_at = now(), updated_at = now()
      WHERE id = $1 AND status = 'open'`,
     [conversationId, String(days)]
   );

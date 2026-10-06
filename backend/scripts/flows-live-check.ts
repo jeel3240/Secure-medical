@@ -121,6 +121,42 @@ async function main(): Promise<void> {
     });
   }
 
+  console.log('\na reply before our text has gone out');
+  {
+    const answersOf = async (leadId: number) =>
+      (await pool.query(`SELECT question_key, label FROM conversation_answers WHERE lead_id = $1 ORDER BY position`, [leadId])).rows.map(
+        (r) => [r.question_key, r.label]
+      );
+
+    const twice = await makeLead('Twice');
+    await startConversation(pool, twice, 'open');
+    const tooSoon = await replyAs(twice, 'yes', { beforeOurText: true });
+    check('a text before the first question has gone out is not an answer to it', [tooSoon?.result.answer, (await conversationOf(twice)).score], [null, 0]);
+
+    // The first question arrives, and the lead answers it twice in a row.
+    await replyAs(twice, 'yes');
+    const again = await replyAs(twice, 'yes', { beforeOurText: true });
+    check('"yes", "yes": the second is not saved as the answer to question 2', await answersOf(twice), [['q1', 'Yes']]);
+    check('they are still on question 2, with question 1\'s score', [(await conversationOf(twice)).step, (await conversationOf(twice)).score], [20, 30]);
+    check('nothing is sent for it, and it is not for a person: a double tap', [again?.result.send, again?.result.needsPerson], [[], false]);
+
+    // Question 2 arrives, and they answer that.
+    await replyAs(twice, 'no');
+    check('the answer kept for question 2 is the one they gave to it', await answersOf(twice), [['q1', 'Yes'], ['q2', 'No']]);
+
+    // Two unclear texts in a row used to use up the one "sorry" and send the lead to review.
+    const fumble = await makeLead('Fumble');
+    await startConversation(pool, fumble, 'open');
+    await replyAs(fumble, 'huh');
+    await replyAs(fumble, 'huh?', { beforeOurText: true });
+    check('two unclear texts in a row cost one "sorry", not a trip to review', (await conversationOf(fumble)).status, 'open');
+
+    // Our text never went: not on its way, so the lead is waiting on nothing.
+    await pool.query(`UPDATE conversations SET updated_at = now() - interval '10 minutes' WHERE lead_id = $1`, [twice]);
+    const stuck = await replyAs(twice, '1', { beforeOurText: true });
+    check('when our text has been unsent for a while, their reply goes to a person', [stuck?.result.needsPerson, stuck?.result.answer], [true, null]);
+  }
+
   {
     const other = await makeLead('Crossed');
     let refused = '';

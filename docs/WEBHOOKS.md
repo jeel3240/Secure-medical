@@ -155,6 +155,11 @@ re-asking a question they already answered is worse than a missing follow-up.
 For the same reason a failed send still returns 200: a retry would not re-send.
 The lead is flagged for a person instead (`STATE-MACHINE.md`, "Sending").
 
+**A reply that arrives before our last text has gone out is stored and
+nothing more** - `STATE-MACHINE.md`, rule 2c. The lead texted twice in a row;
+the second is not an answer to a question still on its way. It logs
+`reply.before_our_text`.
+
 **The handler gives its database connection back before it sends** -
 2026-10-06, from review. Sending records the text through the pool, and waits
 on EZ Texting in between. While the handler still held its own connection, ten

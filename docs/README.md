@@ -109,7 +109,7 @@ contact in the group gets a text within a poll interval. `openers` in the
 ## How to test
 
 ```bash
-cd backend  && npm test && npm run lint    # 627 tests
+cd backend  && npm test && npm run lint    # 632 tests
 cd frontend && npm test && npm run lint    # 273 tests   (counts as of 2026-10-06)
 ```
 
@@ -202,10 +202,12 @@ about 0.2 seconds at 50,000 leads after the fixes of 2026-10-06 (it was 3 to 8
 seconds). Past a few hundred thousand it would need a stored "needs a person"
 flag - `QUEUE.md`, "How fast it is".
 
-**Two things about the SMS flow are waiting for a decision** -
-`STATE-MACHINE.md`, "Open items": "no" to question 3 has no answer of its own,
-and a second text sent before the next question arrives is read as its
-answer.
+**A reply sent just after our text left can still be miscounted.** A lead who
+texts twice in a row no longer has the second text read as the answer to a
+question still on its way (`STATE-MACHINE.md`, rule 2c) - but one sent in the
+few seconds after our text left, before it reached the phone, cannot be told
+from a fast answer. And "no" to question 3 has no answer of its own: it is an
+unclear reply, and a second one goes to a person ("Open items").
 
 **One flow for everyone.** Every new lead gets the one active flow. A flow per
 EZ Texting group, and editing a flow from the website, are not built -

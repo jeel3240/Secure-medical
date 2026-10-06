@@ -92,6 +92,7 @@ firing a real webhook: the number appears nowhere in the output.
 | | `sms.unconfirmed` (warn, `db/outbound.ts`): a send to EZ Texting timed out, so the text may or may not have gone. It is not retried |
 | `conversation.advanced` | `api/webhooks.ts` - only when the reply produced a text to send; `parts` is how many pieces it had, `sent` whether it went |
 | `conversation.expiry_not_moved` | `api/reply-flow.ts` - a text went out but its reply window could not be saved |
+| `reply.before_our_text` | `api/reply-flow.ts` - a reply arrived before the text it would be answering had gone out, and was not counted. `forPerson: true` when that text has been unsent for over two minutes and the lead was flagged instead |
 | `dnc.blocked`, `dnc.released` | `api/webhooks.ts` |
 | `http.unhandled` | `api/http.ts` |
 | `opener.retry`, `opener.retry_failed` | `worker/index.ts` - one line per pass that had something due, with `due`, `sent`, `failed`, `abandoned`, `tooOld` |

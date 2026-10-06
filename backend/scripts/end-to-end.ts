@@ -39,7 +39,8 @@ let stubId = 0;
 };
 
 import request from 'supertest';
-import { startConversation } from '../src/db/flows';
+import { openingQuestion, startConversation } from '../src/db/flows';
+import { sendOpener } from '../src/worker/opener';
 import { pool } from '../src/db/pool';
 import { config } from '../src/config';
 import { createApp } from '../src/api/app';
@@ -160,6 +161,15 @@ async function main(): Promise<void> {
   // In the flow new leads get, on its first question - as the poller does.
   await startConversation(pool, leadId, 'open');
 
+  // Before the first question has gone out, a text from them is not an answer
+  // to it - reply-flow.ts, "a reply before our text".
+  await reply(PHONE, 'yes', new Date(Date.now() - 5000));
+  check('a text before the first question went out answers nothing', (await conversation(leadId)).score, 0);
+
+  // The first question, sent the way the poller sends it - worker/opener.ts.
+  const opener = await sendOpener({ id: leadId, phone: PHONE, firstName: 'Jordan' }, (await openingQuestion(pool, leadId))!);
+  check('the first question goes out', [opener.sent, sent.length], [true, 1]);
+
   check('the lead is stored', leadId > 0, true);
   check('nothing is scored yet', (await getLeadDetail(leadId))?.conversation?.score, 0);
   check('and it is not in the queue', (await listQueue({})).leads.length, 0);
@@ -184,10 +194,9 @@ async function main(): Promise<void> {
   check('the score is replying + Yes + No + Talk to an agent + finishing', c3.score, 90);
   check('and the tier is HOT', c3.tier, 'HOT');
 
-  // Three, not four: the opener is sent by the poller, and this script inserts
-  // the lead directly rather than running a poll cycle against a stubbed
-  // contacts API. What is proved here is the reply flow.
-  check('three messages went out', sent.length, 3);
+  // The first question, then one text per answer - each a reply and, until
+  // the last, the next question.
+  check('four messages went out', sent.length, 4);
   check('all to the lead', new Set(sent.map((s) => s.to)).size, 1);
 
   // ------------------------------------------------------------- 3. queue
@@ -252,8 +261,11 @@ async function main(): Promise<void> {
 
   check('it has entries', timeline.length > 0, true);
   check('the lead arriving is first', timeline[0]?.detail.event, 'lead_received');
-  check('the outbound questions are there', kinds.filter((k) => k === 'sms').length, 3);
-  check('so are the replies', kinds.filter((k) => k === 'inbound').length, 4);
+  // The first question, and a text for each of the three answers.
+  check('the outbound questions are there', kinds.filter((k) => k === 'sms').length, 4);
+  // Every text they sent is kept - the one that came before the first question
+  // included, though it answered nothing.
+  check('so are the replies', kinds.filter((k) => k === 'inbound').length, 5);
   check('the agent SMS is marked as theirs', kinds.includes('agent_sms'), true);
   check('the note is there', kinds.includes('note'), true);
   check('the callback is there', kinds.includes('callback'), true);

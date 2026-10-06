@@ -58,7 +58,9 @@ And `conversations` - still one row per lead, which says where the lead is
 `end_outcome` once the flow has ended. `current_question_id` is the question
 the lead is on, or - once the conversation has expired or gone to review - the
 one they stopped at; it is empty once the questions are finished. `step` is
-that question's position.
+that question's position. `question_sent_at` is when the text the lead has to
+answer actually went out; while it is empty a reply is not counted
+(`STATE-MACHINE.md`, rule 2c).
 
 Think of an exam: `conversations` is the cover sheet - who, which question
 they are on, the total mark. `conversation_answers` is the answer sheet.

@@ -140,6 +140,10 @@ ALTER TABLE conversations
   -- the one they stopped at. NULL once the questions are finished, and for a
   -- suppressed conversation, which was never asked one.
   ADD COLUMN current_question_id INTEGER,
+  -- When the text the lead has to answer - the question, or its "sorry" -
+  -- actually went out. NULL while it has not: a reply that arrives then cannot
+  -- be an answer to it (api/reply-flow.ts, "a reply before our text").
+  ADD COLUMN question_sent_at    TIMESTAMPTZ,
   -- How the flow ended - the choice's `ending`. NULL while open, and for one
   -- that expired, was suppressed or went to review.
   ADD COLUMN end_outcome         TEXT CHECK (end_outcome IN ('completed', 'offers', 'wants_contact', 'declined'));
@@ -198,7 +202,9 @@ UPDATE conversations c SET
   -- Where the lead is, or stopped: `step` was kept on an expired or review one.
   current_question_id = CASE WHEN c.status IN ('open', 'expired', 'review')
     THEN (SELECT q.id FROM flow_questions q WHERE q.flow_id = f.id AND q.position = COALESCE(c.step, 1)) END,
-  end_outcome = CASE WHEN c.status = 'completed' THEN 'completed' END
+  end_outcome = CASE WHEN c.status = 'completed' THEN 'completed' END,
+  -- Open, and its question did go out: `expires_at` is set only by a send.
+  question_sent_at = CASE WHEN c.status = 'open' AND c.expires_at IS NOT NULL THEN c.updated_at END
 FROM flows f WHERE f.key = 'wellness';
 
 -- Every answer already given, into the new table. q1..q3 and their labels

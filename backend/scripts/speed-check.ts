@@ -50,7 +50,7 @@ async function load(): Promise<void> {
            SELECT n, '+1555' || lpad(n::text, 7, '0'), 'Lead' || n, 'Test', 'API', 'weightloss', at, at FROM speed_plan`);
   await q(`SELECT setval('leads_id_seq', ${LEADS})`);
   await q(`INSERT INTO conversations (id, lead_id, status, step, flow_id, current_question_id, end_outcome, score, tier,
-                                      invalid_count, expires_at, completed_at, created_at, updated_at)
+                                      invalid_count, expires_at, question_sent_at, completed_at, created_at, updated_at)
            SELECT n, n,
              CASE WHEN kind < 40 THEN (CASE WHEN at < now() - interval '7 days' THEN 'expired' ELSE 'open' END)
                   WHEN kind < 88 THEN 'completed' WHEN kind < 95 THEN 'expired' WHEN kind < 98 THEN 'review' ELSE 'suppressed' END,
@@ -66,6 +66,7 @@ async function load(): Promise<void> {
                   WHEN kind >= 30 AND kind < 88 THEN 'LOW' WHEN kind >= 95 AND kind < 98 THEN 'LOW' END,
              CASE WHEN kind >= 95 AND kind < 98 THEN 2 ELSE 0 END,
              at + interval '7 days',
+             at,
              CASE WHEN kind >= 40 AND kind < 88 THEN at + interval '20 minutes' END,
              at, at + interval '20 minutes'
            FROM speed_plan`);

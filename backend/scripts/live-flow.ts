@@ -17,11 +17,23 @@ import { pool } from '../src/db/pool';
  *
  * `stored`: also keep the text as an inbound message first, as the webhook
  * does, so the answer is tied to it - for checks that read the thread.
+ *
+ * Nothing is sent here, so nothing marks our text as having gone out - which a
+ * reply needs before it counts (reply-flow.ts, "a reply before our text"). So
+ * this marks it first, as if the lead had received it. `beforeOurText` leaves
+ * it unmarked: the lead texting again before our text arrives.
  */
-export async function replyAs(leadId: number, text: string, opts: { stored?: boolean } = {}) {
+export async function replyAs(leadId: number, text: string, opts: { stored?: boolean; beforeOurText?: boolean } = {}) {
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
+    if (!opts.beforeOurText) {
+      await client.query(
+        `UPDATE conversations SET question_sent_at = now()
+         WHERE lead_id = $1 AND status = 'open' AND question_sent_at IS NULL`,
+        [leadId]
+      );
+    }
     let messageId: number | undefined;
     if (opts.stored) {
       const { rows } = await client.query(

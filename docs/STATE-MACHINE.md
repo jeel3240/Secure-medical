@@ -345,6 +345,44 @@ take-over: the questions must not stop on the strength of a message the lead
 never received. `scripts/agent-sms-live-check.ts` proves that, and proves a real
 reply after the handoff gets no question, no score and no clarification.
 
+### 2c. A reply before our text has gone out - Decided by Jeel, 2026-10-06
+
+A lead texts "Yes" and, a second later, "yes" again - a double tap, or they
+thought the first had not gone.
+
+| Time | The lead | Before this rule | Now |
+|---|---|---|---|
+| 10:00:20 | Sends **Yes** | Question 1 = Yes. Question 2 starts on its way | The same |
+| 10:00:21 | Sends **yes** again | Question 2 = Yes - a question they have not seen. Question 3 is sent on top of it | Kept in the thread. Nothing saved, scored or sent |
+| 10:00:23 | Receives question 2 | ...and question 3 with it | Question 2 alone |
+| 10:01:00 | Answers question 2 | Read as the answer to question 3 | Question 2 = their real answer |
+
+The wrong answer could not be corrected - an answer row is written once - and
+its points moved the lead in the queue. Two unclear texts in a row did the
+same to the one "sorry" a question allows, and sent the lead to review.
+
+**The rule:** the conversation records when the text the lead has to answer -
+a question, or its "sorry" - has actually gone out (`question_sent_at`). It is
+cleared the moment we owe them one, and set when it has been sent. **A reply
+that arrives while it is empty is not an answer**: the message is stored,
+nothing else changes, nothing is sent. `api/reply-flow.ts`,
+`repliedBeforeOurText`.
+
+- **Never for an opt-out.** STOP works whatever state anything is in.
+- **Only while the questions are running.** A finished conversation, or one an
+  agent took over, is handled by rules 2 and 2b as before.
+- **If our text has been unsent for more than two minutes** it is not on its
+  way - it failed, or was never tried - and the lead is waiting on something
+  that will not come. Their reply is flagged for a person (`has_unread_inbound`,
+  the queue's Inbound reply). A send gives up after 30 seconds, so two minutes
+  is well clear of one still in flight.
+- **This covers the first question too.** A lead who texts before it has gone
+  out has not answered it.
+
+**What it cannot catch:** a reply sent a few seconds after our text left,
+while that text was still on its way to the phone. Nothing on our side can
+tell that from a fast answer.
+
 ### 3. A valid answer to the current question
 
 `matchChoice` returns one of the current question's choices. Accepted, as the
@@ -738,7 +776,7 @@ Plus integration tests for the webhook wiring, in the style of
 
 ## Open items
 
-Found in review on 2026-10-06, waiting for a decision:
+Found in review on 2026-10-06, left as it is:
 
 - **"No" to question 3 has no answer of its own.** "Ready to move forward?"
   answered "no" or "not yet" is an unclear reply, and a second one sends "a
@@ -746,11 +784,6 @@ Found in review on 2026-10-06, waiting for a decision:
   review. Left as it is: this lead did ask for information, so a person
   following up is not wrong the way it was on the offers question (fixed the
   same day - "No thanks", above).
-- **A second text sent before the next question arrives is read as its
-  answer.** "Yes" and then "yes" again a moment later answers question 1 and
-  then question 2 - which the lead has not seen. The lock above keeps the two
-  in order; it cannot know the second was not meant for the new question. The
-  answer row cannot be corrected afterwards.
 
 **Parked:** EZ Texting's automatic STOP and HELP replies are the account's own
 wording, not ours. On 2026-10-05 the HELP reply still read "PillRx Alerts";
