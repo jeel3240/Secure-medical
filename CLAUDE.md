@@ -474,7 +474,7 @@ onto them:
 | 2 | Week 2 | Done, approved 2026-09-23 |
 | 3 | Week 3 **and all of Week 4 except Twilio** | Done 2026-09-28, merged into `main` |
 | 4 | Week 4 items 1-4, Twilio calling | Done 2026-10-01 - `docs/TWILIO.md`. A real call placed and recorded the same day. Incoming calls - ring one agent, text the lead on a missed call, and a callback for the agent it rang - tested by Jeel with real calls and merged into `dev` the same day. Deploying them needs migrations 007 and 008, and `twilio:configure` run on the server |
-| 5 | Not in the original plan | **Flows** - decided by Jeel, 2026-10-05, before launch: the SMS questions and answers stored as rows so a group with different questions is new rows, not new code; the client's eDrugstore antibiotics script as the first flow; a recording notice on calls. Built on `feat/flows`, not merged until it has been walked with a real phone. Editing a flow from the website, and a flow per EZ Texting group, are later. `docs/FLOWS.md` |
+| 5 | Not in the original plan | **Flows** - decided by Jeel, 2026-10-05, before launch: the SMS questions and answers stored as rows so a group with different questions is new rows, not new code; the client's eDrugstore antibiotics script as the first flow; a recording notice on calls. Built on `feat/flows`. Reviewed by three independent reads and a 50,000-lead load test on 2026-10-06 (the fixes are on the branch), then walked with a real phone the same day - eight paths, all as specified. Editing a flow from the website, and a flow per EZ Texting group, are later. `docs/FLOWS.md` |
 
 **Phase 3 is everything that is left except calling.** That means the Week 3
 list below, plus Week 4 items 5-9: error handling and retries, logging, the

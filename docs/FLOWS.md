@@ -251,6 +251,38 @@ the inactive flow `wellness`, and every answer already given was copied into
 `backend/scripts/live-checks.sh` runs every live check on its own scratch
 database.
 
+### Walked with a real phone - 2026-10-06
+
+The antibiotics flow, on the EZ Texting test account, replies coming in
+through a temporary tunnel and its own subscription (removed afterwards). A
+fresh lead for each walk:
+
+| Sent from the phone | Result |
+|---|---|
+| Yes, No, 2 | Completed, 90, HOT. Queue: "Yes · No · Talk to an agent" |
+| No, Learn more | Completed, 10. Queue, tagged Wants a call |
+| No, No | Not interested. Not in the queue; not blocked |
+| No, Yes | Offers. Not in the queue |
+| What, Huh | One "sorry", then the review text. Queue, Needs review, stuck at Q1 |
+| Yes, Yes - as fast as the phone allowed | One answer saved, question 2 sent once, no question 3 |
+| (carrying on) Yea, Yes, 1 | "Yea" got the "sorry" - so `yea` and `ya` were added. Then completed, 85, HOT, with the link |
+| Yea, Stop, Start | "Yea" accepted. Blocked and suppressed on Stop, the block released on Start, the lead in the queue as Inbound reply |
+
+What only a real phone could show:
+
+- **A text over 160 characters arrives as one message** - the 243-character
+  reply to "No" on question 2 joined with question 3. So a reply and its
+  question stay one text.
+- **EZ Texting passes "Learn more" through** and sends nothing of its own, as
+  it does not for INFO.
+- **Two texts sent 1.2 seconds apart reached us 33 milliseconds apart.** EZ
+  Texting delivered them together, which is exactly when the second used to be
+  read as the next question's answer (`STATE-MACHINE.md`, rule 2c).
+
+Not walked: a contact added in EZ Texting arriving through the poller (the
+lead was created by hand for each walk; that path is unchanged and was proved
+in September), "Order online", and anything to do with calls.
+
 ### Testing a flow with one phone
 
 A real walk needs a real phone, and every path of a flow is several walks. The

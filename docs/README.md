@@ -191,9 +191,10 @@ server - `TWILIO.md`, "What it needs on the Twilio account".
 `STATE-MACHINE.md`). Five lines in it were drafted here and are waiting for the
 client's word: the reply to Special offers, the offers question's "sorry" text,
 the numbers on the offers question, its third option "No thanks" with its
-reply, and the text after a missed call. Nothing
-has been sent to anyone outside the test group, and the end-to-end script
-deliberately stops short of a real send. Two of the texts run past 160
+reply, and the text after a missed call. **The flow was walked with a real
+phone on 2026-10-06** - eight paths, `FLOWS.md`, "Walked with a real phone".
+Nothing has been sent to anyone outside the test group, and the end-to-end
+script deliberately stops short of a real send. Two of the texts run past 160
 characters and cost two segments (`ADMIN.md`, "Configuration").
 
 **The queue and Admin > Leads slow down as leads accumulate.** A lead's place

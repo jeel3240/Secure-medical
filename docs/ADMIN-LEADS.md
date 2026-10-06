@@ -130,6 +130,14 @@ showed it. That is fixed. It can still happen for a reply the flow does not
 act on - one that arrives with no conversation on the lead - and in that case
 awaiting is the honest answer.
 
+**A lead who sent STOP and later START still reads Opted out.** The block
+itself is lifted - `dnc_list` has it released, and the lead can be texted and
+called - but the conversation STOP ended stays `suppressed`, and this page
+reads that as Opted out. The queue has it right: Inbound reply, for a person.
+Seen on the real-phone walk of 2026-10-06 and left as it is, by Jeel's
+decision that day. If it is ever changed, it is the first line of
+`STATUS_SQL` in `db/leads.ts`: `opted_out` should need a live block.
+
 ## Step
 
 **The question the lead is on now - Jeel, 2026-09-29.** The question the
