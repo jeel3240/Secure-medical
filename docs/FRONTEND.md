@@ -91,6 +91,34 @@ labels, leaving half a line under "Maximum possible".
 tabs, and the ninth wrapped onto a second line below 1366px. Narrower tab sides
 keep all nine on one line down to 1280px, measured.
 
+**Eleven tabs, and the row never wraps - 2026-10-06.** Offers made ten (and
+Not interested, the same day, eleven), and with
+three-digit counts they no longer fitted at any width up to the 1440px the
+content is capped at: "Awaiting reply" broke onto two lines inside a 32px
+track and spilled out of it. Found in review; measured, not judged by eye.
+
+- An option never wraps (`.segmented__option`, `white-space: nowrap`).
+- Admin > Leads uses the switcher's `dense` variant, 12px sides instead of 16.
+- When the row is still wider than its card - a narrow screen, or counts in
+  the thousands - **it scrolls sideways inside the card**
+  (`.table-card__toolbar--scroll`).
+- The admin layout's content column is `minmax(0, 1fr)`. As a bare `1fr` it
+  could not be narrower than its widest content, so the long row stretched
+  the whole page sideways instead of scrolling.
+
+Measured in the running app, with all eleven tabs, on 2026-10-06:
+
+| Counts | Row | 1280px | 1366px | 1440px and wider |
+|---|---|---|---|---|
+| Single digits | 1,119px | Scrolls in its card | Scrolls in its card | Fits |
+| Up to 1,284 | 1,328px | Scrolls in its card | Scrolls in its card | Scrolls in its card |
+
+At every width every option is 32px tall - none wraps - and the page itself
+never scrolls sideways. Once the counts reach three digits the row is wider
+than its card everywhere, so the last tabs are reached by scrolling it; if
+that proves awkward in use, the next step is fewer tabs in the row, not
+smaller ones.
+
 **Removed:** the admin sidebar's greyed "Soon" links - Overview, Scoring,
 Messages, DNC list, Settings. Two duplicated live links; the rest were folded
 into Configuration on 2026-09-23.
@@ -105,7 +133,7 @@ Rebuilt to a mockup Jeel supplied. What changed and why:
 | Tier filter | Three pills, several at once | One segmented switcher - All, Hot, Warm, Low with counts - one at a time |
 | Tier column | Coloured badge | Signal bars and the word, `components/TierSignal.tsx` |
 | Age column | "AGE", amber and red | "WAITING", monospace, one weight and colour for every lead |
-| Status column | Coloured pills, six statuses | An icon and the words, five statuses (Callback came back 2026-09-29, Missed call added 2026-10-01), a hyphen otherwise - `components/QueueStatus.tsx` |
+| Status column | Coloured pills, six statuses | An icon and the words, six statuses (Callback came back 2026-09-29, Missed call added 2026-10-01, Wants a call 2026-10-05), a hyphen otherwise - `components/QueueStatus.tsx` |
 | Button | Pick | **Pick up** - on every screen that picks, so the action has one name |
 | Someone else's lead | "Locked" | A padlock and "Locked", `components/LockIcon.tsx` |
 | Action column | Right-aligned | Centred - buttons and Locked on one axis |
@@ -121,7 +149,7 @@ came back - see below and `QUEUE.md`, "The tag".)*
 bold like Inbound reply. The lead rang and nobody answered; it stays until
 someone gets back to them. `TWILIO.md`, "A missed call".)*
 
-**Only three statuses, and most rows have none - Jeel, 2026-09-28.**
+**Three statuses at first, six now, and most rows have none - Jeel, 2026-09-28.**
 Working – name (was In progress – name), Inbound reply and Needs review, each an icon and the words; any
 other row shows a hyphen, like any other empty cell. New, Attempted 2x and
 Callback 3:00 PM are gone: that history belongs to the agent working the lead
@@ -136,6 +164,15 @@ to say. Which status wins, and why New went too, is in `QUEUE.md`, "The tag".
 | Needs review | Warning triangle | A person has to look at the replies |
 | Callback – name · time | Clock | Someone has a call booked on it |
 | Missed call | Handset with an arrow turned away | The lead rang and nobody answered. Bold, like Inbound reply |
+| Wants a call | Handset | The lead said No, then asked to hear from a rep (2026-10-05). The same handset as Missed call, without the arrow |
+
+Admin > Leads has two more of its own: **Offers**, a price tag, muted - a
+lead who asked for special offers and nothing else - and **Not interested**,
+a circle with a line through it, muted: one who said no to the offers and to
+a rep. Offers, and the queue's Wants a call, got their own icons on
+2026-10-06: they had borrowed the inbound message box and the chat bubble,
+which already meant an unread text and Answering on the other screen. Not
+interested had its own from the start.
 
 The icons are inline SVG outlines on a 24-unit grid, drawn in the text colour
 like the padlock, so a locked row greys its icon with its words.
@@ -208,7 +245,8 @@ uses the link blue. *(Later the same day the DNC list was rebuilt the same way
 as Admin > Leads, switcher included - `ADMIN.md`, "DNC list".)*
 
 **Checked** at 1280, 1366, 1440 and 1920px: all nine statuses stay on one line,
-and nothing overflows the card. A row click opens the timeline; no console errors.
+and nothing overflows the card. *(Eleven since 2026-10-06 - see "Eleven
+tabs, and the row never wraps", above.)* A row click opens the timeline; no console errors.
 
 ## My Callbacks - rebuilt 2026-09-28
 
@@ -355,7 +393,7 @@ needs to know:
 
 | Piece | File |
 |---|---|
-| The card: who, how long it has rung, tier, score, their Interest answer, how far the questions got, how often we tried them today; **Accept** (takes the lead, opens its workspace) and **Decline** | `layout/IncomingCall.tsx`, `styles/incoming-call.css` |
+| The card: who, how long it has rung, tier, score, the last thing they answered (under that question's own heading), how far the questions got, how often we tried them today; **Accept** (takes the lead, opens its workspace) and **Decline** | `layout/IncomingCall.tsx`, `styles/incoming-call.css` |
 | "Calling back · you tried 2× today" | `lib/caller-context.ts`, pure |
 | The states - none, ringing, call, missed - and one call at a time | `lib/incoming-state.ts`, pure |
 | The store joining them to Twilio. A store, not page state, because a call arrives on any screen and the lead's Call button must know one is under way | `lib/incoming-call.ts` (zustand) |
@@ -383,12 +421,17 @@ which the conversation header links to, and which still uses `Timeline.tsx`
 unchanged. An agent on a call wants what the lead said; the full audit trail is
 one click away.
 
-**An inbound digit is labelled only when it provably matches.** `3` becomes
-"3 | Both" when the conversation's recorded answer to that question is 3. The
-matching walks the stored choices in order and advances only on a match, so an
-unclear reply cannot shift every later label by one, and a worded answer like
-"today please" stays plain text. `labelReplies()` has tests for each of those.
-This needed the raw `choice` on each answer chip - `AGENT-WORKSPACE.md`.
+**A reply is labelled with the answer the server recorded for it.** `1`
+becomes "1 | Yes" because the timeline entry for that text carries
+`detail.answer` - the answer row names the message it was read from. The
+screen adds nothing of its own, and shows no label when the lead typed the
+answer's own words (`replyLabel()`, tested).
+
+*(Until 2026-10-06 the screen worked the labels out: `labelReplies()` walked
+the lead's answers in order and matched digits. It was right while every
+answer was a digit. A worded answer was skipped, and the next digit took its
+label - "yes", "2", "1" showed "1 | Yes" on a reply that meant "I know which
+antibiotic". `AGENT-WORKSPACE.md`, "How the lead card is built".)*
 
 **The composer is a message box.** Always present at the foot of the thread,
 Enter to send and Shift+Enter for a new line, templates behind a button. (The
@@ -483,9 +526,9 @@ Internal values and screen words still differ in a few places, on purpose:
 
 | Stored or sent | Shown | Why it stays |
 |---|---|---|
-| conversation `status = 'completed'` | Ready | A database value; renaming it is a migration for no behaviour change. The API's lead status is already `ready` |
+| conversation `status = 'completed'` | Ready - or Offers / Not interested, by `end_outcome` | A database value; renaming it is a migration for no behaviour change. The API's lead status is already `ready` |
 | queue tag kind `working` | Working – name | Same word since 2026-09-28 |
-| Overview `responded`, `completed` | Replied, Answered all 3 | Field names in one JSON payload, read in one page |
+| Overview `responded`, `completed` | Replied, Completed | Field names in one JSON payload, read in one page |
 
 ## Picking a date and time - 2026-09-29
 
@@ -554,10 +597,13 @@ with a contact (`EZTEXTING-API.md`), so every row would read "-" forever. Left
 out rather than given permanent space in a table the brief asks to keep dense.
 Decided 2026-09-26. It goes back in if the partner ever sends state.
 
-**The queue's answer words come from the server** since 2026-10-01 -
-`q1Label` to `q3Label`, saved with each answer. `answerLabel` in
-`lib/format.ts`, the list of names written into the frontend, is now only the
-fallback for an answer with no saved word. `QUEUE.md`, "The response".
+**The queue has one Answers column** - 2026-10-05. A row carries `answers`,
+as many as the lead's flow asked and they answered, and the cell reads "Yes ·
+No · Talk to an agent" with each question's heading on hover
+(`QueuePage.tsx`, `answersText`). It had three fixed columns - Interest,
+Timing, Preference - which cannot fit flows with different numbers of
+questions. The list of answer names written into `lib/format.ts` is gone:
+every word comes from the server, saved with the answer. `FLOWS.md`.
 
 **Age ticks on its own timer, not on the poll.** Once a second, from
 `lib/useSecond.ts`; `formatAge` in `lib/format.ts` words it. A number that only moved when the data refreshed would be wrong
@@ -638,25 +684,38 @@ call figures dimmed with a note; they were removed on 2026-09-28 - `ADMIN.md`,
 "Overview".) Leaving them off would make someone wonder whether the
 page forgot them.
 
+## Refreshing - one request at a time
+
+**A screen asks again five seconds after the last answer arrived** -
+2026-10-06, `api/usePolling.ts`. It used to ask every five seconds on a fixed
+timer, whatever had happened to the request before. While the server answers
+in milliseconds the two are the same. When it is slow they are not: requests
+piled up on a server already struggling, each holding a database connection,
+and a slower answer could never catch up. Now there is never more than one
+request in flight from a screen. The race guard is unchanged - an answer that
+arrives after a newer one is still dropped.
+
 ## Tests
 
-`npm test` in `frontend/`. Vitest with jsdom, 259 tests in 25 files (2026-10-01).
+`npm test` in `frontend/`. Vitest with jsdom, 273 tests in 26 files (2026-10-06).
 
 Logic first, by agreement - a screen is easy to judge by eye, and a dropped
 response or an off-by-one age threshold is not:
 
 | File | Covers |
 |---|---|
-| `api/usePolling.test.ts` | The polling hook's guarantees, the race guard included |
+| `api/usePolling.test.ts` | The polling hook's guarantees, the race guard included, and that a slow answer is waited for rather than asked for again |
 | `lib/format.test.ts`, `lib/lock.test.ts` | Formatting, and which row action and lock a lead gets |
 | `components/Timeline.test.tsx`, `pages/LeadTimelinePage.test.ts` | The timeline's wording, and the summary sidebar |
-| `pages/workspace/Conversation.test.ts` | Labelling a reply with the answer it was recorded as |
+| `pages/workspace/Conversation.test.ts` | The answer shown beside a reply: the server's, and nothing when it would repeat the reply |
+| `pages/QueuePage.test.ts` | The queue's Answers cell and its tooltip |
 | `pages/workspace/Conversation.render.test.tsx` | The sent ticks and the red "!" on a refused message |
-| `components/QueueStatus.test.tsx` | The queue's five statuses, their icons, a callback's time, and the tier bars |
+| `components/QueueStatus.test.tsx` | The queue's six statuses, their icons, a callback's time, and the tier bars |
 | `components/DateTimeField.test.tsx` | The date and time picker: the month grid, quarter hours, past days off, Clear, Escape |
-| `pages/workspace/LeadHeader.test.ts` | The header's source and Questions wording |
+| `pages/workspace/LeadHeader.test.ts` | The header's source and Questions wording, a sub-question, "Q1-a", included |
 | `pages/workspace/LeadNotes.test.tsx` | The Notes card: newest first, three then Show all, the author, the empty state |
-| `pages/workspace/LeadAnswers.test.ts` | The score breakdown's light-blue-to-navy shades |
+| `components/CallTranscript.test.tsx` | A call's transcript: closed until asked for, speakers joined, nothing for an unrecorded call |
+| `pages/workspace/LeadAnswers.test.ts` | The score breakdown's light-blue-to-navy shades, and each line's words |
 | `components/SyncStatus.test.tsx` | The EZ Texting sync line, quiet and amber |
 | `components/Segmented.test.tsx` | The sliding switcher |
 | `lib/call-state.test.ts`, `lib/calling.test.ts` | A call's states and wording; error sentences; who is calling |
@@ -690,8 +749,9 @@ every route lives under `/api`.
 ## Not built
 
 - ~~**Calling.**~~ Built 2026-10-01, Phase 4 - `TWILIO.md`. Outgoing, and
-  incoming to one agent's browser; no call queue, recording, voicemail,
-  transfer or hold, and no card for a caller we hold no lead for.
+  incoming to one agent's browser; no call queue, voicemail box, transfer
+  or hold, and no card for a caller we hold no lead for. Recordings and
+  transcripts were added on 2026-10-02 (`TWILIO.md`).
 - **Live push.** Polling stands in for it, deliberately - see above.
 - **Export CSV** on the DNC list. In the brief, and it hands a file of phone
   numbers to a browser, so it needs Jeel to ask for it.

@@ -22,16 +22,15 @@ rather than something that erodes.
 One page, because neither half has actions any more and they are read together:
 here is what we ask, here is what each answer is worth.
 
-- The nine messages - three questions, three clarifications, the review
-  message, the thanks and the missed-call text - exactly
-  as they sit in `settings`, each with its character and segment count so it is
-  obvious when a message costs two segments.
-- The scoring table: response, completion, and the three points per answer for
+- Every text a lead can receive, as it is sent, each with its character and
+  segment count so it is obvious when one costs two segments.
+- The scoring table: response, completion, and the points for each choice of
   each question, with the maximum possible.
 - The tier bands.
 - Conversation expiry, read from `settings.expiry_days` - 7.
 
-`GET /api/admin/config` returns all of it from `settings`, `scoring_rules` and
+`GET /api/admin/config` returns all of it from the flow new leads get
+(`flows`, `flow_questions`, `flow_choices` - `FLOWS.md`), `settings` and
 `tiers`, so the page always shows what the state machine is actually using
 rather than a copy in the frontend. That is the point of the page: not
 documentation of what we intended, but a window on live values.
@@ -44,11 +43,19 @@ returned as `longestFirstName` - or the `there` fallback when that is shorter,
 with `longestNameIsFallback` set so the page says which it is rather than
 showing "there" as a name (2026-09-29).
 
-**Nine messages**, in the order a lead meets them: three questions, three
-clarifications, the review message sent after a second unclear reply, the
-thanks, and - since 2026-10-01 - the text sent after a call to us that nobody
-answered. The review message was missing until 2026-09-29 - leads received it,
-but it could not be seen here.
+**The messages are listed as a lead receives them** (2026-10-05): the first
+question; then, for every choice, its reply joined to the question that
+follows - one text, which is how it is sent; then each question's "sorry"
+text, the review text, and the text after a missed call. Seventeen for the
+antibiotics flow. Each carries a `name` ("After Q1 · Yes") and `when` ("Then
+Q2", "Ends the questions"), built by the server, since the list depends on the
+flow. A question is named by its key: "Q2", and "Q1-a" for a sub-question -
+"Then Q1-a", "Unclear · Q1-a" (`FLOWS.md`, "Naming a question"). The scoring
+card titles each question the same way, with what it asks: "Q1-a · Offers". Two of them run past 160 characters and are flagged as two segments.
+The card's header names the flow, beside the Messages title.
+
+*(Until then: nine fixed messages - three questions, three clarifications, the
+review text, the thanks and the missed-call text.)*
 A message that fits in one segment for "Jo" and not for "Christopher" is one
 that costs two segments for some leads, and the page has to show that.
 
@@ -68,7 +75,7 @@ style of the other admin pages, each with a title row:
 
 | Card | Shows |
 |---|---|
-| Messages | One row per message: its name and when it is sent on the left ("Question 2 · After answer 1"), the copy in normal type on the right, and "88 characters · 1 segment" under it. `{first_name}` shows as a small "first name" chip. A message that costs a second segment for some leads says so in amber |
+| Messages | One row per message: its name and when it is sent on the left ("After Q1 · Yes", and under it "Then Q2"), the copy in normal type on the right, and "88 characters · 1 segment" under it. `{first_name}` shows as a small "first name" chip. A message that costs a second segment for some leads says so in amber |
 | Scoring | Plain rows - "Replied at all +10", then each question's options grouped under it - and a shaded Maximum row |
 | Tiers | The queue's signal bars and each band |
 | Settings | Expiry, clarifications before review, the segment limit |
@@ -97,7 +104,7 @@ complex".** The page and the API now hold only what a superadmin acts on:
 
 | Part | Shows |
 |---|---|
-| Totals | Leads in · Replied · Answered all 3 · Closed - for Today, 7 days or 30 days, chosen on the navy switcher |
+| Totals | Leads in · Replied · Completed · Closed - for Today, 7 days or 30 days, chosen on the navy switcher |
 | Agents | Per active agent: **Working now** (leads they hold), **Closed** in the period, **Due today**, **Last active** (their newest note, callback they booked, outcome, call they placed or answered, or SMS that went out) |
 | System | Database, EZ Texting sync, the expiry sweep, sending and calling - each OK or Degraded - and incoming replies, which shows its last reply with no verdict. Calling is Degraded when the phone number or the TwiML App no longer points at this server (2026-10-02), and reads "not set up", with no verdict, where calling is off. From the health endpoint |
 
@@ -108,14 +115,14 @@ all real":**
 |---|---|
 | Leads in | Leads that arrived from EZ Texting in the period |
 | Replied | Leads whose **first** reply came in the period. A lead from yesterday who first replies today is today's; one writing again weeks later is not counted twice |
-| Answered all 3 | Leads whose third answer came in the period - `conversations.completed_at`, migration 004 |
+| Completed | Leads who finished their flow's questions in the period, whichever way it ended - a lead who said No and then chose special offers is one. `conversations.completed_at`, migration 004. *(Called "Answered all 3" until 2026-10-06, when a flow stopped being three questions.)* |
 | Closed | **Leads** closed in the period, not presses of Closed: a lead closed, reopened by a text and closed again is one |
 | Working now | Leads the agent holds right now, whatever the period |
 | Due today | The agent's open callbacks due **by the end of today**, in the viewer's time zone, overdue ones included - one booked for next week is not. Until 2026-09-29 it counted only those already due, so a 3 PM callback showed nothing all morning; the column was called Callbacks due |
 
-Until that day Replied and Answered all 3 counted leads that *arrived* in the
+Until that day Replied and Completed counted leads that *arrived* in the
 period, Closed counted presses, and Callbacks due counted every open callback;
-the percentages under Replied and Answered all 3 went with the first fix, since
+the percentages under Replied and Completed went with the first fix, since
 a share of "leads that arrived" no longer applies.
 
 **A failing check is shown in the System card, not across the page** - Jeel,
@@ -222,7 +229,7 @@ of phone numbers to a browser - a superadmin-only route, and not something to
 add without Jeel saying so. Not built.
 
 `scripts/admin-live-check.ts` proves all three read models against a real
-database: the config against the rows seeded by `001_init.sql` and against an
-edited rule, the overview's period windows, totals, per-agent aggregates and
+database: the config against the antibiotics flow seeded by `012_flows.sql` (tiers
+and expiry from `001_init.sql`) and against an edited choice, the overview's period windows, totals, per-agent aggregates and
 activity feed,
 and the DNC list's states, search escaping and lead-less rows.

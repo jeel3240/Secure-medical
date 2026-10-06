@@ -132,12 +132,27 @@ export function usePolling<T>(fetcher: () => Promise<T>, options: PollingOptions
     }
   }, [fetcher]);
 
+  // Each request waits for the one before it - 2026-10-06. On a fixed
+  // interval a slow answer was overtaken by the next request: the slower the
+  // server, the more of them piled up on it, each holding a database
+  // connection, which is the moment it can least afford them. The pause is
+  // counted from when an answer arrives, so there is never more than one
+  // request in flight from a screen.
   useEffect(() => {
     if (!enabled) return;
 
-    void run();
-    const timer = setInterval(() => void run(), intervalMs);
-    return () => clearInterval(timer);
+    let stopped = false;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const tick = async () => {
+      await run();
+      if (!stopped) timer = setTimeout(() => void tick(), intervalMs);
+    };
+    void tick();
+
+    return () => {
+      stopped = true;
+      clearTimeout(timer);
+    };
   }, [run, intervalMs, enabled]);
 
   return {

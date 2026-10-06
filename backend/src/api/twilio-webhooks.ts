@@ -5,6 +5,7 @@
  *   POST /api/webhooks/twilio/status          how a call ended - outgoing or incoming
  *   POST /api/webhooks/twilio/answered-by     who picked up a call we placed: a person or a machine
  *   POST /api/webhooks/twilio/recording       a call's recording is ready, for its transcript
+ *   POST /api/webhooks/twilio/notice          the recording notice a lead we called hears first
  *   POST /api/webhooks/twilio/incoming        a lead is calling our number
  *   POST /api/webhooks/twilio/incoming/after  ringing the agent is over: what to say
  *
@@ -19,7 +20,15 @@
 
 import express, { type NextFunction, type Request, type Response, Router } from 'express';
 import { agentIdFromIdentity, answeredByFor, outcomeForStatus, REFUSAL_SPEECH, talkSeconds } from '../core/calls';
-import { dialTwiml, emptyTwiml, isFromTwilio, missedCallTwiml, refusalTwiml, ringAgentTwiml } from '../integrations/twilio';
+import {
+  dialTwiml,
+  emptyTwiml,
+  isFromTwilio,
+  missedCallTwiml,
+  recordingNoticeTwiml,
+  refusalTwiml,
+  ringAgentTwiml,
+} from '../integrations/twilio';
 import { errText, log } from '../lib/log';
 import type { AppDeps } from './deps';
 import { asyncHandler } from './http';
@@ -171,6 +180,13 @@ export function twilioWebhooksRouter(deps: AppDeps): Router {
       res.sendStatus(204);
     })
   );
+
+  // What a lead we called hears once they pick up, before the agent is
+  // connected: that the call may be recorded. Twilio asks for it only on a
+  // recorded call - the `<Number>` names this address only then.
+  router.post('/notice', (_req, res) => {
+    res.type('text/xml').send(recordingNoticeTwiml());
+  });
 
   // A call's recording is ready. Kept, and its transcript put in line for the
   // worker - which talks to Twilio's transcription service, so this answers

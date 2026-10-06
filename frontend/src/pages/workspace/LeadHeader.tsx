@@ -38,16 +38,24 @@ export function sourceLabel(source: string | null): string | null {
  */
 export function questionsLabel(conversation: LeadDetail['conversation']): string {
   if (!conversation) return 'Not started';
-  const q = `Q${conversation.step ?? 1}`;
+  // The question's own name from the server - "Q2", or "Q1-a" for the
+  // sub-question asked of a lead who said No to question 1. Without one, the
+  // words stand alone: the position is an order, not a question number.
+  const q = conversation.question;
   switch (conversation.status) {
     case 'completed':
+      // A lead who said No ends on the offers question, not on the last one.
+      if (conversation.endOutcome === 'offers') return 'Offers only';
+      if (conversation.endOutcome === 'wants_contact') return 'Wants a call';
+      if (conversation.endOutcome === 'declined') return 'Not interested';
       return 'Completed';
     case 'open':
+      if (!q) return conversation.agentTookOverAt ? 'Agent took over' : 'Open';
       return conversation.agentTookOverAt ? `Agent took over at ${q}` : `On ${q}`;
     case 'expired':
-      return `Stopped at ${q}`;
+      return q ? `Stopped at ${q}` : 'Stopped';
     case 'review':
-      return `Needs review at ${q}`;
+      return q ? `Needs review at ${q}` : 'Needs review';
     case 'suppressed':
       return 'Not sent - blocked';
     default:

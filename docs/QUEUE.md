@@ -10,10 +10,10 @@ tag). Flow rules it depends on: `STATE-MACHINE.md`.
 ## Who is in it
 
 **Only leads that need a person - Jeel, 2026-09-28.** It used to hold every
-responder, a lead halfway through the questions included. But question 3 asks
-how they want to be contacted: a lead who has not reached it has not asked for
-a call, and one still answering would be interrupted by it. Agents contact
-people who have given them a reason to.
+responder, a lead halfway through the questions included. But the last
+question asks what they want to do next: a lead who has not reached it has not
+asked for a call, and one still answering would be interrupted by it. Agents
+contact people who have given them a reason to.
 
 A lead is in the queue when its number is not blocked and it needs a person.
 `db/queue.ts`, `INCLUDED`, is the rule; rewritten here 2026-10-01 to say what
@@ -38,7 +38,7 @@ starts at the first reply, so a score is the mark of a responder:
 
 | Reason | Why a person is needed |
 |---|---|
-| Newest conversation `completed` | Answered all three, including how to contact them |
+| Newest conversation `completed` | Finished the flow's questions, or asked to hear from a rep. **Except** one that ended `offers` - a lead who only asked for special offers is a list for the client's campaigns, not a call to make (2026-10-05) - or `declined`, who said no to the offers and to a rep (2026-10-06). `FLOWS.md`, "What a choice's ending means" |
 | Newest conversation `review` | Replied, and we could not understand it |
 | A callback is booked and not done | An agent promised a call. This is also what keeps an expired lead with a callback in reach |
 
@@ -120,7 +120,8 @@ why is it here? When several apply, the first wins:
 | 2 | `missed_call` | The lead rang us, nobody answered, and nobody has got back to them since - `MISSED_CALL_SQL`, `TWILIO.md`. Bold. A held lead still reads Working | |
 | 3 | `inbound_reply` | The lead has texted and nobody has read it | |
 | 4 | `callback` | A callback is booked and not done - the soonest one. "Callback – Maya Chen · 8:13 PM", with the date when not today. Does not lock the row | `agentId`, `agentName`, `at` |
-| 5 | `needs_review` | Conversation `review`: replies we could not read | |
+| 5 | `wants_call` | The lead said No to the first question, then asked to hear from a rep - the flow ended `wants_contact` (2026-10-05). Says why a lead with 10 points is in the queue | |
+| 6 | `needs_review` | Conversation `review`: replies we could not read | |
 | - | `null` | None of those: the lead is waiting to be picked up. The screen shows a hyphen | |
 
 **Callback came back - Jeel, 2026-09-29.** Testing showed the cost of
@@ -180,7 +181,10 @@ reaches `LIKE`: a `%` in the search box is the character, not a wildcard.
 {
   "leads": [ { "id": 7, "phone": "+1…", "firstName": "…", "lastName": "…",
                "source": "CORE-G-27", "receivedAt": "…", "score": 90,
-               "tier": "HOT", "q1": "3", "q2": "1", "q3": "1",
+               "tier": "HOT",
+               "answers": [ { "key": "q1", "heading": "Requested info", "label": "Yes" },
+                            { "key": "q2", "heading": "Used telemedicine", "label": "No" },
+                            { "key": "q3", "heading": "Next step", "label": "Talk to an agent" } ],
                "conversationStatus": "completed", "tag": null } ],
   "counts":  { "all": 12, "HOT": 4, "WARM": 5, "LOW": 3 },
   "sources": ["CORE-G-27", "CORE-G-31"],
@@ -203,13 +207,55 @@ every other filter, so the selected tiers add up to it.
 `receivedAt` is `ezt_added_at`, falling back to `created_at` - when the lead
 reached us, which is what the ticking Waiting column counts from.
 
-`q1`-`q3` are the raw choices, `"1"`, `"2"`, `"3"`. `q1Label`-`q3Label` are the
-words for them, saved with each answer when it was given (migration 009), and
-are what the INTEREST / TIMING / PREFERENCE columns show - so a choice renamed
-later does not rename what an earlier lead picked. `STATE-MACHINE.md`, "The
-word is kept with the answer". Until 2026-10-01 the screen mapped the number to
-a word from a list written into the frontend; that list is now only the
-fallback for an answer with no saved word.
+`answers` is what the lead answered, in their flow's order: one entry per
+question answered, with the question's `heading` and the choice's `label` as
+they were saved with the answer (`conversation_answers`, `FLOWS.md`) - so a
+choice renamed later does not rename what an earlier lead picked. The screen
+shows them in one **Answers** column, "Yes · No · Talk to an agent", with the
+headings on hover.
+
+*(Until 2026-10-05 a row carried `q1`, `q2`, `q3` and the queue had three fixed
+columns, Interest, Timing and Preference. Flows now differ in how many
+questions they ask, so there is no fixed set of columns to have.)*
+
+## How fast it is
+
+The queue is asked for every five seconds by every open browser, and whether a
+lead belongs in it is worked out from several tables each time - nothing is
+stored. So its cost grows with every lead ever received, not with the size of
+the queue.
+
+**Timed on 2026-10-06 against 50,000 leads** - about a year and a half at 100
+a day - with their answers, messages, calls, notes, callbacks and outcomes
+(`backend/scripts/speed-check.ts`, `npm run speed`; a laptop, so compare the
+two columns, not the figures with a server's):
+
+| | Before | After |
+|---|---|---|
+| The queue as it opens | 7.8 s | 0.18 s |
+| One tier | 4.6 s | 0.18 s |
+| The last 7 days | 0.87 s | 0.01 s |
+| A name search | 0.07 s | 0.02 s |
+
+With a few hundred leads both were instant, which is why nothing showed it.
+Found by loading the leads on purpose. Three causes, none from the flows
+change:
+
+| Cause | Fix |
+|---|---|
+| "Has a callback been booked since this lead was closed?" read the whole `callbacks` table once per closed lead - it had no index by lead. Most of the time | Migration 013: `callbacks (lead_id)`, and `messages (lead_id)` for agents' own texts |
+| The page, the tier counts and the source list were three statements, each working out the whole queue from scratch | One statement. The queue is built once; the counts and the page are both read from it (`db/queue.ts`, `listQueue`) |
+| Postgres compiled these statements to machine code before running them, having priced them far above their cost. The compiling took longer than the query | `jit=off` on the app's connections (`db/pool.ts`) |
+
+**Refreshes do not pile up.** The screen asks again five seconds after the last
+answer arrived, not every five seconds regardless (`usePolling.ts`). On a
+fixed interval a slow server was sent more requests the slower it got.
+
+**What is left grows with the leads.** Each refresh still looks at every lead
+once: about 0.18 s at 50,000, so roughly 0.4 s at 100,000. If that ever
+matters, the fix is to stop working membership out - to store "needs a
+person" on the lead and maintain it - which is a design change, not a tuning
+one.
 
 ## What this does not cover
 
@@ -244,8 +290,8 @@ The tag rules and the route have unit tests (`queue-tags.test.ts`,
 where most of the rules above actually live, so
 `backend/scripts/queue-live-check.ts` seeds one lead per case in a scratch
 database and asserts what comes back - inclusion, exclusion, order, every tag,
-each filter, the counts. The header of that file says how to run it. 47 checks
-as of 2026-10-01, all passing - including a partway lead kept out, and partway
+each filter, the counts. The header of that file says how to run it. 55 checks
+as of 2026-10-06, all passing - including a partway lead kept out, and partway
 leads kept in because they are held, booked, or taken over and replied to; a
 booked callback shows Callback, and call attempts show no tag. The missed call
 - in the queue with no score, reopening a closed lead, its tag, and what
@@ -278,7 +324,7 @@ a codebase ends up with five different refresh behaviours.
 | A stale response is discarded | A slow request from a filter the agent has already changed must not overwrite the current view |
 | The timer stops on unmount | Otherwise it polls forever and sets state on a dead component |
 | `refresh()` fetches now | So a claim or a note appears at once instead of up to 5s later |
-| `keepPreviousData` keeps the old data through a switch | Opt-in, 2026-09-28: Overview's period, this queue's tier and search, Admin > Leads' status and the DNC list's state. The page stays and the old rows fade while `switching` is true, instead of blanking for a spinner. Faded rows are also unclickable (`.is-switching`), so nobody picks up a lead from the list they just switched away from |
+| `keepPreviousData` keeps the old data through a switch | Opt-in, 2026-09-28: Overview's period, this queue's tier and search, Admin > Leads' status, the DNC list's state and My Callbacks' tab. The page stays and the old rows fade while `switching` is true, instead of blanking for a spinner. Faded rows are also unclickable (`.is-switching`), so nobody picks up a lead from the list they just switched away from |
 
 **The fetcher must be stable** - wrapped in `useCallback` with the filters as
 dependencies. When it changes that counts as a new view: the spinner returns and
@@ -320,7 +366,7 @@ question - what may this person actually do:
 | `rowAction` | When | Button | What it does |
 |---|---|---|---|
 | `pick` | Nobody holds it | **Pick up** | Claims it, opens the workspace |
-| `resume` | You hold it | **Resume** | Back into your own lead. Re-claiming your own lead succeeds, but "Pick" implies taking something you already have. While it checks, the button reads *Opening...*, not *Picking...* |
+| `resume` | You hold it | **Resume** | Back into your own lead. Re-claiming your own lead succeeds, but "Pick" implies taking something you already have. While it checks, the button reads *Opening...*, not *Picking up...* |
 | `view` | Someone else holds it, you are a superadmin | **View** | Opens the workspace read-only. Claims nothing, and the holder keeps the lead |
 | `locked` | Someone else holds it, you are an agent | *Locked* | No action |
 

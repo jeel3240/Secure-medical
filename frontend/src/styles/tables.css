@@ -5,7 +5,10 @@
 
 .admin {
   display: grid;
-  grid-template-columns: 200px 1fr;
+  /* minmax(0, ...): a bare 1fr column cannot be narrower than its widest
+     content, so one long row - Admin > Leads' ten status tabs - stretched the
+     whole page sideways instead of scrolling inside its card. */
+  grid-template-columns: 200px minmax(0, 1fr);
   gap: var(--space-6);
   align-items: start;
 }
@@ -94,6 +97,15 @@
   padding: 0 var(--space-4);
   border-bottom: 1px solid var(--color-border);
   white-space: nowrap;
+}
+
+/* The queue's Answers: as many as the lead's flow asked. A long list is cut
+   with an ellipsis - the tooltip has it whole - so it cannot push the row's
+   button off the screen. */
+.table td.cell-answers {
+  max-width: 420px;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 /* A row is its cells and its row label. Written for td alone, the last row
@@ -274,6 +286,13 @@
   border-bottom: 1px solid var(--color-border);
 }
 
+/* A toolbar holding one long switcher: on a screen too narrow for it, it
+   scrolls sideways rather than wrapping its options. */
+.table-card__toolbar--scroll {
+  flex-wrap: nowrap;
+  overflow-x: auto;
+}
+
 .table-card__search {
   flex: 1;
   min-width: 200px;
@@ -377,8 +396,8 @@
   color: var(--color-text-subtle);
 }
 
-/* Status: an icon and the words. Only three statuses exist, and a lead with
-   none shows a hyphen - QueueStatus.tsx. */
+/* Status: an icon and the words. A lead with none shows a hyphen -
+   QueueStatus.tsx. */
 .status {
   display: inline-flex;
   align-items: center;

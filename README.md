@@ -5,7 +5,7 @@ how to run it, and its table says which doc covers what.
 
 - [How to run it, test it, and what to know](docs/README.md)
 - [A lead's whole life on one page - start here](docs/LEAD-FLOW.md)
-- [State machine: the SMS flow spec](docs/STATE-MACHINE.md)
+- [State machine: the SMS flow spec](docs/STATE-MACHINE.md) · [Flows: how the scripts are stored, and adding one](docs/FLOWS.md)
 - [Poller](docs/POLLER.md) · [Webhooks](docs/WEBHOOKS.md) · [EZ Texting API behaviour](docs/EZTEXTING-API.md)
 - [Priority queue](docs/QUEUE.md) · [Agent workspace](docs/AGENT-WORKSPACE.md)
 - [Calling, outgoing and incoming (Twilio)](docs/TWILIO.md)

@@ -20,6 +20,13 @@
  *      gone out, so the row is left as `sending`: never retried, never shown as
  *      failed. The failure is logged.
  *
+ * **A send that timed out is not a refused one** - 2026-10-06. The request
+ * left and no answer came back in time, so the text may have reached the lead.
+ * Its row is left as `sending` too, for the same reason as step 3: marked
+ * failed, the opener retry would send it again. It is reported as not sent,
+ * and as `unconfirmed`, so the caller neither counts it as delivered nor
+ * starts a reply window on it.
+ *
  * An agent's own SMS does not use this: it sends first on purpose, and marks
  * the take-over in the same transaction - `db/agent-sms.ts`.
  */
@@ -36,9 +43,18 @@ export function isBlocked(err: unknown): boolean {
   return err instanceof Error && err.name === 'BlockedNumberError';
 }
 
+/**
+ * The request went out and no answer came back in time - axios's codes for a
+ * timeout. Not a connection that could not be made: that one never left.
+ */
+export function isUnconfirmed(err: unknown): boolean {
+  const code = (err as { code?: unknown } | null)?.code;
+  return code === 'ECONNABORTED' || code === 'ETIMEDOUT';
+}
+
 export type SendResult =
   | { sent: true; eztMessageId: string }
-  | { sent: false; blocked: boolean; err: unknown };
+  | { sent: false; blocked: boolean; err: unknown; /** It may have gone out: see above. */ unconfirmed?: boolean };
 
 export async function sendAndRecord(
   q: Querier,
@@ -55,6 +71,11 @@ export async function sendAndRecord(
   try {
     eztMessageId = (await opts.send()).id;
   } catch (err) {
+    if (isUnconfirmed(err)) {
+      log.warn('sms.unconfirmed', { leadId: opts.leadId, err: errText(err) });
+      return { sent: false, blocked: false, err, unconfirmed: true };
+    }
+
     const blocked = isBlocked(err);
     try {
       await q.query(

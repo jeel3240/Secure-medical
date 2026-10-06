@@ -37,6 +37,10 @@ function answer(sql: string) {
   if (/FROM settings WHERE key = \$1/i.test(sql)) {
     return { rows: [{ value: 'Hi {first_name}, reply 1. A, 2. B, 3. C' }], rowCount: 1 };
   }
+  // The first question of the lead's flow - db/flows.ts.
+  if (/JOIN flow_questions fq ON fq.id = c.current_question_id/i.test(sql)) {
+    return { rows: [{ body: 'Hi {first_name}, reply 1. A, 2. B, 3. C' }], rowCount: 1 };
+  }
   if (/FROM dnc_list/i.test(sql)) return dncRows;
   if (/INSERT INTO leads/i.test(sql)) return leadInsertReturns;
   return { rows: [], rowCount: 1 };
@@ -90,7 +94,7 @@ describe('a contact EZ Texting has marked opted out', () => {
     const stats = await pollOnce();
 
     expect(stats).toMatchObject({ fetched: 1, inserted: 0, suppressed: 1, openersSent: 0 });
-    expect(conversationInsert()?.values).toEqual([42, 'suppressed', null]);
+    expect(conversationInsert()?.values).toEqual([42, 'suppressed']);
     // Blocked through db/dnc.ts, so the block and its activity-log record are
     // one statement - docs/AUDIT.md.
     const block = recorded.find((r) => /INSERT INTO dnc_list/i.test(r.sql));
@@ -119,7 +123,7 @@ describe('a phone already on our do-not-call list', () => {
     const stats = await pollOnce();
 
     expect(stats).toMatchObject({ suppressed: 1, inserted: 0, openersSent: 0 });
-    expect(conversationInsert()?.values).toEqual([42, 'suppressed', null]);
+    expect(conversationInsert()?.values).toEqual([42, 'suppressed']);
     expect(sendMessage).not.toHaveBeenCalled();
     // Not opted out on EZ Texting's side: the poller blocks nothing itself.
     expect(sqlOf()).not.toMatch(/INSERT INTO dnc_list/i);
@@ -137,7 +141,9 @@ describe('an ordinary new contact', () => {
     const stats = await pollOnce();
 
     expect(stats).toMatchObject({ fetched: 1, inserted: 1, suppressed: 0, openersSent: 1 });
-    expect(conversationInsert()?.values).toEqual([42, 'open', 1]);
+    expect(conversationInsert()?.values).toEqual([42, 'open']);
+    // In the flow new leads get, on its first question.
+    expect(conversationInsert()?.sql).toMatch(/FROM flows f .* WHERE f\.is_active/i);
     expect(sendMessage).toHaveBeenCalledTimes(1);
     expect(sqlOf()).toMatch(/INSERT INTO messages/i);
     // The reply window starts when the opener goes out.

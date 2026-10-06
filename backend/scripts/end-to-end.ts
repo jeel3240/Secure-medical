@@ -1,5 +1,5 @@
 /**
- * The whole system, end to end: a lead arrives, answers three questions, is
+ * The whole system, end to end: a lead arrives, answers its flow's questions, is
  * scored, reaches the queue, gets worked by an agent, and shows up on the
  * timeline.
  *
@@ -9,8 +9,7 @@
  * **What it does not prove.** EZ Texting is stubbed at the HTTP boundary, so
  * every check below holds right up to the moment a text would leave the
  * building - and no further. Nothing here shows that a real phone buzzes. That
- * leg needs the approved message copy (the seeded text is still the mockup's
- * placeholder) and a run against the test account, which `docs/README.md`
+ * leg needs a run against the test account, which `docs/README.md`
  * describes. Until then this script proves the machine, not the delivery.
  *
  * Stubbed at `axios.post`, deliberately, not at `sendMessage`: replacing
@@ -40,6 +39,8 @@ let stubId = 0;
 };
 
 import request from 'supertest';
+import { openingQuestion, startConversation } from '../src/db/flows';
+import { sendOpener } from '../src/worker/opener';
 import { pool } from '../src/db/pool';
 import { config } from '../src/config';
 import { createApp } from '../src/api/app';
@@ -157,10 +158,17 @@ async function main(): Promise<void> {
     )
   ).rows[0].id;
 
-  await pool.query(
-    `INSERT INTO conversations (lead_id, status, step, score) VALUES ($1, 'open', 1, 0)`,
-    [leadId]
-  );
+  // In the flow new leads get, on its first question - as the poller does.
+  await startConversation(pool, leadId, 'open');
+
+  // Before the first question has gone out, a text from them is not an answer
+  // to it - reply-flow.ts, "a reply before our text".
+  await reply(PHONE, 'yes', new Date(Date.now() - 5000));
+  check('a text before the first question went out answers nothing', (await conversation(leadId)).score, 0);
+
+  // The first question, sent the way the poller sends it - worker/opener.ts.
+  const opener = await sendOpener({ id: leadId, phone: PHONE, firstName: 'Jordan' }, (await openingQuestion(pool, leadId))!);
+  check('the first question goes out', [opener.sent, sent.length], [true, 1]);
 
   check('the lead is stored', leadId > 0, true);
   check('nothing is scored yet', (await getLeadDetail(leadId))?.conversation?.score, 0);
@@ -169,27 +177,26 @@ async function main(): Promise<void> {
   // ------------------------------------------------------------ 2. the flow
   step('2. The three-question flow');
 
-  check('the webhook accepts the first reply', await reply(PHONE, '3'), 200);
+  check('the webhook accepts the first reply', await reply(PHONE, 'yes'), 200);
   const c1 = await conversation(leadId);
-  check('it moves to Q2', c1.step, 2);
-  check('and scores responded + Both', c1.score, 25);
+  check('it moves to Q2', c1.step, 20);
+  check('and scores replying + Yes', c1.score, 30);
 
   // A word, not a number: matchAnswer accepts both.
-  await reply(PHONE, 'today', new Date(Date.now() + 1000));
+  await reply(PHONE, 'no', new Date(Date.now() + 1000));
   const c2 = await conversation(leadId);
-  check('a word answer is understood', c2.step, 3);
-  check('and scores Today', c2.score, 55);
+  check('a word answer is understood', c2.step, 30);
+  check('and scores that No', c2.score, 35);
 
-  await reply(PHONE, '1', new Date(Date.now() + 2000));
+  await reply(PHONE, '2', new Date(Date.now() + 2000));
   const c3 = await conversation(leadId);
   check('answering Q3 completes it', c3.status, 'completed');
-  check('the score is the maximum', c3.score, 100);
+  check('the score is replying + Yes + No + Talk to an agent + finishing', c3.score, 90);
   check('and the tier is HOT', c3.tier, 'HOT');
 
-  // Three, not four: the opener is sent by the poller, and this script inserts
-  // the lead directly rather than running a poll cycle against a stubbed
-  // contacts API. What is proved here is the reply flow.
-  check('three messages went out', sent.length, 3);
+  // The first question, then one text per answer - each a reply and, until
+  // the last, the next question.
+  check('four messages went out', sent.length, 4);
   check('all to the lead', new Set(sent.map((s) => s.to)).size, 1);
 
   // ------------------------------------------------------------- 3. queue
@@ -200,7 +207,7 @@ async function main(): Promise<void> {
   check('it is in the queue', queued !== undefined, true);
   check('at the top', queue.leads[0]?.id, leadId);
   check('as HOT', queued?.tier, 'HOT');
-  check('with its answers', [queued?.q1, queued?.q2, queued?.q3], ['3', '1', '1']);
+  check('with its answers', queued?.answers.map((a) => a.label), ['Yes', 'No', 'Talk to an agent']);
   check('and nobody holds it', queued?.tag?.kind !== 'working', true);
 
   // ------------------------------------------------------------- 4. claim
@@ -242,7 +249,7 @@ async function main(): Promise<void> {
   const sentBefore = sent.length;
   await reply(PHONE, '2', new Date(Date.now() + 3000));
   check('a later reply sends nothing', sent.length, sentBefore);
-  check('and does not change the score', (await conversation(leadId)).score, 100);
+  check('and does not change the score', (await conversation(leadId)).score, 90);
 
   const disposition = await setDisposition(leadId, agent, 'interested');
   check('a disposition is recorded', disposition.ok, true);
@@ -254,15 +261,18 @@ async function main(): Promise<void> {
 
   check('it has entries', timeline.length > 0, true);
   check('the lead arriving is first', timeline[0]?.detail.event, 'lead_received');
-  check('the outbound questions are there', kinds.filter((k) => k === 'sms').length, 3);
-  check('so are the replies', kinds.filter((k) => k === 'inbound').length, 4);
+  // The first question, and a text for each of the three answers.
+  check('the outbound questions are there', kinds.filter((k) => k === 'sms').length, 4);
+  // Every text they sent is kept - the one that came before the first question
+  // included, though it answered nothing.
+  check('so are the replies', kinds.filter((k) => k === 'inbound').length, 5);
   check('the agent SMS is marked as theirs', kinds.includes('agent_sms'), true);
   check('the note is there', kinds.includes('note'), true);
   check('the callback is there', kinds.includes('callback'), true);
   check('and the disposition', kinds.includes('disposition'), true);
 
   const scored = timeline.find((e) => e.detail.event === 'scored');
-  check('the score is shown as an event', scored?.detail.score, 100);
+  check('the score is shown as an event', scored?.detail.score, 90);
 
   // ------------------------------------------------------- 7. unread + read
   step('7. An inbound reply is flagged and cleared');

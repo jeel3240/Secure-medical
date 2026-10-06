@@ -69,6 +69,30 @@ describe('polling', () => {
     expect(fetcher).toHaveBeenCalledTimes(3);
   });
 
+  it('waits for a slow answer instead of asking again on top of it', async () => {
+    const slow = deferred<string>();
+    const fetcher = vi.fn().mockReturnValueOnce(slow.promise).mockResolvedValue('rows');
+    renderHook(() => usePolling(fetcher));
+    await waitFor(() => expect(fetcher).toHaveBeenCalledTimes(1));
+
+    // Three intervals pass and the first request is still out. On a fixed
+    // interval that was three more requests stacked on a server already slow.
+    await act(async () => {
+      vi.advanceTimersByTime(POLL_MS * 3);
+    });
+    expect(fetcher).toHaveBeenCalledTimes(1);
+
+    // It lands; the pause is counted from then.
+    await act(async () => {
+      slow.resolve('rows');
+    });
+    expect(fetcher).toHaveBeenCalledTimes(1);
+    await act(async () => {
+      vi.advanceTimersByTime(POLL_MS);
+    });
+    expect(fetcher).toHaveBeenCalledTimes(2);
+  });
+
   it('honours a custom interval', async () => {
     const fetcher = vi.fn().mockResolvedValue('rows');
     renderHook(() => usePolling(fetcher, { intervalMs: 1000 }));

@@ -6,7 +6,7 @@
  * screen. The rest is cheap to cover once the file has a test.
  */
 import { describe, expect, it } from 'vitest';
-import { answerLabel, formatAge, formatPhone, formatRelative, leadName, shortName, toLocalInput } from './format';
+import { formatAge, formatPhone, formatRelative, leadName, shortName, toLocalInput } from './format';
 
 const NOW = new Date('2026-09-26T12:00:00.000Z');
 const ago = (seconds: number) => new Date(NOW.getTime() - seconds * 1000).toISOString();
@@ -37,23 +37,6 @@ describe('formatAge', () => {
 
   it('handles a lead with no received time', () => {
     expect(formatAge(null, NOW)).toBe('-');
-  });
-});
-
-describe('answerLabel', () => {
-  it('turns a stored choice into the words the lead saw', () => {
-    expect(answerLabel(1, '3')).toBe('Both');
-    expect(answerLabel(2, '1')).toBe('Today');
-    expect(answerLabel(3, '1')).toBe('Call me now');
-  });
-
-  it('shows a dash for an unanswered question', () => {
-    expect(answerLabel(2, null)).toBe('-');
-  });
-
-  it('shows an unexpected value rather than hiding it', () => {
-    // If the state machine ever stores something else, an agent should see it.
-    expect(answerLabel(1, '9')).toBe('9');
   });
 });
 

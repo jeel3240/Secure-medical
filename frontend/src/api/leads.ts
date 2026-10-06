@@ -5,6 +5,10 @@ export type LeadStatus =
   | 'awaiting_reply'
   | 'answering'
   | 'ready'
+  /** Asked for special offers only: not a call to make. */
+  | 'offers'
+  /** Wants neither offers nor a rep. */
+  | 'declined'
   | 'working'
   | 'closed'
   | 'needs_review'
@@ -19,8 +23,11 @@ export interface AdminLead {
   source: string | null;
   receivedAt: string | null;
   status: LeadStatus | null;
-  /** The question the lead is on now, or `done` once all three are answered. */
-  step: number | 'done' | null;
+  /**
+   * The question the lead is on now or stopped at, as the server names it -
+   * "Q2", "Q1-a" - or `done` once the questions are finished.
+   */
+  step: string | null;
   score: number | null;
   tier: string | null;
   lastActivityAt: string | null;
@@ -58,7 +65,7 @@ export async function listAdminLeads(query: AdminLeadsQuery): Promise<AdminLeads
 }
 
 /** Mirrors QueueTag in backend/src/core/queue-tags.ts. */
-export type QueueTagKind = 'working' | 'missed_call' | 'inbound_reply' | 'callback' | 'needs_review';
+export type QueueTagKind = 'working' | 'missed_call' | 'inbound_reply' | 'callback' | 'wants_call' | 'needs_review';
 
 export interface QueueTag {
   kind: QueueTagKind;
@@ -80,14 +87,12 @@ export interface QueueLead {
   receivedAt: string | null;
   score: number;
   tier: string | null;
-  q1: string | null;
-  q2: string | null;
-  q3: string | null;
-  /** The word the lead chose for each, as it was called when they chose it. Null where unanswered. */
-  q1Label: string | null;
-  q2Label: string | null;
-  q3Label: string | null;
-  conversationStatus: 'open' | 'completed' | 'review' | 'expired';
+  /**
+   * What the lead answered, in their flow's order - as many as it asked and
+   * they answered. The word is the one saved with the answer. FLOWS.md.
+   */
+  answers: { key: string; heading: string; label: string }[];
+  conversationStatus: 'open' | 'completed' | 'review' | 'expired' | 'suppressed';
   /** `null` when there is nothing to say: the lead is waiting to be picked up. */
   tag: QueueTag | null;
 }

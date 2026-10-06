@@ -17,6 +17,8 @@
     "dev:twilio:configure": "ts-node src/cli/twilio-configure.ts",
     "test": "jest",
     "e2e": "ts-node --transpile-only scripts/end-to-end.ts",
+    "dev:ask-again": "ts-node --transpile-only scripts/dev-ask-again.ts",
+    "speed": "ts-node --transpile-only scripts/speed-check.ts",
     "lint": "eslint src scripts"
   },
   "dependencies": {

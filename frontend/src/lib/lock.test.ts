@@ -19,12 +19,7 @@ const lead = (tag: QueueTag | null): QueueLead => ({
   receivedAt: '2026-09-26T12:00:00.000Z',
   score: 100,
   tier: 'HOT',
-  q1: '3',
-  q2: '1',
-  q3: '1',
-  q1Label: 'Both',
-  q2Label: 'Today',
-  q3Label: 'Call me now',
+  answers: [{ key: 'q3', heading: 'Next step', label: 'Talk to an agent' }],
   conversationStatus: 'completed',
   tag,
 });

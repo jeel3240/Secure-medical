@@ -29,19 +29,6 @@ import { TierSignal } from '../../components/TierSignal';
  * the queue's signal bars.
  */
 
-/** The message keys in the order a lead meets them: a name, and when it goes. */
-const MESSAGE_HEADING: Record<string, { name: string; when: string }> = {
-  question_1: { name: 'Question 1', when: 'The opener' },
-  question_2: { name: 'Question 2', when: 'After answer 1' },
-  question_3: { name: 'Question 3', when: 'After answer 2' },
-  message_clarify_1: { name: 'Clarify Q1', when: 'Unclear answer 1' },
-  message_clarify_2: { name: 'Clarify Q2', when: 'Unclear answer 2' },
-  message_clarify_3: { name: 'Clarify Q3', when: 'Unclear answer 3' },
-  message_review: { name: 'Review', when: 'Second unclear answer' },
-  message_thanks: { name: 'Thanks', when: 'After answer 3' },
-  message_missed_call: { name: 'Missed call', when: 'A call to us nobody answered' },
-};
-
 /** `{first_name}` marked where it sits, so the personalised part is visible. */
 function withPlaceholders(body: string): ReactNode {
   return body.split(/(\{first_name\})/).map((part, i) =>
@@ -55,26 +42,21 @@ function withPlaceholders(body: string): ReactNode {
   );
 }
 
-const QUESTION_HEADING: Record<number, string> = {
-  1: 'Q1 · Interest',
-  2: 'Q2 · Timing',
-  3: 'Q3 · Preference',
-};
-
 /** "Responded at all" and "Completed all questions", as plain sentences. */
 const AWARD_LABEL: Record<string, string> = {
   responded: 'Replied at all',
-  completed: 'Answered all three',
+  completed: 'Answered the questions',
 };
 
 /**
- * `scoring_rules.label` stores "Q1: Both"; under a Q1 heading the prefix is
- * repetition. Stripped here rather than in the database, because the column is
- * also read where the question is not already obvious.
+ * A question as the Messages card names it - "Q2", "Q1-a" - joined to what it
+ * asks, so "After Q2" there and this card's points can be matched: "Q2 · Used
+ * telemedicine", "Q1-a · Offers". The name comes from the server, which has
+ * the one rule for it; a question it could only call by its heading is not
+ * said twice.
  */
-function choiceLabel(label: string | null, choice: string): string {
-  if (!label) return choice;
-  return label.replace(/^Q\d:\s*/, '');
+export function questionTitle(question: { short: string; heading: string }): string {
+  return question.short === question.heading ? question.heading : `${question.short} · ${question.heading}`;
 }
 
 export function ConfigPage() {
@@ -110,17 +92,18 @@ export function ConfigPage() {
         <section className="card table-card">
           <header className="card-head">
             <h2 className="card-head__title">Messages</h2>
-            <span className="card-head__meta">In the order a lead receives them</span>
+            <span className="card-head__meta">
+              {data.flow ? `${data.flow.name} · as a lead receives them` : 'No flow is active'}
+            </span>
           </header>
 
           <ol className="config-msgs">
             {data.messages.map((message) => {
-              const heading = MESSAGE_HEADING[message.key] ?? { name: message.key, when: '' };
               return (
                 <li key={message.key} className="config-msg">
                   <div className="config-msg__label">
-                    <span className="config-msg__name">{heading.name}</span>
-                    <span className="config-msg__when">{heading.when}</span>
+                    <span className="config-msg__name">{message.name}</span>
+                    <span className="config-msg__when">{message.when}</span>
                   </div>
                   <div>
                     <p className="config-msg__body">{withPlaceholders(message.body)}</p>
@@ -130,7 +113,7 @@ export function ConfigPage() {
                       </span>
                       {' · '}
                       {message.segments} segment{message.segments === 1 ? '' : 's'}
-                      {message.costsExtraSegment && ' - a second segment for some leads'}
+                      {message.costsExtraSegment && ' - billed as more than one'}
                     </p>
                   </div>
                 </li>
@@ -162,10 +145,10 @@ export function ConfigPage() {
               ))}
               {data.scoring.questions.map((question) => (
                 <div key={question.question} className="kv__group">
-                  <dt className="kv__group-title">{QUESTION_HEADING[question.question]}</dt>
+                  <dt className="kv__group-title">{questionTitle(question)}</dt>
                   {question.choices.map((choice) => (
                     <div key={choice.choice} className="kv__row kv__row--sub">
-                      <dt>{choiceLabel(choice.label, choice.choice)}</dt>
+                      <dt>{choice.label ?? choice.choice}</dt>
                       <dd className="tabular">+{choice.points}</dd>
                     </div>
                   ))}

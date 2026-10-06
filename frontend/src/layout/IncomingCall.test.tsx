@@ -38,8 +38,11 @@ vi.mock('../auth/store', () => ({
 
 const LEAD = {
   id: 7,
-  conversation: { status: 'expired', step: 2, score: 45, tier: 'WARM', agentTookOverAt: null },
-  chips: [{ question: 1, heading: 'Interest', answer: 'Both', choice: '3' }],
+  conversation: { status: 'expired', step: 20, question: 'Q2', score: 45, tier: 'WARM', agentTookOverAt: null, flow: 'antibiotics', endOutcome: null },
+  chips: [
+    { question: 10, key: 'q1', heading: 'Requested info', answer: 'Yes', choice: '1' },
+    { question: 20, key: 'q2', heading: 'Used telemedicine', answer: 'No', choice: '2' },
+  ],
   claimedBy: null,
 };
 const aCall = (author: string) => ({ kind: 'call', at: new Date().toISOString(), author, detail: { direction: 'outbound', outcome: 'no_answer' } });
@@ -135,13 +138,16 @@ describe('a lead rings', () => {
     expect(screen.getByRole('button', { name: 'Decline' })).toBeDefined();
   });
 
-  it('then what we know about them: tier, score, interest, where the questions stopped, and our tries today', async () => {
+  it('then what we know about them: tier, score, their last answer, where the questions stopped, and our tries today', async () => {
     await show();
     act(() => twilio!.onRing(aRing().ring));
     await waitFor(() => expect(screen.getByText('45')).toBeDefined());
     expect(screen.getByText('/ 100')).toBeDefined();
     expect(screen.getByText('WARM')).toBeDefined();
-    expect(screen.getByText('Both')).toBeDefined();
+    // The last thing they answered, under that question's own heading - not the first.
+    expect(screen.getByText('Used telemedicine')).toBeDefined();
+    expect(screen.getByText('No')).toBeDefined();
+    expect(screen.queryByText('Requested info')).toBeNull();
     expect(screen.getByText('Stopped at Q2')).toBeDefined();
     expect(screen.getByText('Calling back · you tried 2× today')).toBeDefined();
     expect(screen.getByText('Accepting opens Priya’s workspace and assigns the lead to you.')).toBeDefined();

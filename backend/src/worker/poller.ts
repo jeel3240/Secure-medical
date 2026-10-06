@@ -1,4 +1,5 @@
 import { blockNumber, DNC_REASONS } from '../db/dnc';
+import { openingQuestion, startConversation } from '../db/flows';
 import { pool } from '../db/pool';
 import { config } from '../config';
 import {
@@ -141,10 +142,8 @@ async function insertLead(
 
     const leadId: number = lead.rows[0].id;
 
-    await client.query(
-      `INSERT INTO conversations (lead_id, status, step) VALUES ($1, $2, $3)`,
-      [leadId, status, status === 'open' ? 1 : null]
-    );
+    // In the flow new leads get, on its first question - db/flows.ts.
+    await startConversation(client, leadId, status);
 
     // Through db/dnc.ts, like every other block - Jeel, 2026-10-01. Until then
     // this was the poller's own insert, `ON CONFLICT DO NOTHING`, which wrote no
@@ -184,7 +183,8 @@ async function insertLead(
  */
 async function openLead(leadId: number, phone: string, firstName: string | null): Promise<boolean> {
   try {
-    const template = await readSetting('question_1');
+    // The first question of the lead's flow - docs/FLOWS.md.
+    const template = await openingQuestion(pool, leadId);
     if (!template) {
       log.error('sms.no_template', { leadId, key: 'question_1' });
       return false;

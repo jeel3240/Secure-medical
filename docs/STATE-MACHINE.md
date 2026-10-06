@@ -12,24 +12,152 @@ and leaves cases undefined. Decisions below that go beyond the plan are marked
 **Decided** with the reason, so they can be revisited deliberately rather than
 rediscovered.
 
+**The script itself is data, since 2026-10-05.** This document has two parts:
+the rules every flow follows - opt-out, unclear replies, scoring, expiry - and
+the script new leads get today, **"The antibiotics flow"** just below. How
+flows are stored, and how a new one is added, is `FLOWS.md`.
+
 Code: `backend/src/core/` for the pure logic, wired in from
 `backend/src/api/webhooks.ts` (replies) and `backend/src/worker/` (opener,
 expiry). Related: WEBHOOKS.md, POLLER.md, SCHEMA.md, the plan's §6.
 
-## What is built, 2026-09-21
+## The antibiotics flow - the script new leads get
+
+eDrugstore antibiotics, the client's script, confirmed by email 2026-10-05. It
+replaced the health & wellness questions before the first real lead. Stored as
+rows (`flows.key = 'antibiotics'`, migration 012); this is it as a lead meets
+it. A choice's reply and the question after it go out as **one text**.
+
+```
+q1  eDrugstore: Hi {first_name}, did you recently request more info about
+    ordering antibiotics online? Reply 1. Yes, 2. No. Reply STOP to opt out.
+      1 Yes  +20  "Great! Let's get you started."                        -> q2
+      2 No    +0  "No problem."                                          -> q1-a
+
+q2  Have you used telemedicine to get prescription medication before?
+    Reply 1. Yes, 2. No.
+      1 Yes  +15  "Great. eDrugstore makes the online consultation process simple."   -> q3
+      2 No    +5  "No problem. You can complete your information online and,
+                   when required, consult with a licensed healthcare provider."  -> q3
+
+q3  Ready to move forward? Reply 1. I know which antibiotic I need,
+    2. Talk to an agent for options & discounts, 3. Order online.
+      1 I know which antibiotic  +30  "Great. Start your online consultation here:
+                                       https://www.edrugstore.com/anti-ez"        ends: completed
+      2 Talk to an agent         +45  "Thanks! An eDrugstore representative will contact you
+                                       to discuss available options, pricing and discounts."  ends: completed
+      3 Order online             +10  "Great! Start your online order and consultation here:
+                                       https://www.edrugstore.com/anti-ez"        ends: completed
+
+q1-a  Would you like to receive special offers from eDrugstore? Reply 1. Yes
+      for offers, 2. Learn more from a rep, 3. No thanks, or STOP to unsubscribe.
+      1 Special offers  +0  "Thanks! You'll receive special offers from eDrugstore.
+                             Reply STOP to opt out."                      ends: offers
+      2 Learn more      +0  "Thanks! An eDrugstore representative will
+                             contact you shortly."                        ends: wants_contact
+      3 No thanks       +0  "No problem. Thanks for your time."           ends: declined
+```
+
+Replying at all: +10, once. Finishing the three questions (an ending of
+`completed`): +10. Tiers are unchanged: HOT 75-100, WARM 45-74, LOW 1-44.
+
+| Path | Score | Tier | Then |
+|---|---|---|---|
+| Yes, Yes, Talk to an agent | 100 | HOT | Agents call, first |
+| Yes, No, Talk to an agent | 90 | HOT | |
+| Yes, Yes, I know which | 85 | HOT | Gets the link, and a call |
+| Yes, No, I know which | 75 | HOT | The lowest HOT - one point less is WARM |
+| Yes, Yes, Order online | 65 | WARM | Gets the link, and a call after the HOT ones |
+| Yes, No, Order online | 55 | WARM | |
+| No, then Special offers | 10 | LOW | **Not in the agents' queue** - marked Offers on Admin > Leads |
+| No, then Learn more | 10 | LOW | In the queue, tagged **Wants a call** |
+| No, then No thanks | 10 | LOW | **Not in the agents' queue** - marked Not interested on Admin > Leads |
+
+**`q1-a` is the offers question: a sub-question of question 1**, asked only of
+a lead who said No to it. The screens call it "Q1-a". Sub-questions are named
+after their parent - `q1-a`, `q1-b` - a rule for every flow, Jeel's,
+2026-10-06: `FLOWS.md`, "Naming a question".
+
+**Decisions in it, and whose:**
+
+- **"No thanks" is a third answer to the offers question** - Jeel, 2026-10-06.
+  A lead who wanted neither offers nor a rep had only STOP to say so, which
+  takes them off every list - and a frustrated lead types it. Typed anyway,
+  "no" was an unclear reply: "Sorry, please reply 1 for offers, 2 to learn
+  more...", and a second "no" got "a representative will follow up with you
+  directly" and a place in the agents' queue. Someone who had declined three
+  times was promised a call. Now it is understood, thanked, and left alone:
+  out of the queue, Not interested on Admin > Leads, still subscribed. With
+  the option printed the text is 158 characters - one segment.
+
+- **Agents call everyone who finishes** - Jeel. "Order online" leads get the
+  link and may still not finish alone; they are WARM, so they come after the
+  leads who asked for a call.
+- **"I know which antibiotic" gets the link straight away** - the client. Its
+  first answer was a follow-up question ("order online, or a call from a
+  rep?"), which led to the same two places as choices 2 and 3.
+- **LEARN MORE, not INFO** - the client's script said "reply INFO". EZ Texting
+  keeps INFO for itself: it answers with the account's help text and the lead
+  never gets ours (found by texting it, 2026-10-05). The client chose "Learn
+  more" instead.
+- **The offers step takes 1, 2 and 3 as well as the words** - Jeel, so it is
+  answered like every other question.
+- **"Learn more" is not HOT** - Jeel. That lead said No to the first question;
+  putting them above leads who said Yes would push buyers down. They keep
+  their 10 points, and the tag says why they are in the queue.
+- **The word "call" is not promised** to a Learn more lead - the client: "a
+  representative will contact you".
+- **Unclear replies repeat the options** - the client agreed; its script had
+  one "sorry" for every question, which did not say what to reply.
+
+**Accepted replies.** The number, or one of the choice's words, as the whole
+reply, any case - or the choice's name, or the option as it was printed
+("1. Yes"): rule 3 has every form.
+
+| | Choice 1 | Choice 2 | Choice 3 |
+|---|---|---|---|
+| q1 | 1, yes, y, yeah, yea, ya, yep, yup, yes please, sure, ok, okay, correct | 2, no, n, nope, nah, no thanks, no thank you | - |
+| q2 | 1, yes, y, yeah, yea, ya, yep, yup, yes please, i have | 2, no, n, nope, nah, never, not yet | - |
+| q3 | 1, i know, know, i know which one | 2, agent, talk, call, call me, talk to an agent | 3, online, order, order online |
+| q1-a | 1, yes, y, yeah, yea, ya, yep, yup, yes please, offers, offer | 2, learn more, learn, more, learnmore | 3, no, n, nope, nah, no thanks, no thank you, not interested |
+
+*(2026-10-06, from the real-phone test: "Yea" got the "sorry" text. `yea`
+and `ya` were added to every Yes, and the offers question's Yes was given the
+same list as the others.)*
+
+**The unclear-reply texts:**
+
+| Question | Text |
+|---|---|
+| q1, q2 | Sorry, please reply 1 for Yes or 2 for No. |
+| q3 | Sorry, please reply 1. I know which antibiotic I need, 2. Talk to an agent, or 3. Order online. |
+| q1-a | Sorry, please reply 1 for offers, 2 to learn more from a rep, 3 for no thanks, or STOP to unsubscribe. |
+| second unclear reply, any question | Thanks! An eDrugstore representative will follow up with you directly. |
+
+**Drafted here, not in the client's script** - to be confirmed in its test
+run: the reply to Special offers, the offers "sorry", the numbers on the
+offers question, and its third option, No thanks, with its reply.
+
+**Two texts run past 160 characters** and are billed as two segments: the
+replies to q2 joined with q3 (189 and 243 characters). One text was kept
+anyway, so a reply and its question cannot arrive out of order. Admin >
+Configuration shows each text and its segment count.
+
+## What is built
 
 | File | Holds |
 |---|---|
-| `core/state-machine.ts` | `step()` and `tierFor()` - every branch below, and scoring |
-| `core/answers.ts` | `matchAnswer()` - the numbers and the word lists |
-| `api/reply-flow.ts` | Loads the conversation and rules, runs `step`, saves, sends |
-| `core/state-machine.test.ts` | 54 tests, one per case in "Tests the state machine needs", plus which replies need a person |
-| `api/__tests__/webhooks.test.ts` | 43, including the flow advancing through the webhook and flagging a reply for a person |
+| `core/state-machine.ts` | `step()`, `tierFor()`, `firstQuestion()` - every rule below, for any flow |
+| `core/answers.ts` | `matchChoice()` - a reply against one question's choices |
+| `db/flows.ts` | Reads a flow; starts a conversation in the active one |
+| `api/reply-flow.ts` | Loads the conversation and its flow, runs `step`, saves the answer row, sends |
+| `core/state-machine.test.ts`, `core/answers.test.ts` | 83 tests: every branch of the antibiotics flow, every rule below, and a five-question flow run on the same code |
+| `api/__tests__/webhooks.test.ts` | 53, including the flow advancing through the webhook, flagging a reply for a person, and a reply before our text |
+| `scripts/flows-live-check.ts` | Against a real Postgres: a second flow added as rows only, walked end to end |
 
-A reply now advances the conversation. Verified against the live account on
-2026-09-21: replies of 3, 1, 1 walked a lead from step 1 to `completed`, score
-100, HOT, with question 2, question 3 and the thanks arriving as real SMS, and
-Admin > Leads showing Completed rather than Awaiting reply.
+The first flow - health & wellness, three questions with three choices each -
+was verified against the live account on 2026-09-21. It is kept, inactive, as
+the flow `wellness`.
 
 Two things deliberately not where the spec's sketch might suggest:
 
@@ -52,22 +180,28 @@ The core is a pure function, no database and no network, so every branch below
 is unit-testable:
 
 ```
-step(conversation, reply, rules) -> { conversation', send: messageKey | null, blockNumber: boolean, needsPerson: boolean }
+step(conversation, reply, rules) -> { conversation', send: string[], blockNumber, needsPerson, answer }
 ```
 
-`needsPerson` is what sets `has_unread_inbound` - "Which replies need a
-person", below.
-
-- `conversation` - the current row: status, step, q1-q3, invalid_count, score, tier.
+- `conversation` - the current row: status, the question the lead is on
+  (`current_question_id`; `step` holds that question's position - an order,
+  not a number the screens print),
+  invalid_count, score, tier, end_outcome.
 - `reply` - the inbound text and the payload's `optOut` flag.
-- `rules` - scoring rules, tiers and settings, loaded by the caller.
-- `send` - which copy to send (`question_2`, `message_clarify_2`, ...), or null.
-  The caller renders it with `core/messages.ts` and sends it.
+- `rules` - the conversation's flow, the tiers and settings, loaded by the
+  caller.
+- `send` - the texts to send, in order, as **one** SMS: a choice's reply and
+  then the next question, or a clarification alone. Empty when nothing is
+  sent. The caller fills in `{first_name}` (`core/messages.ts`) and sends it.
 - `blockNumber` - the caller adds the phone to `dnc_list`.
+- `needsPerson` - sets `has_unread_inbound`: "Which replies need a person",
+  below.
+- `answer` - the answer this reply gave, for the caller to write to
+  `conversation_answers`; null when it gave none.
 
-The webhook loads the lead's newest conversation, calls `step`, saves the
-result, sends, and records the send - in that order, in one transaction except
-the send itself (see "Sending").
+The webhook loads the lead's newest conversation, calls `step`, and saves the
+result in one transaction, which it commits. Then, outside it, the text is
+recorded as `sending`, sent, and its id recorded (see "Sending").
 
 **The conversation row is locked while that happens** (`FOR UPDATE`, added
 2026-09-22). Two texts sent moments apart arrive as two requests at once;
@@ -78,7 +212,8 @@ in parallel: verified by holding one conversation for six seconds, during which
 that lead's reply waited and four other leads' replies completed in 0.2s each.
 
 Answer matching is a separate pure function the state machine calls:
-`matchAnswer(text, step) -> 1 | 2 | 3 | null`.
+`matchChoice(text, choices)` - the choice of the current question the reply
+names, or null.
 
 ---
 
@@ -86,8 +221,8 @@ Answer matching is a separate pure function the state machine calls:
 
 | Status | Meaning | Automated questions? |
 |---|---|---|
-| `open` | Waiting for the answer to question `step` (1-3) | Yes |
-| `completed` | All three answered, scored and tiered | No |
+| `open` | Waiting for the answer to the question the lead is on | Yes |
+| `completed` | The flow ended on a choice. `end_outcome` says how: `completed` (the questions are answered), `offers`, `wants_contact`, or `declined` | No |
 | `review` | Too many unclear replies; a human takes over | No |
 | `suppressed` | Opted out | Never |
 | `expired` | Went quiet past the expiry window | No |
@@ -142,13 +277,15 @@ on phone, so the block holds whatever lead or conversation the number later
 belongs to. From then on:
 
 - no automated text of any kind goes to that number;
-- if the number is delivered again as a new lead, the poller saves it as
-  suppressed and sends nothing;
+- if the number is delivered again, the poller skips it - we already hold the
+  lead. A blocked number we hold no lead for is saved as suppressed. Nothing
+  is sent either way;
 - agents cannot call or text it, and the
   queue never shows a number that is on `dnc_list`, whatever its conversation
   status;
 - Admin > Leads shows it as Opted out;
-- START does not unblock it - see "Opting back in".
+- START lifts the block, but the conversation stays suppressed and the
+  questions do not restart - see "Opting back in".
 
 ### 2. Conversation not `open`
 
@@ -162,11 +299,16 @@ implemented.
 when the questions cannot handle a reply: rule 2 above, and rule 2b below - a
 message to an agent who took the conversation over. `step()` returns this as
 `needsPerson`, so the rule lives beside the others; a lead with no conversation
-at all is flagged too, since nothing handles their message either.
+at all is flagged too, since nothing handles their message either - and so is
+one whose conversation is on a question its flow does not have.
 
-Never flagged: a valid answer, an unclear reply (the clarification, or the move
-to review, is the response - and `review` is how that lead reaches a person),
-and an opt-out.
+Since 2026-10-06 it is also set in two cases outside `step()`, both in
+`api/reply-flow.ts`: a reply while our text has been unsent for over two
+minutes (rule 2c), and a lead whose reply text failed to send ("Sending").
+
+Not flagged by the reply itself: a valid answer, an unclear reply (the
+clarification, or the move to review, is the response - and `review` is how
+that lead reaches a person), and an opt-out.
 
 **Why.** The flag is the queue's *Inbound reply*, and it decides who is in the
 queue. It used to be set on every reply, so a lead simply answering "1" read as
@@ -216,61 +358,110 @@ take-over: the questions must not stop on the strength of a message the lead
 never received. `scripts/agent-sms-live-check.ts` proves that, and proves a real
 reply after the handoff gets no question, no score and no clarification.
 
+### 2c. A reply before our text has gone out - Decided by Jeel, 2026-10-06
+
+A lead texts "Yes" and, a second later, "yes" again - a double tap, or they
+thought the first had not gone.
+
+| Time | The lead | Before this rule | Now |
+|---|---|---|---|
+| 10:00:20 | Sends **Yes** | Question 1 = Yes. Question 2 starts on its way | The same |
+| 10:00:21 | Sends **yes** again | Question 2 = Yes - a question they have not seen. Question 3 is sent on top of it | Kept in the thread. Nothing saved, scored or sent |
+| 10:00:23 | Receives question 2 | ...and question 3 with it | Question 2 alone |
+| 10:01:00 | Answers question 2 | Read as the answer to question 3 | Question 2 = their real answer |
+
+The wrong answer could not be corrected - an answer row is written once - and
+its points moved the lead in the queue. Two unclear texts in a row did the
+same to the one "sorry" a question allows, and sent the lead to review.
+
+**The rule:** the conversation records when the text the lead has to answer -
+a question, or its "sorry" - has actually gone out (`question_sent_at`). It is
+cleared the moment we owe them one, and set when it has been sent. **A reply
+that arrives while it is empty is not an answer**: the message is stored,
+nothing else changes, nothing is sent. `api/reply-flow.ts`,
+`repliedBeforeOurText`.
+
+- **Never for an opt-out.** STOP works whatever state anything is in.
+- **Only while the questions are running.** A finished conversation, or one an
+  agent took over, is handled by rules 2 and 2b as before.
+- **If our text has been unsent for more than two minutes** it is not on its
+  way - it failed, or was never tried - and the lead is waiting on something
+  that will not come. Their reply is flagged for a person (`has_unread_inbound`,
+  the queue's Inbound reply). A send gives up after 30 seconds, so two minutes
+  is well clear of one still in flight.
+- **This covers the first question too.** A lead who texts before it has gone
+  out has not answered it.
+
+**What it cannot catch:** a reply sent a few seconds after our text left,
+while that text was still on its way to the phone. Nothing on our side can
+tell that from a fast answer.
+
 ### 3. A valid answer to the current question
 
-`matchAnswer(text, step)` returns a choice. Accepted forms - the number, or at
-most three words per option (decided 2026-09-17):
+`matchChoice` returns one of the current question's choices. Accepted, as the
+whole reply:
 
-| | Option 1 | Option 2 | Option 3 |
-|---|---|---|---|
-| Q1 | 1, supplements, supplement | 2, telehealth, rx | 3, both |
-| Q2 | 1, today | 2, this week, week | 3, researching |
-| Q3 | 1, call, call me | 2, text, text me | 3, later |
+| Form | Examples |
+|---|---|
+| The choice's number | `2`, `2.`, `(2)`, `Option 2` |
+| One of its words - the lists are with the flow, above (`flow_choices.words`) | `no`, `Nope.`, `yes 👍` |
+| Its name, as the screens show it (`flow_choices.label`) | `Talk to an agent` |
+| The option as it was printed: the number, then text beginning with a word or the name of that same choice | `1. Yes`, `2) Talk to an agent for options & discounts` |
 
-Before matching, the reply is lowercased and trimmed, trailing punctuation is
-dropped, and a leading `option` or `#` is stripped - so `1.`, `Option 1` and
-`Supplements!` all match.
+Before matching, the reply is lowercased and everything that is not a letter
+or a digit becomes a space - so punctuation, brackets and emoji never decide
+the outcome - and a leading `option` is dropped.
 
+*(2026-10-06, from review: until then only trailing `.!?,;:` was dropped, so a
+lead who typed the option the way the question printed it - "1. Yes" - or
+"No, thanks", or added an emoji, was told "Sorry, please reply 1 for Yes or 2
+for No", and sent to a person on the second try. "yes please" and "no thank
+you" were added to the words the same day.)*
+
+- **Only the choices that question has.** Question 1 has two: `3` is not an
+  answer to it.
 - **The whole message must be one of the accepted forms.** No matching inside a
-  sentence, or "not today" would count as "today" and "I don't want
-  supplements" as supplements.
-- **Anything else is unclear** and goes to rule 4. That includes every sentence
-  and anything ambiguous, such as "both today" - a human reads those.
-- The word list is fixed in code. If the client wants to edit it, it moves to
-  `settings` like the message copy.
+  sentence, or "no, I want to talk to someone first" would count as No, and "I
+  don't know which one" as "know".
+- **Anything else is unclear** and goes to rule 4 - every sentence, and
+  anything ambiguous. A human reads those. `1 no` names two choices, so it is
+  neither.
+- **A message over 80 characters is never an answer**, and is not examined:
+  an answer is a number or a few words.
+- **The same word can mean different things on different questions.** "yes" is
+  an answer to q1, q2 and the offers question; "call" only to q3.
 
 On a valid answer:
 
-- Save the choice to `q{step}`.
+- Write one row to `conversation_answers`: the question, the choice, and the
+  choice's label and points as they are at that moment.
 - Reset `invalid_count` to 0.
-- Add points - see "Scoring".
-- If `step` < 3: `step + 1`, send `question_{step+1}`.
-- If `step` = 3: status `completed`, add the completion award, send
-  `message_thanks`.
+- Add the choice's points - see "Scoring".
+- **If the choice names a next question:** move the lead to it, and send the
+  choice's reply and that question as one text.
+- **If the choice ends the flow:** status `completed`, `end_outcome` from the
+  choice, the completion award if that outcome is `completed`, and send the
+  choice's reply.
+- **If the choice names a question the flow cannot go to** - one it does not
+  have, or one at or before the current question, which would ask it again and
+  score it twice - the rows are wrong, not the lead: the answer is kept,
+  status becomes `review`, and the flow's review text is sent. No completion
+  award. The database refuses most such rows (`FLOWS.md`, "Rules the database
+  enforces"); this is for what it cannot (2026-10-06 - before, such a lead was
+  quietly marked completed).
 
 ### 4. Anything else - an unclear reply
 
 - If `invalid_count` < `settings.max_invalid_before_review` (seeded `1`):
-  increment it and send `message_clarify_{step}`. The step does not change.
-- Otherwise: status `review`, send `message_review`.
+  increment it and send the question's own clarification
+  (`flow_questions.clarify_body`). The lead stays on that question.
+- Otherwise: status `review`, send the flow's review text. The conversation
+  stays on the question the lead could not answer, so the screens can say
+  where they got stuck.
 
 **One clarification per question - Decided by Jeel, 2026-09-19.** Each repeats
-that question's options, so the lead is reminded what the numbers mean:
-
-| Step | `settings` key | Text |
-|---|---|---|
-| 1 | `message_clarify_1` | Sorry, please reply with just a number: 1. Supplements, 2. Telehealth/Rx, or 3. Both. |
-| 2 | `message_clarify_2` | Sorry, please reply with just a number: 1. Today, 2. This week, or 3. Just researching. |
-| 3 | `message_clarify_3` | Sorry, please reply with just a number: 1. Call me now, 2. Text me, or 3. Contact me later. |
-
-The options are numbered `1.` rather than `1` (Jeel, 2026-09-22): the dot
-separates the number from the word at a glance. The same change applies to the
-three questions. It costs three characters, which the opener paid for by
-dropping the word "options" - otherwise a name of six letters or more would push
-it past one segment and be dropped by `core/messages.ts`.
-
-It says "just a number" although words are accepted too; asking for a number
-keeps the next reply as simple as possible.
+that question's options, so the lead is reminded what the numbers mean. The
+texts are with the flow, above.
 
 **Decided: the count is per question.** It resets to 0 on every valid answer. A
 lead who fumbles question 1 and then answers it should not arrive at question 2
@@ -280,57 +471,46 @@ An unclear reply still earns the "responded" points - see "Scoring".
 
 ---
 
-## The word is kept with the answer
+## An answer keeps what it was
 
-Added 2026-10-01, migration 009. An answer is stored as the number the lead
-chose - `q1 = '1'` - because that is what scoring reads. Since this migration
-the choice's name at that moment is stored beside it: `q1_label = 'Supplements'`.
+An answer is its own row in `conversation_answers`, written once when the
+reply is accepted, and never changed - the table refuses edits. The row holds
+the choice's **label and points as they were at that moment**.
 
-**Why.** Every screen used to turn the number into a word by looking up the
-choice's *current* name. The client wants to rename choices and add new ones;
-from that day a lead who chose "Supplements" last week would have read as
-whatever choice 1 is called this week. Once a name changes there is no way to
-recover what an earlier lead was offered, so the word is kept from before any
-name is touched.
+**Why.** The client renames choices, adds new ones and changes points. A lead
+who chose "Supplements" last week must still read "Supplements" after choice 1
+is called something else, and their score breakdown must still add up after
+the points change. Once a flow changes there is no way to recover what an
+earlier lead was offered, so it is kept from the start. (Migration 009 did
+this for the label, in columns; migration 012 moved it to rows and added the
+points.)
 
-- **Written once**, when the reply is accepted as an answer, from
-  `scoring_rules.label` as it is then (`api/reply-flow.ts`, `newAnswerLabels`).
-  An unclear reply, or one after the questions ended, writes none.
-- **Never rewritten.** Renaming a choice afterwards changes what new leads get,
-  not what earlier ones have.
-- **What the screens show**: the queue, the lead card and its score breakdown,
-  the incoming-call card, and the conversation view. A row with an answer and
-  no saved word falls back to the current name.
-- **Existing answers were filled in by the migration** with today's names,
-  which are the true ones for them: no name had ever been changed.
-
-Not kept: the *points* an answer earned. The conversation's score is stored, so
-it does not move, but the breakdown lists each answer's points from the rules
-as they stand - if points are changed later, an old lead's breakdown will no
-longer add up to their score. To settle when points become editable.
-
-Nothing else about the flow changes: three questions, three choices each.
+- **What the screens show**: the saved label and points - on the queue, the
+  lead card and its breakdown, the incoming-call card and the conversation.
+- **Changing a flow** changes what the next lead gets, never what an earlier
+  one has. `scripts/lead-detail-live-check.ts` renames a choice and re-scores
+  it, and checks both leads.
 
 ## Scoring
 
-Rules come from `scoring_rules`; tiers from `tiers`. Both are read when the
-reply is processed, never cached across replies, so a change takes effect on
-the next reply. *(They were to be admin-editable; since 2026-09-23 they are
-changed only by a migration - CLAUDE.md §10.)*
+Points come from the flow - each choice's `points`, and the flow's
+`responded_points` and `completed_points`; tiers from `tiers`. All are read
+when the reply is processed, never cached across replies, so a change made by
+a migration takes effect on the next reply.
 
-| Award | Code | When |
-|---|---|---|
-| Responded | `responded` | Once, on the first inbound reply that is not an opt-out, valid or not |
-| Answer | `q{n}_{choice}` | Each valid answer |
-| Completed | `completed` | Once, on the valid answer to question 3 |
+| Award | When |
+|---|---|
+| Responded | Once, on the first inbound reply that is not an opt-out, valid or not |
+| Answer | Each valid answer: that choice's points |
+| Completed | Once, when the flow ends with the outcome `completed` - not on the offers branch |
 
 **Decided: score and tier are updated on every reply, not only on completion.**
 A lead who answers question 1 and goes quiet is a real responder, and the queue
 shows responders; with a score of 10 or more they carry a tier like everyone
 else. *(2026-09-28: the queue no longer shows a lead partway through - only
 completed, needs review, an inbound reply, or one being worked - `QUEUE.md`. A
-partway lead still carries its running score and tier, on Admin > Leads.)* The schema doc explains why this is what fills the LOW band - completed
-conversations never score below 40.
+partway lead still carries its running score and tier, on Admin > Leads.)* On the antibiotics flow a lead who finishes the three questions scores 55 to
+100, so LOW is a lead partway, in review, or one who said No (10).
 
 The tier is the `tiers` row whose range contains the score. A score of 0, which
 means no reply yet, has no tier.
@@ -431,10 +611,24 @@ left it `expired`, set `has_unread_inbound`, and sent nothing.
   The conversation still advances when a send is refused: the lead's answer is
   recorded, and only the message is withheld. Its `conversation.advanced` log
   line says `"sent": false`, so the case is visible.
-- Every automated send uses the copy in `settings`, rendered by
-  `core/messages.ts` (`{first_name}`, one-segment limit), and is recorded in
-  `messages` with the id EZ Texting returns - that id is what links the lead's
-  next reply back to it.
+- Every automated send is rendered by `core/messages.ts` (`{first_name}`) and
+  recorded in `messages` with the id EZ Texting returns - that id is what links
+  the lead's next reply back to it. The questions and replies come from the
+  lead's flow and are sent whole, however long: a reply and its question are
+  one text. The first question and the missed-call text keep the one-segment
+  limit, dropping the name if it would not fit.
+- **A lead whose text did not go out is flagged for a person** - 2026-10-06,
+  from review. They answered and heard nothing back, the conversation is on a
+  question they never received, and nothing retries it; partway through the
+  questions they are not in the queue either, so they would have sat unseen
+  until they expired - every lead who replied during an EZ Texting outage.
+  The reply flow now sets `has_unread_inbound`, which puts them in the queue
+  as an inbound reply, with the failed text in the thread. Not for a blocked
+  number.
+- **A send that timed out is not treated as refused** - calls to EZ Texting
+  give up after 30 seconds, and a text cut off that way may still have gone
+  out. Its row stays `sending`, so it is never sent a second time;
+  `db/outbound.ts`.
 - The database changes commit first, then the send happens. A failed send is
   logged and leaves the conversation where it is; it does not roll the answer
   back. The lead has answered, and losing that would be worse than a missing
@@ -510,12 +704,12 @@ blocked.
 |---|---|
 | Phone on `dnc_list`, or the contact is `optOut` in EZ Texting | Nothing, ever. Added to `dnc_list` if it was not already |
 | Newest conversation `open` - mid-flow | Nothing. Restarting would send question 1 to someone partway through |
-| Newest conversation `completed`, `expired` or `review` | New conversation at step 1 on the same lead, opener sent |
+| Newest conversation `completed`, `expired` or `review` | New conversation on the flow's first question, on the same lead, opener sent |
 | Newest conversation `suppressed` | Nothing, ever - the number opted out |
 
 One person is always one lead row; each return is a new conversation on it.
-The new conversation starts clean: step 1, no answers, `invalid_count` 0, score
-0, no tier.
+The new conversation starts clean: the first question, no answers,
+`invalid_count` 0, score 0, no tier.
 
 **The earlier conversation is kept exactly as it ended.** Its status -
 `completed`, `expired` or `review` - its answers, score and tier are never
@@ -570,22 +764,23 @@ someone who asked us not to.
 
 All against the pure function, no database:
 
-- The happy path: 3, 1, 1 (Both, Today, Call me now) → `completed`, score 100, HOT.
-- Every scoring combination lands in the tier its score implies.
-- A word answer ("supplements", "this week", "call me") and a near-miss number
+- Every path through the antibiotics flow, with its texts, score and tier.
+- "No" on question 1 goes to the offers question, not question 2; none of
+  its three endings earns the completion award.
+- A word answer ("yes", "nope", "agent", "learn more") and a near-miss number
   ("1.", "Option 2", "#3") each count as valid.
-- A sentence containing a valid word ("not today") is unclear, not an answer.
-- One unclear reply → clarification, same step. A second → `review`.
-- Unclear on question 1, valid, then unclear on question 2 → clarification, not
+- A number the question does not have ("3" on question 1) is unclear.
+- A sentence containing a valid word is unclear, not an answer.
+- One unclear reply → that question's clarification, same question. A second
+  → `review`.
+- Unclear, valid, then unclear on the next question → clarification, not
   review, because the count reset.
-- STOP at step 1, 2 and 3 → `suppressed`, number blocked, nothing sent.
+- STOP on any question → `suppressed`, number blocked, nothing sent.
 - STOP after `completed` → number blocked, status stays `completed`.
 - Any reply after `completed`, `review`, `expired` or `suppressed` → nothing
-  sent, conversation unchanged.
-- A lead who answers question 1 and stops scores 15, 20 or 25 depending on the choice, and is LOW.
+  sent, conversation unchanged, flagged for a person.
 - `responded` is awarded once only, however many replies arrive.
-- A reply to an `expired` conversation → nothing sent, conversation stays
-  `expired`, lead flagged unread so the queue shows it as Inbound reply.
+- A flow with five questions, defined in the test, runs on the same code.
 
 Plus integration tests for the webhook wiring, in the style of
 `backend/src/api/__tests__/webhooks.test.ts`.
@@ -594,7 +789,15 @@ Plus integration tests for the webhook wiring, in the style of
 
 ## Open items
 
-None.
+Found in review on 2026-10-06, left as it is:
 
-**Parked:** EZ Texting's automatic STOP reply signs as "PillRx", the account's
-brand, while our opener signs as "Secure Medical". Jeel: not needed now.
+- **"No" to question 3 has no answer of its own.** "Ready to move forward?"
+  answered "no" or "not yet" is an unclear reply, and a second one sends "a
+  representative will follow up with you directly" and the lead to Needs
+  review. Left as it is: this lead did ask for information, so a person
+  following up is not wrong the way it was on the offers question (fixed the
+  same day - "No thanks", above).
+
+**Parked:** EZ Texting's automatic STOP and HELP replies are the account's own
+wording, not ours. On 2026-10-05 the HELP reply still read "PillRx Alerts";
+the client said it has updated it. Our texts sign as eDrugstore.

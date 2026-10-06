@@ -1,19 +1,24 @@
 import { describe, expect, it } from 'vitest';
-import { answer } from './QueuePage';
+import { answersText, answersTitle } from './QueuePage';
 
-describe('an answer in the queue', () => {
-  it('shows the word saved with it, not the choice\'s built-in name', () => {
-    // Choice 1 of question 1 is "Supplements" in the built-in names; this lead
-    // picked it when it was called something else.
-    expect(answer(1, '1', 'Vitamins')).toBe('Vitamins');
+const answers = [
+  { key: 'q1', heading: 'Requested info', label: 'Yes' },
+  { key: 'q2', heading: 'Used telemedicine', label: 'No' },
+  { key: 'q3', heading: 'Next step', label: 'Talk to an agent' },
+];
+
+describe('a lead\'s answers in the queue', () => {
+  it('are one cell, in order, however many the flow asked', () => {
+    expect(answersText(answers)).toBe('Yes · No · Talk to an agent');
+    expect(answersText(answers.slice(0, 1))).toBe('Yes');
   });
 
-  it('falls back to the built-in name for a row with no saved word', () => {
-    expect(answer(1, '1', null)).toBe('Supplements');
+  it('name their questions on hover', () => {
+    expect(answersTitle(answers)).toBe('Requested info: Yes\nUsed telemedicine: No\nNext step: Talk to an agent');
   });
 
-  it('is a hyphen when the question has not been answered', () => {
-    expect(answer(2, null, null)).toBe('-');
-    expect(answer(2, null, 'Today')).toBe('-');
+  it('are a hyphen when nothing has been answered', () => {
+    expect(answersText([])).toBe('-');
+    expect(answersTitle([])).toBeUndefined();
   });
 });
