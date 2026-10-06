@@ -72,7 +72,7 @@ docker compose exec postgres psql -U app -d leads \
 | `NODE_ENV` | `production` turns on the Secure cookie flag, RDS SSL, and the three start-up refusals: a weak `JWT_SECRET`, no `EZT_WEBHOOK_TOKEN`, and Twilio settings only partly set. Set by the compose files; no need to change it in `.env`. |
 | `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_API_KEY`, `TWILIO_API_SECRET`, `TWILIO_TWIML_APP_SID`, `TWILIO_PHONE_NUMBER`, `PUBLIC_URL` | Browser calling (`TWILIO.md`). All empty: calling is off and everything else works. All set: calling is on. Some set: off locally with a warning, and **the API refuses to start in production**. Where each comes from is in `.env.example`. |
 | `TWILIO_TRANSCRIPTION_SERVICE_SID` | Optional, apart from the seven. Set, every call is recorded and transcribed (`TWILIO.md`, "Recordings and transcripts"); empty, nothing is recorded. `npm run twilio:configure -- --transcription` creates the service and prints the id. Needed by both the api and the worker |
-| `PORT`, `SERVICE_NAME` | Not in `.env.example`; set by the compose files where needed. `PORT` is the API's port, 3000 by default. `SERVICE_NAME` is the `svc` field on every log line (`api`, `worker`). |
+| `PORT`, `SERVICE_NAME` | Not in `.env.example` and not set by the compose files. `PORT` is the API's port, 3000 by default. `SERVICE_NAME` overrides the `svc` field on every log line, which is otherwise worked out from the entry point (`api`, `worker`). |
 | `CADDY_DOMAIN` | Not read by anything. The production `Caddyfile` names `dailyleadhub.com` directly. |
 
 Never commit `.env`.
@@ -118,13 +118,20 @@ cd frontend && npm test && npm run lint    # 273 tests   (counts as of 2026-10-0
 **Live checks** prove the SQL against a real Postgres, because a mocked pool
 says nothing about aggregates, date windows, transactions or races. Each one
 refuses to run against a database that holds leads. Its header comment gives
-the command to run one by hand. To run them, each on its own scratch database:
+the command to run one by hand (the flows check points at `live-checks.sh
+flows`). To run them, each on its own scratch database:
 
 ```bash
 cd backend
 scripts/live-checks.sh              # all of them
 scripts/live-checks.sh flows queue  # just these
 ```
+
+There are fifteen live checks, covering the SMS flows (a second flow added as
+rows only), the queue, claims, the read flag, the lead card,
+the timeline, callbacks, dispositions, agent SMS, calls (outgoing, incoming and
+missed), the activity log, Admin > Leads, the admin read models, health and
+the opener retry.
 
 **How fast it is with a lot of leads** is a separate check - it loads 50,000
 fake leads into an empty scratch database and times the read behind every
@@ -138,12 +145,6 @@ DATABASE_URL=postgres://app:app@localhost:5433/speed JWT_SECRET=x EZT_USERNAME=x
   EZT_PASSWORD=x EZT_GROUP=weightloss EZT_SEND_GROUP=weightloss npm run speed -- 50000
 ```
 
-There are fifteen, covering the SMS flows (a second flow added as rows only),
-the queue, claims, the read flag, the lead card,
-the timeline, callbacks, dispositions, agent SMS, calls (outgoing, incoming and
-missed), the activity log, Admin > Leads, the admin read models, health and
-the opener retry.
-
 **The end-to-end script** runs the whole system in one go - a lead arrives,
 answers the antibiotics flow's questions through the real webhook, is scored, reaches the queue,
 is claimed, worked, dispositioned, and finally blocked:
@@ -155,7 +156,7 @@ docker compose exec -e DATABASE_URL=postgres://app:app@postgres:5432/e2e api   n
 docker compose exec -e DATABASE_URL=postgres://app:app@postgres:5432/e2e   -e EZT_SEND_GROUP=stub api npm run e2e
 ```
 
-Fifty checks. EZ Texting is stubbed at the HTTP boundary, so it proves
+Fifty-two checks. EZ Texting is stubbed at the HTTP boundary, so it proves
 everything up to the moment a text would leave the building - and nothing about
 whether a real phone buzzes. For that, set the real `EZT_*` values and add your
 own number to the test group, as "Sending" above describes.
@@ -177,9 +178,9 @@ voicemail, by Twilio's detection, which is not always right. There is no
 voicemail drop, transfer or hold, and the recording's audio is not played in
 the app. **Never run `twilio:configure` locally with production's phone number or
 TwiML App** (2026-10-05): it points both at the laptop and production calling
-stops, silently, until it is run on the server again. Local testing needs its
-own Twilio number and TwiML App in the local `.env` - `TWILIO.md`, "What it
-needs on the Twilio account". Admin > Overview shows no call totals - removed on 2026-09-28
+stops, silently, until it is run on the server again. Calling is not tested
+locally at all (next paragraph); if it ever is again, it needs its own Twilio
+number and TwiML App - `TWILIO.md`, "What it needs on the Twilio account". Admin > Overview shows no call totals - removed on 2026-09-28
 (`ADMIN.md`, "Overview") - though every call is on its lead's timeline.
 
 **Calling is not tested locally** (2026-10-05). The Twilio number is
@@ -209,6 +210,12 @@ question still on its way (`STATE-MACHINE.md`, rule 2c) - but one sent in the
 few seconds after our text left, before it reached the phone, cannot be told
 from a fast answer. And "no" to question 3 has no answer of its own: it is an
 unclear reply, and a second one goes to a person ("Open items").
+
+**A text that timed out is not retried.** A send that gets no answer from EZ
+Texting in 30 seconds may or may not have gone; it is kept as `sending`,
+logged `sms.unconfirmed`, and never sent again - a first question lost that
+way is not retried, because sending it twice is the worse mistake
+(`STATE-MACHINE.md`, "Sending").
 
 **One flow for everyone.** Every new lead gets the one active flow. A flow per
 EZ Texting group, and editing a flow from the website, are not built -

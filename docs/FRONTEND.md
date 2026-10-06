@@ -106,9 +106,18 @@ track and spilled out of it. Found in review; measured, not judged by eye.
   could not be narrower than its widest content, so the long row stretched
   the whole page sideways instead of scrolling.
 
-Measured in the running app at 1280, 1366 and 1440px with counts up to 1,284:
-every option 32px tall, the page never scrolls sideways, the row scrolls
-inside its card.
+Measured in the running app, with all eleven tabs, on 2026-10-06:
+
+| Counts | Row | 1280px | 1366px | 1440px and wider |
+|---|---|---|---|---|
+| Single digits | 1,119px | Scrolls in its card | Scrolls in its card | Fits |
+| Up to 1,284 | 1,328px | Scrolls in its card | Scrolls in its card | Scrolls in its card |
+
+At every width every option is 32px tall - none wraps - and the page itself
+never scrolls sideways. Once the counts reach three digits the row is wider
+than its card everywhere, so the last tabs are reached by scrolling it; if
+that proves awkward in use, the next step is fewer tabs in the row, not
+smaller ones.
 
 **Removed:** the admin sidebar's greyed "Soon" links - Overview, Scoring,
 Messages, DNC list, Settings. Two duplicated live links; the rest were folded
@@ -140,7 +149,7 @@ came back - see below and `QUEUE.md`, "The tag".)*
 bold like Inbound reply. The lead rang and nobody answered; it stays until
 someone gets back to them. `TWILIO.md`, "A missed call".)*
 
-**Only three statuses, and most rows have none - Jeel, 2026-09-28.**
+**Three statuses at first, six now, and most rows have none - Jeel, 2026-09-28.**
 Working – name (was In progress – name), Inbound reply and Needs review, each an icon and the words; any
 other row shows a hyphen, like any other empty cell. New, Attempted 2x and
 Callback 3:00 PM are gone: that history belongs to the agent working the lead
@@ -160,9 +169,10 @@ to say. Which status wins, and why New went too, is in `QUEUE.md`, "The tag".
 Admin > Leads has two more of its own: **Offers**, a price tag, muted - a
 lead who asked for special offers and nothing else - and **Not interested**,
 a circle with a line through it, muted: one who said no to the offers and to
-a rep. Both got their own icon on
-2026-10-06: they had borrowed the chat bubble and the inbound message box,
-which already meant Answering and an unread text on the other screen.
+a rep. Offers, and the queue's Wants a call, got their own icons on
+2026-10-06: they had borrowed the inbound message box and the chat bubble,
+which already meant an unread text and Answering on the other screen. Not
+interested had its own from the start.
 
 The icons are inline SVG outlines on a 24-unit grid, drawn in the text colour
 like the padlock, so a locked row greys its icon with its words.
@@ -235,8 +245,8 @@ uses the link blue. *(Later the same day the DNC list was rebuilt the same way
 as Admin > Leads, switcher included - `ADMIN.md`, "DNC list".)*
 
 **Checked** at 1280, 1366, 1440 and 1920px: all nine statuses stay on one line,
-and nothing overflows the card. *(Ten since 2026-10-05 - see "Ten tabs, and
-the row never wraps", above.)* A row click opens the timeline; no console errors.
+and nothing overflows the card. *(Eleven since 2026-10-06 - see "Eleven
+tabs, and the row never wraps", above.)* A row click opens the timeline; no console errors.
 
 ## My Callbacks - rebuilt 2026-09-28
 
@@ -516,7 +526,7 @@ Internal values and screen words still differ in a few places, on purpose:
 
 | Stored or sent | Shown | Why it stays |
 |---|---|---|
-| conversation `status = 'completed'` | Ready | A database value; renaming it is a migration for no behaviour change. The API's lead status is already `ready` |
+| conversation `status = 'completed'` | Ready - or Offers / Not interested, by `end_outcome` | A database value; renaming it is a migration for no behaviour change. The API's lead status is already `ready` |
 | queue tag kind `working` | Working – name | Same word since 2026-09-28 |
 | Overview `responded`, `completed` | Replied, Completed | Field names in one JSON payload, read in one page |
 
@@ -704,6 +714,7 @@ response or an off-by-one age threshold is not:
 | `components/DateTimeField.test.tsx` | The date and time picker: the month grid, quarter hours, past days off, Clear, Escape |
 | `pages/workspace/LeadHeader.test.ts` | The header's source and Questions wording, a sub-question, "Q1-a", included |
 | `pages/workspace/LeadNotes.test.tsx` | The Notes card: newest first, three then Show all, the author, the empty state |
+| `components/CallTranscript.test.tsx` | A call's transcript: closed until asked for, speakers joined, nothing for an unrecorded call |
 | `pages/workspace/LeadAnswers.test.ts` | The score breakdown's light-blue-to-navy shades, and each line's words |
 | `components/SyncStatus.test.tsx` | The EZ Texting sync line, quiet and amber |
 | `components/Segmented.test.tsx` | The sliding switcher |
@@ -738,8 +749,9 @@ every route lives under `/api`.
 ## Not built
 
 - ~~**Calling.**~~ Built 2026-10-01, Phase 4 - `TWILIO.md`. Outgoing, and
-  incoming to one agent's browser; no call queue, recording, voicemail,
-  transfer or hold, and no card for a caller we hold no lead for.
+  incoming to one agent's browser; no call queue, voicemail box, transfer
+  or hold, and no card for a caller we hold no lead for. Recordings and
+  transcripts were added on 2026-10-02 (`TWILIO.md`).
 - **Live push.** Polling stands in for it, deliberately - see above.
 - **Export CSV** on the DNC list. In the brief, and it hands a file of phone
   numbers to a browser, so it needs Jeel to ask for it.

@@ -215,7 +215,7 @@
   white-space: nowrap;
 }
 
-/* Many options in one row - Admin > Leads has ten. Tighter sides, so they fit
+/* Many options in one row - Admin > Leads has eleven. Tighter sides, so they fit
    from 1366px up with three-digit counts. */
 .segmented--dense .segmented__option {
   padding: 0 var(--space-3);

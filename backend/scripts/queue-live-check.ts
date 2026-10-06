@@ -13,8 +13,8 @@
  *   DATABASE_URL=postgres://app:app@localhost:5433/queue_check REDIS_URL=x JWT_SECRET=x \
  *     EZT_USERNAME=x EZT_PASSWORD=x EZT_GROUP=x npx ts-node --transpile-only scripts/queue-live-check.ts
  *
- * Re-running needs a fresh database: DROP and re-migrate. Last run 2026-09-28,
- * 39 checks, all passing.
+ * Re-running needs a fresh database: DROP and re-migrate - or
+ * `scripts/live-checks.sh queue`. 55 checks as of 2026-10-06.
  */
 import { pool } from '../src/db/pool';
 import { startFlow } from './live-flow';

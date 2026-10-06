@@ -373,8 +373,8 @@ axios rather than `sendMessage`, so the real `dnc_list` check stays in the path
 whatever their flow asked, and nothing for a branch they never took
 (2026-10-05, `FLOWS.md`). **The answer words are the ones saved with each answer** (`conversation_answers`), not the choices' current names - so the chips, the
 breakdown and the incoming-call card keep showing what the lead actually
-picked after a choice is renamed. `STATE-MACHINE.md`, "The word is kept with
-the answer".
+picked after a choice is renamed. `STATE-MACHINE.md`, "An answer keeps what
+it was".
 
 **The newest conversation is the card.** A lateral join picks it, the same way
 the queue and Admin > Leads do. Earlier ones stay on the lead as history; the
@@ -529,9 +529,9 @@ recorded as an answer carries it: `detail.answer`, the choice's label.
 
 **The `scored` event carries how the questions ended** (`endOutcome`,
 2026-10-06). A lead who asked only for offers, or to hear from a rep, has a
-`completed` conversation too; the line reads "Scored 10 · LOW · offers only"
-or "· wants a call" rather than "· completed", which read as the questions
-answered. The timeline page's Status row uses the header's words for the same
+`completed` conversation too; the line reads "Scored 10 · LOW · offers only",
+"· wants a call" or "· not interested" rather than "· completed", which read
+as the questions answered. The timeline page's Status row uses the header's words for the same
 reason.
 
 `getTimeline` returns null for a lead that does not exist, so the route can tell
@@ -562,8 +562,8 @@ events against a real database.
   words.~~ *Done 2026-09-26, `core/score-breakdown.ts`.* The words come from
   the answers saved in `conversation_answers` since 2026-10-05 (`FLOWS.md`);
   before that, `scoring_rules.label` - `Q1: Both` with the prefix stripped - not from the
-  question copy in `settings`. The labels already pair each choice with the
-  points it earns, so one row answers both "what did they say" and "what was it
-  worth"; the question copy is prose written for a lead to read and free to be
-  reworded. The prefix convention is now something code relies on, and
-  `answerLabel` leaves a label without one alone rather than dropping it.
+  question copy in `settings`. Those labels paired each choice with the
+  points it earned, so one row answered both "what did they say" and "what was
+  it worth"; the question copy was prose written for a lead to read and free
+  to be reworded. The prefix convention, and the `answerLabel` function that
+  relied on it, both went with `scoring_rules` on 2026-10-05.

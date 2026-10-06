@@ -33,7 +33,7 @@ export interface LeadDetail {
     agentTookOverAt: string | null;
     /**
      * The question the lead is on, or stopped at, as the screens say it: "Q2",
-     * "Offers" - `core/questions.ts`. Null once the questions are finished.
+     * "Q1-a" - `core/questions.ts`. Null once the questions are finished.
      */
     question: string | null;
     /** Which flow the lead is in: 'antibiotics'. */

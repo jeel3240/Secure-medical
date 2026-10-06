@@ -100,7 +100,7 @@ went a different way:
 | Auth | bcrypt (cost 12) and a JWT in an httpOnly, SameSite=Strict cookie. See `docs/AUTH.md`. |
 | Frontend | React 18, Vite 4, React Router 6, zustand, plain CSS with design tokens. |
 | Production web server | The `caddy` service is built from `frontend/Dockerfile`: the React build copied into a `caddy:2` image. |
-| Calling | Built 2026-10-01: the `twilio` library on the server, `@twilio/voice-sdk` in the browser. Outgoing calls, and incoming calls to one agent's browser; voicemail detection, recordings and transcripts, 2026-10-02. `docs/TWILIO.md`. |
+| Calling | Built 2026-10-01: the `twilio` library on the server, `@twilio/voice-sdk` in the browser. Outgoing calls, and incoming calls to one agent's browser; voicemail detection, recordings and transcripts, 2026-10-02; a recording notice, 2026-10-05. `docs/TWILIO.md`. |
 
 **EZ Texting API notes**
 - Quick start: https://developers.eztexting.com/docs/quick-start-guide
@@ -171,11 +171,11 @@ you change something the docs describe, update the doc in the same commit.
     src/db/notes.ts         agent notes, append-only
     src/api/callbacks.ts    My Callbacks: list, reschedule, mark done
     src/api/calls.ts        browser calling: whether it is set up, and the call token
-    src/api/twilio-webhooks.ts  Twilio's signed webhooks: connect a call, a lead calling in, how it ended
+    src/api/twilio-webhooks.ts  Twilio's signed webhooks: connect a call, a lead calling in, how it ended, who picked up, the recording, the recording notice
     src/core/calls.ts       call rules, pure: identity, outcomes, refusals
     src/db/calls.ts         may this call be placed, who an incoming call rings, and recording it
     src/db/missed-call-text.ts  the text sent after a call to us nobody answered
-    src/integrations/twilio.ts  the only file that uses the twilio library (with twilio-health.ts and the configure CLI)
+    src/integrations/twilio.ts  the file the routes use for the twilio library (twilio-health.ts, twilio-transcripts.ts and the configure CLI use it too)
     src/integrations/twilio-health.ts  the health report's calling check: do the number and the TwiML App point here
     src/integrations/twilio-transcripts.ts  Twilio's transcription service; src/core/transcripts.ts who said what, pure
     src/db/transcripts.ts   call recordings and transcripts; src/worker/transcripts.ts fetches them
@@ -225,7 +225,7 @@ you change something the docs describe, update the doc in the same commit.
     src/db/holder.ts        who holds a lead - checked before every write on it
     src/db/failed-sends.ts  keeps an agent's own text that EZ Texting refused, marked failed
     src/db/outbound.ts      sends an automated text and records it: opener, retry, reply flow, missed-call text
-    src/worker/index.ts     the worker loop: poll, retry openers, expire; src/worker/poller.ts is the poll
+    src/worker/index.ts     the worker loop: poll, expire, retry openers, fetch transcripts; src/worker/poller.ts is the poll
     src/api/app.ts          builds the Express app; index.ts starts it; deps.ts, http.ts are shared plumbing
     src/config.ts           reads the environment, and exits if a required variable is missing
     scripts/admin-leads-live-check.ts  proves the Admin > Leads statuses
@@ -238,7 +238,7 @@ you change something the docs describe, update the doc in the same commit.
     src/api/usePolling.ts   the one place every live screen fetches from
     src/api/workspace.ts    lead card, timeline, notes, callbacks, dispositions, SMS
     src/api/admin.ts        config, overview, DNC, health
-    src/lib/format.ts       phone, dates, age, answer labels
+    src/lib/format.ts       phone, dates, age, names
     src/lib/lock.ts         which queue rows an agent may open
     src/api/calls.ts        calling config and token
     src/lib/call-state.ts   a call's states, pure
@@ -278,6 +278,7 @@ you change something the docs describe, update the doc in the same commit.
     LEAD-FLOW.md            a lead's whole life on one page - start here
     AUTH.md  POLLER.md  WORKFLOW.md  WEBHOOKS.md  ADMIN-LEADS.md  STATE-MACHINE.md  TWILIO.md
     AUDIT.md                the activity log: nothing is lost
+    FLOWS.md                how SMS scripts are stored as rows, how to add one, and how questions are named
     QUEUE.md  AGENT-WORKSPACE.md  ADMIN.md  LOGGING.md  FRONTEND.md
 ```
 
@@ -312,13 +313,13 @@ them. It differs from the list above:
 - **leads** has `group_id`, `group_name` and `ezt_added_at` instead of `group` and `ezt_contact_id`; EZ Texting returns no contact id.
 - **conversations** also has `agent_took_over_at` (003), `completed_at` (004), and `q1_label` to `q3_label` (009): the word the lead chose, kept with the number, so renaming a choice never renames an earlier answer.
 - **dnc_list** also has `released_at` and `released_reason` (002): a block is lifted, never deleted.
-- **settings** gained `message_missed_call` (007); `poll_interval_seconds` is 30 since 005.
+- **settings** gained `message_missed_call` (007, reworded for eDrugstore by 012); `poll_interval_seconds` is 30 since 005.
 - **messages** also has `in_reply_to_ezt_id`, `from_number` and `received_at`; `ezt_message_id` is unique for outbound only.
 - **callbacks** also has `reason` (migration 008, 2026-10-01): `booked`, or `missed_call` for one the system books for the agent a missed call rang.
 - **calls** also has `ended_at`, and since migration 007 (2026-10-01) `direction`; an incoming call that rang nobody has no `agent_id`. Since 010 (2026-10-02) `answered_by`: who picked up a call we placed, a person or a machine - a machine makes the outcome `voicemail`.
 - **leads.previous_lead_id** exists but is unused and expected to be dropped - see §6.
 - **leads.assigned_at** records when an agent claimed the lead. Claims do not expire; it is what lets a superadmin see one held too long. Added 2026-09-15.
-- **flows**, **flow_questions**, **flow_choices** and **conversation_answers** - migration 012, 2026-10-05. The SMS script is rows, not code: a flow's questions, each question's choices with its reply, points and where the lead goes next, and one add-only row per answer given. **conversations** gained `flow_id`, `current_question_id` and `end_outcome`; its `q1`-`q3` columns and labels, `scoring_rules`, and the question and thanks rows in `settings` are no longer read. `docs/FLOWS.md`.
+- **flows**, **flow_questions**, **flow_choices** and **conversation_answers** - migration 012, 2026-10-05. The SMS script is rows, not code: a flow's questions, each question's choices with its reply, points and where the lead goes next, and one add-only row per answer given. **conversations** gained `flow_id`, `current_question_id`, `question_sent_at` (when the text the lead must answer went out - a reply before then is not counted) and `end_outcome`, and `step` now holds the question's position (10, 11, 20, 30), no longer 1-3; its `q1`-`q3` columns and labels, `scoring_rules`, and the question, clarification, thanks and review rows in `settings` are no longer read. A question is named by its key, a sub-question after its parent: `q1-a`, shown "Q1-a". `docs/FLOWS.md`.
 - Migration 013, 2026-10-06: three indexes the queue and Admin > Leads needed - `callbacks (lead_id)`, agents' own texts in `messages`, and `leads` by arrival. With 50,000 leads the queue took 8 seconds; `docs/QUEUE.md`, "How fast it is".
 - **call_recordings** and **call_transcripts** - migration 011, 2026-10-02. A call's recording id at Twilio, and its transcript with who said what. `docs/TWILIO.md`, "Recordings and transcripts".
 - **activity_log** and **webhook_events** - migration 006, 2026-10-01. The company keeps data as proof: every action is one add-only row, and every inbound webhook is kept as received. The foreign keys to `leads` no longer cascade, so a lead with history cannot be deleted. `docs/AUDIT.md`.
@@ -327,7 +328,7 @@ them. It differs from the list above:
 
 ## 6. Core flows (message copy is seeded in `settings` by `001_init.sql`, and the missed-call text by `007`; the flow itself is specified in `docs/STATE-MACHINE.md`)
 
-*(2026-10-05: the script is the client's eDrugstore antibiotics flow, seeded as rows by migration 012 - the copy is in `flow_questions` and `flow_choices`, not `settings`. `docs/FLOWS.md` for how it is stored, `docs/STATE-MACHINE.md` for what it does.)*
+*(2026-10-05: the script is the client's eDrugstore antibiotics flow, seeded as rows by migration 012 - the copy is in `flows`, `flow_questions` and `flow_choices`; only the missed-call text stays in `settings`, reworded by 012. `docs/FLOWS.md` for how it is stored, `docs/STATE-MACHINE.md` for what it does.)*
 
 ### New lead (Worker, every 30–60s)
 1. Poll EZ Texting Contacts API for the lead group, since last checkpoint (overlap window 5 min).
@@ -376,7 +377,7 @@ same treatment when they are built. The queue API was built that way:
 `GET /api/leads`, 2026-09-22. *(2026-10-01: Twilio built that way too -
 `POST /api/calls/token`, `POST /api/webhooks/twilio/voice` and
 `POST /api/webhooks/twilio/status`, and for a lead calling in
-`POST /api/webhooks/twilio/incoming` and `/incoming/after`; and `/answered-by`, Twilio's verdict on who picked up. `docs/TWILIO.md`.)*
+`POST /api/webhooks/twilio/incoming` and `/incoming/after`; and `/answered-by`, Twilio's verdict on who picked up; `/recording`, a call's recording is ready (2026-10-02); and `/notice`, the recording notice a lead we called hears first (2026-10-05). `docs/TWILIO.md`.)*
 
 ---
 

@@ -29,12 +29,13 @@ correct as the state machine and the agents move things on.
 Awaiting reply -> Answering -> Ready -> Working -> Closed
 ```
 
-with Needs review, Expired and Opted out as the other ways the SMS part can end.
+with Offers, Not interested, Needs review, Expired and Opted out as the other
+ways the SMS part can end.
 
 | Status | Tab | Condition |
 |---|---|---|
 | `opted_out` | Opted out | On `dnc_list`, or newest conversation `suppressed` |
-| `closed` | Closed | An agent pressed Closed, and nothing has reopened it since: no unread text from the lead, no callback booked after it, no missed call from them that nobody has got back to (2026-10-01) |
+| `closed` | Closed | An agent pressed Closed, and nothing has reopened it since: no unread text from the lead, no callback booked after it, no missed call from them that nobody has got back to (2026-10-01), and no agent holding it (2026-09-29) |
 | `working` | Working | An agent holds it, or has left any trace on it: a note, a callback, a disposition, a call they placed or answered, or an SMS of their own. A missed incoming call is the lead's doing, not a trace - though the callback it books for an agent is one |
 | `needs_review` | Needs review | Conversation `review` |
 | `offers` | Offers | The flow ended with the lead asking for special offers only (`end_outcome = 'offers'`, 2026-10-05). Not Ready: there is no call to make. An agent's trace on it still reads Working |
@@ -142,8 +143,8 @@ decision that day. If it is ever changed, it is the first line of
 
 **The question the lead is on now - Jeel, 2026-09-29.** The question the
 conversation is on, which the state machine moves on after each valid answer;
-**Done** once the questions are finished; blank when no question ever went
-out (blocked on arrival).
+**Done** once the questions are finished; a hyphen for an opted-out
+conversation - blocked on arrival, or ended by STOP or a DNC outcome.
 
 | Lead | Status · Step |
 |---|---|
@@ -162,11 +163,11 @@ who said No to question 1 - read "Q4", as if they had answered three. The
 API's `step` is now that text (`"Q2"`, `"Q1-a"`, `"done"`) rather than a
 number, and is never worked out from the position.
 
-Until that day it was the highest question *answered*, so it always read one
+Until 2026-09-29 it was the highest question *answered*, so it always read one
 behind - "Answering · Q1" for a lead already past Q1, "Ready · Q3" for one who
 had finished - and said nothing about where a lead that stopped had stopped.
 The API field changed with it: `stepReached` (a number) became `step`
-(`1`-`3`, `'done'` or null). No database change: `conversations.step` already
+(then `1`-`3`, `'done'` or null; text since 2026-10-06). No database change: `conversations.step` already
 held it. `scripts/admin-leads-live-check.ts` proves each row above.
 
 ## The query
@@ -202,13 +203,14 @@ finds `+16026203572`.
 `scripts/admin-leads-live-check.ts` proves the statuses against a real
 database: every SMS status, each kind of agent trace on its own, Closed and a
 lead closed under a retired value, reopening by a later callback or a text,
-and the tab counts - 30 checks as of 2026-10-01, all passing. A missed call
+and the tab counts - 37 checks as of 2026-10-06, all passing. A missed call
 reopening a closed lead, and an outcome settling it, are in
 `scripts/calls-live-check.ts`.
 
 Score and tier are the running values, returned at every stage. Scoring starts
 at the first reply, so a lead part-way through has a real score - 10 for
-responding, 25 once question 1 is answered - and a tier that follows it.
+responding, 30 once question 1 is answered Yes (still 10 after No) - and a
+tier that follows it.
 
 They were hidden until `completed` (now Ready) until 2026-09-22, on the reasoning that a
 partial score next to a final one invites comparing them. That cost more than
@@ -240,10 +242,13 @@ The status icons follow a lead's life: a clock for Awaiting reply, a chat
 bubble for Answering, then an empty circle (Ready), a half-filled one (Working,
 the same as the queue) and a ticked one (Closed). Needs review is the queue's
 warning triangle, Opted out a barred circle in red, Expired an hourglass.
-Closed and Expired are muted: those leads are finished.
+Offers is a price tag and Not interested a circle with a line through it.
+Closed, Expired, Offers and Not interested are muted: nothing is left to do
+on those leads.
 
 Refreshes every 5 seconds. The timer refetches in place rather than showing a
-spinner, so the table does not blank out; only a filter change clears it.
+spinner, so the table does not blank out; a filter change fades the old rows until
+the new ones land.
 
 Rows that are new since the previous fetch get a 600ms highlight. Everything is
 new on the first load, so that case is deliberately excluded - otherwise the

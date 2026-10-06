@@ -100,7 +100,7 @@ after their parent - `q1-a`, `q1-b` - a rule for every flow, Jeel's,
   keeps INFO for itself: it answers with the account's help text and the lead
   never gets ours (found by texting it, 2026-10-05). The client chose "Learn
   more" instead.
-- **The offers step takes 1 and 2 as well as the words** - Jeel, so it is
+- **The offers step takes 1, 2 and 3 as well as the words** - Jeel, so it is
   answered like every other question.
 - **"Learn more" is not HOT** - Jeel. That lead said No to the first question;
   putting them above leads who said Yes would push buyers down. They keep
@@ -111,7 +111,8 @@ after their parent - `q1-a`, `q1-b` - a rule for every flow, Jeel's,
   one "sorry" for every question, which did not say what to reply.
 
 **Accepted replies.** The number, or one of the choice's words, as the whole
-reply, any case:
+reply, any case - or the choice's name, or the option as it was printed
+("1. Yes"): rule 3 has every form.
 
 | | Choice 1 | Choice 2 | Choice 3 |
 |---|---|---|---|
@@ -150,8 +151,8 @@ Configuration shows each text and its segment count.
 | `core/answers.ts` | `matchChoice()` - a reply against one question's choices |
 | `db/flows.ts` | Reads a flow; starts a conversation in the active one |
 | `api/reply-flow.ts` | Loads the conversation and its flow, runs `step`, saves the answer row, sends |
-| `core/state-machine.test.ts`, `core/answers.test.ts` | 63 tests: every branch of the antibiotics flow, every rule below, and a five-question flow run on the same code |
-| `api/__tests__/webhooks.test.ts` | 44, including the flow advancing through the webhook and flagging a reply for a person |
+| `core/state-machine.test.ts`, `core/answers.test.ts` | 83 tests: every branch of the antibiotics flow, every rule below, and a five-question flow run on the same code |
+| `api/__tests__/webhooks.test.ts` | 53, including the flow advancing through the webhook, flagging a reply for a person, and a reply before our text |
 | `scripts/flows-live-check.ts` | Against a real Postgres: a second flow added as rows only, walked end to end |
 
 The first flow - health & wellness, three questions with three choices each -
@@ -183,7 +184,8 @@ step(conversation, reply, rules) -> { conversation', send: string[], blockNumber
 ```
 
 - `conversation` - the current row: status, the question the lead is on
-  (`current_question_id`, with `step` as its number for the screens),
+  (`current_question_id`; `step` holds that question's position - an order,
+  not a number the screens print),
   invalid_count, score, tier, end_outcome.
 - `reply` - the inbound text and the payload's `optOut` flag.
 - `rules` - the conversation's flow, the tiers and settings, loaded by the
@@ -197,9 +199,9 @@ step(conversation, reply, rules) -> { conversation', send: string[], blockNumber
 - `answer` - the answer this reply gave, for the caller to write to
   `conversation_answers`; null when it gave none.
 
-The webhook loads the lead's newest conversation, calls `step`, saves the
-result, sends, and records the send - in that order, in one transaction except
-the send itself (see "Sending").
+The webhook loads the lead's newest conversation, calls `step`, and saves the
+result in one transaction, which it commits. Then, outside it, the text is
+recorded as `sending`, sent, and its id recorded (see "Sending").
 
 **The conversation row is locked while that happens** (`FOR UPDATE`, added
 2026-09-22). Two texts sent moments apart arrive as two requests at once;
@@ -275,13 +277,15 @@ on phone, so the block holds whatever lead or conversation the number later
 belongs to. From then on:
 
 - no automated text of any kind goes to that number;
-- if the number is delivered again as a new lead, the poller saves it as
-  suppressed and sends nothing;
+- if the number is delivered again, the poller skips it - we already hold the
+  lead. A blocked number we hold no lead for is saved as suppressed. Nothing
+  is sent either way;
 - agents cannot call or text it, and the
   queue never shows a number that is on `dnc_list`, whatever its conversation
   status;
 - Admin > Leads shows it as Opted out;
-- START does not unblock it - see "Opting back in".
+- START lifts the block, but the conversation stays suppressed and the
+  questions do not restart - see "Opting back in".
 
 ### 2. Conversation not `open`
 
@@ -295,11 +299,16 @@ implemented.
 when the questions cannot handle a reply: rule 2 above, and rule 2b below - a
 message to an agent who took the conversation over. `step()` returns this as
 `needsPerson`, so the rule lives beside the others; a lead with no conversation
-at all is flagged too, since nothing handles their message either.
+at all is flagged too, since nothing handles their message either - and so is
+one whose conversation is on a question its flow does not have.
 
-Never flagged: a valid answer, an unclear reply (the clarification, or the move
-to review, is the response - and `review` is how that lead reaches a person),
-and an opt-out.
+Since 2026-10-06 it is also set in two cases outside `step()`, both in
+`api/reply-flow.ts`: a reply while our text has been unsent for over two
+minutes (rule 2c), and a lead whose reply text failed to send ("Sending").
+
+Not flagged by the reply itself: a valid answer, an unclear reply (the
+clarification, or the move to review, is the response - and `review` is how
+that lead reaches a person), and an opt-out.
 
 **Why.** The flag is the queue's *Inbound reply*, and it decides who is in the
 queue. It used to be set on every reply, so a lead simply answering "1" read as
@@ -500,8 +509,8 @@ A lead who answers question 1 and goes quiet is a real responder, and the queue
 shows responders; with a score of 10 or more they carry a tier like everyone
 else. *(2026-09-28: the queue no longer shows a lead partway through - only
 completed, needs review, an inbound reply, or one being worked - `QUEUE.md`. A
-partway lead still carries its running score and tier, on Admin > Leads.)* The schema doc explains why this is what fills the LOW band - completed
-conversations never score below 40.
+partway lead still carries its running score and tier, on Admin > Leads.)* On the antibiotics flow a lead who finishes the three questions scores 55 to
+100, so LOW is a lead partway, in review, or one who said No (10).
 
 The tier is the `tiers` row whose range contains the score. A score of 0, which
 means no reply yet, has no tier.
@@ -695,12 +704,12 @@ blocked.
 |---|---|
 | Phone on `dnc_list`, or the contact is `optOut` in EZ Texting | Nothing, ever. Added to `dnc_list` if it was not already |
 | Newest conversation `open` - mid-flow | Nothing. Restarting would send question 1 to someone partway through |
-| Newest conversation `completed`, `expired` or `review` | New conversation at step 1 on the same lead, opener sent |
+| Newest conversation `completed`, `expired` or `review` | New conversation on the flow's first question, on the same lead, opener sent |
 | Newest conversation `suppressed` | Nothing, ever - the number opted out |
 
 One person is always one lead row; each return is a new conversation on it.
-The new conversation starts clean: step 1, no answers, `invalid_count` 0, score
-0, no tier.
+The new conversation starts clean: the first question, no answers,
+`invalid_count` 0, score 0, no tier.
 
 **The earlier conversation is kept exactly as it ended.** Its status -
 `completed`, `expired` or `review` - its answers, score and tier are never
@@ -756,8 +765,8 @@ someone who asked us not to.
 All against the pure function, no database:
 
 - Every path through the antibiotics flow, with its texts, score and tier.
-- "No" on question 1 goes to the offers question, not question 2; neither
-  offers ending earns the completion award.
+- "No" on question 1 goes to the offers question, not question 2; none of
+  its three endings earns the completion award.
 - A word answer ("yes", "nope", "agent", "learn more") and a near-miss number
   ("1.", "Option 2", "#3") each count as valid.
 - A number the question does not have ("3" on question 1) is unclear.

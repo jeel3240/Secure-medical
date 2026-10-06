@@ -66,7 +66,7 @@ export interface Overview {
     leadsReceived: number;
     /** Leads whose first reply came in the period. */
     responded: number;
-    /** Leads whose third answer came in the period - `completed_at`. */
+    /** Leads who finished their flow's questions in the period, whichever way it ended - `completed_at`. */
     completed: number;
     /** Closed in the period - `closed`, and the retired values that meant the same. */
     closed: number;
@@ -105,7 +105,7 @@ export async function getOverview(period: OverviewPeriod, timeZone?: string): Pr
             GROUP BY lead_id
           ) r WHERE r.first_reply >= ${since}
         ) AS responded,
-        -- completed_at, migration 004: when the third answer arrived.
+        -- completed_at, migration 004: when the lead finished the questions.
         (
           SELECT count(DISTINCT lead_id)::int FROM conversations
           WHERE completed_at >= ${since}

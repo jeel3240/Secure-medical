@@ -52,7 +52,7 @@ Q2", "Ends the questions"), built by the server, since the list depends on the
 flow. A question is named by its key: "Q2", and "Q1-a" for a sub-question -
 "Then Q1-a", "Unclear · Q1-a" (`FLOWS.md`, "Naming a question"). The scoring
 card titles each question the same way, with what it asks: "Q1-a · Offers". Two of them run past 160 characters and are flagged as two segments.
-The card's heading names the flow.
+The card's header names the flow, beside the Messages title.
 
 *(Until then: nine fixed messages - three questions, three clarifications, the
 review text, the thanks and the missed-call text.)*
@@ -75,7 +75,7 @@ style of the other admin pages, each with a title row:
 
 | Card | Shows |
 |---|---|
-| Messages | One row per message: its name and when it is sent on the left ("Question 2 · After answer 1"), the copy in normal type on the right, and "88 characters · 1 segment" under it. `{first_name}` shows as a small "first name" chip. A message that costs a second segment for some leads says so in amber |
+| Messages | One row per message: its name and when it is sent on the left ("After Q1 · Yes", and under it "Then Q2"), the copy in normal type on the right, and "88 characters · 1 segment" under it. `{first_name}` shows as a small "first name" chip. A message that costs a second segment for some leads says so in amber |
 | Scoring | Plain rows - "Replied at all +10", then each question's options grouped under it - and a shaded Maximum row |
 | Tiers | The queue's signal bars and each band |
 | Settings | Expiry, clarifications before review, the segment limit |
@@ -229,7 +229,7 @@ of phone numbers to a browser - a superadmin-only route, and not something to
 add without Jeel saying so. Not built.
 
 `scripts/admin-live-check.ts` proves all three read models against a real
-database: the config against the rows seeded by `001_init.sql` and against an
-edited rule, the overview's period windows, totals, per-agent aggregates and
+database: the config against the antibiotics flow seeded by `012_flows.sql` (tiers
+and expiry from `001_init.sql`) and against an edited choice, the overview's period windows, totals, per-agent aggregates and
 activity feed,
 and the DNC list's states, search escaping and lead-less rows.

@@ -30,7 +30,7 @@ the RDS CA bundle if strict verification is ever wanted.
 |---|---|
 | `users` | Agents and superadmins. bcrypt hash, role, active flag, must-change-password flag, last sign-in, session version. |
 | `leads` | One person, pulled from EZ Texting. |
-| `conversations` | Where a lead is in its SMS flow: `flow_id`, `current_question_id`, status, score, tier, `question_sent_at` (when the text the lead has to answer went out; empty while we owe them one - a reply then is not an answer, `STATE-MACHINE.md` rule 2c), and `end_outcome` once it has ended. One row per conversation. `q1`-`q3` and their label columns are retired (migration 012) - answers are rows in `conversation_answers`. `FLOWS.md`. |
+| `conversations` | Where a lead is in its SMS flow: `flow_id`, `current_question_id`, status, score, tier, `question_sent_at` (when the text the lead has to answer went out; empty while we owe them one - a reply then is not an answer, `STATE-MACHINE.md` rule 2c), and `end_outcome` once it has ended. `step` is the current question's `position` - 10, 20, 30, and 11 for the sub-question `q1-a` - no longer 1 to 3 (012 dropped that check); the screens name a question from its key, not from it. One row per conversation. `q1`-`q3` and their label columns are retired (migration 012) - answers are rows in `conversation_answers`. `FLOWS.md`. |
 | `messages` | Every SMS in or out. |
 | `calls` | Twilio calls, with duration and outcome. Written since Phase 4 - `TWILIO.md`, "What is saved". `direction` says who called whom. `twilio_call_sid` is the call's first leg: the browser's for a call we placed, the lead's for one we received. An incoming call that rang nobody has no `agent_id`; an outgoing one always has - the `calls_outbound_has_agent` check (migration 007). |
 | `dispositions` | What an agent decided after contact. |
@@ -39,11 +39,11 @@ the RDS CA bundle if strict verification is ever wanted.
 | `call_recordings` | A call's recording at Twilio: its id (`RE…`), length and channels. The audio stays at Twilio. Migration 011, `TWILIO.md`, "Recordings and transcripts". |
 | `call_transcripts` | The text of a recording: `pending` → `queued` → `completed` or `failed`, and once completed the sentences, each with its speaker (`agent` or `lead`). Written by the worker. Migration 011. |
 | `dnc_list` | Phones that must never be contacted. |
-| `settings` | Key/value config, admin-editable. |
+| `settings` | Key/value config. Changed by migration; the parts a superadmin needs are shown read-only on Admin > Configuration. |
 | `scoring_rules` | Points per answer for the first, fixed flow. **No longer read** since migration 012: points are on `flow_choices`. Kept. |
 | `flows`, `flow_questions`, `flow_choices` | The SMS scripts, as rows: each flow's questions, each question's choices with the reply, the points and where the lead goes next. Migration 012, `FLOWS.md`. |
 | `conversation_answers` | One row per answer a lead gave, with the choice's label and points as they were then, and `message_id`: the inbound text it was read from. Add-only. Migration 012. |
-| `tiers` | HOT/WARM/LOW score bands, admin-editable. |
+| `tiers` | HOT/WARM/LOW score bands. Changed by migration; shown read-only on Admin > Configuration. |
 | `activity_log` | One row per action a person or the system took - who, what, when, and what would otherwise be overwritten. Add-only: a trigger refuses every update and delete. Migration 006, `AUDIT.md`. |
 | `webhook_events` | Every request EZ Texting and Twilio sent, as it arrived. Add-only. Migration 006, `AUDIT.md`. |
 
@@ -148,8 +148,11 @@ EZTEXTING-API.md has the evidence.
 
 **`leads.has_unread_inbound` means a person has to read a reply** - since
 2026-09-28. The webhook sets it only when the questions cannot handle a message:
-after the conversation ended, or to an agent who took it over
-(`STATE-MACHINE.md`, "Which replies need a person"). Picking the lead clears it.
+after the conversation ended, or to an agent who took it over - and, since
+2026-10-06, when the text we owed the lead did not go out: a reply whose
+answer text failed to send, or a reply to a question unsent for over two
+minutes (`api/reply-flow.ts`; `STATE-MACHINE.md`, "Which replies need a
+person"). Picking the lead clears it.
 It decides who is in the queue, as *Inbound reply*.
 
 It used to be set on every inbound message, answers included. Migration 003
@@ -188,7 +191,7 @@ code: `core/activity.ts`, `db/activity.ts`, `db/dnc.ts`.)
 | `dispositions.value` | Agent, Phase 3 | The seven values are listed in `DESIGN-PROMPT.md` section 3: Interested, Callback set, No answer, Voicemail, Not interested, Wrong number, DNC. *(2026-09-23: they did not have to come from Jeel after all - the design brief already had them.)* *(2026-09-28: new rows are `closed` or `dnc` only; the seven above are retired, and old rows keep them - `core/dispositions.ts`. No migration: the column has no constraint to change.)* |
 | `calls.outcome` | Twilio's end-of-call callback, Phase 4 | `answered`, `no_answer`, `busy`, `failed`, `canceled` - mapped from Twilio's statuses in `core/calls.ts` - `missed`, for an incoming call nobody answered, and `voicemail`, for a call we placed that a machine picked up (`calls.answered_by`, migration 010). Null while a call is in progress. No constraint on the column. |
 | `dnc_list.reason` | Poller, webhook and the DNC outcome | Poller writes `ezt_opt_out` for a contact already opted out in EZ Texting; the webhook writes `sms_stop` for a STOP reply. An agent's DNC outcome writes `agent_disposition` (`db/dnc.ts`), since Phase 3 - `AGENT-WORKSPACE.md`. |
-| `messages.delivery_status` | Send path | Whatever EZ Texting returns. Unverified - we have never read a delivery status back. *(2026-09-28: we write two values. `failed` - a send EZ Texting refused, with no `ezt_message_id`. `sending` - an automated text between its row being written and EZ Texting's id being recorded, `db/outbound.ts`; it stays `sending` only if the write after a successful send failed, and counts as sent. Everything else is NULL.)* |
+| `messages.delivery_status` | Send path | Whatever EZ Texting returns. Unverified - we have never read a delivery status back. *(2026-09-28: we write two values. `failed` - a send EZ Texting refused, with no `ezt_message_id`. `sending` - an automated text between its row being written and EZ Texting's id being recorded, `db/outbound.ts`; it stays `sending` in two cases: the write after a successful send failed (it counts as sent), or the send timed out with no answer from EZ Texting (2026-10-06 - it may have gone, so it is neither marked failed nor retried). Everything else is NULL.)* |
 
 Each should get a CHECK once its values are known. Until then anything is
 accepted, including typos, and nothing will complain.
@@ -254,27 +257,29 @@ connection now fails with an error rather than waiting for ever.
 
 ## Seeded data
 
-The seeded message copy is the mockup's wording, page 2: the opener carries the
-sender name, the reason for the text and the opt-out, and `{first_name}` is
-filled in at send time. Copy that is only the reply options would reach a lead
-as an unexplained menu from an unknown number, which is also what US carriers
-object to in a first message.
-
 **The flow new leads get is seeded by migration 012** - the eDrugstore
 antibiotics script, `STATE-MACHINE.md`. The paragraphs below describe the
 first flow's seeds, which 012 copied into the flow tables as `wellness`.
+
+The first flow's seeded copy was the mockup's wording, page 2: the opener
+carries the sender name, the reason for the text and the opt-out, and
+`{first_name}` is filled in at send time - as the antibiotics opener does.
+Copy that is only the reply options would reach a lead as an unexplained menu
+from an unknown number, which is also what US carriers object to in a first
+message.
 
 `001_init.sql` seeds `settings`, `scoring_rules` and `tiers` with the defaults
 from the mockup: Responded +10, Completed +10, Q1 5/10/15, Q2 30/20/5,
 Q3 35/25/10, and HOT 75-100 / WARM 45-74 / LOW 1-44. It also seeds the question
 and reply copy, the 60s poll interval (30s since migration 005) and the 5 minute poll overlap.
 Migration 007 adds one more message, `message_missed_call`: the text sent after
-a call to us that nobody answered.
+a call to us that nobody answered (reworded for eDrugstore by 012).
 
 All three tables were meant to be edited by a superadmin at runtime. They are
 not: since 2026-09-23 Admin shows them and a migration changes them
-(CLAUDE.md §10). The worker and the state machine still read them on every
-use, so a migration takes effect without a restart.
+(CLAUDE.md §10). `settings` and `tiers` are still read on every use, so a
+migration takes effect without a restart; `scoring_rules` is no longer read
+(012) - points are on `flow_choices`, read with the flow on every reply.
 
 ### LOW is mostly for partial conversations
 
@@ -285,13 +290,14 @@ A completed conversation cannot score below 40: `responded` and `completed` add
 20 between them, and the cheapest answers add another 20. Of the 27 possible
 answer combinations, 13 land HOT, 13 WARM, and only one - the least engaged
 answer to all three questions - lands LOW. A test in
-`core/state-machine.test.ts` walks all 27 and asserts that split, so a change
-to the seeded points or bands fails there rather than quietly reshaping the
-queue.
+`core/state-machine.test.ts` walked all 27 and asserted that split until 012;
+it now walks the six ways to finish the antibiotics flow, 55 to 100, so a
+change to the seeded points or bands still fails there rather than quietly
+reshaping the queue.
 
 That is not a mis-set band. Scoring applies to partial conversations too. A
 lead who replies once and goes quiet scores 10 and is LOW; one who stalls after
-Q2 sits in the low WARM range. The admin screen's own preview shows
+Q2 sits in the low WARM range. The mockup's admin screen showed
 "Responded, stalled at Q1 -> 10 LOW".
 
 So the tiers are only skewed if you look at completions alone, and at 50-100

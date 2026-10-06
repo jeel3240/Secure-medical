@@ -16,7 +16,7 @@ export interface AnswerChip {
   heading: string;
   /** One chip per question answered, so there is always an answer. */
   answer: string;
-  /** The raw `1`/`2`/`3` the lead sent, for labelling the conversation view. */
+  /** The choice's number - `1`, `2` or `3` - whatever the lead typed to pick it. */
   choice: string;
 }
 
@@ -42,7 +42,7 @@ export interface LeadDetail {
     id: number;
     status: string;
     step: number | null;
-    /** The question the lead is on or stopped at, as the screens say it: "Q2", "Offers". */
+    /** The question the lead is on or stopped at, as the screens say it: "Q2", "Q1-a". */
     question: string | null;
     score: number;
     tier: string | null;

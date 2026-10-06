@@ -66,7 +66,11 @@ there first, so the vocabulary stays in one place.
 
 **Not recorded here, because their own rows already are the record:** the
 automated SMS flow (every message is in `messages`), a lead arriving
-(`leads`), a conversation completing or expiring (`conversations`).
+(`leads`), a conversation completing or expiring (`conversations`), and each
+answer a lead gives (`conversation_answers` - add-only, and tied to the
+inbound text it was read from). A reply that was not counted because it
+arrived before our text had gone out is kept in `messages` like any other,
+and logged as `reply.before_our_text`.
 
 ### Written with the action, not after it
 
@@ -91,8 +95,8 @@ lead nobody holds writes nothing.
 
 ### It cannot be altered
 
-A trigger on `activity_log` and on `webhook_events` refuses every `UPDATE` and
-`DELETE`:
+A trigger on `activity_log`, on `webhook_events` and - since migration 012 -
+on `conversation_answers` refuses every `UPDATE` and `DELETE`:
 
 ```
 activity_log is add-only: rows cannot be changed or deleted
@@ -170,8 +174,9 @@ database and has no screen yet.
 
 ## What this does not cover
 
-- **Call audio.** No recording. Awaiting Jeel's decision; some US states need
-  everyone on the call to consent.
+- **Call audio.** Recorded when the transcription service is set, but the
+  audio stays at Twilio: we keep its id and the transcript (`call_recordings`,
+  `call_transcripts`). The lead hears a recording notice first - `TWILIO.md`.
 - **Backups.** The log protects against the app and against edits. It does not
   protect against losing the database. That is RDS: automatic backups with
   enough retention, deletion protection on the instance, and optionally a daily

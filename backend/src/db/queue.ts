@@ -108,10 +108,11 @@ const BASE = `
  *
  * **A closed lead leaves** - Jeel, 2026-09-28. Once an agent has pressed
  * Closed (`db/lead-state.ts`), completing the questions, needing review or an
- * older callback no longer keeps it here. Two things still do: an agent
- * holding it, so it does not vanish while they save and move on; and a new
- * message from the lead, which a person must read. A callback booked after
- * closing reopens the lead altogether.
+ * older callback no longer keeps it here. Three things still do: an agent
+ * holding it, so it does not vanish while they save and move on; a new
+ * message from the lead, which a person must read; and a call from them
+ * that nobody answered (2026-10-01). A callback booked after closing reopens
+ * the lead altogether.
  *
  * A lead partway through the questions is on Admin > Leads only.
  *

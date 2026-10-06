@@ -183,6 +183,7 @@ reaches `LIKE`: a `%` in the search box is the character, not a wildcard.
                "source": "CORE-G-27", "receivedAt": "…", "score": 90,
                "tier": "HOT",
                "answers": [ { "key": "q1", "heading": "Requested info", "label": "Yes" },
+                            { "key": "q2", "heading": "Used telemedicine", "label": "No" },
                             { "key": "q3", "heading": "Next step", "label": "Talk to an agent" } ],
                "conversationStatus": "completed", "tag": null } ],
   "counts":  { "all": 12, "HOT": 4, "WARM": 5, "LOW": 3 },
@@ -289,8 +290,8 @@ The tag rules and the route have unit tests (`queue-tags.test.ts`,
 where most of the rules above actually live, so
 `backend/scripts/queue-live-check.ts` seeds one lead per case in a scratch
 database and asserts what comes back - inclusion, exclusion, order, every tag,
-each filter, the counts. The header of that file says how to run it. 47 checks
-as of 2026-10-01, all passing - including a partway lead kept out, and partway
+each filter, the counts. The header of that file says how to run it. 55 checks
+as of 2026-10-06, all passing - including a partway lead kept out, and partway
 leads kept in because they are held, booked, or taken over and replied to; a
 booked callback shows Callback, and call attempts show no tag. The missed call
 - in the queue with no score, reopening a closed lead, its tag, and what
@@ -323,7 +324,7 @@ a codebase ends up with five different refresh behaviours.
 | A stale response is discarded | A slow request from a filter the agent has already changed must not overwrite the current view |
 | The timer stops on unmount | Otherwise it polls forever and sets state on a dead component |
 | `refresh()` fetches now | So a claim or a note appears at once instead of up to 5s later |
-| `keepPreviousData` keeps the old data through a switch | Opt-in, 2026-09-28: Overview's period, this queue's tier and search, Admin > Leads' status and the DNC list's state. The page stays and the old rows fade while `switching` is true, instead of blanking for a spinner. Faded rows are also unclickable (`.is-switching`), so nobody picks up a lead from the list they just switched away from |
+| `keepPreviousData` keeps the old data through a switch | Opt-in, 2026-09-28: Overview's period, this queue's tier and search, Admin > Leads' status, the DNC list's state and My Callbacks' tab. The page stays and the old rows fade while `switching` is true, instead of blanking for a spinner. Faded rows are also unclickable (`.is-switching`), so nobody picks up a lead from the list they just switched away from |
 
 **The fetcher must be stable** - wrapped in `useCallback` with the filters as
 dependencies. When it changes that counts as a new view: the spinner returns and
@@ -365,7 +366,7 @@ question - what may this person actually do:
 | `rowAction` | When | Button | What it does |
 |---|---|---|---|
 | `pick` | Nobody holds it | **Pick up** | Claims it, opens the workspace |
-| `resume` | You hold it | **Resume** | Back into your own lead. Re-claiming your own lead succeeds, but "Pick" implies taking something you already have. While it checks, the button reads *Opening...*, not *Picking...* |
+| `resume` | You hold it | **Resume** | Back into your own lead. Re-claiming your own lead succeeds, but "Pick" implies taking something you already have. While it checks, the button reads *Opening...*, not *Picking up...* |
 | `view` | Someone else holds it, you are a superadmin | **View** | Opens the workspace read-only. Claims nothing, and the holder keeps the lead |
 | `locked` | Someone else holds it, you are an agent | *Locked* | No action |
 

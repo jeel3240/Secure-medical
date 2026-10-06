@@ -51,10 +51,10 @@ every lead. The fourth holds the **real values**.
 | `flows` | flow | `key` (`antibiotics`), `name`, `ezt_group` (not read yet), `responded_points`, `completed_points`, `review_body` (sent after a second unclear reply), `is_active` |
 | `flow_questions` | question | `flow_id`, `key` (`q1`, `q1-a`), `position`, `body` (the question), `clarify_body` (the "sorry, please reply..." text), `heading` (what the screens call it: "Next step") |
 | `flow_choices` | choice | `flow_id` and `question_id`, `choice` (`1`), `label` ("Talk to an agent"), `words` (also accepted: `{agent,talk,call}`), `points`, `reply_body`, and where it leads: `next_question_id`, or an `ending` |
-| `conversation_answers` | answer given | `conversation_id`, `lead_id`, the question (`question_id`, and its key, position and heading copied in), `choice`, and the `label` and `points` **as they were then** |
+| `conversation_answers` | answer given | `conversation_id`, `lead_id`, the question (`question_id`, and its key, position and heading copied in), `choice`, the `label` and `points` **as they were then**, and `message_id`: the inbound text the answer was read from |
 
-And `conversations` - still one row per lead, which says where the lead is
-**now**: `flow_id`, `current_question_id`, `status`, `score`, `tier`, and
+And `conversations` - one row per conversation, and the lead's newest says
+where the lead is **now**: `flow_id`, `current_question_id`, `status`, `score`, `tier`, and
 `end_outcome` once the flow has ended. `current_question_id` is the question
 the lead is on, or - once the conversation has expired or gone to review - the
 one they stopped at; it is empty once the questions are finished. `step` is
@@ -97,8 +97,14 @@ they are on, the total mark. `conversation_answers` is the answer sheet.
 
 The two that are not for agents are one list in the code, `NOT_FOR_AGENTS`
 (`core/state-machine.ts`), which the queue reads. A new ending is added in
-three places: the two `CHECK`s in the migration, the `Ending` type, and - if
-agents should not see it - that list.
+three places for the flow to run: the two `CHECK`s in the migration, the
+`Ending` type, and - if agents should not see it - that list. For it to have
+its own status on Admin > Leads and its own words on the lead card and the
+timeline, also: `STATUS_SQL` and `LeadStatus` in `db/leads.ts`, the status
+list in `api/admin/leads.ts`, and on the frontend `components/LeadStatus.tsx`,
+the tabs in `pages/admin/LeadsPage.tsx`, `components/Timeline.tsx` and
+`pages/workspace/LeadHeader.tsx`. Without the first of those the lead reads
+Ready.
 
 ### `position` is not "what comes next"
 
@@ -141,8 +147,9 @@ and sends a lead who meets such a row to a person instead of asking again
 ## How a reply moves a lead
 
 1. The lead's conversation says which flow, and which question they are on.
-2. The reply is matched against that question's choices: the number, or one of
-   the choice's words.
+2. The reply is matched against that question's choices: the number, one of
+   the choice's words, its label, or the option as it was printed
+   (`STATE-MACHINE.md`, rule 3).
 3. The matching choice gives the label, the points, the reply text and the
    next question.
 4. One row is written to `conversation_answers`; the conversation moves to the
@@ -176,9 +183,10 @@ Check before shipping one:
   next question go out as one text; Admin > Configuration shows each as sent,
   with its segment count.
 - The first question says who is texting and how to opt out.
-- **Reply words are not reserved by EZ Texting.** STOP, HELP and INFO are
-  answered by EZ Texting itself and never reach us - found with INFO on
-  2026-10-05. Text a new keyword to the account before using it.
+- **Reply words are not reserved by EZ Texting.** It answers STOP, HELP and
+  INFO itself. STOP still reaches us, and blocks the number; a lead who sent
+  INFO got the account's own help text and never ours - found on 2026-10-05.
+  Text a new keyword to the account before using it.
 - The points against the tier bands (`tiers`): HOT starts at 75. **The most a
   lead can score must not pass 100** - the bands end there, the screens say
   "/ 100", and a score above it has no tier.

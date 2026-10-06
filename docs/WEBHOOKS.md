@@ -8,8 +8,9 @@ EZ Texting has no session.
 
 Code: `backend/src/api/webhooks.ts`. Payload shape: `docs/EZTEXTING-API.md`.
 
-**This doc is EZ Texting's webhook only.** Twilio's four - a call being placed,
-a lead calling in, and how each ended - are in `TWILIO.md`. They differ in one
+**This doc is EZ Texting's webhook only.** Twilio's seven - a call being
+placed, a lead calling in, how each ended, who picked up, the recording notice
+and the recording - are in `TWILIO.md`. They differ in one
 way that matters: Twilio signs every request, so those are checked by
 signature rather than by a secret in the path. Both kinds are kept as received
 in `webhook_events` (`AUDIT.md`).
@@ -31,7 +32,9 @@ in `webhook_events` (`AUDIT.md`).
 5. ~~Set `leads.has_unread_inbound`.~~ *(2026-09-28: set only when a person has
    to read the reply, and after the state machine has run, since it decides -
    `STATE-MACHINE.md`, "Which replies need a person". An answer, an unclear
-   reply and an opt-out are never flagged.)*
+   reply and an opt-out are not flagged by the reply itself; the lead is
+   flagged if our text back fails to send, or if they reply while our text
+   has been unsent for over two minutes - 2026-10-06.)*
 6. If it is an opt-out, add to `dnc_list` and suppress any open conversation. A
    lead can opt out with no open conversation - already completed, for instance -
    and the `dnc_list` row is what blocks future contact either way.
@@ -158,7 +161,8 @@ The lead is flagged for a person instead (`STATE-MACHINE.md`, "Sending").
 **A reply that arrives before our last text has gone out is stored and
 nothing more** - `STATE-MACHINE.md`, rule 2c. The lead texted twice in a row;
 the second is not an answer to a question still on its way. It logs
-`reply.before_our_text`.
+`reply.before_our_text`. The one exception: if our text has been unsent for
+over two minutes it is not on its way, and the lead is flagged for a person.
 
 **The handler gives its database connection back before it sends** -
 2026-10-06, from review. Sending records the text through the pool, and waits

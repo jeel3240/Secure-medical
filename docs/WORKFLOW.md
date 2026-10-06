@@ -100,8 +100,9 @@ unrelated file. As of 2026-10-06 the files are 001 to 013: `main` holds 001 to
 missed call books, the word kept with each answer, who picked up a call, and
 call recordings and transcripts - are on `dev`. 012, the SMS flows as rows
 with the antibiotics script (`FLOWS.md`), and 013, three indexes for the
-queue and Admin > Leads (`QUEUE.md`, "How fast it is"), are on their own
-branch until it has been tested with a real phone. *(012 was edited on that
+queue and Admin > Leads (`QUEUE.md`, "How fast it is"), are on `feat/flows`,
+walked with a real phone on 2026-10-06 (`FLOWS.md`) and waiting to be merged
+into `dev`. *(012 was edited on that
 branch on 2026-10-06, after review and before it ran anywhere but a
 developer's machine: a local database that ran the earlier 012 has to be
 rebuilt.)* `npm run migrate` applies whatever the
@@ -130,8 +131,8 @@ docker compose exec api npm run migrate
 first deploy that has calling, and whenever `PUBLIC_URL` or a Twilio setting
 changes. **Only ever on the server.** Run from a laptop with production's
 number, it moves production's calls to that laptop (2026-10-05; `TWILIO.md`,
-"What it needs on the Twilio account") - local testing uses its own number
-and TwiML App. It points the TwiML App and the phone
+"What it needs on the Twilio account") - calling is not tested locally; if
+it ever is again, it needs its own number and TwiML App. It points the TwiML App and the phone
 number at this server, and refuses a number that rings somewhere else unless
 `--take-over` is passed. `TWILIO.md`, "Deploying it".
 

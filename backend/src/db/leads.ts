@@ -43,8 +43,9 @@ export interface AdminLeadRow {
   status: LeadStatus | null;
   /**
    * The question the lead is on now, or stopped at, as the screens say it -
-   * "Q2", "Offers" (`core/questions.ts`) - or `done` once the questions are
-   * finished. Null when no question ever went out (blocked on arrival).
+   * "Q2", "Q1-a" (`core/questions.ts`) - or `done` once the questions are
+   * finished. Null for an opted-out conversation: blocked on arrival, or
+   * ended by STOP or a DNC outcome.
    */
   step: string | null;
   score: number | null;

@@ -25,7 +25,7 @@ export interface AdminLead {
   status: LeadStatus | null;
   /**
    * The question the lead is on now or stopped at, as the server names it -
-   * "Q2", "Offers" - or `done` once the questions are finished.
+   * "Q2", "Q1-a" - or `done` once the questions are finished.
    */
   step: string | null;
   score: number | null;

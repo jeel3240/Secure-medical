@@ -8,7 +8,8 @@ becomes a text to the lead, a tag in the queue and a callback for that agent -
 on the lead's timeline.
 
 Code: `backend/src/core/calls.ts` (the rules, pure), `db/calls.ts` (the SQL),
-`integrations/twilio.ts` (the only file that uses the twilio library),
+`integrations/twilio.ts` (the file the routes use for the twilio library;
+`twilio-health.ts`, `twilio-transcripts.ts` and the configure CLI use it too),
 `api/calls.ts` (the browser's routes), `api/twilio-webhooks.ts` (Twilio's
 routes), `twilio-settings.ts` (the settings). Screen: `frontend/src/lib/call-state.ts`,
 `lib/calling.ts`, `pages/workspace/useLeadCall.ts`, `pages/workspace/CallControl.tsx`,
@@ -113,13 +114,14 @@ There is no ringing of a mobile phone.
 
 ### A missed call
 
-The lead hears: "Thank you for calling Secure Medical. Our team member is not
-available right now, and will call you back shortly. Goodbye." Then:
+The lead hears: "Thank you for calling eDrugstore. Our team member is not
+available right now, and will call you back shortly. Goodbye." ("Secure
+Medical" until 2026-10-05.) Then:
 
 | | |
 |---|---|
 | **The call is saved** | `calls` row with `direction = 'inbound'`, `outcome = 'missed'`, whatever Twilio called it (no-answer, busy, canceled). `agent_id` is the agent it rang, or null when it rang nobody |
-| **The lead is texted** | `message_missed_call` from `settings`, sent through EZ Texting like every other text and saved in `messages`: "Secure Medical: Sorry we missed your call. Our team member is not available right now and will call you back shortly." Once per call. Not sent to a blocked number - the do-not-call check is inside the sender |
+| **The lead is texted** | `message_missed_call` from `settings`, sent through EZ Texting like every other text and saved in `messages`: "eDrugstore: Sorry we missed your call. A team member will call you back shortly." (reworded by migration 012; 007 seeded the first wording, signed Secure Medical). Once per call. Not sent to a blocked number - the do-not-call check is inside the sender |
 | **The lead goes to the queue** | Tagged **Missed call**, in bold, above an unread reply - unless an agent holds the lead, when the queue still says Working – name and the lead's page and the callback carry it. A closed lead is reopened by it. A lead with no score is in the queue for it too, at the bottom. `QUEUE.md`, "The tag" |
 | **The agent gets a callback** | One row on their My Callbacks, under Today, first in the list and marked **Missed call** (Overdue only from the next day) - `callbacks.reason = 'missed_call'`, migration 008. The queue tag says a lead needs calling; this says whose job it is. One per lead however many times they ring. Not booked when the call rang nobody (the lead waits in the queue for anyone), for a deactivated agent, or for a number on the do-not-call list. An agent who pressed Decline gets it too: the lead was still told we would call back |
 | **The agent is told** | The card on their screen becomes a notice: "Missed call · Leo M. · Rang for 20s", with **Call back**. It stays until dismissed, or until another call rings |
@@ -184,7 +186,7 @@ the foot of the screen that showed only a name and a number.
      (555) 010-0014
 📞 Calling back · you tried 2× today
 Score       Used telemedicine   Flow
-45 / 100    No                  Stopped at Q3
+45 / 100    Yes                 Stopped at Q3
 [ Decline ]                     [ Accept ]
 Accepting opens Leo's workspace and assigns the lead to you.
 ```
@@ -193,7 +195,7 @@ Accepting opens Leo's workspace and assigns the lead to you.
 |---|---|
 | Name, number | Sent with the call, so they show the instant it rings |
 | How long it has rung | Counted in the browser |
-| Tier, score, interest (question 1), flow | The lead card, `GET /api/leads/:id`, fetched as it starts to ring. The same words as the lead's page |
+| Tier, score, the lead's last answer (under that question's heading), flow | The lead card, `GET /api/leads/:id`, fetched as it starts to ring. The same words as the lead's page |
 | "Calling back · you tried 2× today" | The lead's timeline: calls we placed today, by this agent or - named - by another; otherwise when we last called. Nothing when we never have. `lib/caller-context.ts` |
 | The last line | Drops "and assigns the lead to you" when the agent already holds it |
 
@@ -470,7 +472,7 @@ made `agent_id` optional for them (migration 007).
 | `agent_id`, `lead_id` | Who called whom. For an incoming call, the agent it rang - null when it rang nobody. An outgoing call always has an agent; the database refuses one without |
 | `started_at` | When Twilio asked us how to connect it |
 | `ended_at` | When Twilio reported the far leg ended - the lead's for a call we placed, the agent's for one we received - or at once for an incoming call that rang nobody. Null while the call is in progress |
-| `outcome` | `answered`, `no_answer`, `busy`, `failed` or `canceled` - `core/calls.ts` - and `missed` for an incoming call nobody answered. Null while in progress |
+| `outcome` | `answered`, `no_answer`, `busy`, `failed` or `canceled` - `core/calls.ts` - `voicemail` for a call we placed that a machine picked up, and `missed` for an incoming call nobody answered. Null while in progress |
 | `answered_by` | Who picked up a call we placed: `human`, `machine`, `fax` or `unknown` - "Voicemail", above. Null for an incoming call, one nobody picked up, or one from before migration 010 |
 | `duration_sec` | Seconds of conversation. 0 unless answered |
 
@@ -676,8 +678,9 @@ own phone.
   as a conference on the server, which Phase 4 did not build, and a button
   that only muted would mislead.
 - **Voicemail drop, transfer, playing a recording in the app.** Not in the
-  plan. (Recording, transcripts and voicemail *detection* are built - above.) Recording needs the
-  lead's consent, and is waiting on Jeel's decision.
+  plan. (Recording, transcripts and voicemail *detection* are built - above. The lead
+  is told a call is recorded before it connects - "Recordings and
+  transcripts".)
 - **A call queue for incoming calls.** One agent is rung, or nobody -
   "Incoming calls", above.
 - **A stale call is not closed.** If Twilio's end-of-call report never arrives,

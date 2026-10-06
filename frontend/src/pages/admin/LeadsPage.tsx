@@ -31,7 +31,8 @@ const EMPTY = '-';
 
 /**
  * In the order a lead lives them - Awaiting reply, Answering, Ready,
- * Working, Closed - then the three other ways the SMS part can end. Working
+ * Working, Closed - with Offers and Not interested after Ready - then the
+ * three other ways the SMS part can end. Working
  * and Closed were added, and In progress and Completed renamed, by Jeel on
  * 2026-09-28: ADMIN-LEADS.md, "Status".
  */
@@ -136,7 +137,7 @@ export function LeadsPage() {
       <div className="card table-card">
         {/* The queue's tier switcher, so the chosen status is the brand navy
             and slides the same way - Jeel, 2026-09-28. The underline tabs it
-            replaces used the brighter link blue. Ten options: dense, and on
+            replaces used the brighter link blue. Eleven options: dense, and on
             a screen too narrow for them the row scrolls - it never wraps. */}
         <div className="table-card__toolbar table-card__toolbar--scroll">
           <Segmented
