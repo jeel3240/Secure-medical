@@ -17,10 +17,13 @@ question 1 is `backend/src/worker/opener.ts`, shared with the opener retry
 (2026-09-28; each had its own copy until then).
 API behaviour it depends on: `docs/EZTEXTING-API.md`.
 
-The worker tick does three things: this poll, the retry of openers that never
-went out (`worker/retry-openers.ts`, "Retrying a failed opener" below), then
-the expiry sweep in `worker/expiry.ts` - each in its own try/catch so a failure
-on one does not stop the others. Expiring is local work that must keep happening while EZ Texting is
+The worker tick does four things, in this order: this poll, the expiry sweep
+in `worker/expiry.ts`, the retry of openers that never went out
+(`worker/retry-openers.ts`, "Retrying a failed opener" below), then fetching
+call transcripts (`TWILIO.md`) - each in its own try/catch so a failure
+on one does not stop the others. **Every call to EZ Texting gives up after 30
+seconds** (2026-10-06): without a limit one hung connection stopped all four,
+with nothing in the logs. Expiring is local work that must keep happening while EZ Texting is
 unreachable. The sweep's rules are in STATE-MACHINE.md, "Expiry"; what the
 poller owns is setting `expires_at` when the opener goes out.
 

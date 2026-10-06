@@ -70,7 +70,10 @@ export interface Conversation {
   status: ConversationStatus;
   /** The current question's position, for screens that say "On Q2". */
   step: number | null;
-  /** The question the lead is on. Null once the conversation is not open. */
+  /**
+   * The question the lead is on - or, once it has expired or gone to review,
+   * the one they stopped at. Null once the questions are finished.
+   */
   currentQuestionId: number | null;
   invalidCount: number;
   score: number;
@@ -238,8 +241,9 @@ export function step(conversation: Conversation, reply: Reply, rules: Rules): St
     }
 
     // Not flagged: the review status is what brings this lead to a person, and
-    // Inbound reply would outrank Needs review and hide why.
-    return nothing({ ...scored, status: 'review', currentQuestionId: null }, { send: [flow.reviewBody] });
+    // Inbound reply would outrank Needs review and hide why. The question stays
+    // on the conversation: it is where they got stuck.
+    return nothing({ ...scored, status: 'review' }, { send: [flow.reviewBody] });
   }
 
   // 3. A valid answer. Record it, reset the unclear count - a lead who fumbles
@@ -258,6 +262,22 @@ export function step(conversation: Conversation, reply: Reply, rules: Rules): St
   const reply_ = chosen.reply ? [chosen.reply] : [];
 
   const next = flow.questions.find((q) => q.id === chosen.nextQuestionId);
+
+  // The choice names a question this flow cannot take the lead to: one it
+  // does not have, or one at or before this one, which would ask it again and
+  // score it twice. The rows are wrong, not the lead - their answer stands and
+  // is kept - but nothing sensible can be asked next, so a person follows up.
+  // The database refuses most such rows (012_flows.sql); this is for the rest.
+  if (chosen.nextQuestionId !== null && (!next || next.position <= question.position)) {
+    return {
+      conversation: withScore({ ...conversation, invalidCount: 0, status: 'review' }, rules, scoreAfterAnswer),
+      send: [flow.reviewBody],
+      blockNumber: false,
+      needsPerson: false,
+      answer,
+    };
+  }
+
   if (next) {
     return {
       conversation: withScore(
@@ -274,8 +294,7 @@ export function step(conversation: Conversation, reply: Reply, rules: Rules): St
     };
   }
 
-  // The choice ends the flow. A choice that names a next question the flow no
-  // longer has ends it too, as completed: the lead has answered what exists.
+  // The choice ends the flow.
   const ending: Ending = chosen.ending ?? 'completed';
   const finished = withScore(
     { ...conversation, invalidCount: 0, status: 'completed', currentQuestionId: null, endOutcome: ending },

@@ -29,9 +29,10 @@ export interface ConversationRow extends Conversation {
  * moment apart arrive as two requests at once; without the lock both could read
  * the same question, treat their text as the answer to it, and each send the
  * next question - the lead gets it twice and one of their answers is lost. The
- * lock makes the second wait, so it reads the conversation the first one left
- * and answers the question the lead is actually on. It holds one lead's row, so
- * replies from other leads are unaffected.
+ * lock makes the second wait, so it reads the conversation the first one left.
+ * (It is then read as an answer to the question the first one moved to, which
+ * the lead may not have seen yet - STATE-MACHINE.md, "Open items".) It holds
+ * one lead's row, so replies from other leads are unaffected.
  */
 export async function loadNewestConversation(
   client: PoolClient,
@@ -94,8 +95,8 @@ async function saveConversation(client: PoolClient, id: number, c: Conversation)
   // bumpExpiry, called after the send succeeds.
   //
   // completed_at is stamped the first time the conversation is saved as
-  // completed, and kept after - migration 004, for Admin > Overview's
-  // "Answered all 3".
+  // completed - whichever way its flow ended - and kept after: migration 004,
+  // for Admin > Overview's "Completed".
   await client.query(
     `UPDATE conversations
      SET status = $2, step = $3, current_question_id = $4,
@@ -115,13 +116,20 @@ async function saveConversation(client: PoolClient, id: number, c: Conversation)
  * conversation's lock means a second answer cannot get here, and if it ever
  * did, the first stands.
  */
-async function saveAnswer(client: PoolClient, conversationId: number, leadId: number, a: GivenAnswer): Promise<void> {
+async function saveAnswer(
+  client: PoolClient,
+  conversationId: number,
+  leadId: number,
+  a: GivenAnswer,
+  /** The inbound text the answer was read from. */
+  messageId: number | null
+): Promise<void> {
   await client.query(
     `INSERT INTO conversation_answers
-       (conversation_id, lead_id, question_id, question_key, position, heading, choice, label, points)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+       (conversation_id, lead_id, question_id, question_key, position, heading, choice, label, points, message_id)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
      ON CONFLICT (conversation_id, question_id) DO NOTHING`,
-    [conversationId, leadId, a.questionId, a.questionKey, a.position, a.heading, a.choice, a.label, a.points]
+    [conversationId, leadId, a.questionId, a.questionKey, a.position, a.heading, a.choice, a.label, a.points, messageId]
   );
 }
 
@@ -152,18 +160,29 @@ export async function applyReply(
   leadId: number,
   phone: string,
   firstName: string | null,
-  reply: { text: string; optOut: boolean }
+  /** `messageId`: the stored inbound text, kept with the answer it gives. */
+  reply: { text: string; optOut: boolean; messageId?: number }
 ): Promise<PendingReply | null> {
   const conversation = await loadNewestConversation(client, leadId);
   if (!conversation) return null;
 
   const rules = await loadRules(client, conversation.flowId);
-  if (!rules) return null;
+  if (!rules) {
+    // No flow to follow - a row no migration reached. STOP still has to end
+    // it: an opt-out can never depend on the state the conversation is in.
+    if (reply.optOut && conversation.status === 'open') {
+      await client.query(
+        `UPDATE conversations SET status = 'suppressed', updated_at = now() WHERE id = $1`,
+        [conversation.id]
+      );
+    }
+    return null;
+  }
 
   const result = step(conversation, reply, rules);
 
   await saveConversation(client, conversation.id, result.conversation);
-  if (result.answer) await saveAnswer(client, conversation.id, leadId, result.answer);
+  if (result.answer) await saveAnswer(client, conversation.id, leadId, result.answer, reply.messageId ?? null);
 
   // The send is handed back as a closure so the caller can commit first.
   return {
@@ -202,6 +221,14 @@ async function bumpExpiry(q: Querier, conversationId: number): Promise<void> {
  * missing follow-up is the lesser problem. The refused message is kept as a
  * failed one, so the thread shows it with a red "!" - `db/failed-sends.ts`.
  *
+ * **A lead whose text did not go out is flagged for a person** - 2026-10-06,
+ * from review. They answered and heard nothing back; the conversation is on a
+ * question they never received, nothing retries it, and a lead partway through
+ * is not in the queue - so they would sit unseen until they expired, every
+ * lead who replied during an EZ Texting outage. The flag puts them in the
+ * queue as an inbound reply, with the failed text in their thread. Not for a
+ * blocked number: that send was never owed.
+ *
  * A failure also leaves `expires_at` where it was, so a lead who was never
  * actually messaged expires on schedule rather than a week late.
  */
@@ -226,10 +253,8 @@ async function sendFlowMessage(
     // One text: a reply and the question after it must not arrive out of
     // order, which two sends could. Past 160 characters it is billed as two
     // segments - the Configuration page shows which choices cost that.
-    const { text, nameDropped } = renderMessage(templates.join(' '), firstName, Infinity);
-    if (nameDropped) {
-      log.info('sms.name_dropped', { leadId, flow });
-    }
+    // No length limit, so the name is never dropped to fit one.
+    const { text } = renderMessage(templates.join(' '), firstName, Infinity);
 
     // Recorded around the send so it is never sent twice nor marked refused
     // after it went out - db/outbound.ts.
@@ -240,16 +265,29 @@ async function sendFlowMessage(
     });
     if (!result.sent) {
       log.error('sms.failed', { leadId, flow, blocked: result.blocked, err: errText(result.err) });
+      if (!result.blocked) await flagForPerson(pool, leadId);
       return null;
     }
 
-    await bumpExpiry(pool, conversationId);
-
     log.info('sms.sent', { leadId, flow, eztMessageId: result.eztMessageId });
+
+    // After the text has gone, and on its own: a failure here must not be
+    // logged as a failed send, which it was not.
+    try {
+      await bumpExpiry(pool, conversationId);
+    } catch (err) {
+      log.error('conversation.expiry_not_moved', { leadId, err: errText(err) });
+    }
     return result.eztMessageId;
   } catch (err) {
     // Before the send: the database refusing the row. Nothing went out.
     log.error('sms.failed', { leadId, flow, err: errText(err) });
+    await flagForPerson(pool, leadId).catch(() => undefined);
     return null;
   }
+}
+
+/** The lead answered and our text back did not go out: a person has to see them. */
+async function flagForPerson(q: Querier, leadId: number): Promise<void> {
+  await q.query('UPDATE leads SET has_unread_inbound = true WHERE id = $1', [leadId]);
 }

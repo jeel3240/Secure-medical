@@ -50,13 +50,15 @@ every lead. The fourth holds the **real values**.
 |---|---|---|
 | `flows` | flow | `key` (`antibiotics`), `name`, `ezt_group` (not read yet), `responded_points`, `completed_points`, `review_body` (sent after a second unclear reply), `is_active` |
 | `flow_questions` | question | `flow_id`, `key` (`q1`, `offers`), `position`, `body` (the question), `clarify_body` (the "sorry, please reply..." text), `heading` (what the screens call it: "Next step") |
-| `flow_choices` | choice | `question_id`, `choice` (`1`), `label` ("Talk to an agent"), `words` (also accepted: `{agent,talk,call}`), `points`, `reply_body`, and where it leads: `next_question_id`, or an `ending` |
+| `flow_choices` | choice | `flow_id` and `question_id`, `choice` (`1`), `label` ("Talk to an agent"), `words` (also accepted: `{agent,talk,call}`), `points`, `reply_body`, and where it leads: `next_question_id`, or an `ending` |
 | `conversation_answers` | answer given | `conversation_id`, `lead_id`, the question (`question_id`, and its key, position and heading copied in), `choice`, and the `label` and `points` **as they were then** |
 
 And `conversations` - still one row per lead, which says where the lead is
 **now**: `flow_id`, `current_question_id`, `status`, `score`, `tier`, and
-`end_outcome` once the flow has ended. `step` is the current question's
-position, for screens that say "On Q2".
+`end_outcome` once the flow has ended. `current_question_id` is the question
+the lead is on, or - once the conversation has expired or gone to review - the
+one they stopped at; it is empty once the questions are finished. `step` is
+that question's position.
 
 Think of an exam: `conversations` is the cover sheet - who, which question
 they are on, the total mark. `conversation_answers` is the answer sheet.
@@ -66,6 +68,17 @@ they are on, the total mark. `conversation_answers` is the answer sheet.
 - **One flow is active** - the one new leads get (`flows_one_active`).
 - **A choice either leads to a question or ends the flow**, never both and
   never neither (`flow_choices_next_or_end`).
+- **A choice belongs to one flow, and can only lead to a question of that
+  flow** (`flow_choices_next_in_flow`). That is why a choice carries `flow_id`
+  as well as its question: the database can then hold both the question and
+  the next question to it. Without it a choice could point into another flow
+  and a lead would be sent a question that is not theirs.
+- **A conversation is only ever on a question of its own flow**
+  (`conversations_question_in_flow`).
+- **A flow awards something for replying** (`responded_points > 0`, and no
+  default). "Has replied" is read everywhere as "score above 0" - the queue,
+  the lead card - so a flow that gave nothing for a reply would hide its own
+  leads.
 - **A question is answered once in a conversation** (unique on conversation
   and question).
 - **A saved answer cannot be edited or deleted** - the same trigger as the
@@ -85,6 +98,12 @@ they are on, the total mark. `conversation_answers` is the answer sheet.
 sent. Where a lead goes after an answer is the choice's `next_question_id`.
 That is what makes a branch possible: "No" on the first question jumps to the
 offers question, which sits fourth.
+
+**A choice may only lead forward** - to a question with a higher `position`.
+So a flow cannot loop, a question is asked once, and a lead's score is the sum
+of its answers. The database cannot check this one; the state machine does,
+and sends a lead who meets such a row to a person instead of asking again
+(`STATE-MACHINE.md`, rule 3).
 
 ## How a reply moves a lead
 
@@ -107,8 +126,8 @@ no code.
 
 1. Insert the flow into `flows`, with `is_active = false`.
 2. Insert its questions into `flow_questions`.
-3. Insert each question's choices into `flow_choices`, with `next_question_id`
-   or an `ending`.
+3. Insert each question's choices into `flow_choices`, with the flow's id and
+   `next_question_id` or an `ending`.
 4. To make it the one new leads get: set the old flow's `is_active` to false
    and the new one's to true, in the same migration.
 
@@ -125,7 +144,10 @@ Check before shipping one:
 - **Reply words are not reserved by EZ Texting.** STOP, HELP and INFO are
   answered by EZ Texting itself and never reach us - found with INFO on
   2026-10-05. Text a new keyword to the account before using it.
-- The points against the tier bands (`tiers`): HOT starts at 75.
+- The points against the tier bands (`tiers`): HOT starts at 75. **The most a
+  lead can score must not pass 100** - the bands end there, the screens say
+  "/ 100", and a score above it has no tier.
+- Every choice leads forward, to a later `position`.
 
 ## Changing a flow
 
@@ -136,9 +158,17 @@ runs, so:
   label they had.
 - **Changing points** changes what the next answer earns. Saved answers keep
   theirs, and a finished lead's score does not move.
-- **Removing a question or a choice** that conversations point at is refused
-  by the database (foreign keys). Add a new flow instead and make it active;
-  leads in the old one finish there.
+- **Changing a flow's two awards** - for replying, for finishing - is the one
+  change that shows on old leads: their score stays, but the breakdown's
+  "Responded" and "Completed" lines are read from the flow as it is now, so
+  the lines stop adding up to the score. An answer's line is unaffected.
+  Accepted: it needs those two numbers to change, which has not happened.
+- **Removing a question** that a conversation is on, or that anyone has
+  answered, is refused by the database (foreign keys). Add a new flow instead
+  and make it active; leads in the old one finish there.
+- **Removing a choice** is not refused, and loses nothing already said: an
+  answer carries its own copy of the label and the points. Leads still on that
+  question can no longer pick it.
 
 A lead stays in the flow it started in. Making another flow active changes
 what **new** leads get.
@@ -170,9 +200,6 @@ the inactive flow `wellness`, and every answer already given was copied into
   answer to each question. With a branch a lead cannot reach every question,
   so for some flows it will read higher than any lead can score. For
   antibiotics it is exact.
-- **The screens say "Q4"** for the offers question, by its position, where
-  they show which question a lead is on. Only a lead who said No and has not
-  yet answered the offers question shows it.
 - **Rescoring.** Nothing rescores old leads when points change.
 
 ## Testing
@@ -204,8 +231,9 @@ It marks the lead's open conversation expired, if it has one, starts a new one
 in the flow new leads get, and sends the first question the way the poller
 does. Nothing is deleted: the earlier walks and their answers stay on the lead.
 
-- **Local only.** It refuses when `NODE_ENV` is `production`, and it is in
-  `scripts/`, which is not compiled into the production build.
+- **Local only.** It refuses when `NODE_ENV` is `production`. That check is
+  the only thing stopping it there: the file is not compiled into `dist/`, but
+  the server's image does contain `scripts/`.
 - It needs the lead to exist already - the first walk comes in through the
   poller - and refuses a blocked number: after a walk that ends with STOP, text
   START from the phone first.

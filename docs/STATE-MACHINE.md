@@ -98,10 +98,10 @@ reply, any case:
 
 | | Choice 1 | Choice 2 | Choice 3 |
 |---|---|---|---|
-| q1 | 1, yes, y, yeah, yep, yup, sure, ok, okay, correct | 2, no, n, nope, nah, no thanks | - |
-| q2 | 1, yes, y, yeah, yep, yup, i have | 2, no, n, nope, nah, never, not yet | - |
+| q1 | 1, yes, y, yeah, yep, yup, yes please, sure, ok, okay, correct | 2, no, n, nope, nah, no thanks, no thank you | - |
+| q2 | 1, yes, y, yeah, yep, yup, yes please, i have | 2, no, n, nope, nah, never, not yet | - |
 | q3 | 1, i know, know, i know which one | 2, agent, talk, call, call me, talk to an agent | 3, online, order, order online |
-| offers | 1, yes, y, offers, offer | 2, learn more, learn, more, learnmore | - |
+| offers | 1, yes, y, yes please, offers, offer | 2, learn more, learn, more, learnmore | - |
 
 **The unclear-reply texts:**
 
@@ -330,13 +330,25 @@ reply after the handoff gets no question, no score and no clarification.
 
 ### 3. A valid answer to the current question
 
-`matchChoice` returns one of the current question's choices. Accepted: the
-choice's number, or one of its words - the lists are with the flow, above
-(`flow_choices.words`; until 2026-10-05 a fixed list in code).
+`matchChoice` returns one of the current question's choices. Accepted, as the
+whole reply:
 
-Before matching, the reply is lowercased and trimmed, trailing punctuation is
-dropped, and a leading `option` or `#` is stripped - so `1.`, `Option 1` and
-`Yes!` all match.
+| Form | Examples |
+|---|---|
+| The choice's number | `2`, `2.`, `(2)`, `Option 2` |
+| One of its words - the lists are with the flow, above (`flow_choices.words`) | `no`, `Nope.`, `yes 👍` |
+| Its name, as the screens show it (`flow_choices.label`) | `Talk to an agent` |
+| The option as it was printed: the number, then text beginning with a word or the name of that same choice | `1. Yes`, `2) Talk to an agent for options & discounts` |
+
+Before matching, the reply is lowercased and everything that is not a letter
+or a digit becomes a space - so punctuation, brackets and emoji never decide
+the outcome - and a leading `option` is dropped.
+
+*(2026-10-06, from review: until then only trailing `.!?,;:` was dropped, so a
+lead who typed the option the way the question printed it - "1. Yes" - or
+"No, thanks", or added an emoji, was told "Sorry, please reply 1 for Yes or 2
+for No", and sent to a person on the second try. "yes please" and "no thank
+you" were added to the words the same day.)*
 
 - **Only the choices that question has.** Question 1 has two: `3` is not an
   answer to it.
@@ -344,7 +356,10 @@ dropped, and a leading `option` or `#` is stripped - so `1.`, `Option 1` and
   sentence, or "no, I want to talk to someone first" would count as No, and "I
   don't know which one" as "know".
 - **Anything else is unclear** and goes to rule 4 - every sentence, and
-  anything ambiguous. A human reads those.
+  anything ambiguous. A human reads those. `1 no` names two choices, so it is
+  neither.
+- **A message over 80 characters is never an answer**, and is not examined:
+  an answer is a number or a few words.
 - **The same word can mean different things on different questions.** "yes" is
   an answer to q1, q2 and the offers question; "call" only to q3.
 
@@ -359,13 +374,22 @@ On a valid answer:
 - **If the choice ends the flow:** status `completed`, `end_outcome` from the
   choice, the completion award if that outcome is `completed`, and send the
   choice's reply.
+- **If the choice names a question the flow cannot go to** - one it does not
+  have, or one at or before the current question, which would ask it again and
+  score it twice - the rows are wrong, not the lead: the answer is kept,
+  status becomes `review`, and the flow's review text is sent. No completion
+  award. The database refuses most such rows (`FLOWS.md`, "Rules the database
+  enforces"); this is for what it cannot (2026-10-06 - before, such a lead was
+  quietly marked completed).
 
 ### 4. Anything else - an unclear reply
 
 - If `invalid_count` < `settings.max_invalid_before_review` (seeded `1`):
   increment it and send the question's own clarification
   (`flow_questions.clarify_body`). The lead stays on that question.
-- Otherwise: status `review`, send the flow's review text.
+- Otherwise: status `review`, send the flow's review text. The conversation
+  stays on the question the lead could not answer, so the screens can say
+  where they got stuck.
 
 **One clarification per question - Decided by Jeel, 2026-09-19.** Each repeats
 that question's options, so the lead is reminded what the numbers mean. The
@@ -519,10 +543,24 @@ left it `expired`, set `has_unread_inbound`, and sent nothing.
   The conversation still advances when a send is refused: the lead's answer is
   recorded, and only the message is withheld. Its `conversation.advanced` log
   line says `"sent": false`, so the case is visible.
-- Every automated send uses the copy in `settings`, rendered by
-  `core/messages.ts` (`{first_name}`, one-segment limit), and is recorded in
-  `messages` with the id EZ Texting returns - that id is what links the lead's
-  next reply back to it.
+- Every automated send is rendered by `core/messages.ts` (`{first_name}`) and
+  recorded in `messages` with the id EZ Texting returns - that id is what links
+  the lead's next reply back to it. The questions and replies come from the
+  lead's flow and are sent whole, however long: a reply and its question are
+  one text. The first question and the missed-call text keep the one-segment
+  limit, dropping the name if it would not fit.
+- **A lead whose text did not go out is flagged for a person** - 2026-10-06,
+  from review. They answered and heard nothing back, the conversation is on a
+  question they never received, and nothing retries it; partway through the
+  questions they are not in the queue either, so they would have sat unseen
+  until they expired - every lead who replied during an EZ Texting outage.
+  The reply flow now sets `has_unread_inbound`, which puts them in the queue
+  as an inbound reply, with the failed text in the thread. Not for a blocked
+  number.
+- **A send that timed out is not treated as refused** - calls to EZ Texting
+  give up after 30 seconds, and a text cut off that way may still have gone
+  out. Its row stays `sending`, so it is never sent a second time;
+  `db/outbound.ts`.
 - The database changes commit first, then the send happens. A failed send is
   logged and leaves the conversation where it is; it does not roll the answer
   back. The lead has answered, and losing that would be worse than a missing
@@ -683,7 +721,20 @@ Plus integration tests for the webhook wiring, in the style of
 
 ## Open items
 
-None.
+Two found in review on 2026-10-06, both waiting for a decision:
+
+- **"No" on the offers question has no answer of its own.** A lead who says No
+  to question 1 and then "no" to "Would you like to receive special offers?"
+  is told "Sorry, please reply 1 for offers, 2 to learn more..."; a second
+  "no" gets "an eDrugstore representative will follow up with you directly"
+  and puts them in the queue as Needs review - someone who declined twice is
+  promised a call. It needs a third choice with its own wording and an ending
+  that keeps the lead out of the queue. The same holds for "no" to question 3.
+- **A second text sent before the next question arrives is read as its
+  answer.** "Yes" and then "yes" again a moment later answers question 1 and
+  then question 2 - which the lead has not seen. The lock above keeps the two
+  in order; it cannot know the second was not meant for the new question. The
+  answer row cannot be corrected afterwards.
 
 **Parked:** EZ Texting's automatic STOP and HELP replies are the account's own
 wording, not ours. On 2026-10-05 the HELP reply still read "PillRx Alerts";

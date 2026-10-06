@@ -172,7 +172,8 @@ describe('an unclear reply', () => {
   it('a second one hands the lead to a person: Needs review', () => {
     const r = run(['huh', 'still huh']);
     expect(r.send).toEqual(['Thanks! An eDrugstore representative will follow up with you directly.']);
-    expect(r.conversation).toMatchObject({ status: 'review', currentQuestionId: null, score: 10 });
+    // The question stays: it is where they got stuck.
+    expect(r.conversation).toMatchObject({ status: 'review', currentQuestionId: Q1, score: 10 });
     // Not flagged as an inbound reply: Needs review is what brings it to a person.
     expect(r.needsPerson).toBe(false);
   });
@@ -225,6 +226,49 @@ describe('a text when no question is waiting for it', () => {
   it('an open conversation on a question its flow no longer has goes to a person, not a crash', () => {
     const r = step(fresh({ currentQuestionId: 999 }), said('1'), RULES);
     expect(r).toMatchObject({ needsPerson: true, send: [], answer: null });
+  });
+});
+
+describe('a flow whose rows are wrong', () => {
+  /** The antibiotics flow with question 1's "Yes" pointed somewhere else. */
+  const yesLeadsTo = (nextQuestionId: number): Rules => ({
+    ...RULES,
+    flow: {
+      ...ANTIBIOTICS,
+      questions: ANTIBIOTICS.questions.map((q) =>
+        q.id === Q1
+          ? { ...q, choices: q.choices.map((c) => (c.choice === '1' ? { ...c, nextQuestionId } : c)) }
+          : q
+      ),
+    },
+  });
+
+  it('a choice leading to a question the flow does not have: the answer is kept and a person follows up', () => {
+    const r = step(fresh(), said('yes'), yesLeadsTo(999));
+    // Not completed: nothing was finished, so no completion award and no place among finished leads.
+    expect(r.conversation).toMatchObject({ status: 'review', endOutcome: null, score: 30 });
+    expect(r.answer).toMatchObject({ questionKey: 'q1', label: 'Yes', points: 20 });
+    expect(r.send).toEqual([ANTIBIOTICS.reviewBody]);
+  });
+
+  it('a choice leading back to its own question would ask it again and score it twice: the same', () => {
+    const r = step(fresh(), said('yes'), yesLeadsTo(Q1));
+    expect(r.conversation).toMatchObject({ status: 'review', score: 30 });
+    expect(r.send).toEqual([ANTIBIOTICS.reviewBody]);
+  });
+
+  it('a choice leading to an earlier question: the same', () => {
+    const onQ2 = run(['1']).conversation;
+    const back: Rules = {
+      ...RULES,
+      flow: {
+        ...ANTIBIOTICS,
+        questions: ANTIBIOTICS.questions.map((q) =>
+          q.id === Q2 ? { ...q, choices: q.choices.map((c) => ({ ...c, nextQuestionId: Q1 })) } : q
+        ),
+      },
+    };
+    expect(step(onQ2, said('yes'), back).conversation.status).toBe('review');
   });
 });
 

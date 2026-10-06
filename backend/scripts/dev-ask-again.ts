@@ -14,8 +14,9 @@
  * poller sends it. Nothing is deleted: the earlier conversations and their
  * answers stay, and so does whatever agents did with the lead.
  *
- * Refuses in production, and is not in the production build: scripts/ is
- * never compiled into dist/. docs/FLOWS.md, "Testing a flow with one phone".
+ * Refuses in production - `NODE_ENV` is the only guard: the file is not
+ * compiled into dist/, but the server's image does hold scripts/.
+ * docs/FLOWS.md, "Testing a flow with one phone".
  */
 import '../src/config';
 import { openingQuestion, startConversation } from '../src/db/flows';

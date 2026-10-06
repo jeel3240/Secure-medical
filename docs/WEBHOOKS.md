@@ -153,6 +153,18 @@ Two details matter here:
 logged and leaves the conversation advanced - the lead has answered, and
 re-asking a question they already answered is worse than a missing follow-up.
 For the same reason a failed send still returns 200: a retry would not re-send.
+The lead is flagged for a person instead (`STATE-MACHINE.md`, "Sending").
+
+**The handler gives its database connection back before it sends** -
+2026-10-06, from review. Sending records the text through the pool, and waits
+on EZ Texting in between. While the handler still held its own connection, ten
+replies in flight at once each kept one and waited for another: the pool of
+ten was empty, nothing returned, and the whole API - sign-in, the queue,
+Twilio's webhooks - stopped until it was restarted. Reproduced with ten
+simultaneous replies and a slow send. The connection is now released straight
+after `COMMIT`. Two more limits stand behind it: a request that cannot get a
+connection fails after ten seconds instead of waiting for ever
+(`db/pool.ts`), and a call to EZ Texting gives up after thirty.
 
 **`blockNumber` comes from the state machine's result,** not from the handler
 re-reading the text. The handler decides whether the reply *is* an opt-out,
@@ -171,6 +183,15 @@ decision of what counts as an opt-out stay here.
 A send to a number on `dnc_list` is refused inside `sendMessage`, so a reply
 arriving after a STOP from elsewhere advances the conversation but sends
 nothing. The `conversation.advanced` log line says `"sent": false` in that case.
+That line is written only when the reply produced something to send, and
+carries `parts` - how many pieces went into the one text - never the wording.
+*(Between 2026-10-05 and -06 it was written for every reply, STOP included,
+with `"sent": false`: the list of texts had replaced a single key, and an
+empty list still counted as something to send.)*
+
+**A keyword is short.** STOP, START and the rest are matched against the whole
+message only when it is 40 characters or fewer; a longer message is not a
+keyword and is not scanned.
 
 ## Not done yet
 

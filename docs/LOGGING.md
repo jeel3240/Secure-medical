@@ -83,13 +83,15 @@ firing a real webhook: the number appears nowhere in the output.
 | `worker.started`, `poll.tick`, `poll.failed` | `worker/index.ts` |
 | `conversation.expired`, `expiry.failed` | `worker/index.ts` |
 | `call.token_issued`, `call.started`, `call.refused`, `call.failed_to_start`, `call.finished`, `call.answered_by`, `call.recorded`, `call.incoming`, `call.incoming_failed`, `call.missed_not_recorded`, `twilio.webhook_rejected`, `twilio.archive_failed`, `calling.off` | `api/calls.ts`, `api/twilio-webhooks.ts`, `api/index.ts` - browser calling, `TWILIO.md`. `call.refused` carries `reason`; `twilio.webhook_rejected` usually means `PUBLIC_URL` is not the address Twilio calls |
-| `sms.sent`, `sms.failed`, `sms.no_template`, `sms.name_dropped`, `sms.record_failed` | `worker/poller.ts`, `worker/retry-openers.ts`, `worker/opener.ts` (`sms.name_dropped`), `api/reply-flow.ts`, `db/agent-sms.ts`, `db/outbound.ts` (`sms.record_failed`) |
+| `sms.sent`, `sms.failed`, `sms.unconfirmed`, `sms.no_template`, `sms.name_dropped`, `sms.record_failed` | `worker/poller.ts`, `worker/retry-openers.ts`, `worker/opener.ts` (`sms.name_dropped`), `api/reply-flow.ts`, `db/agent-sms.ts`, `db/outbound.ts` (`sms.record_failed`) |
 | | **Which text it was** (2026-10-05): the first question logs `key: question_1` - the opener's name in the logs, kept though the wording now comes from the lead's flow; a text sent after a reply logs `flow: antibiotics`, the flow's key, since one text can carry a reply and the next question |
 | | The text after a missed call logs the same events with `key: message_missed_call` (`db/missed-call-text.ts`). Its `sms.failed` is at `warn`, a real refusal by EZ Texting included, so an alarm on `level=error` alone does not catch it |
 | `transcript.tick`, `transcript.tick_failed`, `transcript.request_failed`, `transcript.read_failed` | `worker/transcripts.ts` - a call's transcript, `TWILIO.md`, "Recordings and transcripts". `tick` only when something moved |
 | `opener.retry`, `opener.retry_failed`, `opener.gave_up` | `worker/retry-openers.ts` - `POLLER.md`, "Retrying a failed opener" |
 | `webhook.rejected`, `webhook.ignored`, `webhook.failed` | `api/webhooks.ts` |
-| `conversation.advanced` | `api/webhooks.ts` |
+| | `sms.unconfirmed` (warn, `db/outbound.ts`): a send to EZ Texting timed out, so the text may or may not have gone. It is not retried |
+| `conversation.advanced` | `api/webhooks.ts` - only when the reply produced a text to send; `parts` is how many pieces it had, `sent` whether it went |
+| `conversation.expiry_not_moved` | `api/reply-flow.ts` - a text went out but its reply window could not be saved |
 | `dnc.blocked`, `dnc.released` | `api/webhooks.ts` |
 | `http.unhandled` | `api/http.ts` |
 | `opener.retry`, `opener.retry_failed` | `worker/index.ts` - one line per pass that had something due, with `due`, `sent`, `failed`, `abandoned`, `tooOld` |

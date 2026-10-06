@@ -168,8 +168,8 @@ function savedConversation(calls: Recorded[]) {
 function savedAnswer(calls: Recorded[]) {
   const insert = calls.find((c) => /INSERT INTO conversation_answers/i.test(c.sql));
   if (!insert?.values) return null;
-  const [conversationId, leadId, questionId, questionKey, , , choice, label, points] = insert.values as unknown[];
-  return { conversationId, leadId, questionId, questionKey, choice, label, points };
+  const [conversationId, leadId, questionId, questionKey, , , choice, label, points, messageId] = insert.values as unknown[];
+  return { conversationId, leadId, questionId, questionKey, choice, label, points, messageId };
 }
 
 function buildApp() {
@@ -529,6 +529,8 @@ describe('the reply advances the conversation', () => {
       choice: '1',
       label: 'Yes',
       points: 20,
+      // The stored text it was read from, so the thread can label that very message.
+      messageId: 7,
     });
     // The reply and the next question, as one text.
     expect(sendMessage).toHaveBeenCalledTimes(1);
@@ -671,6 +673,55 @@ describe('the reply advances the conversation', () => {
     expect(poolSql().some((sql) => /expires_at/i.test(sql))).toBe(false);
     expect(sqlOf(calls)).not.toMatch(/expires_at/i);
     expect(savedConversation(calls)).toMatchObject({ step: 2, currentQuestionId: Q2 });
+  });
+
+  it('flags a lead whose text did not go out, so a person sees them', async () => {
+    const { client } = fakeClient({ leadId: 42, conversation: {} });
+    connect.mockReturnValue(client);
+    sendMessage.mockRejectedValue(new Error('EZ Texting down'));
+
+    await request(buildApp()).post('/api/webhooks/eztexting').send(reply({ message: '1' }));
+
+    // They answered and heard nothing back; nothing retries a question, and a
+    // lead partway through is not in the queue. The flag is what puts them there.
+    expect(poolSql().some((sql) => /UPDATE leads SET has_unread_inbound = true/i.test(sql))).toBe(true);
+  });
+
+  it('does not flag one whose number is blocked: that text was never owed', async () => {
+    const { client } = fakeClient({ leadId: 42, conversation: {} });
+    connect.mockReturnValue(client);
+    sendMessage.mockRejectedValue(Object.assign(new Error('blocked'), { name: 'BlockedNumberError' }));
+
+    await request(buildApp()).post('/api/webhooks/eztexting').send(reply({ message: '1' }));
+
+    expect(poolSql().some((sql) => /has_unread_inbound/i.test(sql))).toBe(false);
+  });
+
+  it('hands its connection back before it sends', async () => {
+    const { client } = fakeClient({ leadId: 42, conversation: {} });
+    connect.mockReturnValue(client);
+    let releasedBeforeSend: boolean | null = null;
+    sendMessage.mockImplementation(async () => {
+      releasedBeforeSend = client.release.mock.calls.length > 0;
+      return { id: 'sent-1' };
+    });
+
+    await request(buildApp()).post('/api/webhooks/eztexting').send(reply({ message: '1' }));
+
+    // Held across the send, ten replies at once each kept one connection and
+    // waited for another to record their text, and the API stopped.
+    expect(releasedBeforeSend).toBe(true);
+    expect(client.release).toHaveBeenCalledTimes(1);
+  });
+
+  it('a STOP sends nothing', async () => {
+    const { client } = fakeClient({ leadId: 42, conversation: {} });
+    connect.mockReturnValue(client);
+
+    await request(buildApp()).post('/api/webhooks/eztexting').send(reply({ message: 'STOP' }));
+
+    expect(sendMessage).not.toHaveBeenCalled();
+    expect(client.release).toHaveBeenCalledTimes(1);
   });
 
   it('keeps the advanced conversation when the send fails', async () => {

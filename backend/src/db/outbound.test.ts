@@ -56,6 +56,36 @@ describe('sendAndRecord', () => {
     expect(db.sql[1]).toMatch(/SET delivery_status = 'failed'/);
   });
 
+  it('leaves the row as sending when the send timed out - it may have gone, so it is neither failed nor retried', async () => {
+    const db = fakeDb();
+    const result = await sendAndRecord(db, {
+      leadId: 7,
+      body: 'Q1',
+      send: async () => {
+        throw Object.assign(new Error('timeout of 30000ms exceeded'), { code: 'ECONNABORTED' });
+      },
+    });
+
+    expect(result).toMatchObject({ sent: false, blocked: false, unconfirmed: true });
+    // Only the insert: nothing marks it failed, which is what the opener retry reads.
+    expect(db.sql).toHaveLength(1);
+  });
+
+  it('a connection that could not be made is a plain failure: nothing left', async () => {
+    const db = fakeDb();
+    const result = await sendAndRecord(db, {
+      leadId: 7,
+      body: 'Q1',
+      send: async () => {
+        throw Object.assign(new Error('connect ECONNREFUSED'), { code: 'ECONNREFUSED' });
+      },
+    });
+
+    expect(result).toMatchObject({ sent: false, blocked: false });
+    expect(result).not.toHaveProperty('unconfirmed');
+    expect(db.sql[1]).toMatch(/SET delivery_status = 'failed'/);
+  });
+
   it('removes the row for a blocked number - that send was never attempted', async () => {
     const db = fakeDb();
     const result = await sendAndRecord(db, {

@@ -74,10 +74,36 @@ async function main(): Promise<void> {
     check('every text names eDrugstore, never Secure Medical',
       antibiotics.questions.some((q) => /secure medical/i.test(q.body + q.clarifyBody)) || /secure medical/i.test(antibiotics.reviewBody), false);
     let refused = '';
-    await pool.query(`INSERT INTO flows (key, name, review_body, is_active) VALUES ('second', 'Second', 'x', true)`).catch((err: Error) => {
+    await pool.query(`INSERT INTO flows (key, name, responded_points, review_body, is_active) VALUES ('second', 'Second', 10, 'x', true)`).catch((err: Error) => {
       refused = err.message;
     });
     check('only one flow can be the one new leads get', /flows_one_active/.test(refused), true);
+
+    // The rules a migration adding a flow is held to, by the database.
+    const refusedBy = async (sql: string) => {
+      let message = '';
+      await pool.query(sql).catch((err: Error) => {
+        message = err.message;
+      });
+      return message;
+    };
+    check(
+      'a flow cannot award nothing for replying: "score above 0" is how a reply is known',
+      /responded_points/.test(
+        await refusedBy(`INSERT INTO flows (key, name, responded_points, review_body) VALUES ('zero', 'Zero', 0, 'x')`)
+      ),
+      true
+    );
+    check(
+      'a choice cannot lead into another flow',
+      /flow_choices_next_in_flow/.test(
+        await refusedBy(
+          `UPDATE flow_choices c SET next_question_id = (SELECT q.id FROM flow_questions q JOIN flows f ON f.id = q.flow_id WHERE f.key = 'wellness' AND q.key = 'q2'), ending = NULL
+           WHERE c.choice = '1' AND c.question_id = (SELECT q.id FROM flow_questions q JOIN flows f ON f.id = q.flow_id WHERE f.key = 'antibiotics' AND q.key = 'q3')`
+        )
+      ),
+      true
+    );
   }
 
   console.log('\na lead in the antibiotics flow');
@@ -92,6 +118,22 @@ async function main(): Promise<void> {
       tier: 'LOW',
       end_outcome: null,
     });
+  }
+
+  {
+    const other = await makeLead('Crossed');
+    let refused = '';
+    await pool
+      .query(
+        `INSERT INTO conversations (lead_id, status, step, flow_id, current_question_id)
+         SELECT $1, 'open', 1, (SELECT id FROM flows WHERE key = 'antibiotics'),
+                (SELECT q.id FROM flow_questions q JOIN flows f ON f.id = q.flow_id WHERE f.key = 'wellness' AND q.key = 'q1')`,
+        [other]
+      )
+      .catch((err: Error) => {
+        refused = err.message;
+      });
+    check('a conversation cannot be on a question of another flow', /conversations_question_in_flow/.test(refused), true);
   }
 
   console.log('\na second flow, added as rows only: five questions and a branch');
@@ -110,8 +152,8 @@ async function main(): Promise<void> {
     // Choice 1 always goes on to the next question; choice 2 of question 2
     // skips to question 5; the fifth ends it.
     await pool.query(
-      `INSERT INTO flow_choices (question_id, choice, label, words, points, reply_body, next_question_id, ending)
-       SELECT q.id, c.choice, 'W' || q.position || c.label, ARRAY[lower(c.label)], c.points,
+      `INSERT INTO flow_choices (flow_id, question_id, choice, label, words, points, reply_body, next_question_id, ending)
+       SELECT q.flow_id, q.id, c.choice, 'W' || q.position || c.label, ARRAY[lower(c.label)], c.points,
               CASE WHEN c.choice = '1' THEN 'Got it.' END,
               CASE WHEN q.position = 5 THEN NULL
                    WHEN q.position = 2 AND c.choice = '2' THEN last.id
