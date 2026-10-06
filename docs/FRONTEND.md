@@ -91,7 +91,8 @@ labels, leaving half a line under "Maximum possible".
 tabs, and the ninth wrapped onto a second line below 1366px. Narrower tab sides
 keep all nine on one line down to 1280px, measured.
 
-**Ten tabs, and the row never wraps - 2026-10-06.** Offers made ten, and with
+**Eleven tabs, and the row never wraps - 2026-10-06.** Offers made ten (and
+Not interested, the same day, eleven), and with
 three-digit counts they no longer fitted at any width up to the 1440px the
 content is capped at: "Awaiting reply" broke onto two lines inside a 32px
 track and spilled out of it. Found in review; measured, not judged by eye.
@@ -156,8 +157,10 @@ to say. Which status wins, and why New went too, is in `QUEUE.md`, "The tag".
 | Missed call | Handset with an arrow turned away | The lead rang and nobody answered. Bold, like Inbound reply |
 | Wants a call | Handset | The lead said No, then asked to hear from a rep (2026-10-05). The same handset as Missed call, without the arrow |
 
-Admin > Leads has one more of its own: **Offers**, a price tag, muted - a
-lead who asked for special offers and nothing else. Both got their own icon on
+Admin > Leads has two more of its own: **Offers**, a price tag, muted - a
+lead who asked for special offers and nothing else - and **Not interested**,
+a circle with a line through it, muted: one who said no to the offers and to
+a rep. Both got their own icon on
 2026-10-06: they had borrowed the chat bubble and the inbound message box,
 which already meant Answering and an unread text on the other screen.
 
@@ -684,7 +687,7 @@ arrives after a newer one is still dropped.
 
 ## Tests
 
-`npm test` in `frontend/`. Vitest with jsdom, 271 tests in 26 files (2026-10-06).
+`npm test` in `frontend/`. Vitest with jsdom, 272 tests in 26 files (2026-10-06).
 
 Logic first, by agreement - a screen is easy to judge by eye, and a dropped
 response or an off-by-one age threshold is not:

@@ -41,6 +41,7 @@ const TABS: { key: string; label: string }[] = [
   { key: 'answering', label: 'Answering' },
   { key: 'ready', label: 'Ready' },
   { key: 'offers', label: 'Offers' },
+  { key: 'declined', label: 'Not interested' },
   { key: 'working', label: 'Working' },
   { key: 'closed', label: 'Closed' },
   { key: 'needs_review', label: 'Needs review' },

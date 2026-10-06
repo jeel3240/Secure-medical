@@ -154,6 +154,8 @@ async function main(): Promise<void> {
   await startFlow(offersOnly, ['2', '1']);
   const wantsRep = await lead('WantsRep', null);
   await startFlow(wantsRep, ['2', 'learn more']);
+  const wantsNothing = await lead('WantsNothing', null);
+  await startFlow(wantsNothing, ['no', 'no thanks']);
   // Said No, was asked about offers, and went quiet: stopped on a question that is not "Q4".
   const quietOnOffers = await lead('QuietOnOffers', null);
   const quietConversation = await startFlow(quietOnOffers, ['2']);
@@ -182,6 +184,7 @@ async function main(): Promise<void> {
   check('unclear: needs_review', status('Unclear'), 'needs_review');
   check('asked for offers only: offers, not ready - there is no call to make', status('OffersOnly'), 'offers');
   check('asked to hear from a rep: ready for an agent', status('WantsRep'), 'ready');
+  check('said no to both: declined - not ready, nobody is to call them', status('WantsNothing'), 'declined');
   check('went quiet: expired', status('Quiet'), 'expired');
   check('blocked: opted_out', status('Stopped'), 'opted_out');
 
@@ -212,10 +215,11 @@ async function main(): Promise<void> {
   const closedTab = await listAdminLeads({ status: 'closed', pageSize: 200 });
   check('the closed tab lists exactly the closed leads', closedTab.leads.map((l) => l.firstName).sort(), ['Closed', 'SoldBefore']);
   check('the counts add up per status', all.counts, {
-    all: 25,
+    all: 26,
     awaiting_reply: 2,
     answering: 1,
     offers: 1,
+    declined: 1,
     ready: 4,
     working: 10,
     closed: 2,
@@ -224,9 +228,9 @@ async function main(): Promise<void> {
     opted_out: 2,
   });
   // The total is read from those counts, not counted again.
-  check('the total is the chosen tab\'s count', [closedTab.total, all.total], [2, 25]);
+  check('the total is the chosen tab\'s count', [closedTab.total, all.total], [2, 26]);
   const second = await listAdminLeads({ pageSize: 10, page: 2 });
-  check('a later page carries on in the same order, newest first', [second.leads.length, second.page, second.total], [10, 2, 25]);
+  check('a later page carries on in the same order, newest first', [second.leads.length, second.page, second.total], [10, 2, 26]);
   const firstIds = (await listAdminLeads({ pageSize: 10 })).leads.map((l) => l.id);
   check('and repeats nothing from the first', second.leads.some((l) => firstIds.includes(l.id)), false);
 

@@ -38,7 +38,7 @@ export interface LeadDetail {
     question: string | null;
     /** Which flow the lead is in: 'antibiotics'. */
     flow: string | null;
-    /** How the flow ended: completed, offers, wants_contact - or null. */
+    /** How the flow ended: completed, offers, wants_contact, declined - or null. */
     endOutcome: string | null;
   } | null;
 

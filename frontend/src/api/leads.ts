@@ -7,6 +7,8 @@ export type LeadStatus =
   | 'ready'
   /** Asked for special offers only: not a call to make. */
   | 'offers'
+  /** Wants neither offers nor a rep. */
+  | 'declined'
   | 'working'
   | 'closed'
   | 'needs_review'

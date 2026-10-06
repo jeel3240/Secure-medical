@@ -63,11 +63,11 @@ async function main(): Promise<void> {
       { key: 'antibiotics', is_active: true },
     ]);
     const antibiotics = (await loadFlow(pool, (await pool.query(`SELECT id FROM flows WHERE key = 'antibiotics'`)).rows[0].id))!;
-    check('antibiotics: four questions, with two, two, three and two choices', antibiotics.questions.map((q) => [q.key, q.choices.length]), [
+    check('antibiotics: four questions, with two, two, three and three choices', antibiotics.questions.map((q) => [q.key, q.choices.length]), [
       ['q1', 2],
       ['q2', 2],
       ['q3', 3],
-      ['offers', 2],
+      ['offers', 3],
     ]);
     const q1 = antibiotics.questions[0];
     check('"No" on question 1 leads to the offers question, not question 2', antibiotics.questions.find((q) => q.id === q1.choices[1].nextQuestionId)?.key, 'offers');

@@ -51,7 +51,7 @@ export interface LeadDetail {
     agentTookOverAt: string | null;
     /** Which flow the lead is in: 'antibiotics'. FLOWS.md. */
     flow: string | null;
-    /** How the flow ended: completed, offers, wants_contact - or null. */
+    /** How the flow ended: completed, offers, wants_contact, declined - or null. */
     endOutcome: string | null;
   } | null;
   chips: AnswerChip[];

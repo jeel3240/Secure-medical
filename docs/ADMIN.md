@@ -46,7 +46,7 @@ showing "there" as a name (2026-09-29).
 **The messages are listed as a lead receives them** (2026-10-05): the first
 question; then, for every choice, its reply joined to the question that
 follows - one text, which is how it is sent; then each question's "sorry"
-text, the review text, and the text after a missed call. Sixteen for the
+text, the review text, and the text after a missed call. Seventeen for the
 antibiotics flow. Each carries a `name` ("After Q1 · Yes") and `when` ("Then
 Q2", "Ends the questions"), built by the server, since the list depends on the
 flow. A numbered question is "Q2"; one off the main line goes by its heading -

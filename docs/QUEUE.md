@@ -38,7 +38,7 @@ starts at the first reply, so a score is the mark of a responder:
 
 | Reason | Why a person is needed |
 |---|---|
-| Newest conversation `completed` | Finished the flow's questions, or asked to hear from a rep. **Except** one that ended `offers` - a lead who only asked for special offers is a list for the client's campaigns, not a call to make (2026-10-05, `FLOWS.md`) |
+| Newest conversation `completed` | Finished the flow's questions, or asked to hear from a rep. **Except** one that ended `offers` - a lead who only asked for special offers is a list for the client's campaigns, not a call to make (2026-10-05) - or `declined`, who said no to the offers and to a rep (2026-10-06). `FLOWS.md`, "What a choice's ending means" |
 | Newest conversation `review` | Replied, and we could not understand it |
 | A callback is booked and not done | An agent promised a call. This is also what keeps an expired lead with a callback in reach |
 

@@ -202,9 +202,12 @@ async function main() {
   await startFlow(wantsRep, ['2', 'learn more']);
   const finished = await lead({ phone: '+15550000194', first: 'Finished', source: 'CORE-G-27', ageMin: 4, status: null, score: 0, tier: null });
   await startFlow(finished, ['1', '2', '3']);
+  const wantsNothing = await lead({ phone: '+15550000193', first: 'WantsNothing', source: 'CORE-G-27', ageMin: 4, status: null, score: 0, tier: null });
+  await startFlow(wantsNothing, ['no', 'no']);
   const afterNo = await listQueue({ limit: 200 });
   const row = (id: number) => afterNo.leads.find((l) => l.id === id);
   check('a lead who asked for offers only is not in the queue: no call to make', row(offersOnly), undefined);
+  check('nor is one who said no to the offers and to a rep: they asked for nothing', row(wantsNothing), undefined);
   check('one who asked to hear from a rep is, at its own low score', [row(wantsRep)?.score, row(wantsRep)?.tier], [10, 'LOW']);
   check('tagged, so an agent sees why it is there', row(wantsRep)?.tag, { kind: 'wants_call' });
   check('a row carries its answers, as many as the lead gave', row(wantsRep)?.answers, [

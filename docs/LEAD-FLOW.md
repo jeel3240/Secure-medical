@@ -56,15 +56,18 @@ that doc wins if the two ever disagree:
             │
             ├── texts STOP ──────────────► OPTED OUT      never contacted again
             │
-            └── says No, then asks ──────► OFFERS         out of the queue: a list for
-                for special offers only                   the client's campaigns
+            ├── says No, then asks ──────► OFFERS         out of the queue: a list for
+            │   for special offers only                   the client's campaigns
+            │
+            └── says No, then ───────────► NOT INTERESTED out of the queue: wants
+                No thanks                                 neither offers nor a rep
 ```
 
 The questions a lead gets are the **eDrugstore antibiotics** script since
 2026-10-05: did you ask about antibiotics, have you used telemedicine, how do
 you want to go on. A lead who says No to the first is asked one thing instead -
-special offers, or hear from a rep. Offers ends there; **hear from a rep** is
-Ready, in the queue as **Wants a call**. `STATE-MACHINE.md`, "The antibiotics
+special offers, hear from a rep, or no thanks. Offers and no thanks end there;
+**hear from a rep** is Ready, in the queue as **Wants a call**. `STATE-MACHINE.md`, "The antibiotics
 flow".
 
 An agent's DNC button leads to Opted out too, from any status.
@@ -82,6 +85,7 @@ highest in this list wins.
 | **Needs review** | Two replies we could not understand | Yes |
 | **Ready** | Finished the questions, or asked to hear from a rep; nobody has touched it | Yes |
 | **Offers** | Said No to the first question, then Yes to special offers. Nothing for an agent to do | No, unless they text or ring us |
+| **Not interested** | Said No to the first question, then No thanks to the offers and to a rep | No, unless they text or ring us |
 | **Expired** | Went quiet during the questions | No, unless they text or ring us |
 | **Answering** | Partway through the questions | No, unless an agent holds it or they ring us and nobody answers |
 | **Awaiting reply** | Has not answered question 1 | No, with the same two exceptions |

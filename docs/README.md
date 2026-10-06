@@ -109,8 +109,8 @@ contact in the group gets a text within a poll interval. `openers` in the
 ## How to test
 
 ```bash
-cd backend  && npm test && npm run lint    # 620 tests
-cd frontend && npm test && npm run lint    # 271 tests   (counts as of 2026-10-06)
+cd backend  && npm test && npm run lint    # 626 tests
+cd frontend && npm test && npm run lint    # 272 tests   (counts as of 2026-10-06)
 ```
 
 **Unit and route tests** mock the database and cover behaviour in isolation.
@@ -188,9 +188,10 @@ reads "off"; a calling change is proved by tests and checked on the live
 server - `TWILIO.md`, "What it needs on the Twilio account".
 
 **The message copy is the client's antibiotics script** (2026-10-05,
-`STATE-MACHINE.md`). Four lines in it were drafted here and are waiting for the
+`STATE-MACHINE.md`). Five lines in it were drafted here and are waiting for the
 client's word: the reply to Special offers, the offers question's "sorry" text,
-the numbers on the offers question, and the text after a missed call. Nothing
+the numbers on the offers question, its third option "No thanks" with its
+reply, and the text after a missed call. Nothing
 has been sent to anyone outside the test group, and the end-to-end script
 deliberately stops short of a real send. Two of the texts run past 160
 characters and cost two segments (`ADMIN.md`, "Configuration").
@@ -202,9 +203,9 @@ seconds). Past a few hundred thousand it would need a stored "needs a person"
 flag - `QUEUE.md`, "How fast it is".
 
 **Two things about the SMS flow are waiting for a decision** -
-`STATE-MACHINE.md`, "Open items": "no" to the offers question has no answer of
-its own, and a second text sent before the next question arrives is read as
-its answer.
+`STATE-MACHINE.md`, "Open items": "no" to question 3 has no answer of its own,
+and a second text sent before the next question arrives is read as its
+answer.
 
 **One flow for everyone.** Every new lead gets the one active flow. A flow per
 EZ Texting group, and editing a flow from the website, are not built -

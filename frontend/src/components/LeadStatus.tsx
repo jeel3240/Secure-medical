@@ -13,7 +13,7 @@ import { StatusIcon, type StatusIconName } from './StatusIcon';
  * offers and nothing else, is a price tag: its own icon, so the message box
  * with an arrow keeps meaning one thing - an unread text - on every screen.
  *
- * Tone: leads with nothing left to do (Closed, Expired, Offers) step back to muted; Opted out is in
+ * Tone: leads with nothing left to do (Closed, Expired, Offers, Not interested) step back to muted; Opted out is in
  * the danger colour, since that number can never be contacted. Everything
  * else is plain text.
  */
@@ -23,6 +23,7 @@ export const LEAD_STATUS_LABEL: Record<Status, string> = {
   answering: 'Answering',
   ready: 'Ready',
   offers: 'Offers',
+  declined: 'Not interested',
   working: 'Working',
   closed: 'Closed',
   needs_review: 'Needs review',
@@ -36,6 +37,8 @@ const ICON: Record<Status, StatusIconName> = {
   ready: 'circle',
   // Wants offers by text, not a call.
   offers: 'tag',
+  // Said no to the offers and to a rep.
+  declined: 'minus',
   working: 'half',
   closed: 'check',
   needs_review: 'warning',
@@ -46,6 +49,7 @@ const ICON: Record<Status, StatusIconName> = {
 const TONE: Partial<Record<Status, 'muted' | 'danger'>> = {
   closed: 'muted',
   offers: 'muted',
+  declined: 'muted',
   expired: 'muted',
   opted_out: 'danger',
 };

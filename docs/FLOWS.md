@@ -91,6 +91,12 @@ they are on, the total mark. `conversation_answers` is the answer sheet.
 | `completed` | The questions are answered | Yes | Yes, by score |
 | `offers` | Wants offers only | No | No - Admin > Leads shows **Offers** |
 | `wants_contact` | Asked to hear from a rep | No | Yes, tagged **Wants a call** |
+| `declined` | Wants neither offers nor a rep | No | No - Admin > Leads shows **Not interested** |
+
+The two that are not for agents are one list in the code, `NOT_FOR_AGENTS`
+(`core/state-machine.ts`), which the queue reads. A new ending is added in
+three places: the two `CHECK`s in the migration, the `Ending` type, and - if
+agents should not see it - that list.
 
 ### `position` is not "what comes next"
 

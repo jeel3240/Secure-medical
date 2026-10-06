@@ -33,6 +33,7 @@ describe('the header in words', () => {
     ['finished', convo({ status: 'completed', step: 3 }), 'Completed'],
     ['said No, asked for offers', convo({ status: 'completed', step: 4, endOutcome: 'offers' }), 'Offers only'],
     ['said No, asked for a rep', convo({ status: 'completed', step: 4, endOutcome: 'wants_contact' }), 'Wants a call'],
+    ['said No, then no thanks', convo({ status: 'completed', step: 4, endOutcome: 'declined' }), 'Not interested'],
     ['went quiet', convo({ status: 'expired', step: 2 }), 'Stopped at Q2'],
     ['unclear replies', convo({ status: 'review', step: 1 }), 'Needs review at Q1'],
     ['an agent took over', convo({ step: 1, agentTookOverAt: '2026-09-29T02:39:50Z' }), 'Agent took over at Q1'],

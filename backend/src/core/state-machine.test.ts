@@ -149,15 +149,36 @@ describe('after "No": special offers, or hear from a rep', () => {
     expect(r.conversation).toMatchObject({ status: 'completed', endOutcome: 'wants_contact' });
   });
 
-  it('neither earns the "answered all the questions" 10: they answered one', () => {
+  // A lead who wants neither had only STOP to say so, which takes them off
+  // every list; "no" was an unclear reply, and a second one promised them a
+  // rep and put them in the queue.
+  it.each(['3', 'no', 'No thanks', 'nope', 'not interested'])('%j: wants neither - thanked, and left alone', (text) => {
+    const r = run(['2', text]);
+    expect(r.send).toEqual(['No problem. Thanks for your time.']);
+    expect(r.conversation).toMatchObject({ status: 'completed', endOutcome: 'declined', score: 10, tier: 'LOW' });
+    expect(r.answer).toMatchObject({ questionKey: 'offers', label: 'No thanks', points: 0 });
+    // Not for a person: nothing was asked for.
+    expect(r.needsPerson).toBe(false);
+  });
+
+  it('none of the three earns the "answered all the questions" 10: they answered one', () => {
     expect(run(['2', '1']).conversation.score).toBe(10);
     expect(run(['2', '2']).conversation.score).toBe(10);
+    expect(run(['2', '3']).conversation.score).toBe(10);
   });
 
   it('anything else gets the offers question\'s own "sorry"', () => {
     const r = run(['2', 'maybe']);
-    expect(r.send).toEqual(['Sorry, please reply 1 for offers, 2 to learn more from a rep, or STOP to unsubscribe.']);
+    expect(r.send).toEqual([
+      'Sorry, please reply 1 for offers, 2 to learn more from a rep, 3 for no thanks, or STOP to unsubscribe.',
+    ]);
     expect(r.conversation.currentQuestionId).toBe(OFFERS);
+  });
+
+  it('the offers text with its third option still fits one segment', () => {
+    // Sent joined to "No problem." - 158 characters of the 160.
+    const asSent = `No problem. ${ANTIBIOTICS.questions.find((q) => q.id === OFFERS)!.body}`;
+    expect(asSent.length).toBeLessThanOrEqual(160);
   });
 });
 

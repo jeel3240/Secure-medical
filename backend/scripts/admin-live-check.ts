@@ -99,8 +99,8 @@ async function main(): Promise<void> {
 
     // Against the antibiotics flow seeded by 012_flows.sql - docs/FLOWS.md.
     check('it describes the flow new leads get', config.flow, { key: 'antibiotics', name: 'eDrugstore antibiotics' });
-    // The opener, nine choices, four "sorry"s, the review text, the missed-call text.
-    check('every text a lead can receive is listed', config.messages.length, 16);
+    // The opener, ten choices, four "sorry"s, the review text, the missed-call text.
+    check('every text a lead can receive is listed', config.messages.length, 17);
     check('the opener is first', [config.messages[0].key, config.messages[0].name], ['q1', 'Question 1']);
     check('and is personalised', config.messages[0].personalised, true);
     const afterYes = config.messages.find((m) => m.key === 'q1_1');
@@ -109,6 +109,8 @@ async function main(): Promise<void> {
     check('and says where it leads', [afterYes?.name, afterYes?.when], ['After Q1 · Yes', 'Then Q2']);
     const afterNo = config.messages.find((m) => m.key === 'q1_2');
     check('a question off the main line goes by its heading', afterNo?.when, 'Then Offers');
+    // "No problem." joined to the offers question with its three options: 158 of the 160.
+    check('"No", then the offers question, is still one segment', [afterNo?.length, afterNo?.segments], [158, 1]);
     const afterQ2No = config.messages.find((m) => m.key === 'q2_2');
     check('one that runs past 160 characters is flagged as two segments', [afterQ2No?.segments, afterQ2No?.costsExtraSegment], [2, true]);
     check('including the review message, sent after a second unclear reply', config.messages.some((m) => m.key === 'review'), true);
@@ -120,7 +122,7 @@ async function main(): Promise<void> {
     check('HOT starts at 75', config.tiers[0].minScore, 75);
     check('expiry is 7 days', config.settings.expiryDays, 7);
     check('the flat awards are separated from the answers', config.scoring.awards.length, 2);
-    check('each question has its own choices: two, two, three, two', config.scoring.questions.map((q) => q.choices.length), [2, 2, 3, 2]);
+    check('each question has its own choices: two, two, three, three', config.scoring.questions.map((q) => q.choices.length), [2, 2, 3, 3]);
     check('and its own heading', config.scoring.questions.map((q) => q.heading), ['Requested info', 'Used telemedicine', 'Next step', 'Offers']);
 
     // With no leads yet, the fallback name is the worst case.

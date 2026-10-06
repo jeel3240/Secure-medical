@@ -22,8 +22,15 @@ export type ConversationStatus = 'open' | 'completed' | 'expired' | 'suppressed'
  * - `completed`: the questions are answered. Agents call, by score.
  * - `offers`: wants offers only. Not for agents.
  * - `wants_contact`: asked to hear from a rep. Agents call.
+ * - `declined`: wants neither offers nor a rep. Not for agents.
  */
-export type Ending = 'completed' | 'offers' | 'wants_contact';
+export type Ending = 'completed' | 'offers' | 'wants_contact' | 'declined';
+
+/**
+ * The endings that leave nothing for an agent to do: the lead finished the
+ * questions and asked for no call. The queue leaves them out (`db/queue.ts`).
+ */
+export const NOT_FOR_AGENTS: readonly Ending[] = ['offers', 'declined'];
 
 export interface FlowChoice {
   /** What the lead types: '1'. */

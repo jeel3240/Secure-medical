@@ -38,6 +38,7 @@ with Needs review, Expired and Opted out as the other ways the SMS part can end.
 | `working` | Working | An agent holds it, or has left any trace on it: a note, a callback, a disposition, a call they placed or answered, or an SMS of their own. A missed incoming call is the lead's doing, not a trace - though the callback it books for an agent is one |
 | `needs_review` | Needs review | Conversation `review` |
 | `offers` | Offers | The flow ended with the lead asking for special offers only (`end_outcome = 'offers'`, 2026-10-05). Not Ready: there is no call to make. An agent's trace on it still reads Working |
+| `declined` | Not interested | The lead said No to the first question, then No thanks to the offers and to a rep (`end_outcome = 'declined'`, 2026-10-06). Nothing to do; out of the queue. They have not opted out |
 | `ready` | Ready | Conversation `completed` - the questions are finished, or the lead asked to hear from a rep - and no agent has touched it |
 | `expired` | Expired | Conversation `expired` |
 | `answering` | Answering | Conversation `open` and at least one question answered (a row in `conversation_answers`) |

@@ -46,6 +46,7 @@ export function questionsLabel(conversation: LeadDetail['conversation']): string
       // A lead who said No ends on the offers question, not on the last one.
       if (conversation.endOutcome === 'offers') return 'Offers only';
       if (conversation.endOutcome === 'wants_contact') return 'Wants a call';
+      if (conversation.endOutcome === 'declined') return 'Not interested';
       return 'Completed';
     case 'open':
       return conversation.agentTookOverAt ? `Agent took over at ${q}` : `On ${q}`;

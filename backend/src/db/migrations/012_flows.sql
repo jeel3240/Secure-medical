@@ -87,7 +87,8 @@ CREATE TABLE flow_choices (
   --   completed      the questions are answered; agents call, by score
   --   offers         wants offers only; not for agents
   --   wants_contact  asked to hear from a rep; agents call
-  ending           TEXT CHECK (ending IN ('completed', 'offers', 'wants_contact')),
+  --   declined       wants neither; not for agents
+  ending           TEXT CHECK (ending IN ('completed', 'offers', 'wants_contact', 'declined')),
   UNIQUE (question_id, choice),
   FOREIGN KEY (question_id, flow_id) REFERENCES flow_questions (id, flow_id),
   CONSTRAINT flow_choices_next_in_flow
@@ -138,7 +139,7 @@ ALTER TABLE conversations
   ADD COLUMN current_question_id INTEGER,
   -- How the flow ended - the choice's `ending`. NULL while open, and for one
   -- that expired, was suppressed or went to review.
-  ADD COLUMN end_outcome         TEXT CHECK (end_outcome IN ('completed', 'offers', 'wants_contact'));
+  ADD COLUMN end_outcome         TEXT CHECK (end_outcome IN ('completed', 'offers', 'wants_contact', 'declined'));
 
 -- A conversation is only ever on a question of its own flow.
 ALTER TABLE conversations
@@ -236,8 +237,8 @@ FROM flows f, (VALUES
    'Sorry, please reply 1. I know which antibiotic I need, 2. Talk to an agent, or 3. Order online.',
    'Next step'),
   ('offers', 4,
-   'Would you like to receive special offers from eDrugstore? Reply 1. Yes for offers, 2. Learn more from a rep, or STOP to unsubscribe.',
-   'Sorry, please reply 1 for offers, 2 to learn more from a rep, or STOP to unsubscribe.',
+   'Would you like to receive special offers from eDrugstore? Reply 1. Yes for offers, 2. Learn more from a rep, 3. No thanks, or STOP to unsubscribe.',
+   'Sorry, please reply 1 for offers, 2 to learn more from a rep, 3 for no thanks, or STOP to unsubscribe.',
    'Offers')
 ) AS q(key, position, body, clarify_body, heading)
 WHERE f.key = 'antibiotics';
@@ -263,7 +264,12 @@ JOIN (VALUES
   ('offers', '1', 'Special offers', ARRAY['yes', 'y', 'yes please', 'offers', 'offer'], 0,
    'Thanks! You''ll receive special offers from eDrugstore. Reply STOP to opt out.', NULL, 'offers'),
   ('offers', '2', 'Learn more', ARRAY['learn more', 'learn', 'more', 'learnmore'], 0,
-   'Thanks! An eDrugstore representative will contact you shortly.', NULL, 'wants_contact')
+   'Thanks! An eDrugstore representative will contact you shortly.', NULL, 'wants_contact'),
+  -- Jeel, 2026-10-06: a lead who wants neither had no way to say so but STOP,
+  -- which takes them off every list. Typed anyway, "no" was an unclear reply -
+  -- and a second one promised them a rep and put them in the agents' queue.
+  ('offers', '3', 'No thanks', ARRAY['no', 'n', 'nope', 'nah', 'no thanks', 'no thank you', 'not interested'], 0,
+   'No problem. Thanks for your time.', NULL, 'declined')
 ) AS c(question, choice, label, words, points, reply_body, next_key, ending) ON true
 JOIN flow_questions q ON q.flow_id = f.id AND q.key = c.question
 LEFT JOIN flow_questions nq ON nq.flow_id = f.id AND nq.key = c.next_key

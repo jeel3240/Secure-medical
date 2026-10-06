@@ -25,6 +25,8 @@ export type LeadStatus =
   | 'ready'
   /** Asked for special offers only - not a call to make. docs/FLOWS.md. */
   | 'offers'
+  /** Said No to the offers and to a rep: wants neither. Nothing to do. */
+  | 'declined'
   | 'working'
   | 'closed'
   | 'needs_review'
@@ -115,6 +117,7 @@ const STATUS_SQL = `
     WHEN ${WORKED_SQL} THEN 'working'
     WHEN c.status = 'review' THEN 'needs_review'
     WHEN c.status = 'completed' AND c.end_outcome = 'offers' THEN 'offers'
+    WHEN c.status = 'completed' AND c.end_outcome = 'declined' THEN 'declined'
     WHEN c.status = 'completed' THEN 'ready'
     WHEN c.status = 'expired' THEN 'expired'
     -- One look-up for this conversation. Written as EXISTS it was planned as a

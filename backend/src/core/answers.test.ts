@@ -85,6 +85,9 @@ describe('matching a reply to a choice', () => {
     expect(picked('call')).toBeNull();
     expect(picked('call', q3)).toBe('2');
     expect(picked('learn more', offers)).toBe('2');
+    // "no" is choice 2 of Q1 - and choice 3, No thanks, of the offers question.
+    expect(picked('no', offers)).toBe('3');
+    expect(picked('no')).toBe('2');
     expect(picked('more', offers)).toBe('2');
     expect(picked('learn more')).toBeNull();
   });

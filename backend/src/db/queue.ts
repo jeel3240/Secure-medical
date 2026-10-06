@@ -9,6 +9,7 @@
  */
 
 import { queueTag, type QueueTag } from '../core/queue-tags';
+import { NOT_FOR_AGENTS } from '../core/state-machine';
 import { CLOSED_SQL, MISSED_CALL_SQL } from './lead-state';
 import { likeLiteral } from './sql';
 import { pool } from './pool';
@@ -95,7 +96,7 @@ const BASE = `
  * row, whatever the conversation says), and one of these holds:
  *
  * - **Completed** - finished their flow's questions, except by asking only
- *   for offers.
+ *   for offers, or for nothing (`NOT_FOR_AGENTS`).
  * - **Needs review** - replied, and we could not understand it.
  * - **Inbound reply** - texted something the questions cannot handle: after
  *   the conversation ended, or to an agent who took it over. Since the same day
@@ -126,6 +127,12 @@ const BASE = `
  * including for the person holding it. Holding now stands on its own; the
  * score test applies to everything else.
  */
+/** Safe to inline: a constant from this codebase, each value checked to be a plain word. */
+const notForAgents = NOT_FOR_AGENTS.map((ending) => {
+  if (!/^[a-z_]+$/.test(ending)) throw new Error(`Unexpected ending: ${ending}`);
+  return `'${ending}'`;
+}).join(', ');
+
 const INCLUDED = `
   NOT EXISTS (
     SELECT 1 FROM dnc_list d WHERE d.phone = l.phone AND d.released_at IS NULL
@@ -138,9 +145,10 @@ const INCLUDED = `
       c.score > 0
       AND NOT ${CLOSED_SQL}
       AND (
-        -- Finished the questions - except a lead who only asked for offers:
-        -- that is a list for the client's campaigns, not a call to make.
-        (c.status = 'completed' AND c.end_outcome IS DISTINCT FROM 'offers')
+        -- Finished the questions - except a lead who asked only for offers
+        -- (a list for the client's campaigns) or for nothing at all: neither
+        -- is a call to make.
+        (c.status = 'completed' AND (c.end_outcome IS NULL OR c.end_outcome NOT IN (${notForAgents})))
         OR c.status = 'review'
         OR EXISTS (
           SELECT 1 FROM callbacks cb WHERE cb.lead_id = l.id AND cb.done_at IS NULL

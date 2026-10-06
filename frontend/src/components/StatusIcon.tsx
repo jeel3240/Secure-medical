@@ -21,6 +21,7 @@ export type StatusIconName =
   | 'missed'
   | 'phone'
   | 'tag'
+  | 'minus'
   | 'warning'
   | 'ban'
   | 'hourglass'
@@ -81,6 +82,13 @@ const PATHS: Record<StatusIconName, ReactNode> = {
     <>
       <path d="M20.6 13.4l-7.2 7.2a2 2 0 0 1-2.8 0L3 13V3h10l7.6 7.6a2 2 0 0 1 0 2.8z" />
       <path d="M7.5 7.5h.01" />
+    </>
+  ),
+  // Said no to everything: a circle with a line through the middle.
+  minus: (
+    <>
+      <circle cx="12" cy="12" r="9" />
+      <path d="M8 12h8" />
     </>
   ),
   // A person has to look.

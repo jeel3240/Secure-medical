@@ -135,6 +135,7 @@ export function activityText(detail: Record<string, unknown>, at: string): strin
 function scoredAs(detail: Record<string, unknown>): string {
   if (detail.endOutcome === 'offers') return 'offers only';
   if (detail.endOutcome === 'wants_contact') return 'wants a call';
+  if (detail.endOutcome === 'declined') return 'not interested';
   return String(detail.status);
 }
 

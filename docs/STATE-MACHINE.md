@@ -50,11 +50,12 @@ q3  Ready to move forward? Reply 1. I know which antibiotic I need,
                                        https://www.edrugstore.com/anti-ez"        ends: completed
 
 offers  Would you like to receive special offers from eDrugstore? Reply 1. Yes
-        for offers, 2. Learn more from a rep, or STOP to unsubscribe.
+        for offers, 2. Learn more from a rep, 3. No thanks, or STOP to unsubscribe.
       1 Special offers  +0  "Thanks! You'll receive special offers from eDrugstore.
                              Reply STOP to opt out."                      ends: offers
       2 Learn more      +0  "Thanks! An eDrugstore representative will
                              contact you shortly."                        ends: wants_contact
+      3 No thanks       +0  "No problem. Thanks for your time."           ends: declined
 ```
 
 Replying at all: +10, once. Finishing the three questions (an ending of
@@ -70,8 +71,19 @@ Replying at all: +10, once. Finishing the three questions (an ending of
 | Yes, No, Order online | 55 | WARM | |
 | No, then Special offers | 10 | LOW | **Not in the agents' queue** - marked Offers on Admin > Leads |
 | No, then Learn more | 10 | LOW | In the queue, tagged **Wants a call** |
+| No, then No thanks | 10 | LOW | **Not in the agents' queue** - marked Not interested on Admin > Leads |
 
 **Decisions in it, and whose:**
+
+- **"No thanks" is a third answer to the offers question** - Jeel, 2026-10-06.
+  A lead who wanted neither offers nor a rep had only STOP to say so, which
+  takes them off every list - and a frustrated lead types it. Typed anyway,
+  "no" was an unclear reply: "Sorry, please reply 1 for offers, 2 to learn
+  more...", and a second "no" got "a representative will follow up with you
+  directly" and a place in the agents' queue. Someone who had declined three
+  times was promised a call. Now it is understood, thanked, and left alone:
+  out of the queue, Not interested on Admin > Leads, still subscribed. With
+  the option printed the text is 158 characters - one segment.
 
 - **Agents call everyone who finishes** - Jeel. "Order online" leads get the
   link and may still not finish alone; they are WARM, so they come after the
@@ -101,7 +113,7 @@ reply, any case:
 | q1 | 1, yes, y, yeah, yep, yup, yes please, sure, ok, okay, correct | 2, no, n, nope, nah, no thanks, no thank you | - |
 | q2 | 1, yes, y, yeah, yep, yup, yes please, i have | 2, no, n, nope, nah, never, not yet | - |
 | q3 | 1, i know, know, i know which one | 2, agent, talk, call, call me, talk to an agent | 3, online, order, order online |
-| offers | 1, yes, y, yes please, offers, offer | 2, learn more, learn, more, learnmore | - |
+| offers | 1, yes, y, yes please, offers, offer | 2, learn more, learn, more, learnmore | 3, no, n, nope, nah, no thanks, no thank you, not interested |
 
 **The unclear-reply texts:**
 
@@ -109,12 +121,12 @@ reply, any case:
 |---|---|
 | q1, q2 | Sorry, please reply 1 for Yes or 2 for No. |
 | q3 | Sorry, please reply 1. I know which antibiotic I need, 2. Talk to an agent, or 3. Order online. |
-| offers | Sorry, please reply 1 for offers, 2 to learn more from a rep, or STOP to unsubscribe. |
+| offers | Sorry, please reply 1 for offers, 2 to learn more from a rep, 3 for no thanks, or STOP to unsubscribe. |
 | second unclear reply, any question | Thanks! An eDrugstore representative will follow up with you directly. |
 
 **Drafted here, not in the client's script** - to be confirmed in its test
-run: the reply to Special offers, the offers "sorry", and the numbers on the
-offers question.
+run: the reply to Special offers, the offers "sorry", the numbers on the
+offers question, and its third option, No thanks, with its reply.
 
 **Two texts run past 160 characters** and are billed as two segments: the
 replies to q2 joined with q3 (189 and 243 characters). One text was kept
@@ -199,7 +211,7 @@ names, or null.
 | Status | Meaning | Automated questions? |
 |---|---|---|
 | `open` | Waiting for the answer to the question the lead is on | Yes |
-| `completed` | The flow ended on a choice. `end_outcome` says how: `completed` (the questions are answered), `offers`, or `wants_contact` | No |
+| `completed` | The flow ended on a choice. `end_outcome` says how: `completed` (the questions are answered), `offers`, `wants_contact`, or `declined` | No |
 | `review` | Too many unclear replies; a human takes over | No |
 | `suppressed` | Opted out | Never |
 | `expired` | Went quiet past the expiry window | No |
@@ -721,15 +733,14 @@ Plus integration tests for the webhook wiring, in the style of
 
 ## Open items
 
-Two found in review on 2026-10-06, both waiting for a decision:
+Found in review on 2026-10-06, waiting for a decision:
 
-- **"No" on the offers question has no answer of its own.** A lead who says No
-  to question 1 and then "no" to "Would you like to receive special offers?"
-  is told "Sorry, please reply 1 for offers, 2 to learn more..."; a second
-  "no" gets "an eDrugstore representative will follow up with you directly"
-  and puts them in the queue as Needs review - someone who declined twice is
-  promised a call. It needs a third choice with its own wording and an ending
-  that keeps the lead out of the queue. The same holds for "no" to question 3.
+- **"No" to question 3 has no answer of its own.** "Ready to move forward?"
+  answered "no" or "not yet" is an unclear reply, and a second one sends "a
+  representative will follow up with you directly" and the lead to Needs
+  review. Left as it is: this lead did ask for information, so a person
+  following up is not wrong the way it was on the offers question (fixed the
+  same day - "No thanks", above).
 - **A second text sent before the next question arrives is read as its
   answer.** "Yes" and then "yes" again a moment later answers question 1 and
   then question 2 - which the lead has not seen. The lock above keeps the two
