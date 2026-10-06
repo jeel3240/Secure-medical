@@ -1,10 +1,10 @@
 import { answerChips, scoreBreakdown, type SavedAnswer } from './score-breakdown';
 
-const yes: SavedAnswer = { questionKey: 'q1', position: 1, heading: 'Requested info', choice: '1', label: 'Yes', points: 20 };
-const tele: SavedAnswer = { questionKey: 'q2', position: 2, heading: 'Used telemedicine', choice: '2', label: 'No', points: 5 };
-const agent: SavedAnswer = { questionKey: 'q3', position: 3, heading: 'Next step', choice: '2', label: 'Talk to an agent', points: 45 };
+const yes: SavedAnswer = { questionKey: 'q1', position: 10, heading: 'Requested info', choice: '1', label: 'Yes', points: 20 };
+const tele: SavedAnswer = { questionKey: 'q2', position: 20, heading: 'Used telemedicine', choice: '2', label: 'No', points: 5 };
+const agent: SavedAnswer = { questionKey: 'q3', position: 30, heading: 'Next step', choice: '2', label: 'Talk to an agent', points: 45 };
 const no: SavedAnswer = { ...yes, choice: '2', label: 'No', points: 0 };
-const offers: SavedAnswer = { questionKey: 'offers', position: 4, heading: 'Offers', choice: '1', label: 'Special offers', points: 0 };
+const offers: SavedAnswer = { questionKey: 'q1-a', position: 11, heading: 'Offers', choice: '1', label: 'Special offers', points: 0 };
 
 const AWARDS = { respondedPoints: 10, completedPoints: 10 };
 
@@ -49,9 +49,9 @@ describe('the score breakdown', () => {
 describe('the answer chips', () => {
   it('one per answered question, in the flow\'s order, with the question\'s own heading', () => {
     expect(answerChips([agent, yes, tele])).toEqual([
-      { question: 1, key: 'q1', heading: 'Requested info', answer: 'Yes', choice: '1' },
-      { question: 2, key: 'q2', heading: 'Used telemedicine', answer: 'No', choice: '2' },
-      { question: 3, key: 'q3', heading: 'Next step', answer: 'Talk to an agent', choice: '2' },
+      { question: 10, key: 'q1', heading: 'Requested info', answer: 'Yes', choice: '1' },
+      { question: 20, key: 'q2', heading: 'Used telemedicine', answer: 'No', choice: '2' },
+      { question: 30, key: 'q3', heading: 'Next step', answer: 'Talk to an agent', choice: '2' },
     ]);
   });
 

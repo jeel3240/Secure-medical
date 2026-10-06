@@ -108,7 +108,7 @@ async function main(): Promise<void> {
       "Great! Let's get you started. Have you used telemedicine to get prescription medication before? Reply 1. Yes, 2. No.");
     check('and says where it leads', [afterYes?.name, afterYes?.when], ['After Q1 · Yes', 'Then Q2']);
     const afterNo = config.messages.find((m) => m.key === 'q1_2');
-    check('a question off the main line goes by its heading', afterNo?.when, 'Then Offers');
+    check('a sub-question is named after its parent', afterNo?.when, 'Then Q1-a');
     // "No problem." joined to the offers question with its three options: 158 of the 160.
     check('"No", then the offers question, is still one segment', [afterNo?.length, afterNo?.segments], [158, 1]);
     const afterQ2No = config.messages.find((m) => m.key === 'q2_2');
@@ -122,8 +122,8 @@ async function main(): Promise<void> {
     check('HOT starts at 75', config.tiers[0].minScore, 75);
     check('expiry is 7 days', config.settings.expiryDays, 7);
     check('the flat awards are separated from the answers', config.scoring.awards.length, 2);
-    check('each question has its own choices: two, two, three, three', config.scoring.questions.map((q) => q.choices.length), [2, 2, 3, 3]);
-    check('and its own heading', config.scoring.questions.map((q) => q.heading), ['Requested info', 'Used telemedicine', 'Next step', 'Offers']);
+    check('each question has its own choices, in the flow\'s order', config.scoring.questions.map((q) => [q.short, q.choices.length]), [['Q1', 2], ['Q1-a', 3], ['Q2', 2], ['Q3', 3]]);
+    check('and its own heading', config.scoring.questions.map((q) => q.heading), ['Requested info', 'Offers', 'Used telemedicine', 'Next step']);
 
     // With no leads yet, the fallback name is the worst case.
     check('the worst case uses the fallback when there are no leads', config.longestFirstName, 'there');

@@ -27,7 +27,7 @@ jest.mock('../../db/pool', () => ({
   pool: { connect: () => connect(), query: (...a: unknown[]) => poolQuery(...(a as [string])) },
 }));
 
-import { ANTIBIOTICS, Q1, Q2, Q3 } from '../../core/flow-fixtures';
+import { ANTIBIOTICS, Q1, Q2 } from '../../core/flow-fixtures';
 import { webhooksRouter } from '../webhooks';
 
 interface Recorded {
@@ -103,7 +103,7 @@ function fakeClient(opts: {
             id: 5,
             status: 'open',
             flow_id: ANTIBIOTICS.id,
-            step: 1,
+            step: 10,
             invalid_count: 0,
             score: 0,
             tier: null,
@@ -111,7 +111,7 @@ function fakeClient(opts: {
             // On the question its step names, unless the conversation is over.
             current_question_id:
               (opts.conversation.status ?? 'open') === 'open'
-                ? ([Q1, Q2, Q3][(opts.conversation.step ?? 1) - 1] ?? Q1)
+                ? (ANTIBIOTICS.questions.find((q) => q.position === (opts.conversation?.step ?? 10))?.id ?? Q1)
                 : null,
             ...opts.conversation,
           };
@@ -381,7 +381,7 @@ describe('a reply from a lead we hold', () => {
     });
 
     it('does not flag the answer that completes the conversation', async () => {
-      const conversation = { step: 3, score: 45, tier: 'WARM' };
+      const conversation = { step: 30, score: 45, tier: 'WARM' };
       const { client, calls } = fakeClient({ leadId: 42, conversation });
       connect.mockReturnValue(client);
 
@@ -402,7 +402,7 @@ describe('a reply from a lead we hold', () => {
     });
 
     it('flags a reply to an agent who took the conversation over', async () => {
-      const conversation = { step: 2, score: 30, agent_took_over_at: '2026-09-28T10:00:00.000Z' };
+      const conversation = { step: 20, score: 30, agent_took_over_at: '2026-09-28T10:00:00.000Z' };
       const { client, calls } = fakeClient({ leadId: 42, conversation });
       connect.mockReturnValue(client);
 
@@ -515,7 +515,7 @@ describe('the reply advances the conversation', () => {
     // 10 for responding plus 20 for Yes.
     expect(savedConversation(calls)).toMatchObject({
       status: 'open',
-      step: 2,
+      step: 20,
       currentQuestionId: Q2,
       score: 30,
       tier: 'LOW',
@@ -545,14 +545,14 @@ describe('the reply advances the conversation', () => {
 
     await request(buildApp()).post('/api/webhooks/eztexting').send(reply({ message: 'no' }));
 
-    expect(savedConversation(calls)).toMatchObject({ status: 'open', step: 4, score: 10 });
+    expect(savedConversation(calls)).toMatchObject({ status: 'open', step: 11, score: 10 });
     expect(sentText()).toMatch(/^No problem\. Would you like to receive special offers from eDrugstore\?/);
   });
 
   it('completes on the answer to question 3 and sends that answer\'s message', async () => {
     const { client, calls } = fakeClient({
       leadId: 42,
-      conversation: { step: 3, score: 45, tier: 'WARM' },
+      conversation: { step: 30, score: 45, tier: 'WARM' },
     });
     connect.mockReturnValue(client);
 
@@ -578,7 +578,7 @@ describe('the reply advances the conversation', () => {
       .post('/api/webhooks/eztexting')
       .send(reply({ message: 'what is this about' }));
 
-    expect(savedConversation(calls)).toMatchObject({ status: 'open', step: 1, invalidCount: 1 });
+    expect(savedConversation(calls)).toMatchObject({ status: 'open', step: 10, invalidCount: 1 });
     expect(savedAnswer(calls)).toBeNull();
     expect(sendMessage).toHaveBeenCalledTimes(1);
   });
@@ -599,7 +599,7 @@ describe('the reply advances the conversation', () => {
   it('leaves a completed conversation alone and sends nothing', async () => {
     const { client, calls } = fakeClient({
       leadId: 42,
-      conversation: { status: 'completed', step: 3, score: 100, tier: 'HOT', end_outcome: 'completed' },
+      conversation: { status: 'completed', step: 30, score: 100, tier: 'HOT', end_outcome: 'completed' },
     });
     connect.mockReturnValue(client);
 
@@ -672,7 +672,7 @@ describe('the reply advances the conversation', () => {
     // week later. The conversation still advances.
     expect(poolSql().some((sql) => /expires_at/i.test(sql))).toBe(false);
     expect(sqlOf(calls)).not.toMatch(/expires_at/i);
-    expect(savedConversation(calls)).toMatchObject({ step: 2, currentQuestionId: Q2 });
+    expect(savedConversation(calls)).toMatchObject({ step: 20, currentQuestionId: Q2 });
   });
 
   it('flags a lead whose text did not go out, so a person sees them', async () => {
@@ -733,7 +733,7 @@ describe('the reply advances the conversation', () => {
 
     // 200, not 500: retrying would not re-send, and the answer is saved.
     expect(res.status).toBe(200);
-    expect(savedConversation(calls)).toMatchObject({ step: 2, currentQuestionId: Q2 });
+    expect(savedConversation(calls)).toMatchObject({ step: 20, currentQuestionId: Q2 });
     expect(sqlOf(calls)).toMatch(/COMMIT/);
   });
 });

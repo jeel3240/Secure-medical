@@ -687,7 +687,7 @@ arrives after a newer one is still dropped.
 
 ## Tests
 
-`npm test` in `frontend/`. Vitest with jsdom, 272 tests in 26 files (2026-10-06).
+`npm test` in `frontend/`. Vitest with jsdom, 273 tests in 26 files (2026-10-06).
 
 Logic first, by agreement - a screen is easy to judge by eye, and a dropped
 response or an off-by-one age threshold is not:
@@ -702,7 +702,7 @@ response or an off-by-one age threshold is not:
 | `pages/workspace/Conversation.render.test.tsx` | The sent ticks and the red "!" on a refused message |
 | `components/QueueStatus.test.tsx` | The queue's six statuses, their icons, a callback's time, and the tier bars |
 | `components/DateTimeField.test.tsx` | The date and time picker: the month grid, quarter hours, past days off, Clear, Escape |
-| `pages/workspace/LeadHeader.test.ts` | The header's source and Questions wording, a question named "Offers" included |
+| `pages/workspace/LeadHeader.test.ts` | The header's source and Questions wording, a sub-question, "Q1-a", included |
 | `pages/workspace/LeadNotes.test.tsx` | The Notes card: newest first, three then Show all, the author, the empty state |
 | `pages/workspace/LeadAnswers.test.ts` | The score breakdown's light-blue-to-navy shades, and each line's words |
 | `components/SyncStatus.test.tsx` | The EZ Texting sync line, quiet and amber |

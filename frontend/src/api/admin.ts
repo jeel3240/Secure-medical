@@ -31,7 +31,9 @@ export interface AdminConfig {
     questions: {
       question: number;
       key: string;
-      /** What the screens call the question: 'Next step'. */
+      /** What the screens call the question itself: 'Q3', 'Q1-a'. */
+      short: string;
+      /** What the screens call its answer: 'Next step'. */
       heading: string;
       choices: { choice: string; label: string | null; points: number }[];
     }[];

@@ -16,7 +16,7 @@ import { pool } from './pool';
 
 /** One answer on a queue row. */
 export interface QueueAnswer {
-  /** 'q1', 'offers'. */
+  /** 'q1', 'q1-a'. */
   key: string;
   /** What the screens call the question: 'Next step'. */
   heading: string;

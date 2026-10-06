@@ -9,7 +9,7 @@ import { firstQuestion, step, tierFor, type Conversation, type Flow, type Rules 
 function fresh(overrides: Partial<Conversation> = {}): Conversation {
   return {
     status: 'open',
-    step: 1,
+    step: 10,
     currentQuestionId: Q1,
     invalidCount: 0,
     score: 0,
@@ -41,11 +41,11 @@ describe('Question 1: did you request info?', () => {
   it('Yes: the reply and Question 2 in one text; 10 for replying and 20 for Yes', () => {
     const r = step(fresh(), said('1'), RULES);
     expect(r.send).toEqual(["Great! Let's get you started.", body(Q2)]);
-    expect(r.conversation).toMatchObject({ status: 'open', currentQuestionId: Q2, step: 2, score: 30, tier: 'LOW' });
+    expect(r.conversation).toMatchObject({ status: 'open', currentQuestionId: Q2, step: 20, score: 30, tier: 'LOW' });
     expect(r.answer).toEqual({
       questionId: Q1,
       questionKey: 'q1',
-      position: 1,
+      position: 10,
       heading: 'Requested info',
       choice: '1',
       label: 'Yes',
@@ -82,7 +82,7 @@ describe('Question 2: used telemedicine before?', () => {
   ])('%s: its own reply, then Question 3 either way', (text, points, reply) => {
     const r = run(['1', text]);
     expect(r.send).toEqual([reply, body(Q3)]);
-    expect(r.conversation).toMatchObject({ currentQuestionId: Q3, step: 3, score: 30 + points });
+    expect(r.conversation).toMatchObject({ currentQuestionId: Q3, step: 30, score: 30 + points });
   });
 });
 
@@ -140,7 +140,7 @@ describe('after "No": special offers, or hear from a rep', () => {
     const r = run(['2', text]);
     expect(r.send).toEqual(["Thanks! You'll receive special offers from eDrugstore. Reply STOP to opt out."]);
     expect(r.conversation).toMatchObject({ status: 'completed', endOutcome: 'offers', score: 10, tier: 'LOW' });
-    expect(r.answer).toMatchObject({ questionKey: 'offers', label: 'Special offers' });
+    expect(r.answer).toMatchObject({ questionKey: 'q1-a', label: 'Special offers' });
   });
 
   it.each(['2', 'learn more', 'Learn More!', 'learn', 'more'])('%j: a rep will contact them', (text) => {
@@ -156,7 +156,7 @@ describe('after "No": special offers, or hear from a rep', () => {
     const r = run(['2', text]);
     expect(r.send).toEqual(['No problem. Thanks for your time.']);
     expect(r.conversation).toMatchObject({ status: 'completed', endOutcome: 'declined', score: 10, tier: 'LOW' });
-    expect(r.answer).toMatchObject({ questionKey: 'offers', label: 'No thanks', points: 0 });
+    expect(r.answer).toMatchObject({ questionKey: 'q1-a', label: 'No thanks', points: 0 });
     // Not for a person: nothing was asked for.
     expect(r.needsPerson).toBe(false);
   });

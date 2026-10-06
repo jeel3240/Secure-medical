@@ -48,7 +48,7 @@ export interface FlowChoice {
 
 export interface FlowQuestion {
   id: number;
-  /** 'q1', 'offers'. */
+  /** 'q1', 'q1-a'. */
   key: string;
   /** Display order; the lowest is the first question. */
   position: number;

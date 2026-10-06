@@ -231,9 +231,9 @@ export function LeadsPage() {
                       <span className="cell-sub">{formatPhone(lead.phone)}</span>
                     </td>
                     <td>{lead.status ? <LeadStatus status={lead.status} /> : EMPTY}</td>
-                    {/* "Q2" in the code face, as before; a question that goes by
-                        its name - "Offers" - and "Done" are words. */}
-                    <td className={lead.step && /^Q\d+$/.test(lead.step) ? 'mono' : undefined}>
+                    {/* "Q2" and "Q1-a" in the code face, as before; "Done", and a
+                        question that goes by its heading, are words. */}
+                    <td className={lead.step && /^Q\d/.test(lead.step) ? 'mono' : undefined}>
                       {lead.step === 'done' ? 'Done' : (lead.step ?? EMPTY)}
                     </td>
                     <td className="right tabular cell-strong">{lead.score ?? EMPTY}</td>

@@ -49,12 +49,14 @@ const AWARD_LABEL: Record<string, string> = {
 };
 
 /**
- * A question as the Messages card names it - "Q2", or its heading for one off
- * the main line - joined to what it asks, so "After Q2" there and this card's
- * points can be matched: "Q2 · Used telemedicine", "Offers".
+ * A question as the Messages card names it - "Q2", "Q1-a" - joined to what it
+ * asks, so "After Q2" there and this card's points can be matched: "Q2 · Used
+ * telemedicine", "Q1-a · Offers". The name comes from the server, which has
+ * the one rule for it; a question it could only call by its heading is not
+ * said twice.
  */
-export function questionTitle(question: { key: string; heading: string }): string {
-  return /^q\d+$/.test(question.key) ? `${question.key.toUpperCase()} · ${question.heading}` : question.heading;
+export function questionTitle(question: { short: string; heading: string }): string {
+  return question.short === question.heading ? question.heading : `${question.short} · ${question.heading}`;
 }
 
 export function ConfigPage() {

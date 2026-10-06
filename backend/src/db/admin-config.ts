@@ -51,9 +51,11 @@ export interface AdminConfig {
     questions: {
       /** The question's order in the flow. */
       question: number;
-      /** 'q1', 'offers'. */
+      /** 'q1', 'q1-a'. */
       key: string;
-      /** What the screens call it: 'Next step'. */
+      /** What the screens call the question itself: 'Q3', 'Q1-a' - `core/questions.ts`. */
+      short: string;
+      /** What the screens call its answer: 'Next step'. */
       heading: string;
       choices: { choice: string; label: string | null; points: number }[];
     }[];
@@ -136,7 +138,8 @@ export async function getAdminConfig(): Promise<AdminConfig> {
     const short = questionShort;
 
     const first = questions[0];
-    if (first) messages.push(message(first.key, `Question ${first.position}`, 'The opener', first.body));
+    // "Question 1": from the question's own name, not its position - positions go in tens.
+    if (first) messages.push(message(first.key, short(first).replace(/^Q(?=\d)/, 'Question '), 'The opener', first.body));
 
     for (const question of questions) {
       for (const choice of question.choices) {
@@ -178,6 +181,7 @@ export async function getAdminConfig(): Promise<AdminConfig> {
         .map((question) => ({
           question: question.position,
           key: question.key,
+          short: questionShort(question),
           heading: question.heading,
           choices: question.choices.map((c) => ({ choice: c.choice, label: c.label, points: c.points })),
         }))

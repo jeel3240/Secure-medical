@@ -1,7 +1,7 @@
 import { matchChoice, normaliseReply } from './answers';
 import { ANTIBIOTICS } from './flow-fixtures';
 
-const [q1, , q3, offers] = ANTIBIOTICS.questions;
+const [q1, offers, , q3] = ANTIBIOTICS.questions;
 const picked = (text: string, question = q1) => matchChoice(text, question.choices)?.choice ?? null;
 
 describe('a reply, cleaned up before it is compared', () => {

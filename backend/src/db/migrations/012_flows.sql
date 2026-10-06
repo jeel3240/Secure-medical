@@ -46,11 +46,14 @@ CREATE UNIQUE INDEX flows_one_active ON flows (is_active) WHERE is_active;
 CREATE TABLE flow_questions (
   id           SERIAL PRIMARY KEY,
   flow_id      INTEGER NOT NULL REFERENCES flows(id),
-  -- 'q1', 'q2', 'offers'.
+  -- 'q1', 'q2' for the main line; 'q1-a', 'q1-b' for a sub-question, asked
+  -- after question 1. The screens name a question from it: "Q2", "Q1-a".
   key          TEXT NOT NULL,
   -- Display order, and which question is first (the lowest). It does not say
   -- where a lead goes next - each choice does - but a choice may only lead
   -- to a later position, so a flow cannot loop (core/state-machine.ts).
+  -- Numbered in tens - 10, 20, 30 - so a sub-question fits behind its parent
+  -- (11, 12) without renumbering the questions after it.
   position     SMALLINT NOT NULL,
   -- The question as the lead reads it. May contain {first_name}.
   body         TEXT NOT NULL,
@@ -224,19 +227,20 @@ INSERT INTO flows (key, name, responded_points, completed_points, review_body, i
 INSERT INTO flow_questions (flow_id, key, position, body, clarify_body, heading)
 SELECT f.id, q.key, q.position, q.body, q.clarify_body, q.heading
 FROM flows f, (VALUES
-  ('q1', 1,
+  ('q1', 10,
    'eDrugstore: Hi {first_name}, did you recently request more info about ordering antibiotics online? Reply 1. Yes, 2. No. Reply STOP to opt out.',
    'Sorry, please reply 1 for Yes or 2 for No.',
    'Requested info'),
-  ('q2', 2,
+  ('q2', 20,
    'Have you used telemedicine to get prescription medication before? Reply 1. Yes, 2. No.',
    'Sorry, please reply 1 for Yes or 2 for No.',
    'Used telemedicine'),
-  ('q3', 3,
+  ('q3', 30,
    'Ready to move forward? Reply 1. I know which antibiotic I need, 2. Talk to an agent for options & discounts, 3. Order online.',
    'Sorry, please reply 1. I know which antibiotic I need, 2. Talk to an agent, or 3. Order online.',
    'Next step'),
-  ('offers', 4,
+  -- A sub-question of q1: asked only of a lead who said No to it.
+  ('q1-a', 11,
    'Would you like to receive special offers from eDrugstore? Reply 1. Yes for offers, 2. Learn more from a rep, 3. No thanks, or STOP to unsubscribe.',
    'Sorry, please reply 1 for offers, 2 to learn more from a rep, 3 for no thanks, or STOP to unsubscribe.',
    'Offers')
@@ -250,7 +254,7 @@ JOIN (VALUES
   ('q1', '1', 'Yes', ARRAY['yes', 'y', 'yeah', 'yep', 'yup', 'yes please', 'sure', 'ok', 'okay', 'correct'], 20,
    'Great! Let''s get you started.', 'q2', NULL),
   ('q1', '2', 'No', ARRAY['no', 'n', 'nope', 'nah', 'no thanks', 'no thank you'], 0,
-   'No problem.', 'offers', NULL),
+   'No problem.', 'q1-a', NULL),
   ('q2', '1', 'Yes', ARRAY['yes', 'y', 'yeah', 'yep', 'yup', 'yes please', 'i have'], 15,
    'Great. eDrugstore makes the online consultation process simple.', 'q3', NULL),
   ('q2', '2', 'No', ARRAY['no', 'n', 'nope', 'nah', 'never', 'not yet'], 5,
@@ -261,14 +265,14 @@ JOIN (VALUES
    'Thanks! An eDrugstore representative will contact you to discuss available options, pricing and discounts.', NULL, 'completed'),
   ('q3', '3', 'Order online', ARRAY['online', 'order', 'order online'], 10,
    'Great! Start your online order and consultation here: https://www.edrugstore.com/anti-ez', NULL, 'completed'),
-  ('offers', '1', 'Special offers', ARRAY['yes', 'y', 'yes please', 'offers', 'offer'], 0,
+  ('q1-a', '1', 'Special offers', ARRAY['yes', 'y', 'yes please', 'offers', 'offer'], 0,
    'Thanks! You''ll receive special offers from eDrugstore. Reply STOP to opt out.', NULL, 'offers'),
-  ('offers', '2', 'Learn more', ARRAY['learn more', 'learn', 'more', 'learnmore'], 0,
+  ('q1-a', '2', 'Learn more', ARRAY['learn more', 'learn', 'more', 'learnmore'], 0,
    'Thanks! An eDrugstore representative will contact you shortly.', NULL, 'wants_contact'),
   -- Jeel, 2026-10-06: a lead who wants neither had no way to say so but STOP,
   -- which takes them off every list. Typed anyway, "no" was an unclear reply -
   -- and a second one promised them a rep and put them in the agents' queue.
-  ('offers', '3', 'No thanks', ARRAY['no', 'n', 'nope', 'nah', 'no thanks', 'no thank you', 'not interested'], 0,
+  ('q1-a', '3', 'No thanks', ARRAY['no', 'n', 'nope', 'nah', 'no thanks', 'no thank you', 'not interested'], 0,
    'No problem. Thanks for your time.', NULL, 'declined')
 ) AS c(question, choice, label, words, points, reply_body, next_key, ending) ON true
 JOIN flow_questions q ON q.flow_id = f.id AND q.key = c.question

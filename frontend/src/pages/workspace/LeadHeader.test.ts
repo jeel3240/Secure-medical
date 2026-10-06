@@ -25,18 +25,20 @@ describe('the header in words', () => {
   });
 
   it.each<[string, LeadDetail['conversation'], string]>([
-    ['on a question', convo({ step: 2, question: 'Q2' }), 'On Q2'],
-    // The offers question sits fourth; the lead was asked it second.
-    ['said No, on the offers question', convo({ step: 4, question: 'Offers' }), 'On Offers'],
-    ['went quiet on it', convo({ status: 'expired', step: 4, question: 'Offers' }), 'Stopped at Offers'],
-    ['an older row that names no question', convo({ step: 2 }), 'On Q2'],
+    ['on a question', convo({ step: 20, question: 'Q2' }), 'On Q2'],
+    // The offers question: a sub-question of the first.
+    ['said No, on the sub-question', convo({ step: 11, question: 'Q1-a' }), 'On Q1-a'],
+    ['went quiet on it', convo({ status: 'expired', step: 11, question: 'Q1-a' }), 'Stopped at Q1-a'],
+    // The position is an order, not a question number: no name, no made-up one.
+    ['a row whose question cannot be found', convo({ step: 20 }), 'Open'],
+    ['the same, gone quiet', convo({ status: 'expired', step: 20 }), 'Stopped'],
     ['finished', convo({ status: 'completed', step: 3 }), 'Completed'],
     ['said No, asked for offers', convo({ status: 'completed', step: 4, endOutcome: 'offers' }), 'Offers only'],
     ['said No, asked for a rep', convo({ status: 'completed', step: 4, endOutcome: 'wants_contact' }), 'Wants a call'],
     ['said No, then no thanks', convo({ status: 'completed', step: 4, endOutcome: 'declined' }), 'Not interested'],
-    ['went quiet', convo({ status: 'expired', step: 2 }), 'Stopped at Q2'],
-    ['unclear replies', convo({ status: 'review', step: 1 }), 'Needs review at Q1'],
-    ['an agent took over', convo({ step: 1, agentTookOverAt: '2026-09-29T02:39:50Z' }), 'Agent took over at Q1'],
+    ['went quiet', convo({ status: 'expired', step: 20, question: 'Q2' }), 'Stopped at Q2'],
+    ['unclear replies', convo({ status: 'review', step: 10, question: 'Q1' }), 'Needs review at Q1'],
+    ['an agent took over', convo({ step: 10, question: 'Q1', agentTookOverAt: '2026-09-29T02:39:50Z' }), 'Agent took over at Q1'],
     ['blocked on arrival', convo({ status: 'suppressed' }), 'Not sent - blocked'],
     ['no conversation', null, 'Not started'],
   ])('questions: %s', (_, conversation, label) => {

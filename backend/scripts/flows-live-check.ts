@@ -63,14 +63,15 @@ async function main(): Promise<void> {
       { key: 'antibiotics', is_active: true },
     ]);
     const antibiotics = (await loadFlow(pool, (await pool.query(`SELECT id FROM flows WHERE key = 'antibiotics'`)).rows[0].id))!;
-    check('antibiotics: four questions, with two, two, three and three choices', antibiotics.questions.map((q) => [q.key, q.choices.length]), [
-      ['q1', 2],
-      ['q2', 2],
-      ['q3', 3],
-      ['offers', 3],
+    // In the flow's order: the sub-question sits behind its parent.
+    check('antibiotics: three questions and a sub-question of the first', antibiotics.questions.map((q) => [q.key, q.position, q.choices.length]), [
+      ['q1', 10, 2],
+      ['q1-a', 11, 3],
+      ['q2', 20, 2],
+      ['q3', 30, 3],
     ]);
     const q1 = antibiotics.questions[0];
-    check('"No" on question 1 leads to the offers question, not question 2', antibiotics.questions.find((q) => q.id === q1.choices[1].nextQuestionId)?.key, 'offers');
+    check('"No" on question 1 leads to the offers question, not question 2', antibiotics.questions.find((q) => q.id === q1.choices[1].nextQuestionId)?.key, 'q1-a');
     check('every text names eDrugstore, never Secure Medical',
       antibiotics.questions.some((q) => /secure medical/i.test(q.body + q.clarifyBody)) || /secure medical/i.test(antibiotics.reviewBody), false);
     let refused = '';
@@ -113,7 +114,7 @@ async function main(): Promise<void> {
     check('starts in the active flow and moves on', await conversationOf(first), {
       flow: 'antibiotics',
       status: 'open',
-      step: 2,
+      step: 20,
       score: 30,
       tier: 'LOW',
       end_outcome: null,
@@ -224,7 +225,7 @@ async function main(): Promise<void> {
     check('and it finishes there', await conversationOf(first), {
       flow: 'antibiotics',
       status: 'completed',
-      step: 3,
+      step: 30,
       score: 55,
       tier: 'WARM',
       end_outcome: 'completed',

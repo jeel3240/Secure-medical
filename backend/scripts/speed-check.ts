@@ -54,7 +54,7 @@ async function load(): Promise<void> {
            SELECT n, n,
              CASE WHEN kind < 40 THEN (CASE WHEN at < now() - interval '7 days' THEN 'expired' ELSE 'open' END)
                   WHEN kind < 88 THEN 'completed' WHEN kind < 95 THEN 'expired' WHEN kind < 98 THEN 'review' ELSE 'suppressed' END,
-             CASE WHEN kind < 30 THEN 1 WHEN kind < 40 THEN 2 WHEN kind < 88 THEN NULL WHEN kind < 98 THEN 1 END,
+             CASE WHEN kind < 30 THEN 10 WHEN kind < 40 THEN 20 WHEN kind < 88 THEN NULL WHEN kind < 98 THEN 10 END,
              ${flow},
              CASE WHEN kind < 30 THEN ${question('q1')} WHEN kind < 40 THEN ${question('q2')}
                   WHEN kind >= 88 AND kind < 98 THEN ${question('q1')} END,
@@ -75,11 +75,11 @@ async function load(): Promise<void> {
     q(`INSERT INTO conversation_answers (conversation_id, lead_id, question_id, question_key, position, heading, choice, label, points, created_at)
        SELECT n, n, ${question(key)}, '${key}', ${position}, '${heading}', ${choice}, ${label}, ${points}, at + interval '${after}'
        FROM speed_plan WHERE ${where}`);
-  await answer('q1', 1, 'Requested info', `CASE WHEN kind < 75 THEN '1' ELSE '2' END`, `CASE WHEN kind < 75 THEN 'Yes' ELSE 'No' END`,
+  await answer('q1', 10, 'Requested info', `CASE WHEN kind < 75 THEN '1' ELSE '2' END`, `CASE WHEN kind < 75 THEN 'Yes' ELSE 'No' END`,
     `CASE WHEN kind < 75 THEN 20 ELSE 0 END`, 'kind >= 30 AND kind < 88', '5 minutes');
-  await answer('q2', 2, 'Used telemedicine', `'1'`, `'Yes'`, '15', 'kind >= 40 AND kind < 75', '10 minutes');
-  await answer('q3', 3, 'Next step', `'2'`, `'Talk to an agent'`, '45', 'kind >= 40 AND kind < 75', '20 minutes');
-  await answer('offers', 4, 'Offers', `CASE WHEN kind < 83 THEN '1' ELSE '2' END`,
+  await answer('q2', 20, 'Used telemedicine', `'1'`, `'Yes'`, '15', 'kind >= 40 AND kind < 75', '10 minutes');
+  await answer('q3', 30, 'Next step', `'2'`, `'Talk to an agent'`, '45', 'kind >= 40 AND kind < 75', '20 minutes');
+  await answer('q1-a', 11, 'Offers', `CASE WHEN kind < 83 THEN '1' ELSE '2' END`,
     `CASE WHEN kind < 83 THEN 'Special offers' ELSE 'Learn more' END`, '0', 'kind >= 75 AND kind < 88', '20 minutes');
 
   await q(`INSERT INTO messages (lead_id, direction, body, ezt_message_id, delivery_status, created_at)
@@ -138,7 +138,7 @@ async function main(): Promise<void> {
   );
 
   const finished = (await pool.query(`SELECT lead_id FROM conversations WHERE end_outcome = 'completed' ORDER BY id DESC LIMIT 1`)).rows[0].lead_id;
-  const partway = (await pool.query(`SELECT lead_id FROM conversations WHERE status = 'open' AND step = 2 ORDER BY id DESC LIMIT 1`)).rows[0]?.lead_id;
+  const partway = (await pool.query(`SELECT lead_id FROM conversations WHERE status = 'open' AND step = 20 ORDER BY id DESC LIMIT 1`)).rows[0]?.lead_id;
 
   console.log('\nthe queue - asked every five seconds by every agent');
   const queue = await listQueue();

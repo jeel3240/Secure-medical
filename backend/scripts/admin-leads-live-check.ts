@@ -56,7 +56,8 @@ async function lead(
     await pool.query(
       `UPDATE conversations
        SET status = $2, score = $3, tier = 'HOT',
-           current_question_id = CASE WHEN $2 = 'open' THEN current_question_id END
+           -- Kept where the lead stopped, as the real paths leave it; cleared once finished.
+           current_question_id = CASE WHEN $2 IN ('open', 'expired', 'review') THEN current_question_id END
        WHERE id = $1`,
       [conversationId, conversation.status, conversation.score ?? 0]
     );
@@ -174,8 +175,8 @@ async function main(): Promise<void> {
   check('answered all three: done', step('Ready'), 'done');
   check('went quiet after Q1: stopped at Q2', step('Quiet'), 'Q2');
   check('unclear replies on Q1: stuck at Q1', step('Unclear'), 'Q1');
-  // The offers question sits fourth, and is the second thing this lead was asked.
-  check('said No, then went quiet on the offers question: "Offers", not "Q4"', step('QuietOnOffers'), 'Offers');
+  // The offers question is asked only after No to question 1: its sub-question.
+  check('said No, then went quiet on the sub-question: "Q1-a", not "Q4"', step('QuietOnOffers'), 'Q1-a');
 
   console.log('\nthe SMS part');
   check('no reply yet: awaiting_reply', status('Waiting'), 'awaiting_reply');

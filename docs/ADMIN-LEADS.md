@@ -144,14 +144,15 @@ out (blocked on arrival).
 | Finished the questions | Ready · Done |
 | Answered Q1, then silent 7 days | Expired · Q2 - where they dropped off |
 | Two unclear replies to Q1 | Needs review · Q1 |
-| Said No to Q1, then silent on the offers question | Expired · Offers |
+| Said No to Q1, then silent on the offers question | Expired · Q1-a |
 
-**By the question's own name** - 2026-10-06. A numbered question is "Q2"; one
-off the main line goes by its heading (`core/questions.ts`, one rule for every
-screen). It was the bare position, and the antibiotics flow's offers question
-- fourth in the flow, second thing a lead who said No is asked - read "Q4",
-as if they had answered three. The API's `step` is now that text (`"Q2"`,
-`"Offers"`, `"done"`) rather than a number.
+**By the question's own name** - 2026-10-06. A question on the main line is
+"Q2"; a sub-question is named after its parent, "Q1-a" (`core/questions.ts`,
+one rule for every screen; `FLOWS.md`, "Naming a question"). It was the bare
+position, and the antibiotics flow's offers question - asked only of a lead
+who said No to question 1 - read "Q4", as if they had answered three. The
+API's `step` is now that text (`"Q2"`, `"Q1-a"`, `"done"`) rather than a
+number, and is never worked out from the position.
 
 Until that day it was the highest question *answered*, so it always read one
 behind - "Answering · Q1" for a lead already past Q1, "Ready · Q3" for one who

@@ -127,7 +127,7 @@ async function main(): Promise<void> {
 
     // Before the handoff: a valid answer advances and question 3 goes out.
     const before = await replyAs(leadId, '1');
-    check('a reply before the handoff advances', before?.result.conversation.step, 3);
+    check('a reply before the handoff advances', before?.result.conversation.step, 30);
     check('and is scored', before?.result.conversation.score, 45);
 
     // A second lead, at the same place, whose agent then texts them.
@@ -139,14 +139,14 @@ async function main(): Promise<void> {
     const after = await replyAs(taken.leadId, '1');
     check('a reply after the handoff sends nothing', after?.result.send, []);
     check('is not scored', after?.result.conversation.score, 30);
-    check('and does not advance', after?.result.conversation.step, 2);
+    check('and does not advance', after?.result.conversation.step, 20);
 
     const row = await pool.query(
       `SELECT c.step, c.score, (SELECT count(*)::int FROM conversation_answers a WHERE a.conversation_id = c.id) AS answers
        FROM conversations c WHERE c.id = $1`,
       [taken.conversationId]
     );
-    check('the database agrees: one answer, the one given before', row.rows[0], { step: 2, score: 30, answers: 1 });
+    check('the database agrees: one answer, the one given before', row.rows[0], { step: 20, score: 30, answers: 1 });
     void conversationId;
 
     // The conversation stays open, so the lead is still reachable and expiry

@@ -49,7 +49,7 @@ every lead. The fourth holds the **real values**.
 | Table | One row per | Holds |
 |---|---|---|
 | `flows` | flow | `key` (`antibiotics`), `name`, `ezt_group` (not read yet), `responded_points`, `completed_points`, `review_body` (sent after a second unclear reply), `is_active` |
-| `flow_questions` | question | `flow_id`, `key` (`q1`, `offers`), `position`, `body` (the question), `clarify_body` (the "sorry, please reply..." text), `heading` (what the screens call it: "Next step") |
+| `flow_questions` | question | `flow_id`, `key` (`q1`, `q1-a`), `position`, `body` (the question), `clarify_body` (the "sorry, please reply..." text), `heading` (what the screens call it: "Next step") |
 | `flow_choices` | choice | `flow_id` and `question_id`, `choice` (`1`), `label` ("Talk to an agent"), `words` (also accepted: `{agent,talk,call}`), `points`, `reply_body`, and where it leads: `next_question_id`, or an `ending` |
 | `conversation_answers` | answer given | `conversation_id`, `lead_id`, the question (`question_id`, and its key, position and heading copied in), `choice`, and the `label` and `points` **as they were then** |
 
@@ -102,8 +102,33 @@ agents should not see it - that list.
 
 `position` is display order, and the lowest is the question a new lead is
 sent. Where a lead goes after an answer is the choice's `next_question_id`.
-That is what makes a branch possible: "No" on the first question jumps to the
-offers question, which sits fourth.
+That is what makes a branch possible: "Yes" on the first question skips its
+sub-question and goes straight to the second.
+
+### Naming a question, and sub-questions - Jeel, 2026-10-06
+
+A question's `key` is its name, and the screens read it from there
+(`core/questions.ts`, one rule for every screen):
+
+| Key | Is | Shown as |
+|---|---|---|
+| `q1`, `q2`, `q3` | A question on the main line | Q1, Q2, Q3 |
+| `q1-a`, `q1-b` | A **sub-question** of question 1: asked only after some answer to it | Q1-a, Q1-b |
+| anything else | - | The question's `heading` |
+
+The antibiotics flow's offers question is `q1-a`: only a lead who said No to
+question 1 is asked it. It had its own name and sat fourth, and the screens
+said "Q4" - "Stopped at Q4" for a lead who had answered one question.
+
+**Positions go in tens** - 10, 20, 30 for the main line - **and a sub-question
+sits behind its parent**: `q1-a` is 11, `q1-b` 12. So the questions list in
+the order a lead can meet them - Q1, Q1-a, Q2, Q3 - a sub-question that leads
+back into the main line still leads forward, and one added later needs no
+other row renumbered.
+
+A flow may have as many sub-questions as it needs, under any question. A
+sub-question of a sub-question has no name in this scheme; give it the next
+letter under the same parent.
 
 **A choice may only lead forward** - to a question with a higher `position`.
 So a flow cannot loop, a question is asked once, and a lead's score is the sum
@@ -131,7 +156,9 @@ A flow is added by a **migration that only inserts rows**. No table, no column,
 no code.
 
 1. Insert the flow into `flows`, with `is_active = false`.
-2. Insert its questions into `flow_questions`.
+2. Insert its questions into `flow_questions`: keys `q1`, `q2`... and `q1-a`
+   for a sub-question; positions in tens, a sub-question behind its parent
+   ("Naming a question", above).
 3. Insert each question's choices into `flow_choices`, with the flow's id and
    `next_question_id` or an `ending`.
 4. To make it the one new leads get: set the old flow's `is_active` to false

@@ -15,7 +15,7 @@ describe('score breakdown shades', () => {
 describe('a line of the score breakdown', () => {
   it('names an answer by what was asked, in the words the server sent', () => {
     expect(breakdownLabel({ code: 'q1_1', label: 'Yes', heading: 'Requested info' })).toBe('Requested info: Yes');
-    expect(breakdownLabel({ code: 'offers_2', label: 'Learn more', heading: 'Offers' })).toBe('Offers: Learn more');
+    expect(breakdownLabel({ code: 'q1-a_2', label: 'Learn more', heading: 'Offers' })).toBe('Offers: Learn more');
   });
 
   it('has its own words for the two awards', () => {

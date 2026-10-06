@@ -406,9 +406,12 @@ the first with the second's answers. Found in review; proved in
 `scripts/timeline-live-check.ts`.
 
 **The card says which question the lead is on, or stopped at** -
-`conversation.question`, "Q2" or "Offers" (`core/questions.ts`). The header's
-"On Q2", "Stopped at Offers" and the incoming-call card read it. It was built
-from the bare position, which read "Q4" for the offers question.
+`conversation.question`, "Q2" or "Q1-a" (`core/questions.ts`; `FLOWS.md`,
+"Naming a question"). The header's "On Q2", "Stopped at Q1-a" and the
+incoming-call card read it. It was built from the bare position, which read
+"Q4" for the offers question. A conversation whose question cannot be found
+says only "Open" or "Stopped": the position is an order, not a number to
+print.
 
 **The breakdown shows only what was earned.** A lead who stopped after question
 1 gets two lines, not five with zeros: the card records what happened rather

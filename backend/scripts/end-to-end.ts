@@ -169,13 +169,13 @@ async function main(): Promise<void> {
 
   check('the webhook accepts the first reply', await reply(PHONE, 'yes'), 200);
   const c1 = await conversation(leadId);
-  check('it moves to Q2', c1.step, 2);
+  check('it moves to Q2', c1.step, 20);
   check('and scores replying + Yes', c1.score, 30);
 
   // A word, not a number: matchAnswer accepts both.
   await reply(PHONE, 'no', new Date(Date.now() + 1000));
   const c2 = await conversation(leadId);
-  check('a word answer is understood', c2.step, 3);
+  check('a word answer is understood', c2.step, 30);
   check('and scores that No', c2.score, 35);
 
   await reply(PHONE, '2', new Date(Date.now() + 2000));

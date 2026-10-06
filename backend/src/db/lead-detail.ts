@@ -108,7 +108,13 @@ const SQL = `
     LIMIT 1
   ) c ON true
   LEFT JOIN flows f ON f.id = c.flow_id
-  LEFT JOIN flow_questions cq ON cq.id = c.current_question_id
+  -- The question it is on: by id, or for a row that names none, by its flow and position.
+  LEFT JOIN LATERAL (
+    SELECT q.key, q.heading FROM flow_questions q
+    WHERE q.id = c.current_question_id
+       OR (c.current_question_id IS NULL AND q.flow_id = c.flow_id AND q.position = c.step)
+    LIMIT 1
+  ) cq ON true
   LEFT JOIN users u ON u.id = l.assigned_to AND u.is_active
   LEFT JOIN dnc_list d ON d.phone = l.phone AND d.released_at IS NULL
   LEFT JOIN LATERAL (
@@ -122,14 +128,15 @@ const SQL = `
 `;
 
 /**
- * The question a conversation is on, or stopped at. From the question itself
- * where the conversation still names one; from the bare `step` for a row that
- * does not, so an older one still reads "Q2".
+ * The question a conversation is on, or stopped at, by its own name. Null once
+ * the questions are finished, and for a row whose question cannot be found -
+ * never worked out from the bare position, which is not a question number
+ * (positions go in tens, and a sub-question sits between two of them).
  */
-function questionLabel(r: { question_key: string | null; question_heading: string | null; step: number | null; status: string }): string | null {
+function questionLabel(r: { question_key: string | null; question_heading: string | null; status: string }): string | null {
   if (r.status === 'completed' || r.status === 'suppressed') return null;
   if (r.question_key && r.question_heading) return questionShort({ key: r.question_key, heading: r.question_heading });
-  return r.step ? `Q${r.step}` : null;
+  return null;
 }
 
 /** Null when there is no such lead. */

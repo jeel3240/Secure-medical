@@ -205,7 +205,7 @@ you change something the docs describe, update the doc in the same commit.
     src/core/answers.ts     matches a reply to a choice of the question asked, pure
     src/db/flows.ts         loads a flow, starts a conversation on the active one, and gives its first question
     src/core/flow-fixtures.ts  the antibiotics flow as a constant, for tests only
-    src/core/questions.ts   what the screens call a question: "Q2", or "Offers" - one rule for every screen
+    src/core/questions.ts   what the screens call a question: "Q2", and "Q1-a" for a sub-question - one rule for every screen
     src/api/reply-flow.ts   runs the state machine for an inbound reply
     src/worker/expiry.ts    marks stale open conversations expired
     src/worker/retry-openers.ts  retries openers that never went out

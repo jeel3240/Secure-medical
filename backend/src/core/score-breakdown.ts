@@ -14,7 +14,7 @@
 
 /** One saved answer, as `conversation_answers` holds it. */
 export interface SavedAnswer {
-  /** 'q1', 'offers'. */
+  /** 'q1', 'q1-a'. */
   questionKey: string;
   /** The question's order in its flow. */
   position: number;
@@ -81,21 +81,13 @@ export function scoreBreakdown(conversation: ScoredConversation, answers: SavedA
 }
 
 export interface AnswerChip {
-  /** The question's order in its flow. */
+  /** The question's order in its flow - its `position`, numbered in tens. */
   question: number;
-  /** The question's key: 'q1', 'offers'. */
+  /** The question's key: 'q1', 'q1-a'. */
   key: string;
   heading: string;
   answer: string;
-  /**
-   * The raw choice the lead sent - `1`, `2` or `3`.
-   *
-   * The label alone is not enough for the conversation view, which wants to
-   * write an inbound `3` as "3 Order online". Pairing a reply with a question
-   * by counting inbound messages is wrong the moment one of them was unclear,
-   * so the screen matches the digit against this instead and labels nothing it
-   * cannot prove.
-   */
+  /** The choice's number - `1`, `2` or `3` - whatever the lead typed to pick it. */
   choice: string;
 }
 

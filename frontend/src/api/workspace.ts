@@ -11,7 +11,7 @@ import { api, viewerTimeZone } from './client';
 export interface AnswerChip {
   /** The question's order in the lead's flow. */
   question: number;
-  /** 'q1', 'offers'. */
+  /** 'q1', 'q1-a'. */
   key: string;
   heading: string;
   /** One chip per question answered, so there is always an answer. */

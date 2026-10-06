@@ -32,7 +32,7 @@ it. A choice's reply and the question after it go out as **one text**.
 q1  eDrugstore: Hi {first_name}, did you recently request more info about
     ordering antibiotics online? Reply 1. Yes, 2. No. Reply STOP to opt out.
       1 Yes  +20  "Great! Let's get you started."                        -> q2
-      2 No    +0  "No problem."                                          -> offers
+      2 No    +0  "No problem."                                          -> q1-a
 
 q2  Have you used telemedicine to get prescription medication before?
     Reply 1. Yes, 2. No.
@@ -49,8 +49,8 @@ q3  Ready to move forward? Reply 1. I know which antibiotic I need,
       3 Order online             +10  "Great! Start your online order and consultation here:
                                        https://www.edrugstore.com/anti-ez"        ends: completed
 
-offers  Would you like to receive special offers from eDrugstore? Reply 1. Yes
-        for offers, 2. Learn more from a rep, 3. No thanks, or STOP to unsubscribe.
+q1-a  Would you like to receive special offers from eDrugstore? Reply 1. Yes
+      for offers, 2. Learn more from a rep, 3. No thanks, or STOP to unsubscribe.
       1 Special offers  +0  "Thanks! You'll receive special offers from eDrugstore.
                              Reply STOP to opt out."                      ends: offers
       2 Learn more      +0  "Thanks! An eDrugstore representative will
@@ -72,6 +72,11 @@ Replying at all: +10, once. Finishing the three questions (an ending of
 | No, then Special offers | 10 | LOW | **Not in the agents' queue** - marked Offers on Admin > Leads |
 | No, then Learn more | 10 | LOW | In the queue, tagged **Wants a call** |
 | No, then No thanks | 10 | LOW | **Not in the agents' queue** - marked Not interested on Admin > Leads |
+
+**`q1-a` is the offers question: a sub-question of question 1**, asked only of
+a lead who said No to it. The screens call it "Q1-a". Sub-questions are named
+after their parent - `q1-a`, `q1-b` - a rule for every flow, Jeel's,
+2026-10-06: `FLOWS.md`, "Naming a question".
 
 **Decisions in it, and whose:**
 
@@ -113,7 +118,7 @@ reply, any case:
 | q1 | 1, yes, y, yeah, yep, yup, yes please, sure, ok, okay, correct | 2, no, n, nope, nah, no thanks, no thank you | - |
 | q2 | 1, yes, y, yeah, yep, yup, yes please, i have | 2, no, n, nope, nah, never, not yet | - |
 | q3 | 1, i know, know, i know which one | 2, agent, talk, call, call me, talk to an agent | 3, online, order, order online |
-| offers | 1, yes, y, yes please, offers, offer | 2, learn more, learn, more, learnmore | 3, no, n, nope, nah, no thanks, no thank you, not interested |
+| q1-a | 1, yes, y, yes please, offers, offer | 2, learn more, learn, more, learnmore | 3, no, n, nope, nah, no thanks, no thank you, not interested |
 
 **The unclear-reply texts:**
 
@@ -121,7 +126,7 @@ reply, any case:
 |---|---|
 | q1, q2 | Sorry, please reply 1 for Yes or 2 for No. |
 | q3 | Sorry, please reply 1. I know which antibiotic I need, 2. Talk to an agent, or 3. Order online. |
-| offers | Sorry, please reply 1 for offers, 2 to learn more from a rep, 3 for no thanks, or STOP to unsubscribe. |
+| q1-a | Sorry, please reply 1 for offers, 2 to learn more from a rep, 3 for no thanks, or STOP to unsubscribe. |
 | second unclear reply, any question | Thanks! An eDrugstore representative will follow up with you directly. |
 
 **Drafted here, not in the client's script** - to be confirmed in its test

@@ -109,8 +109,8 @@ contact in the group gets a text within a poll interval. `openers` in the
 ## How to test
 
 ```bash
-cd backend  && npm test && npm run lint    # 626 tests
-cd frontend && npm test && npm run lint    # 272 tests   (counts as of 2026-10-06)
+cd backend  && npm test && npm run lint    # 627 tests
+cd frontend && npm test && npm run lint    # 273 tests   (counts as of 2026-10-06)
 ```
 
 **Unit and route tests** mock the database and cover behaviour in isolation.

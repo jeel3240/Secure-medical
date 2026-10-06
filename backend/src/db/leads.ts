@@ -83,7 +83,7 @@ export interface AdminLeadPage {
 const BASE = `
   FROM leads l
   LEFT JOIN LATERAL (
-    SELECT c.id, c.status, c.step, c.score, c.tier, c.end_outcome, c.current_question_id
+    SELECT c.id, c.status, c.step, c.score, c.tier, c.end_outcome, c.flow_id, c.current_question_id
     FROM conversations c
     WHERE c.lead_id = l.id
     ORDER BY c.created_at DESC, c.id DESC
@@ -214,7 +214,7 @@ export async function listAdminLeads(query: AdminLeadQuery): Promise<AdminLeadPa
        SELECT l.id, l.phone, l.first_name, l.last_name, l.source,
               ${RECEIVED} AS received_at,
               ${STATUS_SQL} AS status,
-              c.status AS conversation_status, c.step, c.score, c.tier, c.current_question_id
+              c.status AS conversation_status, c.step, c.score, c.tier, c.flow_id, c.current_question_id
        ${BASE}
        ${where}
        ORDER BY ${RECEIVED} DESC, l.id DESC
@@ -228,7 +228,13 @@ export async function listAdminLeads(query: AdminLeadQuery): Promise<AdminLeadPa
        ORDER BY COALESCE(m.received_at, m.created_at) DESC, m.id DESC
        LIMIT 1
      ) m ON true
-     LEFT JOIN flow_questions fq ON fq.id = p.current_question_id
+     -- By id, or for a row that names no question, by its flow and position.
+     LEFT JOIN LATERAL (
+       SELECT q.key, q.heading FROM flow_questions q
+       WHERE q.id = p.current_question_id
+          OR (p.current_question_id IS NULL AND q.flow_id = p.flow_id AND q.position = p.step)
+       LIMIT 1
+     ) fq ON true
      ORDER BY p.received_at DESC, p.id DESC`,
     values
   );
@@ -265,21 +271,20 @@ export async function listAdminLeads(query: AdminLeadQuery): Promise<AdminLeadPa
  * finished. A lead that went quiet reads the question it never answered,
  * which is where it dropped off.
  *
- * By the question's own name - "Q2", "Offers" - since 2026-10-06; it was the
+ * By the question's own name - "Q2", "Q1-a" - since 2026-10-06; it was the
  * bare position, and the antibiotics flow's offers question, asked second of
- * a lead who said No, read "Q4". A conversation that names no question (an
- * older row) falls back to its position.
+ * a lead who said No, read "Q4". Never worked out from the position: that is
+ * an order, not a question number.
  */
 function stepLabel(r: {
   conversation_status: string | null;
-  step: number | null;
   question_key: string | null;
   question_heading: string | null;
 }): string | null {
   if (r.conversation_status === 'completed') return 'done';
   if (r.conversation_status === 'suppressed') return null;
   if (r.question_key && r.question_heading) return questionShort({ key: r.question_key, heading: r.question_heading });
-  return r.step ? `Q${r.step}` : null;
+  return null;
 }
 
 /** Distinct sources, for the filter dropdown. */

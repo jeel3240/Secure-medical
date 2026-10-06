@@ -212,7 +212,7 @@ async function main() {
   check('tagged, so an agent sees why it is there', row(wantsRep)?.tag, { kind: 'wants_call' });
   check('a row carries its answers, as many as the lead gave', row(wantsRep)?.answers, [
     { key: 'q1', heading: 'Requested info', label: 'No' },
-    { key: 'offers', heading: 'Offers', label: 'Learn more' },
+    { key: 'q1-a', heading: 'Offers', label: 'Learn more' },
   ]);
   check('three for a lead who finished', row(finished)?.answers.map((a) => a.label), ['Yes', 'No', 'Order online']);
   check('"Order online" is WARM: called, after the HOT ones', [row(finished)?.score, row(finished)?.tier], [55, 'WARM']);
