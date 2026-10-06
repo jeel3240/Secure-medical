@@ -96,13 +96,13 @@ second part's SQL there once.
 
 *(The `004` on disk today, `004_conversation_completed_at.sql`, is a later and
 unrelated file. As of 2026-10-06 the files are 001 to 013: `main` holds 001 to
-005, and 006 to 011 - the activity log, incoming calls, the callback a
-missed call books, the word kept with each answer, who picked up a call, and
-call recordings and transcripts - are on `dev`. 012, the SMS flows as rows
-with the antibiotics script (`FLOWS.md`), and 013, three indexes for the
-queue and Admin > Leads (`QUEUE.md`, "How fast it is"), are on `feat/flows`,
-walked with a real phone on 2026-10-06 (`FLOWS.md`) and waiting to be merged
-into `dev`. *(012 was edited on that
+011 - 006 to 011, the activity log, incoming calls, the callback a missed call
+books, the word kept with each answer, who picked up a call, and call
+recordings and transcripts, reached it on 2026-10-05. 012, the SMS flows as
+rows with the antibiotics script (`FLOWS.md`), and 013, three indexes for the
+queue and Admin > Leads (`QUEUE.md`, "How fast it is"), are on `dev` since
+2026-10-06, after a walk with a real phone (`FLOWS.md`); the next merge into
+`main` and deploy runs those two. *(012 was edited on that
 branch on 2026-10-06, after review and before it ran anywhere but a
 developer's machine: a local database that ran the earlier 012 has to be
 rebuilt.)* `npm run migrate` applies whatever the
