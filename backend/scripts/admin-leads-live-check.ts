@@ -154,6 +154,10 @@ async function main(): Promise<void> {
   await startFlow(offersOnly, ['2', '1']);
   const wantsRep = await lead('WantsRep', null);
   await startFlow(wantsRep, ['2', 'learn more']);
+  // Said No, was asked about offers, and went quiet: stopped on a question that is not "Q4".
+  const quietOnOffers = await lead('QuietOnOffers', null);
+  const quietConversation = await startFlow(quietOnOffers, ['2']);
+  await pool.query(`UPDATE conversations SET status = 'expired' WHERE id = $1`, [quietConversation]);
 
   const all = await listAdminLeads({ pageSize: 200 });
   const by = Object.fromEntries(all.leads.map((l) => [l.firstName, l]));
@@ -163,11 +167,13 @@ async function main(): Promise<void> {
   // Step is the question the lead is on now - 2026-09-29. It read the highest
   // question answered, one behind: "Answering · Q1" while being asked Q2.
   console.log('\nstep');
-  check('no reply yet: on Q1', step('Waiting'), 1);
-  check('answered Q1: on Q2', step('Midway'), 2);
+  check('no reply yet: on Q1', step('Waiting'), 'Q1');
+  check('answered Q1: on Q2', step('Midway'), 'Q2');
   check('answered all three: done', step('Ready'), 'done');
-  check('went quiet after Q1: stopped at Q2', step('Quiet'), 2);
-  check('unclear replies on Q1: stuck at Q1', step('Unclear'), 1);
+  check('went quiet after Q1: stopped at Q2', step('Quiet'), 'Q2');
+  check('unclear replies on Q1: stuck at Q1', step('Unclear'), 'Q1');
+  // The offers question sits fourth, and is the second thing this lead was asked.
+  check('said No, then went quiet on the offers question: "Offers", not "Q4"', step('QuietOnOffers'), 'Offers');
 
   console.log('\nthe SMS part');
   check('no reply yet: awaiting_reply', status('Waiting'), 'awaiting_reply');
@@ -206,7 +212,7 @@ async function main(): Promise<void> {
   const closedTab = await listAdminLeads({ status: 'closed', pageSize: 200 });
   check('the closed tab lists exactly the closed leads', closedTab.leads.map((l) => l.firstName).sort(), ['Closed', 'SoldBefore']);
   check('the counts add up per status', all.counts, {
-    all: 24,
+    all: 25,
     awaiting_reply: 2,
     answering: 1,
     offers: 1,
@@ -214,9 +220,15 @@ async function main(): Promise<void> {
     working: 10,
     closed: 2,
     needs_review: 1,
-    expired: 1,
+    expired: 2,
     opted_out: 2,
   });
+  // The total is read from those counts, not counted again.
+  check('the total is the chosen tab\'s count', [closedTab.total, all.total], [2, 25]);
+  const second = await listAdminLeads({ pageSize: 10, page: 2 });
+  check('a later page carries on in the same order, newest first', [second.leads.length, second.page, second.total], [10, 2, 25]);
+  const firstIds = (await listAdminLeads({ pageSize: 10 })).leads.map((l) => l.id);
+  check('and repeats nothing from the first', second.leads.some((l) => firstIds.includes(l.id)), false);
 
   console.log(failures === 0 ? '\nall checks passed' : `\n${failures} check(s) FAILED`);
   await pool.end();

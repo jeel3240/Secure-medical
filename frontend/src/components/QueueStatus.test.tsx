@@ -1,5 +1,5 @@
 /**
- * The queue's statuses: only three, each an icon and the words - Jeel,
+ * The queue's statuses, each an icon and the words - Jeel,
  * 2026-09-28. The icon says which status it is; Inbound reply is also bold,
  * because a lead has written to us and nobody has read it.
  */
@@ -25,7 +25,7 @@ describe('statuses', () => {
     ['someone working it', { kind: 'working', agentId: 2, agentName: 'karm' }, 'Working – karm', 'half', false],
     ['an unread reply', { kind: 'inbound_reply' }, 'Inbound reply', 'inbound', true],
     ['a call nobody answered', { kind: 'missed_call' }, 'Missed call', 'missed', true],
-    ['a lead who asked to hear from a rep', { kind: 'wants_call' }, 'Wants a call', 'chat', false],
+    ['a lead who asked to hear from a rep', { kind: 'wants_call' }, 'Wants a call', 'phone', false],
     ['replies nobody understood', { kind: 'needs_review' }, 'Needs review', 'warning', false],
     ['a callback booked', { kind: 'callback', agentId: 21, agentName: 'Maya Chen' }, 'Callback – Maya Chen', 'clock', false],
   ])('%s: its own icon, and the words', (_, tag, text, icon, bold) => {

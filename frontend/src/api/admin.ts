@@ -62,7 +62,7 @@ export interface Overview {
     leadsReceived: number;
     /** Leads whose first reply came in the period. */
     responded: number;
-    /** Leads whose third answer came in the period. */
+    /** Leads who finished their flow's questions in the period, whichever way it ended. */
     completed: number;
     /** Leads closed in the period - leads, not presses. */
     closed: number;

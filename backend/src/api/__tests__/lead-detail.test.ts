@@ -30,6 +30,7 @@ const A_LEAD: LeadDetail = {
     tier: 'HOT',
     expiresAt: null,
     agentTookOverAt: null,
+    question: null,
     flow: 'antibiotics',
     endOutcome: 'completed',
   },

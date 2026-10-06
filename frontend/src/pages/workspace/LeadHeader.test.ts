@@ -6,6 +6,7 @@ const convo = (over: Partial<NonNullable<LeadDetail['conversation']>>): LeadDeta
   id: 1,
   status: 'open',
   step: 1,
+  question: null,
   score: 0,
   tier: null,
   expiresAt: null,
@@ -24,7 +25,11 @@ describe('the header in words', () => {
   });
 
   it.each<[string, LeadDetail['conversation'], string]>([
-    ['on a question', convo({ step: 2 }), 'On Q2'],
+    ['on a question', convo({ step: 2, question: 'Q2' }), 'On Q2'],
+    // The offers question sits fourth; the lead was asked it second.
+    ['said No, on the offers question', convo({ step: 4, question: 'Offers' }), 'On Offers'],
+    ['went quiet on it', convo({ status: 'expired', step: 4, question: 'Offers' }), 'Stopped at Offers'],
+    ['an older row that names no question', convo({ step: 2 }), 'On Q2'],
     ['finished', convo({ status: 'completed', step: 3 }), 'Completed'],
     ['said No, asked for offers', convo({ status: 'completed', step: 4, endOutcome: 'offers' }), 'Offers only'],
     ['said No, asked for a rep', convo({ status: 'completed', step: 4, endOutcome: 'wants_contact' }), 'Wants a call'],

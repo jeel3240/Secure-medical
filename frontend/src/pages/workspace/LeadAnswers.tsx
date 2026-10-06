@@ -37,16 +37,19 @@ export function LeadAnswers({ lead }: { lead: LeadDetail }) {
     <>
       <article className="card told-us">
         <h2 className="card__title">What {lead.firstName ?? 'the lead'} told us</h2>
-        <dl className="told-us__list">
-          {/* One per question answered - as many as the lead's flow asked. */}
-          {lead.chips.length === 0 && <p className="told-us__none">Nothing yet</p>}
-          {lead.chips.map((chip) => (
-            <div key={chip.key}>
-              <dt>{chip.heading}</dt>
-              <dd>{chip.answer}</dd>
-            </div>
-          ))}
-        </dl>
+        {/* One per question answered - as many as the lead's flow asked. */}
+        {lead.chips.length === 0 ? (
+          <p className="told-us__none">Nothing yet</p>
+        ) : (
+          <dl className="told-us__list">
+            {lead.chips.map((chip) => (
+              <div key={chip.key}>
+                <dt>{chip.heading}</dt>
+                <dd>{chip.answer}</dd>
+              </div>
+            ))}
+          </dl>
+        )}
       </article>
 
       {lead.breakdown.length > 0 && (

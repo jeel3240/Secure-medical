@@ -33,13 +33,13 @@ export interface QueueRow {
   receivedAt: string | null;
   score: number;
   tier: string | null;
-  /** Their answers, as the choices they picked. The screen maps them to words. */
   /**
    * What the lead answered, in the flow's order - as many as their flow asked
    * and they answered. The word is the one saved with the answer.
    */
   answers: QueueAnswer[];
-  conversationStatus: 'open' | 'completed' | 'review' | 'expired';
+  /** `suppressed`: a lead who sent STOP, then START, and has written again. */
+  conversationStatus: 'open' | 'completed' | 'review' | 'expired' | 'suppressed';
   /** `null` when there is nothing to say: the lead is waiting to be picked up. */
   tag: QueueTag | null;
 }
@@ -94,7 +94,8 @@ const BASE = `
  * an unread message - below), its number is not blocked (a live `dnc_list`
  * row, whatever the conversation says), and one of these holds:
  *
- * - **Completed** - answered all three, including how to contact them.
+ * - **Completed** - finished their flow's questions, except by asking only
+ *   for offers.
  * - **Needs review** - replied, and we could not understand it.
  * - **Inbound reply** - texted something the questions cannot handle: after
  *   the conversation ended, or to an agent who took it over. Since the same day
@@ -151,18 +152,14 @@ const INCLUDED = `
 
 const RECEIVED = `COALESCE(l.ezt_added_at, l.created_at)`;
 
-function buildFilters(query: QueueQuery, values: unknown[]): string {
+/**
+ * The filters every part of the answer shares: who is in the queue, the time
+ * window and the search. Tier and source are applied after - the tier counts
+ * ignore the tier filter and the source list ignores the source filter, so
+ * they are left out of the set those are counted from.
+ */
+function buildSetFilters(query: QueueQuery, values: unknown[]): string {
   const clauses: string[] = [INCLUDED];
-
-  if (query.tier?.length) {
-    values.push(query.tier.map((t) => t.toUpperCase()));
-    clauses.push(`c.tier = ANY($${values.length}::text[])`);
-  }
-
-  if (query.source?.length) {
-    values.push(query.source);
-    clauses.push(`l.source = ANY($${values.length}::text[])`);
-  }
 
   if (query.since) {
     values.push(query.since);
@@ -184,8 +181,35 @@ function buildFilters(query: QueueQuery, values: unknown[]): string {
   return `WHERE ${clauses.join(' AND ')}`;
 }
 
+/** Tier and source, on the rows of the page. `q` is the set built above. */
+function buildPageFilters(query: QueueQuery, values: unknown[]): string {
+  const clauses: string[] = [];
+
+  if (query.tier?.length) {
+    values.push(query.tier.map((t) => t.toUpperCase()));
+    clauses.push(`q.tier = ANY($${values.length}::text[])`);
+  }
+
+  if (query.source?.length) {
+    values.push(query.source);
+    clauses.push(`q.source = ANY($${values.length}::text[])`);
+  }
+
+  return clauses.length ? `WHERE ${clauses.join(' AND ')}` : '';
+}
+
+/** How many queued leads have this tier and this source - what the pills and the dropdown are built from. */
+interface QueueGroup {
+  tier: string | null;
+  source: string | null;
+  n: number;
+}
+
 interface QueueDbRow {
-  id: number;
+  /** On every row, the same: the whole queue, counted by tier and source. */
+  groups: QueueGroup[];
+  /** Null on the one row that comes back when the page is empty. */
+  id: number | null;
   phone: string;
   first_name: string | null;
   last_name: string | null;
@@ -212,72 +236,107 @@ interface QueueDbRow {
  * down the list always has the highest-intent lead in front of them, and
  * between equal scores the freshest one, because speed to contact is the whole
  * point of the screen.
+ *
+ * **One statement, and one pass over the leads** - 2026-10-06. Whether a lead
+ * belongs in the queue is worked out from several tables, for every lead we
+ * hold, and this is asked every five seconds by every open browser. There
+ * were three statements - the page, the tier counts, the source list - and
+ * each worked that out from scratch. Now:
+ *
+ * - `q` is the queue, built once (`MATERIALIZED`, so it is not folded back
+ *   into each use of it).
+ * - `grouped` counts it by tier and source - a handful of rows, from which
+ *   both the tier pills and the source dropdown are read below.
+ * - `page` takes the rows to show and only then looks up what each needs: its
+ *   answers, its next callback, whether it is a missed call.
+ *
+ * `grouped` is one row, so the page hangs off it with a left join: an empty
+ * page still returns the counts, on a row with no lead.
+ *
+ * Timed against 50,000 leads: docs/QUEUE.md, "How fast it is".
  */
 export async function listQueue(query: QueueQuery = {}): Promise<QueuePage> {
   const limit = Math.min(MAX_LIMIT, Math.max(1, query.limit ?? DEFAULT_LIMIT));
 
   const values: unknown[] = [];
-  const where = buildFilters(query, values);
+  const inQueue = buildSetFilters(query, values);
+  const onPage = buildPageFilters(query, values);
 
-  const rows = await pool.query<QueueDbRow>(
-    `SELECT l.id, l.phone, l.first_name, l.last_name, l.source,
-            ${RECEIVED} AS received_at,
-            c.score, c.tier, c.status, c.end_outcome,
-            -- What they answered, as saved, in the flow's order. One subquery
-            -- for the row, so a page of leads is still one statement.
-            (SELECT COALESCE(jsonb_agg(jsonb_build_object(
-                      'key', a.question_key, 'heading', a.heading, 'label', a.label) ORDER BY a.position), '[]'::jsonb)
-             FROM conversation_answers a WHERE a.conversation_id = c.id) AS answers,
-            u.id AS agent_id, u.name AS agent_name, l.has_unread_inbound,
-            ${MISSED_CALL_SQL} AS missed_call,
-            ncb.agent_id AS callback_agent_id, ncb.agent_name AS callback_agent_name,
-            ncb.scheduled_at AS callback_at
-     ${BASE}
+  const { rows } = await pool.query<QueueDbRow>(
+    `WITH q AS MATERIALIZED (
+       SELECT l.id, l.phone, l.first_name, l.last_name, l.source,
+              ${RECEIVED} AS received_at,
+              c.id AS conversation_id, c.score, c.tier, c.status, c.end_outcome,
+              u.id AS agent_id, u.name AS agent_name, l.has_unread_inbound
+       ${BASE}
+       ${inQueue}
+     ),
+     grouped AS (
+       SELECT COALESCE(jsonb_agg(jsonb_build_object('tier', g.tier, 'source', g.source, 'n', g.n)), '[]'::jsonb) AS groups
+       FROM (SELECT q.tier, q.source, count(*)::int AS n FROM q GROUP BY q.tier, q.source) g
+     )
+     SELECT grouped.groups, page.*
+     FROM grouped
      LEFT JOIN LATERAL (
-       SELECT cb.agent_id, cu.name AS agent_name, cb.scheduled_at
-       FROM callbacks cb JOIN users cu ON cu.id = cb.agent_id
-       WHERE cb.lead_id = l.id AND cb.done_at IS NULL
-       ORDER BY cb.scheduled_at, cb.id
-       LIMIT 1
-     ) ncb ON true
-     ${where}
-     ORDER BY c.score DESC, ${RECEIVED} DESC, l.id DESC
-     LIMIT ${limit}`,
+       SELECT l.id, l.phone, l.first_name, l.last_name, l.source, l.received_at,
+              l.score, l.tier, l.status, l.end_outcome,
+              -- What they answered, as saved, in the flow's order.
+              (SELECT COALESCE(jsonb_agg(jsonb_build_object(
+                        'key', a.question_key, 'heading', a.heading, 'label', a.label) ORDER BY a.position), '[]'::jsonb)
+               FROM conversation_answers a WHERE a.conversation_id = l.conversation_id) AS answers,
+              l.agent_id, l.agent_name, l.has_unread_inbound,
+              ${MISSED_CALL_SQL} AS missed_call,
+              ncb.agent_id AS callback_agent_id, ncb.agent_name AS callback_agent_name,
+              ncb.scheduled_at AS callback_at
+       -- Named l, as the lead is everywhere else: the missed-call rule reads l.id.
+       FROM (
+         SELECT q.* FROM q
+         ${onPage}
+         ORDER BY q.score DESC, q.received_at DESC, q.id DESC
+         LIMIT ${limit}
+       ) l
+       LEFT JOIN LATERAL (
+         SELECT cb.agent_id, cu.name AS agent_name, cb.scheduled_at
+         FROM callbacks cb JOIN users cu ON cu.id = cb.agent_id
+         WHERE cb.lead_id = l.id AND cb.done_at IS NULL
+         ORDER BY cb.scheduled_at, cb.id
+         LIMIT 1
+       ) ncb ON true
+     ) page ON true
+     ORDER BY page.score DESC, page.received_at DESC, page.id DESC`,
     values
   );
+
+  const groups: QueueGroup[] = rows[0]?.groups ?? [];
+  const leads = rows.filter((r): r is QueueDbRow & { id: number } => r.id !== null);
 
   // The two option lists are each counted without the filter they drive: the
   // tier pills would zero each other out, and picking a source would leave
   // that source alone in the dropdown with no way back.
-  const countValues: unknown[] = [];
-  const counts = await pool.query<{ tier: string | null; n: number }>(
-    `SELECT c.tier, count(*)::int AS n ${BASE} ${buildFilters({ ...query, tier: undefined }, countValues)} GROUP BY c.tier`,
-    countValues
-  );
-
-  const sourceValues: unknown[] = [];
-  const sources = await pool.query<{ source: string }>(
-    `SELECT DISTINCT l.source ${BASE} ${buildFilters({ ...query, source: undefined }, sourceValues)}
-       AND l.source IS NOT NULL
-     ORDER BY l.source`,
-    sourceValues
-  );
+  const wantedSources = query.source?.length ? new Set(query.source) : null;
+  const wantedTiers = query.tier?.length ? new Set(query.tier.map((t) => t.toUpperCase())) : null;
 
   const byTier: Record<string, number> = { all: 0 };
-  for (const row of counts.rows) {
-    if (row.tier) byTier[row.tier] = row.n;
-    byTier.all += row.n;
+  const sources = new Set<string>();
+  for (const group of groups) {
+    if (!wantedSources || (group.source !== null && wantedSources.has(group.source))) {
+      if (group.tier) byTier[group.tier] = (byTier[group.tier] ?? 0) + group.n;
+      byTier.all += group.n;
+    }
+    if (group.source !== null && (!wantedTiers || (group.tier !== null && wantedTiers.has(group.tier)))) {
+      sources.add(group.source);
+    }
   }
 
   // How many match everything asked for, which is what the limit truncated.
   // The tier counts already have every other filter applied, so the selected
-  // tiers add up to it - no third count query.
-  const total = query.tier?.length
-    ? query.tier.reduce((sum, t) => sum + (byTier[t.toUpperCase()] ?? 0), 0)
+  // tiers add up to it.
+  const total = wantedTiers
+    ? [...wantedTiers].reduce((sum, t) => sum + (byTier[t] ?? 0), 0)
     : byTier.all;
 
   return {
-    leads: rows.rows.map((r) => ({
+    leads: leads.map((r) => ({
       id: r.id,
       phone: r.phone,
       firstName: r.first_name,
@@ -305,7 +364,7 @@ export async function listQueue(query: QueueQuery = {}): Promise<QueuePage> {
       }),
     })),
     counts: byTier,
-    sources: sources.rows.map((r) => r.source),
+    sources: [...sources].sort((a, b) => a.localeCompare(b)),
     total,
     limit,
   };

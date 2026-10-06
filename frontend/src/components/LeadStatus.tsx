@@ -9,9 +9,11 @@ import { StatusIcon, type StatusIconName } from './StatusIcon';
  * The icons follow the lead's life: a clock while we wait on them, a chat
  * bubble while they answer, then an empty circle (Ready), a half-filled one
  * (Working) and a ticked one (Closed). Working and Needs review use the same
- * icons as the queue - `StatusIcon.tsx`.
+ * icons as the queue - `StatusIcon.tsx`. Offers, a lead who asked for special
+ * offers and nothing else, is a price tag: its own icon, so the message box
+ * with an arrow keeps meaning one thing - an unread text - on every screen.
  *
- * Tone: finished leads (Closed, Expired) step back to muted; Opted out is in
+ * Tone: leads with nothing left to do (Closed, Expired, Offers) step back to muted; Opted out is in
  * the danger colour, since that number can never be contacted. Everything
  * else is plain text.
  */
@@ -33,7 +35,7 @@ const ICON: Record<Status, StatusIconName> = {
   answering: 'chat',
   ready: 'circle',
   // Wants offers by text, not a call.
-  offers: 'inbound',
+  offers: 'tag',
   working: 'half',
   closed: 'check',
   needs_review: 'warning',

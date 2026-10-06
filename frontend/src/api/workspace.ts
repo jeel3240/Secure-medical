@@ -42,6 +42,8 @@ export interface LeadDetail {
     id: number;
     status: string;
     step: number | null;
+    /** The question the lead is on or stopped at, as the screens say it: "Q2", "Offers". */
+    question: string | null;
     score: number;
     tier: string | null;
     expiresAt: string | null;

@@ -7,6 +7,7 @@
  */
 
 import { pool } from './pool';
+import { questionShort } from '../core/questions';
 import { CLOSED_SQL, MISSED_CALL_SQL } from './lead-state';
 import { answerChips, scoreBreakdown, type SavedAnswer } from '../core/score-breakdown';
 import type { AnswerChip, BreakdownLine } from '../core/score-breakdown';
@@ -30,6 +31,11 @@ export interface LeadDetail {
     expiresAt: string | null;
     /** Set once an agent takes the conversation over - STATE-MACHINE.md 2b. */
     agentTookOverAt: string | null;
+    /**
+     * The question the lead is on, or stopped at, as the screens say it: "Q2",
+     * "Offers" - `core/questions.ts`. Null once the questions are finished.
+     */
+    question: string | null;
     /** Which flow the lead is in: 'antibiotics'. */
     flow: string | null;
     /** How the flow ended: completed, offers, wants_contact - or null. */
@@ -78,6 +84,7 @@ const SQL = `
     c.status, c.step, c.score, c.tier, c.end_outcome,
     c.expires_at, c.agent_took_over_at,
     f.key AS flow_key, f.responded_points, f.completed_points,
+    cq.key AS question_key, cq.heading AS question_heading,
     -- What they answered, as it was saved - docs/FLOWS.md.
     (SELECT COALESCE(jsonb_agg(jsonb_build_object(
               'questionKey', a.question_key, 'position', a.position, 'heading', a.heading,
@@ -93,7 +100,7 @@ const SQL = `
     ou.name AS outcome_by
   FROM leads l
   LEFT JOIN LATERAL (
-    SELECT c.id, c.status, c.step, c.flow_id, c.end_outcome,
+    SELECT c.id, c.status, c.step, c.flow_id, c.current_question_id, c.end_outcome,
            c.score, c.tier, c.expires_at, c.agent_took_over_at
     FROM conversations c
     WHERE c.lead_id = l.id
@@ -101,6 +108,7 @@ const SQL = `
     LIMIT 1
   ) c ON true
   LEFT JOIN flows f ON f.id = c.flow_id
+  LEFT JOIN flow_questions cq ON cq.id = c.current_question_id
   LEFT JOIN users u ON u.id = l.assigned_to AND u.is_active
   LEFT JOIN dnc_list d ON d.phone = l.phone AND d.released_at IS NULL
   LEFT JOIN LATERAL (
@@ -112,6 +120,17 @@ const SQL = `
   LEFT JOIN users ou ON ou.id = od.agent_id
   WHERE l.id = $1
 `;
+
+/**
+ * The question a conversation is on, or stopped at. From the question itself
+ * where the conversation still names one; from the bare `step` for a row that
+ * does not, so an older one still reads "Q2".
+ */
+function questionLabel(r: { question_key: string | null; question_heading: string | null; step: number | null; status: string }): string | null {
+  if (r.status === 'completed' || r.status === 'suppressed') return null;
+  if (r.question_key && r.question_heading) return questionShort({ key: r.question_key, heading: r.question_heading });
+  return r.step ? `Q${r.step}` : null;
+}
 
 /** Null when there is no such lead. */
 export async function getLeadDetail(leadId: number): Promise<LeadDetail | null> {
@@ -149,6 +168,7 @@ export async function getLeadDetail(leadId: number): Promise<LeadDetail | null> 
           tier: r.tier,
           expiresAt: r.expires_at?.toISOString() ?? null,
           agentTookOverAt: r.agent_took_over_at?.toISOString() ?? null,
+          question: questionLabel(r),
           flow: r.flow_key ?? null,
           endOutcome: r.end_outcome ?? null,
         }

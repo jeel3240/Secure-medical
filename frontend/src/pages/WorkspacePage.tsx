@@ -293,7 +293,6 @@ export function WorkspacePage() {
               {entries ? (
                 <Conversation
                   entries={entries}
-                  chips={lead.chips}
                   leadFirstName={lead.firstName ?? 'Lead'}
                 />
               ) : (

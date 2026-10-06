@@ -49,13 +49,12 @@ const AWARD_LABEL: Record<string, string> = {
 };
 
 /**
- * `scoring_rules.label` stores "Q1: Both"; under a Q1 heading the prefix is
- * repetition. Stripped here rather than in the database, because the column is
- * also read where the question is not already obvious.
+ * A question as the Messages card names it - "Q2", or its heading for one off
+ * the main line - joined to what it asks, so "After Q2" there and this card's
+ * points can be matched: "Q2 · Used telemedicine", "Offers".
  */
-function choiceLabel(label: string | null, choice: string): string {
-  if (!label) return choice;
-  return label.replace(/^Q\d:\s*/, '');
+export function questionTitle(question: { key: string; heading: string }): string {
+  return /^q\d+$/.test(question.key) ? `${question.key.toUpperCase()} · ${question.heading}` : question.heading;
 }
 
 export function ConfigPage() {
@@ -144,10 +143,10 @@ export function ConfigPage() {
               ))}
               {data.scoring.questions.map((question) => (
                 <div key={question.question} className="kv__group">
-                  <dt className="kv__group-title">{question.heading}</dt>
+                  <dt className="kv__group-title">{questionTitle(question)}</dt>
                   {question.choices.map((choice) => (
                     <div key={choice.choice} className="kv__row kv__row--sub">
-                      <dt>{choiceLabel(choice.label, choice.choice)}</dt>
+                      <dt>{choice.label ?? choice.choice}</dt>
                       <dd className="tabular">+{choice.points}</dd>
                     </div>
                   ))}

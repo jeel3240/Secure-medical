@@ -21,8 +21,11 @@ export interface AdminLead {
   source: string | null;
   receivedAt: string | null;
   status: LeadStatus | null;
-  /** The question the lead is on now, or `done` once all three are answered. */
-  step: number | 'done' | null;
+  /**
+   * The question the lead is on now or stopped at, as the server names it -
+   * "Q2", "Offers" - or `done` once the questions are finished.
+   */
+  step: string | null;
   score: number | null;
   tier: string | null;
   lastActivityAt: string | null;
@@ -87,7 +90,7 @@ export interface QueueLead {
    * they answered. The word is the one saved with the answer. FLOWS.md.
    */
   answers: { key: string; heading: string; label: string }[];
-  conversationStatus: 'open' | 'completed' | 'review' | 'expired';
+  conversationStatus: 'open' | 'completed' | 'review' | 'expired' | 'suppressed';
   /** `null` when there is nothing to say: the lead is waiting to be picked up. */
   tag: QueueTag | null;
 }

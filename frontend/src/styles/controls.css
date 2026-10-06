@@ -209,6 +209,16 @@
   color: var(--color-text-muted);
   cursor: pointer;
   transition: color 180ms ease;
+  /* "Awaiting reply" on two lines is taller than the track and spills out of
+     it. An option never wraps; a row too long for its place scrolls instead -
+     tables.css, .table-card__toolbar--scroll. */
+  white-space: nowrap;
+}
+
+/* Many options in one row - Admin > Leads has ten. Tighter sides, so they fit
+   from 1366px up with three-digit counts. */
+.segmented--dense .segmented__option {
+  padding: 0 var(--space-3);
 }
 
 /* The chosen option in the header's navy, white text - the same look an action

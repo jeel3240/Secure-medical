@@ -11,12 +11,28 @@ import { applyReply } from '../src/api/reply-flow';
 import { startConversation } from '../src/db/flows';
 import { pool } from '../src/db/pool';
 
-/** One reply from the lead, through the path the webhook takes. Returns what the flow decided. */
-export async function replyAs(leadId: number, text: string) {
+/**
+ * One reply from the lead, through the path the webhook takes. Returns what
+ * the flow decided.
+ *
+ * `stored`: also keep the text as an inbound message first, as the webhook
+ * does, so the answer is tied to it - for checks that read the thread.
+ */
+export async function replyAs(leadId: number, text: string, opts: { stored?: boolean } = {}) {
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
-    const pending = await applyReply(client, leadId, '+15550000000', 'Test', { text, optOut: false });
+    let messageId: number | undefined;
+    if (opts.stored) {
+      const { rows } = await client.query(
+        `INSERT INTO messages (lead_id, direction, body, from_number, received_at)
+         SELECT l.id, 'inbound', $2, ltrim(l.phone, '+'), clock_timestamp() FROM leads l WHERE l.id = $1
+         RETURNING id`,
+        [leadId, text]
+      );
+      messageId = rows[0].id;
+    }
+    const pending = await applyReply(client, leadId, '+15550000000', 'Test', { text, optOut: false, messageId });
     await client.query('COMMIT');
     return pending;
   } catch (err) {

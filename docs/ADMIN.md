@@ -103,7 +103,7 @@ complex".** The page and the API now hold only what a superadmin acts on:
 
 | Part | Shows |
 |---|---|
-| Totals | Leads in · Replied · Answered all 3 · Closed - for Today, 7 days or 30 days, chosen on the navy switcher |
+| Totals | Leads in · Replied · Completed · Closed - for Today, 7 days or 30 days, chosen on the navy switcher |
 | Agents | Per active agent: **Working now** (leads they hold), **Closed** in the period, **Due today**, **Last active** (their newest note, callback they booked, outcome, call they placed or answered, or SMS that went out) |
 | System | Database, EZ Texting sync, the expiry sweep, sending and calling - each OK or Degraded - and incoming replies, which shows its last reply with no verdict. Calling is Degraded when the phone number or the TwiML App no longer points at this server (2026-10-02), and reads "not set up", with no verdict, where calling is off. From the health endpoint |
 
@@ -114,14 +114,14 @@ all real":**
 |---|---|
 | Leads in | Leads that arrived from EZ Texting in the period |
 | Replied | Leads whose **first** reply came in the period. A lead from yesterday who first replies today is today's; one writing again weeks later is not counted twice |
-| Answered all 3 | Leads whose third answer came in the period - `conversations.completed_at`, migration 004 |
+| Completed | Leads who finished their flow's questions in the period, whichever way it ended - a lead who said No and then chose special offers is one. `conversations.completed_at`, migration 004. *(Called "Answered all 3" until 2026-10-06, when a flow stopped being three questions.)* |
 | Closed | **Leads** closed in the period, not presses of Closed: a lead closed, reopened by a text and closed again is one |
 | Working now | Leads the agent holds right now, whatever the period |
 | Due today | The agent's open callbacks due **by the end of today**, in the viewer's time zone, overdue ones included - one booked for next week is not. Until 2026-09-29 it counted only those already due, so a 3 PM callback showed nothing all morning; the column was called Callbacks due |
 
-Until that day Replied and Answered all 3 counted leads that *arrived* in the
+Until that day Replied and Completed counted leads that *arrived* in the
 period, Closed counted presses, and Callbacks due counted every open callback;
-the percentages under Replied and Answered all 3 went with the first fix, since
+the percentages under Replied and Completed went with the first fix, since
 a share of "leads that arrived" no longer applies.
 
 **A failing check is shown in the System card, not across the page** - Jeel,

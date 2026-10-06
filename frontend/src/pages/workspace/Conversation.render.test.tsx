@@ -15,7 +15,7 @@ const entry = (kind: TimelineEntry['kind'], body: string, deliveryStatus?: strin
   ({ kind, at: '2026-09-28T10:00:00Z', author: 'karm', detail: { body, deliveryStatus } }) as TimelineEntry;
 
 const renderThread = (entries: TimelineEntry[]) =>
-  render(<Conversation entries={entries} chips={[]} leadFirstName="Ruby" />);
+  render(<Conversation entries={entries} leadFirstName="Ruby" />);
 
 describe('the sent ticks', () => {
   it('marks an automated message and an agent message as sent', () => {

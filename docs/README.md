@@ -109,8 +109,8 @@ contact in the group gets a text within a poll interval. `openers` in the
 ## How to test
 
 ```bash
-cd backend  && npm test && npm run lint    # 599 tests
-cd frontend && npm test && npm run lint    # 270 tests   (counts as of 2026-10-05)
+cd backend  && npm test && npm run lint    # 620 tests
+cd frontend && npm test && npm run lint    # 271 tests   (counts as of 2026-10-06)
 ```
 
 **Unit and route tests** mock the database and cover behaviour in isolation.
@@ -124,6 +124,18 @@ the command to run one by hand. To run them, each on its own scratch database:
 cd backend
 scripts/live-checks.sh              # all of them
 scripts/live-checks.sh flows queue  # just these
+```
+
+**How fast it is with a lot of leads** is a separate check - it loads 50,000
+fake leads into an empty scratch database and times the read behind every
+screen (`backend/scripts/speed-check.ts`; `QUEUE.md`, "How fast it is"):
+
+```bash
+docker compose exec postgres psql -U app -d postgres -c 'CREATE DATABASE speed'
+cd backend
+DATABASE_URL=postgres://app:app@localhost:5433/speed node scripts/migrate.js
+DATABASE_URL=postgres://app:app@localhost:5433/speed JWT_SECRET=x EZT_USERNAME=x \
+  EZT_PASSWORD=x EZT_GROUP=weightloss EZT_SEND_GROUP=weightloss npm run speed -- 50000
 ```
 
 There are fifteen, covering the SMS flows (a second flow added as rows only),
@@ -182,6 +194,17 @@ the numbers on the offers question, and the text after a missed call. Nothing
 has been sent to anyone outside the test group, and the end-to-end script
 deliberately stops short of a real send. Two of the texts run past 160
 characters and cost two segments (`ADMIN.md`, "Configuration").
+
+**The queue and Admin > Leads slow down as leads accumulate.** A lead's place
+and status are worked out on every refresh, for every lead ever received:
+about 0.2 seconds at 50,000 leads after the fixes of 2026-10-06 (it was 3 to 8
+seconds). Past a few hundred thousand it would need a stored "needs a person"
+flag - `QUEUE.md`, "How fast it is".
+
+**Two things about the SMS flow are waiting for a decision** -
+`STATE-MACHINE.md`, "Open items": "no" to the offers question has no answer of
+its own, and a second text sent before the next question arrives is read as
+its answer.
 
 **One flow for everyone.** Every new lead gets the one active flow. A flow per
 EZ Texting group, and editing a flow from the website, are not built -

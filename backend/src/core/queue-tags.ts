@@ -42,7 +42,7 @@ export interface QueueTag {
 }
 
 export interface QueueFacts {
-  conversationStatus: 'open' | 'completed' | 'review' | 'expired';
+  conversationStatus: 'open' | 'completed' | 'review' | 'expired' | 'suppressed';
   /** The active agent holding the lead, if any. */
   holder: { id: number; name: string } | null;
   hasUnreadInbound: boolean;

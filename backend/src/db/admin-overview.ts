@@ -89,7 +89,7 @@ export async function getOverview(period: OverviewPeriod, timeZone?: string): Pr
 
   const [leadRows, agentRows, activityRows] = await Promise.all([
     // Every total counts things that *happened* in the period - Jeel,
-    // 2026-09-28, "i want all real". Until then Replied and Answered all 3
+    // 2026-09-28, "i want all real". Until then Replied and Completed
     // counted leads that *arrived* in the period, so a lead who arrived
     // yesterday and answered today counted under yesterday, and Closed counted
     // presses of the button, so a lead closed twice counted twice.

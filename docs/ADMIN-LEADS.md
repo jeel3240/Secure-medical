@@ -38,7 +38,7 @@ with Needs review, Expired and Opted out as the other ways the SMS part can end.
 | `working` | Working | An agent holds it, or has left any trace on it: a note, a callback, a disposition, a call they placed or answered, or an SMS of their own. A missed incoming call is the lead's doing, not a trace - though the callback it books for an agent is one |
 | `needs_review` | Needs review | Conversation `review` |
 | `offers` | Offers | The flow ended with the lead asking for special offers only (`end_outcome = 'offers'`, 2026-10-05). Not Ready: there is no call to make. An agent's trace on it still reads Working |
-| `ready` | Ready | Conversation `completed` - answered all three - and no agent has touched it |
+| `ready` | Ready | Conversation `completed` - the questions are finished, or the lead asked to hear from a rep - and no agent has touched it |
 | `expired` | Expired | Conversation `expired` |
 | `answering` | Answering | Conversation `open` and at least one question answered (a row in `conversation_answers`) |
 | `awaiting_reply` | Awaiting reply | Conversation `open`, nothing answered |
@@ -131,18 +131,26 @@ awaiting is the honest answer.
 
 ## Step
 
-**The question the lead is on now - Jeel, 2026-09-29.** Q1, Q2 or Q3 from the
-conversation's own `step`, which the state machine moves on after each valid
-answer; **Done** once all three are answered; blank when no question ever went
+**The question the lead is on now - Jeel, 2026-09-29.** The question the
+conversation is on, which the state machine moves on after each valid answer;
+**Done** once the questions are finished; blank when no question ever went
 out (blocked on arrival).
 
 | Lead | Status · Step |
 |---|---|
 | Question 1 sent, no reply | Awaiting reply · Q1 |
 | Answered Q1, being asked Q2 | Answering · Q2 |
-| Answered all three | Ready · Done |
+| Finished the questions | Ready · Done |
 | Answered Q1, then silent 7 days | Expired · Q2 - where they dropped off |
 | Two unclear replies to Q1 | Needs review · Q1 |
+| Said No to Q1, then silent on the offers question | Expired · Offers |
+
+**By the question's own name** - 2026-10-06. A numbered question is "Q2"; one
+off the main line goes by its heading (`core/questions.ts`, one rule for every
+screen). It was the bare position, and the antibiotics flow's offers question
+- fourth in the flow, second thing a lead who said No is asked - read "Q4",
+as if they had answered three. The API's `step` is now that text (`"Q2"`,
+`"Offers"`, `"done"`) rather than a number.
 
 Until that day it was the highest question *answered*, so it always read one
 behind - "Answering · Q1" for a lead already past Q1, "Ready · Q3" for one who
@@ -256,3 +264,34 @@ time is the last poll.
 - **Polling, not push.** Five seconds is frequent enough at 50-100 leads a day,
   but it is a poll. If the queue screen later uses something better, this should
   follow it.
+
+## How fast it is
+
+Like the queue (`QUEUE.md`, "How fast it is"), a lead's status is worked out,
+not stored, so the page's cost grows with every lead ever received. Timed the
+same way on 2026-10-06, against 50,000 leads:
+
+| | Before | After |
+|---|---|---|
+| Every lead, first page | 3.3 s | 0.18 s |
+| One status tab | 5.7 s | 0.34 s |
+| A late page | 5.1 s | 0.27 s |
+| A name search | 0.07 s | 0.03 s |
+
+What changed, besides the index and the `jit` setting described there
+(`db/leads.ts`, `listAdminLeads`):
+
+- **Two statements, not three.** The total was a third pass that always came
+  to a number the tab counts already held; it is read from them.
+- **The counts no longer look up each lead's last message** - nothing in them
+  needs it.
+- **The page picks its rows first** - filter, order, limit - **and then** joins
+  each row's last message and question: fifty look-ups, not one per lead.
+- **Leads are indexed by when they arrived** (migration 013), so an unfiltered
+  page reads only its own rows instead of sorting every lead.
+- "Has this lead answered anything?" is one look-up for that conversation; it
+  had been planned as a read of every answer ever given.
+
+`?page=` must be a whole number from 1 (400 otherwise). It used to reach the
+statement as whatever it parsed to - `2.5` skipped 75 rows, `1e30` was a 500.
+

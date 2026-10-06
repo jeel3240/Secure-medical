@@ -135,10 +135,12 @@ export function LeadsPage() {
       <div className="card table-card">
         {/* The queue's tier switcher, so the chosen status is the brand navy
             and slides the same way - Jeel, 2026-09-28. The underline tabs it
-            replaces used the brighter link blue. */}
-        <div className="table-card__toolbar">
+            replaces used the brighter link blue. Ten options: dense, and on
+            a screen too narrow for them the row scrolls - it never wraps. */}
+        <div className="table-card__toolbar table-card__toolbar--scroll">
           <Segmented
             label="Status"
+            dense
             value={status}
             onChange={(next) => {
               setStatus(next);
@@ -228,8 +230,10 @@ export function LeadsPage() {
                       <span className="cell-sub">{formatPhone(lead.phone)}</span>
                     </td>
                     <td>{lead.status ? <LeadStatus status={lead.status} /> : EMPTY}</td>
-                    <td className={lead.step ? 'mono' : undefined}>
-                      {lead.step === 'done' ? 'Done' : lead.step ? `Q${lead.step}` : EMPTY}
+                    {/* "Q2" in the code face, as before; a question that goes by
+                        its name - "Offers" - and "Done" are words. */}
+                    <td className={lead.step && /^Q\d+$/.test(lead.step) ? 'mono' : undefined}>
+                      {lead.step === 'done' ? 'Done' : (lead.step ?? EMPTY)}
                     </td>
                     <td className="right tabular cell-strong">{lead.score ?? EMPTY}</td>
                     <td className="mono cell-code">{lead.source ?? EMPTY}</td>

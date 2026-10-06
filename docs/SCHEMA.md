@@ -1,6 +1,6 @@
 # Database schema
 
-The migrations in `backend/src/db/migrations/` - `001` to `012`, in order -
+The migrations in `backend/src/db/migrations/` - `001` to `013`, in order -
 are the source of truth for exact columns, types and constraints. `001_init.sql`
 is the starting schema; the ones after it add columns, tables and constraints. This explains what the tables are for and the
 parts that are not obvious from reading the SQL.
@@ -42,7 +42,7 @@ the RDS CA bundle if strict verification is ever wanted.
 | `settings` | Key/value config, admin-editable. |
 | `scoring_rules` | Points per answer for the first, fixed flow. **No longer read** since migration 012: points are on `flow_choices`. Kept. |
 | `flows`, `flow_questions`, `flow_choices` | The SMS scripts, as rows: each flow's questions, each question's choices with the reply, the points and where the lead goes next. Migration 012, `FLOWS.md`. |
-| `conversation_answers` | One row per answer a lead gave, with the choice's label and points as they were then. Add-only. Migration 012. |
+| `conversation_answers` | One row per answer a lead gave, with the choice's label and points as they were then, and `message_id`: the inbound text it was read from. Add-only. Migration 012. |
 | `tiers` | HOT/WARM/LOW score bands, admin-editable. |
 | `activity_log` | One row per action a person or the system took - who, what, when, and what would otherwise be overwritten. Add-only: a trigger refuses every update and delete. Migration 006, `AUDIT.md`. |
 | `webhook_events` | Every request EZ Texting and Twilio sent, as it arrived. Add-only. Migration 006, `AUDIT.md`. |
@@ -217,15 +217,40 @@ Opt-out is checked before it and is unaffected either way. Added in `003`; set b
 still open, and read by the reply flow and the lead card.
 
 **`conversations.completed_at`** - migration `004`, 2026-09-28 - is when the
-lead's third answer arrived. `api/reply-flow.ts` stamps it the first time the
+lead finished the questions, whichever way their flow ended (until 012: when
+the third answer arrived). `api/reply-flow.ts` stamps it the first time the
 conversation is saved as `completed` and keeps it on later saves; NULL
-otherwise. Admin > Overview counts "Answered all 3" by it: without it the page
+otherwise. Admin > Overview counts "Completed" by it: without it the page
 could only count leads that *arrived* in a period and had completed since.
 
 The migration fills it in for conversations already completed, from the time the
 thanks message went out - sent the instant a conversation completes - falling
 back to `updated_at` when the thanks failed to send. Checked on local data: all
 five completed conversations took their thanks message's time exactly.
+
+**Answers copied by migration 012 carry a time that is not theirs.** The old
+`q1`-`q3` columns never recorded when each answer was given, so a copied row's
+`created_at` is when its conversation was last saved, and its `message_id` is
+empty - the thread does not label those replies. Only rows the migration
+copied; every answer given since has both. Production held no leads when 012
+ran, so there are none there.
+
+**The flow tables hold each other to one flow** (012). A choice carries
+`flow_id` so that both its question and the question it leads to must belong
+to that flow, and a conversation can only be on a question of its own flow -
+composite foreign keys onto `flow_questions (id, flow_id)`. A flow must award
+points for replying (`responded_points > 0`). `FLOWS.md`, "Rules the database
+enforces".
+
+**Indexes added for the two list screens** - migration `013`, 2026-10-06:
+`callbacks (lead_id)`, `messages (lead_id)` where an agent sent it, and
+`leads` by when the lead arrived. Each was a read of a whole table per lead,
+or a sort of every lead, on every refresh. `QUEUE.md`, "How fast it is".
+
+**The app's connections run with `jit=off` and give up waiting for a
+connection after ten seconds** (`db/pool.ts`). Postgres's compile step cost
+more than the queries it was applied to; and a request that cannot get a
+connection now fails with an error rather than waiting for ever.
 
 ## Seeded data
 

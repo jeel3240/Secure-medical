@@ -390,11 +390,25 @@ queue and the claim endpoint. All three have to agree or the card would show a
 lead as held by someone who cannot work it.
 
 **Each answer chip carries the raw `choice` as well as its words** - `1`, `2`
-or `3`, null while unanswered. Added 2026-09-28 for the workspace's conversation
-view, which writes an inbound `3` as "3 | Both". The words alone cannot do that
-honestly: pairing replies with questions by counting inbound messages is wrong
-the moment one of them was unclear, so the screen matches the digit against the
-stored choice instead and labels nothing it cannot prove.
+or `3`. There is a chip only for a question the lead answered.
+
+**The conversation labels a reply with the answer it was recorded as** - "1 |
+Yes" - **and that answer now comes with the message** (2026-10-06). Each row of
+`conversation_answers` names the inbound text it was read from (`message_id`,
+migration 012), the timeline puts the answer's label on that entry
+(`detail.answer`), and the screen shows it; nothing is added when the lead
+typed the answer's own words. Until then the screen worked it out from the
+chips, walking them in order and matching digits. That was wrong whenever an
+earlier answer had been typed as a word: "yes", "2", "1" showed "1 | Yes" on
+the third reply, which meant "I know which antibiotic" - and the antibiotics
+flow made worded answers the ordinary case. Two walks on one lead mislabelled
+the first with the second's answers. Found in review; proved in
+`scripts/timeline-live-check.ts`.
+
+**The card says which question the lead is on, or stopped at** -
+`conversation.question`, "Q2" or "Offers" (`core/questions.ts`). The header's
+"On Q2", "Stopped at Offers" and the incoming-call card read it. It was built
+from the bare position, which read "Q4" for the offers question.
 
 **The breakdown shows only what was earned.** A lead who stopped after question
 1 gets two lines, not five with zeros: the card records what happened rather
@@ -507,7 +521,15 @@ missed call reads "Callback added · missed call", then "Missed call returned".
 
 **Three kinds come out of `messages`.** An inbound row is a reply; an outbound
 row with `sent_by` null is one of ours; an outbound row with an agent is their
-manual message, written by `db/agent-sms.ts` (task 9).
+manual message, written by `db/agent-sms.ts` (task 9). A reply that was
+recorded as an answer carries it: `detail.answer`, the choice's label.
+
+**The `scored` event carries how the questions ended** (`endOutcome`,
+2026-10-06). A lead who asked only for offers, or to hear from a rep, has a
+`completed` conversation too; the line reads "Scored 10 · LOW · offers only"
+or "· wants a call" rather than "· completed", which read as the questions
+answered. The timeline page's Status row uses the header's words for the same
+reason.
 
 `getTimeline` returns null for a lead that does not exist, so the route can tell
 that apart from a lead with no history - both would otherwise be an empty list.

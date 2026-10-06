@@ -10,10 +10,10 @@ tag). Flow rules it depends on: `STATE-MACHINE.md`.
 ## Who is in it
 
 **Only leads that need a person - Jeel, 2026-09-28.** It used to hold every
-responder, a lead halfway through the questions included. But question 3 asks
-how they want to be contacted: a lead who has not reached it has not asked for
-a call, and one still answering would be interrupted by it. Agents contact
-people who have given them a reason to.
+responder, a lead halfway through the questions included. But the last
+question asks what they want to do next: a lead who has not reached it has not
+asked for a call, and one still answering would be interrupted by it. Agents
+contact people who have given them a reason to.
 
 A lead is in the queue when its number is not blocked and it needs a person.
 `db/queue.ts`, `INCLUDED`, is the rule; rewritten here 2026-10-01 to say what
@@ -216,6 +216,45 @@ headings on hover.
 *(Until 2026-10-05 a row carried `q1`, `q2`, `q3` and the queue had three fixed
 columns, Interest, Timing and Preference. Flows now differ in how many
 questions they ask, so there is no fixed set of columns to have.)*
+
+## How fast it is
+
+The queue is asked for every five seconds by every open browser, and whether a
+lead belongs in it is worked out from several tables each time - nothing is
+stored. So its cost grows with every lead ever received, not with the size of
+the queue.
+
+**Timed on 2026-10-06 against 50,000 leads** - about a year and a half at 100
+a day - with their answers, messages, calls, notes, callbacks and outcomes
+(`backend/scripts/speed-check.ts`, `npm run speed`; a laptop, so compare the
+two columns, not the figures with a server's):
+
+| | Before | After |
+|---|---|---|
+| The queue as it opens | 7.8 s | 0.18 s |
+| One tier | 4.6 s | 0.18 s |
+| The last 7 days | 0.87 s | 0.01 s |
+| A name search | 0.07 s | 0.02 s |
+
+With a few hundred leads both were instant, which is why nothing showed it.
+Found by loading the leads on purpose. Three causes, none from the flows
+change:
+
+| Cause | Fix |
+|---|---|
+| "Has a callback been booked since this lead was closed?" read the whole `callbacks` table once per closed lead - it had no index by lead. Most of the time | Migration 013: `callbacks (lead_id)`, and `messages (lead_id)` for agents' own texts |
+| The page, the tier counts and the source list were three statements, each working out the whole queue from scratch | One statement. The queue is built once; the counts and the page are both read from it (`db/queue.ts`, `listQueue`) |
+| Postgres compiled these statements to machine code before running them, having priced them far above their cost. The compiling took longer than the query | `jit=off` on the app's connections (`db/pool.ts`) |
+
+**Refreshes do not pile up.** The screen asks again five seconds after the last
+answer arrived, not every five seconds regardless (`usePolling.ts`). On a
+fixed interval a slow server was sent more requests the slower it got.
+
+**What is left grows with the leads.** Each refresh still looks at every lead
+once: about 0.18 s at 50,000, so roughly 0.4 s at 100,000. If that ever
+matters, the fix is to stop working membership out - to store "needs a
+person" on the lead and maintain it - which is a design change, not a tuning
+one.
 
 ## What this does not cover
 

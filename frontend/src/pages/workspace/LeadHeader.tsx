@@ -38,7 +38,9 @@ export function sourceLabel(source: string | null): string | null {
  */
 export function questionsLabel(conversation: LeadDetail['conversation']): string {
   if (!conversation) return 'Not started';
-  const q = `Q${conversation.step ?? 1}`;
+  // The question's own name from the server - "Q2", or "Offers" for the one
+  // asked of a lead who said No, which sits fourth and is not their "Q4".
+  const q = conversation.question ?? `Q${conversation.step ?? 1}`;
   switch (conversation.status) {
     case 'completed':
       // A lead who said No ends on the offers question, not on the last one.

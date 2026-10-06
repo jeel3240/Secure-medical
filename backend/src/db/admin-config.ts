@@ -12,6 +12,7 @@
  */
 
 import { loadFlow } from './flows';
+import { questionShort } from '../core/questions';
 import { pool } from './pool';
 import { NAME_FALLBACK, SEGMENT_LIMIT } from '../core/messages';
 
@@ -132,10 +133,7 @@ export async function getAdminConfig(): Promise<AdminConfig> {
   if (flow) {
     const questions = [...flow.questions].sort((a, b) => a.position - b.position);
     const q = (id: number | null) => questions.find((x) => x.id === id);
-    // "Q2" for a numbered question; one off the main line goes by its
-    // heading, "Offers".
-    const short = (x: { key: string; heading: string }) =>
-      /^q\d+$/.test(x.key) ? x.key.toUpperCase() : x.heading;
+    const short = questionShort;
 
     const first = questions[0];
     if (first) messages.push(message(first.key, `Question ${first.position}`, 'The opener', first.body));

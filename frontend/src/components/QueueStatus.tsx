@@ -67,7 +67,7 @@ const ICON: Record<QueueTag['kind'], StatusIconName> = {
   missed_call: 'missed',
   inbound_reply: 'inbound',
   callback: 'clock',
-  wants_call: 'chat',
+  wants_call: 'phone',
   needs_review: 'warning',
 };
 

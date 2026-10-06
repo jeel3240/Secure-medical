@@ -261,7 +261,19 @@ export function QueuePage() {
                         <span className="cell-name">{leadName(lead)}</span>
                         <span className="cell-sub">{formatPhone(lead.phone)}</span>
                       </td>
-                      <td title={answersTitle(lead.answers)}>{answersText(lead.answers)}</td>
+                      <td className="cell-answers" title={answersTitle(lead.answers)}>
+                        {/* Each answer with its question for a screen reader;
+                            the question is otherwise only in the tooltip. */}
+                        {lead.answers.length === 0
+                          ? EMPTY
+                          : lead.answers.map((a, i) => (
+                              <span key={a.key}>
+                                {i > 0 && ' · '}
+                                <span className="visually-hidden">{a.heading}: </span>
+                                {a.label}
+                              </span>
+                            ))}
+                      </td>
                       <td className="right tabular cell-strong">{lead.score}</td>
                       {/* One style for every waiting time - Jeel, 2026-09-28.
                           It used to turn bold for an overdue HOT lead, which

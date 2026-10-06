@@ -4,7 +4,7 @@
  * cannot disagree about whether a lead is finished.
  *
  * Jeel, 2026-09-28. Until then a lead's status described only its SMS
- * conversation. A lead that answered all three questions read "Completed"
+ * conversation. A lead that finished the questions read "Completed"
  * forever - untouched, called five times or finished alike - and a finished
  * lead went back into the queue at the top. Two states were added, both
  * computed from what agents have already recorded, nothing stored:
