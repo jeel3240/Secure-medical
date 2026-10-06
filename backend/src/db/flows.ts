@@ -18,25 +18,25 @@ export interface Db {
 
 /** One flow, whole. Null when it does not exist. */
 export async function loadFlow(q: Db, flowId: number): Promise<Flow | null> {
-  const [flows, questions, choices] = await Promise.all([
-    q.query(
-      `SELECT id, key, responded_points, completed_points, review_body FROM flows WHERE id = $1`,
-      [flowId]
-    ),
-    q.query(
-      `SELECT id, key, position, body, clarify_body, heading
-       FROM flow_questions WHERE flow_id = $1 ORDER BY position`,
-      [flowId]
-    ),
-    q.query(
-      `SELECT c.question_id, c.choice, c.label, c.words, c.points, c.reply_body, c.next_question_id, c.ending
-       FROM flow_choices c
-       JOIN flow_questions fq ON fq.id = c.question_id
-       WHERE fq.flow_id = $1
-       ORDER BY c.question_id, c.choice`,
-      [flowId]
-    ),
-  ]);
+  // One after another, not together: `q` is often a client inside a
+  // transaction, and a client runs one query at a time.
+  const flows = await q.query(
+    `SELECT id, key, responded_points, completed_points, review_body FROM flows WHERE id = $1`,
+    [flowId]
+  );
+  const questions = await q.query(
+    `SELECT id, key, position, body, clarify_body, heading
+     FROM flow_questions WHERE flow_id = $1 ORDER BY position`,
+    [flowId]
+  );
+  const choices = await q.query(
+    `SELECT c.question_id, c.choice, c.label, c.words, c.points, c.reply_body, c.next_question_id, c.ending
+     FROM flow_choices c
+     JOIN flow_questions fq ON fq.id = c.question_id
+     WHERE fq.flow_id = $1
+     ORDER BY c.question_id, c.choice`,
+    [flowId]
+  );
 
   const flow = flows.rows[0];
   if (!flow) return null;

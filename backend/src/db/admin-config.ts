@@ -132,7 +132,10 @@ export async function getAdminConfig(): Promise<AdminConfig> {
   if (flow) {
     const questions = [...flow.questions].sort((a, b) => a.position - b.position);
     const q = (id: number | null) => questions.find((x) => x.id === id);
-    const short = (key: string) => key.toUpperCase();
+    // "Q2" for a numbered question; one off the main line goes by its
+    // heading, "Offers".
+    const short = (x: { key: string; heading: string }) =>
+      /^q\d+$/.test(x.key) ? x.key.toUpperCase() : x.heading;
 
     const first = questions[0];
     if (first) messages.push(message(first.key, `Question ${first.position}`, 'The opener', first.body));
@@ -145,8 +148,8 @@ export async function getAdminConfig(): Promise<AdminConfig> {
         messages.push(
           message(
             `${question.key}_${choice.choice}`,
-            `After ${short(question.key)} · ${choice.label}`,
-            next ? `Then ${short(next.key)}` : 'Ends the questions',
+            `After ${short(question)} · ${choice.label}`,
+            next ? `Then ${short(next)}` : 'Ends the questions',
             body
           )
         );
@@ -154,7 +157,7 @@ export async function getAdminConfig(): Promise<AdminConfig> {
     }
     for (const question of questions) {
       messages.push(
-        message(`clarify_${question.key}`, `Unclear · ${short(question.key)}`, 'A reply that is not one of the choices', question.clarifyBody)
+        message(`clarify_${question.key}`, `Unclear · ${short(question)}`, 'A reply that is not one of the choices', question.clarifyBody)
       );
     }
     messages.push(message('review', 'Review', 'Second unclear reply', flow.reviewBody));

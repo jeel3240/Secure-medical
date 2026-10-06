@@ -223,8 +223,8 @@ async function main(): Promise<void> {
     const late = await makeLead('+15550000231');
     await startFlow(late, ['1']);
     const first = async (lead: number) => (await getLeadDetail(lead))?.breakdown.find((l) => l.code === 'q1_1');
-    check('a lead who answers after the change gets the new word and points', await first(late), { code: 'q1_1', label: 'Yes, I did', points: 25 });
-    check('one who answered before it keeps what they chose and earned', await first(early), { code: 'q1_1', label: 'Yes', points: 20 });
+    check('a lead who answers after the change gets the new word and points', await first(late), { code: 'q1_1', label: 'Yes, I did', heading: 'Requested info', points: 25 });
+    check('one who answered before it keeps what they chose and earned', await first(early), { code: 'q1_1', label: 'Yes', heading: 'Requested info', points: 20 });
 
     // The queue holds finished leads; finish these two so it lists them.
     await replyAs(early, '2');

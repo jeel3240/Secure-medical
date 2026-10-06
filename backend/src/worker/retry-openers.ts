@@ -70,8 +70,8 @@ const MAX_AGE_HOURS = 24;
 
 /**
  * When the first attempt never happened at all - no failed row, e.g. the
- * `question_1` setting was missing - the first retry waits this long after the
- * lead arrived.
+ * worker stopped between saving the lead and sending - the first retry waits
+ * this long after the lead arrived.
  */
 const FIRST_ATTEMPT_AFTER_MINUTES = 1;
 

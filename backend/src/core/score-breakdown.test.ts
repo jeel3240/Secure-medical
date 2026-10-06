@@ -13,9 +13,9 @@ describe('the score breakdown', () => {
     const lines = scoreBreakdown({ score: 90, endOutcome: 'completed', ...AWARDS }, [agent, yes, tele]);
     expect(lines).toEqual([
       { code: 'responded', label: 'Responded', points: 10 },
-      { code: 'q1_1', label: 'Yes', points: 20 },
-      { code: 'q2_2', label: 'No', points: 5 },
-      { code: 'q3_2', label: 'Talk to an agent', points: 45 },
+      { code: 'q1_1', label: 'Yes', heading: 'Requested info', points: 20 },
+      { code: 'q2_2', label: 'No', heading: 'Used telemedicine', points: 5 },
+      { code: 'q3_2', label: 'Talk to an agent', heading: 'Next step', points: 45 },
       { code: 'completed', label: 'Completed', points: 10 },
     ]);
     expect(lines.reduce((total, l) => total + l.points, 0)).toBe(90);
@@ -42,7 +42,7 @@ describe('the score breakdown', () => {
     // The answer was worth 20 when it was given; whatever the flow says now,
     // that is what this lead earned.
     const line = scoreBreakdown({ score: 30, endOutcome: null, ...AWARDS }, [{ ...yes, points: 20, label: 'Yes (old wording)' }])[1];
-    expect(line).toEqual({ code: 'q1_1', label: 'Yes (old wording)', points: 20 });
+    expect(line).toEqual({ code: 'q1_1', label: 'Yes (old wording)', heading: 'Requested info', points: 20 });
   });
 });
 

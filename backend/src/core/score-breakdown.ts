@@ -32,6 +32,11 @@ export interface BreakdownLine {
   code: string;
   /** What to show: `Responded`, `Yes`, `Talk to an agent`. */
   label: string;
+  /**
+   * For an answer, what was asked: `Requested info`. "Yes +20" alone does not
+   * say yes to what. Absent on the two awards.
+   */
+  heading?: string;
   points: number;
 }
 
@@ -65,7 +70,7 @@ export function scoreBreakdown(conversation: ScoredConversation, answers: SavedA
   }
 
   for (const a of inOrder(answers)) {
-    lines.push({ code: `${a.questionKey}_${a.choice}`, label: a.label, points: a.points });
+    lines.push({ code: `${a.questionKey}_${a.choice}`, label: a.label, heading: a.heading, points: a.points });
   }
 
   if (conversation.endOutcome === 'completed' && conversation.completedPoints > 0) {

@@ -107,6 +107,8 @@ async function main(): Promise<void> {
     check('a choice is shown as the lead receives it: its reply and the next question, one text', afterYes?.body,
       "Great! Let's get you started. Have you used telemedicine to get prescription medication before? Reply 1. Yes, 2. No.");
     check('and says where it leads', [afterYes?.name, afterYes?.when], ['After Q1 · Yes', 'Then Q2']);
+    const afterNo = config.messages.find((m) => m.key === 'q1_2');
+    check('a question off the main line goes by its heading', afterNo?.when, 'Then Offers');
     const afterQ2No = config.messages.find((m) => m.key === 'q2_2');
     check('one that runs past 160 characters is flagged as two segments', [afterQ2No?.segments, afterQ2No?.costsExtraSegment], [2, true]);
     check('including the review message, sent after a second unclear reply', config.messages.some((m) => m.key === 'review'), true);

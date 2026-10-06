@@ -73,12 +73,12 @@ export async function loadNewestConversation(
  */
 export async function loadRules(client: PoolClient, flowId: number | null): Promise<Rules | null> {
   if (flowId === null) return null;
-  const [flow, tiers, settings] = await Promise.all([
-    loadFlow(client, flowId),
-    client.query(`SELECT name, min_score, max_score FROM tiers ORDER BY sort_order`),
-    client.query(`SELECT value FROM settings WHERE key = 'max_invalid_before_review'`),
-  ]);
+  const flow = await loadFlow(client, flowId);
   if (!flow) return null;
+  const tiers = await client.query(`SELECT name, min_score, max_score FROM tiers ORDER BY sort_order`);
+  const settings = await client.query(
+    `SELECT value FROM settings WHERE key = 'max_invalid_before_review'`
+  );
 
   const limit = Number(settings.rows[0]?.value);
   return {

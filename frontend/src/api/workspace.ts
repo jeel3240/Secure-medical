@@ -24,6 +24,8 @@ export interface AnswerChip {
 export interface BreakdownLine {
   code: string;
   label: string;
+  /** For an answer, what was asked: "Requested info". */
+  heading?: string;
   points: number;
 }
 

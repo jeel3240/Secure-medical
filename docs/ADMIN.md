@@ -49,7 +49,8 @@ follows - one text, which is how it is sent; then each question's "sorry"
 text, the review text, and the text after a missed call. Sixteen for the
 antibiotics flow. Each carries a `name` ("After Q1 · Yes") and `when` ("Then
 Q2", "Ends the questions"), built by the server, since the list depends on the
-flow. Two of them run past 160 characters and are flagged as two segments.
+flow. A numbered question is "Q2"; one off the main line goes by its heading -
+"Then Offers", "Unclear · Offers". Two of them run past 160 characters and are flagged as two segments.
 The card's heading names the flow.
 
 *(Until then: nine fixed messages - three questions, three clarifications, the

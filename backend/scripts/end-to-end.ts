@@ -1,5 +1,5 @@
 /**
- * The whole system, end to end: a lead arrives, answers three questions, is
+ * The whole system, end to end: a lead arrives, answers its flow's questions, is
  * scored, reaches the queue, gets worked by an agent, and shows up on the
  * timeline.
  *
@@ -9,8 +9,7 @@
  * **What it does not prove.** EZ Texting is stubbed at the HTTP boundary, so
  * every check below holds right up to the moment a text would leave the
  * building - and no further. Nothing here shows that a real phone buzzes. That
- * leg needs the approved message copy (the seeded text is still the mockup's
- * placeholder) and a run against the test account, which `docs/README.md`
+ * leg needs a run against the test account, which `docs/README.md`
  * describes. Until then this script proves the machine, not the delivery.
  *
  * Stubbed at `axios.post`, deliberately, not at `sendMessage`: replacing

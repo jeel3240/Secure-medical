@@ -400,7 +400,12 @@ stored choice instead and labels nothing it cannot prove.
 1 gets two lines, not five with zeros: the card records what happened rather
 than scoring what was possible. The lines are built from the answers saved in
 `conversation_answers`, with the label and points each had when it was given,
-plus the flow's awards for replying and for finishing.
+plus the flow's awards for replying and for finishing. An answer's line also
+carries the question's `heading`, and the screen shows the two together -
+"Requested info: Yes  +20" - because "Yes +20" does not say yes to what. *(The
+screen had "Interest:" and "Timing:" written into it for the first two
+questions; found in the browser on 2026-10-05, when the antibiotics flow read
+"Interest: Yes".)*
 
 `scripts/lead-detail-live-check.ts` proves the parts that live in SQL - which
 conversation wins, the released-DNC join, the deactivated holder - against a
