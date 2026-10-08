@@ -30,13 +30,32 @@ the lead or for how long. The same statement now writes `lead.picked_up` and
 `lead.released` to the activity log, with `heldSince`, and the Lead Timeline
 shows them. So does a rescheduled callback, with both times. `AUDIT.md`.
 
-*(2026-09-28: the release endpoint accepts a superadmin releasing anyone's
-claim, but no screen calls it that way, so force-release is not reachable. In
-practice a claim clears when the agent presses Back to queue or saves an
-outcome; leaving the page any other way keeps it. A superadmin's button on
-someone else's lead is **View**, which opens the workspace read-only and
-claims nothing - taking a lead off an agent is a separate, deliberate act
-and still needs a control. `QUEUE.md`, "What the button offers".)*
+**A lead stays with the agent who picked it up until they let it go on
+purpose - Jeel, 2026-10-08.** Two things release it:
+
+- **An outcome.** Saving Closed or DNC releases the lead ("Dispositions").
+- **The Release button**, at the top right of the lead's page beside "Held by
+  you · since 3:04 PM". The holder sees it on their own lead. A **superadmin
+  sees it on anyone's** - "Held by Maya Chen · since 3:04 PM · Release" - which
+  is the way out of a lead locked to an agent who is not there; the release is
+  recorded as forced. It is switched off while a call is under way.
+
+**Back to queue only goes back.** Until 2026-10-08 it also released the lead.
+On the first day of real use an agent called a lead twice, reached voicemail,
+left a note and a text, and went back to the list - and the lead was free for
+anyone, which nobody had decided. Leaving a page is not a decision about the
+lead. A held lead is "Working – name" in the queue, locked to everyone else,
+and **Resume** for its holder.
+
+What this costs: nothing releases a lead by itself. An agent who goes home
+holding leads keeps them locked until they come back or a superadmin presses
+Release. `leads.assigned_at` is how long each has been held.
+
+*(2026-09-28 to 2026-10-08: the release endpoint already accepted a superadmin
+releasing anyone's claim, but no screen offered it. A superadmin's button in
+the queue on someone else's lead is still **View**, which opens the workspace
+read-only and claims nothing - `QUEUE.md`, "What the button offers" - and
+Release is now there on that page.)*
 
 **A claim by a deactivated agent does not count.** The queue already ignores it
 (`QUEUE.md`); the claim endpoint treats such a lead as free.

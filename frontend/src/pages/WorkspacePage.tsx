@@ -18,6 +18,7 @@ import { LeadNotes } from './workspace/LeadNotes';
 import { SmsCompose } from './workspace/SmsCompose';
 import { useLeadCall } from './workspace/useLeadCall';
 import { formatTime, leadName } from '../lib/format';
+import { mayRelease } from '../lib/lock';
 import { useIncomingCall } from '../lib/incoming-call';
 import { useSecond } from '../lib/useSecond';
 
@@ -158,19 +159,30 @@ export function WorkspacePage() {
   };
 
   /**
-   * Releases the claim on the way out, so the lead is not left locked - but
-   * only a claim that is yours. A superadmin looking at someone else's lead
-   * would otherwise take it off them just by leaving.
+   * Back to the queue, and nothing else - Jeel, 2026-10-08. Until then this
+   * also released the lead: an agent who called, got voicemail and went back
+   * to the list had let the lead go without meaning to, and the next agent
+   * picked it up. Leaving a page is not a decision about the lead. It stays
+   * with the agent who holds it - "Resume" in their queue - until they save an
+   * outcome or press Release.
    */
-  const backToQueue = async () => {
+  const backToQueue = () => navigate('/queue');
+
+  /**
+   * Lets the lead go, deliberately: the holder's own, or - for a superadmin -
+   * anyone's, which is the way out of a lead locked to an agent who is not
+   * there. The server records who released it, and that it was forced.
+   */
+  const release = async () => {
     setReleasing(true);
+    setPickError(null);
     try {
-      if (mine) await releaseLead(leadId);
-    } catch {
-      // A failed release must not trap the agent on the screen. The claim is
-      // visible to a superadmin, who can force-release it.
+      await releaseLead(leadId);
+    } catch (err) {
+      setPickError(toApiError(err).message);
     } finally {
-      navigate('/queue');
+      await refresh();
+      setReleasing(false);
     }
   };
 
@@ -204,7 +216,7 @@ export function WorkspacePage() {
     <section className={`workspace${call.state.phase === 'idle' && !incomingBar ? '' : ' workspace--call-bar'}`}>
       <div className="workspace__top">
         <div className="workspace__top-left">
-          <Button variant="ghost" onClick={() => void backToQueue()} loading={releasing}>
+          <Button variant="ghost" onClick={backToQueue}>
             &larr; Back to queue
           </Button>
           {place && (
@@ -214,10 +226,23 @@ export function WorkspacePage() {
           )}
         </div>
         {held && (
-          <span className="workspace__held">
-            <span className="workspace__held-dot" aria-hidden="true" />
-            Held by {mine ? 'you' : held.name} · since {formatTime(new Date(held.at))}
-          </span>
+          <div className="workspace__top-right">
+            <span className="workspace__held">
+              <span className="workspace__held-dot" aria-hidden="true" />
+              Held by {mine ? 'you' : held.name} · since {formatTime(new Date(held.at))}
+            </span>
+            {/* Not while a call is under way: the call belongs to whoever holds the lead. */}
+            {mayRelease(held, me) && (
+              <Button
+                variant="ghost"
+                onClick={() => void release()}
+                loading={releasing}
+                disabled={call.state.phase !== 'idle'}
+              >
+                Release
+              </Button>
+            )}
+          </div>
         )}
       </div>
 

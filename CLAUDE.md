@@ -543,8 +543,9 @@ retry, the end-to-end script, and a README with how to test and known limits.
 
 - ~~**"Today" is UTC.**~~ Fixed 2026-09-28: each viewer's own time zone, sent
   by the browser as `?tz=` - `db/sql.ts`, `startOfTodaySql`.
-- **Force-release has no screen.** The API lets a superadmin release anyone's
-  claim; nothing on screen offers it. `FRONTEND.md`, "Not built".
+- ~~**Force-release has no screen.**~~ Built 2026-10-08: a Release button on
+  the lead's page, for the holder and for a superadmin on anyone's lead. Back
+  to queue no longer releases a lead - `AGENT-WORKSPACE.md`.
 - **Source always reads "API" in production** - it is how the contact was
   added to EZ Texting, not which partner sent it. Keep the column, or find the
   partner elsewhere.
