@@ -128,7 +128,11 @@ saying Working after karm lets go, until the lead is Closed.
      to the queue. Nobody needs to pick it up any more - Jeel, 2026-09-29.
      While Closed or DNC is chosen, the callback choices are switched off.
    - With only a callback or a note: the agent stays on the lead.
-4. **Back to queue** releases a lead the agent is leaving without an outcome.
+4. **Back to queue** only goes back. The lead stays with the agent - locked to
+   everyone else, **Resume** in their own queue - until they save Closed or
+   DNC, or press **Release** at the top of the lead's page (Jeel, 2026-10-08;
+   it used to release the lead on the way out). A superadmin can press Release
+   on anyone's lead.
 
 There is no reason to pick when closing. The note says why, if anything does.
 
@@ -141,7 +145,7 @@ There is no reason to pick when closing. The note says why, if anything does.
 | A lead calls our number and nobody answers | Back as **Missed call**, closed or not, until an agent calls or texts them, answers when they ring again, or saves an outcome. If the call rang an agent, that agent also gets it on My Callbacks. `TWILIO.md`, "A missed call" |
 | An agent books a callback after closing a lead | Back as **Callback – name · time** in the queue (Working on Admin > Leads), until the callback is done |
 | An opted-out lead texts START | Unblocked, and back as **Inbound reply** for a person to read. The questions do not restart - `STATE-MACHINE.md`, "Opting back in" |
-| An agent picks a lead and puts it back without doing anything | Back to **Ready** |
+| An agent picks a lead and presses Release without doing anything | Back to **Ready** |
 
 ## What changed on 2026-09-28
 

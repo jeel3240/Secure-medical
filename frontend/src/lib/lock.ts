@@ -60,3 +60,16 @@ export function rowAction(lead: QueueLead, me: PublicUser | null): RowAction {
 
   return 'locked';
 }
+
+/**
+ * Whether the viewer may let a held lead go - the Release button on the lead's
+ * page. The holder may; so may a superadmin, for anyone's, which is the way
+ * out of a lead locked to an agent who has gone home. Nobody else, and there
+ * is nothing to release on a lead nobody holds. The server decides for real
+ * (`db/claims.ts`); this only decides whether to offer the button.
+ */
+export function mayRelease(holder: { id: number } | null, me: PublicUser | null): boolean {
+  if (!holder || !me) return false;
+  return holder.id === me.id || me.role === 'superadmin';
+}
+

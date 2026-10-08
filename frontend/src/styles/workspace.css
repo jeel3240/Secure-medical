@@ -15,6 +15,12 @@
   gap: var(--space-3);
 }
 
+.workspace__top-right {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
 .workspace__place {
   color: var(--color-text-muted);
   font-size: var(--text-small);

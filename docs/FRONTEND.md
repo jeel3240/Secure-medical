@@ -498,7 +498,8 @@ an outcome advances the step; DNC opens the confirm and Cancel leaves the
 outcome alone; Save posts note, callback and disposition and clears the form;
 Save & next released and opened the next lead (since removed); the timeline page still shows all
 three; unclear replies stay unlabelled; a blocked number hides the composer and
-Send SMS; Back to queue releases the claim. No console errors.
+Send SMS; Back to queue releases the claim *(until 2026-10-08 - it only goes
+back now)*. No console errors.
 
 Agents land on `/queue`; `/admin` lands on Overview. The admin section is behind
 `RequireRole`, and every admin endpoint refuses an agent independently - the
@@ -618,8 +619,12 @@ actions switched off, a strip saying whose it is, and Pick up right there if nob
 holds it. Looking also leaves an unread reply unread: the workspace marks it
 read only for the holder, so a glance no longer lets a lead who texted back drop
 out of the queue. A 409 on Pick up still shows the holder's name and refreshes.
-*Back to queue* releases the claim - and only a claim that is
-yours, so a superadmin leaving someone else's lead no longer takes it off them.
+*Back to queue* only goes back - 2026-10-08. The lead stays with whoever
+holds it. Letting it go is the **Release** button at the top right, beside
+"Held by you · since 3:04 PM": shown to the holder, and to a superadmin on
+anyone's lead (`lib/lock.ts`, `mayRelease`), and switched off during a call.
+After it the page stays open, as a viewer's, with Pick up offered again.
+*(Until then Back to queue released the holder's own claim on the way out.)*
 
 (For an hour earlier the same day, a row click opened the Lead Timeline instead.
 Two different pages for the same lead read as two different things, so both now
@@ -654,7 +659,7 @@ choose. Save is the primary button.
 **Saving an outcome ends the visit - Jeel, 2026-09-29.** With Closed or DNC,
 Save releases the lead (on the server) and takes the agent back to the queue,
 where the lead is already gone. With only a note or a callback the agent stays
-and leaves with *Back to queue*. A closed lead shows Closed as the selected
+and leaves with *Back to queue*, still holding the lead. A closed lead shows Closed as the selected
 button with "Closed by Maya · 7:01 PM" beneath it. A lead someone holds is never
 closed (`AGENT-WORKSPACE.md`), so the agent holding it starts from clear buttons
 and their Closed is always saved. What Save did is a muted
@@ -697,7 +702,7 @@ arrives after a newer one is still dropped.
 
 ## Tests
 
-`npm test` in `frontend/`. Vitest with jsdom, 273 tests in 26 files (2026-10-06).
+`npm test` in `frontend/`. Vitest with jsdom, 277 tests in 26 files (2026-10-08).
 
 Logic first, by agreement - a screen is easy to judge by eye, and a dropped
 response or an off-by-one age threshold is not:
@@ -705,7 +710,7 @@ response or an off-by-one age threshold is not:
 | File | Covers |
 |---|---|
 | `api/usePolling.test.ts` | The polling hook's guarantees, the race guard included, and that a slow answer is waited for rather than asked for again |
-| `lib/format.test.ts`, `lib/lock.test.ts` | Formatting, and which row action and lock a lead gets |
+| `lib/format.test.ts`, `lib/lock.test.ts` | Formatting, which row action and lock a lead gets, and who may release a held lead |
 | `components/Timeline.test.tsx`, `pages/LeadTimelinePage.test.ts` | The timeline's wording, and the summary sidebar |
 | `pages/workspace/Conversation.test.ts` | The answer shown beside a reply: the server's, and nothing when it would repeat the reply |
 | `pages/QueuePage.test.ts` | The queue's Answers cell and its tooltip |
@@ -757,7 +762,7 @@ every route lives under `/api`.
   numbers to a browser, so it needs Jeel to ask for it.
 - **Previous-lead history** on the timeline. Repeat-lead handling is a future
   item (CLAUDE.md §10), so there is never an earlier lead to show.
-- **Force-release.** `POST /api/leads/:id/release` already lets a superadmin
-  release anyone's claim, and `AGENT-WORKSPACE.md` promises it, but no screen
-  offers it. Today a claim clears when the agent presses Back to queue or saves
-  an outcome.
+- ~~**Force-release.**~~ Built 2026-10-08: the Release button on the lead's
+  page, which a superadmin sees on anyone's lead. A list of every held lead
+  and how long it has been held is still not built - a superadmin finds them
+  in the queue, as "Working – name".
