@@ -8,7 +8,7 @@
 import { describe, expect, it } from 'vitest';
 import type { QueueLead, QueueTag } from '../api/leads';
 import type { PublicUser } from '../api/types';
-import { lockHolder, rowAction } from './lock';
+import { lockHolder, mayRelease, rowAction } from './lock';
 
 const lead = (tag: QueueTag | null): QueueLead => ({
   id: 1,
@@ -129,3 +129,23 @@ describe('what the row action offers', () => {
     expect(rowAction(lead({ kind: 'working', agentId: 2, agentName: 'karm' }), null)).toBe('locked');
   });
 });
+
+describe('who may release a held lead', () => {
+  it('the agent holding it', () => {
+    expect(mayRelease({ id: MAYA.id }, MAYA)).toBe(true);
+  });
+
+  it('a superadmin, for anyone\'s - the way out of a lead locked to someone who is not there', () => {
+    expect(mayRelease({ id: MAYA.id }, BOSS)).toBe(true);
+  });
+
+  it('not another agent', () => {
+    expect(mayRelease({ id: RAE.id }, MAYA)).toBe(false);
+  });
+
+  it('nothing to release when nobody holds it, or nobody is signed in', () => {
+    expect(mayRelease(null, MAYA)).toBe(false);
+    expect(mayRelease({ id: MAYA.id }, null)).toBe(false);
+  });
+});
+

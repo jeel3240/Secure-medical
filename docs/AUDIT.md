@@ -40,7 +40,7 @@ it.
 | Action | When | `detail` keeps |
 |---|---|---|
 | `lead.picked_up` | An agent picks a lead up. Resuming a lead already held is not a new pick-up and records nothing | `tookOverFrom`, when taken from a deactivated agent |
-| `lead.released` | Back to queue; a superadmin's force-release; an outcome letting go of the lead | `heldSince`, `forced`, `because: 'outcome'` |
+| `lead.released` | The Release button (until 2026-10-08, Back to queue); a superadmin's force-release; an outcome letting go of the lead | `heldSince`, `forced`, `because: 'outcome'` |
 | `reply.read` | An unread reply is opened - once, by whoever cleared it | |
 | `note.added` | A note is saved | `noteId` - the text stays in `notes`, not copied |
 | `outcome.set` | Closed or DNC is saved | `value`, `dispositionId` |
