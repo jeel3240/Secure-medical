@@ -272,6 +272,26 @@ polling every minute - locally it had said so for six days. The poller now
 writes the checkpoint on every successful poll (`POLLER.md`, step 7), so the
 time is the last poll.
 
+**The view is in the address** - 2026-10-11, `frontend/src/lib/leads-view.ts`.
+The tab, the source, the time window, the search and the page number are read
+from the page's address and written back to it: `/admin/leads?status=answering&page=2`.
+They were held in the page's memory, so they were gone when the page was. On
+the Answering tab, open a lead, press Back - and the list was on All again,
+page one, every time: found in the first week of real use, working down a
+tab one lead at a time.
+
+- Back returns to the same tab, filters, search and page.
+- A default is left out, so the plain page is still `/admin/leads`.
+- Changing the view replaces the address rather than adding to the history,
+  so Back from the list leaves it instead of stepping through every tab that
+  was clicked.
+- Anything unrecognised in the address reads as its default and never reaches
+  the server.
+- The Leads link in the side menu still opens the plain page, on All.
+
+The queue, My Callbacks and the DNC list keep their view in memory and still
+start over the same way.
+
 ## Not done yet
 
 - **Source filter is single-select.** The spec asks for multi-select; the API

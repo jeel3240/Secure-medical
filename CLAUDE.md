@@ -239,7 +239,8 @@ you change something the docs describe, update the doc in the same commit.
     src/api/workspace.ts    lead card, timeline, notes, callbacks, dispositions, SMS
     src/api/admin.ts        config, overview, DNC, health
     src/lib/format.ts       phone, dates, age, names
-    src/lib/lock.ts         which queue rows an agent may open
+    src/lib/lock.ts         which queue rows an agent may open, and who may release a held lead
+    src/lib/leads-view.ts   Admin > Leads' tab, filters and page, kept in the address so Back returns to them
     src/api/calls.ts        calling config and token
     src/lib/call-state.ts   a call's states, pure
     src/lib/calling.ts      the only file that uses Twilio's Voice SDK
