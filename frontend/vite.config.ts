@@ -24,7 +24,12 @@ export default defineConfig({
     port: 5173,
     strictPort: true,
     proxy: {
-      '/api': { target: 'http://localhost:3000' },
+      // 127.0.0.1, not localhost. Docker publishes the API on IPv4 only, and
+      // `localhost` is tried as IPv6 first - so when anything else on the
+      // machine listens on [::1]:3000 (another project's dev server did,
+      // 2026-10-11), every /api call went to it and sign-in failed here with
+      // nothing wrong in this app.
+      '/api': { target: 'http://127.0.0.1:3000' },
     },
   },
 });
