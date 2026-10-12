@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { listAdminLeads, type AdminLeadsResponse } from '../../api/leads';
 import { usePolling } from '../../api/usePolling';
 import { Banner } from '../../components/Banner';
@@ -11,6 +11,7 @@ import { Spinner } from '../../components/Spinner';
 import { SyncStatus } from '../../components/SyncStatus';
 import { TierSignal } from '../../components/TierSignal';
 import { formatPhone, formatReceived, formatRelative, leadName } from '../../lib/format';
+import { readLeadsView, writeLeadsView, type LeadsView } from '../../lib/leads-view';
 
 /**
  * Admin > Leads: every lead the poller has pulled in, replied or not.
@@ -58,14 +59,30 @@ const SINCE: { key: string; label: string }[] = [
   { key: 'all', label: 'All time' },
 ];
 
+const ALLOWED = { statuses: TABS.map((tab) => tab.key), sinces: SINCE.map((s) => s.key) };
+
 export function LeadsPage() {
   const navigate = useNavigate();
-  const [status, setStatus] = useState('all');
-  const [since, setSince] = useState('all');
-  const [source, setSource] = useState<string>('');
-  const [search, setSearch] = useState('');
-  const [query, setQuery] = useState('');
-  const [page, setPage] = useState(1);
+
+  // The tab, the filters, the search and the page are in the address, not in
+  // this component - `lib/leads-view.ts`. So opening a lead and coming Back
+  // returns to the same list; in memory, it came back as All, page one.
+  const [params, setParams] = useSearchParams();
+  const view = readLeadsView(params, ALLOWED);
+  const { status, since, source, q: query, page } = view;
+
+  // Replaces the address rather than adding to the history: Back from a lead
+  // goes to the list as it was left, and Back from the list leaves it, instead
+  // of stepping through every tab that was clicked.
+  const latest = useRef(view);
+  latest.current = view;
+  const show = useCallback(
+    (changes: Partial<LeadsView>) => setParams(writeLeadsView({ ...latest.current, ...changes }), { replace: true }),
+    [setParams]
+  );
+
+  // What is typed, ahead of the search that has been sent.
+  const [search, setSearch] = useState(query);
 
   // Ids seen on the previous load, so genuinely new rows can be highlighted
   // rather than every row flashing on each refresh.
@@ -106,13 +123,14 @@ export function LeadsPage() {
     data.leads.forEach((l) => seen.current.add(l.id));
   }, [data]);
 
+  // Sent once the typing pauses. Only when it differs from what is showing:
+  // run on every mount, this used to put the list back on page one.
   useEffect(() => {
-    const id = setTimeout(() => {
-      setQuery(search.trim());
-      setPage(1);
-    }, 300);
+    const next = search.trim();
+    if (next === query) return;
+    const id = setTimeout(() => show({ q: next, page: 1 }), 300);
     return () => clearTimeout(id);
-  }, [search]);
+  }, [search, query, show]);
 
   const counts = data?.counts ?? {};
   const totalPages = data ? Math.max(1, Math.ceil(data.total / data.pageSize)) : 1;
@@ -144,10 +162,7 @@ export function LeadsPage() {
             label="Status"
             dense
             value={status}
-            onChange={(next) => {
-              setStatus(next);
-              setPage(1);
-            }}
+            onChange={(next) => show({ status: next, page: 1 })}
             options={TABS.map((tab) => ({ value: tab.key, label: tab.label, count: counts[tab.key] ?? 0 }))}
           />
         </div>
@@ -164,10 +179,7 @@ export function LeadsPage() {
           <select
             className="select-input"
             value={source}
-            onChange={(e) => {
-              setSource(e.target.value);
-              setPage(1);
-            }}
+            onChange={(e) => show({ source: e.target.value, page: 1 })}
             aria-label="Source"
           >
             <option value="">All sources</option>
@@ -180,10 +192,7 @@ export function LeadsPage() {
           <select
             className="select-input"
             value={since}
-            onChange={(e) => {
-              setSince(e.target.value);
-              setPage(1);
-            }}
+            onChange={(e) => show({ since: e.target.value, page: 1 })}
             aria-label="Received"
           >
             {SINCE.map((s) => (
@@ -261,13 +270,13 @@ export function LeadsPage() {
 
         {data && totalPages > 1 && (
           <div className="table-card__pager">
-            <Button variant="secondary" disabled={page <= 1} onClick={() => setPage((p) => p - 1)}>
+            <Button variant="secondary" disabled={page <= 1} onClick={() => show({ page: page - 1 })}>
               Previous
             </Button>
             <span>
               Page {page} of {totalPages}
             </span>
-            <Button variant="secondary" disabled={page >= totalPages} onClick={() => setPage((p) => p + 1)}>
+            <Button variant="secondary" disabled={page >= totalPages} onClick={() => show({ page: page + 1 })}>
               Next
             </Button>
           </div>

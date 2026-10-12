@@ -689,6 +689,15 @@ call figures dimmed with a note; they were removed on 2026-09-28 - `ADMIN.md`,
 "Overview".) Leaving them off would make someone wonder whether the
 page forgot them.
 
+## Sign-in fails locally with nothing wrong: something else is on port 3000
+
+Found 2026-10-11. The dev server sent `/api` to `http://localhost:3000`.
+Docker publishes the API on IPv4 only, and `localhost` is tried as IPv6 first,
+so when another project's dev server was listening on `[::1]:3000` every
+`/api` call went to it - a 308 from a stranger - and sign-in failed in this
+app. The proxy now names `127.0.0.1` (`vite.config.ts`). To see what holds the
+port: `lsof -nP -iTCP:3000 -sTCP:LISTEN`.
+
 ## Refreshing - one request at a time
 
 **A screen asks again five seconds after the last answer arrived** -
@@ -702,7 +711,7 @@ arrives after a newer one is still dropped.
 
 ## Tests
 
-`npm test` in `frontend/`. Vitest with jsdom, 277 tests in 26 files (2026-10-08).
+`npm test` in `frontend/`. Vitest with jsdom, 282 tests in 27 files (2026-10-11).
 
 Logic first, by agreement - a screen is easy to judge by eye, and a dropped
 response or an off-by-one age threshold is not:
@@ -711,6 +720,7 @@ response or an off-by-one age threshold is not:
 |---|---|
 | `api/usePolling.test.ts` | The polling hook's guarantees, the race guard included, and that a slow answer is waited for rather than asked for again |
 | `lib/format.test.ts`, `lib/lock.test.ts` | Formatting, which row action and lock a lead gets, and who may release a held lead |
+| `lib/leads-view.test.ts` | Admin > Leads' view read from and written to the address: the round trip, defaults left out, anything unrecognised read as the default |
 | `components/Timeline.test.tsx`, `pages/LeadTimelinePage.test.ts` | The timeline's wording, and the summary sidebar |
 | `pages/workspace/Conversation.test.ts` | The answer shown beside a reply: the server's, and nothing when it would repeat the reply |
 | `pages/QueuePage.test.ts` | The queue's Answers cell and its tooltip |
@@ -743,7 +753,7 @@ npm run test:watch
 ```bash
 cd frontend
 npm install
-npm run dev       # :5173, proxying /api to the API on :3000
+npm run dev       # :5173, proxying /api to the API on 127.0.0.1:3000
 npm run build     # tsc then vite build, into dist/
 ```
 
