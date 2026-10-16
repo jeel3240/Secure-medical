@@ -134,8 +134,9 @@ number, it moves production's calls to that laptop (2026-10-05; `TWILIO.md`,
 "What it needs on the Twilio account"). Locally, since 2026-10-16, there is a
 dev number, (480) 530-8582, with its own TwiML App and
 `TWILIO_IDENTITY_PREFIX=dev-` - never production's. It points the TwiML App and the phone
-number at this server, and refuses a number that rings somewhere else unless
-`--take-over` is passed. `TWILIO.md`, "Deploying it".
+number at this server, and refuses to move either from something another server
+relies on unless `--take-over` is passed (`-- --dry-run` shows what it would
+do). `TWILIO.md`, "Deploying it".
 
 **`docker compose logs` returns nothing on the server.** The production
 override sets the `awslogs` log driver on api, worker and caddy, so container

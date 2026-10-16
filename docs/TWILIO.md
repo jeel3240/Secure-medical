@@ -269,9 +269,14 @@ leads come from EZ Texting. Both are decisions, not styling.
 ### What it needs on the Twilio account
 
 The phone number's Voice URL must be `PUBLIC_URL/api/webhooks/twilio/incoming`.
-`npm run twilio:configure` sets it, along with the TwiML App. A number that
-already sends its calls somewhere else is left alone unless `--take-over` is
-passed.
+`npm run twilio:configure` sets it, along with the TwiML App. Since 2026-10-16
+(`core/twilio-pointing.ts`) it refuses, for the number and the app alike,
+anything another server relies on: this app on another real server, an address
+that is not this app, or a number answered by another TwiML App. Both are
+decided before either is changed, so a refusal never leaves them half-moved.
+`--take-over` overrides; `--dry-run` says what it would change and changes
+nothing. Pointing nowhere, or at a tunnel (an earlier laptop session), is not
+a refusal.
 
 **One number rings one deployment**, and so does one TwiML App.
 
@@ -282,10 +287,13 @@ says, so run from a laptop it moves them to that laptop's tunnel: leads who
 call the number ring nobody in production, and calls agents place fail, until
 it is run on the server again. Nothing errors while that happens.
 
-- **The command's own guard does not stop this.** It leaves alone a number
-  that rings *another app*; a laptop and production are the same app, with the
-  same webhook path, so it goes straight through. `--take-over` is not needed
-  for the damage.
+- **Until 2026-10-16 the command's own guard did not stop this.** It left
+  alone only a number that rang *another app*; a laptop and production are the
+  same app, with the same webhook path, so it went straight through - and the
+  TwiML App was changed without any check. It now refuses (above): run from a
+  laptop against production's real settings, both the number and the app come
+  back "points at this app on another server", and nothing is changed. That
+  refusal is a second line, not a reason to try - the rule stands.
 - **From 2026-10-05 to 2026-10-16 calling was not tested locally at all**
   (Jeel): the local `.env` kept its `TWILIO_*` lines empty. It was not only
   the command - see the next point.
@@ -559,14 +567,16 @@ or dropped.
 changes:
 
 ```bash
-docker compose exec api npm run dev:twilio:configure   # local
+docker compose exec api npm run dev:twilio:configure   # local - the dev number only
 docker compose exec api npm run twilio:configure       # production
+# add -- --dry-run to see what it would change, without changing it
 ```
 
 It sets the TwiML App's Voice URL to `PUBLIC_URL/api/webhooks/twilio/voice`
 and the phone number's to `PUBLIC_URL/api/webhooks/twilio/incoming`, and
-changes nothing else on the account. "Incoming calls" above has the one thing
-to watch: a number rings only one deployment.
+changes nothing else on the account. "What it needs on the Twilio account"
+above has what it refuses, and the one thing to watch: a number rings only one
+deployment.
 
 ## The screen
 
@@ -629,8 +639,9 @@ microphone. `lib/calling.ts` is the only file that touches the SDK.
 
 | What | Where |
 |---|---|
-| Settings: off, on, incomplete, malformed values | `src/twilio-settings.test.ts` |
-| Identity, outcomes, talk time | `src/core/calls.test.ts` |
+| Settings: off, on, incomplete, malformed values, the identity prefix | `src/twilio-settings.test.ts` |
+| Identity (with and without a prefix), outcomes, talk time | `src/core/calls.test.ts` |
+| What `twilio:configure` may point and what it refuses - production from a laptop, an old tunnel, someone else's line, another TwiML App | `src/core/twilio-pointing.test.ts` |
 | The token's claims, the TwiML, the signature check | `src/integrations/twilio.test.ts` |
 | Every route, refusals, a database failure, the missed-call text sent once | `src/api/__tests__/calls.test.ts` |
 | The SQL: who may call, DNC, retries, the timeline; who an incoming call rings, a missed call, its effect on the queue and Admin > Leads, what settles it and what does not, and its callback - booked once, under Today, finished by a call or an answer | `scripts/calls-live-check.ts` - against a real Postgres |
