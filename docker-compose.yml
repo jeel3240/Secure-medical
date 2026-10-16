@@ -52,6 +52,8 @@ services:
       PUBLIC_URL: ${PUBLIC_URL:-}
       # Optional: set, every call is recorded and transcribed - docs/TWILIO.md.
       TWILIO_TRANSCRIPTION_SERVICE_SID: ${TWILIO_TRANSCRIPTION_SERVICE_SID:-}
+      # Optional: empty in production; dev- on a laptop sharing the Twilio account.
+      TWILIO_IDENTITY_PREFIX: ${TWILIO_IDENTITY_PREFIX:-}
     depends_on:
       postgres:
         condition: service_healthy
@@ -85,6 +87,7 @@ services:
       TWILIO_PHONE_NUMBER: ${TWILIO_PHONE_NUMBER:-}
       PUBLIC_URL: ${PUBLIC_URL:-}
       TWILIO_TRANSCRIPTION_SERVICE_SID: ${TWILIO_TRANSCRIPTION_SERVICE_SID:-}
+      TWILIO_IDENTITY_PREFIX: ${TWILIO_IDENTITY_PREFIX:-}
     depends_on:
       postgres:
         condition: service_healthy

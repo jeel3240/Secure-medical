@@ -59,4 +59,28 @@ describe('browser calling settings', () => {
       missing: ['TWILIO_TRANSCRIPTION_SERVICE_SID'],
     });
   });
+
+  it('the identity prefix is optional and empty unless set - production keeps its names', () => {
+    const result = readTwilioSettings(FULL);
+    expect(result.status === 'on' && result.settings.identityPrefix).toBe('');
+  });
+
+  it.each(['dev-', 'jeel-', 'test2-'])('the identity prefix %p is used as given', (prefix) => {
+    const result = readTwilioSettings({ ...FULL, TWILIO_IDENTITY_PREFIX: ` ${prefix} ` });
+    expect(result.status === 'on' && result.settings.identityPrefix).toBe(prefix);
+  });
+
+  it.each(['dev', 'Dev-', 'dev_', '-', 'dev--x', 'dev agent-', `${'a'.repeat(20)}-`])(
+    'a malformed identity prefix %p is named, not used or dropped',
+    (prefix) => {
+      expect(readTwilioSettings({ ...FULL, TWILIO_IDENTITY_PREFIX: prefix })).toEqual({
+        status: 'incomplete',
+        missing: ['TWILIO_IDENTITY_PREFIX'],
+      });
+    }
+  );
+
+  it('an identity prefix alone does not switch calling on', () => {
+    expect(readTwilioSettings({ TWILIO_IDENTITY_PREFIX: 'dev-' })).toEqual({ status: 'off' });
+  });
 });

@@ -195,7 +195,7 @@ ticket's own PR.
 |---|---|---|---|
 | T0 | Resend the first texts the EZ Texting block stopped, slowly | - | Done 2026-10-16 - run on the server for the 174 leads of the block |
 | | **Setup** | | |
-| T1 | A laptop can never ring for production's calls | - | Not started |
+| T1 | A laptop can never ring for production's calls | - | Done 2026-10-16 |
 | T2 | `twilio:configure` cannot move production's number | - | Not started |
 | T3 | Set up the new number for local work | T1, T2 | Number and dev app ready (2026-10-15); tunnel and test call wait for T1, T2 |
 | | **Data and rules - no calls yet** | | |
@@ -314,25 +314,36 @@ under the retry's "never days late" rule); `LOGGING.md`, `AUDIT.md`,
 calls, even on the same Twilio account.
 **Needs:** nothing. **Production:** none - the prefix is empty there.
 
-**Build**
-- A new optional setting, `TWILIO_IDENTITY_PREFIX` - letters, digits and
-  hyphens, for example `dev-`.
-- The browser's name at Twilio becomes `<prefix>agent-<user id>`. Production
-  leaves it empty, so its names stay `agent-<user id>`.
-- Reading a name back accepts only this server's prefix, so a call meant for
-  another environment's browser is never taken for one of ours.
+**Build** (as built)
+- A new optional setting, `TWILIO_IDENTITY_PREFIX` - lower-case letters and
+  digits ending in a hyphen, for example `dev-`. Passed to the api and the
+  worker by `docker-compose.yml`.
+- The browser's name at Twilio becomes `<prefix>agent-<user id>`, in the
+  token and in the incoming ring. Production leaves it empty, so its names
+  stay `agent-<user id>`.
+- Reading a name back (the voice webhook) accepts only this server's prefix,
+  so a call from another environment's browser is never taken for one of ours.
+- The prefix is a required argument of `identityFor` and
+  `agentIdFromIdentity` - no default - so no caller can forget it and quietly
+  use production's names.
+- A malformed prefix makes the settings incomplete (production refuses to
+  start), rather than being used or dropped.
 
 **Done when**
-- [ ] Tests: no prefix gives `agent-21`, exactly as today; `dev-` gives
-      `dev-agent-21` and reads back as user 21.
-- [ ] Tests: a dev server refuses `agent-21`, and production refuses
+- [x] Tests: no prefix gives `agent-21`, exactly as today; `dev-` gives
+      `dev-agent-21` and reads back as user 21 - in the token, the incoming
+      ring and the voice webhook.
+- [x] Tests: a dev server refuses `agent-21`, and production refuses
       `dev-agent-21`.
-- [ ] Tests: a badly formed prefix is refused at start-up.
+- [x] Tests: a badly formed prefix is named as incomplete; a prefix alone
+      does not switch calling on.
+- [x] The local `.env` has `TWILIO_IDENTITY_PREFIX=dev-`.
 
 **Files:** `backend/src/core/calls.ts`, `backend/src/twilio-settings.ts`,
-`backend/src/integrations/twilio.ts`, `.env.example`.
-**Doc:** `TWILIO.md`, "What it needs on the Twilio account"; the settings
-table in `docs/README.md`.
+`backend/src/integrations/twilio.ts`, `backend/src/api/twilio-webhooks.ts`,
+their tests, `docker-compose.yml`, `.env.example`.
+**Doc:** `TWILIO.md`, "What it needs on the Twilio account" and "Settings";
+the settings table in `docs/README.md`; `CLAUDE.md` §7.
 
 ---
 

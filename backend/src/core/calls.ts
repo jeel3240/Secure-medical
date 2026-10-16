@@ -10,15 +10,27 @@
  * The browser's identity inside Twilio. It is written into the signed access
  * token we mint, so when Twilio later sends `From: client:agent-21` to our voice
  * webhook - itself signed - the agent id in it can be trusted.
+ *
+ * `prefix` is this server's `TWILIO_IDENTITY_PREFIX` - empty in production,
+ * `dev-` on a laptop sharing the Twilio account - so two copies of the app never
+ * hand out the same name (twilio-settings.ts says why that matters). It has no
+ * default on purpose: a caller that forgot it would quietly use production's
+ * names.
  */
-export function identityFor(userId: number): string {
-  return `agent-${userId}`;
+export function identityFor(userId: number, prefix: string): string {
+  return `${prefix}agent-${userId}`;
 }
 
-/** `client:agent-21` (as Twilio sends it) or `agent-21` -> 21. Anything else -> null. */
-export function agentIdFromIdentity(raw: unknown): number | null {
+/**
+ * `client:agent-21` (as Twilio sends it) or `agent-21` -> 21, for this server's
+ * prefix. Anything else -> null - including another copy's names: production
+ * does not take `dev-agent-21` for user 21, nor a laptop `agent-21`.
+ */
+export function agentIdFromIdentity(raw: unknown, prefix: string): number | null {
   if (typeof raw !== 'string') return null;
-  const match = /^(?:client:)?agent-([1-9]\d*)$/.exec(raw);
+  const name = raw.startsWith('client:') ? raw.slice('client:'.length) : raw;
+  if (!name.startsWith(prefix)) return null;
+  const match = /^agent-([1-9]\d*)$/.exec(name.slice(prefix.length));
   return match ? Number(match[1]) : null;
 }
 

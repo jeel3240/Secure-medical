@@ -56,6 +56,7 @@ const SETTINGS: TwilioSettings = {
   twimlAppSid: `AP${'3'.repeat(32)}`,
   callerId: '+14804708259',
   publicUrl: 'https://calls.example.com',
+  identityPrefix: '',
 };
 const PASSWORD = 'correct-horse-battery';
 
@@ -174,6 +175,20 @@ describe('connecting a call', () => {
     const res = await fromTwilio(app, VOICE, A_CALL);
     expect(res.status).toBe(200);
     expect(res.text).toContain('could not be placed');
+  });
+
+  it('a copy of the app with an identity prefix reads its own browsers, and only its own', async () => {
+    const { app } = await buildApp({ twilio: { ...SETTINGS, identityPrefix: 'dev-' } });
+
+    const own = await fromTwilio(app, VOICE, { ...A_CALL, From: 'client:dev-agent-21' });
+    expect(own.text).toContain('<Dial');
+    expect(startCall).toHaveBeenCalledWith({ callSid: 'CA100', leadId: 7, agentId: 21 });
+
+    // Production's agent-21 is not this server's user 21.
+    startCall.mockClear();
+    const other = await fromTwilio(app, VOICE, A_CALL);
+    expect(other.text).toContain('<Hangup/>');
+    expect(startCall).not.toHaveBeenCalled();
   });
 });
 

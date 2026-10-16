@@ -286,17 +286,28 @@ it is run on the server again. Nothing errors while that happens.
   that rings *another app*; a laptop and production are the same app, with the
   same webhook path, so it goes straight through. `--take-over` is not needed
   for the damage.
-- **Calling is not tested locally at all - Jeel, 2026-10-05.** Keep the
-  `TWILIO_*` lines in the local `.env` empty, so calling is off there. It is
-  not only the command: a local app signed in to the same Twilio account
-  registers its browser under the same agent identity as production's, so a
-  lead's call can ring the laptop, and a call placed locally is answered by
-  production's server. Calling changes are proved by tests and then on the
-  server.
-- **If local calling is ever needed again, use a different Twilio number and a different
-  TwiML App**, and put those in the local `.env` as `TWILIO_PHONE_NUMBER` and
-  `TWILIO_TWIML_APP_SID`. A local `.env` must never hold production's two
-  values. The account SID, auth token and API key can be shared.
+- **From 2026-10-05 to 2026-10-16 calling was not tested locally at all**
+  (Jeel): the local `.env` kept its `TWILIO_*` lines empty. It was not only
+  the command - see the next point.
+- **A different number is not enough; the browser's name must differ too.**
+  Twilio rings a browser by the name in its token - `agent-21` for user 21 -
+  and rings *every* browser on the account with that name, whichever number
+  the call came in on. A laptop on the same Twilio account names its user 21
+  `agent-21` as well, so production's calls would ring the laptop, and the
+  laptop's test calls a real agent. **`TWILIO_IDENTITY_PREFIX`** (2026-10-16,
+  `core/calls.ts`) puts a prefix in front of every name: empty in production,
+  so its names are unchanged; `dev-` locally, so the laptop's user 21 is
+  `dev-agent-21`. Each server reads only its own names back - production does
+  not take `dev-agent-21` for user 21, nor a laptop `agent-21`.
+- **Local calling uses its own number, TwiML App and prefix** (2026-10-16).
+  The client added **(480) 530-8582** to the account for development, and a
+  TwiML App `secure-medical-calling-dev` was made for it. The local `.env`
+  holds `TWILIO_PHONE_NUMBER=+14805308582`, that app's id as
+  `TWILIO_TWIML_APP_SID`, and `TWILIO_IDENTITY_PREFIX=dev-`; the account SID,
+  auth token and API key are shared with production. A local `.env` must
+  never hold production's number or TwiML App. `PUBLIC_URL` stays empty - so
+  calling is off on the laptop - until a tunnel is set up for a test
+  (`AUTO-CALLS.md`, ticket T3).
 - **If it happens anyway:** Admin > Overview shows **Calling** as Degraded
   within a minute. Fix it by running `npm run twilio:configure` on the server.
 - Up to 2026-10-02, before production took calls, local testing did use this
@@ -528,6 +539,13 @@ Console.
 | `TWILIO_TWIML_APP_SID` | The TwiML App, `AP…`, whose Voice URL is our voice webhook |
 | `TWILIO_PHONE_NUMBER` | The caller ID, E.164. Must be a number on the same account |
 | `PUBLIC_URL` | This app's public https address, no trailing slash |
+
+Two more are optional and apart from the seven: `TWILIO_TRANSCRIPTION_SERVICE_SID`
+("Recordings and transcripts", below), and **`TWILIO_IDENTITY_PREFIX`** -
+empty in production, `dev-` on a laptop sharing the Twilio account ("What it
+needs on the Twilio account", above). Lower-case letters and digits ending in
+a hyphen; a malformed one makes the settings incomplete rather than being used
+or dropped.
 
 `twilio-settings.ts` reads them into one of three states:
 

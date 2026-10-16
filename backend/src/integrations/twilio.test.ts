@@ -20,11 +20,18 @@ const SETTINGS: TwilioSettings = {
   twimlAppSid: `AP${'3'.repeat(32)}`,
   callerId: '+14804708259',
   publicUrl: 'https://calls.example.com',
+  identityPrefix: '',
 };
 
 const payload = (jwt: string) => JSON.parse(Buffer.from(jwt.split('.')[1], 'base64url').toString());
 
 describe('the browser call token', () => {
+  it('carries this server\'s identity prefix, so a laptop is never named like production', () => {
+    const { token, identity } = mintCallToken({ ...SETTINGS, identityPrefix: 'dev-' }, 21);
+    expect(identity).toBe('dev-agent-21');
+    expect(payload(token).grants.identity).toBe('dev-agent-21');
+  });
+
   it('lets one agent place calls through our TwiML App, and be rung as that agent', () => {
     const { token, identity } = mintCallToken(SETTINGS, 21);
     const claims = payload(token);
@@ -79,6 +86,13 @@ describe('telling Twilio how to connect', () => {
 });
 
 describe('a lead calling our number', () => {
+  it('rings the browser by this server\'s name for the agent - never another copy\'s', () => {
+    const lead = { id: 7, name: 'Priya Sharma', phone: '+16026203572' };
+    expect(ringAgentTwiml({ ...SETTINGS, identityPrefix: 'dev-' }, 21, lead, 'CA300')).toContain(
+      '<Identity>dev-agent-21</Identity>'
+    );
+  });
+
   it('rings one agent’s browser for 20 seconds, saying who is calling', () => {
     const xml = ringAgentTwiml(SETTINGS, 21, { id: 7, name: 'Priya Sharma', phone: '+16026203572' }, 'CA300');
     expect(xml).toContain('timeout="20"');
