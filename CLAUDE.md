@@ -177,6 +177,7 @@ you change something the docs describe, update the doc in the same commit.
     src/db/missed-call-text.ts  the text sent after a call to us nobody answered
     src/integrations/twilio.ts  the file the routes use for the twilio library (twilio-health.ts, twilio-transcripts.ts and the configure CLI use it too)
     src/integrations/twilio-health.ts  the health report's calling check: do the number and the TwiML App point here
+    src/core/twilio-pointing.ts  what twilio:configure may point, and what it refuses - production's number from a laptop, above all
     src/integrations/twilio-transcripts.ts  Twilio's transcription service; src/core/transcripts.ts who said what, pure
     src/db/transcripts.ts   call recordings and transcripts; src/worker/transcripts.ts fetches them
     src/twilio-settings.ts  calling's settings: off, on or incomplete

@@ -180,8 +180,10 @@ Calling fails silently in one way: Twilio asks two addresses how to handle a
 call - the TwiML App's Voice URL for a call a browser places, the phone
 number's for a lead calling in - and if either points somewhere else, calls
 simply stop arriving. Nothing crashes and nothing is logged, because the
-request never reaches us. The usual cause is `twilio:configure` run from a
-laptop against the number production uses. So the check asks Twilio where both
+request never reaches us. The usual cause was `twilio:configure` run from a
+laptop against the number production uses; since 2026-10-16 the command refuses
+that (`TWILIO.md`, "What it needs on the Twilio account"), which leaves a change
+made by hand in the Twilio Console. So the check asks Twilio where both
 point and compares them with `PUBLIC_URL`; the message says which is wrong and
 to run `npm run twilio:configure` on this server.
 

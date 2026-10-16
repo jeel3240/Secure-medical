@@ -196,8 +196,8 @@ ticket's own PR.
 | T0 | Resend the first texts the EZ Texting block stopped, slowly | - | Done 2026-10-16 - run on the server for the 174 leads of the block |
 | | **Setup** | | |
 | T1 | A laptop can never ring for production's calls | - | Done 2026-10-16 |
-| T2 | `twilio:configure` cannot move production's number | - | Not started |
-| T3 | Set up the new number for local work | T1, T2 | Number and dev app ready (2026-10-15); tunnel and test call wait for T1, T2 |
+| T2 | `twilio:configure` cannot move production's number | - | Done 2026-10-16 |
+| T3 | Set up the new number for local work | T1, T2 | Number, dev app and `dev-` prefix ready (2026-10-16); the tunnel and a test call are next |
 | | **Data and rules - no calls yet** | | |
 | T4 | The database can hold a robot call | - | Not started |
 | T5 | The screens know a robot call from an agent's call | T4 | Not started |
@@ -353,22 +353,32 @@ the settings table in `docs/README.md`; `CLAUDE.md` §7.
 away from production by accident.
 **Needs:** nothing. **Production:** running it on the server works as today.
 
-**Build**
-- Before changing anything, it reads where the number and the TwiML App point
-  now.
-- If either points at a host that is not this server's `PUBLIC_URL` and not a
-  tunnel address (`*.trycloudflare.com`, ngrok), it stops and names that
-  host - unless `--take-over` is passed.
+**Build** (as built)
+- One pure rule, `core/twilio-pointing.ts`, for the number **and the TwiML
+  App** - the app had no check at all before, and was changed before the
+  number was looked at.
+- Refused without `--take-over`: this app on another real server (production,
+  from a laptop), an address that is not this app, a number answered by
+  another TwiML App. Pointing nowhere, at an old tunnel, or at the same server
+  is not a refusal - so the recovery (run it on the server after an accident)
+  still works.
+- Both are decided before either is changed: a refusal changes nothing, never
+  half-moves them.
+- `--dry-run` says what it would change and changes nothing.
 
 **Done when**
-- [ ] Tests: refuses when the number points at `https://dailyleadhub.com` and
-      `PUBLIC_URL` is a tunnel.
-- [ ] Tests: allows one tunnel to another, the same host, or a number that
-      points nowhere.
-- [ ] Tests: `--take-over` overrides.
+- [x] Tests: refuses production's number from a tunnel; allows a tunnel,
+      nothing, the same server; `--take-over` overrides; someone else's line
+      and another TwiML App are refused (21 tests).
+- [x] On production's real settings, read only: from a laptop, the number and
+      the app are both refused; on the server, nothing to change.
+- [x] The real command, `--dry-run`, against the dev number: both would be
+      pointed, nothing was changed (checked on Twilio afterwards).
 
-**Files:** `backend/src/cli/twilio-configure.ts` and its test.
-**Doc:** `TWILIO.md`, "What it needs on the Twilio account".
+**Files:** `backend/src/core/twilio-pointing.ts` (+ test),
+`backend/src/cli/twilio-configure.ts`.
+**Doc:** `TWILIO.md`, "What it needs on the Twilio account", "Settings" and
+"Testing"; `WORKFLOW.md`; `CLAUDE.md` §4.
 
 ---
 
