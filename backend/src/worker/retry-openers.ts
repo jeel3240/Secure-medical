@@ -10,10 +10,10 @@
  * silent, with no sign on any screen that anything went wrong. Deferred from
  * Week 2 (CLAUDE.md §10) into this task.
  *
- * **How a failed opener is recognised.** `worker/poller.ts` sets `expires_at`
- * only once the opener is actually accepted, so a conversation that is still
- * `open` with `expires_at IS NULL` never had one go out. That is the signature;
- * no new column is needed.
+ * **Which leads.** `db/openers-never-sent.ts`, which also explains how a
+ * failed opener is recognised - shared since 2026-10-16 with the resend after
+ * an outage (`worker/send-waiting-openers.ts`), which takes over a lead only
+ * once this retry has given up on it (`retryGaveUp`).
  *
  * **Backoff, and why it is spaced this widely.** EZ Texting being down is
  * usually minutes, not seconds, and a lead whose opener is an hour late is
@@ -46,6 +46,7 @@
  * opening it sees the red "!" and can text by hand.
  */
 
+import { findOpenersNeverSent } from '../db/openers-never-sent';
 import { pool } from '../db/pool';
 import { errText, log } from '../lib/log';
 import { sendOpener } from './opener';
@@ -88,25 +89,20 @@ export interface RetryStats {
 }
 
 /**
- * How many openers we have already tried for this lead, and when the last one
- * failed.
- *
- * Read from the failed message rows `db/outbound.ts` leaves, so no new column
- * is needed and both survive a restart. A blocked number records nothing -
- * that send was never attempted - so it never looks due here either.
- *
- * Automated sends only (`sent_by IS NULL`). An agent's own text that EZ Texting
- * refused is a failed row too, and until 2026-09-28 it counted as an opener
- * attempt: a few tries by an agent during an outage gave the lead up after
- * five minutes instead of nine hours. Found in review.
+ * Why this retry will never try a lead again, or null while it still will:
+ * `abandoned` once the attempts are used up, `tooOld` once the lead is past the
+ * age limit. A lead given up on is what the resend after an outage takes
+ * (`worker/send-waiting-openers.ts`) - and only that, so the two never send to
+ * the same lead.
  */
-const FAILED_OPENERS = `
-  FROM messages m
-  WHERE m.lead_id = l.id
-    AND m.direction = 'outbound'
-    AND m.delivery_status = 'failed'
-    AND m.sent_by IS NULL
-`;
+export function retryGaveUp(
+  lead: { attempts: number; arrivedAt: Date },
+  now: number
+): 'abandoned' | 'tooOld' | null {
+  if (lead.attempts >= MAX_ATTEMPTS) return 'abandoned';
+  if (now - lead.arrivedAt.getTime() > MAX_AGE_HOURS * 3_600_000) return 'tooOld';
+  return null;
+}
 
 /**
  * Runs one retry pass. Called from the worker loop beside the poll and the
@@ -116,68 +112,24 @@ export async function retryFailedOpeners(): Promise<RetryStats> {
   const startedAt = Date.now();
   const stats: RetryStats = { due: 0, sent: 0, failed: 0, abandoned: 0, tooOld: 0, durationMs: 0 };
 
-  // Leads whose conversation is open and has no expiry: the opener never went
-  // out. A blocked number is excluded - it is not a failure to retry, it is a
-  // number we must not text. Ordered oldest first so the longest-waiting lead
-  // is contacted first.
-  const { rows } = await pool.query(
-    `SELECT l.id, l.phone, l.first_name,
-            -- The first question of the lead's own flow - docs/FLOWS.md.
-            fq.body AS template,
-            (SELECT count(*)::int ${FAILED_OPENERS}) AS attempts,
-            (SELECT max(m.created_at) ${FAILED_OPENERS}) AS last_failed_at,
-            COALESCE(l.ezt_added_at, l.created_at) AS arrived_at
-     FROM leads l
-     JOIN conversations c ON c.lead_id = l.id
-     JOIN flow_questions fq ON fq.id = c.current_question_id
-     WHERE c.status = 'open'
-       AND c.expires_at IS NULL
-       -- Still on the flow's first question with nothing answered. A lead who
-       -- replied anyway has moved the conversation on, and the first question
-       -- again would be scored as the answer to the next (review, 2026-09-28).
-       AND c.score = 0
-       AND NOT EXISTS (
-         SELECT 1 FROM flow_questions earlier
-         WHERE earlier.flow_id = fq.flow_id AND earlier.position < fq.position
-       )
-       AND NOT EXISTS (
-         SELECT 1 FROM messages m WHERE m.lead_id = l.id AND m.direction = 'inbound'
-       )
-       -- Nothing of ours went out or may have: a 'sending' row counts, since
-       -- that text may have been delivered - db/outbound.ts.
-       AND NOT EXISTS (
-         SELECT 1 FROM messages m
-         WHERE m.lead_id = l.id AND m.direction = 'outbound'
-           AND m.delivery_status IS DISTINCT FROM 'failed'
-       )
-       AND NOT EXISTS (
-         SELECT 1 FROM dnc_list d WHERE d.phone = l.phone AND d.released_at IS NULL
-       )
-     ORDER BY arrived_at`
-  );
-
+  const leads = await findOpenersNeverSent(pool);
   const now = Date.now();
 
-  for (const row of rows) {
-    const attempts: number = row.attempts;
+  for (const lead of leads) {
+    const { attempts } = lead;
 
-    if (attempts >= MAX_ATTEMPTS) {
-      stats.abandoned++;
-      continue;
-    }
-
-    const arrivedAt = new Date(row.arrived_at).getTime();
-    if (now - arrivedAt > MAX_AGE_HOURS * 3_600_000) {
-      stats.tooOld++;
+    const gaveUp = retryGaveUp(lead, now);
+    if (gaveUp) {
+      stats[gaveUp]++;
       continue;
     }
 
     // Due once the wait after the last failure has passed - or, if nothing has
     // been attempted yet, a minute after the lead arrived.
     const dueAt =
-      attempts === 0
-        ? arrivedAt + FIRST_ATTEMPT_AFTER_MINUTES * 60_000
-        : new Date(row.last_failed_at).getTime() + WAIT_AFTER_FAILURE_MINUTES[attempts - 1] * 60_000;
+      attempts === 0 || !lead.lastFailedAt
+        ? lead.arrivedAt.getTime() + FIRST_ATTEMPT_AFTER_MINUTES * 60_000
+        : lead.lastFailedAt.getTime() + WAIT_AFTER_FAILURE_MINUTES[attempts - 1] * 60_000;
     if (now < dueAt) continue;
 
     stats.due++;
@@ -185,12 +137,15 @@ export async function retryFailedOpeners(): Promise<RetryStats> {
     try {
       // Recorded around the send - db/outbound.ts - so a text that went out is
       // never retried because a write after it failed.
-      const result = await sendOpener({ id: row.id, phone: row.phone, firstName: row.first_name }, row.template);
+      const result = await sendOpener(
+        { id: lead.leadId, phone: lead.phone, firstName: lead.firstName },
+        lead.template
+      );
 
       if (!result.sent) {
         stats.failed++;
         log.error('sms.failed', {
-          leadId: row.id,
+          leadId: lead.leadId,
           key: 'question_1',
           retry: attempts + 1,
           blocked: result.blocked,
@@ -200,14 +155,14 @@ export async function retryFailedOpeners(): Promise<RetryStats> {
         // every tick the lead stays abandoned. A blocked number records no
         // attempt, so it never reaches it.
         if (!result.blocked && attempts + 1 >= MAX_ATTEMPTS) {
-          log.warn('opener.gave_up', { leadId: row.id, attempts: attempts + 1 });
+          log.warn('opener.gave_up', { leadId: lead.leadId, attempts: attempts + 1 });
         }
         continue;
       }
 
       stats.sent++;
       log.info('sms.sent', {
-        leadId: row.id,
+        leadId: lead.leadId,
         key: 'question_1',
         retry: attempts + 1,
         eztMessageId: result.eztMessageId,
@@ -217,7 +172,7 @@ export async function retryFailedOpeners(): Promise<RetryStats> {
       // nothing is counted, so it is tried again next tick) or after it (the
       // reply window - the text went out and its row says so).
       stats.failed++;
-      log.error('sms.failed', { leadId: row.id, key: 'question_1', retry: attempts + 1, err: errText(err) });
+      log.error('sms.failed', { leadId: lead.leadId, key: 'question_1', retry: attempts + 1, err: errText(err) });
     }
   }
 
