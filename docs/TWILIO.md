@@ -652,14 +652,16 @@ microphone. `lib/calling.ts` is the only file that touches the SDK.
 | Incoming: ringing, answered, missed, declined, one call at a time; what the card shows; Call back | `frontend/src/lib/incoming-state.test.ts`, `lib/caller-context.test.ts`, `layout/IncomingCall.test.tsx` |
 
 **Locally a real call needs a public address**, because Twilio must reach the
-voice webhook - **and its own Twilio number and TwiML App, never
-production's** ("What it needs on the Twilio account", above). With those in
+voice webhook - **and its own Twilio number, TwiML App and identity prefix,
+never production's** ("What it needs on the Twilio account", above): the dev
+number (480) 530-8582, `secure-medical-calling-dev` and `dev-`. With those in
 the local `.env`:
 
 ```bash
 cloudflared tunnel --url http://localhost:3000     # prints an https address
 # put it in .env as PUBLIC_URL, then:
 docker compose up -d api
+docker compose exec api npm run dev:twilio:configure -- --dry-run   # what it would change
 docker compose exec api npm run dev:twilio:configure
 ```
 
