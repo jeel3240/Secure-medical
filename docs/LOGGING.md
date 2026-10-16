@@ -103,10 +103,14 @@ the logs will never know to look for it.
 ### What is deliberately not structured
 
 `src/cli/create-superadmin.ts`, `src/cli/twilio-configure.ts`,
-`scripts/migrate.js` and `src/config.ts` still use `console`. The CLI
-prints a one-time password to a human's terminal - that must never become a
-shipped JSON log line - and `config.ts` runs before anything else exists, to say
-which env var is missing.
+`src/cli/send-waiting-openers.ts`, `scripts/migrate.js` and `src/config.ts`
+still use `console`. The CLI prints a one-time password to a human's terminal -
+that must never become a shipped JSON log line - and `config.ts` runs before
+anything else exists, to say which env var is missing. The resend after an
+outage prints its list for the person running it; run with `docker compose
+exec`, its output stays in that terminal and is not shipped. The sender it
+shares with the retry still writes its usual `sms.*` lines there, and each text
+it sends is a `messages` row (`POLLER.md`, "Resending after an outage").
 
 ## Health endpoint
 

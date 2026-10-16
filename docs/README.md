@@ -127,11 +127,11 @@ scripts/live-checks.sh              # all of them
 scripts/live-checks.sh flows queue  # just these
 ```
 
-There are fifteen live checks, covering the SMS flows (a second flow added as
+There are sixteen live checks, covering the SMS flows (a second flow added as
 rows only), the queue, claims, the read flag, the lead card,
 the timeline, callbacks, dispositions, agent SMS, calls (outgoing, incoming and
-missed), the activity log, Admin > Leads, the admin read models, health and
-the opener retry.
+missed), the activity log, Admin > Leads, the admin read models, health, the
+opener retry, and the resend after an outage.
 
 **How fast it is with a lot of leads** is a separate check - it loads 50,000
 fake leads into an empty scratch database and times the read behind every
@@ -275,6 +275,7 @@ commit.
 | `POLLER.md` | How leads are pulled in | The poller or worker loop |
 | `WEBHOOKS.md` | How replies are received | The webhook handler |
 | `TWILIO.md` | Browser calling: how a call works, incoming calls and missed calls, what is saved, settings, testing, deploying | Anything about calls, Twilio's webhooks, the Call button, the incoming-call card or the call bar |
+| `AUTO-CALLS.md` | Automated outbound calls: the agreed script and flow, the transfer and hold rules, the "Taking calls" switch, and the build tracker. Planned, not built | A ticket from its tracker is merged, or any decision about automated calls |
 | `AUDIT.md` | The activity log and the raw webhook archive: what is recorded, why nothing can be edited or deleted, what it does not cover | **Any new action a person or the system can take** - it records itself, or this doc says why not |
 | `ADMIN-LEADS.md` | The superadmin Leads page | That page or its API |
 | `QUEUE.md` | The agents' priority queue API: who is in it, the order, the tags | `GET /api/leads`, the queue query or the tag rules |
