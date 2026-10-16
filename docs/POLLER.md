@@ -257,9 +257,98 @@ it sees the red "!" and can text by hand.
   and a non-failed outbound row, so it is never picked up. Texting a lead twice
   is worse than not retrying at all.
 - **Send a first question days late.** A lead more than 24 hours old is left
-  alone - see "Changed in review" above.
+  alone - see "Changed in review" above. The one exception is a person's
+  decision after an outage, run by hand - "Resending after an outage", below.
 
 Oldest lead first: they have been silent the longest.
+
+## Resending after an outage
+
+Built 2026-10-16 - `npm run openers:send-waiting`,
+`worker/send-waiting-openers.ts`, its arguments in `core/resend-args.ts`.
+
+**Why it exists.** From 2026-10-14 EZ Texting blocked the account for two
+days: every first text failed. The retry above did what it should - five
+attempts in about nine hours, then nothing, and nothing at all for a lead more
+than a day old - so when the account came back, the leads from those two days
+had never been asked anything, and never would be. Paid for and silent.
+
+The retry's "never a day late" rule stays: it is right for something that runs
+by itself, on every lead, with nobody watching. Asking those leads anyway,
+days later, is a decision a person makes after looking at the list - so it is
+a command run by hand, not a change to the retry.
+
+**Which leads.** The same definition as the retry - `db/openers-never-sent.ts`,
+shared since this was built, so the two cannot drift: still on the first
+question, nothing answered, no reply, no text of ours that went out or may
+have, not blocked. Then, on top:
+
+- **Only leads the retry has given up on** - attempts used up, or past its
+  day (`retryGaveUp` in `worker/retry-openers.ts`). A lead the retry may still
+  send to is the retry's, so the two never text the same lead.
+- **Only leads that arrived in the window given** (`--from`, `--to`).
+- **Only leads nobody has worked**: not picked up, and no call, outcome,
+  callback, note or text of an agent's. Days later, a lead a person has dealt
+  with must not get an automated first question.
+
+A lead whose conversation expired before a first text went out (seven days)
+is listed apart and never sent to: its conversation is over.
+
+**How it sends.**
+
+- **One text at a time, 30 seconds apart** by default (`--every`; never under
+  10). Sending a few hundred of the same text back to back is how a sender gets
+  screened by the carriers.
+- **Checked again just before each text**, so a lead who replies, is blocked
+  or is picked up while it runs is skipped.
+- **Stops at the first text EZ Texting refuses or does not answer.** One
+  refusal after an outage most likely means more. Run the same command again
+  to carry on: a lead already sent to no longer matches, so nothing is sent
+  twice. A text EZ Texting did not answer in time may have gone out, and is
+  never sent again (`db/outbound.ts`).
+- **One run at a time** - an advisory lock; a second run is refused.
+- **Ctrl+C is safe.** A text in flight is recorded as possibly sent, and the
+  lock goes with the connection.
+
+It prints to the terminal and logs nothing of its own. Each text it sends is a
+`messages` row, as for every automated text (`AUDIT.md`), and goes through
+the same sender as the retry: rendered from the lead's flow, the reply window
+opened once it goes out.
+
+**Running it on the server**, in the worker container, which has EZ Texting's
+credentials - during the day, once EZ Texting is working again:
+
+```bash
+# 1. Who would get one. Sends nothing.
+docker compose exec worker npm run openers:send-waiting -- --from 2026-10-14 --dry-run
+
+# 2. Five, then check they arrived - in EZ Texting, or on the leads' timelines.
+docker compose exec worker npm run openers:send-waiting -- --from 2026-10-14 --limit 5
+
+# 3. The rest. The five already sent are not listed again.
+docker compose exec worker npm run openers:send-waiting -- --from 2026-10-14
+```
+
+A date or time without an offset is **Arizona time** (`2026-10-14`,
+`2026-10-14T09:30`); one with `Z` or an offset is taken as written. `--to`
+is now unless given. What a dry run prints:
+
+```
+Leads that arrived Oct 14, 2026, 12:00 AM to Oct 16, 2026, 9:48 AM, Arizona time.
+
+3 waiting for a first text, oldest first:
+  #1 Priya ··0142  arrived Oct 14, 2026, 4:48 PM  5 failed attempts
+  #2 Leo ··0188  arrived Oct 15, 2026, 3:48 AM  1 failed attempt
+  #3 - ··0199  arrived Oct 15, 2026, 1:48 PM  5 failed attempts
+Would send 2, one every 30 seconds - about 1 minute.
+Dry run: nothing was sent.
+```
+
+It exits 0 when it finished or after a dry run, and 1 when the arguments were
+wrong, another run was going, or it stopped at a text that did not go out.
+Proved by `scripts/send-waiting-openers-live-check.ts`: the leads it takes and
+the ones it must not, never twice across runs, the pace, stopping and carrying
+on, a lead that changes while it runs, and one run at a time.
 
 ## The other two failures in task 27
 

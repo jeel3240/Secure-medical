@@ -209,8 +209,11 @@ you change something the docs describe, update the doc in the same commit.
     src/api/reply-flow.ts   runs the state machine for an inbound reply
     src/worker/expiry.ts    marks stale open conversations expired
     src/worker/retry-openers.ts  retries openers that never went out
-    src/worker/opener.ts    sends question 1: shared by the poller and the retry
+    src/worker/send-waiting-openers.ts  sends, by hand, the first questions an outage left unsent - npm run openers:send-waiting; arguments in src/core/resend-args.ts
+    src/db/openers-never-sent.ts  which leads never got their first question - shared by the retry and the resend
+    src/worker/opener.ts    sends question 1: shared by the poller, the retry and the resend
     scripts/retry-openers-live-check.ts  proves the backoff and the two must-nots
+    scripts/send-waiting-openers-live-check.ts  proves the resend takes only what the retry gave up on, never twice, at its pace
     scripts/end-to-end.ts   the whole system in one run - npm run e2e
     scripts/live-checks.sh  runs every live check, each on its own scratch database
     scripts/flows-live-check.ts  proves a second, five-question flow works from rows alone; scripts/live-flow.ts answers a flow for the other checks
@@ -230,7 +233,7 @@ you change something the docs describe, update the doc in the same commit.
     src/config.ts           reads the environment, and exits if a required variable is missing
     scripts/admin-leads-live-check.ts  proves the Admin > Leads statuses
     src/lib/log.ts          structured JSON logging, with redaction enforced
-    src/cli/                create-superadmin, twilio-configure
+    src/cli/                create-superadmin, twilio-configure, send-waiting-openers
     src/integrations/       EZ Texting client
     src/db/users.ts         user queries; src/db/pool.ts
   frontend/
