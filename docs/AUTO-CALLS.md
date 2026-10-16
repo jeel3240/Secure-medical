@@ -193,7 +193,7 @@ ticket's own PR.
 
 | # | Ticket | Needs | Status |
 |---|---|---|---|
-| T0 | Resend the first texts the EZ Texting block stopped, slowly | - | Built 2026-10-16 - to run on the server |
+| T0 | Resend the first texts the EZ Texting block stopped, slowly | - | Done 2026-10-16 - run on the server for the 174 leads of the block |
 | | **Setup** | | |
 | T1 | A laptop can never ring for production's calls | - | Not started |
 | T2 | `twilio:configure` cannot move production's number | - | Not started |
@@ -290,8 +290,10 @@ EZ Texting has unblocked the account.
 - [x] A lead that replies or is blocked while it runs is skipped.
 - [x] A second run is refused while one is going.
 - [x] The retry's own live check passes unchanged; all 16 live checks pass.
-- [ ] Jeel runs `--dry-run` on the server and checks the list before the real
-      run.
+- [x] Jeel runs `--dry-run` on the server and checks the list before the real
+      run - 2026-10-16: 174 leads, every one with 5 failed attempts, arrived
+      Oct 14 3:23-5:32 AM and Oct 15 3:00-5:51 AM (Arizona time); then the
+      real run, one text every 30 seconds.
 
 **Files:** `backend/src/cli/send-waiting-openers.ts`,
 `backend/src/worker/send-waiting-openers.ts`, `backend/src/core/resend-args.ts`
