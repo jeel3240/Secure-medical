@@ -9,6 +9,7 @@ const SETTINGS: TwilioSettings = {
   twimlAppSid: `AP${'3'.repeat(32)}`,
   callerId: '+14804708259',
   publicUrl: 'https://dailyleadhub.com',
+  identityPrefix: '',
 };
 
 const HERE: CallingSetup = {

@@ -1,16 +1,32 @@
 import { agentIdFromIdentity, answeredByFor, identityFor, outcomeForStatus, talkSeconds, tookByMachine } from './calls';
 
 describe('who a browser is', () => {
-  it('round-trips an agent id through the identity Twilio sends back', () => {
-    expect(identityFor(21)).toBe('agent-21');
-    expect(agentIdFromIdentity('client:agent-21')).toBe(21);
-    expect(agentIdFromIdentity('agent-21')).toBe(21);
+  it('round-trips an agent id through the identity Twilio sends back - production, no prefix', () => {
+    expect(identityFor(21, '')).toBe('agent-21');
+    expect(agentIdFromIdentity('client:agent-21', '')).toBe(21);
+    expect(agentIdFromIdentity('agent-21', '')).toBe(21);
+  });
+
+  it('puts this server\'s prefix in front, and reads it back', () => {
+    expect(identityFor(21, 'dev-')).toBe('dev-agent-21');
+    expect(agentIdFromIdentity('client:dev-agent-21', 'dev-')).toBe(21);
+    expect(agentIdFromIdentity('dev-agent-21', 'dev-')).toBe(21);
+  });
+
+  it('never takes another copy\'s name for one of its own - the clash the prefix exists to stop', () => {
+    // Production is not given user 21 by a laptop's browser...
+    expect(agentIdFromIdentity('client:dev-agent-21', '')).toBeNull();
+    // ...nor a laptop by production's...
+    expect(agentIdFromIdentity('client:agent-21', 'dev-')).toBeNull();
+    // ...nor by a third copy's.
+    expect(agentIdFromIdentity('client:jeel-agent-21', 'dev-')).toBeNull();
   });
 
   it.each(['client:agent-0', 'client:agent-x', 'client:maya', '+16026203572', '', undefined, 21])(
     'refuses %p',
     (raw) => {
-      expect(agentIdFromIdentity(raw)).toBeNull();
+      expect(agentIdFromIdentity(raw, '')).toBeNull();
+      expect(agentIdFromIdentity(raw, 'dev-')).toBeNull();
     }
   );
 });

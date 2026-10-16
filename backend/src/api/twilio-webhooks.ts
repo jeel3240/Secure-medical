@@ -100,10 +100,10 @@ export function twilioWebhooksRouter(deps: AppDeps): Router {
     '/voice',
     asyncHandler(async (req, res) => {
       const body = (req.body ?? {}) as Record<string, unknown>;
-      const callSid = field(body, 'CallSid');
-      const agentId = agentIdFromIdentity(body.From);
-      const leadId = Number(field(body, 'leadId'));
       const settings = deps.twilio!;
+      const callSid = field(body, 'CallSid');
+      const agentId = agentIdFromIdentity(body.From, settings.identityPrefix);
+      const leadId = Number(field(body, 'leadId'));
 
       res.type('text/xml');
 

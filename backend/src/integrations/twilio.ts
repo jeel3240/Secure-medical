@@ -54,7 +54,7 @@ export const INCOMING_AFTER_PATH = '/api/webhooks/twilio/incoming/after';
  * and to be rung as that agent when one of their leads calls back.
  */
 export function mintCallToken(settings: TwilioSettings, userId: number): { token: string; identity: string } {
-  const identity = identityFor(userId);
+  const identity = identityFor(userId, settings.identityPrefix);
   const token = new twilio.jwt.AccessToken(settings.accountSid, settings.apiKey, settings.apiSecret, {
     identity,
     ttl: TOKEN_TTL_SECONDS,
@@ -154,7 +154,7 @@ export function ringAgentTwiml(
     statusCallbackMethod: 'POST',
     statusCallbackEvent: ['completed'],
   });
-  client.identity(identityFor(agentId));
+  client.identity(identityFor(agentId, settings.identityPrefix));
   client.parameter({ name: 'leadId', value: String(lead.id) });
   client.parameter({ name: 'leadName', value: lead.name });
   client.parameter({ name: 'leadPhone', value: lead.phone });

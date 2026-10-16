@@ -36,13 +36,30 @@ export interface TwilioSettings {
    * creates one.
    */
   transcriptionServiceSid?: string | null;
+  /**
+   * Put in front of every browser's name at Twilio: `dev-` makes user 21
+   * `dev-agent-21`. Empty in production, so its names are `agent-21` as they
+   * always were. Optional, and apart from the seven.
+   *
+   * Any other copy of the app on the same Twilio account must set one. Twilio
+   * rings every browser on the account that has the name it is given, whichever
+   * number the call came in on - so a laptop whose user 21 is named like
+   * production's would ring for production's calls, and production's agent for
+   * the laptop's test calls. A different number does not separate them; a
+   * different name does. TWILIO.md, "What it needs on the Twilio account".
+   */
+  identityPrefix: string;
 }
 
 /** The seven that switch calling on - all or none. */
-type RequiredKey = Exclude<keyof TwilioSettings, 'transcriptionServiceSid'>;
+type RequiredKey = Exclude<keyof TwilioSettings, 'transcriptionServiceSid' | 'identityPrefix'>;
 
 export const TRANSCRIPTION_VARIABLE = 'TWILIO_TRANSCRIPTION_SERVICE_SID';
 const TRANSCRIPTION_SHAPE = /^GA[0-9a-f]{32}$/;
+
+export const IDENTITY_PREFIX_VARIABLE = 'TWILIO_IDENTITY_PREFIX';
+/** Lower-case letters and digits, ending in a hyphen: `dev-`, `jeel-`. */
+const IDENTITY_PREFIX_SHAPE = /^[a-z0-9]{1,19}-$/;
 
 const VARIABLES = {
   accountSid: 'TWILIO_ACCOUNT_SID',
@@ -85,6 +102,11 @@ export function readTwilioSettings(env: Record<string, string | undefined>): Twi
   // Optional, but a typo is still a failure later, with a worse error.
   const transcription = (env[TRANSCRIPTION_VARIABLE] ?? '').trim();
   if (transcription !== '' && !TRANSCRIPTION_SHAPE.test(transcription)) missing.push(TRANSCRIPTION_VARIABLE);
+  // Optional too. A malformed one is refused rather than used: a name Twilio
+  // rejects is every call failing, and one quietly dropped is the clash it
+  // exists to prevent.
+  const identityPrefix = (env[IDENTITY_PREFIX_VARIABLE] ?? '').trim();
+  if (identityPrefix !== '' && !IDENTITY_PREFIX_SHAPE.test(identityPrefix)) missing.push(IDENTITY_PREFIX_VARIABLE);
   if (missing.length > 0) return { status: 'incomplete', missing };
 
   return {
@@ -93,6 +115,7 @@ export function readTwilioSettings(env: Record<string, string | undefined>): Twi
       ...values,
       publicUrl: values.publicUrl.replace(/\/+$/, ''),
       transcriptionServiceSid: transcription || null,
+      identityPrefix,
     },
   };
 }
