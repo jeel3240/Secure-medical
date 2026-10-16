@@ -350,6 +350,15 @@ Proved by `scripts/send-waiting-openers-live-check.ts`: the leads it takes and
 the ones it must not, never twice across runs, the pace, stopping and carrying
 on, a lead that changes while it runs, and one run at a time.
 
+**Run on production, 2026-10-16**, the day EZ Texting unblocked the account.
+The dry run listed **174 leads**, every one with five failed attempts, in two
+batches: Oct 14, 3:23-5:32 AM, and Oct 15, 3:00-5:51 AM, Arizona time -
+the partner delivers its leads in the early morning, and none arrived after
+the client paused them on Oct 15. None had expired. The list was checked, then
+sent at one every 30 seconds - about 87 minutes. Gaps in the lead ids between
+the two batches are normal: every poll re-reads the last few minutes of
+contacts, and an insert that finds the phone already held still uses up an id.
+
 ## The other two failures in task 27
 
 **EZ Texting unreachable mid-poll** was already safe and stays as it is: the
