@@ -179,15 +179,19 @@ voicemail, by Twilio's detection, which is not always right. There is no
 voicemail drop, transfer or hold, and the recording's audio is not played in
 the app. **Never run `twilio:configure` locally with production's phone number or
 TwiML App** (2026-10-05): it points both at the laptop and production calling
-stops, silently, until it is run on the server again. Calling is not tested
-locally at all (next paragraph); if it ever is again, it needs its own Twilio
-number and TwiML App - `TWILIO.md`, "What it needs on the Twilio account". Admin > Overview shows no call totals - removed on 2026-09-28
+stops, silently, until it is run on the server again. Locally there is a dev
+number of its own (next paragraph) - `TWILIO.md`, "What it needs on the Twilio
+account". Admin > Overview shows no call totals - removed on 2026-09-28
 (`ADMIN.md`, "Overview") - though every call is on its lead's timeline.
 
-**Calling is not tested locally** (2026-10-05). The Twilio number is
-production's, so a local `.env` keeps the Twilio settings empty and calling
-reads "off"; a calling change is proved by tests and checked on the live
-server - `TWILIO.md`, "What it needs on the Twilio account".
+**Calling is off locally until a tunnel is set** (2026-10-16). From 2026-10-05
+the only Twilio number was production's, so a local `.env` kept the Twilio
+settings empty. Since 2026-10-16 local has its own: the dev number
+(480) 530-8582, the TwiML App `secure-medical-calling-dev`, and
+`TWILIO_IDENTITY_PREFIX=dev-`, so a laptop can never ring production's
+browsers or be rung by them. `PUBLIC_URL` stays empty - calling reads "off" -
+until a tunnel is set up for a test (`AUTO-CALLS.md`, T3). `TWILIO.md`, "What
+it needs on the Twilio account".
 
 **The message copy is the client's antibiotics script** (2026-10-05,
 `STATE-MACHINE.md`). Five lines in it were drafted here and are waiting for the

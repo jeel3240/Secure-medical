@@ -131,8 +131,9 @@ docker compose exec api npm run migrate
 first deploy that has calling, and whenever `PUBLIC_URL` or a Twilio setting
 changes. **Only ever on the server.** Run from a laptop with production's
 number, it moves production's calls to that laptop (2026-10-05; `TWILIO.md`,
-"What it needs on the Twilio account") - calling is not tested locally; if
-it ever is again, it needs its own number and TwiML App. It points the TwiML App and the phone
+"What it needs on the Twilio account"). Locally, since 2026-10-16, there is a
+dev number, (480) 530-8582, with its own TwiML App and
+`TWILIO_IDENTITY_PREFIX=dev-` - never production's. It points the TwiML App and the phone
 number at this server, and refuses a number that rings somewhere else unless
 `--take-over` is passed. `TWILIO.md`, "Deploying it".
 
