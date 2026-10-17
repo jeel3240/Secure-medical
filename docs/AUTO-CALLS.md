@@ -197,7 +197,7 @@ ticket's own PR.
 | | **Setup** | | |
 | T1 | A laptop can never ring for production's calls | - | Done 2026-10-16 |
 | T2 | `twilio:configure` cannot move production's number | - | Done 2026-10-16 |
-| T3 | Set up the new number for local work | T1, T2 | Number, dev app and `dev-` prefix ready (2026-10-16); the tunnel and a test call are next |
+| T3 | Set up the new number for local work | T1, T2 | Done 2026-10-17 - a real call each way on the dev number |
 | | **Data and rules - no calls yet** | | |
 | T4 | The database can hold a robot call | - | Not started |
 | T5 | The screens know a robot call from an agent's call | T4 | Not started |
@@ -396,20 +396,27 @@ away from production by accident.
   calling stays off on the laptop - and production's number and app are no
   longer in it. The account id, token and API key are shared with production.
 - **After T1:** `TWILIO_IDENTITY_PREFIX=dev-` in the local `.env`.
-- **Developer:** first checks `TWILIO_PHONE_NUMBER` is not `+14804708259` and
-  stops if it is; starts a tunnel; sets `PUBLIC_URL`; restarts the api; runs
-  `dev:twilio:configure`; signs in locally and calls a test lead whose phone
-  is Jeel's.
+- **Done 2026-10-17:** checked the local `.env` held only the dev number, app
+  and prefix; started a tunnel and set it as `PUBLIC_URL`; started the api
+  alone - not the worker, so nothing polled EZ Texting or texted anyone;
+  `dev:twilio:configure -- --dry-run`, then for real: the dev app and the dev
+  number now point at the tunnel. A local test lead with Jeel's phone (the
+  local database only).
 
 **Done when**
-- [ ] A real call from the local app reaches Jeel's phone, showing the new
-      number.
-- [ ] A real call to the new number rings the local browser.
-- [ ] Admin > Overview on production still shows Calling OK.
+- [x] A real call from the local app reaches Jeel's phone, showing the new
+      number - 2026-10-17, rang from (480) 530-8582; not picked up, saved
+      `no_answer`, which is right.
+- [x] A real call to the new number rings the local browser - only it, as
+      `dev-agent-16`; answered, 6 seconds, recording saved.
+- [x] Production untouched - its number and TwiML App read back on Twilio
+      before and after, still pointing at dailyleadhub.com. (Checked on
+      Twilio directly rather than on Admin > Overview, whose Calling check
+      reads the same two settings.)
 
 **Files:** none in the code.
-**Doc:** `TWILIO.md` - local calling is allowed on the dev number only, and
-how to set it up.
+**Doc:** `TWILIO.md` - local calling is allowed on the dev number only, how to
+set it up, and these two calls.
 
 ---
 
