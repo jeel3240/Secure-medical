@@ -103,8 +103,8 @@ LEAD CALLS (480) 470-8259 BACK
 - **1 hour after the first text**, if they have not replied (Jeel,
   2026-10-15). The worker checks every 30 seconds, so the call goes out within
   about 30 seconds of the hour being up.
-- **Only 11am-5pm** (the client, 2026-10-13). Time zone and days are to be
-  confirmed; until then Arizona time, Monday to Friday. A lead whose hour ends
+- **Only 11am-5pm, Arizona time** (the client, 2026-10-13; the time zone
+  Jeel's, 2026-10-17). Days: Monday to Friday, until said otherwise. A lead whose hour ends
   outside the window is called at the start of the next one, before newer
   leads.
 - **Once.** No second call, whatever happened on the first - until the
@@ -1091,11 +1091,14 @@ switched on.
 
 Building starts on the defaults in brackets.
 
-1. The 11-5 window: which time zone, which days? [Arizona time, Monday to Friday]
+1. Which days for the 11-5 window? [Monday to Friday]
 2. No answer or voicemail: one call only, or try again another day? [one call]
-3. The opening line: "I'm an AI assistant" or "This is an automated call"?
-4. The link text and its URL.
-5. Nobody takes the transfer: the busy line, and the lead first in the queue - OK?
+3. The link text and its URL.
+4. Nobody takes the transfer: the busy line, and the lead first in the queue - OK?
+
+Decided (2026-10-17, Jeel): the window is **Arizona time**; the call opens
+"Hi, this is Seri calling from eDrugstore. This is an automated call." - as
+Jeel told the client on 2026-10-14 for a scripted call, without objection.
 
 To tell the client (decided): called 1 hour after the first text; no email
 anywhere - the email branch and the email line in the voicemail are dropped.
