@@ -107,8 +107,10 @@ LEAD CALLS (480) 470-8259 BACK
   Jeel's, 2026-10-17). Days: Monday to Friday, until said otherwise. A lead whose hour ends
   outside the window is called at the start of the next one, before newer
   leads.
-- **Once.** No second call, whatever happened on the first - until the
-  client says otherwise ("To confirm with the client", below).
+- **Once.** No second call, whatever happened on the first (Jeel,
+  2026-10-17): a lead who does not pick up still has the first text, and the
+  voicemail asks them to call back. A second try may come later, when Jeel
+  says.
 - Only leads that arrive after `AUTO_CALLS` is first switched on - never the
   backlog.
 
@@ -1092,13 +1094,15 @@ switched on.
 Building starts on the defaults in brackets.
 
 1. Which days for the 11-5 window? [Monday to Friday]
-2. No answer or voicemail: one call only, or try again another day? [one call]
-3. The link text and its URL.
-4. Nobody takes the transfer: the busy line, and the lead first in the queue - OK?
+2. The link text and its URL. [the link the SMS script already uses,
+   https://www.edrugstore.com/anti-ez - though the call says "all our
+   medication" and that is the antibiotics page]
+3. Nobody takes the transfer: the busy line, and the lead first in the queue - OK?
 
 Decided (2026-10-17, Jeel): the window is **Arizona time**; the call opens
 "Hi, this is Seri calling from eDrugstore. This is an automated call." - as
-Jeel told the client on 2026-10-14 for a scripted call, without objection.
+Jeel told the client on 2026-10-14 for a scripted call, without objection; and
+**one call per lead** for now.
 
 To tell the client (decided): called 1 hour after the first text; no email
 anywhere - the email branch and the email line in the voicemail are dropped.
