@@ -1,7 +1,8 @@
 # Automated outbound calls
 
-**Planned 2026-10-15. Not built yet.** This doc is the agreed design and the
-tracker for building it. Each ticket below updates its row when it is merged,
+**Planned 2026-10-15. Being built: the groundwork, T0 to T3, is done
+(2026-10-17); the robot calls themselves, T4 onwards, are not built yet.** This
+doc is the agreed design and the tracker for building it. Each ticket below updates its row when it is merged,
 and the sections it touches, so the doc always says what is built and what is
 not.
 
