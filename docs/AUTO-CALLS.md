@@ -103,8 +103,8 @@ LEAD CALLS (480) 470-8259 BACK
 - **1 hour after the first text**, if they have not replied (Jeel,
   2026-10-15). The worker checks every 30 seconds, so the call goes out within
   about 30 seconds of the hour being up.
-- **Only 11am-5pm, Arizona time** (the client, 2026-10-13; the time zone
-  Jeel's, 2026-10-17). Days: Monday to Friday, until said otherwise. A lead whose hour ends
+- **Only 11am-5pm, Arizona time, Monday to Friday** (the client, 2026-10-13;
+  the time zone and days Jeel's, 2026-10-17). A lead whose hour ends
   outside the window is called at the start of the next one, before newer
   leads.
 - **Once.** No second call, whatever happened on the first (Jeel,
@@ -1089,23 +1089,23 @@ switched on.
 - [ ] The first real robot calls on production, seen on the timeline and
       Admin > Leads.
 
-## To confirm with the client
+## Decided with the client
 
-Building starts on the defaults in brackets.
+Nothing is left to confirm before building (2026-10-17). What was decided, and
+by whom:
 
-1. Which days for the 11-5 window? [Monday to Friday]
-2. The link text and its URL. [the link the SMS script already uses,
-   https://www.edrugstore.com/anti-ez - though the call says "all our
-   medication" and that is the antibiotics page]
-3. Nobody takes the transfer: the busy line, and the lead first in the queue - OK?
+| What | Decided | By |
+|---|---|---|
+| When a lead is called | 1 hour after the first text, if they have not replied | Jeel, 2026-10-15 |
+| The window | 11am-5pm, **Arizona time**, **Monday to Friday** | the client (hours, 2026-10-13); Jeel (time zone and days, 2026-10-17) |
+| The opening line | "Hi, this is Seri calling from eDrugstore. This is an automated call." | Jeel, as told to the client on 2026-10-14 for a scripted call |
+| Calls per lead | **One.** No second try for now | Jeel, 2026-10-17 |
+| The link texted on "yes" | The one the SMS script already sends: https://www.edrugstore.com/anti-ez | Jeel, 2026-10-17 |
+| A "yes" nobody takes | The busy line, and the lead first in the agents' queue as "Wants a call" | Jeel, 2026-10-17 |
+| Email | None anywhere: the email branch and the email line in the voicemail are dropped | Jeel, 2026-10-15 |
 
-Decided (2026-10-17, Jeel): the window is **Arizona time**; the call opens
-"Hi, this is Seri calling from eDrugstore. This is an automated call." - as
-Jeel told the client on 2026-10-14 for a scripted call, without objection; and
-**one call per lead** for now.
-
-To tell the client (decided): called 1 hour after the first text; no email
-anywhere - the email branch and the email line in the voicemail are dropped.
+To tell the client: called 1 hour after the first text, Arizona time, Monday
+to Friday; one call per lead; no email.
 
 ## Not in Stage 1
 
