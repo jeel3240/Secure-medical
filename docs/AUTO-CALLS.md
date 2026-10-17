@@ -512,8 +512,8 @@ database, and there is a place to keep what each lead says.
     (25 s), hold safety stop (10 minutes), confidence threshold (0.4), and the
     texts: link text, voicemail, busy line, hold line.
 - `db/call-script.ts` loads the active script.
-- The link text and URL are a placeholder until the client sends them; T26
-  does not go live with it.
+- The link texted on "yes" is the one the SMS script already sends,
+  https://www.edrugstore.com/anti-ez (Jeel, 2026-10-17).
 
 **Done when**
 - [ ] The migration runs on a copy of the database.
@@ -1080,7 +1080,7 @@ switched on.
 - On the dev number, to Jeel's phone, with two browsers: yes taken; yes
   nobody; yes on hold then taken; no -> link; no -> no; stop; silence twice;
   keys; voicemail; calling back after the voicemail.
-- The client's real link text and URL in place (no placeholder).
+- The link text checked on a real phone: https://www.edrugstore.com/anti-ez.
 - Deploy with `AUTO_CALLS` off; migrations run; then Jeel sets `AUTO_CALLS=on`
   and watches the first calls.
 
