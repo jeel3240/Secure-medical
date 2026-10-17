@@ -230,6 +230,8 @@ ticket's own PR.
 | | **Finish** | | |
 | T25 | Everything written down and checked end to end | T0-T24 | Not started |
 | T26 | Real phone, every path, then live | T25 | Not started |
+| | **Other tickets - not calling** | | |
+| W1 | Day dividers in the agent's conversation | - | Not started |
 
 ### The tickets
 
@@ -1088,6 +1090,46 @@ switched on.
 - [ ] Every path above heard and saved correctly.
 - [ ] The first real robot calls on production, seen on the timeline and
       Admin > Leads.
+
+### Other tickets - not calling
+
+Kept in this tracker so there is one list. Same rules: one branch, one PR into
+`dev`, code, tests and docs together.
+
+#### W1 - Day dividers in the agent's conversation
+
+**Goal:** an agent reading a lead's conversation can tell which day each text
+and call happened, as in WhatsApp. Asked for by Jeel, 2026-10-17: the
+conversation shows only times ("12:48 PM", "2:40 PM"), so a lead worked over
+several days reads as one afternoon.
+**Needs:** nothing. **Production:** visible once deployed - a divider in the
+workspace conversation wherever the day changes.
+
+**Build**
+- In the agent workspace's conversation (`pages/workspace/Conversation.tsx`),
+  a small centred label before the first item of each day: **Today**,
+  **Yesterday**, then **Wed, Oct 14** - the year only when it is not this year.
+- The Lead Timeline page already has day dividers (`components/Timeline.tsx`,
+  "WED, OCT 14"). Both screens use one shared rule, `dayLabel` in
+  `lib/format.ts`, so they say the same - the timeline gains Today and
+  Yesterday too.
+- The day is the viewer's own, from the browser's time zone, like every other
+  date on screen.
+- In the app's existing style: muted, like the system lines; no new colours.
+  Every message keeps its time.
+- Any kind of item starts a new day - a text, a call or a system line.
+
+**Done when**
+- [ ] Tests: `dayLabel` - today, yesterday, earlier this year, another year,
+      either side of midnight.
+- [ ] Tests: the conversation shows one divider per day, before that day's
+      first item, and none between items of the same day.
+- [ ] Seen in the browser on a lead with texts and calls over several days.
+
+**Files:** `frontend/src/lib/format.ts` (+ test),
+`frontend/src/pages/workspace/Conversation.tsx` (+ test),
+`frontend/src/components/Timeline.tsx`, `frontend/src/styles/workspace.css`.
+**Doc:** `FRONTEND.md`, `AGENT-WORKSPACE.md`.
 
 ## Decided with the client
 
