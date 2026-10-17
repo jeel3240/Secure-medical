@@ -34,7 +34,7 @@ an email line in the voicemail; **the app only texts, so both are dropped**
 (Jeel, 2026-10-15). A lead who does not want a text is a No.
 
 ```
-Q1  "Hi, this is Seri calling from eDrugstore. [opening line - client to confirm]
+Q1  "Hi, this is Seri calling from eDrugstore. This is an automated call.
      Are you interested in ordering antibiotics at 25% off today?"
       YES -> "Great, connecting you with a live agent now. Please hold."  -> transfer
       NO  -> "No problem - I'll just ask one more quick thing."            -> Q2
