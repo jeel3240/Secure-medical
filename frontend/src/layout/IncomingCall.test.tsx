@@ -9,6 +9,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { CallHandlers, IncomingHandlers, IncomingRing } from '../lib/calling';
 import { useIncomingCall } from '../lib/incoming-call';
 import { NO_CALL } from '../lib/incoming-state';
+import { isBrowserBusy } from '../lib/presence';
 import { IncomingCall } from './IncomingCall';
 
 const getCallConfig = vi.fn();
@@ -232,6 +233,33 @@ describe('the ring', () => {
     canRing.mockReturnValue(true);
     fireEvent.pointerDown(window);
     await waitFor(() => expect(screen.queryByText(/Call sound off/)).toBeNull());
+  });
+});
+
+describe('keeping the browser busy, so no transfer rings it meanwhile (T9)', () => {
+  it('from the first ring until the note box after the call is done', async () => {
+    await show();
+    expect(isBrowserBusy()).toBe(false);
+    const { ring, events } = aRing();
+    act(() => twilio!.onRing(ring));
+    expect(isBrowserBusy()).toBe(true);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Accept' }));
+    act(() => events().onAnswered());
+    act(() => events().onEnded());
+    // The call is over, but the note box is still open.
+    expect(isBrowserBusy()).toBe(true);
+    fireEvent.click(screen.getByRole('button', { name: 'Skip' }));
+    expect(isBrowserBusy()).toBe(false);
+  });
+
+  it('not once a ring is missed - the notice does not keep anyone busy', async () => {
+    await show();
+    const { ring } = aRing();
+    act(() => twilio!.onRing(ring));
+    act(() => twilio!.onRingOver(ring));
+    expect(screen.getByText('Missed call · Priya S.')).toBeDefined();
+    expect(isBrowserBusy()).toBe(false);
   });
 });
 

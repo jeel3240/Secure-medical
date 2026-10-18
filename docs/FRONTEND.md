@@ -409,6 +409,21 @@ set up - a browser that can be rung has to hold a registered device - and
 re-checked every 30 seconds. Signing out destroys it. `lib/calling.ts` is the
 only file that touches the SDK.
 
+**Telling the server it can take a call** (T9, 2026-10-18 - "Who is free" in
+`AUTO-CALLS.md`). Each 30-second check also says whether the browser can take
+a call now: registered, and not busy. Busy is `lib/presence.ts`, a small
+register that knows nothing about calls: the lead's call (`useLeadCall`, by
+`useBusyWhile`) and the incoming call (`lib/incoming-call.ts`, by a store
+subscription) each mark it under their own name, and clear it when they end -
+or when the page goes. What counts as busy is pure: `occupiesAgent` in
+`lib/call-state.ts` (placed, live, or ended with the note box open - a failure
+is only a message) and `incomingOccupiesAgent` in `lib/incoming-state.ts`
+(ringing too; a missed call is only a notice). A change of busy is reported at
+once. Reports go one after another, each with a ten-second limit, so an older
+"available" never lands after a newer "busy" and one stuck request cannot hold
+back the rest. Nothing is said when listening stops: the sign-out has already
+cleared it on the server.
+
 **The centre column is a conversation, not a log.** `workspace/Conversation.tsx`
 shows the SMS thread, each call as one quiet line (since Phase 4) and the
 system markers - inbound on the left, ours on
@@ -747,9 +762,10 @@ response or an off-by-one age threshold is not:
 | `components/SyncStatus.test.tsx` | The EZ Texting sync line, quiet and amber |
 | `components/Segmented.test.tsx` | The sliding switcher |
 | `lib/call-state.test.ts`, `lib/calling.test.ts` | A call's states and wording; error sentences; who is calling |
-| `lib/calling.device.test.ts` | The join to Twilio's SDK, against a stand-in: placing a call, being rung, accept, decline, sign-out |
+| `lib/calling.device.test.ts` | The join to Twilio's SDK, against a stand-in: placing a call, being rung, accept, decline, sign-out; telling the server whether it can take a call - registered or not, busy at once, every 30 seconds, in order |
+| `lib/presence.test.ts` | What keeps the browser busy: several reasons at once, listeners told only of a change, `useBusyWhile` following its component |
 | `pages/workspace/CallBar.test.tsx` | The call bar in every state, and its note box |
-| `lib/incoming-state.test.ts`, `layout/IncomingCall.test.tsx` | A lead calling in: ringing, answered, missed, declined, one call at a time; what the card shows; Call back |
+| `lib/incoming-state.test.ts`, `layout/IncomingCall.test.tsx` | A lead calling in: ringing, answered, missed, declined, one call at a time; what the card shows; Call back; keeping the browser busy until the note box is done |
 | `lib/ringtone.test.ts`, `lib/call-notification.test.ts`, `lib/caller-context.test.ts` | The ring and its first-click unlock; the desktop notification; the "Calling back" line |
 | `styles/type-system.test.ts` | The type scale, duplicate selectors, undefined tokens - "Type system" above |
 

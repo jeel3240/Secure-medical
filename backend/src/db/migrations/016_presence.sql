@@ -1,0 +1,12 @@
+-- Who can take a call right now - T9, 2026-10-18. docs/AUTO-CALLS.md, "Who is
+-- free".
+--
+-- A transfer from an automated call rings people, so the server has to know
+-- whose browser can ring. Each signed-in browser that can take a call says so
+-- every 30 seconds (and at once when that changes); this is how long the last
+-- word holds - two minutes, so a browser that closed, lost its connection or
+-- went to sleep stops counting by itself. NULL: not available.
+--
+-- Not a record of anything, and not in the activity log: it is the present
+-- moment, overwritten every half minute. AUDIT.md says so.
+ALTER TABLE users ADD COLUMN ringable_until TIMESTAMPTZ;

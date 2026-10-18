@@ -1,4 +1,4 @@
-import { callReducer, IDLE, isActive, type CallEvent, type CallState } from './call-state';
+import { callReducer, IDLE, isActive, occupiesAgent, type CallEvent, type CallState } from './call-state';
 
 /**
  * A lead calling in, as this browser sees it, pure - TWILIO.md, "Incoming
@@ -47,6 +47,15 @@ export const NO_CALL: IncomingState = { phase: 'none' };
 /** True while this browser is ringing or on an answered call: no other call may start. */
 export function isBusy(state: IncomingState): boolean {
   return state.phase === 'ringing' || (state.phase === 'call' && isActive(state.call));
+}
+
+/**
+ * True while it keeps the agent from taking another call: ringing, or answered
+ * and not yet done with - the note box included (`occupiesAgent`). A missed
+ * call is only a notice.
+ */
+export function incomingOccupiesAgent(state: IncomingState): boolean {
+  return state.phase === 'ringing' || (state.phase === 'call' && occupiesAgent(state.call));
 }
 
 export function incomingReducer(state: IncomingState, event: IncomingEvent): IncomingState {

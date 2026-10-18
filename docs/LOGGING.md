@@ -100,6 +100,11 @@ firing a real webhook: the number appears nowhere in the output.
 A new event belongs in this table as well as in the code, or whoever is querying
 the logs will never know to look for it.
 
+**Deliberately not logged:** `POST /api/calls/ringable` (T9), each browser
+saying whether it can take a call. It comes every 30 seconds from every open
+browser - two lines a minute per agent, saying nothing new. Its state is
+`users.ringable_until`; a failure still reaches `http.unhandled`.
+
 ### What is deliberately not structured
 
 `src/cli/create-superadmin.ts`, `src/cli/twilio-configure.ts`,

@@ -1,6 +1,7 @@
 import type { Call, Device } from '@twilio/voice-sdk';
 import { toApiError } from '../api/client';
-import { getCallToken } from '../api/calls';
+import { getCallToken, postRingable } from '../api/calls';
+import { isBrowserBusy, onBusyChange } from './presence';
 
 /**
  * Calls in the browser, placed and received - Phase 4, TWILIO.md.
@@ -23,6 +24,14 @@ import { getCallToken } from '../api/calls';
  * is signed in and checks every half minute that it still is - a laptop that
  * slept, a token that could not be refreshed, a device discarded after a
  * failed call all end the registration without anyone being told.
+ *
+ * **Saying so.** Each check also tells the server whether this browser can take
+ * a call now - registered with Twilio, and nothing on screen keeping the agent
+ * busy (`lib/presence.ts`) - and it says so at once when busy changes. The
+ * server keeps the word for two minutes, so a browser that closes or sleeps
+ * stops counting by itself (T9, AUTO-CALLS.md "Who is free"). When Twilio is
+ * unreachable it says "not available" rather than nothing, so the server
+ * knows within half a minute, not two.
  */
 
 export interface CallHandlers {
@@ -97,7 +106,7 @@ function discardDevice(): void {
   void stale?.then((device) => device.destroy()).catch(() => undefined);
 }
 
-/** Registers the device if it is not; replaces one that has been destroyed. */
+/** Registers the device if it is not; replaces one that has been destroyed. Then says whether it can ring. */
 async function keepRegistered(): Promise<void> {
   if (!listener) return;
   try {
@@ -108,6 +117,34 @@ async function keepRegistered(): Promise<void> {
     // Offline, signed out, or Twilio unreachable. Start clean at the next check.
     discardDevice();
   }
+  await reportRingable();
+}
+
+/** Whether the device there is now is registered - never starts one. */
+async function isRegistered(): Promise<boolean> {
+  const device = await devicePromise?.catch(() => null);
+  return device?.state === 'registered';
+}
+
+/** The reports so far, one after another. */
+let reporting: Promise<void> = Promise.resolve();
+
+/**
+ * Tells the server whether this browser can take a call now, as it is when
+ * sent. Each report goes after the one before it, so an older "available" can
+ * never reach the server after a newer "busy". A failure is left alone: the
+ * next check says it again, and until then the server's last word runs out by
+ * itself.
+ */
+function reportRingable(): Promise<void> {
+  reporting = reporting.then(async () => {
+    if (!listener) return;
+    const registered = await isRegistered();
+    // Stopped meanwhile - signed out: nothing more to say.
+    if (!listener) return;
+    await postRingable(registered && !isBrowserBusy()).catch(() => undefined);
+  });
+  return reporting;
 }
 
 /**
@@ -118,10 +155,17 @@ export function listenForCalls(handlers: IncomingHandlers): () => void {
   listener = handlers;
   void keepRegistered();
   const timer = window.setInterval(() => void keepRegistered(), REGISTRATION_CHECK_MS);
+  // A call starting or a note saved is news now, not in half a minute.
+  const stopWatching = onBusyChange(() => void reportRingable());
   return () => {
     window.clearInterval(timer);
+    stopWatching();
     listener = null;
-    // Signed out: this browser must stop ringing for them.
+    // Signed out: this browser must stop ringing for them. Nothing is said:
+    // the sign-out has already ended the session, so the server has cleared
+    // it, and a word now could only be refused. Leaving the shell any other
+    // way - the Change password page - lapses in two minutes, as a closed tab
+    // does.
     discardDevice();
   };
 }

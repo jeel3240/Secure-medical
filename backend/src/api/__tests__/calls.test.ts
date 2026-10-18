@@ -1,6 +1,6 @@
 /**
- * Browser calling's routes: the browser's two (config, token) and Twilio's two
- * (voice, status). The database layer is mocked; the route contract, Twilio's
+ * Browser calling's routes: the browser's three (config, token, ringable) and
+ * Twilio's. The database layer is mocked; the route contract, Twilio's
  * signature check and the refusals are what is under test. The SQL is proved by
  * scripts/calls-live-check.ts.
  */
@@ -34,6 +34,10 @@ jest.mock('../../db/missed-call-text', () => ({
   sendMissedCallText: (leadId: number) => sendMissedCallText(leadId),
 }));
 
+type RingableArgs = Parameters<typeof import('../../db/presence').setRingable>;
+const setRingable = jest.fn<Promise<void>, RingableArgs>();
+jest.mock('../../db/presence', () => ({ setRingable: (...a: RingableArgs) => setRingable(...a) }));
+
 // The raw archive writes through the pool; here it only has to be called.
 const poolQuery = jest.fn(async (_sql: string, _values?: unknown[]) => ({ rows: [], rowCount: 1 }));
 jest.mock('../../db/pool', () => ({ pool: { query: (...a: [string, unknown[]?]) => poolQuery(...a) } }));
@@ -46,6 +50,7 @@ beforeEach(() => {
   recordAnsweredBy.mockReset().mockResolvedValue(true);
   saveRecording.mockReset().mockResolvedValue(true);
   sendMissedCallText.mockReset().mockResolvedValue(true);
+  setRingable.mockReset().mockResolvedValue();
 });
 
 const SETTINGS: TwilioSettings = {
@@ -81,6 +86,8 @@ describe('the browser’s routes', () => {
     const { app } = await setup(SETTINGS);
     expect((await request(app).get('/api/calls/config')).status).toBe(401);
     expect((await request(app).post('/api/calls/token')).status).toBe(401);
+    expect((await request(app).post('/api/calls/ringable').send({ available: true })).status).toBe(401);
+    expect(setRingable).not.toHaveBeenCalled();
   });
 
   it('say calling is off, and refuse a token, when it is not set up', async () => {
@@ -99,6 +106,44 @@ describe('the browser’s routes', () => {
     expect(res.body.identity).toMatch(/^agent-\d+$/);
     expect(typeof res.body.token).toBe('string');
     expect(res.body.ttlSeconds).toBe(3600);
+  });
+});
+
+describe('a browser saying whether it can take a call', () => {
+  async function setup(twilioSettings: TwilioSettings | null) {
+    const { app, users } = await buildApp({ twilio: twilioSettings });
+    const user = await seedUser(users, { email: 'maya@example.com', name: 'Maya', password: PASSWORD });
+    return { mayaId: user.id, maya: await signIn(app, 'maya@example.com', PASSWORD) };
+  }
+
+  it.each([true, false])('available: %s is saved for the signed-in person, and nobody else', async (available) => {
+    const { maya, mayaId } = await setup(SETTINGS);
+    const res = await maya.post('/api/calls/ringable').send({ available });
+    expect(res.status).toBe(204);
+    expect(setRingable).toHaveBeenCalledTimes(1);
+    const [, userId, saved] = setRingable.mock.calls[0];
+    expect([userId, saved]).toEqual([mayaId, available]);
+  });
+
+  it.each([
+    ['nothing', undefined],
+    ['a string', { available: 'true' }],
+    ['a number', { available: 1 }],
+    ['null', { available: null }],
+  ])('anything but true or false - %s - is refused and nothing is saved', async (_, body) => {
+    const { maya } = await setup(SETTINGS);
+    const res = await maya.post('/api/calls/ringable').send(body);
+    expect(res.status).toBe(400);
+    expect(res.body.error).toBe('invalid_available');
+    expect(setRingable).not.toHaveBeenCalled();
+  });
+
+  it('is refused when calling is not set up - no browser can be rung', async () => {
+    const { maya } = await setup(null);
+    const res = await maya.post('/api/calls/ringable').send({ available: true });
+    expect(res.status).toBe(503);
+    expect(res.body.error).toBe('calling_off');
+    expect(setRingable).not.toHaveBeenCalled();
   });
 });
 

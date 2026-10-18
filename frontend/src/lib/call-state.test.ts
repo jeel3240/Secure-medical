@@ -1,5 +1,15 @@
 import { describe, expect, it } from 'vitest';
-import { callBlockedReason, callClock, callReducer, endedText, IDLE, isActive, type CallEvent, type CallState } from './call-state';
+import {
+  callBlockedReason,
+  callClock,
+  callReducer,
+  endedText,
+  IDLE,
+  isActive,
+  occupiesAgent,
+  type CallEvent,
+  type CallState,
+} from './call-state';
 
 const run = (events: CallEvent[], from: CallState = IDLE) => events.reduce(callReducer, from);
 const T0 = 1_000_000;
@@ -54,6 +64,21 @@ describe('what cannot happen', () => {
 
   it('a new call can start after one ended or failed', () => {
     expect(run([{ type: 'start' }, { type: 'failed', message: 'x' }, { type: 'start' }])).toEqual({ phase: 'connecting' });
+  });
+});
+
+describe('whether the agent can take another call meanwhile', () => {
+  it('not while it is being placed, rings, is live, or its note box is open', () => {
+    expect(occupiesAgent(run([{ type: 'start' }]))).toBe(true);
+    expect(occupiesAgent(run([{ type: 'start' }, { type: 'ringing' }]))).toBe(true);
+    expect(occupiesAgent(run([{ type: 'start' }, { type: 'answered', at: T0 }]))).toBe(true);
+    expect(occupiesAgent(run([{ type: 'start' }, { type: 'ended', at: T0, byAgent: false }]))).toBe(true);
+  });
+
+  it('yes with no call, once the note is saved or skipped, and after a failure - only a message', () => {
+    expect(occupiesAgent(IDLE)).toBe(false);
+    expect(occupiesAgent(run([{ type: 'start' }, { type: 'ended', at: T0, byAgent: true }, { type: 'reset' }]))).toBe(false);
+    expect(occupiesAgent(run([{ type: 'start' }, { type: 'failed', message: 'x' }]))).toBe(false);
   });
 });
 

@@ -1,6 +1,6 @@
 # Database schema
 
-The migrations in `backend/src/db/migrations/` - `001` to `015`, in order -
+The migrations in `backend/src/db/migrations/` - `001` to `016`, in order -
 are the source of truth for exact columns, types and constraints. `001_init.sql`
 is the starting schema; the ones after it add columns, tables and constraints. This explains what the tables are for and the
 parts that are not obvious from reading the SQL.
@@ -28,7 +28,7 @@ the RDS CA bundle if strict verification is ever wanted.
 
 | Table | Holds |
 |---|---|
-| `users` | Agents and superadmins. bcrypt hash, role, active flag, must-change-password flag, last sign-in, session version. |
+| `users` | Agents and superadmins. bcrypt hash, role, active flag, must-change-password flag, last sign-in, session version. Since 016 (T9, 2026-10-18) `ringable_until`: until when this person's browser can be rung - each open browser says so every 30 seconds and the word holds two minutes; NULL is not available. Cleared whenever the session version is bumped. Not a record of anything, so not in the activity log - "Who is free" in `AUTO-CALLS.md`. |
 | `leads` | One person, pulled from EZ Texting. |
 | `conversations` | Where a lead is in its SMS flow: `flow_id`, `current_question_id`, status, score, tier, `question_sent_at` (when the text the lead has to answer went out; empty while we owe them one - a reply then is not an answer, `STATE-MACHINE.md` rule 2c), and `end_outcome` once it has ended. `step` is the current question's `position` - 10, 20, 30, and 11 for the sub-question `q1-a` - no longer 1 to 3 (012 dropped that check); the screens name a question from its key, not from it. One row per conversation. `q1`-`q3` and their label columns are retired (migration 012) - answers are rows in `conversation_answers`. `FLOWS.md`. |
 | `messages` | Every SMS in or out. |

@@ -44,6 +44,15 @@ export function isActive(state: CallState): boolean {
   return state.phase === 'connecting' || state.phase === 'ringing' || state.phase === 'live';
 }
 
+/**
+ * True while the call keeps its agent from taking another - being placed,
+ * live, or finished with its note box still open (T9, AUTO-CALLS.md "Who is
+ * free"). A failed call is only a message: the agent is free.
+ */
+export function occupiesAgent(state: CallState): boolean {
+  return isActive(state) || state.phase === 'ended';
+}
+
 export function callReducer(state: CallState, event: CallEvent): CallState {
   switch (event.type) {
     case 'start':
