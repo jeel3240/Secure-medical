@@ -33,17 +33,18 @@ As it will be said. The client's version (2026-10-13) had an email branch and
 an email line in the voicemail; **the app only texts, so both are dropped**
 (Jeel, 2026-10-15). A lead who does not want a text is a No.
 
-**No "This is an automated call" line, and a natural voice** (Jeel,
-2026-10-18, after hearing the first real call): the opening was "Hi, this is
-Seri calling from eDrugstore. This is an automated call. Are you interested
-...", in Amazon Polly's Joanna (Neural), which sounded machine-made. It is now
-said in Google's Chirp3-HD **Kore**, US English, chosen by ear on a real phone
-from five of Twilio's newer voices (Twilio lists them as public beta).
-Migration 018.
+**No "This is an automated call" line, the offer before the question, and a
+natural voice** (Jeel, 2026-10-18, after hearing the first real call): the
+opening was "Hi, this is Seri calling from eDrugstore. This is an automated
+call. Are you interested in ordering antibiotics at 25% off today?", in Amazon
+Polly's Joanna (Neural), which sounded machine-made. It now says the offer
+first and ends on one short yes-or-no question, in Google's Chirp3-HD
+**Kore**, US English, chosen by ear on a real phone from five of Twilio's
+newer voices (Twilio lists them as public beta). Migration 018.
 
 ```
-Q1  "Hi, this is Seri calling from eDrugstore.
-     Are you interested in ordering antibiotics at 25% off today?"
+Q1  "Hi, this is Seri calling from eDrugstore. Today we're offering 25% off
+     antibiotics. Are you interested in ordering?"
       YES -> "Great, connecting you with a live agent now. Please hold."  -> transfer
       NO  -> "No problem - I'll just ask one more quick thing."            -> Q2
 
@@ -1054,8 +1055,8 @@ after the lead hangs up**, with `CallStatus=completed` and nothing heard - T13
 must take that as hung up, never as silence to ask again. **Voicemail
 detection said `unknown` for a person** who listened - T18 carries on for
 `unknown`, as planned. And Jeel asked for **no "This is an automated call"
-line and a more natural voice**: migration 018, after a sample call of five
-newer voices - "The script". Each of its two changes names the value it
+line, the offer before the question, and a more natural voice**: migration
+018, after a sample call of five newer voices - "The script". Each of its two changes names the value it
 replaces and must change exactly one row, or the migration stops.
 
 **Files:** `backend/src/integrations/twilio-calls.ts` (+ test),
@@ -1524,7 +1525,7 @@ by whom:
 |---|---|---|
 | When a lead is called | 1 hour after the first text, if they have not replied | Jeel, 2026-10-15 |
 | The window | 11am-5pm, **Arizona time**, **Monday to Friday** | the client (hours, 2026-10-13); Jeel (time zone and days, 2026-10-17) |
-| The opening line | "Hi, this is Seri calling from eDrugstore." - no "This is an automated call" | Jeel, 2026-10-18, after the first real call. It had been told to the client on 2026-10-14 |
+| The opening line | "Hi, this is Seri calling from eDrugstore. Today we're offering 25% off antibiotics. Are you interested in ordering?" - no "This is an automated call", and the offer before the question | Jeel, 2026-10-18, after the first real call. "This is an automated call" had been told to the client on 2026-10-14 |
 | The voice | Google Chirp3-HD **Kore**, US English, chosen by ear on a real phone | Jeel, 2026-10-18 |
 | Calls per lead | **One.** No second try for now | Jeel, 2026-10-17 |
 | The link texted on "yes" | The one the SMS script already sends: https://www.edrugstore.com/anti-ez | Jeel, 2026-10-17 |
@@ -1533,8 +1534,8 @@ by whom:
 
 To tell the client: called 1 hour after the first text, Arizona time, Monday
 to Friday; one call per lead; no email; the opening no longer says "This is an
-automated call" (they were told it would on 2026-10-14), and the voice is a
-more natural one.
+automated call" (they were told it would on 2026-10-14) and now says the offer
+before asking, and the voice is a more natural one.
 
 ## Not in Stage 1
 

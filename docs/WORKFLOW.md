@@ -80,6 +80,11 @@ production unless Jeel says otherwise - that assumption is cheap when wrong and
 expensive when right, because editing a file that has run leaves the two
 databases permanently different with nothing to show it.
 
+*(Jeel says otherwise, 2026-10-18: until automated calls are deployed as a
+whole, 014 onwards have not run in production and may be edited in place - 018
+was, for the call's opening. A laptop that already ran the old file re-applies
+it by hand and says so. After that deploy, the rule above holds again.)*
+
 This applies to the smallest changes as much as the large ones. Adding a column,
 widening one, adding an index, seeding a settings row, correcting a value: each
 one is a file. `002_dnc_release.sql` exists because two columns had to be added

@@ -71,9 +71,9 @@ async function main(): Promise<void> {
     ]);
     const [q1, q2] = script!.steps;
     check(
-      'it opens as decided: who is calling, then the offer - no "automated call" line since 018',
+      'it opens as decided: who is calling, the offer, then the question - no "automated call" line (018)',
       q1.body,
-      'Hi, this is Seri calling from eDrugstore. Are you interested in ordering antibiotics at 25% off today?'
+      "Hi, this is Seri calling from eDrugstore. Today we're offering 25% off antibiotics. Are you interested in ordering?"
     );
     check('asking again asks for keys, and offers 9 to stop', q1.repeatBody, 'Sorry, I didn\'t catch that. Press 1 for yes, 2 for no, or 9 to stop these calls.');
     check('q1: yes transfers, no leads to q2', q1.choices.map((c) => [c.key, c.label, c.ending, c.nextStepId]), [
