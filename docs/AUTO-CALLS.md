@@ -166,6 +166,31 @@ matching (`matchChoice`) is unchanged: there the whole reply must be the
 answer. "Hello?" as the call is answered is not taken as an answer: the first
 question cannot be interrupted (T12).
 
+### What the call does after each answer
+
+Built in T8 (2026-10-18): `firstAsk` and `afterAnswer` in `core/call-script.ts`,
+pure - given the script, the step, which asking it was, and what the answer
+was taken to mean, they say what to say and what comes next. The webhooks
+(T12 on) only carry it out.
+
+| After | Said | Then |
+|---|---|---|
+| The lead picks up | The first step's question | listen |
+| A choice that leads on (Q1 No) | Its reply, then the next step's question, together | listen |
+| A choice that transfers (Q1 Yes) | Its reply | ring people (T15) |
+| A choice that sends the link (Q2 Yes) | Its reply | hang up, then text the link (T14) - `link_sent` |
+| A choice that declines (Q2 No) | Its reply | hang up - `not_interested` |
+| Not understood or silence, first asking | The step's repeat line, asking for keys | listen, the last chance |
+| Not understood or silence, second asking | "Thank you for your time. Have a great day." | hang up - `no_response` |
+| Stop, on any step and asking | "Okay, we won't call you again. Goodbye." | hang up, block the number - `opted_out` |
+
+An answer on the second asking counts like one on the first. **A script that
+leads nowhere it may** - an answer to a step it does not have, a next step that
+is missing, or one that is not later than this one - ends the call with the
+no-response line, marked as a broken script to be logged: a mistake in our
+rows, never a loop and never a crash. Each answer is kept as a `call_answers`
+row: a choice with its key and label as they are now, or what else it was.
+
 ### Traffic
 
 The robot slows down and stops by itself:
@@ -226,7 +251,7 @@ ticket's own PR.
 | T5 | The screens know a robot call from an agent's call | T4 | Done 2026-10-18 |
 | T6 | The call script saved as rows | T4 | Done 2026-10-18 |
 | T7 | Understanding a spoken answer | T6 | Done 2026-10-18 |
-| T8 | What the robot does after each answer | T6, T7 | Not started |
+| T8 | What the robot does after each answer | T6, T7 | Done 2026-10-18 |
 | | **Who can take a call** | | |
 | T9 | The server knows who is online | - | Not started |
 | T10 | The "Taking calls" switch | T9 | Not started |
@@ -658,12 +683,20 @@ keys, and some people say the number instead.
   politely, never loops.
 
 **Done when**
-- [ ] A test for each path: Q1 yes -> transfer; Q1 no -> Q2; Q2 yes -> link;
-      Q2 no -> not interested; not understood once and twice; silence; stop
-      on Q1 and on Q2; a broken script.
+- [x] A test for each path: Q1 yes -> transfer; Q1 no -> Q2, said with the
+      reply; Q2 yes -> link; Q2 no -> not interested; not understood once and
+      twice; silence once and twice; stop on Q1 and Q2, on either asking; an
+      answer on the second asking; a broken script four ways (an unknown step,
+      a missing next step, a step leading back, no steps) - 22 tests.
 
-**Files:** `backend/src/core/call-script.ts` and its test.
-**Doc:** this one.
+As built: `CallAction` is what the webhooks carry out - ask a step (with the
+lines to say and which asking it is), transfer, or end with a `CallResult`
+(the `script_result` values) and flags: send the link, block the number, or a
+broken script to log. `answerRecord` gives the `call_answers` row for an
+answer. 757 backend tests pass.
+
+**Files:** `backend/src/core/call-script.ts`, `backend/src/core/call-script.test.ts`.
+**Doc:** this one, "What the call does after each answer"; `CLAUDE.md` §4.
 
 ---
 
