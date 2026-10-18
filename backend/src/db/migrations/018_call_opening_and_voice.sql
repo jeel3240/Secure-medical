@@ -2,9 +2,10 @@
 -- hearing the first real call (T12). docs/AUTO-CALLS.md, "The script" and
 -- "Decided with the client".
 --
--- The opening no longer says "This is an automated call.":
---   "Hi, this is Seri calling from eDrugstore. Are you interested in ordering
---    antibiotics at 25% off today?"
+-- The opening no longer says "This is an automated call.", and says the offer
+-- before asking - one short yes-or-no question last:
+--   "Hi, this is Seri calling from eDrugstore. Today we're offering 25% off
+--    antibiotics. Are you interested in ordering?"
 --
 -- The voice is Google's Chirp3-HD "Kore", US English, chosen by ear on a real
 -- phone from five of Twilio's newer voices, in place of Amazon Polly's
@@ -27,7 +28,7 @@ BEGIN
   END IF;
 
   UPDATE call_steps st
-  SET body = 'Hi, this is Seri calling from eDrugstore. Are you interested in ordering antibiotics at 25% off today?'
+  SET body = 'Hi, this is Seri calling from eDrugstore. Today we''re offering 25% off antibiotics. Are you interested in ordering?'
   FROM call_scripts s
   WHERE st.script_id = s.id
     AND s.key = 'antibiotics'

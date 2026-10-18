@@ -101,7 +101,7 @@ describe('the lead picks up', () => {
     expect(res.type).toBe('text/xml');
     expect(linkAutomatedCall).toHaveBeenCalledWith(42, 'CA900');
     expect(res.text).toContain('<Pause length="1"/><Gather');
-    expect(res.text).toContain('Are you interested in ordering antibiotics at 25% off today?');
+    expect(res.text).toContain("Today we're offering 25% off antibiotics. Are you interested in ordering?");
     expect(res.text).toContain(`/auto/gather?call=42&amp;step=${OFFER_STEP}&amp;try=1`);
   });
 

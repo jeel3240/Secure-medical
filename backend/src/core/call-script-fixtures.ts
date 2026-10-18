@@ -33,7 +33,7 @@ export const ANTIBIOTICS_CALL: CallScript = {
       key: 'q1',
       position: 10,
       heading: 'Offer',
-      body: 'Hi, this is Seri calling from eDrugstore. Are you interested in ordering antibiotics at 25% off today?',
+      body: "Hi, this is Seri calling from eDrugstore. Today we're offering 25% off antibiotics. Are you interested in ordering?",
       repeatBody: ASK_AGAIN,
       choices: [
         {
