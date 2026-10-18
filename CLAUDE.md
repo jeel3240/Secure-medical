@@ -256,12 +256,12 @@ you change something the docs describe, update the doc in the same commit.
     src/api/calls.ts        calling config and token; the browser's word and the "Taking calls" switch
     src/lib/call-state.ts   a call's states, pure
     src/lib/calling.ts      the only file that uses Twilio's Voice SDK
-    src/lib/incoming-state.ts  a lead calling in: ringing, answered, missed - pure
+    src/lib/incoming-state.ts  a lead calling in: ringing, answered, missed; alone or one of several (T11) - pure
     src/lib/incoming-call.ts   the store that joins those states to Twilio
     src/lib/presence.ts     what keeps this browser busy - a call, a ring, a note box; calling.ts tells the server (T9)
     src/layout/TakingCalls.tsx  the "Taking calls" switch in the app bar, shown only with automated calls on (T10)
     src/layout/IncomingCall.tsx  the incoming-call card and missed-call notice, on every screen
-    src/lib/caller-context.ts  "Calling back · you tried 2× today", pure
+    src/lib/caller-context.ts  "Calling back · you tried 2× today", and a transfer's line (T11), pure
     src/lib/ringtone.ts        the ring of an incoming call, made in the browser
     src/lib/call-notification.ts  the desktop notification for an incoming call
     src/components/CallTranscript.tsx  a call's transcript, under the call

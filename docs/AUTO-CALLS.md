@@ -316,7 +316,7 @@ ticket's own PR.
 | | **Who can take a call** | | |
 | T9 | The server knows who is online | - | Done 2026-10-18 |
 | T10 | The "Taking calls" switch | T9 | Done 2026-10-18 |
-| T11 | Several browsers ringing at once | - | Not started |
+| T11 | Several browsers ringing at once | - | Done 2026-10-18 |
 | | **The call - on the dev number** | | |
 | T12 | The server places one call | T3, T4, T6 | Not started |
 | T13 | The questions | T7, T8, T12 | Not started |
@@ -903,14 +903,35 @@ nothing odd, and nobody loses an unsaved note.
 - A call that rings one person behaves exactly as today.
 
 **Done when**
-- [ ] Tests: a group ring taken by someone else -> nothing shown.
-- [ ] Tests: a one-person ring not answered -> "Missed call", as today.
-- [ ] Tests: a ring while the note is open -> the note is kept.
-- [ ] Tests: the transfer card's wording.
+- [x] Tests: a group ring taken by someone else -> nothing shown, no "Missed
+      call", the ring stops.
+- [x] Tests: a one-person ring not answered -> "Missed call", as today.
+- [x] Tests: a group ring while the note is open -> declined, and the note
+      kept as typed; the same while a call or note from a lead's page is open.
+      A one-person ring still takes the note box's place, as today.
+- [x] Tests: the transfer card's wording, with no "Calling back" line; the
+      ring's kind read from the call - 339 frontend tests.
+- [x] Seen in the local app, the card's state set in the page (nothing rang):
+      a transfer reads "Transfer · said yes to the offer"; an ordinary call
+      back keeps its "Calling back" line; no console errors.
 
-**Files:** `frontend/src/lib/incoming-state.ts`, `frontend/src/lib/incoming-call.ts`,
-`frontend/src/lib/calling.ts`, `frontend/src/layout/IncomingCall.tsx`.
-**Doc:** `FRONTEND.md`, `TWILIO.md`.
+As built: the server marks a ring with `<Parameter>`s - `ring=group`,
+`reason=transfer`, and `step`, the heading of the question the lead said yes
+to, so the card's words come from the script's rows: "said yes to the offer"
+from the step "Offer" (`transferContext`). `ringKind` in `lib/calling.ts`
+reads them; each ring carries its `RingKind` through `lib/incoming-state.ts`.
+A group ring arriving while anything keeps the browser busy - including a
+call or note on a lead's page, which the incoming store cannot see - is
+**declined** rather than ignored (`lib/presence.ts`, from T9): Twilio keeps
+ringing the others, and the whole ring is busy only when every browser was
+("Busy Everywhere", error 31600) - to be confirmed on the first real group
+ring in T15. A one-person ring is unchanged, including taking an open note
+box's place: it is that agent's own lead calling.
+
+**Files:** `frontend/src/lib/incoming-state.ts` (+ test), `frontend/src/lib/incoming-call.ts`,
+`frontend/src/lib/calling.ts` (+ tests), `frontend/src/lib/caller-context.ts` (+ test),
+`frontend/src/layout/IncomingCall.tsx` (+ test).
+**Doc:** `FRONTEND.md`, `TWILIO.md` ("A ring that goes to several people"), `CLAUDE.md`.
 
 ---
 
@@ -1021,8 +1042,11 @@ everyone free.
 - The lead is held by someone free -> ring only them, 25 seconds. Not free,
   or not taken -> next step.
 - Ring everyone free (at most 10) together for 25 seconds, carrying the lead
-  and `ring=group`. No per-person end reports - the end is taken from the
-  call itself.
+  and `ring=group`, `reason=transfer` and `step` - the heading of the
+  question the lead said yes to (T11, `TWILIO.md`). No per-person end
+  reports - the end is taken from the call itself.
+- Confirm on the first real group ring that one browser declining leaves the
+  others ringing (T11 relies on it).
 - The first to accept: `POST .../auto/claim` makes them the lead's holder
   (taking over from anyone else, recorded with who it was taken from), saves
   them on the call, and the result `transferred`.

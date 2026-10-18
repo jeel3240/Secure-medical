@@ -1,6 +1,7 @@
 import type { Call, Device } from '@twilio/voice-sdk';
 import { toApiError } from '../api/client';
 import { getCallToken, postRingable } from '../api/calls';
+import type { RingKind } from './incoming-state';
 import { isBrowserBusy, onBusyChange } from './presence';
 
 /**
@@ -56,6 +57,8 @@ export interface CallHandle {
 /** A lead ringing this browser, not yet answered. */
 export interface IncomingRing {
   lead: { id: number; name: string; phone: string };
+  /** Alone or with others, and whether it is a transfer - `ringKind`. */
+  kind: RingKind;
   /** Pick up. Everything after that arrives through the handlers. */
   answer: (handlers: CallHandlers) => CallHandle;
   /** Send them to the "we will call you back" message instead. */
@@ -180,10 +183,24 @@ export function incomingLead(params: Map<string, string>, from: string | undefin
   };
 }
 
+/**
+ * How the server rang this browser, from what it attached to the call - T11,
+ * AUTO-CALLS.md: `ring=group` when several people are rung at once,
+ * `reason=transfer` and `step` for a lead put through from the automated call.
+ * Nothing attached is a ring to this person alone, as every call was before.
+ */
+export function ringKind(params: Map<string, string>): RingKind {
+  return {
+    group: params.get('ring') === 'group',
+    transfer: params.get('reason') === 'transfer' ? { step: params.get('step')?.trim() ?? '' } : null,
+  };
+}
+
 function announce(call: Call, handlers: IncomingHandlers): void {
   let answered = false;
   const ring: IncomingRing = {
     lead: incomingLead(call.customParameters, call.parameters.From),
+    kind: ringKind(call.customParameters),
     answer: (callHandlers) => {
       answered = true;
       const handle = wire(call, callHandlers);

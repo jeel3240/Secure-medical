@@ -394,8 +394,9 @@ needs to know:
 | Piece | File |
 |---|---|
 | The card: who, how long it has rung, tier, score, the last thing they answered (under that question's own heading), how far the questions got, how often we tried them today; **Accept** (takes the lead, opens its workspace) and **Decline** | `layout/IncomingCall.tsx`, `styles/incoming-call.css` |
-| "Calling back · you tried 2× today" - agents' calls only, never the server's automated one (T5) | `lib/caller-context.ts`, pure |
-| The states - none, ringing, call, missed - and one call at a time | `lib/incoming-state.ts`, pure |
+| "Calling back · you tried 2× today" - agents' calls only, never the server's automated one (T5); for a transfer, "Transfer · said yes to the offer" instead (T11, `transferContext`) | `lib/caller-context.ts`, pure |
+| The states - none, ringing, call, missed - and one call at a time. Each ring carries its `RingKind` (T11): alone, or one of several (`group`), and whether it is a transfer; a group ring that ends unanswered is gone, never "missed" | `lib/incoming-state.ts`, pure |
+| Reading the kind from the call's parameters - `ring=group`, `reason=transfer`, `step` - is `ringKind` in `lib/calling.ts`. A group ring arriving while anything keeps the browser busy (`lib/presence.ts`) is declined there and then by the store, so an open note box is never replaced by it; a ring to one person still is | `lib/incoming-call.ts` |
 | The store joining them to Twilio. A store, not page state, because a call arrives on any screen and the lead's Call button must know one is under way | `lib/incoming-call.ts` (zustand) |
 | The ringtone: a WAV made in memory, looped by an `<audio>` element, armed from `main.tsx` so the first click - sign-in included - lets it play. "Call sound off · click to turn on" shows until then | `lib/ringtone.ts` |
 | The desktop notification, and the tab title "Incoming call" | `lib/call-notification.ts` |
@@ -776,8 +777,8 @@ response or an off-by-one age threshold is not:
 | `lib/presence.test.ts` | What keeps the browser busy: several reasons at once, listeners told only of a change, `useBusyWhile` following its component |
 | `layout/TakingCalls.test.tsx` | The "Taking calls" switch: shown only with automated calls on, flips once saved, one save at a time, a failure leaves it as it was |
 | `pages/workspace/CallBar.test.tsx` | The call bar in every state, and its note box |
-| `lib/incoming-state.test.ts`, `layout/IncomingCall.test.tsx` | A lead calling in: ringing, answered, missed, declined, one call at a time; what the card shows; Call back; keeping the browser busy until the note box is done |
-| `lib/ringtone.test.ts`, `lib/call-notification.test.ts`, `lib/caller-context.test.ts` | The ring and its first-click unlock; the desktop notification; the "Calling back" line |
+| `lib/incoming-state.test.ts`, `layout/IncomingCall.test.tsx` | A lead calling in: ringing, answered, missed, declined, one call at a time; what the card shows; Call back; keeping the browser busy until the note box is done; a ring several people got - cleared quietly, declined while busy with the note kept as typed, a transfer's card |
+| `lib/ringtone.test.ts`, `lib/call-notification.test.ts`, `lib/caller-context.test.ts` | The ring and its first-click unlock; the desktop notification; the "Calling back" line, and a transfer's line |
 | `styles/type-system.test.ts` | The type scale, duplicate selectors, undefined tokens - "Type system" above |
 
 ```bash
