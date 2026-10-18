@@ -164,7 +164,8 @@ Nothing is overwritten (`AUDIT.md`).
 |---|---|
 | The call | `calls`, with `direction = 'automated'`; `agent_id` empty until someone takes a transfer. `script_result`: `transferred`, `transfer_missed`, `link_sent`, `not_interested`, `opted_out`, `no_response`, `voicemail_left`, `hung_up`, `unanswered` |
 | What the lead said | `call_answers`, one add-only row per answer: what Twilio heard, how sure, keys pressed, the choice it matched |
-| The script | `call_scripts`, `call_steps`, `call_choices` - rows, changed by migration, like the SMS flow |
+| The script | `call_scripts`, `call_steps`, `call_choices` - rows, changed by migration, like the SMS flow (015). The script's own words - stop, no response, voicemail, busy, hold, the link text - are on its `call_scripts` row, so another script brings its own |
+| When it calls | `settings`: `auto_call_hours_start` 11:00, `auto_call_hours_end` 17:00, `auto_call_time_zone` America/Phoenix, `auto_call_days` mon-fri, `auto_call_wait_minutes` 60, `auto_call_ring_seconds` 25, `auto_call_hold_max_minutes` 10, `auto_call_min_confidence` 0.4 |
 | The link text | `messages`, like every text |
 | Who is free | `users.taking_calls`, `users.ringable_until` |
 | Every action | `activity_log` |
@@ -204,7 +205,7 @@ ticket's own PR.
 | | **Data and rules - no calls yet** | | |
 | T4 | The database can hold a robot call | - | Done 2026-10-18 |
 | T5 | The screens know a robot call from an agent's call | T4 | Done 2026-10-18 |
-| T6 | The call script saved as rows | T4 | Not started |
+| T6 | The call script saved as rows | T4 | Done 2026-10-18 |
 | T7 | Understanding a spoken answer | T6 | Not started |
 | T8 | What the robot does after each answer | T6, T7 | Not started |
 | | **Who can take a call** | | |
@@ -537,21 +538,40 @@ database, and there is a place to keep what each lead says.
   - Seeded with the script in "The script" above.
   - Settings rows: call hours (11:00-17:00), time zone (America/Phoenix),
     days (Monday-Friday), wait after the first text (60 minutes), ring time
-    (25 s), hold safety stop (10 minutes), confidence threshold (0.4), and the
-    texts: link text, voicemail, busy line, hold line.
+    (25 s), hold safety stop (10 minutes), confidence threshold (0.4). The
+    texts - link text, voicemail, busy line, hold line - went on the script's
+    row instead (see "As built" below).
 - `db/call-script.ts` loads the active script.
 - The link texted on "yes" is the one the SMS script already sends,
   https://www.edrugstore.com/anti-ez (Jeel, 2026-10-17).
 
 **Done when**
-- [ ] The migration runs on a copy of the database.
-- [ ] A live check: editing or deleting a `call_answers` row is refused.
-- [ ] A live check: a choice with both a next step and an ending is refused.
-- [ ] The loader returns the script exactly as written above.
+- [x] The migration runs on the local database, and a second run applies
+      nothing.
+- [x] A live check: editing or deleting a `call_answers` row is refused; the
+      same asking cannot be saved twice; a choice row must name its choice and
+      nothing else may.
+- [x] A live check: a choice with both a next step and an ending is refused,
+      and one with neither; 9 as a choice; an unknown ending; a choice into
+      another script; a second active script.
+- [x] The loader returns the script exactly as written above - the opening
+      line, the repeat line, both steps' choices, the stop words, the
+      voicemail without email, the anti-ez link - and the eight settings.
+
+As built - one change from the plan: **the script's own words are on its
+`call_scripts` row, not in `settings`** - stop, no response, voicemail, busy,
+hold, the link text and the voice. They are the script's words, in
+eDrugstore's voice, and a script for another group brings its own. `settings`
+keeps only the call center's numbers: hours, time zone, days, wait, ring
+time, hold stop, confidence. The types are in `core/call-script.ts`, so the
+pure rules of T7 and T8 need no database. `scripts/call-script-live-check.ts`,
+29 checks; 17 live checks in all.
 
 **Files:** `backend/src/db/migrations/015_call_script.sql`,
-`backend/src/db/call-script.ts`, a live check.
-**Doc:** this one, `SCHEMA.md`.
+`backend/src/core/call-script.ts`, `backend/src/db/call-script.ts`,
+`backend/scripts/call-script-live-check.ts`.
+**Doc:** this one, `SCHEMA.md`, `AUDIT.md`, `README.md`, `WORKFLOW.md`,
+`CLAUDE.md`.
 
 ---
 
@@ -784,9 +804,10 @@ response, not interested, and stop.
 **Needs:** T13. **Production:** none.
 
 **Build**
-- The missed-call text sender becomes a general "send this settings text to
-  this lead" (`sendSettingsText(leadId, key)`); the missed-call text uses it
-  unchanged.
+- The missed-call text sender becomes a general "send this text to this
+  lead", given the text - the link text from the script's row
+  (`call_scripts.link_text`, T6), the missed-call text from `settings` as
+  today; the missed-call text works unchanged.
 - On "yes": save `link_sent` first (only if the result is still empty); only
   then send the text, after Twilio has its answer.
 - The text is saved in `messages` like every text; a blocked number gets
