@@ -11,6 +11,8 @@
  * It writes rows, so it refuses to run against a database that holds leads.
  * Run it with the others: scripts/live-checks.sh call-script
  */
+import type { CallScript } from '../src/core/call-script';
+import { ANTIBIOTICS_CALL } from '../src/core/call-script-fixtures';
 import { loadActiveCallScript } from '../src/db/call-script';
 import { pool } from '../src/db/pool';
 
@@ -25,6 +27,19 @@ function check(label: string, actual: unknown, expected: unknown): void {
     failures++;
     console.log(`  FAIL ${label}\n       expected ${e}\n       actual   ${a}`);
   }
+}
+
+/** A script with its database ids replaced by step keys, so two copies compare by content. */
+function shape(script: CallScript) {
+  const keyOf = new Map(script.steps.map((st) => [st.id, st.key]));
+  const { id: _id, ...rest } = script;
+  return {
+    ...rest,
+    steps: script.steps.map(({ id: _stepId, choices, ...step }) => ({
+      ...step,
+      choices: choices.map((c) => ({ ...c, nextStepId: c.nextStepId === null ? null : keyOf.get(c.nextStepId) })),
+    })),
+  };
 }
 
 /** The constraint or trigger a statement broke, or 'accepted'. */
@@ -75,6 +90,9 @@ async function main(): Promise<void> {
     check('stop words, on every step', script!.optOutWords.includes('stop calling'), true);
     check('no email anywhere - the voicemail ends at calling back', script!.voicemailBody.endsWith('Please call us back at {callback_number}. Thanks, and have a great day!'), true);
     check('the link is the one the SMS script sends', script!.linkText.includes('https://www.edrugstore.com/anti-ez'), true);
+    // The unit tests (core/answers.spoken.test.ts, and T8's) use a copy of the
+    // script; it must be the script the database holds, word for word.
+    check('the tests\' copy of the script is this one, word for word', shape(script!), shape(ANTIBIOTICS_CALL));
   }
 
   console.log('\nwhen it calls - the settings');

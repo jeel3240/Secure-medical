@@ -203,10 +203,11 @@ you change something the docs describe, update the doc in the same commit.
     src/api/webhooks.ts     inbound SMS from EZ Texting
     src/core/messages.ts    renders outbound copy ({first_name}, segment limit)
     src/core/state-machine.ts  the SMS flow, pure: follows any flow's questions and choices; scoring and tiers
-    src/core/answers.ts     matches a reply to a choice of the question asked, pure
+    src/core/answers.ts     matches a reply to a choice of the question asked, pure - an SMS reply, and a spoken answer on the automated call (T7)
     src/db/flows.ts         loads a flow, starts a conversation on the active one, and gives its first question
     src/core/flow-fixtures.ts  the antibiotics flow as a constant, for tests only
     src/core/call-script.ts the automated call's script, pure: its shape now, what the call does after each answer from T8
+    src/core/call-script-fixtures.ts  the call script as a constant, for tests only - the live check holds it to the database
     src/db/call-script.ts   loads the automated call's script (migration 015)
     scripts/call-script-live-check.ts  proves migration 015: the script as agreed, its guards, answers add-only
     src/core/questions.ts   what the screens call a question: "Q2", and "Q1-a" for a sub-question - one rule for every screen
