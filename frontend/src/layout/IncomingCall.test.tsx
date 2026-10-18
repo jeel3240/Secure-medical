@@ -8,8 +8,8 @@ import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { CallHandlers, IncomingHandlers, IncomingRing } from '../lib/calling';
 import { useIncomingCall } from '../lib/incoming-call';
-import { NO_CALL } from '../lib/incoming-state';
-import { isBrowserBusy } from '../lib/presence';
+import { ALONE, NO_CALL, type RingKind } from '../lib/incoming-state';
+import { isBrowserBusy, setBusy } from '../lib/presence';
 import { IncomingCall } from './IncomingCall';
 
 const getCallConfig = vi.fn();
@@ -55,11 +55,12 @@ vi.mock('../lib/calling', () => ({
   },
 }));
 
-function aRing(lead = { id: 7, name: 'Priya Sharma', phone: '+15550100016' }) {
+function aRing(lead = { id: 7, name: 'Priya Sharma', phone: '+15550100016' }, kind: RingKind = ALONE) {
   let handlers: CallHandlers | null = null;
   const handle = { hangUp: vi.fn(), setMuted: vi.fn(), sendDigits: vi.fn() };
   const ring: IncomingRing = {
     lead,
+    kind,
     answer: vi.fn((given: CallHandlers) => {
       handlers = given;
       return handle;
@@ -233,6 +234,76 @@ describe('the ring', () => {
     canRing.mockReturnValue(true);
     fireEvent.pointerDown(window);
     await waitFor(() => expect(screen.queryByText(/Call sound off/)).toBeNull());
+  });
+});
+
+describe('a ring that went to several people (T11)', () => {
+  const PRIYA = { id: 7, name: 'Priya Sharma', phone: '+15550100016' };
+  const GROUP: RingKind = { group: true, transfer: null };
+  const TRANSFER: RingKind = { group: true, transfer: { step: 'Offer' } };
+
+  /** Answers a ring to this person alone and ends it, leaving the note box open with something typed. */
+  async function noteOpen() {
+    const { ring, events } = aRing();
+    act(() => twilio!.onRing(ring));
+    fireEvent.click(screen.getByRole('button', { name: 'Accept' }));
+    act(() => events().onAnswered());
+    act(() => events().onEnded());
+    fireEvent.change(screen.getByLabelText('Note about this call'), { target: { value: 'Wants the 25% off' } });
+  }
+
+  it('someone else took it: the card clears quietly - no "Missed call"', async () => {
+    await show();
+    const { ring } = aRing(PRIYA, GROUP);
+    act(() => twilio!.onRing(ring));
+    expect(screen.getByText('Incoming call')).toBeDefined();
+    act(() => twilio!.onRingOver(ring));
+    expect(screen.queryByText(/Incoming call|Missed call/)).toBeNull();
+    expect(stopRinging).toHaveBeenCalled();
+  });
+
+  it('arriving while the note box after a call is open: declined here, and the note kept as typed', async () => {
+    await show();
+    await noteOpen();
+    const { ring } = aRing({ id: 8, name: 'Sam Lee', phone: '+15550100017' }, GROUP);
+    act(() => twilio!.onRing(ring));
+
+    expect(ring.decline).toHaveBeenCalled();
+    expect(screen.queryByText('Incoming call')).toBeNull();
+    expect((screen.getByLabelText('Note about this call') as HTMLTextAreaElement).value).toBe('Wants the 25% off');
+  });
+
+  it('arriving while a call from a lead’s page, or its note, is open: declined here, nothing shown', async () => {
+    await show();
+    setBusy('lead-call', true);
+    try {
+      const { ring } = aRing(PRIYA, GROUP);
+      act(() => twilio!.onRing(ring));
+      expect(ring.decline).toHaveBeenCalled();
+      expect(screen.queryByText('Incoming call')).toBeNull();
+    } finally {
+      setBusy('lead-call', false);
+    }
+  });
+
+  it('a ring to this person alone still takes the note box’s place, as it always has - it is their lead calling', async () => {
+    await show();
+    await noteOpen();
+    const { ring } = aRing({ id: 8, name: 'Sam Lee', phone: '+15550100017' });
+    act(() => twilio!.onRing(ring));
+    expect(ring.decline).not.toHaveBeenCalled();
+    expect(screen.getByText('Incoming call')).toBeDefined();
+  });
+
+  it('a transfer says so in place of "Calling back"', async () => {
+    await show();
+    act(() => twilio!.onRing(aRing(PRIYA, TRANSFER).ring));
+    expect(screen.getByText('Transfer · said yes to the offer')).toBeDefined();
+    // Once what we know about them has loaded - the timeline holds two of our calls.
+    await waitFor(() => expect(screen.getByText('45')).toBeDefined());
+    await act(async () => undefined);
+    expect(screen.queryByText(/Calling back/)).toBeNull();
+    expect(screen.getByText('Accepting opens Priya’s workspace and assigns the lead to you.')).toBeDefined();
   });
 });
 

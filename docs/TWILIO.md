@@ -205,7 +205,7 @@ Accepting opens Leo's workspace and assigns the lead to you.
 | Name, number | Sent with the call, so they show the instant it rings |
 | How long it has rung | Counted in the browser |
 | Tier, score, the lead's last answer (under that question's heading), flow | The lead card, `GET /api/leads/:id`, fetched as it starts to ring. The same words as the lead's page |
-| "Calling back · you tried 2× today" | The lead's timeline: calls agents placed today, by this agent or - named - by another; otherwise when one last called. Nothing when no agent ever has. The server's automated call is not counted - "you tried" is about people (T5, 2026-10-18); naming it here is T19's to decide. `lib/caller-context.ts` |
+| "Calling back · you tried 2× today" | The lead's timeline: calls agents placed today, by this agent or - named - by another; otherwise when one last called. Nothing when no agent ever has. The server's automated call is not counted - "you tried" is about people (T5, 2026-10-18); naming it here is T19's to decide. A transfer shows "Transfer · said yes to the offer" instead (T11). `lib/caller-context.ts` |
 | The last line | Drops "and assigns the lead to you" when the agent already holds it |
 
 The card is up at once and the details fill in a moment later; if they cannot
@@ -233,6 +233,36 @@ be loaded it still rings and can still be accepted.
   seconds, since Twilio's SDK ignores a call to a busy browser rather than
   refusing it. The lead's own Call button is off while an incoming call is
   ringing or live.
+
+**A ring that goes to several people** (T11, 2026-10-18 - for the automated
+call's transfer, T15, and a lead calling back whom no agent owns, T19).
+Nothing sends one yet. The server marks it with `<Parameter>`s on each
+`<Client>`, beside `leadId`, `leadName` and `leadPhone`:
+
+| Parameter | Means |
+|---|---|
+| `ring=group` | Several people are rung at once; the first to accept takes it |
+| `reason=transfer` | A lead who said yes on the automated call, being put through |
+| `step` | With a transfer: the heading of the question they said yes to - "Offer" |
+
+`lib/calling.ts` (`ringKind`) reads them; nothing attached is a ring to one
+person, exactly as before. On the screen:
+
+- **Over without this person answering, it clears quietly** - no "Missed
+  call" notice. The browser cannot tell whether someone else took it or it
+  went on to the hold or busy line, and either way it was never this
+  person's missed call.
+- **Arriving while anything keeps them busy** - a call, a ring, a note box
+  open after a call, on any page (`lib/presence.ts`) - it is declined at once
+  and never shown, so a note being written is never lost to it. Twilio keeps
+  ringing the others: one browser declining is busy for that one only, and
+  the whole ring is busy only when every browser was ("Busy Everywhere",
+  error 31600). To be confirmed on the first real group ring (T15).
+- **Decline** declines it for this person; the others keep ringing.
+- **A transfer says so** in place of "Calling back": "Transfer · said yes to
+  the offer", from `step` (`lib/caller-context.ts`, `transferContext`).
+- A ring to one person is unchanged - including that it takes the place of an
+  open note box, since it is that agent's own lead calling.
 
 **It rings.** `lib/ringtone.ts` plays the app's own ringtone - a short melody
 of eight soft, mallet-like notes, a pause, and again - for as long as the card

@@ -7,7 +7,8 @@ import { callReducer, IDLE, isActive, occupiesAgent, type CallEvent, type CallSt
  *   none -> ringing -> call (answered: connecting -> live -> ended) -> none
  *               \
  *                +--> missed -> none        it rang out, or the lead hung up
- *                +--> none                  the agent declined
+ *                +--> none                  the agent declined, or a ring that
+ *                                           went to several people ended
  *
  * Timestamps are passed in with the event, as in `call-state.ts`, so this
  * stays a pure function.
@@ -25,16 +26,40 @@ export interface Caller {
   phone: string;
 }
 
+/**
+ * How this browser is being rung - T11, AUTO-CALLS.md. Read from what the
+ * server attached to the call (`lib/calling.ts`, `ringKind`).
+ */
+export interface RingKind {
+  /**
+   * Rung together with other people (`ring=group`), and the first to accept
+   * takes it. Over without this person answering, it clears with no "Missed
+   * call": someone else took it, or it went on to the hold or busy line - it
+   * was never theirs alone.
+   */
+  group: boolean;
+  /**
+   * A lead who said yes on the automated call, being put through
+   * (`reason=transfer`), with the heading of the question they said yes to
+   * (`step`, "Offer"). Null for any other call.
+   */
+  transfer: { step: string } | null;
+}
+
+/** One person rung - every call before automated calls, and every one since that is not a group. */
+export const ALONE: RingKind = { group: false, transfer: null };
+
 export type IncomingState =
   | { phase: 'none' }
   /** Ringing since `since`, ms - the card shows how long. */
-  | { phase: 'ringing'; caller: Caller; since: number }
+  | { phase: 'ringing'; caller: Caller; since: number; kind: RingKind }
   | { phase: 'call'; caller: Caller; call: CallState }
   /** Nobody picked up, after ringing `rangSeconds`. Stays until the agent has seen it. */
   | { phase: 'missed'; caller: Caller; rangSeconds: number };
 
 export type IncomingEvent =
-  | { type: 'ring'; caller: Caller; at: number }
+  /** `kind` left out is a ring to this person alone. */
+  | { type: 'ring'; caller: Caller; at: number; kind?: RingKind }
   | { type: 'ring_over'; at: number }
   | { type: 'declined' }
   | { type: 'answer' }
@@ -64,16 +89,17 @@ export function incomingReducer(state: IncomingState, event: IncomingEvent): Inc
       // A second caller while one is ringing or being spoken to is not shown;
       // they hear that we will call back. A missed call, or a finished one
       // still showing its note box, gives way to the phone that is ringing now.
-      return isBusy(state) ? state : { phase: 'ringing', caller: event.caller, since: event.at };
+      return isBusy(state) ? state : { phase: 'ringing', caller: event.caller, since: event.at, kind: event.kind ?? ALONE };
 
     case 'ring_over':
-      return state.phase === 'ringing'
-        ? {
-            phase: 'missed',
-            caller: state.caller,
-            rangSeconds: Math.max(0, Math.round((event.at - state.since) / 1000)),
-          }
-        : state;
+      if (state.phase !== 'ringing') return state;
+      // A ring several people got is nobody's missed call: it clears quietly.
+      if (state.kind.group) return NO_CALL;
+      return {
+        phase: 'missed',
+        caller: state.caller,
+        rangSeconds: Math.max(0, Math.round((event.at - state.since) / 1000)),
+      };
 
     case 'declined':
       return state.phase === 'ringing' ? NO_CALL : state;

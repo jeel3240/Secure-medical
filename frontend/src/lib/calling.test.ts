@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { describeCallError, incomingLead } from './calling';
+import { describeCallError, incomingLead, ringKind } from './calling';
 
 const twilioError = (code: number) => Object.assign(new Error('twilio'), { code });
 const named = (name: string) => Object.assign(new Error(name), { name });
@@ -41,5 +41,29 @@ describe('who is calling, from what the server attached to the call', () => {
   it('with nothing attached: the number Twilio reports, and no lead to open', () => {
     expect(incomingLead(new Map(), '+15550100016')).toEqual({ id: 0, name: '', phone: '+15550100016' });
     expect(incomingLead(new Map([['leadId', 'x']]), undefined)).toEqual({ id: 0, name: '', phone: '' });
+  });
+});
+
+describe('how the server rang this browser (T11)', () => {
+  it('with nothing attached: alone, and not a transfer - every call before automated calls', () => {
+    expect(ringKind(new Map([['leadId', '7']]))).toEqual({ group: false, transfer: null });
+  });
+
+  it('ring=group: several people at once', () => {
+    expect(ringKind(new Map([['ring', 'group']]))).toEqual({ group: true, transfer: null });
+  });
+
+  it('reason=transfer: a lead put through from the automated call, with the question they said yes to', () => {
+    const params = new Map([
+      ['ring', 'group'],
+      ['reason', 'transfer'],
+      ['step', ' Offer '],
+    ]);
+    expect(ringKind(params)).toEqual({ group: true, transfer: { step: 'Offer' } });
+    expect(ringKind(new Map([['reason', 'transfer']]))).toEqual({ group: false, transfer: { step: '' } });
+  });
+
+  it('anything else is not read as a group or a transfer', () => {
+    expect(ringKind(new Map([['ring', 'GROUP'], ['reason', 'callback']]))).toEqual({ group: false, transfer: null });
   });
 });

@@ -170,6 +170,19 @@ describe('a lead calling in', () => {
     stop();
   });
 
+  it('says how it was rung - alone by default; a group, and a transfer with its question, when the server says so (T11)', async () => {
+    const { ring, incoming, stop } = await ringing();
+    expect(ring.kind).toEqual({ group: false, transfer: null });
+
+    const transfer = new FakeCall();
+    transfer.customParameters.set('ring', 'group');
+    transfer.customParameters.set('reason', 'transfer');
+    transfer.customParameters.set('step', 'Offer');
+    device.emit('incoming', transfer);
+    expect(incoming.onRing.mock.calls[1][0].kind).toEqual({ group: true, transfer: { step: 'Offer' } });
+    stop();
+  });
+
   it('stopping - signing out - destroys the device, so the browser cannot ring', async () => {
     const { stop, used } = await ringing();
     stop();
