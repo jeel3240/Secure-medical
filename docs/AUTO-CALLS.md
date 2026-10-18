@@ -135,17 +135,36 @@ with an after-call note open.
 
 ### Understanding an answer
 
-- A key pressed always wins: 1 yes, 2 no, 9 stop.
-- Otherwise the words Twilio heard are searched for each choice's words, as
-  whole words inside the sentence, longest first: "Yes, I am" and "Yeah sure"
-  are Yes; "No, I'm not interested" is No. Both or neither is unclear.
-- **A doubtful hearing is unclear** (Jeel, 2026-10-15): Twilio sends how sure
-  it is (0-1). Below 0.4 the answer is not trusted and the question is asked
-  again - with keys, which are always certain. No figure at all is not
-  counted against the answer, since some speech models send none. Every
-  answer's figure is kept, and 0.4 is set from the first real calls.
-- "Hello?" as the call is answered is not taken as an answer: the first
-  question cannot be interrupted.
+Built in T7 (2026-10-18): `matchSpokenChoice` in `core/answers.ts`, pure. In
+this order:
+
+1. **A key pressed wins** - keys are never misheard: 1 and 2 are the step's
+   choices, 9 is stop, any other key is unclear - whatever was heard as well.
+2. **A number said on its own** counts as that key: "one", "1", "nine" - and
+   the words Twilio may write for them, "won", "to", "too". Only as the whole
+   answer: "I need to think" is not a 2.
+3. **Stop wins over anything else said**: any of the script's stop words -
+   "stop calling", "stop", "remove me", "take me off", "do not call", "don't
+   call", "unsubscribe" - anywhere in the sentence. "No, stop calling me" is
+   stop. **Even when Twilio is unsure**: wrongly ending one call loses that
+   call, while missing a real stop calls someone who asked not to be.
+4. **A doubtful hearing is unclear** (Jeel, 2026-10-15): Twilio sends how sure
+   it is (0-1). Below 0.4 (`auto_call_min_confidence`) the answer is not
+   trusted and the question is asked again - with keys, which are always
+   certain. No figure at all, or 0, is not counted against the answer, since
+   some speech models send none. Every answer's figure is kept, and 0.4 is set
+   from the first real calls.
+5. **Otherwise the choices' words are found inside the sentence**, as whole
+   words, longest phrase first, each word used once: "Yes, I am" and "Yeah
+   sure" are Yes; "No, I'm not interested" is No - `not interested` takes those
+   words before Yes's `interested` can. Exactly one choice found is that
+   choice; both ("yes no", "not really interested") or neither ("maybe",
+   "who is this") is unclear. Nothing said and nothing pressed is silence.
+
+A sentence longer than 300 characters is not an answer. The SMS flow's
+matching (`matchChoice`) is unchanged: there the whole reply must be the
+answer. "Hello?" as the call is answered is not taken as an answer: the first
+question cannot be interrupted (T12).
 
 ### Traffic
 
@@ -206,7 +225,7 @@ ticket's own PR.
 | T4 | The database can hold a robot call | - | Done 2026-10-18 |
 | T5 | The screens know a robot call from an agent's call | T4 | Done 2026-10-18 |
 | T6 | The call script saved as rows | T4 | Done 2026-10-18 |
-| T7 | Understanding a spoken answer | T6 | Not started |
+| T7 | Understanding a spoken answer | T6 | Done 2026-10-18 |
 | T8 | What the robot does after each answer | T6, T7 | Not started |
 | | **Who can take a call** | | |
 | T9 | The server knows who is online | - | Not started |
@@ -594,16 +613,28 @@ understood" - never a guess.
 - SMS matching (`matchChoice`) is not changed.
 
 **Done when**
-- [ ] Tests: "Yes, I am", "Yeah sure", "yes please" -> Yes.
-- [ ] Tests: "No", "No, I'm not interested", "not interested" -> No.
-- [ ] Tests: "Stop calling me", "remove me", "do not call", key 9 -> stop.
-- [ ] Tests: "yes no", "maybe", "what is this", silence -> not understood.
-- [ ] Tests: keys 1 and 2; "yes" heard with 0.2 -> not understood; with no
-      figure -> Yes.
-- [ ] Every SMS matching test still passes.
+- [x] Tests: "Yes, I am", "Yeah sure", "yes please" -> Yes; and on the link
+      step "Sure, send it", "text me" -> Yes, "Don't text me" -> No.
+- [x] Tests: "No", "No, I'm not interested", "not interested" -> No - never
+      Yes for the "interested" inside it.
+- [x] Tests: "Stop calling me", "remove me", "do not call", key 9, "nine" ->
+      stop; it wins over anything else said, and when Twilio is unsure.
+- [x] Tests: "yes no", "maybe", "what is this", "not really interested" ->
+      not understood; nothing said or pressed -> silence.
+- [x] Tests: keys 1 and 2 win over anything heard; another key is not
+      understood; "one", "to", "won" said alone count as keys; "yes" heard
+      with 0.21 -> not understood, at 0.4 -> Yes, with no figure or 0 -> Yes.
+- [x] Every SMS matching test still passes - 65 answer tests in all.
 
-**Files:** `backend/src/core/answers.ts` and its test.
-**Doc:** this one, "Understanding an answer".
+As built: the tests use `core/call-script-fixtures.ts`, the script as
+migration 015 seeds it, and `call-script-live-check.ts` compares that copy with
+the database word for word, so the tests always use the real words. Sound-alike
+number words ("to", "won") were added while building - the repeat line asks for
+keys, and some people say the number instead.
+
+**Files:** `backend/src/core/answers.ts`, `backend/src/core/answers.spoken.test.ts`,
+`backend/src/core/call-script-fixtures.ts`, `backend/scripts/call-script-live-check.ts`.
+**Doc:** this one, "Understanding an answer"; `CLAUDE.md` §4.
 
 ---
 
