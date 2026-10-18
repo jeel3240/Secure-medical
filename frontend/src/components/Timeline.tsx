@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'react';
 import type { TimelineEntry, TimelineKind } from '../api/workspace';
 import { DISPOSITION_LABEL, type Disposition } from '../api/workspace';
-import { formatTime } from '../lib/format';
+import { dayLabel, formatDay, formatTime, isSameDay } from '../lib/format';
 import { CallTranscript } from './CallTranscript';
 
 /**
@@ -31,12 +31,6 @@ const LABEL: Record<TimelineKind, string> = {
   disposition: 'DISP',
   activity: 'LOG',
 };
-
-const dayFormat = new Intl.DateTimeFormat(undefined, {
-  weekday: 'short',
-  month: 'short',
-  day: 'numeric',
-});
 
 /** `34s`, `2:14` - how a call length reads in a list. */
 function duration(seconds: unknown): string {
@@ -99,7 +93,7 @@ export function activityText(detail: Record<string, unknown>, at: string): strin
   const subject = typeof detail.subject === 'string' ? detail.subject : null;
   const when = (iso: unknown) => {
     const date = typeof iso === 'string' ? new Date(iso) : null;
-    return date ? `${dayFormat.format(date)} ${formatTime(date)}` : 'an unknown time';
+    return date ? `${formatDay(date)} ${formatTime(date)}` : 'an unknown time';
   };
 
   switch (detail.action) {
@@ -166,7 +160,7 @@ function entryText(entry: TimelineEntry): string {
       return callText(d);
     case 'callback': {
       const at = typeof d.scheduledAt === 'string' ? new Date(d.scheduledAt) : null;
-      const when = at ? `${dayFormat.format(at)} ${formatTime(at)}` : 'unscheduled';
+      const when = at ? `${formatDay(at)} ${formatTime(at)}` : 'unscheduled';
       // One the system booked because their call was missed has no chosen time.
       if (d.reason === 'missed_call') return d.doneAt ? 'Missed call returned' : 'Callback added · missed call';
       return d.doneAt ? `Callback completed (was ${when})` : `Callback scheduled for ${when}`;
@@ -181,9 +175,6 @@ function entryText(entry: TimelineEntry): string {
       return typeof d.body === 'string' ? d.body : '';
   }
 }
-
-const sameDay = (a: Date, b: Date) =>
-  a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
 
 export function Timeline({
   entries,
@@ -206,21 +197,22 @@ export function Timeline({
   }
 
   let lastDay: Date | null = null;
+  const now = new Date();
 
   return (
     <ol className="timeline">
       {entries.map((entry, index) => {
         const at = new Date(entry.at);
         // Day separators, so a lead worked over a week does not read as one
-        // long afternoon.
-        const newDay = !lastDay || !sameDay(lastDay, at);
+        // long afternoon - named as the conversation names them (W1).
+        const newDay = !lastDay || !isSameDay(lastDay, at);
         lastDay = at;
 
         const failed = entry.kind === 'sms' && entry.detail.deliveryStatus === 'failed';
 
         return (
           <li key={`${entry.kind}-${entry.at}-${index}`}>
-            {newDay && <div className="timeline__day">{dayFormat.format(at)}</div>}
+            {newDay && <div className="timeline__day">{dayLabel(at, now)}</div>}
 
             <div className={`timeline__entry timeline__entry--${entry.kind}`}>
               <span className="timeline__kind">{LABEL[entry.kind]}</span>

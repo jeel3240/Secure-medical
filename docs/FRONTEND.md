@@ -417,9 +417,22 @@ name, so the rule 2b handoff is visible in the thread itself.
 
 That is a real change and worth knowing: **notes, callbacks and dispositions
 are no longer in the workspace centre.** They are on the Lead Timeline,
-which the conversation header links to, and which still uses `Timeline.tsx`
-unchanged. An agent on a call wants what the lead said; the full audit trail is
-one click away.
+which the conversation header links to, and which still uses `Timeline.tsx`.
+An agent on a call wants what the lead said; the full audit trail is one click
+away.
+
+**A label wherever the day changes - W1, 2026-10-18, asked for by Jeel.** Each
+item in the conversation shows only its time, so a lead worked over several
+days read as one afternoon. A small label now sits between the days, as a
+phone's messages app shows it: **Today**, **Yesterday**, **Wed, Oct 14** - the
+year only for another year - centred between two hairlines in the label style
+(`.convo__day`), so it reads as a heading over the messages rather than one
+more message. Any item can start a day: a text, a call or a system line. The
+Lead Timeline already had day separators ("WED, OCT 14"); both screens now name
+the day through one rule, `dayLabel` in `lib/format.ts`, so the timeline says
+Today and Yesterday too. It is the viewer's own day, from the browser's time
+zone, like every date on screen; "Yesterday" is the calendar day before, not
+24 hours back. `lib/format.test.ts`, `Conversation.render.test.tsx`.
 
 **A reply is labelled with the answer the server recorded for it.** `1`
 becomes "1 | Yes" because the timeline entry for that text carries

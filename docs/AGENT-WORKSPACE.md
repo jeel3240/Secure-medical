@@ -424,6 +424,9 @@ flow made worded answers the ordinary case. Two walks on one lead mislabelled
 the first with the second's answers. Found in review; proved in
 `scripts/timeline-live-check.ts`.
 
+**The conversation marks each day** - Today, Yesterday, Wed, Oct 14 - where it
+changes (W1, 2026-10-18). `FRONTEND.md`, "A label wherever the day changes".
+
 **The card says which question the lead is on, or stopped at** -
 `conversation.question`, "Q2" or "Q1-a" (`core/questions.ts`; `FLOWS.md`,
 "Naming a question"). The header's "On Q2", "Stopped at Q1-a" and the
