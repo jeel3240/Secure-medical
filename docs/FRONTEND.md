@@ -394,7 +394,7 @@ needs to know:
 | Piece | File |
 |---|---|
 | The card: who, how long it has rung, tier, score, the last thing they answered (under that question's own heading), how far the questions got, how often we tried them today; **Accept** (takes the lead, opens its workspace) and **Decline** | `layout/IncomingCall.tsx`, `styles/incoming-call.css` |
-| "Calling back · you tried 2× today" | `lib/caller-context.ts`, pure |
+| "Calling back · you tried 2× today" - agents' calls only, never the server's automated one (T5) | `lib/caller-context.ts`, pure |
 | The states - none, ringing, call, missed - and one call at a time | `lib/incoming-state.ts`, pure |
 | The store joining them to Twilio. A store, not page state, because a call arrives on any screen and the lead's Call button must know one is under way | `lib/incoming-call.ts` (zustand) |
 | The ringtone: a WAV made in memory, looped by an `<audio>` element, armed from `main.tsx` so the first click - sign-in included - lets it play. "Call sound off · click to turn on" shows until then | `lib/ringtone.ts` |

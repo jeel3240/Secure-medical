@@ -63,7 +63,8 @@ export function summarise(entries: TimelineEntry[]): Summary {
   for (const entry of entries) {
     switch (entry.kind) {
       case 'call':
-        // Attempts are ours: a call the lead placed is not one.
+        // Attempts are ours - an agent's call or, since T4, the server's
+        // automated one; a call the lead placed is not one.
         if (entry.detail.direction !== 'inbound') summary.calls++;
         break;
       case 'sms':

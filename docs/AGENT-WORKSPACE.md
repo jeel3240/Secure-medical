@@ -541,8 +541,12 @@ entries → other system events, so the story reads in the sequence it happened.
 **What an entry carries.** A call: `outcome`, `durationSec` and `direction`. A
 callback: `scheduledAt`, `doneAt` and `reason`. `components/Timeline.tsx` words
 them - "Outbound call · answered · 2:14", "Incoming call · answered · 1:15",
-"Missed call · told we will call back"; a callback the system booked for a
-missed call reads "Callback added · missed call", then "Missed call returned".
+"Missed call · told we will call back", and the server's own call "Automated
+call · answered · 0:40" (T5, 2026-10-18 - worded as its own, never as an
+agent's; how its script ended is added by T21); a callback the system booked
+for a missed call reads "Callback added · missed call", then "Missed call
+returned". The Lead Timeline's "Attempts" counts an automated call as one of
+ours, like an agent's.
 
 **Three kinds come out of `messages`.** An inbound row is a reply; an outbound
 row with `sent_by` null is one of ours; an outbound row with an agent is their

@@ -5,11 +5,13 @@ import { formatRelative } from './format';
  * Why this lead is probably calling, in one line for the incoming-call card -
  * "Calling back · you tried 2× today". Pure: it reads the lead's timeline.
  *
- * Only calls we placed count. Null when we have never called them: the card
- * then says nothing rather than guessing.
+ * Only calls an agent placed count - not one the lead placed, and not the
+ * server's automated call (T5, docs/AUTO-CALLS.md): "you tried 2×" and "Sam
+ * tried" are about people. Null when no agent has called them: the card then
+ * says nothing rather than guessing.
  */
 export function callerContext(entries: TimelineEntry[], myName: string, now: Date): string | null {
-  const placed = entries.filter((e) => e.kind === 'call' && e.detail.direction !== 'inbound');
+  const placed = entries.filter((e) => e.kind === 'call' && e.detail.direction === 'outbound');
   if (placed.length === 0) return null;
 
   const today = placed.filter((e) => new Date(e.at).toDateString() === now.toDateString());

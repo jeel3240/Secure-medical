@@ -203,7 +203,7 @@ ticket's own PR.
 | T3 | Set up the new number for local work | T1, T2 | Done 2026-10-17 - a real call each way on the dev number |
 | | **Data and rules - no calls yet** | | |
 | T4 | The database can hold a robot call | - | Done 2026-10-18 |
-| T5 | The screens know a robot call from an agent's call | T4 | Not started |
+| T5 | The screens know a robot call from an agent's call | T4 | Done 2026-10-18 |
 | T6 | The call script saved as rows | T4 | Not started |
 | T7 | Understanding a spoken answer | T6 | Not started |
 | T8 | What the robot does after each answer | T6, T7 | Not started |
@@ -496,12 +496,22 @@ to be confirmed on the first real transfer (T15). `CallDirection` in
   "Automated call", until T21 gives it its full wording.
 
 **Done when**
-- [ ] Tests: a robot call is not counted in "you tried".
-- [ ] Tests: a robot call shows on the timeline without error.
+- [x] Tests: a robot call is not counted in "you tried" - alone it gives no
+      "Calling back" line; beside an agent's call, only the agent's counts.
+- [x] Tests: a robot call shows on the timeline and in the conversation as
+      "Automated call · answered · 40s", "· no answer", "· voicemail", "· in
+      progress" - never as "Outbound call".
+- [x] Tests: the Lead Timeline's "Attempts" counts it as one of ours, and it
+      is not contact from the lead.
 
-**Files:** `frontend/src/api/workspace.ts`, `frontend/src/lib/caller-context.ts`,
-`frontend/src/components/Timeline.tsx`, `frontend/src/pages/LeadTimelinePage.tsx`.
-**Doc:** `FRONTEND.md`.
+As built: `CallDirection` in `api/workspace.ts` mirrors the backend's.
+"Attempts" keeps its rule - every call that is not the lead's - because a robot
+call is our attempt to reach them. 299 frontend tests pass.
+
+**Files:** `frontend/src/api/workspace.ts`, `frontend/src/lib/caller-context.ts`
+(+ test), `frontend/src/components/Timeline.tsx` (+ test),
+`frontend/src/pages/LeadTimelinePage.tsx` (+ test).
+**Doc:** `FRONTEND.md`, `AGENT-WORKSPACE.md`, `TWILIO.md`.
 
 ---
 
@@ -925,6 +935,9 @@ agent owns them.
   ring stopping, so the lead is not sent the missed-call text while someone
   is talking to them.
 - Only with `AUTO_CALLS` on; off, it works exactly as today.
+- Decide the incoming card's "Calling back" line for a lead returning the
+  automated call - T5 counts only agents' calls there, so today it says
+  nothing; "Calling back · automated call, 2h ago" is one way. Noted 2026-10-18.
 
 **Done when**
 - [ ] A live check: holder; last caller; everyone free; nobody free -> missed.
