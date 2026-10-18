@@ -25,6 +25,13 @@ describe('why a lead is probably calling', () => {
     expect(callerContext([call('Maya Chen', at(2))], 'Maya Chen', NOW)).toMatch(/^Calling back · last called /);
   });
 
+  it('the server\'s automated call is not an agent trying them (T5)', () => {
+    const robot = call('', at(0, 9), 'automated');
+    expect(callerContext([robot], 'Maya Chen', NOW)).toBeNull();
+    // Beside an agent's own call, only the agent's counts.
+    expect(callerContext([robot, call('Maya Chen', at(0, 11))], 'Maya Chen', NOW)).toBe('Calling back · you tried 1× today');
+  });
+
   it('we never called them: says nothing', () => {
     expect(callerContext([], 'Maya Chen', NOW)).toBeNull();
     expect(callerContext([call('Maya Chen', at(0), 'inbound')], 'Maya Chen', NOW)).toBeNull();

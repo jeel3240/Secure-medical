@@ -118,6 +118,16 @@ describe('calls', () => {
     expect(screen.getByText(text)).toBeDefined();
   });
 
+  it.each([
+    ['answered', 40, 'Automated call · answered · 40s'],
+    ['no_answer', 0, 'Automated call · no answer'],
+    ['voicemail', 25, 'Automated call · voicemail'],
+    [null, null, 'Automated call · in progress'],
+  ])('the server\'s automated call, %s: worded as its own, never as an agent\'s (T5)', (outcome, durationSec, text) => {
+    render(<Timeline entries={[entry({ kind: 'call', detail: { outcome, durationSec, direction: 'automated' } })]} />);
+    expect(screen.getByText(text)).toBeDefined();
+  });
+
   it('a call with no outcome yet is in progress', () => {
     render(<Timeline entries={[entry({ kind: 'call', detail: { outcome: null, durationSec: null } })]} />);
     expect(screen.getByText('Outbound call · in progress')).toBeDefined();

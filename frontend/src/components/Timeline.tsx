@@ -63,9 +63,12 @@ export function callText(detail: Record<string, unknown>): string {
     if (outcome === 'answered') return `Incoming call · answered · ${duration(detail.durationSec)}`;
     return `Incoming call · ${CALL_OUTCOME[outcome] ?? outcome.replace(/_/g, ' ')}`;
   }
-  if (typeof outcome !== 'string') return 'Outbound call · in progress';
-  if (outcome === 'answered') return `Outbound call · answered · ${duration(detail.durationSec)}`;
-  return `Outbound call · ${CALL_OUTCOME[outcome] ?? outcome.replace(/_/g, ' ')}`;
+  // An agent's call, or the server's automated one (T5), worded the same way.
+  // How an automated call's script ended is T21's to add.
+  const what = detail.direction === 'automated' ? 'Automated call' : 'Outbound call';
+  if (typeof outcome !== 'string') return `${what} · in progress`;
+  if (outcome === 'answered') return `${what} · answered · ${duration(detail.durationSec)}`;
+  return `${what} · ${CALL_OUTCOME[outcome] ?? outcome.replace(/_/g, ' ')}`;
 }
 
 const CALL_REFUSAL: Record<string, string> = {

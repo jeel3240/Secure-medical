@@ -88,6 +88,14 @@ export type TimelineKind =
   /** From the activity log: a pick-up, a release, a moved callback - AUDIT.md. */
   | 'activity';
 
+/**
+ * Which way a call went - a call entry's `detail.direction`. Mirrors
+ * `CallDirection` in backend/src/core/calls.ts: an agent called from the
+ * browser, the lead called us, or the server placed it - an automated call
+ * (T4, docs/AUTO-CALLS.md), which has an agent only once someone takes it.
+ */
+export type CallDirection = 'outbound' | 'inbound' | 'automated';
+
 export interface TimelineEntry {
   kind: TimelineKind;
   at: string;
