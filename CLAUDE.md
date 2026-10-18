@@ -206,7 +206,7 @@ you change something the docs describe, update the doc in the same commit.
     src/core/answers.ts     matches a reply to a choice of the question asked, pure - an SMS reply, and a spoken answer on the automated call (T7)
     src/db/flows.ts         loads a flow, starts a conversation on the active one, and gives its first question
     src/core/flow-fixtures.ts  the antibiotics flow as a constant, for tests only
-    src/core/call-script.ts the automated call's script, pure: its shape now, what the call does after each answer from T8
+    src/core/call-script.ts the automated call's script, pure: its shape, and what the call does after each answer (firstAsk, afterAnswer - T8)
     src/core/call-script-fixtures.ts  the call script as a constant, for tests only - the live check holds it to the database
     src/db/call-script.ts   loads the automated call's script (migration 015)
     scripts/call-script-live-check.ts  proves migration 015: the script as agreed, its guards, answers add-only
