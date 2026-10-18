@@ -113,6 +113,13 @@ Twilio as soon as someone signs in (`lib/calling.ts`, `listenForCalls`) and
 checks every 30 seconds that it still is. A closed laptop is a missed call.
 There is no ringing of a mobile phone.
 
+Each check also tells the server whether this browser can take a call now -
+registered, and no call, ring or after-call note open - with
+`POST /api/calls/ringable` (T9, 2026-10-18). It is said at once when a call
+starts or ends, and holds two minutes on the server (`users.ringable_until`).
+It is for the automated call's transfer, which rings only people who are free;
+the incoming calls above do not read it. "Who is free" in `AUTO-CALLS.md`.
+
 ### A missed call
 
 The lead hears: "Thank you for calling eDrugstore. Our team member is not

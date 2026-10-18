@@ -128,7 +128,7 @@ scripts/live-checks.sh              # all of them
 scripts/live-checks.sh flows queue  # just these
 ```
 
-There are seventeen live checks, covering the automated call's script (migration 015), the SMS flows (a second flow added as
+There are eighteen live checks, covering who can take a call (migration 016), the automated call's script (migration 015), the SMS flows (a second flow added as
 rows only), the queue, claims, the read flag, the lead card,
 the timeline, callbacks, dispositions, agent SMS, calls (outgoing, incoming and
 missed), the activity log, Admin > Leads, the admin read models, health, the

@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { incomingReducer, isBusy, NO_CALL, type IncomingEvent, type IncomingState } from './incoming-state';
+import {
+  incomingOccupiesAgent,
+  incomingReducer,
+  isBusy,
+  NO_CALL,
+  type IncomingEvent,
+  type IncomingState,
+} from './incoming-state';
 
 const PRIYA = { id: 7, name: 'Priya Sharma', phone: '+15550100016' };
 const SAM = { id: 8, name: 'Sam Lee', phone: '+15550100017' };
@@ -62,6 +69,25 @@ describe('one call at a time', () => {
     expect(isBusy(run([ring, { type: 'answer' }, answered]))).toBe(true);
     expect(isBusy(run([ring, rangOut]))).toBe(false);
     expect(isBusy(run([ring, { type: 'answer' }, answered, ended]))).toBe(false);
+  });
+});
+
+describe('whether the agent can take another call meanwhile', () => {
+  it('not while it rings, while they talk, or while the note box after is open', () => {
+    expect(incomingOccupiesAgent(run([ring]))).toBe(true);
+    expect(incomingOccupiesAgent(run([ring, { type: 'answer' }]))).toBe(true);
+    expect(incomingOccupiesAgent(run([ring, { type: 'answer' }, answered]))).toBe(true);
+    expect(incomingOccupiesAgent(run([ring, { type: 'answer' }, answered, ended]))).toBe(true);
+  });
+
+  it('yes with no call, after a missed call - only a notice - and once the note is done', () => {
+    expect(incomingOccupiesAgent(NO_CALL)).toBe(false);
+    expect(incomingOccupiesAgent(run([ring, rangOut]))).toBe(false);
+    expect(incomingOccupiesAgent(run([ring, { type: 'declined' }]))).toBe(false);
+    const done: IncomingEvent = { type: 'call', event: { type: 'reset' } };
+    expect(incomingOccupiesAgent(run([ring, { type: 'answer' }, answered, ended, done]))).toBe(false);
+    const broke: IncomingEvent = { type: 'call', event: { type: 'failed', message: 'x' } };
+    expect(incomingOccupiesAgent(run([ring, { type: 'answer' }, broke]))).toBe(false);
   });
 });
 

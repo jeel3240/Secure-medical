@@ -1,6 +1,7 @@
 /**
  * `GET /api/calls/config` and `POST /api/calls/token` - what the browser needs
- * to place a call. Phase 4, TWILIO.md.
+ * to place a call. Phase 4, TWILIO.md. And `POST /api/calls/ringable` - whether
+ * it can take one now (T9, AUTO-CALLS.md).
  *
  * Signed-in users only. The token lets a browser place calls as that agent
  * through our TwiML App, nothing more; which lead it may call is decided per
@@ -32,6 +33,33 @@ export function callsRouter(deps: AppDeps): Router {
       const { token, identity } = mintCallToken(deps.twilio, req.user!.id);
       log.info('call.token_issued', { userId: req.user!.id });
       res.json({ token, identity, ttlSeconds: TOKEN_TTL_SECONDS });
+    })
+  );
+
+  /**
+   * "I can take a call now" - or not - from a signed-in browser, every 30
+   * seconds and whenever it changes. `db/presence.ts`. Not logged (LOGGING.md):
+   * it would be two lines a minute per agent, saying nothing new.
+   */
+  router.post(
+    '/ringable',
+    asyncHandler(async (req, res) => {
+      if (!deps.twilio) {
+        throw new HttpError(503, 'calling_off', 'Calling is not set up on this server.');
+      }
+      const available = (req.body as { available?: unknown } | undefined)?.available;
+      if (typeof available !== 'boolean') {
+        throw new HttpError(400, 'invalid_available', 'available must be true or false.');
+      }
+      // Loaded lazily, as the other routes' SQL is: ../db/pool pulls in config,
+      // which exits the process when an env var is missing - that would break
+      // the route tests, which build the app without a full environment.
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const { pool } = require('../db/pool') as typeof import('../db/pool');
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const presence = require('../db/presence') as typeof import('../db/presence');
+      await presence.setRingable(pool, req.user!.id, available);
+      res.status(204).end();
     })
   );
 

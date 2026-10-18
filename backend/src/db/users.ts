@@ -81,7 +81,9 @@ export const pgUserStore: UserStore = {
     if (patch.isActive !== undefined) add('is_active', patch.isActive);
     if (patch.passwordHash !== undefined) add('password_hash', patch.passwordHash);
     if (patch.mustChangePassword !== undefined) add('must_change_password', patch.mustChangePassword);
-    if (patch.bumpSession) sets.push('session_version = session_version + 1');
+    // Ending every session also ends being ringable (T9, db/presence.ts): a
+    // signed-out or deactivated browser must not be rung for a transfer.
+    if (patch.bumpSession) sets.push('session_version = session_version + 1', 'ringable_until = NULL');
 
     values.push(id);
     const { rows } = await pool.query<DbUser>(

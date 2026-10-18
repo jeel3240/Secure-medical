@@ -133,6 +133,35 @@ leaves it off and is never rung for a transfer.
 server every 30 seconds; silent for 2 minutes is gone), and not on a call or
 with an after-call note open.
 
+**The app is open** - built in T9 (2026-10-18): `db/presence.ts` on the
+server, `lib/presence.ts` and `lib/calling.ts` in the browser. Each signed-in
+browser where calling is set up tells the server, every 30 seconds and at once
+when it changes, whether it can take a call now: registered with Twilio, and
+nothing on its screen keeping the person busy - a call being placed or live, a
+lead ringing, or a finished call's note box still open. The server keeps the
+word for two minutes (`users.ringable_until`), so a browser that closes, loses
+its connection or sleeps stops counting by itself.
+
+- **"Not available" is said, not left out**: the moment a call or a ring
+  starts, and while Twilio cannot be reached. The server knows at once, or
+  within half a minute, rather than in two minutes.
+- The reports go one after another, each reading the screen as it is sent, so
+  an older "available" can never land after a newer "busy".
+- **Ending a session clears it at once**: signing out, being deactivated, a
+  password change (`db/users.ts`, where every session ends). A deactivated
+  account can never be made ringable.
+- Leaving the app's pages without signing out - the Change password page -
+  stops the browser ringing at once, and lapses on the server within two
+  minutes, as a closed tab does.
+- Not in the activity log: it is the present moment, overwritten every half
+  minute (`AUDIT.md`).
+- **Two tabs** of one person each speak for themselves, and the last word wins:
+  a note box open in one tab while the other says "available" is not seen.
+  T10's "not on a call", checked on the server, covers a call under way in
+  either.
+- Nothing reads it yet. T10 joins it to the switch and to "not on a call" as
+  one rule, `FREE_PEOPLE_SQL`; `RINGABLE_SQL` is its presence part.
+
 ### Understanding an answer
 
 Built in T7 (2026-10-18): `matchSpokenChoice` in `core/answers.ts`, pure. In
@@ -253,7 +282,7 @@ ticket's own PR.
 | T7 | Understanding a spoken answer | T6 | Done 2026-10-18 |
 | T8 | What the robot does after each answer | T6, T7 | Done 2026-10-18 |
 | | **Who can take a call** | | |
-| T9 | The server knows who is online | - | Not started |
+| T9 | The server knows who is online | - | Done 2026-10-18 |
 | T10 | The "Taking calls" switch | T9 | Not started |
 | T11 | Several browsers ringing at once | - | Not started |
 | | **The call - on the dev number** | | |
@@ -716,18 +745,49 @@ visible.
   after-call note open. Sets `ringable_until` to 2 minutes from now, or
   clears it.
 - The browser sends it from its existing 30-second check (`keepRegistered`),
-  only when its Twilio connection is up.
+  and at once when a call, a ring or a note box starts or ends.
 - Signing out and deactivating an account clear it.
 
 **Done when**
-- [ ] Route tests: signed-in only; available and busy both saved.
-- [ ] A live check: online; on a call (busy); signed out (cleared); silent for
-      2 minutes (gone).
-- [ ] A frontend test: nothing is sent while the Twilio connection is down.
+- [x] Route tests: signed-in only; available and busy both saved for the
+      signed-in person; anything but true or false refused; refused with
+      calling off.
+- [x] A live check: available for 2 minutes, and again from the start when
+      said again; busy (cleared); silent for 2 minutes (gone); signed out
+      (cleared, nobody else's); deactivated (cleared, and never ringable
+      again) - 17 checks.
+- [x] Frontend tests: "not available" while the Twilio connection is down; at
+      once when a call starts and when it is done; every 30 seconds; in
+      order; nothing after signing out. Which call states keep the agent busy;
+      an incoming ring keeps the browser busy until its note box is done, a
+      missed call does not - 316 frontend tests.
+- [x] Seen against Twilio, from the local app with calling switched on for the
+      check (the dev number's settings, `dev-` names, nothing pointed): signed
+      in -> "available", held 120 seconds, said again at 30 seconds; signed
+      out -> cleared; no console errors.
 
-**Files:** migration 016, `backend/src/api/calls.ts`, `backend/src/api/auth/routes.ts`,
-`backend/src/db/users.ts`, `frontend/src/lib/calling.ts`.
-**Doc:** this one, "Who is free"; `TWILIO.md`.
+As built: one change from the ticket - **when Twilio cannot be reached the
+browser says "not available"** rather than nothing, so the server knows within
+half a minute, not two. What keeps a browser busy is one small register,
+`lib/presence.ts`, marked by the lead's call (`useLeadCall`) and the incoming
+call (`lib/incoming-call.ts`); the rules are `occupiesAgent` and
+`incomingOccupiesAgent`, pure. Reports go one after another, so an older
+"available" never lands after a newer "busy". Nothing is said when the app
+stops listening: signing out has already cleared it on the server, and a word
+then could only be refused. Ending a session clears it in `db/users.ts`, the
+one place every session ends - sign-out, deactivation, a password change -
+so `api/auth/routes.ts` is unchanged. Not in the activity log. Nothing reads it
+yet: T10 joins it to the switch.
+
+**Files:** `backend/src/db/migrations/016_presence.sql`, `backend/src/db/presence.ts`,
+`backend/src/db/users.ts`, `backend/src/api/calls.ts` (+ test),
+`backend/scripts/presence-live-check.ts`, `frontend/src/lib/presence.ts` (+ test),
+`frontend/src/lib/calling.ts` (+ test), `frontend/src/lib/call-state.ts` (+ test),
+`frontend/src/lib/incoming-state.ts` (+ test), `frontend/src/lib/incoming-call.ts`
+(+ `layout/IncomingCall.test.tsx`),
+`frontend/src/pages/workspace/useLeadCall.ts`, `frontend/src/api/calls.ts`.
+**Doc:** this one, "Who is free"; `TWILIO.md`, `SCHEMA.md`, `AUDIT.md`,
+`AUTH.md`, `FRONTEND.md`, `README.md`, `WORKFLOW.md`, `CLAUDE.md`.
 
 ---
 
@@ -758,7 +818,7 @@ is on.
 - [ ] The switch is hidden with `AUTO_CALLS` off.
 
 **Files:** migration 017, `backend/src/api/calls.ts`, `backend/src/db/presence.ts`
-(new), `backend/src/core/activity.ts`, `frontend/src/layout/AppShell.tsx`,
+(from T9), `backend/src/core/activity.ts`, `frontend/src/layout/AppShell.tsx`,
 `docker-compose.yml`.
 **Doc:** this one, `AUDIT.md`.
 

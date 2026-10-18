@@ -56,6 +56,7 @@ expires:
 | Password reset by an admin | Signed out everywhere. `session_version` bumped. |
 | Own password changed | Other devices signed out; this browser gets a fresh cookie. |
 | Signed out | That token dies server-side too, so a copied cookie stops working. |
+| Any of the above that bumps `session_version` | The browser is no longer counted as able to take a call (`ringable_until` cleared, T9 - "Who is free" in `AUTO-CALLS.md`): a signed-out or deactivated person is never rung for a transfer. |
 | Role changed | Applies on the next request. No bump needed, since the row is re-read. |
 
 ## Decisions and why

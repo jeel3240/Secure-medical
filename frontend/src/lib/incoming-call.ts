@@ -3,7 +3,8 @@ import { getCallConfig } from '../api/calls';
 import { claimLead } from '../api/leads';
 import type { CallEvent } from './call-state';
 import { describeCallError, listenForCalls, type CallHandle, type IncomingRing } from './calling';
-import { incomingReducer, NO_CALL, type IncomingEvent, type IncomingState } from './incoming-state';
+import { incomingOccupiesAgent, incomingReducer, NO_CALL, type IncomingEvent, type IncomingState } from './incoming-state';
+import { setBusy } from './presence';
 
 /**
  * The incoming call this browser is ringing with or is on - TWILIO.md,
@@ -129,3 +130,7 @@ export const useIncomingCall = create<IncomingCallStore>((set, get) => {
     },
   };
 });
+
+// A lead ringing or on the line, or the note box after, keeps this browser
+// busy: no transfer rings it meanwhile (T9, lib/presence.ts).
+useIncomingCall.subscribe(({ state }) => setBusy('incoming-call', incomingOccupiesAgent(state)));

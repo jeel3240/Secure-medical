@@ -74,6 +74,12 @@ too, with what Twilio heard, since migration 015). A reply that was not counted 
 arrived before our text had gone out is kept in `messages` like any other,
 and logged as `reply.before_our_text`.
 
+**Not recorded at all:** whether a browser can take a call right now
+(`users.ringable_until`, T9). It is the present moment, said by each open
+browser every half minute and overwritten each time - not something anyone
+did. The "Taking calls" switch, which a person does turn on and off, is
+recorded (T10, `calls.availability_changed`).
+
 ### Written with the action, not after it
 
 A record written separately could say something happened that was rolled back,
