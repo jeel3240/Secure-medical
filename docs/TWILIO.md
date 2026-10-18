@@ -675,15 +675,23 @@ end-of-call report saved as answered, 42 seconds.
 pressed Call. The phone rang showing the client's number, was answered, and the
 call was saved as `answered`, 15 seconds, with its start and end times.
 
-**Two real calls on the dev number, 2026-10-17** - the first local calls since
-2026-10-05, after the identity prefix and the configure guard. The api ran
-alone, without the worker, so nothing polled EZ Texting or texted anyone; the
-test lead, with Jeel's phone, was in the local database only.
+**Three real calls on the dev number, 2026-10-17** - the first local calls
+since 2026-10-05, after the identity prefix and the configure guard. The api
+ran alone, without the worker, so nothing polled EZ Texting or asked the SMS
+questions; the test lead, with Jeel's phone, was in the local database only.
 
 | Call | What happened | Saved |
 |---|---|---|
 | The local app called Jeel's phone | It rang showing (480) 530-8582; not picked up | `outbound`, `no_answer`, 0 s - right |
 | Jeel called (480) 530-8582 | Only the local browser rang, as `dev-agent-16`; answered | `inbound`, `answered`, 6 s, recording saved |
+| Jeel called it again | The local browser rang; not answered | `inbound`, `missed`; a missed-call callback for him; **the missed-call text sent to his phone** |
+
+**Without the worker, a local session can still text.** The worker polls and
+asks the questions, but the api sends the missed-call text itself, through EZ
+Texting, when a call to the number goes unanswered - so the third call above
+texted Jeel's phone "Sorry we missed your call", exactly as production would.
+The notes of the day first said nothing could text anyone; that was wrong,
+found the next day. Test with a lead whose phone is your own.
 
 Production's number and TwiML App were read back on Twilio before and after:
 both still pointed at dailyleadhub.com. Nothing needs undoing after a session -

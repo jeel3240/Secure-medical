@@ -403,7 +403,9 @@ away from production by accident.
 - **After T1:** `TWILIO_IDENTITY_PREFIX=dev-` in the local `.env`.
 - **Done 2026-10-17:** checked the local `.env` held only the dev number, app
   and prefix; started a tunnel and set it as `PUBLIC_URL`; started the api
-  alone - not the worker, so nothing polled EZ Texting or texted anyone;
+  alone - not the worker, so nothing polled EZ Texting or asked the questions
+  (the api still sends the missed-call text: a third, unanswered test call
+  texted Jeel's phone - `TWILIO.md`);
   `dev:twilio:configure -- --dry-run`, then for real: the dev app and the dev
   number now point at the tunnel. A local test lead with Jeel's phone (the
   local database only).
