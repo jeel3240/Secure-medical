@@ -6,14 +6,17 @@ import { api } from './client';
  * The config says whether calling is set up on this server and which number
  * leads will see; the token is the browser's short-lived permission to place
  * calls as the signed-in agent. Which lead a call may reach is decided by the
- * server when the call starts, not here. And whether this browser can take a
- * call now - T9, AUTO-CALLS.md "Who is free".
+ * server when the call starts, not here. And, for automated calls
+ * (AUTO-CALLS.md, "Who is free"): whether this browser can take a call now
+ * (T9), and the "Taking calls" switch (T10).
  */
 
 export interface CallConfig {
   enabled: boolean;
   /** The number leads see, E.164. Null when calling is off. */
   callerId: string | null;
+  /** Automated calls are on: the app bar shows the "Taking calls" switch. */
+  autoCalls: boolean;
 }
 
 let config: Promise<CallConfig> | null = null;
@@ -45,4 +48,10 @@ export async function getCallToken(): Promise<string> {
  */
 export async function postRingable(available: boolean): Promise<void> {
   await api.post('/calls/ringable', { available }, { timeout: 10_000 });
+}
+
+/** Switches "Taking calls" on or off for the signed-in person. Resolves to what it now is. */
+export async function setTakingCalls(on: boolean): Promise<boolean> {
+  const { data } = await api.post<{ takingCalls: boolean }>('/calls/taking-calls', { on });
+  return data.takingCalls;
 }

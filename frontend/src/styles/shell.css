@@ -84,7 +84,79 @@
 
 .appbar__right {
   display: flex;
+  align-items: center;
   justify-content: flex-end;
+  gap: var(--space-2);
+}
+
+/* The "Taking calls" switch - T10, AUTO-CALLS.md "Who is free". On the navy bar,
+   so it uses the bar's colours; green when on, the colour of a live call. */
+.taking-calls {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  height: 36px;
+  padding: 0 var(--space-2);
+  border: 0;
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--color-appbar-text);
+  font: inherit;
+  cursor: pointer;
+}
+
+.taking-calls[aria-checked='true'] {
+  color: var(--color-appbar-text-active);
+}
+
+.taking-calls:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.taking-calls:focus-visible {
+  outline: none;
+  box-shadow: inset 0 0 0 2px var(--color-appbar-accent);
+}
+
+/* Being saved: it flips once the server has it. */
+.taking-calls:disabled {
+  cursor: progress;
+}
+
+.taking-calls__track {
+  position: relative;
+  flex: none;
+  width: 32px;
+  height: 18px;
+  border-radius: 9px;
+  background: rgba(255, 255, 255, 0.22);
+  transition: background 150ms ease;
+}
+
+.taking-calls[aria-checked='true'] .taking-calls__track {
+  background: var(--color-call-live);
+}
+
+.taking-calls__thumb {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--color-appbar-text-active);
+  transition: transform 150ms ease;
+}
+
+.taking-calls[aria-checked='true'] .taking-calls__thumb {
+  transform: translateX(14px);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .taking-calls__track,
+  .taking-calls__thumb {
+    transition: none;
+  }
 }
 
 .user-menu {

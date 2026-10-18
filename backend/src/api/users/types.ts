@@ -12,6 +12,8 @@ export interface UserRow {
   sessionVersion: number;
   lastLoginAt: Date | null;
   createdAt: Date;
+  /** The "Taking calls" switch - T10, AUTO-CALLS.md "Who is free". */
+  takingCalls: boolean;
 }
 
 /** What the API ever returns about a user. Never includes the hash or session version. */
@@ -24,6 +26,7 @@ export interface PublicUser {
   mustChangePassword: boolean;
   lastLoginAt: string | null;
   createdAt: string;
+  takingCalls: boolean;
 }
 
 export interface CreateUserInput {
@@ -42,6 +45,8 @@ export interface UpdateUserInput {
   mustChangePassword?: boolean;
   /** Ends every existing session for the user. */
   bumpSession?: boolean;
+  /** Switches "Taking calls"; the time it changed is kept only when it does. */
+  takingCalls?: boolean;
 }
 
 /**
@@ -75,5 +80,6 @@ export function toPublicUser(user: UserRow): PublicUser {
     mustChangePassword: user.mustChangePassword,
     lastLoginAt: user.lastLoginAt ? user.lastLoginAt.toISOString() : null,
     createdAt: user.createdAt.toISOString(),
+    takingCalls: user.takingCalls,
   };
 }

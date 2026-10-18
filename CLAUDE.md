@@ -170,7 +170,7 @@ you change something the docs describe, update the doc in the same commit.
     src/db/timeline.ts      the merged lead timeline
     src/db/notes.ts         agent notes, append-only
     src/api/callbacks.ts    My Callbacks: list, reschedule, mark done
-    src/api/calls.ts        browser calling: whether it is set up, and the call token
+    src/api/calls.ts        browser calling: whether it is set up, and the call token; the browser's word and the "Taking calls" switch (T9, T10)
     src/api/twilio-webhooks.ts  Twilio's signed webhooks: connect a call, a lead calling in, how it ended, who picked up, the recording, the recording notice
     src/core/calls.ts       call rules, pure: identity, outcomes, refusals
     src/db/calls.ts         may this call be placed, who an incoming call rings, and recording it
@@ -210,8 +210,10 @@ you change something the docs describe, update the doc in the same commit.
     src/core/call-script-fixtures.ts  the call script as a constant, for tests only - the live check holds it to the database
     src/db/call-script.ts   loads the automated call's script (migration 015)
     scripts/call-script-live-check.ts  proves migration 015: the script as agreed, its guards, answers add-only
-    src/db/presence.ts      who can take a call now: each open browser says so, it holds two minutes (T9)
-    scripts/presence-live-check.ts  proves it: the two minutes, busy, sign-out and deactivation clear it
+    src/db/presence.ts      who can take a call now: each open browser says so, it holds two minutes (T9); FREE_SQL, who is free (T10)
+    scripts/presence-live-check.ts  proves it: the two minutes, busy, sign-out and deactivation clear it; the switch; who is free
+    src/api/taking-calls.ts the "Taking calls" switch: why it changed, and its activity row (T10)
+    src/auto-calls-settings.ts  AUTO_CALLS: on only when exactly "on" (T10)
     src/core/questions.ts   what the screens call a question: "Q2", and "Q1-a" for a sub-question - one rule for every screen
     src/api/reply-flow.ts   runs the state machine for an inbound reply
     src/worker/expiry.ts    marks stale open conversations expired
@@ -251,12 +253,13 @@ you change something the docs describe, update the doc in the same commit.
     src/lib/format.ts       phone, dates, age, names
     src/lib/lock.ts         which queue rows an agent may open, and who may release a held lead
     src/lib/leads-view.ts   Admin > Leads' tab, filters and page, kept in the address so Back returns to them
-    src/api/calls.ts        calling config and token
+    src/api/calls.ts        calling config and token; the browser's word and the "Taking calls" switch
     src/lib/call-state.ts   a call's states, pure
     src/lib/calling.ts      the only file that uses Twilio's Voice SDK
     src/lib/incoming-state.ts  a lead calling in: ringing, answered, missed - pure
     src/lib/incoming-call.ts   the store that joins those states to Twilio
     src/lib/presence.ts     what keeps this browser busy - a call, a ring, a note box; calling.ts tells the server (T9)
+    src/layout/TakingCalls.tsx  the "Taking calls" switch in the app bar, shown only with automated calls on (T10)
     src/layout/IncomingCall.tsx  the incoming-call card and missed-call notice, on every screen
     src/lib/caller-context.ts  "Calling back · you tried 2× today", pure
     src/lib/ringtone.ts        the ring of an incoming call, made in the browser
@@ -319,10 +322,10 @@ is local only; production layers `docker-compose.prod.yml` on top of it.
 Rule: **only one `open` conversation per phone number, ever.**
 
 **As built, 2026-09-14.** The migrations in `backend/src/db/migrations/` - 001
-to 016 as of 2026-10-18 - are the source of truth and `docs/SCHEMA.md` explains
+to 017 as of 2026-10-18 - are the source of truth and `docs/SCHEMA.md` explains
 them. It differs from the list above:
 
-- **users** also has `session_version` and `last_login_at`, and since 016 (T9, 2026-10-18) `ringable_until`: until when the person's browser can take a call - said every 30 seconds, held two minutes, cleared when the session ends. `docs/AUTO-CALLS.md`, "Who is free".
+- **users** also has `session_version` and `last_login_at`, and since 016 (T9, 2026-10-18) `ringable_until`: until when the person's browser can take a call - said every 30 seconds, held two minutes, cleared when the session ends. `docs/AUTO-CALLS.md`, "Who is free". Since 017 (T10) `taking_calls` and `taking_calls_at`: the "Taking calls" switch, off at every sign-in and sign-out.
 - **leads** has `group_id`, `group_name` and `ezt_added_at` instead of `group` and `ezt_contact_id`; EZ Texting returns no contact id.
 - **conversations** also has `agent_took_over_at` (003), `completed_at` (004), and `q1_label` to `q3_label` (009): the word the lead chose, kept with the number, so renaming a choice never renames an earlier answer.
 - **dnc_list** also has `released_at` and `released_reason` (002): a block is lifted, never deleted.
@@ -564,7 +567,7 @@ retry, the end-to-end script, and a README with how to test and known limits.
 - **Source always reads "API" in production** - it is how the contact was
   added to EZ Texting, not which partner sent it. Keep the column, or find the
   partner elsewhere.
-- **Deploy:** `npm run migrate` applies whatever the server has not run, up to 013. *(2026-10-18: production runs 001 to 013; 014, 015 and 016, automated calls, are on `dev` for the next deploy - `docs/WORKFLOW.md`.)* `main` holds 001 to 011 since 2026-10-05, so a deploy of today's `dev` adds 012, the SMS flows and the antibiotics script (`docs/FLOWS.md`), and 013, indexes for the two list screens (`docs/QUEUE.md`) - merged into `dev` on 2026-10-06. What 005 to 011 were (011: call recordings and transcripts, which also need `TWILIO_TRANSCRIPTION_SERVICE_SID` - `docs/TWILIO.md`; 010: voicemail detection; 009: the word kept with each answer - `docs/STATE-MACHINE.md`; 005, 2026-09-29: poll every 30s; 006, 2026-10-01: the activity log, the raw webhook archive, and leads that cannot be deleted - `docs/AUDIT.md`; 007 and 008, the same day: incoming calls and the callback a missed call books - `docs/TWILIO.md`). Calling also needs the seven Twilio settings - all or none, a partly set group stops the API starting - and `npm run twilio:configure` run on the server, last: the phone number rings only one deployment. Production also needs `EZT_WEBHOOK_TOKEN` set, or the API will not start - it is already set there.
+- **Deploy:** `npm run migrate` applies whatever the server has not run, up to 013. *(2026-10-18: production runs 001 to 013; 014 to 017, automated calls, are on `dev` for the next deploy, with `AUTO_CALLS` left unset - `docs/WORKFLOW.md`.)* `main` holds 001 to 011 since 2026-10-05, so a deploy of today's `dev` adds 012, the SMS flows and the antibiotics script (`docs/FLOWS.md`), and 013, indexes for the two list screens (`docs/QUEUE.md`) - merged into `dev` on 2026-10-06. What 005 to 011 were (011: call recordings and transcripts, which also need `TWILIO_TRANSCRIPTION_SERVICE_SID` - `docs/TWILIO.md`; 010: voicemail detection; 009: the word kept with each answer - `docs/STATE-MACHINE.md`; 005, 2026-09-29: poll every 30s; 006, 2026-10-01: the activity log, the raw webhook archive, and leads that cannot be deleted - `docs/AUDIT.md`; 007 and 008, the same day: incoming calls and the callback a missed call books - `docs/TWILIO.md`). Calling also needs the seven Twilio settings - all or none, a partly set group stops the API starting - and `npm run twilio:configure` run on the server, last: the phone number rings only one deployment. Production also needs `EZT_WEBHOOK_TOKEN` set, or the API will not start - it is already set there.
 
 Task 29 found nothing to fix in the app: all three bugs the end-to-end script
 surfaced were in the script itself. Two apparent failures were the app being

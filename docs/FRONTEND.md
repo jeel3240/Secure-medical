@@ -424,6 +424,16 @@ once. Reports go one after another, each with a ten-second limit, so an older
 back the rest. Nothing is said when listening stops: the sign-out has already
 cleared it on the server.
 
+**The "Taking calls" switch** (T10, 2026-10-18 - "Who is free" in
+`AUTO-CALLS.md`). `layout/TakingCalls.tsx`, in the app bar before the user
+menu: a small switch, `role="switch"`, muted when off and the green of a live
+call when on, in `styles/shell.css`. Shown only when `GET /api/calls/config`
+says calling is set up and `autoCalls` is on - unknown is hidden. Its state is
+the signed-in user's `takingCalls`, from the sign-in store, so it needs no
+fetch of its own and a reload shows what the server holds. A click saves
+first and flips after, disabled meanwhile; a failure leaves it as it was and
+says so on hover. Signing in starts it off.
+
 **The centre column is a conversation, not a log.** `workspace/Conversation.tsx`
 shows the SMS thread, each call as one quiet line (since Phase 4) and the
 system markers - inbound on the left, ours on
@@ -764,6 +774,7 @@ response or an off-by-one age threshold is not:
 | `lib/call-state.test.ts`, `lib/calling.test.ts` | A call's states and wording; error sentences; who is calling |
 | `lib/calling.device.test.ts` | The join to Twilio's SDK, against a stand-in: placing a call, being rung, accept, decline, sign-out; telling the server whether it can take a call - registered or not, busy at once, every 30 seconds, in order |
 | `lib/presence.test.ts` | What keeps the browser busy: several reasons at once, listeners told only of a change, `useBusyWhile` following its component |
+| `layout/TakingCalls.test.tsx` | The "Taking calls" switch: shown only with automated calls on, flips once saved, one save at a time, a failure leaves it as it was |
 | `pages/workspace/CallBar.test.tsx` | The call bar in every state, and its note box |
 | `lib/incoming-state.test.ts`, `layout/IncomingCall.test.tsx` | A lead calling in: ringing, answered, missed, declined, one call at a time; what the card shows; Call back; keeping the browser busy until the note box is done |
 | `lib/ringtone.test.ts`, `lib/call-notification.test.ts`, `lib/caller-context.test.ts` | The ring and its first-click unlock; the desktop notification; the "Calling back" line |

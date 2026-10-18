@@ -40,6 +40,11 @@ export const ACTIVITY_ACTIONS = [
   // The do-not-call list. Re-blocking a number overwrites its row.
   'dnc.blocked',
   'dnc.released',
+  /**
+   * The "Taking calls" switch went on or off - `detail.on`, and `detail.why`:
+   * `by_hand`, `sign_in` or `sign_out` (T10, AUTO-CALLS.md "Who is free").
+   */
+  'calls.availability_changed',
   // Sign-in.
   'auth.signed_in',
   'auth.sign_in_failed',
