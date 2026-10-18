@@ -6,6 +6,7 @@
  * (docs/AUDIT.md): a recording arriving, a transcript completing, one failing.
  */
 
+import type { CallDirection } from '../core/calls';
 import { activityInsertSql } from './activity';
 import { pool } from './pool';
 import { MAX_TRANSCRIPT_ATTEMPTS, TRANSCRIPT_GIVE_UP_HOURS, type TranscriptLine } from '../core/transcripts';
@@ -49,7 +50,7 @@ export async function saveRecording(opts: {
 export interface OpenTranscript {
   id: number;
   callId: number;
-  direction: 'outbound' | 'inbound';
+  direction: CallDirection;
   recordingSid: string;
   status: 'pending' | 'queued';
   transcriptSid: string | null;

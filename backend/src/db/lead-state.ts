@@ -39,6 +39,12 @@ const closingList = CLOSING_DISPOSITIONS.map((value) => {
  * The automated "we will call you back" text does not clear it: that text is
  * the promise, not the call back.
  *
+ * **Nor does an automated call** (T4, 2026-10-18; `AUTO-CALLS.md`) - the
+ * server's scripted call is not a person getting back to them. Once a person
+ * takes its transfer it carries their `agent_id`, and then it counts like any
+ * call an agent was on. So "a call that returns it" is an agent's own call, or
+ * any call with a person on it - answered, or under way.
+ *
  * **A call under way counts as returning it** - found on the first real
  * answered call, 2026-10-01: the agent was talking to the lead under a banner
  * saying nobody had answered them, because a call has no outcome until it
@@ -64,8 +70,10 @@ export const MISSED_CALL_SQL = `(
         WHERE rc.lead_id = l.id AND rc.id > mc.id
           AND (
             rc.direction = 'outbound'
-            OR rc.outcome = 'answered'
-            OR (rc.outcome IS NULL AND rc.started_at > now() - interval '2 hours')
+            OR (
+              rc.agent_id IS NOT NULL
+              AND (rc.outcome = 'answered' OR (rc.outcome IS NULL AND rc.started_at > now() - interval '2 hours'))
+            )
           )
       )
       AND NOT EXISTS (
@@ -141,10 +149,12 @@ export const WORKED_SQL = `(
   OR EXISTS (SELECT 1 FROM callbacks wc WHERE wc.lead_id = l.id)
   OR EXISTS (SELECT 1 FROM dispositions wd WHERE wd.lead_id = l.id)
   -- A call an agent placed or answered. A missed incoming call is the lead's
-  -- doing, not an agent's work.
+  -- doing, not an agent's work; nor is an automated call nobody took (T4) -
+  -- answered by the lead, it still had no person on it.
   OR EXISTS (
     SELECT 1 FROM calls wk
-    WHERE wk.lead_id = l.id AND (wk.direction = 'outbound' OR wk.outcome = 'answered')
+    WHERE wk.lead_id = l.id
+      AND (wk.direction = 'outbound' OR (wk.outcome = 'answered' AND wk.agent_id IS NOT NULL))
   )
   OR EXISTS (SELECT 1 FROM messages wm WHERE wm.lead_id = l.id AND wm.sent_by IS NOT NULL)
 )`;

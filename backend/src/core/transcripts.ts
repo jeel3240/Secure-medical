@@ -7,6 +7,8 @@
  * is stored.
  */
 
+import type { CallDirection } from './calls';
+
 export type Speaker = 'agent' | 'lead';
 
 export interface TranscriptLine {
@@ -21,8 +23,12 @@ export interface TranscriptLine {
  *   dialled the lead (channel 2).
  * - The lead called us: their phone is the call (channel 1), and it dialled the
  *   agent's browser (channel 2).
+ * - The server called the lead (automated, T4): the recording starts when an
+ *   agent takes the transfer, and the call is the lead's leg (channel 1), which
+ *   dialled the agent's browser (channel 2) - as when the lead calls us. To be
+ *   confirmed on the first real transfer (`AUTO-CALLS.md`, T15).
  */
-export function speakerFor(direction: 'outbound' | 'inbound', channel: number): Speaker {
+export function speakerFor(direction: CallDirection, channel: number): Speaker {
   const first: Speaker = direction === 'outbound' ? 'agent' : 'lead';
   const second: Speaker = direction === 'outbound' ? 'lead' : 'agent';
   return channel === 1 ? first : second;
@@ -36,7 +42,7 @@ export interface RawSentence {
 }
 
 /** In the order they were said, each with who said it. Empty sentences are dropped. */
-export function transcriptLines(direction: 'outbound' | 'inbound', sentences: RawSentence[]): TranscriptLine[] {
+export function transcriptLines(direction: CallDirection, sentences: RawSentence[]): TranscriptLine[] {
   return sentences
     .map((s) => ({
       speaker: speakerFor(direction, Number(s.mediaChannel)),

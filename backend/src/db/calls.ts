@@ -190,7 +190,8 @@ export async function finishCall(opts: {
 
 /**
  * Records who picked up a call we placed - a person or a machine - and, when it
- * was a machine, saves the call as `voicemail` rather than `answered`.
+ * was a machine, saves the call as `voicemail` rather than `answered`. An
+ * agent's call or an automated one (T4).
  *
  * The verdict and the end of the call arrive in either order: detection takes
  * a few seconds, and a short call can be over before it reports. So this
@@ -205,7 +206,7 @@ export async function recordAnsweredBy(opts: { callSid: string; answeredBy: Answ
   const { rowCount } = await pool.query(
     `WITH prev AS (
        SELECT id, outcome FROM calls
-       WHERE twilio_call_sid = $1 AND direction = 'outbound' AND answered_by IS NULL
+       WHERE twilio_call_sid = $1 AND direction IN ('outbound', 'automated') AND answered_by IS NULL
        FOR UPDATE
      ),
      verdict AS (
@@ -275,7 +276,8 @@ export async function startIncomingCall(opts: { callSid: string; fromPhone: stri
                 (SELECT u.id FROM users u WHERE u.id = l.assigned_to AND u.is_active),
                 (SELECT c.agent_id FROM calls c
                  JOIN users u ON u.id = c.agent_id AND u.is_active
-                 WHERE c.lead_id = l.id AND c.direction = 'outbound'
+                 -- An automated call counts once a person took it (T4).
+                 WHERE c.lead_id = l.id AND c.direction IN ('outbound', 'automated')
                  ORDER BY c.id DESC LIMIT 1)
               ) AS agent_id
        FROM leads l
