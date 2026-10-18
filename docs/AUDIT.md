@@ -69,7 +69,8 @@ automated SMS flow (every message is in `messages`, including the first
 questions the resend after an outage sends - `POLLER.md`), a lead arriving
 (`leads`), a conversation completing or expiring (`conversations`), and each
 answer a lead gives (`conversation_answers` - add-only, and tied to the
-inbound text it was read from). A reply that was not counted because it
+inbound text it was read from; on an automated call, `call_answers` - add-only
+too, with what Twilio heard, since migration 015). A reply that was not counted because it
 arrived before our text had gone out is kept in `messages` like any other,
 and logged as `reply.before_our_text`.
 
@@ -96,8 +97,9 @@ lead nobody holds writes nothing.
 
 ### It cannot be altered
 
-A trigger on `activity_log`, on `webhook_events` and - since migration 012 -
-on `conversation_answers` refuses every `UPDATE` and `DELETE`:
+A trigger on `activity_log`, on `webhook_events`, on `conversation_answers`
+(since migration 012) and on `call_answers` (since 015) refuses every `UPDATE`
+and `DELETE`:
 
 ```
 activity_log is add-only: rows cannot be changed or deleted

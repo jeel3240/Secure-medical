@@ -95,10 +95,11 @@ ran the old 003 but never 004 misses the second part; rebuild it, or run the
 second part's SQL there once.
 
 *(The `004` on disk today, `004_conversation_completed_at.sql`, is a later and
-unrelated file. *(2026-10-18: production runs 001 to 013; 014, automated
-calls - T4, `AUTO-CALLS.md` - is on `dev`, and the next deploy runs it. It
-changes no existing row: a third call direction, a column, two checks and an
-index.)* As of 2026-10-06 the files are 001 to 013: `main` holds 001 to
+unrelated file. *(2026-10-18: production runs 001 to 013; 014 and 015, for
+automated calls - T4 and T6, `AUTO-CALLS.md` - are on `dev`, and the next
+deploy runs them. Neither changes an existing row: 014 adds a third call
+direction, a column, two checks and an index; 015 adds the call script's four
+tables, its seed, and eight `settings` rows.)* As of 2026-10-06 the files are 001 to 013: `main` holds 001 to
 011 - 006 to 011, the activity log, incoming calls, the callback a missed call
 books, the word kept with each answer, who picked up a call, and call
 recordings and transcripts, reached it on 2026-10-05. 012, the SMS flows as

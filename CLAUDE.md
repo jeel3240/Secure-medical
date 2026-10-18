@@ -206,6 +206,9 @@ you change something the docs describe, update the doc in the same commit.
     src/core/answers.ts     matches a reply to a choice of the question asked, pure
     src/db/flows.ts         loads a flow, starts a conversation on the active one, and gives its first question
     src/core/flow-fixtures.ts  the antibiotics flow as a constant, for tests only
+    src/core/call-script.ts the automated call's script, pure: its shape now, what the call does after each answer from T8
+    src/db/call-script.ts   loads the automated call's script (migration 015)
+    scripts/call-script-live-check.ts  proves migration 015: the script as agreed, its guards, answers add-only
     src/core/questions.ts   what the screens call a question: "Q2", and "Q1-a" for a sub-question - one rule for every screen
     src/api/reply-flow.ts   runs the state machine for an inbound reply
     src/worker/expiry.ts    marks stale open conversations expired
@@ -312,7 +315,7 @@ is local only; production layers `docker-compose.prod.yml` on top of it.
 Rule: **only one `open` conversation per phone number, ever.**
 
 **As built, 2026-09-14.** The migrations in `backend/src/db/migrations/` - 001
-to 014 as of 2026-10-18 - are the source of truth and `docs/SCHEMA.md` explains
+to 015 as of 2026-10-18 - are the source of truth and `docs/SCHEMA.md` explains
 them. It differs from the list above:
 
 - **users** also has `session_version` and `last_login_at`.
@@ -326,6 +329,7 @@ them. It differs from the list above:
 - **leads.previous_lead_id** exists but is unused and expected to be dropped - see §6.
 - **leads.assigned_at** records when an agent claimed the lead. Claims do not expire; it is what lets a superadmin see one held too long. Added 2026-09-15.
 - **flows**, **flow_questions**, **flow_choices** and **conversation_answers** - migration 012, 2026-10-05. The SMS script is rows, not code: a flow's questions, each question's choices with its reply, points and where the lead goes next, and one add-only row per answer given. **conversations** gained `flow_id`, `current_question_id`, `question_sent_at` (when the text the lead must answer went out - a reply before then is not counted) and `end_outcome`, and `step` now holds the question's position (10, 11, 20, 30), no longer 1-3; its `q1`-`q3` columns and labels, `scoring_rules`, and the question, clarification, thanks and review rows in `settings` are no longer read. A question is named by its key, a sub-question after its parent: `q1-a`, shown "Q1-a". `docs/FLOWS.md`.
+- Migration 015, 2026-10-18 (T6, `docs/AUTO-CALLS.md`): the automated call's script as rows - **call_scripts** (with the lines every step shares and the link text), **call_steps**, **call_choices** - and **call_answers**, add-only, one row per answer with what Twilio heard; and the `auto_call_*` rows in **settings** (11:00-17:00 America/Phoenix, Monday-Friday, 60 minutes after the first text, and the call's limits).
 - Migration 014, 2026-10-18 (T4, `docs/AUTO-CALLS.md`): **calls** can be `automated` - placed by the server, with no `agent_id` until a person takes its transfer - and gain `script_result`; one automated call per lead (`calls_one_automated_per_lead`). An automated call nobody took never makes a lead Working nor returns a missed call.
 - Migration 013, 2026-10-06: three indexes the queue and Admin > Leads needed - `callbacks (lead_id)`, agents' own texts in `messages`, and `leads` by arrival. With 50,000 leads the queue took 8 seconds; `docs/QUEUE.md`, "How fast it is".
 - **call_recordings** and **call_transcripts** - migration 011, 2026-10-02. A call's recording id at Twilio, and its transcript with who said what. `docs/TWILIO.md`, "Recordings and transcripts".
@@ -556,7 +560,7 @@ retry, the end-to-end script, and a README with how to test and known limits.
 - **Source always reads "API" in production** - it is how the contact was
   added to EZ Texting, not which partner sent it. Keep the column, or find the
   partner elsewhere.
-- **Deploy:** `npm run migrate` applies whatever the server has not run, up to 013. *(2026-10-18: production runs 001 to 013; 014, automated calls, is on `dev` for the next deploy - `docs/WORKFLOW.md`.)* `main` holds 001 to 011 since 2026-10-05, so a deploy of today's `dev` adds 012, the SMS flows and the antibiotics script (`docs/FLOWS.md`), and 013, indexes for the two list screens (`docs/QUEUE.md`) - merged into `dev` on 2026-10-06. What 005 to 011 were (011: call recordings and transcripts, which also need `TWILIO_TRANSCRIPTION_SERVICE_SID` - `docs/TWILIO.md`; 010: voicemail detection; 009: the word kept with each answer - `docs/STATE-MACHINE.md`; 005, 2026-09-29: poll every 30s; 006, 2026-10-01: the activity log, the raw webhook archive, and leads that cannot be deleted - `docs/AUDIT.md`; 007 and 008, the same day: incoming calls and the callback a missed call books - `docs/TWILIO.md`). Calling also needs the seven Twilio settings - all or none, a partly set group stops the API starting - and `npm run twilio:configure` run on the server, last: the phone number rings only one deployment. Production also needs `EZT_WEBHOOK_TOKEN` set, or the API will not start - it is already set there.
+- **Deploy:** `npm run migrate` applies whatever the server has not run, up to 013. *(2026-10-18: production runs 001 to 013; 014 and 015, automated calls, are on `dev` for the next deploy - `docs/WORKFLOW.md`.)* `main` holds 001 to 011 since 2026-10-05, so a deploy of today's `dev` adds 012, the SMS flows and the antibiotics script (`docs/FLOWS.md`), and 013, indexes for the two list screens (`docs/QUEUE.md`) - merged into `dev` on 2026-10-06. What 005 to 011 were (011: call recordings and transcripts, which also need `TWILIO_TRANSCRIPTION_SERVICE_SID` - `docs/TWILIO.md`; 010: voicemail detection; 009: the word kept with each answer - `docs/STATE-MACHINE.md`; 005, 2026-09-29: poll every 30s; 006, 2026-10-01: the activity log, the raw webhook archive, and leads that cannot be deleted - `docs/AUDIT.md`; 007 and 008, the same day: incoming calls and the callback a missed call books - `docs/TWILIO.md`). Calling also needs the seven Twilio settings - all or none, a partly set group stops the API starting - and `npm run twilio:configure` run on the server, last: the phone number rings only one deployment. Production also needs `EZT_WEBHOOK_TOKEN` set, or the API will not start - it is already set there.
 
 Task 29 found nothing to fix in the app: all three bugs the end-to-end script
 surfaced were in the script itself. Two apparent failures were the app being
