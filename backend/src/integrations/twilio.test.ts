@@ -1,8 +1,13 @@
 import twilio from 'twilio';
 import type { TwilioSettings } from '../twilio-settings';
+import { ANTIBIOTICS_CALL as SCRIPT } from '../core/call-script-fixtures';
 import {
+  autoCallTwiml,
+  autoCallUrl,
+  AUTO_ANSWER_PATH,
   dialTwiml,
   emptyTwiml,
+  hangupTwiml,
   isFromTwilio,
   mintCallToken,
   missedCallTwiml,
@@ -143,5 +148,58 @@ describe('checking a request came from Twilio', () => {
     expect(isFromTwilio(SETTINGS, { signature: undefined, path, params })).toBe(false);
     expect(isFromTwilio(SETTINGS, { signature, path, params: { ...params, From: 'client:agent-1' } })).toBe(false);
     expect(isFromTwilio(SETTINGS, { signature, path: '/api/webhooks/twilio/status', params })).toBe(false);
+  });
+});
+
+describe('the automated call, in Twilio\'s words (T12)', () => {
+  const [OFFER] = SCRIPT.steps;
+  const ask = { kind: 'ask' as const, step: OFFER, attempt: 1 as const, say: [OFFER.body] };
+
+  it('names the call\'s row in every webhook address, with anything else it needs', () => {
+    expect(autoCallUrl(SETTINGS, AUTO_ANSWER_PATH, 42)).toBe('https://calls.example.com/api/webhooks/twilio/auto/answer?call=42');
+    expect(autoCallUrl(SETTINGS, '/x', 42, { step: 3, try: 2 })).toBe('https://calls.example.com/x?call=42&step=3&try=2');
+  });
+
+  it('asks: a second of quiet, then the question in the script\'s voice, listening for speech or one key', () => {
+    const xml = autoCallTwiml(SETTINGS, { callId: 42, script: SCRIPT, action: ask, pauseFirst: true });
+    expect(xml).toMatch(/^<\?xml[^>]*><Response><Pause length="1"\/><Gather /);
+    expect(xml).toContain('input="speech dtmf"');
+    expect(xml).toContain('numDigits="1"');
+    expect(xml).toContain('speechTimeout="auto"');
+    // "Hello?" over the question is not the answer; silence is reported, not skipped.
+    expect(xml).toContain('bargeIn="false"');
+    expect(xml).toContain('actionOnEmptyResult="true"');
+    expect(xml).toContain(
+      `action="https://calls.example.com/api/webhooks/twilio/auto/gather?call=42&amp;step=${OFFER.id}&amp;try=1"`
+    );
+    expect(xml).toContain('<Say voice="Google.en-US-Chirp3-HD-Kore">Hi, this is Seri calling from eDrugstore.');
+    expect(xml).toMatch(/<\/Say><\/Gather><\/Response>$/);
+  });
+
+  it('listens hardest for the step\'s own words and the stop words', () => {
+    const xml = autoCallTwiml(SETTINGS, { callId: 42, script: SCRIPT, action: ask });
+    const hints = /hints="([^"]*)"/.exec(xml)![1].split(', ');
+    expect(hints).toEqual(expect.arrayContaining(['yes', 'not interested', 'stop calling', 'remove me']));
+    expect(new Set(hints).size).toBe(hints.length);
+  });
+
+  it('a later asking has no pause, and never a recording notice - nothing is recorded before a transfer', () => {
+    const xml = autoCallTwiml({ ...SETTINGS, transcriptionServiceSid: `GA${'4'.repeat(32)}` }, { callId: 42, script: SCRIPT, action: ask });
+    expect(xml).not.toContain('<Pause');
+    expect(xml).not.toContain('recorded');
+  });
+
+  it('ends: says the lines, then hangs up - no listening', () => {
+    const xml = autoCallTwiml(SETTINGS, {
+      callId: 42,
+      script: SCRIPT,
+      action: { kind: 'end', say: [SCRIPT.noResponseBody], result: 'no_response' },
+    });
+    expect(xml).toContain('<Say voice="Google.en-US-Chirp3-HD-Kore">Thank you for your time. Have a great day.</Say><Hangup/>');
+    expect(xml).not.toContain('<Gather');
+  });
+
+  it('ends a call it cannot act on without a word', () => {
+    expect(hangupTwiml()).toMatch(/<Response><Hangup\/><\/Response>$/);
   });
 });

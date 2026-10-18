@@ -1,4 +1,10 @@
 /**
+ * The settings for automated calls, docs/AUTO-CALLS.md: whether the server
+ * places them (`AUTO_CALLS`), and outside production which numbers it may ring
+ * (`AUTO_CALL_TEST_NUMBERS`).
+ */
+
+/**
  * Whether the server places automated calls - `AUTO_CALLS`, docs/AUTO-CALLS.md.
  *
  * Off unless it says exactly `on`: production gets each automated-calling
@@ -24,4 +30,38 @@ export function readAutoCalls(env: Record<string, string | undefined>): AutoCall
   if (raw === 'on') return { on: true, unknown: null };
   if (raw === '' || raw === 'off') return { on: false, unknown: null };
   return { on: false, unknown: raw };
+}
+
+/**
+ * Which numbers an automated call may ring outside production -
+ * `AUTO_CALL_TEST_NUMBERS`, T12. Comma-separated, E.164:
+ * `+16025550123,+16025550124`.
+ *
+ * On a laptop, or any copy that is not production, an automated call rings
+ * only a number on this list - our own phones - whatever lead it is for, so a
+ * copy of real leads can never ring a real person. Empty, nothing can be
+ * called. Production does not read it: any lead may be called there.
+ */
+export interface AutoCallNumbers {
+  /** The numbers that may be rung; null when any may - production. */
+  only: ReadonlySet<string> | null;
+  /** How many entries were not E.164 numbers - ignored, and counted for the log, never named. */
+  invalid: number;
+}
+
+const E164 = /^\+[1-9]\d{7,14}$/;
+
+export function readAutoCallTestNumbers(env: Record<string, string | undefined>, production: boolean): AutoCallNumbers {
+  if (production) return { only: null, invalid: 0 };
+  const entries = (env.AUTO_CALL_TEST_NUMBERS ?? '')
+    .split(',')
+    .map((entry) => entry.trim())
+    .filter(Boolean);
+  const valid = entries.filter((entry) => E164.test(entry));
+  return { only: new Set(valid), invalid: entries.length - valid.length };
+}
+
+/** Whether an automated call may ring `phone` here. */
+export function mayRing(numbers: AutoCallNumbers, phone: string): boolean {
+  return numbers.only === null || numbers.only.has(phone);
 }

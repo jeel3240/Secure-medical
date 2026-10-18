@@ -74,6 +74,7 @@ docker compose exec postgres psql -U app -d leads \
 | `TWILIO_IDENTITY_PREFIX` | Optional, apart from the seven. Put in front of every browser's name at Twilio. **Empty in production; `dev-` locally**, because the laptop shares production's Twilio account and Twilio rings every browser with the same name - `TWILIO.md`, "What it needs on the Twilio account". Needed by the api |
 | `TWILIO_TRANSCRIPTION_SERVICE_SID` | Optional, apart from the seven. Set, every call is recorded and transcribed (`TWILIO.md`, "Recordings and transcripts"); empty, nothing is recorded. `npm run twilio:configure -- --transcription` creates the service and prints the id. Needed by both the api and the worker |
 | `AUTO_CALLS` | Automated calls (`AUTO-CALLS.md`). **Off unless exactly `on`**, and only with calling set up; anything else is off and logged once as `auto_calls.off`, never a reason to refuse to start. Production gets every automated-calling change with it off. On, the app bar shows the "Taking calls" switch. Needed by the api and the worker |
+| `AUTO_CALL_TEST_NUMBERS` | Outside production, **the only numbers an automated call may ring** - our own phones, comma-separated E.164 (`+16025550123,+16025550124`). Empty, nothing is rung; an entry that is not E.164 is ignored. Production does not read it. `AUTO-CALLS.md`, "How a call is placed". Needed by the api and the worker |
 | `PORT`, `SERVICE_NAME` | Not in `.env.example` and not set by the compose files. `PORT` is the API's port, 3000 by default. `SERVICE_NAME` overrides the `svc` field on every log line, which is otherwise worked out from the entry point (`api`, `worker`). |
 | `CADDY_DOMAIN` | Not read by anything. The production `Caddyfile` names `dailyleadhub.com` directly. |
 
@@ -129,7 +130,7 @@ scripts/live-checks.sh              # all of them
 scripts/live-checks.sh flows queue  # just these
 ```
 
-There are eighteen live checks, covering who can take a call (migrations 016 and 017: the browser's word, the "Taking calls" switch, and who is free), the automated call's script (migration 015), the SMS flows (a second flow added as
+There are nineteen live checks, covering placing an automated call (its row, every refusal, linking it to Twilio's call, two placements racing), who can take a call (migrations 016 and 017: the browser's word, the "Taking calls" switch, and who is free), the automated call's script (migration 015), the SMS flows (a second flow added as
 rows only), the queue, claims, the read flag, the lead card,
 the timeline, callbacks, dispositions, agent SMS, calls (outgoing, incoming and
 missed), the activity log, Admin > Leads, the admin read models, health, the

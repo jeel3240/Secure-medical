@@ -9,20 +9,32 @@
  *   POST /api/webhooks/twilio/incoming        a lead is calling our number
  *   POST /api/webhooks/twilio/incoming/after  ringing the agent is over: what to say
  *
+ * And the automated call's, T12 on (AUTO-CALLS.md) - each naming the call's
+ * row, `?call=<id>`, in the address Twilio signs:
+ *
+ *   POST /api/webhooks/twilio/auto/answer     the lead picked up: the first question
+ *   POST /api/webhooks/twilio/auto/gather     the lead answered a question, or said nothing
+ *   POST /api/webhooks/twilio/auto/status     how the call ended
+ *   POST /api/webhooks/twilio/auto/amd        who picked up: a person or a machine
+ *
  * Unauthenticated, like the EZ Texting webhook, but unlike it Twilio signs
  * every request (X-Twilio-Signature), so anything unsigned or mis-signed is
  * refused before it reaches the database. With calling not set up, every
- * route answers 404, as if they did not exist.
+ * route answers 404, as if they did not exist - and the automated call's do
+ * too while automated calls are off (`AUTO_CALLS`).
  *
  * Twilio posts form-encoded fields, not JSON, so this router parses its own
  * bodies.
  */
 
 import express, { type NextFunction, type Request, type Response, Router } from 'express';
+import { firstAsk } from '../core/call-script';
 import { agentIdFromIdentity, answeredByFor, outcomeForStatus, REFUSAL_SPEECH, talkSeconds } from '../core/calls';
 import {
+  autoCallTwiml,
   dialTwiml,
   emptyTwiml,
+  hangupTwiml,
   isFromTwilio,
   missedCallTwiml,
   recordingNoticeTwiml,
@@ -62,15 +74,31 @@ function missedText() {
   return require('../db/missed-call-text') as typeof import('../db/missed-call-text');
 }
 
+/** The automated call's row, and the script it says - loaded lazily, as above. */
+function autoCalls() {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const { linkAutomatedCall } = require('../db/auto-calls') as typeof import('../db/auto-calls');
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const { loadActiveCallScript } = require('../db/call-script') as typeof import('../db/call-script');
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const { pool } = require('../db/pool') as typeof import('../db/pool');
+  return { linkAutomatedCall, loadScript: () => loadActiveCallScript(pool) };
+}
+
 const field = (body: Record<string, unknown>, key: string): string =>
   typeof body[key] === 'string' ? (body[key] as string) : '';
+
+/** The automated call's row named in a webhook's address - a positive whole number, or null. */
+function autoCallId(raw: unknown): number | null {
+  return typeof raw === 'string' && /^[1-9]\d{0,9}$/.test(raw) ? Number(raw) : null;
+}
 
 export function twilioWebhooksRouter(deps: AppDeps): Router {
   const router = Router();
   router.use(express.urlencoded({ extended: false, limit: '20kb' }));
 
   router.use((req: Request, res: Response, next: NextFunction) => {
-    if (!deps.twilio) {
+    if (!deps.twilio || (req.path.startsWith('/auto/') && !deps.autoCalls)) {
       res.status(404).json({ error: 'not_found', message: 'No such endpoint.' });
       return;
     }
@@ -267,6 +295,106 @@ export function twilioWebhooksRouter(deps: AppDeps): Router {
         log.error('call.missed_not_recorded', { callSid: field(body, 'CallSid'), err: errText(err) });
       }
       res.send(missedCallTwiml());
+    })
+  );
+
+  /**
+   * The automated call's row for a webhook about it, linked to Twilio's id for
+   * the call - saved now if Twilio's answer to placing it never reached us.
+   * Null when the request names no row of ours, or another call's: then it is
+   * not acted on.
+   */
+  const automatedCall = async (req: Request): Promise<{ callId: number; callSid: string } | null> => {
+    const callId = autoCallId(req.query.call);
+    const callSid = field((req.body ?? {}) as Record<string, unknown>, 'CallSid');
+    if (callId === null || !callSid) return null;
+    return (await autoCalls().linkAutomatedCall(callId, callSid)) ? { callId, callSid } : null;
+  };
+
+  // The lead picked up: a second's quiet, then the first question, listening
+  // for the answer. Anything wrong and the call simply ends - the lead is
+  // never left listening to Twilio's "application error".
+  router.post(
+    '/auto/answer',
+    asyncHandler(async (req, res) => {
+      res.type('text/xml');
+      try {
+        const call = await automatedCall(req);
+        if (!call) {
+          log.warn('auto_call.unknown_call', { path: req.path, callId: req.query.call });
+          res.send(hangupTwiml());
+          return;
+        }
+        const script = await autoCalls().loadScript();
+        if (!script) {
+          log.error('auto_call.no_script', { callId: call.callId });
+          res.send(hangupTwiml());
+          return;
+        }
+        const action = firstAsk(script);
+        if (action.kind === 'end' && action.brokenScript) log.error('auto_call.broken_script', { callId: call.callId });
+        log.info('auto_call.answered', { callId: call.callId, callSid: call.callSid });
+        res.send(autoCallTwiml(deps.twilio!, { callId: call.callId, script, action, pauseFirst: true }));
+      } catch (err) {
+        log.error('auto_call.answer_failed', { callId: req.query.call, err: errText(err) });
+        res.send(hangupTwiml());
+      }
+    })
+  );
+
+  // The lead answered the question, or said nothing. T12 asks the first
+  // question and stops there: whatever was said, the lead is thanked and the
+  // call ends. T13 reads the answer, keeps it, and carries the script on.
+  router.post(
+    '/auto/gather',
+    asyncHandler(async (req, res) => {
+      res.type('text/xml');
+      try {
+        const call = await automatedCall(req);
+        const script = call ? await autoCalls().loadScript() : null;
+        if (!call || !script) {
+          res.send(hangupTwiml());
+          return;
+        }
+        res.send(
+          autoCallTwiml(deps.twilio!, {
+            callId: call.callId,
+            script,
+            action: { kind: 'end', say: [script.noResponseBody], result: 'no_response' },
+          })
+        );
+      } catch (err) {
+        log.error('auto_call.gather_failed', { callId: req.query.call, err: errText(err) });
+        res.send(hangupTwiml());
+      }
+    })
+  );
+
+  // How the call ended: saved as every call's end is (`finishCall`), on the
+  // row this address names.
+  router.post(
+    '/auto/status',
+    asyncHandler(async (req, res) => {
+      const body = (req.body ?? {}) as Record<string, unknown>;
+      const call = await automatedCall(req);
+      if (call) await recordEnd(call.callSid, body.CallStatus, body.CallDuration);
+      else log.warn('auto_call.unknown_call', { path: req.path, callId: req.query.call });
+      res.sendStatus(204);
+    })
+  );
+
+  // Who picked up: kept on the row, as for an agent's call. T18 acts on a
+  // machine - leaves the voicemail message.
+  router.post(
+    '/auto/amd',
+    asyncHandler(async (req, res) => {
+      const answeredBy = answeredByFor(((req.body ?? {}) as Record<string, unknown>).AnsweredBy);
+      const call = await automatedCall(req);
+      if (call && answeredBy) {
+        const recorded = await db().recordAnsweredBy({ callSid: call.callSid, answeredBy });
+        log.info('call.answered_by', { callSid: call.callSid, answeredBy, recorded });
+      }
+      res.sendStatus(204);
     })
   );
 

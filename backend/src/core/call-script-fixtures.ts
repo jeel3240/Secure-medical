@@ -1,9 +1,9 @@
 /**
- * The automated call's script as migration 015 seeds it, for tests - so the
- * words and lines a test uses are the ones a lead hears. Not used by the app,
- * which loads the script from the database (`db/call-script.ts`).
- * `scripts/call-script-live-check.ts` compares this with the database, so the
- * two cannot drift apart.
+ * The automated call's script as migration 015 seeds it and 018 changes it,
+ * for tests - so the words and lines a test uses are the ones a lead hears.
+ * Not used by the app, which loads the script from the database
+ * (`db/call-script.ts`). `scripts/call-script-live-check.ts` compares this with
+ * the database, so the two cannot drift apart.
  */
 
 import type { CallScript } from './call-script';
@@ -17,7 +17,7 @@ export const ANTIBIOTICS_CALL: CallScript = {
   id: 1,
   key: 'antibiotics',
   name: 'eDrugstore antibiotics',
-  voice: 'Polly.Joanna-Neural',
+  voice: 'Google.en-US-Chirp3-HD-Kore',
   optOutWords: ['stop calling', 'stop', 'remove me', 'take me off', 'do not call', "don't call", 'unsubscribe'],
   optOutBody: "Okay, we won't call you again. Goodbye.",
   noResponseBody: 'Thank you for your time. Have a great day.',
@@ -33,7 +33,7 @@ export const ANTIBIOTICS_CALL: CallScript = {
       key: 'q1',
       position: 10,
       heading: 'Offer',
-      body: 'Hi, this is Seri calling from eDrugstore. This is an automated call. Are you interested in ordering antibiotics at 25% off today?',
+      body: 'Hi, this is Seri calling from eDrugstore. Are you interested in ordering antibiotics at 25% off today?',
       repeatBody: ASK_AGAIN,
       choices: [
         {

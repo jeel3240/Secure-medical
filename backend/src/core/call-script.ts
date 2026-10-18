@@ -108,15 +108,18 @@ export type CallAction =
       brokenScript?: true;
     };
 
-/** The first thing said when the lead picks up: the first step's question. */
-export function firstAsk(script: CallScript): CallAction {
+/** An action that is only words and listening - everything but a transfer. */
+export type AskOrEnd = Extract<CallAction, { kind: 'ask' | 'end' }>;
+
+/** The first thing said when the lead picks up: the first step's question. Never a transfer. */
+export function firstAsk(script: CallScript): AskOrEnd {
   const first = script.steps[0];
   if (!first) return politeEnd(script);
   return { kind: 'ask', step: first, attempt: 1, say: [first.body] };
 }
 
 /** A call the script cannot carry on: thank them, end, and flag our mistake. */
-function politeEnd(script: CallScript): CallAction {
+function politeEnd(script: CallScript): AskOrEnd {
   return { kind: 'end', say: [script.noResponseBody], result: 'no_response', brokenScript: true };
 }
 

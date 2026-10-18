@@ -576,6 +576,12 @@ trusted without a session.
 
 With calling not set up, every Twilio webhook route answers 404.
 
+**The automated call's webhooks** (`/auto/answer`, `/auto/gather`,
+`/auto/status`, `/auto/amd` - T12) are checked the same way, and name their
+call's row in the address (`?call=<id>`), which is part of what Twilio signs:
+the row cannot be swapped. They answer 404 while automated calls are off.
+What each does: `AUTO-CALLS.md`, "How a call is placed".
+
 ## Settings
 
 Seven variables. `.env.example` says where each comes from in the Twilio
