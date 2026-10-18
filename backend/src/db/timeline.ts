@@ -10,6 +10,7 @@
  * AGENT-WORKSPACE.md, "The timeline"; DESIGN-PROMPT.md section 3.
  */
 
+import type { CallDirection } from '../core/calls';
 import type { ActivityAction } from '../core/activity';
 import { pool } from './pool';
 
@@ -229,8 +230,8 @@ interface TimelineRow {
   at: Date;
   /** Every query selects it: the agent, or null for our own and the lead's. */
   author: string | null;
-  /** Messages and calls: which way it went. */
-  direction?: 'inbound' | 'outbound';
+  /** Messages and calls: which way it went. A call can also be `automated` (T4). */
+  direction?: CallDirection;
   sent_by?: number | null;
   body?: string;
   /** Inbound only: the choice this text was recorded as - "Yes". */

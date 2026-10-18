@@ -10,6 +10,12 @@ describe('who said it', () => {
     expect(speakerFor('inbound', 1)).toBe('lead');
     expect(speakerFor('inbound', 2)).toBe('agent');
   });
+
+  it('an automated call an agent took over: the lead is channel 1, as when the lead calls us', () => {
+    // Recorded from the transfer on: the lead's leg dialled the agent's browser.
+    expect(speakerFor('automated', 1)).toBe('lead');
+    expect(speakerFor('automated', 2)).toBe('agent');
+  });
 });
 
 describe('the transcript, from Twilio\'s sentences', () => {

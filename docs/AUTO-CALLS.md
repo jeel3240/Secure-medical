@@ -202,7 +202,7 @@ ticket's own PR.
 | T2 | `twilio:configure` cannot move production's number | - | Done 2026-10-16 |
 | T3 | Set up the new number for local work | T1, T2 | Done 2026-10-17 - a real call each way on the dev number |
 | | **Data and rules - no calls yet** | | |
-| T4 | The database can hold a robot call | - | Not started |
+| T4 | The database can hold a robot call | - | Done 2026-10-18 |
 | T5 | The screens know a robot call from an agent's call | T4 | Not started |
 | T6 | The call script saved as rows | T4 | Not started |
 | T7 | Understanding a spoken answer | T6 | Not started |
@@ -455,18 +455,32 @@ agent's work.
   - End of call, voicemail verdict, transcript speakers: handle `automated`.
 
 **Done when**
-- [ ] A live check: a robot call with no agent leaves the lead not Working
-      and a missed call still open.
-- [ ] A live check: once an agent takes it, the lead is Working and the
-      missed call is answered.
-- [ ] Every existing live check still passes.
-- [ ] The migration runs on a copy of the database.
+- [x] A live check: a robot call with no agent leaves the lead not Working
+      and a missed call still open - answered by the lead or under way.
+- [x] A live check: once an agent takes it, the lead is Working, the missed
+      call is answered, and a call back rings that agent.
+- [x] The database refuses an agent's call without an agent, a second
+      automated call to one lead, and a script result on any other call.
+- [x] Every existing live check still passes - calls 104 (86 before), all 16.
+- [x] The migration runs on the local database, which holds calls, and a
+      second run applies nothing.
+
+As built: one rule for both "Working" and "returned a missed call" - a call
+counts when a person was on it (`agent_id` set), or an agent placed it; an
+answered or ongoing call with nobody on it counts for neither. Existing rows
+read exactly as before, since every answered or ongoing call so far has an
+agent. The voicemail verdict is kept for automated calls too (T18 needs it),
+and a transcript of one puts the lead on channel 1, as an incoming call does -
+to be confirmed on the first real transfer (T15). `CallDirection` in
+`core/calls.ts` is the one type for a call's direction.
 
 **Files:** `backend/src/db/migrations/014_automated_calls.sql`,
 `backend/src/db/lead-state.ts`, `backend/src/db/calls.ts`,
-`backend/src/db/timeline.ts`, `backend/src/core/transcripts.ts`,
-`backend/src/db/transcripts.ts`, `scripts/calls-live-check.ts`.
-**Doc:** `SCHEMA.md`, `TWILIO.md`.
+`backend/src/db/timeline.ts`, `backend/src/core/calls.ts`,
+`backend/src/core/transcripts.ts` (+ test), `backend/src/db/transcripts.ts`,
+`backend/scripts/calls-live-check.ts`.
+**Doc:** `SCHEMA.md`, `TWILIO.md`, `ADMIN-LEADS.md`, `LEAD-FLOW.md`,
+`WORKFLOW.md`, `CLAUDE.md` §5 and §10.
 
 ---
 

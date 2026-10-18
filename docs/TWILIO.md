@@ -98,7 +98,8 @@ One agent, never several:
 
 1. **The agent holding the lead** - they are working it right now.
 2. Otherwise **the agent who last called that lead** - the lead is most likely
-   returning that call.
+   returning that call. An automated call counts once a person took its
+   transfer (T4); one nobody took has no agent and is skipped.
 3. Otherwise nobody. A lead no agent has ever held or called has nobody whose
    call it is; it goes straight to missed and into the queue.
 
@@ -135,6 +136,7 @@ Medical" until 2026-10-05.) Then:
 | An agent texts the lead | Their own text. One EZ Texting refused does not count - it never arrived. Nor does the automated "we will call you back" text: that is the promise, not the call back |
 | The lead rings again and is answered | |
 | A call with them is under way | No outcome yet, started within the last 2 hours - so an agent talking to the lead is not shown Missed call (found on the first real answered call), and a row Twilio never closed cannot hide one for good. If an incoming call under way ends unanswered, that is a new missed call |
+| An automated call - only once a person is on it | The server's scripted call (T4) is not a person getting back to them: answered by the lead or under way, it settles nothing until someone takes its transfer. Then it counts like any call with a person on it |
 | An agent saves an outcome | Closed or DNC, after the call. They have decided what happens to the lead (2026-10-01, from the doc review: until then a lead closed without a call back stayed in the queue as Missed call) |
 
 Until then the tag and the badge stay. Reading the lead's page does not clear
@@ -487,8 +489,9 @@ made `agent_id` optional for them (migration 007).
 | Column | Value |
 |---|---|
 | `twilio_call_sid` | Twilio's id for the call's **first** leg: the browser's for a call we placed, the lead's for one we received. Unique, which is what makes a retried webhook safe |
-| `direction` | `outbound` - an agent called the lead - or `inbound`, the lead called us |
-| `agent_id`, `lead_id` | Who called whom. For an incoming call, the agent it rang - null when it rang nobody. An outgoing call always has an agent; the database refuses one without |
+| `direction` | `outbound` - an agent called the lead - or `inbound`, the lead called us - or, since migration 014 (T4, 2026-10-18), `automated`: the server called the lead (`AUTO-CALLS.md`) |
+| `agent_id`, `lead_id` | Who called whom. For an incoming call, the agent it rang - null when it rang nobody. An agent's outgoing call always has an agent; the database refuses one without (`calls_outbound_has_agent`). An automated call has none until a person takes its transfer, then theirs |
+| `script_result` | Automated calls only (014): how the script ended - `transferred`, `transfer_missed`, `link_sent`, `not_interested`, `opted_out`, `no_response`, `voicemail_left`, `hung_up`, `unanswered`. `outcome` keeps Twilio's view beside it. One automated call per lead, ever: a unique index (`calls_one_automated_per_lead`) |
 | `started_at` | When Twilio asked us how to connect it |
 | `ended_at` | When Twilio reported the far leg ended - the lead's for a call we placed, the agent's for one we received - or at once for an incoming call that rang nobody. Null while the call is in progress |
 | `outcome` | `answered`, `no_answer`, `busy`, `failed` or `canceled` - `core/calls.ts` - `voicemail` for a call we placed that a machine picked up, and `missed` for an incoming call nobody answered. Null while in progress |
@@ -511,7 +514,9 @@ finds `ended_at` already set and changes nothing - the first outcome stands.
 **A call an agent placed or answered makes its lead Working** on Admin > Leads,
 and counts as the agent's latest activity on Overview (`db/lead-state.ts`,
 `db/admin-overview.ts`). A missed incoming call is the lead's doing, not an
-agent's work, so it does neither by itself - "What a missed call does to the
+agent's work, so it does neither by itself. Nor does an automated call nobody
+took (T4): the lead may have answered it, but no person was on it - it counts
+once a person takes its transfer and the call carries their `agent_id` - "What a missed call does to the
 lead's other states", above. Overview shows no call totals - they were removed
 on 2026-09-28 at Jeel's request and are not back.
 

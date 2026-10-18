@@ -81,7 +81,7 @@ highest in this list wins.
 |---|---|---|
 | **Opted out** | Texted STOP, or an agent pressed DNC. The number is blocked. (A lead who later texted START still reads Opted out here, though unblocked - "Ways back") | No |
 | **Closed** | An agent pressed Closed | No, until something reopens it - "Ways back", below |
-| **Working** | An agent holds it, or has left a note, a callback, a call they placed or answered, an SMS or an outcome on it | Yes |
+| **Working** | An agent holds it, or has left a note, a callback, a call they placed or answered, an SMS or an outcome on it. An automated call counts only once a person took it | Yes |
 | **Needs review** | Two replies we could not understand | Yes |
 | **Ready** | Finished the questions, or asked to hear from a rep; nobody has touched it | Yes |
 | **Offers** | Said No to the first question, then Yes to special offers. Nothing for an agent to do | No, unless they text or ring us |

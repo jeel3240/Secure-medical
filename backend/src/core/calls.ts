@@ -35,6 +35,13 @@ export function agentIdFromIdentity(raw: unknown, prefix: string): number | null
 }
 
 /**
+ * Which way a call went - `calls.direction`. An agent placed it from the
+ * browser, a lead called us, or the server placed it: an automated call (T4,
+ * 2026-10-18, `AUTO-CALLS.md`), which has no agent until a person takes it.
+ */
+export type CallDirection = 'outbound' | 'inbound' | 'automated';
+
+/**
  * What a finished call is recorded as, in `calls.outcome`. `missed` is an
  * incoming call nobody answered, whatever the reason - the agent was away,
  * declined, was not signed in, or the lead hung up first. For the lead and for
