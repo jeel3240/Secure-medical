@@ -1,8 +1,8 @@
-import { useEffect, useRef } from 'react';
+import { Fragment, useEffect, useRef } from 'react';
 import type { TimelineEntry } from '../../api/workspace';
 import { CallTranscript } from '../../components/CallTranscript';
 import { callText, systemText } from '../../components/Timeline';
-import { formatTime } from '../../lib/format';
+import { dayLabel, formatTime, isSameDay } from '../../lib/format';
 
 /**
  * The workspace centre column: the SMS thread, read as a conversation rather
@@ -19,6 +19,11 @@ import { formatTime } from '../../lib/format';
  * **Inbound sits left, ours sits right,** the way every messaging app reads.
  * Automated sends are marked `Auto`, an agent's own send carries their name, so
  * the handoff in STATE-MACHINE.md rule 2b is visible in the thread itself.
+ *
+ * **A label wherever the day changes** - "Today", "Yesterday", "Wed, Oct 14" -
+ * as a phone's messages app shows it (W1, 2026-10-18). Each item keeps only its
+ * time, so without them a lead worked over several days read as one afternoon.
+ * `dayLabel` names the day the same way the Lead Timeline does.
  */
 
 
@@ -131,84 +136,107 @@ export function Conversation({
     return <p className="convo__empty">No messages yet.</p>;
   }
 
+  const now = new Date();
+  let lastDay: Date | null = null;
+
   return (
     <div className="convo">
       {shown.map((entry, index) => {
         const at = new Date(entry.at);
-        const time = formatTime(at);
-
-        if (entry.kind === 'system') {
-          return (
-            <p className="convo__system" key={`${entry.at}-${index}`}>
-              {systemText(entry.detail)} · {time}
-            </p>
-          );
-        }
-
-        if (entry.kind === 'call') {
-          return (
-            <div className="convo__call" key={`${entry.at}-${index}`}>
-              <p className="convo__system">
-                {callText(entry.detail)}
-                {entry.author ? ` · ${entry.author}` : ''} · {time}
-              </p>
-              <CallTranscript detail={entry.detail} agentName={entry.author} leadName={leadFirstName} />
-            </div>
-          );
-        }
-
-        const body = typeof entry.detail.body === 'string' ? entry.detail.body : '';
-        const failed = entry.detail.deliveryStatus === 'failed';
-
-        if (entry.kind === 'inbound') {
-          const label = replyLabel(entry);
-          return (
-            <div className="convo__row convo__row--in" key={`${entry.at}-${index}`}>
-              <div className="convo__bubble convo__bubble--in">
-                {label ? (
-                  <>
-                    <span className="convo__choice tabular">{body.trim()}</span>
-                    <span className="convo__divider" aria-hidden="true" />
-                    <span className="convo__choice-label">{label}</span>
-                  </>
-                ) : (
-                  body
-                )}
-              </div>
-              <p className="convo__meta">
-                {leadFirstName} · {time}
-              </p>
-            </div>
-          );
-        }
-
+        // Any item can start a day - a text, a call or a system line.
+        const newDay = !lastDay || !isSameDay(lastDay, at);
+        lastDay = at;
         return (
-          <div className="convo__row convo__row--out" key={`${entry.at}-${index}`}>
-            <p className="convo__meta">
-              {entry.kind === 'agent_sms' ? entry.author ?? 'Agent' : 'Auto'} · {time}
-            </p>
-            <div className="convo__line">
-              {failed && <NotSentMark />}
-              <div
-                className={`convo__bubble convo__bubble--out${
-                  entry.kind === 'agent_sms' ? ' convo__bubble--agent' : ''
-                }`}
-              >
-                {body}
-                {!failed && (
-                  <>
-                    {/* Holds the ticks' space on the last line, so text never
-                        runs underneath them. */}
-                    <span className="convo__tick-space" aria-hidden="true" />
-                    <SentTicks />
-                  </>
-                )}
-              </div>
-            </div>
-          </div>
+          <Fragment key={`${entry.at}-${index}`}>
+            {newDay && <p className="convo__day">{dayLabel(at, now)}</p>}
+            <ConversationItem entry={entry} time={formatTime(at)} leadFirstName={leadFirstName} />
+          </Fragment>
         );
       })}
       <div ref={bottom} />
+    </div>
+  );
+}
+
+/** One text, call or system line in the thread, drawn by what kind it is. */
+function ConversationItem({
+  entry,
+  time,
+  leadFirstName,
+}: {
+  entry: TimelineEntry;
+  /** "12:48 PM" - the day is the label above, when it changes. */
+  time: string;
+  leadFirstName: string;
+}) {
+  if (entry.kind === 'system') {
+    return (
+      <p className="convo__system">
+        {systemText(entry.detail)} · {time}
+      </p>
+    );
+  }
+
+  if (entry.kind === 'call') {
+    return (
+      <div className="convo__call">
+        <p className="convo__system">
+          {callText(entry.detail)}
+          {entry.author ? ` · ${entry.author}` : ''} · {time}
+        </p>
+        <CallTranscript detail={entry.detail} agentName={entry.author} leadName={leadFirstName} />
+      </div>
+    );
+  }
+
+  const body = typeof entry.detail.body === 'string' ? entry.detail.body : '';
+  const failed = entry.detail.deliveryStatus === 'failed';
+
+  if (entry.kind === 'inbound') {
+    const label = replyLabel(entry);
+    return (
+      <div className="convo__row convo__row--in">
+        <div className="convo__bubble convo__bubble--in">
+          {label ? (
+            <>
+              <span className="convo__choice tabular">{body.trim()}</span>
+              <span className="convo__divider" aria-hidden="true" />
+              <span className="convo__choice-label">{label}</span>
+            </>
+          ) : (
+            body
+          )}
+        </div>
+        <p className="convo__meta">
+          {leadFirstName} · {time}
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="convo__row convo__row--out">
+      <p className="convo__meta">
+        {entry.kind === 'agent_sms' ? entry.author ?? 'Agent' : 'Auto'} · {time}
+      </p>
+      <div className="convo__line">
+        {failed && <NotSentMark />}
+        <div
+          className={`convo__bubble convo__bubble--out${
+            entry.kind === 'agent_sms' ? ' convo__bubble--agent' : ''
+          }`}
+        >
+          {body}
+          {!failed && (
+            <>
+              {/* Holds the ticks' space on the last line, so text never
+                  runs underneath them. */}
+              <span className="convo__tick-space" aria-hidden="true" />
+              <SentTicks />
+            </>
+          )}
+        </div>
+      </div>
     </div>
   );
 }

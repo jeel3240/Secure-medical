@@ -6,7 +6,17 @@
  * screen. The rest is cheap to cover once the file has a test.
  */
 import { describe, expect, it } from 'vitest';
-import { formatAge, formatPhone, formatRelative, leadName, shortName, toLocalInput } from './format';
+import {
+  dayLabel,
+  formatAge,
+  formatDay,
+  formatPhone,
+  formatRelative,
+  isSameDay,
+  leadName,
+  shortName,
+  toLocalInput,
+} from './format';
 
 const NOW = new Date('2026-09-26T12:00:00.000Z');
 const ago = (seconds: number) => new Date(NOW.getTime() - seconds * 1000).toISOString();
@@ -92,5 +102,58 @@ describe('a full name, shortened the way every screen shows a lead', () => {
     ['', ''],
   ])('%j -> %j', (full, short) => {
     expect(shortName(full)).toBe(short);
+  });
+});
+
+describe('dayLabel - the day over a list of what happened (W1)', () => {
+  // Local calendar dates, so the tests hold in any time zone. 18 Oct 2026 is a
+  // Sunday.
+  const at = (month: number, day: number, hour = 12, minute = 0, year = 2026) =>
+    new Date(year, month - 1, day, hour, minute);
+  const NOW_LOCAL = at(10, 18, 15, 0);
+
+  it('says Today for any time today', () => {
+    expect(dayLabel(at(10, 18, 0, 0), NOW_LOCAL)).toBe('Today');
+    expect(dayLabel(at(10, 18, 23, 59), NOW_LOCAL)).toBe('Today');
+  });
+
+  it('says Yesterday for any time the day before', () => {
+    expect(dayLabel(at(10, 17, 0, 0), NOW_LOCAL)).toBe('Yesterday');
+    expect(dayLabel(at(10, 17, 23, 59), NOW_LOCAL)).toBe('Yesterday');
+  });
+
+  it('turns over at midnight, not 24 hours back', () => {
+    const justAfterMidnight = at(10, 18, 0, 1);
+    expect(dayLabel(at(10, 18, 0, 0), justAfterMidnight)).toBe('Today');
+    expect(dayLabel(at(10, 17, 23, 59), justAfterMidnight)).toBe('Yesterday');
+    expect(dayLabel(at(10, 16, 23, 59), justAfterMidnight)).toBe('Fri, Oct 16');
+  });
+
+  it('names an earlier day this year by weekday and date', () => {
+    expect(dayLabel(at(10, 14, 12, 48), NOW_LOCAL)).toBe('Wed, Oct 14');
+    expect(dayLabel(at(10, 16), NOW_LOCAL)).toBe('Fri, Oct 16');
+  });
+
+  it('adds the year only for another year', () => {
+    expect(dayLabel(at(10, 14, 12, 0, 2025), NOW_LOCAL)).toBe('Tue, Oct 14, 2025');
+  });
+
+  it('finds Yesterday across a month and a year', () => {
+    expect(dayLabel(at(10, 31), at(11, 1, 9))).toBe('Yesterday');
+    expect(dayLabel(at(12, 31, 22, 0, 2026), at(1, 1, 9, 0, 2027))).toBe('Yesterday');
+    expect(dayLabel(at(12, 30, 22, 0, 2026), at(1, 1, 9, 0, 2027))).toBe('Wed, Dec 30, 2026');
+  });
+});
+
+describe('isSameDay and formatDay', () => {
+  it('compares calendar days, not 24-hour spans', () => {
+    expect(isSameDay(new Date(2026, 9, 18, 0, 0), new Date(2026, 9, 18, 23, 59))).toBe(true);
+    expect(isSameDay(new Date(2026, 9, 17, 23, 59), new Date(2026, 9, 18, 0, 0))).toBe(false);
+    // The same day of the month in another month is another day.
+    expect(isSameDay(new Date(2026, 8, 18), new Date(2026, 9, 18))).toBe(false);
+  });
+
+  it('formats a day as weekday and date', () => {
+    expect(formatDay(new Date(2026, 9, 14, 12, 48))).toBe('Wed, Oct 14');
   });
 });

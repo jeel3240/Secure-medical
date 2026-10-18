@@ -19,6 +19,41 @@ export function formatDateTime(date: Date): string {
   return dateTimeFormat.format(date);
 }
 
+const dayFormat = new Intl.DateTimeFormat(undefined, { weekday: 'short', month: 'short', day: 'numeric' });
+const dayYearFormat = new Intl.DateTimeFormat(undefined, {
+  weekday: 'short',
+  month: 'short',
+  day: 'numeric',
+  year: 'numeric',
+});
+
+/** "Wed, Oct 14". */
+export function formatDay(date: Date): string {
+  return dayFormat.format(date);
+}
+
+/** Whether two moments fall on the same calendar day, in the viewer's own time zone. */
+export function isSameDay(a: Date, b: Date): boolean {
+  return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
+}
+
+/**
+ * The label over a day in a list of what happened to a lead: "Today",
+ * "Yesterday", "Wed, Oct 14" - and "Wed, Oct 14, 2025" for another year. W1,
+ * 2026-10-18: the agent's conversation showed only times, so a lead worked over
+ * several days read as one afternoon. The conversation and the Lead Timeline
+ * both use this, so they name a day the same way.
+ *
+ * The viewer's own day, from the browser's time zone, like every date on screen.
+ */
+export function dayLabel(date: Date, now = new Date()): string {
+  if (isSameDay(date, now)) return 'Today';
+  // Built from the calendar date, not by subtracting 24 hours, so the day a
+  // clock changes is still one day.
+  if (isSameDay(date, new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1))) return 'Yesterday';
+  return (date.getFullYear() === now.getFullYear() ? dayFormat : dayYearFormat).format(date);
+}
+
 /**
  * The value an `<input type="datetime-local">` wants: local time with no zone,
  * `2026-09-28T15:45` - not an ISO string, which is UTC. Wrap up and My
@@ -39,11 +74,7 @@ export function formatPhone(phone: string): string {
 export function formatReceived(iso: string | null, now = new Date()): string {
   if (!iso) return '-';
   const date = new Date(iso);
-  const sameDay =
-    date.getFullYear() === now.getFullYear() &&
-    date.getMonth() === now.getMonth() &&
-    date.getDate() === now.getDate();
-  return sameDay ? `Today, ${timeFormat.format(date)}` : dateTimeFormat.format(date);
+  return isSameDay(date, now) ? `Today, ${timeFormat.format(date)}` : dateTimeFormat.format(date);
 }
 
 /** Short relative time for the last-activity column. */
@@ -61,9 +92,7 @@ export function formatRelative(iso: string | null, now = new Date()): string {
 export function formatLastLogin(iso: string | null, now = new Date()): string {
   if (!iso) return 'Never';
   const date = new Date(iso);
-  const sameDay =
-    date.getFullYear() === now.getFullYear() && date.getMonth() === now.getMonth() && date.getDate() === now.getDate();
-  return sameDay ? `Today, ${timeFormat.format(date)}` : dateTimeFormat.format(date);
+  return isSameDay(date, now) ? `Today, ${timeFormat.format(date)}` : dateTimeFormat.format(date);
 }
 
 /**

@@ -231,7 +231,7 @@ ticket's own PR.
 | T25 | Everything written down and checked end to end | T0-T24 | Not started |
 | T26 | Real phone, every path, then live | T25 | Not started |
 | | **Other tickets - not calling** | | |
-| W1 | Day dividers in the agent's conversation | - | Not started |
+| W1 | Day dividers in the agent's conversation | - | Done 2026-10-18 |
 
 ### The tickets
 
@@ -1120,11 +1120,18 @@ workspace conversation wherever the day changes.
 - Any kind of item starts a new day - a text, a call or a system line.
 
 **Done when**
-- [ ] Tests: `dayLabel` - today, yesterday, earlier this year, another year,
-      either side of midnight.
-- [ ] Tests: the conversation shows one divider per day, before that day's
-      first item, and none between items of the same day.
-- [ ] Seen in the browser on a lead with texts and calls over several days.
+- [x] Tests: `dayLabel` - today, yesterday, earlier this year, another year,
+      either side of midnight, across a month and a year.
+- [x] Tests: the conversation shows one divider per day, before that day's
+      first item, and none between items of the same day; each item keeps its
+      time.
+- [x] Seen in the browser on a lead with texts and calls over several days -
+      the conversation and the Lead Timeline both read Thu, Oct 15 /
+      Yesterday / Today; no console errors.
+
+As built: the two copies of "same day" in `lib/format.ts` and the timeline's
+own day format now use the shared `isSameDay` and `formatDay`, so there is one
+rule for days.
 
 **Files:** `frontend/src/lib/format.ts` (+ test),
 `frontend/src/pages/workspace/Conversation.tsx` (+ test),
