@@ -19,7 +19,7 @@ const openServers: http.Server[] = [];
  * the request reaches that program instead and fails at random. Binding to
  * 127.0.0.1 up front means the OS never picks a port someone else has there.
  */
-export async function buildApp(opts: { twilio?: TwilioSettings | null } = {}) {
+export async function buildApp(opts: { twilio?: TwilioSettings | null; autoCalls?: boolean } = {}) {
   const users = new MemoryUserStore();
   /** Everything the app recorded in the activity log, in order. */
   const activity: ActivityEntry[] = [];
@@ -29,6 +29,7 @@ export async function buildApp(opts: { twilio?: TwilioSettings | null } = {}) {
       jwtSecret: JWT_SECRET,
       secureCookies: false,
       twilio: opts.twilio ?? null,
+      autoCalls: opts.autoCalls ?? false,
       activity: { record: async (entry) => void activity.push(entry) },
     })
   );

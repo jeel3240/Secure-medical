@@ -133,6 +133,38 @@ leaves it off and is never rung for a transfer.
 server every 30 seconds; silent for 2 minutes is gone), and not on a call or
 with an after-call note open.
 
+**The switch** - built in T10 (2026-10-18). `users.taking_calls`, off for
+everyone to begin with (migration 017); `POST /api/calls/taking-calls`;
+`layout/TakingCalls.tsx` in the app bar, beside the user menu - a small switch
+that turns green when on. Each change is a `calls.availability_changed` row,
+with `on` and `why`: `by_hand`, `sign_in` or `sign_out` (`api/taking-calls.ts`),
+and only when it really changed - signing in with it already off records
+nothing.
+
+- **Shown, and accepted, only while automated calls are on** - `AUTO_CALLS=on`
+  and calling set up (`auto-calls-settings.ts`, `api/index.ts`). Off, the
+  route refuses (`auto_calls_off`) and the app bar has no switch.
+- **It flips once the server has it.** A switch that showed "on" before it was
+  saved could leave someone believing they will be rung when they will not. A
+  failure leaves it where it was, and says so on hover.
+- **Signing in turns it off even if another browser left it on**: the person
+  chooses again. That other browser still shows "on" until it is reloaded -
+  the safe way round, since it is not rung. T15, which turns it off from the
+  server, needs the browser told; noted there.
+- A deactivated account is never free, whatever its switch says; signing in
+  again after reactivation turns it off.
+
+**Free, in one place** - `FREE_SQL` in `db/presence.ts`: an active account,
+the switch on, the browser able to ring (`RINGABLE_SQL`), and no call of
+theirs still going - checked on the server too, so a call counts the moment
+it starts, not at the browser's next word. "Still going" is a call with no
+outcome, started in the last 2 hours: a ring for an incoming call counts, an
+automated call nobody has taken keeps nobody busy, and a call whose end
+Twilio never reported stops counting after 2 hours - the window a missed
+call's "under way" uses. A small index of the calls still going
+(`calls_under_way_by_agent`, migration 017) keeps it instant. `freePeople`
+lists them; T15 rings them, T20 counts them.
+
 **The app is open** - built in T9 (2026-10-18): `db/presence.ts` on the
 server, `lib/presence.ts` and `lib/calling.ts` in the browser. Each signed-in
 browser where calling is set up tells the server, every 30 seconds and at once
@@ -159,8 +191,8 @@ its connection or sleeps stops counting by itself.
   a note box open in one tab while the other says "available" is not seen.
   T10's "not on a call", checked on the server, covers a call under way in
   either.
-- Nothing reads it yet. T10 joins it to the switch and to "not on a call" as
-  one rule, `FREE_PEOPLE_SQL`; `RINGABLE_SQL` is its presence part.
+- T10 joins it to the switch and to "not on a call" as one rule, `FREE_SQL`
+  (below); `RINGABLE_SQL` is its presence part.
 
 ### Understanding an answer
 
@@ -283,7 +315,7 @@ ticket's own PR.
 | T8 | What the robot does after each answer | T6, T7 | Done 2026-10-18 |
 | | **Who can take a call** | | |
 | T9 | The server knows who is online | - | Done 2026-10-18 |
-| T10 | The "Taking calls" switch | T9 | Not started |
+| T10 | The "Taking calls" switch | T9 | Done 2026-10-18 |
 | T11 | Several browsers ringing at once | - | Not started |
 | | **The call - on the dev number** | | |
 | T12 | The server places one call | T3, T4, T6 | Not started |
@@ -807,20 +839,49 @@ is on.
 - The switch in the app bar, beside the user menu, in the app's style.
 - `GET /api/calls/config` says whether `AUTO_CALLS` is on;
   `docker-compose.yml` passes `AUTO_CALLS` to the api and the worker.
-- One shared definition of **free** (`FREE_PEOPLE_SQL`): active, switch on,
-  app open, not on a call. Used by every later ticket.
+- One shared definition of **free** (`FREE_SQL`): active, switch on, app open,
+  not on a call. Used by every later ticket.
 
 **Done when**
-- [ ] Tests: off after sign-in and sign-out; on and off by hand; every change
-      in the activity log.
-- [ ] A live check: switch off -> not free; on but on a call -> not free; on,
-      app open, not on a call -> free, superadmin or agent.
-- [ ] The switch is hidden with `AUTO_CALLS` off.
+- [x] Tests: off after sign-in and sign-out; on and off by hand; every change
+      in the activity log, and nothing that did not change; refused with
+      automated calls off, and anything but true or false refused - 13 route
+      tests; `AUTO_CALLS` read only as exactly `on` - 8 tests.
+- [x] A live check: switch off -> not free; on but on a call -> not free; on,
+      app open, not on a call -> free, superadmin or agent. Also: a browser
+      silent or busy, a lead ringing them, a call never reported ended, an
+      automated call before and after its transfer is taken, a deactivated
+      account; the time it changed kept only on a change - presence check,
+      34 checks.
+- [x] The switch is hidden with `AUTO_CALLS` off - tested, and seen.
+- [x] Seen in the local app with calling and automated calls on for the check
+      (dev settings): off after sign-in; switched on -> saved, and free once
+      the browser registered with Twilio; still on after a reload; signing out
+      -> off, not free; recorded `by_hand`, then `sign_out`; no console
+      errors.
 
-**Files:** migration 017, `backend/src/api/calls.ts`, `backend/src/db/presence.ts`
-(from T9), `backend/src/core/activity.ts`, `frontend/src/layout/AppShell.tsx`,
-`docker-compose.yml`.
-**Doc:** this one, `AUDIT.md`.
+As built: `AUTO_CALLS` is read by `auto-calls-settings.ts` - on only when it
+says exactly `on`; anything else is off and logged once (`auto_calls.off`),
+never a reason to refuse to start. Automated calls count as on only with
+calling set up too, decided once in `api/index.ts` (`deps.autoCalls`). The
+switch lives on the user (`takingCalls` on the signed-in user), so the app
+bar reads it from the sign-in store. It flips only once the server has it.
+The rule is `FREE_SQL`, with `freePeople`, and migration 017 also adds
+`calls_under_way_by_agent`, a small index of the calls still going.
+
+**Files:** `backend/src/db/migrations/017_taking_calls.sql`,
+`backend/src/auto-calls-settings.ts` (+ test), `backend/src/api/taking-calls.ts`,
+`backend/src/api/calls.ts`, `backend/src/api/auth/routes.ts`,
+`backend/src/api/deps.ts`, `backend/src/api/index.ts`,
+`backend/src/api/users/types.ts`, `backend/src/db/users.ts`,
+`backend/src/db/presence.ts`, `backend/src/core/activity.ts`,
+`backend/src/api/__tests__/taking-calls.test.ts`,
+`backend/scripts/presence-live-check.ts`, `frontend/src/layout/TakingCalls.tsx`
+(+ test), `frontend/src/layout/AppShell.tsx`, `frontend/src/api/calls.ts`,
+`frontend/src/api/types.ts`, `frontend/src/styles/shell.css`,
+`docker-compose.yml`, `.env.example`.
+**Doc:** this one, `AUDIT.md`, `AUTH.md`, `SCHEMA.md`, `FRONTEND.md`,
+`LOGGING.md`, `README.md`, `WORKFLOW.md`, `CLAUDE.md`.
 
 ---
 
@@ -970,6 +1031,11 @@ everyone free.
 - A free person who let it ring out, and is still free, has their switch
   turned off and sees "Missed a transfer · Taking calls off". Someone who
   started a call in those seconds keeps it on.
+- The browser must learn that: its switch shows what the server holds (T10),
+  and today it reads it only at sign-in and when switched. One way: the
+  30-second report (T9) answers with the switch's state. The switch-off is a
+  `calls.availability_changed` row with `why: missed_transfer`, written in the
+  same statement. Noted 2026-10-18.
 - Recording starts when the agent joins, as on every other call.
 
 **Done when**

@@ -1,6 +1,6 @@
 /**
- * Who can take a call right now - T9, docs/AUTO-CALLS.md "Who is free",
- * migration 016.
+ * Who can take a call right now - T9 and T10, docs/AUTO-CALLS.md "Who is
+ * free", migrations 016 and 017.
  *
  * Each signed-in browser that can take a call says so every 30 seconds, and at
  * once when that changes: its Twilio connection is up, and nothing on its
@@ -18,11 +18,39 @@ import type { Querier } from './sql';
 /** How long one "I'm here" holds: four times the browser's 30-second check. */
 export const RINGABLE_SECONDS = 120;
 
-/**
- * Whether `u` (users) can be rung now. T10 adds the "Taking calls" switch and
- * a call already under way to make the full "free".
- */
+/** Whether `u` (users) has a browser open that can be rung now - one part of `FREE_SQL`. */
 export const RINGABLE_SQL = `(u.ringable_until IS NOT NULL AND u.ringable_until > now())`;
+
+/**
+ * Whether `u` (users) is free to take a transfer now - AUTO-CALLS.md, "Who is
+ * free". The one definition: who is rung for a transfer, and how many calls
+ * the robot places at once, both come from it.
+ *
+ * - an active account,
+ * - "Taking calls" switched on (T10) - the switch decides, not the role,
+ * - a browser open that can be rung (`RINGABLE_SQL`) - which also means no
+ *   call, ring or note box open on its screen,
+ * - and no call of theirs still going, checked here too, so a call counts the
+ *   moment it starts rather than at the browser's next word. Only one started
+ *   in the last 2 hours - the window a missed call's "under way" uses
+ *   (`db/lead-state.ts`) - so a call whose end Twilio never reported cannot
+ *   keep someone busy for good.
+ */
+export const FREE_SQL = `(
+  u.is_active
+  AND u.taking_calls
+  AND ${RINGABLE_SQL}
+  AND NOT EXISTS (
+    SELECT 1 FROM calls oc
+    WHERE oc.agent_id = u.id AND oc.outcome IS NULL AND oc.started_at > now() - interval '2 hours'
+  )
+)`;
+
+/** Everyone free now, by id. */
+export async function freePeople(q: Querier): Promise<number[]> {
+  const { rows } = await q.query(`SELECT u.id FROM users u WHERE ${FREE_SQL} ORDER BY u.id`);
+  return rows.map((r) => r.id as number);
+}
 
 /**
  * Saves what a browser says: available for the next two minutes, or not.

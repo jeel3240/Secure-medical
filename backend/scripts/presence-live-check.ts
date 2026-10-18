@@ -1,18 +1,20 @@
 /**
- * Proves migration 016 and db/presence.ts against a real Postgres - T9,
- * docs/AUTO-CALLS.md "Who is free".
+ * Proves migrations 016 and 017 and db/presence.ts against a real Postgres -
+ * T9 and T10, docs/AUTO-CALLS.md "Who is free".
  *
  * What a mock cannot show: that "I can take a call" holds for two minutes and
  * then lapses by itself, so a closed or sleeping browser stops counting with
  * nobody clearing it; that "not now" and ending a session clear it at once;
- * and that a deactivated account can never be made ringable. Getting those
- * wrong rings a desk nobody is at, or a person who signed out.
+ * that a deactivated account can never be made ringable; and that "free" -
+ * switch on, browser open, no call going - holds for exactly the right people,
+ * superadmin or agent. Getting those wrong rings a desk nobody is at, a person
+ * who signed out, or someone already talking to a lead.
  *
  * It writes rows, so it refuses to run against a database that holds users.
  * Run it with the others: scripts/live-checks.sh presence
  */
 import { pool } from '../src/db/pool';
-import { RINGABLE_SECONDS, RINGABLE_SQL, setRingable } from '../src/db/presence';
+import { freePeople, RINGABLE_SECONDS, RINGABLE_SQL, setRingable } from '../src/db/presence';
 import { pgUserStore } from '../src/db/users';
 
 let failures = 0;
@@ -36,11 +38,11 @@ async function refuseIfNotEmpty(): Promise<void> {
   }
 }
 
-async function makeUser(email: string): Promise<number> {
+async function makeUser(email: string, role: 'agent' | 'superadmin' = 'agent'): Promise<number> {
   const user = await pgUserStore.create({
     email,
     name: email.split('@')[0],
-    role: 'agent',
+    role,
     passwordHash: 'not-a-real-hash',
     mustChangePassword: false,
   });
@@ -124,6 +126,99 @@ async function main(): Promise<void> {
     await setRingable(pool, sam, true);
     check('and a browser still open cannot make it ringable again', await ringable(sam), false);
     check('nothing is held for it', await secondsLeft(sam), null);
+  }
+
+  console.log('\nthe "Taking calls" switch');
+  {
+    const ava = await makeUser('ava@example.com');
+    const state = async () => {
+      const { rows } = await pool.query(
+        `SELECT taking_calls AS on, taking_calls_at IS NOT NULL AS stamped, taking_calls_at AS at FROM users WHERE id = $1`,
+        [ava]
+      );
+      return rows[0] as { on: boolean; stamped: boolean; at: Date };
+    };
+    const fresh = await state();
+    check('a new account starts with it off, never switched', [fresh.on, fresh.stamped], [false, false]);
+
+    await pgUserStore.update(ava, { takingCalls: true });
+    const switchedOn = await state();
+    check('switched on: on, with the time it changed', [switchedOn.on, switchedOn.stamped], [true, true]);
+
+    await pool.query(`UPDATE users SET taking_calls_at = '2026-01-01T00:00:00Z' WHERE id = $1`, [ava]);
+    await pgUserStore.update(ava, { takingCalls: true });
+    check('switched on again: the time it changed stays', (await state()).at.toISOString(), '2026-01-01T00:00:00.000Z');
+
+    await pgUserStore.update(ava, { takingCalls: false });
+    const switchedOff = await state();
+    check('switched off: off, and the time moves', [switchedOff.on, switchedOff.at.toISOString() > '2026-01-01T00:00:00.000Z'], [false, true]);
+
+    await pgUserStore.update(ava, { takingCalls: true });
+    await setRingable(pool, ava, true);
+    await pgUserStore.update(ava, { bumpSession: true, takingCalls: false });
+    check('signing out: off, and not ringable, in one statement', [(await state()).on, await ringable(ava)], [false, false]);
+  }
+
+  console.log('\nwho is free');
+  {
+    const lead = (
+      await pool.query(`INSERT INTO leads (phone, first_name, ezt_added_at) VALUES ('+15550000901', 'Pat', now()) RETURNING id`)
+    ).rows[0].id as number;
+    const kim = await makeUser('kim@example.com');
+    const boss = await makeUser('boss@example.com', 'superadmin');
+    let sid = 0;
+    /** A call of `agentId`'s, still going unless `outcome` is given. */
+    const call = async (agentId: number | null, opts: { direction?: string; outcome?: string; startedAgo?: string } = {}) =>
+      (
+        await pool.query(
+          `INSERT INTO calls (lead_id, agent_id, twilio_call_sid, started_at, direction, outcome, ended_at)
+           VALUES ($1, $2, $3, now() - $4::interval, $5, $6::text, CASE WHEN $6::text IS NULL THEN NULL ELSE now() END)
+           RETURNING id`,
+          [lead, agentId, `CA-free-${++sid}`, opts.startedAgo ?? '0 seconds', opts.direction ?? 'outbound', opts.outcome ?? null]
+        )
+      ).rows[0].id as number;
+    const end = (callId: number) =>
+      pool.query(`UPDATE calls SET outcome = 'answered', ended_at = now() WHERE id = $1`, [callId]);
+
+    await setRingable(pool, kim, true);
+    await setRingable(pool, boss, true);
+    check('browser open, switch off: nobody is free - the switch decides', await freePeople(pool), []);
+
+    await pgUserStore.update(kim, { takingCalls: true });
+    await pgUserStore.update(boss, { takingCalls: true });
+    check('switch on, browser open, no call: free - agent and superadmin alike', await freePeople(pool), [kim, boss]);
+
+    await pgUserStore.update(boss, { takingCalls: false });
+    check('a superadmin who switches it off is not free', await freePeople(pool), [kim]);
+    await pgUserStore.update(boss, { takingCalls: true });
+
+    await pool.query(`UPDATE users SET ringable_until = now() - interval '1 second' WHERE id = $1`, [boss]);
+    check('switch on, but the browser silent for two minutes: not free', await freePeople(pool), [kim]);
+    await setRingable(pool, boss, false);
+    check('switch on, but the browser says busy: not free', await freePeople(pool), [kim]);
+    await setRingable(pool, boss, true);
+
+    const placed = await call(kim);
+    check('on a call they placed, before the browser says so: not free', await freePeople(pool), [boss]);
+    await end(placed);
+    check('once it ends: free again', await freePeople(pool), [kim, boss]);
+
+    const ringing = await call(kim, { direction: 'inbound' });
+    check('a lead ringing them: not free', await freePeople(pool), [boss]);
+    await end(ringing);
+
+    await call(kim, { startedAgo: '3 hours' });
+    check('a call whose end was never reported, 3 hours on: no longer keeps them busy', await freePeople(pool), [kim, boss]);
+
+    const robot = await call(null, { direction: 'automated' });
+    check('an automated call nobody has taken keeps nobody busy', await freePeople(pool), [kim, boss]);
+    await pool.query(`UPDATE calls SET agent_id = $1 WHERE id = $2`, [boss, robot]);
+    check('once a person takes its transfer, they are on it: not free', await freePeople(pool), [kim]);
+    await end(robot);
+
+    await pool.query(`UPDATE users SET is_active = false WHERE id = $1`, [kim]);
+    await pool.query(`UPDATE users SET ringable_until = now() + interval '1 minute' WHERE id = $1`, [kim]);
+    check('deactivated, even with the switch on and a browser open: not free', await freePeople(pool), [boss]);
   }
 
   console.log(failures === 0 ? '\nall checks passed' : `\n${failures} check(s) FAILED`);

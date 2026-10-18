@@ -1,3 +1,4 @@
+import { readAutoCalls } from '../auto-calls-settings';
 import { config } from '../config';
 import { recordActivity } from '../db/activity';
 import { pool } from '../db/pool';
@@ -29,15 +30,26 @@ if (config.twilio.status === 'incomplete') {
   log.warn('calling.off', { reason: 'incomplete_settings', missing: config.twilio.missing });
 }
 
+// Automated calls: AUTO_CALLS=on, and calling set up - AUTO-CALLS.md. Either
+// missing leaves them off, said once here rather than found out later.
+const autoCallsSetting = readAutoCalls(process.env);
+if (autoCallsSetting.unknown !== null) {
+  log.warn('auto_calls.off', { reason: 'unknown_value', value: autoCallsSetting.unknown });
+} else if (autoCallsSetting.on && config.twilio.status !== 'on') {
+  log.warn('auto_calls.off', { reason: 'calling_off' });
+}
+const autoCalls = autoCallsSetting.on && config.twilio.status === 'on';
+
 const app = createApp({
   users: pgUserStore,
   jwtSecret: config.jwtSecret,
   secureCookies: isProduction,
   twilio: config.twilio.status === 'on' ? config.twilio.settings : null,
+  autoCalls,
   activity: { record: (entry) => recordActivity(pool, entry) },
 });
 
 const port = process.env.PORT || 3000;
 app.listen(port, () => {
-  log.info('api.started', { port, calling: config.twilio.status });
+  log.info('api.started', { port, calling: config.twilio.status, autoCalls: autoCalls ? 'on' : 'off' });
 });

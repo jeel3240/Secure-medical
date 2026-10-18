@@ -95,12 +95,14 @@ ran the old 003 but never 004 misses the second part; rebuild it, or run the
 second part's SQL there once.
 
 *(The `004` on disk today, `004_conversation_completed_at.sql`, is a later and
-unrelated file. *(2026-10-18: production runs 001 to 013; 014, 015 and 016, for
-automated calls - T4, T6 and T9, `AUTO-CALLS.md` - are on `dev`, and the next
-deploy runs them. None changes an existing row: 014 adds a third call
-direction, a column, two checks and an index; 015 adds the call script's four
-tables, its seed, and eight `settings` rows; 016 adds one empty column to
-`users`.)* As of 2026-10-06 the files are 001 to 013: `main` holds 001 to
+unrelated file. *(2026-10-18: production runs 001 to 013; 014 to 017, for automated calls -
+T4, T6, T9 and T10, `AUTO-CALLS.md` - are on `dev`, and the next deploy runs
+them. None changes an existing row: 014 adds a third call direction, a
+column, two checks and an index; 015 adds the call script's four tables, its
+seed, and eight `settings` rows; 016 adds one empty column to `users`; 017
+adds two more - the "Taking calls" switch, off for everyone - and an index of
+the calls still going. Deploy with `AUTO_CALLS` unset: nothing changes for
+anyone until it is `on`.)* As of 2026-10-06 the files are 001 to 013: `main` holds 001 to
 011 - 006 to 011, the activity log, incoming calls, the callback a missed call
 books, the word kept with each answer, who picked up a call, and call
 recordings and transcripts, reached it on 2026-10-05. 012, the SMS flows as

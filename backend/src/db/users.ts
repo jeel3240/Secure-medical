@@ -3,7 +3,7 @@ import { EmailTakenError } from '../api/users/types';
 import { pool } from './pool';
 
 const COLUMNS = `id, email, name, role, password_hash, is_active, must_change_password,
-  session_version, last_login_at, created_at`;
+  session_version, last_login_at, created_at, taking_calls`;
 
 const UNIQUE_VIOLATION = '23505';
 
@@ -18,6 +18,7 @@ interface DbUser {
   session_version: number;
   last_login_at: Date | null;
   created_at: Date;
+  taking_calls: boolean;
 }
 
 function toUserRow(row: DbUser): UserRow {
@@ -32,6 +33,7 @@ function toUserRow(row: DbUser): UserRow {
     sessionVersion: row.session_version,
     lastLoginAt: row.last_login_at,
     createdAt: row.created_at,
+    takingCalls: row.taking_calls,
   };
 }
 
@@ -84,6 +86,12 @@ export const pgUserStore: UserStore = {
     // Ending every session also ends being ringable (T9, db/presence.ts): a
     // signed-out or deactivated browser must not be rung for a transfer.
     if (patch.bumpSession) sets.push('session_version = session_version + 1', 'ringable_until = NULL');
+    if (patch.takingCalls !== undefined) {
+      values.push(patch.takingCalls);
+      const on = `$${values.length}`;
+      // In SET, `taking_calls` still reads the old value: the time moves only on a change.
+      sets.push(`taking_calls_at = CASE WHEN taking_calls <> ${on} THEN now() ELSE taking_calls_at END`, `taking_calls = ${on}`);
+    }
 
     values.push(id);
     const { rows } = await pool.query<DbUser>(

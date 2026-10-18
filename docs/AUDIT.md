@@ -60,6 +60,7 @@ it.
 | `auth.signed_in`, `auth.signed_out`, `auth.password_changed` | | |
 | `auth.sign_in_failed` | A refused sign-in | The `email` tried and `why`. Never the password |
 | `user.created`, `user.updated`, `user.password_reset` | A superadmin changes an agent's account | `changes`: each field as `{ from, to }`. Never a password |
+| `calls.availability_changed` | The "Taking calls" switch went on or off (T10, `AUTO-CALLS.md` "Who is free") - by the person, or because they signed in or out. Only when it really changed | `on`, and `why`: `by_hand`, `sign_in` or `sign_out` |
 
 The list is `ACTIVITY_ACTIONS` in `core/activity.ts`. A new action is added
 there first, so the vocabulary stays in one place.
@@ -78,7 +79,7 @@ and logged as `reply.before_our_text`.
 (`users.ringable_until`, T9). It is the present moment, said by each open
 browser every half minute and overwritten each time - not something anyone
 did. The "Taking calls" switch, which a person does turn on and off, is
-recorded (T10, `calls.availability_changed`).
+recorded (T10, `calls.availability_changed`, above).
 
 ### Written with the action, not after it
 

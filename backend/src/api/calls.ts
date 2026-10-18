@@ -1,7 +1,8 @@
 /**
  * `GET /api/calls/config` and `POST /api/calls/token` - what the browser needs
- * to place a call. Phase 4, TWILIO.md. And `POST /api/calls/ringable` - whether
- * it can take one now (T9, AUTO-CALLS.md).
+ * to place a call. Phase 4, TWILIO.md. And for automated calls (AUTO-CALLS.md,
+ * "Who is free"): `POST /api/calls/ringable` - whether this browser can take a
+ * call now (T9) - and `POST /api/calls/taking-calls`, the switch (T10).
  *
  * Signed-in users only. The token lets a browser place calls as that agent
  * through our TwiML App, nothing more; which lead it may call is decided per
@@ -14,14 +15,18 @@ import type { AppDeps } from './deps';
 import { asyncHandler, HttpError } from './http';
 import { mintCallToken, TOKEN_TTL_SECONDS } from '../integrations/twilio';
 import { log } from '../lib/log';
+import { recordTakingCalls } from './taking-calls';
 
 export function callsRouter(deps: AppDeps): Router {
   const router = Router();
   router.use(requireAuth(deps), requirePasswordChanged);
 
-  /** Whether calling is set up, and the number leads will see - for the Call button. */
+  /**
+   * Whether calling is set up, and the number leads will see - for the Call
+   * button; and whether automated calls are on - for the "Taking calls" switch.
+   */
   router.get('/config', (_req, res) => {
-    res.json({ enabled: deps.twilio !== null, callerId: deps.twilio?.callerId ?? null });
+    res.json({ enabled: deps.twilio !== null, callerId: deps.twilio?.callerId ?? null, autoCalls: deps.autoCalls });
   });
 
   router.post(
@@ -60,6 +65,30 @@ export function callsRouter(deps: AppDeps): Router {
       const presence = require('../db/presence') as typeof import('../db/presence');
       await presence.setRingable(pool, req.user!.id, available);
       res.status(204).end();
+    })
+  );
+
+  /**
+   * The "Taking calls" switch, on or off, for the signed-in person. Refused
+   * while automated calls are off: the switch is not shown, and nothing would
+   * ring. Recorded only when it changed - `api/taking-calls.ts`.
+   */
+  router.post(
+    '/taking-calls',
+    asyncHandler(async (req, res) => {
+      if (!deps.autoCalls) {
+        throw new HttpError(503, 'auto_calls_off', 'Automated calls are not on on this server.');
+      }
+      const on = (req.body as { on?: unknown } | undefined)?.on;
+      if (typeof on !== 'boolean') {
+        throw new HttpError(400, 'invalid_on', 'on must be true or false.');
+      }
+      const user = req.user!;
+      if (user.takingCalls !== on) {
+        await deps.users.update(user.id, { takingCalls: on });
+        await recordTakingCalls(deps, user.id, on, 'by_hand');
+      }
+      res.json({ takingCalls: on });
     })
   );
 

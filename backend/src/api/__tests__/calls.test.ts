@@ -92,7 +92,7 @@ describe('the browser’s routes', () => {
 
   it('say calling is off, and refuse a token, when it is not set up', async () => {
     const { maya } = await setup(null);
-    expect((await maya.get('/api/calls/config')).body).toEqual({ enabled: false, callerId: null });
+    expect((await maya.get('/api/calls/config')).body).toEqual({ enabled: false, callerId: null, autoCalls: false });
     const res = await maya.post('/api/calls/token');
     expect(res.status).toBe(503);
     expect(res.body.error).toBe('calling_off');
@@ -100,7 +100,7 @@ describe('the browser’s routes', () => {
 
   it('give the caller ID and a token for the signed-in agent when it is', async () => {
     const { maya } = await setup(SETTINGS);
-    expect((await maya.get('/api/calls/config')).body).toEqual({ enabled: true, callerId: '+14804708259' });
+    expect((await maya.get('/api/calls/config')).body).toEqual({ enabled: true, callerId: '+14804708259', autoCalls: false });
     const res = await maya.post('/api/calls/token');
     expect(res.status).toBe(200);
     expect(res.body.identity).toMatch(/^agent-\d+$/);

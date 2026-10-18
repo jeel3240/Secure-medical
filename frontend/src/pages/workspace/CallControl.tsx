@@ -39,7 +39,7 @@ export function CallControl({
       .then((loaded) => alive && setConfig(loaded))
       // Unknown is treated as off: a Call button that cannot work is worse
       // than one that says why it is off.
-      .catch(() => alive && setConfig({ enabled: false, callerId: null }));
+      .catch(() => alive && setConfig({ enabled: false, callerId: null, autoCalls: false }));
     return () => {
       alive = false;
     };

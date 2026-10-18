@@ -54,6 +54,8 @@ services:
       TWILIO_TRANSCRIPTION_SERVICE_SID: ${TWILIO_TRANSCRIPTION_SERVICE_SID:-}
       # Optional: empty in production; dev- on a laptop sharing the Twilio account.
       TWILIO_IDENTITY_PREFIX: ${TWILIO_IDENTITY_PREFIX:-}
+      # Automated calls, off unless exactly "on" - docs/AUTO-CALLS.md.
+      AUTO_CALLS: ${AUTO_CALLS:-}
     depends_on:
       postgres:
         condition: service_healthy
@@ -88,6 +90,8 @@ services:
       PUBLIC_URL: ${PUBLIC_URL:-}
       TWILIO_TRANSCRIPTION_SERVICE_SID: ${TWILIO_TRANSCRIPTION_SERVICE_SID:-}
       TWILIO_IDENTITY_PREFIX: ${TWILIO_IDENTITY_PREFIX:-}
+      # The worker places the automated calls (T20) - docs/AUTO-CALLS.md.
+      AUTO_CALLS: ${AUTO_CALLS:-}
     depends_on:
       postgres:
         condition: service_healthy
