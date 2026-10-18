@@ -22,6 +22,7 @@ import '../src/config';
 import { openingQuestion, startConversation } from '../src/db/flows';
 import { pool } from '../src/db/pool';
 import { sendOpener } from '../src/worker/opener';
+import { phoneFromArg } from './dev-phone';
 
 async function main(): Promise<number> {
   if (process.env.NODE_ENV === 'production') {
@@ -29,12 +30,11 @@ async function main(): Promise<number> {
     return 1;
   }
 
-  const digits = (process.argv[2] ?? '').replace(/\D/g, '');
-  if (digits.length !== 10 && digits.length !== 11) {
+  const phone = phoneFromArg(process.argv[2]);
+  if (!phone) {
     console.error('Usage: npm run dev:ask-again -- <phone, e.g. +16025550123>');
     return 1;
   }
-  const phone = `+${digits.length === 10 ? `1${digits}` : digits}`;
 
   const { rows } = await pool.query(
     `SELECT l.id, l.first_name,

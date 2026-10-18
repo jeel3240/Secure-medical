@@ -20,6 +20,7 @@
     "test": "jest",
     "e2e": "ts-node --transpile-only scripts/end-to-end.ts",
     "dev:ask-again": "ts-node --transpile-only scripts/dev-ask-again.ts",
+    "dev:auto-call": "ts-node --transpile-only scripts/dev-auto-call.ts",
     "speed": "ts-node --transpile-only scripts/speed-check.ts",
     "lint": "eslint src scripts"
   },

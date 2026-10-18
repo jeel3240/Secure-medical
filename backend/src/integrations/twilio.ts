@@ -1,13 +1,15 @@
 /**
- * Twilio, for browser calling - Phase 4, TWILIO.md.
+ * Twilio, for browser calling - Phase 4, TWILIO.md - and for the automated
+ * call's words (T12, AUTO-CALLS.md).
  *
- * The only file that touches the twilio library. Everything here is a pure
- * function of the settings and its arguments: it makes no network call, so the
- * routes that use it are tested without Twilio.
+ * Everything here is a pure function of the settings and its arguments: it
+ * makes no network call, so the routes that use it are tested without Twilio.
+ * Asking Twilio to place a call is `integrations/twilio-calls.ts`.
  */
 
 import twilio from 'twilio';
 import type VoiceResponse from 'twilio/lib/twiml/VoiceResponse';
+import type { AskOrEnd, CallScript, CallStep } from '../core/call-script';
 import { identityFor, INCOMING_RING_SECONDS, MISSED_CALL_SPEECH, RECORDING_NOTICE } from '../core/calls';
 import type { TwilioSettings } from '../twilio-settings';
 
@@ -186,5 +188,87 @@ export function refusalTwiml(speech: string): string {
   const response = new twilio.twiml.VoiceResponse();
   response.say(speech);
   response.hangup();
+  return response.toString();
+}
+
+/** End the call, saying nothing - for a request we cannot act on. */
+export function hangupTwiml(): string {
+  const response = new twilio.twiml.VoiceResponse();
+  response.hangup();
+  return response.toString();
+}
+
+/**
+ * The automated call's webhooks - T12, AUTO-CALLS.md. Each address names the
+ * call's row (`?call=<id>`): the row exists before Twilio is asked, while
+ * Twilio's own id for the call may not have reached us yet.
+ */
+export const AUTO_ANSWER_PATH = '/api/webhooks/twilio/auto/answer';
+/** The lead answered a question - or said nothing. */
+export const AUTO_GATHER_PATH = '/api/webhooks/twilio/auto/gather';
+export const AUTO_STATUS_PATH = '/api/webhooks/twilio/auto/status';
+/** Twilio's verdict on who picked up: a person or a machine. */
+export const AUTO_AMD_PATH = '/api/webhooks/twilio/auto/amd';
+
+/** The full address of one of those webhooks, for one call. */
+export function autoCallUrl(
+  settings: TwilioSettings,
+  path: string,
+  callId: number,
+  extra: Record<string, string | number> = {}
+): string {
+  const query = new URLSearchParams({ call: String(callId) });
+  for (const [key, value] of Object.entries(extra)) query.set(key, String(value));
+  return `${settings.publicUrl}${path}?${query.toString()}`;
+}
+
+/** The words a step's answer may hold - Twilio listens harder for them. */
+function hintsFor(script: CallScript, step: CallStep): string {
+  const words = [...step.choices.flatMap((choice) => choice.words), ...script.optOutWords];
+  return [...new Set(words)].join(', ');
+}
+
+/**
+ * What the automated call says and does next, in Twilio's words - T12.
+ * `core/call-script.ts` decides it; this only writes it down.
+ *
+ * - **ask**: the lines, said inside a `<Gather>` that listens for speech and
+ *   for one key. `bargeIn` off: the lead cannot talk over the question, so a
+ *   "Hello?" while it plays is not taken as the answer. `actionOnEmptyResult`:
+ *   silence is reported too, so the server decides what silence means - ask
+ *   again, or end. The answer goes to `/auto/gather`, with the step and which
+ *   asking it was.
+ * - **end**: the lines, then hang up.
+ *
+ * `pauseFirst`, when the lead has just picked up: a second of quiet first, so
+ * the first words are not lost to a phone still coming to the ear.
+ */
+export function autoCallTwiml(
+  settings: TwilioSettings,
+  opts: { callId: number; script: CallScript; action: AskOrEnd; pauseFirst?: boolean }
+): string {
+  const { script, action } = opts;
+  // The script's voice is a row; Twilio's list of names is the type.
+  const voice = { voice: script.voice as VoiceResponse.SayAttributes['voice'] };
+  const response = new twilio.twiml.VoiceResponse();
+  if (opts.pauseFirst) response.pause({ length: 1 });
+
+  if (action.kind === 'end') {
+    for (const line of action.say) response.say(voice, line);
+    response.hangup();
+    return response.toString();
+  }
+
+  const gather = response.gather({
+    input: ['speech', 'dtmf'],
+    numDigits: 1,
+    speechTimeout: 'auto',
+    bargeIn: false,
+    actionOnEmptyResult: true,
+    hints: hintsFor(script, action.step),
+    action: autoCallUrl(settings, AUTO_GATHER_PATH, opts.callId, { step: action.step.id, try: action.attempt }),
+    method: 'POST',
+  });
+  for (const line of action.say) gather.say(voice, line);
   return response.toString();
 }

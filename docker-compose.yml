@@ -56,6 +56,8 @@ services:
       TWILIO_IDENTITY_PREFIX: ${TWILIO_IDENTITY_PREFIX:-}
       # Automated calls, off unless exactly "on" - docs/AUTO-CALLS.md.
       AUTO_CALLS: ${AUTO_CALLS:-}
+      # Outside production, the only numbers an automated call may ring.
+      AUTO_CALL_TEST_NUMBERS: ${AUTO_CALL_TEST_NUMBERS:-}
     depends_on:
       postgres:
         condition: service_healthy
@@ -92,6 +94,7 @@ services:
       TWILIO_IDENTITY_PREFIX: ${TWILIO_IDENTITY_PREFIX:-}
       # The worker places the automated calls (T20) - docs/AUTO-CALLS.md.
       AUTO_CALLS: ${AUTO_CALLS:-}
+      AUTO_CALL_TEST_NUMBERS: ${AUTO_CALL_TEST_NUMBERS:-}
     depends_on:
       postgres:
         condition: service_healthy

@@ -33,8 +33,16 @@ As it will be said. The client's version (2026-10-13) had an email branch and
 an email line in the voicemail; **the app only texts, so both are dropped**
 (Jeel, 2026-10-15). A lead who does not want a text is a No.
 
+**No "This is an automated call" line, and a natural voice** (Jeel,
+2026-10-18, after hearing the first real call): the opening was "Hi, this is
+Seri calling from eDrugstore. This is an automated call. Are you interested
+...", in Amazon Polly's Joanna (Neural), which sounded machine-made. It is now
+said in Google's Chirp3-HD **Kore**, US English, chosen by ear on a real phone
+from five of Twilio's newer voices (Twilio lists them as public beta).
+Migration 018.
+
 ```
-Q1  "Hi, this is Seri calling from eDrugstore. This is an automated call.
+Q1  "Hi, this is Seri calling from eDrugstore.
      Are you interested in ordering antibiotics at 25% off today?"
       YES -> "Great, connecting you with a live agent now. Please hold."  -> transfer
       NO  -> "No problem - I'll just ask one more quick thing."            -> Q2
@@ -261,6 +269,61 @@ The robot slows down and stops by itself:
 - none when nobody is free;
 - none outside 11am-5pm.
 
+## How a call is placed
+
+Built in T12 (2026-10-18). One path, `worker/place-auto-call.ts`, for the dev
+command now and the dialler later (T20):
+
+1. **The row first** - `startAutomatedCall` (`db/auto-calls.ts`), one
+   transaction with the lead locked: the call's `calls` row
+   (`direction = 'automated'`, no agent) and its `call.started` record. It
+   refuses, writing no row and recording `call.refused` with why:
+   `not_found`; `blocked` (the do-not-call list); `already_called` (one
+   automated call per lead); `no_script` (none active); `not_test_number`.
+2. **Then Twilio, once** - `integrations/twilio-calls.ts`, the only file that
+   rings a phone through Twilio's API. Ten seconds and the library's own retry
+   off: a request Twilio has not answered is given up, never repeated, since
+   it may have gone out and a second could ring the lead twice.
+3. **Twilio's answer.** Placed: its id is kept on the row. Refused (a 4xx):
+   the row is ended as `failed`, recorded with Twilio's status and error code -
+   never its message, which can quote the number. No answer, or a 5xx: the
+   row is left as it is; if the call did go out, its first webhook fills in
+   the id. A row whose call never went out stays without an outcome, and the
+   lead is not called again - T20 decides how such a row is closed.
+
+**Outside production, only our own phones are rung** - `AUTO_CALL_TEST_NUMBERS`
+(`auto-calls-settings.ts`), comma-separated E.164 numbers. Empty, nothing is;
+an entry that is not E.164 is ignored and counted. Production does not read
+it. It is checked in step 1, so the dev command and the dialler both obey it.
+
+**What Twilio is asked for** (`automatedCallRequest`): our number as caller
+ID; the phone rings up to 60 seconds, long enough for a voicemail to answer;
+voicemail detection beside the call, not in front of it (`asyncAmd`,
+`DetectMessageEnd`), so the lead hears the question at once and the verdict
+arrives later. Nothing is recorded: the recording, and its notice, start
+only with a transfer (T15).
+
+**The call's webhooks** - each names the call's row, `?call=<id>`, in the
+address Twilio signs, so the row cannot be swapped: a request for row 43
+signed as row 42 is refused. A webhook whose row is not an automated call, or
+is linked to another Twilio call, is not acted on. All four answer 404 while
+automated calls are off, and 403 unsigned (`TWILIO.md`, "Why the webhooks can
+be trusted").
+
+| Webhook | Now | Later |
+|---|---|---|
+| `POST /api/webhooks/twilio/auto/answer` | The lead picked up: a second's quiet, then the first question in the script's voice, inside a `<Gather>` - speech or one key; `bargeIn` off, so "Hello?" over the question is not the answer; silence reported too; the step's words and the stop words as hints. Anything wrong - no row, no script, the database down - ends the call quietly, never Twilio's "application error" | - |
+| `POST /api/webhooks/twilio/auto/gather` | Whatever was said, the lead is thanked and the call ends | T13: the answer read, kept and acted on |
+| `POST /api/webhooks/twilio/auto/status` | How it ended, saved as every call's end is (`finishCall`): outcome, talk time, `call.ended`. Never a missed-call text | T13: `script_result` at the end |
+| `POST /api/webhooks/twilio/auto/amd` | Who picked up, kept as `answered_by`; a machine on an answered call makes it `voicemail` | T18: the voicemail message |
+
+**Trying it locally** - `npm run dev:auto-call -- <phone>` (`scripts/dev-auto-call.ts`)
+calls the local lead with that number. It needs, in the environment the api
+runs with: calling set up, `PUBLIC_URL` a tunnel, `AUTO_CALLS=on`, and the
+number on `AUTO_CALL_TEST_NUMBERS`. No `twilio:configure`: each call carries
+its own webhook addresses, so the number and the TwiML App are not involved.
+Refuses in production.
+
 ## What is saved
 
 Nothing is overwritten (`AUDIT.md`).
@@ -318,7 +381,7 @@ ticket's own PR.
 | T10 | The "Taking calls" switch | T9 | Done 2026-10-18 |
 | T11 | Several browsers ringing at once | - | Done 2026-10-18 |
 | | **The call - on the dev number** | | |
-| T12 | The server places one call | T3, T4, T6 | Not started |
+| T12 | The server places one call | T3, T4, T6 | Done 2026-10-18 - a real call to Jeel's phone; the opening and voice changed after it (018) |
 | T13 | The questions | T7, T8, T12 | Not started |
 | T14 | Text the link | T13 | Not started |
 | T15 | The transfer | T10, T11, T13 | Not started |
@@ -963,15 +1026,49 @@ ended.
   calling off (404), kept in `webhook_events`.
 
 **Done when**
-- [ ] Route tests: signed, unsigned, calling off, the end saved.
-- [ ] Jeel's phone rings showing the new number and hears question 1.
-- [ ] The row is saved with its outcome and length.
-- [ ] A number not on the list is refused.
+- [x] Route tests: signed, unsigned, signed for another row, calling off,
+      automated calls off, the end saved, the verdict kept, a request naming
+      no row or another call's - 17 tests.
+- [x] Jeel's phone rings showing the new number and hears question 1 -
+      2026-10-18, call 4, placed from (480) 530-8582 with `dev:auto-call`.
+- [x] The row is saved with its outcome and length - answered, 13 seconds, no
+      agent; the four webhooks arrived in order (answer, amd, gather, status)
+      and the activity log has `call.started`, `call.answered_by` and
+      `call.ended`, all the system's.
+- [x] A number not on the list is refused - tested, and proved on a real
+      database with every other refusal, linking, failing and two placements
+      racing for one lead (`auto-calls-live-check`, 34 checks).
 
-**Files:** `backend/src/integrations/twilio-calls.ts`,
-`backend/src/integrations/twilio.ts` (the TwiML), `backend/src/api/twilio-webhooks.ts`,
-`backend/src/db/auto-calls.ts` (new), `backend/scripts/dev-auto-call.ts`.
-**Doc:** this one.
+As built: "How a call is placed", above. The steps are one path,
+`worker/place-auto-call.ts`, which the dialler will use. The webhooks name
+our row (`?call=<id>`), not Twilio's call, because the row exists before
+Twilio answers. The voicemail verdict already has its webhook,
+`/auto/amd`, which keeps it as for an agent's call; T18 adds the message. Until
+T13, `/auto/gather` thanks the lead and ends the call, whatever was said -
+without it, the first answer would reach no webhook and the lead would hear
+Twilio's error. All four answer 404 while `AUTO_CALLS` is off, so production
+has none of them until it is switched on.
+
+The first real call taught three things. **Twilio still asks `/auto/gather`
+after the lead hangs up**, with `CallStatus=completed` and nothing heard - T13
+must take that as hung up, never as silence to ask again. **Voicemail
+detection said `unknown` for a person** who listened - T18 carries on for
+`unknown`, as planned. And Jeel asked for **no "This is an automated call"
+line and a more natural voice**: migration 018, after a sample call of five
+newer voices - "The script". Each of its two changes names the value it
+replaces and must change exactly one row, or the migration stops.
+
+**Files:** `backend/src/integrations/twilio-calls.ts` (+ test),
+`backend/src/integrations/twilio.ts` (the TwiML, + test), `backend/src/api/twilio-webhooks.ts`,
+`backend/src/api/__tests__/auto-call-webhooks.test.ts`, `backend/src/db/auto-calls.ts`,
+`backend/src/worker/place-auto-call.ts` (+ test), `backend/src/auto-calls-settings.ts`
+(+ test), `backend/src/core/call-script.ts`, `backend/scripts/dev-auto-call.ts`,
+`backend/scripts/dev-phone.ts`, `backend/scripts/auto-calls-live-check.ts`,
+`backend/package.json`, `docker-compose.yml`, `.env.example`; and for the
+opening and the voice, `backend/src/db/migrations/018_call_opening_and_voice.sql`,
+`backend/src/core/call-script-fixtures.ts`, `backend/scripts/call-script-live-check.ts`.
+**Doc:** this one, "How a call is placed"; `TWILIO.md`, `AUDIT.md`,
+`LOGGING.md`, `README.md`, `CLAUDE.md`.
 
 ---
 
@@ -986,7 +1083,18 @@ response, not interested, and stop.
   and how sure it was; asks T7 what it means and T8 what to do; says it.
 - One `call_answers` row per answer. Twilio sending the same request twice
   saves one row.
-- The result is saved once (`script_result`, only if still empty).
+- The result is saved once (`script_result`, only if still empty); and when
+  the call ends without one (`/auto/status`, T12): `unanswered` if it was
+  never answered, `hung_up` if the script never finished.
+- Replaces T12's stand-in on `/auto/gather`, which thanks the lead and ends
+  the call whatever was said.
+- A request with `CallStatus=completed` is a lead who hung up - found on the
+  first real call: Twilio still asks `/auto/gather` after the hang-up, with
+  nothing heard. Saved as `hung_up`, never taken as silence to ask again.
+- Testing needs several real calls to one phone, and locally that phone can
+  have only one: one lead per number (`leads_phone_key`) and one automated
+  call per lead. A dev-only way to call again is needed first - decided here,
+  never touching the production path's rules. Noted 2026-10-18.
 - Stop -> the number is blocked (`blockNumber`, new reason `call_opt_out`),
   recorded in the activity log.
 - The first question cannot be interrupted, so "Hello?" is not an answer.
@@ -1137,9 +1245,10 @@ transferred.
 **Needs:** T12. **Production:** none.
 
 **Build**
-- `POST .../auto/amd` - Twilio's verdict on who answered. A machine, once its
-  greeting ends -> the call switches to the voicemail message (the number
-  read out digit by digit), then hangs up; result `voicemail_left`.
+- `POST .../auto/amd` - Twilio's verdict on who answered (the webhook exists
+  since T12 and keeps the verdict). A machine, once its greeting ends -> the
+  call switches to the voicemail message (the number read out digit by
+  digit), then hangs up; result `voicemail_left`.
 - A fax -> hang up. A person, or not sure -> the script carries on.
 - The verdict is saved as `answered_by`, as for agents' calls.
 - A verdict that arrives while a transfer is ringing stops it and leaves the
@@ -1201,7 +1310,11 @@ people taking them can handle.
   not held, not Closed, never called by the robot. Oldest first.
 - How many: people free, minus robot calls still going (no end, started
   within 10 minutes). None while anyone is on hold. None when nobody is free.
-- Places each call as in T12.
+- Places each call as in T12, through `worker/place-auto-call.ts`, with
+  `readAutoCallTestNumbers(env, NODE_ENV === 'production')`.
+- Closes a row whose call never reached Twilio (T12: Twilio did not answer,
+  and no webhook ever came) - for example as `failed` after 10 minutes, so it
+  is not "under way" for ever.
 
 **Done when**
 - [ ] A live check of who is picked: the 1-hour wait, the hours, the days,
@@ -1411,14 +1524,17 @@ by whom:
 |---|---|---|
 | When a lead is called | 1 hour after the first text, if they have not replied | Jeel, 2026-10-15 |
 | The window | 11am-5pm, **Arizona time**, **Monday to Friday** | the client (hours, 2026-10-13); Jeel (time zone and days, 2026-10-17) |
-| The opening line | "Hi, this is Seri calling from eDrugstore. This is an automated call." | Jeel, as told to the client on 2026-10-14 for a scripted call |
+| The opening line | "Hi, this is Seri calling from eDrugstore." - no "This is an automated call" | Jeel, 2026-10-18, after the first real call. It had been told to the client on 2026-10-14 |
+| The voice | Google Chirp3-HD **Kore**, US English, chosen by ear on a real phone | Jeel, 2026-10-18 |
 | Calls per lead | **One.** No second try for now | Jeel, 2026-10-17 |
 | The link texted on "yes" | The one the SMS script already sends: https://www.edrugstore.com/anti-ez | Jeel, 2026-10-17 |
 | A "yes" nobody takes | The busy line, and the lead first in the agents' queue as "Wants a call" | Jeel, 2026-10-17 |
 | Email | None anywhere: the email branch and the email line in the voicemail are dropped | Jeel, 2026-10-15 |
 
 To tell the client: called 1 hour after the first text, Arizona time, Monday
-to Friday; one call per lead; no email.
+to Friday; one call per lead; no email; the opening no longer says "This is an
+automated call" (they were told it would on 2026-10-14), and the voice is a
+more natural one.
 
 ## Not in Stage 1
 

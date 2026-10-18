@@ -1,6 +1,6 @@
 # Database schema
 
-The migrations in `backend/src/db/migrations/` - `001` to `017`, in order -
+The migrations in `backend/src/db/migrations/` - `001` to `018`, in order -
 are the source of truth for exact columns, types and constraints. `001_init.sql`
 is the starting schema; the ones after it add columns, tables and constraints. This explains what the tables are for and the
 parts that are not obvious from reading the SQL.
@@ -43,7 +43,7 @@ the RDS CA bundle if strict verification is ever wanted.
 | `scoring_rules` | Points per answer for the first, fixed flow. **No longer read** since migration 012: points are on `flow_choices`. Kept. |
 | `flows`, `flow_questions`, `flow_choices` | The SMS scripts, as rows: each flow's questions, each question's choices with the reply, the points and where the lead goes next. Migration 012, `FLOWS.md`. |
 | `conversation_answers` | One row per answer a lead gave, with the choice's label and points as they were then, and `message_id`: the inbound text it was read from. Add-only. Migration 012. |
-| `call_scripts`, `call_steps`, `call_choices` | The automated call's script, as rows - migration 015 (T6, 2026-10-18), `AUTO-CALLS.md`. A script carries the lines every step shares - stop, no response, voicemail, busy, hold - its voice, and the text with the link; a step what it asks and how it asks again; a choice its key (never 9, which is stop), the words that may be said for it, its reply, and either the next step or an ending: `transfer`, `send_link` or `declined`. One active script; a choice can never lead into another script's step. Its own tables, not the SMS flow's - "Why not the SMS flow tables" in `AUTO-CALLS.md` |
+| `call_scripts`, `call_steps`, `call_choices` | The automated call's script, as rows - migration 015 (T6, 2026-10-18), `AUTO-CALLS.md`. A script carries the lines every step shares - stop, no response, voicemail, busy, hold - its voice, and the text with the link; a step what it asks and how it asks again; a choice its key (never 9, which is stop), the words that may be said for it, its reply, and either the next step or an ending: `transfer`, `send_link` or `declined`. One active script; a choice can never lead into another script's step. Its own tables, not the SMS flow's - "Why not the SMS flow tables" in `AUTO-CALLS.md` Migration 018 (2026-10-18) changed the antibiotics script's opening - no "This is an automated call" - and its voice, to Google Chirp3-HD Kore. |
 | `call_answers` | One row per answer on an automated call: what Twilio heard, how sure (0 to 1), the keys pressed, and what it was taken to mean - a choice with its label as it was then, unclear, silence or stop. One per asking (`UNIQUE (call_id, step_id, attempt)`), so a repeated webhook saves one. Add-only. Migration 015 |
 | `tiers` | HOT/WARM/LOW score bands. Changed by migration; shown read-only on Admin > Configuration. |
 | `activity_log` | One row per action a person or the system took - who, what, when, and what would otherwise be overwritten. Add-only: a trigger refuses every update and delete. Migration 006, `AUDIT.md`. |

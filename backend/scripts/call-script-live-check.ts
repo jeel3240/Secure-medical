@@ -1,9 +1,9 @@
 /**
- * Proves migration 015 and db/call-script.ts against a real Postgres - T6,
- * docs/AUTO-CALLS.md.
+ * Proves migrations 015 and 018 and db/call-script.ts against a real Postgres
+ * - T6, docs/AUTO-CALLS.md.
  *
- * What a mock cannot show: that the script seeded is the one agreed, word for
- * word; that the guards on the tables hold - one active script, a choice that
+ * What a mock cannot show: that the script in the database is the one agreed,
+ * word for word, as 015 seeds it and 018 changes it; that the guards on the tables hold - one active script, a choice that
  * either leads on or ends, never into another script, never on 9; and that
  * what a lead said can be added and never changed. Getting those wrong is a
  * call that says the wrong thing, loops, or loses the record of an answer.
@@ -64,16 +64,16 @@ async function main(): Promise<void> {
   const script = await loadActiveCallScript(pool);
   {
     check('there is one, and it is active', script?.key, 'antibiotics');
-    check('spoken in its voice', script?.voice, 'Polly.Joanna-Neural');
+    check('spoken in its voice - Kore, chosen by ear (018)', script?.voice, 'Google.en-US-Chirp3-HD-Kore');
     check('two steps, in order', script?.steps.map((s) => [s.key, s.position, s.heading]), [
       ['q1', 10, 'Offer'],
       ['q2', 20, 'Link'],
     ]);
     const [q1, q2] = script!.steps;
     check(
-      'it opens as decided: an automated call, the offer',
+      'it opens as decided: who is calling, then the offer - no "automated call" line since 018',
       q1.body,
-      'Hi, this is Seri calling from eDrugstore. This is an automated call. Are you interested in ordering antibiotics at 25% off today?'
+      'Hi, this is Seri calling from eDrugstore. Are you interested in ordering antibiotics at 25% off today?'
     );
     check('asking again asks for keys, and offers 9 to stop', q1.repeatBody, 'Sorry, I didn\'t catch that. Press 1 for yes, 2 for no, or 9 to stop these calls.');
     check('q1: yes transfers, no leads to q2', q1.choices.map((c) => [c.key, c.label, c.ending, c.nextStepId]), [
