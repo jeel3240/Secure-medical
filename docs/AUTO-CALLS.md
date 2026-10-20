@@ -315,7 +315,10 @@ row: a choice with its key and label as they are now, or what else it was.
   none - never overwritten - and the number blocked only if it is not blocked
   already. All in one transaction.
 - **Stop blocks the number** with reason `call_opt_out` and its `dnc.blocked`
-  record, by the system; texts and calls both stop.
+  record, by the system; texts and calls both stop. It also ends the lead's
+  open text conversation (`suppressed`) - the same end state as a STOP text
+  or an agent's DNC, so a later START is never read as an answer to a
+  question nobody is asking (2026-10-19, found in the doc check).
 - **A yes to the link is texted** (T14, `sendCallLinkText` in
   `db/lead-texts.ts`): the active script's `link_text`, on the lead's thread
   like every automated text, and refused for a blocked number. Only for the
@@ -1212,7 +1215,10 @@ faster and far less sure, so it was dropped - T13b then halved Twilio's part
 with Deepgram. A "yes" hears the busy
 line until T15. The link is saved as asked for, and texted since T14. `dev:auto-call`
 gained `--again` and `--unblock` for testing with one phone. The DNC page
-names the new reason, "Said stop on automated call".
+names the new reason, "Said stop on automated call". Found in the doc check
+the same day: a stop on the call blocked the number but left the text
+conversation open, unlike a STOP text or an agent's DNC - it now ends it too
+(`keepAnswer`; `auto-calls-live-check`, 56 checks).
 
 **Files:** `backend/src/core/call-script.ts` (+ test), `backend/src/api/twilio-webhooks.ts`,
 `backend/src/api/__tests__/auto-call-webhooks.test.ts`, `backend/src/db/auto-calls.ts`,

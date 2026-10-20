@@ -130,7 +130,7 @@ scripts/live-checks.sh              # all of them
 scripts/live-checks.sh flows queue  # just these
 ```
 
-There are twenty live checks, covering the texts a call leads to (the link, and the text after a missed call - EZ Texting stubbed), the automated call (its row, every refusal, linking it to Twilio's call, two placements racing; each answer kept once, a result never overwritten, a stop blocking once, the end settling an unfinished script), who can take a call (migrations 016 and 017: the browser's word, the "Taking calls" switch, and who is free), the automated call's script (migrations 015 and 018), the SMS flows (a second flow added as
+There are twenty live checks, covering the texts a call leads to (the link, and the text after a missed call - EZ Texting stubbed), the automated call (its row, every refusal, linking it to Twilio's call, two placements racing; each answer kept once, a result never overwritten, a stop blocking once and ending the text questions, the end settling an unfinished script), who can take a call (migrations 016 and 017: the browser's word, the "Taking calls" switch, and who is free), the automated call's script (migrations 015 and 018), the SMS flows (a second flow added as
 rows only), the queue, claims, the read flag, the lead card,
 the timeline, callbacks, dispositions, agent SMS, calls (outgoing, incoming and
 missed), the activity log, Admin > Leads, the admin read models, health, the

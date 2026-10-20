@@ -272,6 +272,10 @@ trailing punctuation ignored). This is already implemented in the webhook.
 | Our app | Stores the STOP message on the lead, so the history shows it |
 | Our app | Sends nothing |
 
+The same end state - the number blocked, an `open` conversation `suppressed`
+- comes from an agent's DNC outcome (`AGENT-WORKSPACE.md`) and from a lead
+saying stop on the automated call (`AUTO-CALLS.md`, since 2026-10-19).
+
 The lead row stays. What is blocked is the **phone number**: `dnc_list` is keyed
 on phone, so the block holds whatever lead or conversation the number later
 belongs to. From then on:
