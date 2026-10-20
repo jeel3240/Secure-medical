@@ -13,7 +13,7 @@
  * row, `?call=<id>`, in the address Twilio signs:
  *
  *   POST /api/webhooks/twilio/auto/answer     the lead picked up: the first question
- *   POST /api/webhooks/twilio/auto/gather     the lead answered a question, or said nothing
+ *   POST /api/webhooks/twilio/auto/gather     the lead answered a question, or said nothing (T13)
  *   POST /api/webhooks/twilio/auto/status     how the call ended
  *   POST /api/webhooks/twilio/auto/amd        who picked up: a person or a machine
  *
@@ -28,7 +28,8 @@
  */
 
 import express, { type NextFunction, type Request, type Response, Router } from 'express';
-import { firstAsk } from '../core/call-script';
+import { matchSpokenChoice, type SpokenAnswer } from '../core/answers';
+import { firstAsk, handleAnswer, OPT_OUT_KEY } from '../core/call-script';
 import { agentIdFromIdentity, answeredByFor, outcomeForStatus, REFUSAL_SPEECH, talkSeconds } from '../core/calls';
 import {
   autoCallTwiml,
@@ -77,20 +78,36 @@ function missedText() {
 /** The automated call's row, and the script it says - loaded lazily, as above. */
 function autoCalls() {
   // eslint-disable-next-line @typescript-eslint/no-require-imports
-  const { linkAutomatedCall } = require('../db/auto-calls') as typeof import('../db/auto-calls');
+  const rows = require('../db/auto-calls') as typeof import('../db/auto-calls');
   // eslint-disable-next-line @typescript-eslint/no-require-imports
-  const { loadActiveCallScript } = require('../db/call-script') as typeof import('../db/call-script');
+  const script = require('../db/call-script') as typeof import('../db/call-script');
   // eslint-disable-next-line @typescript-eslint/no-require-imports
   const { pool } = require('../db/pool') as typeof import('../db/pool');
-  return { linkAutomatedCall, loadScript: () => loadActiveCallScript(pool) };
+  return {
+    linkAutomatedCall: rows.linkAutomatedCall,
+    keepAnswer: rows.keepAnswer,
+    settleAutomatedCall: rows.settleAutomatedCall,
+    loadScript: () => script.loadActiveCallScript(pool),
+    readMinConfidence: () => script.readMinConfidence(pool),
+  };
 }
 
 const field = (body: Record<string, unknown>, key: string): string =>
   typeof body[key] === 'string' ? (body[key] as string) : '';
 
-/** The automated call's row named in a webhook's address - a positive whole number, or null. */
+/** A positive whole number from a webhook's address - the call's row, a step - or null. */
 function autoCallId(raw: unknown): number | null {
   return typeof raw === 'string' && /^[1-9]\d{0,9}$/.test(raw) ? Number(raw) : null;
+}
+
+/** What the lead said or pressed, as Twilio's `<Gather>` reports it. */
+function spokenAnswer(body: Record<string, unknown>): SpokenAnswer {
+  const confidence = Number(field(body, 'Confidence'));
+  return {
+    heard: field(body, 'SpeechResult') || null,
+    digits: field(body, 'Digits') || null,
+    confidence: field(body, 'Confidence') !== '' && confidence >= 0 && confidence <= 1 ? confidence : null,
+  };
 }
 
 export function twilioWebhooksRouter(deps: AppDeps): Router {
@@ -342,26 +359,71 @@ export function twilioWebhooksRouter(deps: AppDeps): Router {
     })
   );
 
-  // The lead answered the question, or said nothing. T12 asks the first
-  // question and stops there: whatever was said, the lead is thanked and the
-  // call ends. T13 reads the answer, keeps it, and carries the script on.
+  // The lead answered a question, or said nothing - T13. What it means is
+  // `matchSpokenChoice` (T7), what follows `handleAnswer` (T8, T13); this
+  // keeps the answer, its result and any block (`keepAnswer`), and says what
+  // comes next. The address names the step and which asking it was.
   router.post(
     '/auto/gather',
     asyncHandler(async (req, res) => {
       res.type('text/xml');
       try {
         const call = await automatedCall(req);
-        const script = call ? await autoCalls().loadScript() : null;
-        if (!call || !script) {
+        const stepId = autoCallId(req.query.step);
+        const attempt = req.query.try === '1' ? 1 : req.query.try === '2' ? 2 : null;
+        if (!call || stepId === null || attempt === null) {
+          log.warn('auto_call.unknown_call', { path: req.path, callId: req.query.call });
           res.send(hangupTwiml());
           return;
         }
+        const ac = autoCalls();
+        const [script, minConfidence] = await Promise.all([ac.loadScript(), ac.readMinConfidence()]);
+        if (!script) {
+          log.error('auto_call.no_script', { callId: call.callId });
+          res.send(hangupTwiml());
+          return;
+        }
+
+        const body = (req.body ?? {}) as Record<string, unknown>;
+        const spoken = spokenAnswer(body);
+        const step = script.steps.find((s) => s.id === stepId) ?? null;
+        const match = matchSpokenChoice(spoken, step?.choices ?? [], {
+          optOutWords: script.optOutWords,
+          optOutKey: OPT_OUT_KEY,
+          minConfidence,
+        });
+        // Twilio asks here even after the lead hung up - `handleAnswer`.
+        const hungUp = field(body, 'CallStatus') === 'completed';
+        const outcome = handleAnswer(script, stepId, attempt, match, hungUp);
+
+        const { kept } = await ac.keepAnswer({
+          callId: call.callId,
+          step: step && { id: step.id, key: step.key },
+          attempt,
+          spoken,
+          record: outcome.answer,
+          result: outcome.result,
+          blockNumber: outcome.blockNumber,
+        });
+        // What was heard stays in the database, never in the logs.
+        log.info('auto_call.answer', {
+          callId: call.callId,
+          step: step?.key ?? stepId,
+          attempt,
+          meaning: match.result === 'choice' ? match.choice.label : match.result,
+          confidence: spoken.confidence,
+          hungUp,
+          result: outcome.result,
+          kept,
+        });
+        if (outcome.brokenScript) log.error('auto_call.broken_script', { callId: call.callId, step: stepId });
+        // T14 texts the link; until then it is only asked for.
+        if (outcome.sendLink) log.warn('auto_call.link_not_sent', { callId: call.callId, reason: 'until_t14' });
+
         res.send(
-          autoCallTwiml(deps.twilio!, {
-            callId: call.callId,
-            script,
-            action: { kind: 'end', say: [script.noResponseBody], result: 'no_response' },
-          })
+          outcome.next
+            ? autoCallTwiml(deps.twilio!, { callId: call.callId, script, action: outcome.next })
+            : hangupTwiml()
         );
       } catch (err) {
         log.error('auto_call.gather_failed', { callId: req.query.call, err: errText(err) });
@@ -371,14 +433,19 @@ export function twilioWebhooksRouter(deps: AppDeps): Router {
   );
 
   // How the call ended: saved as every call's end is (`finishCall`), on the
-  // row this address names.
+  // row this address names - and a script that never reached its own end is
+  // given one: unanswered, or hung up (T13).
   router.post(
     '/auto/status',
     asyncHandler(async (req, res) => {
       const body = (req.body ?? {}) as Record<string, unknown>;
       const call = await automatedCall(req);
-      if (call) await recordEnd(call.callSid, body.CallStatus, body.CallDuration);
-      else log.warn('auto_call.unknown_call', { path: req.path, callId: req.query.call });
+      if (call) {
+        await recordEnd(call.callSid, body.CallStatus, body.CallDuration);
+        await autoCalls().settleAutomatedCall(call.callId);
+      } else {
+        log.warn('auto_call.unknown_call', { path: req.path, callId: req.query.call });
+      }
       res.sendStatus(204);
     })
   );

@@ -198,7 +198,9 @@ who is actually blocked.
 
 **The page matches Admin > Leads - Jeel, 2026-09-28.** One card: the queue's
 navy switcher for All / Blocked / Released beside the search, then the table -
-the lead's name with the number under it, the reason, when it was added, and
+the lead's name with the number under it, the reason in words - Texted STOP,
+Opted out on EZ Texting, Agent set DNC, and since T13 Said stop on automated
+call - when it was added, and
 the state as an icon and words: **Blocked** in red with a barred circle,
 **Released** muted with a tick and "Texted START · date" under it. A number
 with no lead reads "No lead". A row with a lead opens its timeline. The blue

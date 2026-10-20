@@ -14,9 +14,9 @@ import { formatPhone, formatReceived } from '../../lib/format';
  * Admin > DNC list. DESIGN-PROMPT.md 6e; ADMIN.md. Phase 3 task 25.
  *
  * **Read-only, with no manual add and no delete** - Jeel, 2026-09-23. A number
- * reaches this list through an agent's DNC disposition, an SMS STOP, or an EZ
- * Texting opt-out found by the poller; it leaves only by the lead texting
- * START. The design brief calls it a compliance record, so nothing here deletes
+ * reaches this list through an agent's DNC disposition, an SMS STOP, an EZ
+ * Texting opt-out found by the poller, or a stop said on the automated call
+ * (T13); it leaves only by the lead texting START. The design brief calls it a compliance record, so nothing here deletes
  * a row.
  *
  * **Released rows are shown as released, not hidden.** Hiding them would stop
@@ -41,6 +41,7 @@ const REASON: Record<string, string> = {
   sms_stop: 'Texted STOP',
   ezt_opt_out: 'Opted out on EZ Texting',
   agent_disposition: 'Agent set DNC',
+  call_opt_out: 'Said stop on automated call',
 };
 
 const RELEASE_REASON: Record<string, string> = {
@@ -194,8 +195,9 @@ export function DncPage() {
         )}
 
         <p className="card-note">
-          Numbers are added by a STOP reply, an EZ Texting opt-out, or an agent's DNC, and released
-          only when the lead texts START. Nothing is added or removed here.
+          Numbers are added by a STOP reply, an EZ Texting opt-out, an agent's DNC, or a stop said on
+          the automated call, and released only when the lead texts START. Nothing is added or removed
+          here.
         </p>
       </div>
     </section>

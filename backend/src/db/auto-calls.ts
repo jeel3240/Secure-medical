@@ -11,7 +11,10 @@
  * call: it already treats an automated call as nobody's work (T4).
  */
 
+import type { SpokenAnswer } from '../core/answers';
+import type { AnswerRecord, CallResult } from '../core/call-script';
 import { activityInsertSql, recordActivity } from './activity';
+import { blockNumber, DNC_REASONS } from './dnc';
 import { pool } from './pool';
 
 /**
@@ -123,8 +126,9 @@ export async function linkAutomatedCall(callId: number, callSid: string): Promis
 
 /**
  * Twilio refused to place the call, so it never rang: the row is ended as
- * `failed`, with Twilio's status and error code, and its `call.ended` record
- * written in the same statement. Only once - an ended row is left alone.
+ * `failed` and `unanswered`, with Twilio's status and error code, and its
+ * `call.ended` record written in the same statement. Only once - an ended row
+ * is left alone.
  */
 export async function failAutomatedCall(
   callId: number,
@@ -132,7 +136,7 @@ export async function failAutomatedCall(
 ): Promise<void> {
   await pool.query(
     `WITH failed AS (
-       UPDATE calls SET outcome = 'failed', duration_sec = 0, ended_at = now()
+       UPDATE calls SET outcome = 'failed', duration_sec = 0, ended_at = now(), script_result = 'unanswered'
        WHERE id = $1 AND direction = 'automated' AND ended_at IS NULL
        RETURNING id, lead_id
      )
@@ -142,5 +146,109 @@ export async function failAutomatedCall(
                                'reason', 'twilio_refused', 'twilioStatus', $2::int, 'twilioCode', $3::int)
      FROM failed`,
     [callId, twilio.status, twilio.code]
+  );
+}
+
+/** Kept as heard, up to this long - Twilio's own are a sentence at most. */
+const MAX_HEARD = 500;
+
+/**
+ * Keeps one answer on the automated call `callId` - T13, in one transaction.
+ * Each part is safe to repeat, since Twilio may send the same request twice:
+ *
+ * - the `call_answers` row, once per asking (`UNIQUE (call_id, step_id,
+ *   attempt)`);
+ * - how the script ended, `result`, only if the call has none yet - never
+ *   overwritten;
+ * - when the lead said stop, the number blocked (`call_opt_out`, with its
+ *   `dnc.blocked` record) - only if it is not blocked already.
+ *
+ * `kept` is whether an answer row was written: false for a repeated request,
+ * and for an answer with no step to keep it under.
+ */
+export async function keepAnswer(opts: {
+  callId: number;
+  step: { id: number; key: string } | null;
+  attempt: 1 | 2;
+  spoken: SpokenAnswer;
+  record: AnswerRecord | null;
+  result: CallResult | null;
+  blockNumber: boolean;
+}): Promise<{ kept: boolean }> {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+
+    const { rows } = await client.query<{ lead_id: number; phone: string }>(
+      `SELECT c.lead_id, l.phone
+       FROM calls c JOIN leads l ON l.id = c.lead_id
+       WHERE c.id = $1 AND c.direction = 'automated'
+       FOR UPDATE OF c`,
+      [opts.callId]
+    );
+    const call = rows[0];
+    if (!call) {
+      await client.query('ROLLBACK');
+      return { kept: false };
+    }
+
+    let kept = false;
+    if (opts.record && opts.step) {
+      const inserted = await client.query(
+        `INSERT INTO call_answers (call_id, lead_id, step_id, step_key, attempt, heard, confidence, digits,
+                                   result, choice_key, choice_label)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+         ON CONFLICT (call_id, step_id, attempt) DO NOTHING
+         RETURNING id`,
+        [
+          opts.callId,
+          call.lead_id,
+          opts.step.id,
+          opts.step.key,
+          opts.attempt,
+          opts.spoken.heard?.trim().slice(0, MAX_HEARD) || null,
+          opts.spoken.confidence ?? null,
+          opts.spoken.digits?.trim() || null,
+          opts.record.result,
+          opts.record.choiceKey,
+          opts.record.choiceLabel,
+        ]
+      );
+      kept = inserted.rowCount === 1;
+    }
+
+    if (opts.result) {
+      await client.query(`UPDATE calls SET script_result = $2 WHERE id = $1 AND script_result IS NULL`, [
+        opts.callId,
+        opts.result,
+      ]);
+    }
+    if (opts.blockNumber) {
+      const live = await client.query(`SELECT 1 FROM dnc_list WHERE phone = $1 AND released_at IS NULL`, [call.phone]);
+      if (live.rowCount === 0) await blockNumber(client, call.phone, DNC_REASONS.callOptOut);
+    }
+
+    await client.query('COMMIT');
+    return { kept };
+  } catch (err) {
+    await client.query('ROLLBACK');
+    throw err;
+  } finally {
+    client.release();
+  }
+}
+
+/**
+ * The call has ended (`/auto/status`): a script that never reached its own
+ * end is given one - `unanswered` if the lead never picked up, `hung_up` if
+ * they did and left before the script finished. A result already saved is
+ * never changed.
+ */
+export async function settleAutomatedCall(callId: number): Promise<void> {
+  await pool.query(
+    `UPDATE calls
+     SET script_result = CASE WHEN outcome IN ('answered', 'voicemail') THEN 'hung_up' ELSE 'unanswered' END
+     WHERE id = $1 AND direction = 'automated' AND script_result IS NULL AND outcome IS NOT NULL`,
+    [callId]
   );
 }

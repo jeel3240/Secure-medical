@@ -160,20 +160,24 @@ describe('the automated call, in Twilio\'s words (T12)', () => {
     expect(autoCallUrl(SETTINGS, '/x', 42, { step: 3, try: 2 })).toBe('https://calls.example.com/x?call=42&step=3&try=2');
   });
 
-  it('asks: a second of quiet, then the question in the script\'s voice, listening for speech or one key', () => {
+  it('asks: a second of quiet, the lead-in with nothing listening, then the question itself, listening from its first word', () => {
     const xml = autoCallTwiml(SETTINGS, { callId: 42, script: SCRIPT, action: ask, pauseFirst: true });
-    expect(xml).toMatch(/^<\?xml[^>]*><Response><Pause length="1"\/><Gather /);
+    // "Hello?" over the greeting is not the answer: nothing listens yet.
+    expect(xml).toMatch(
+      /^<\?xml[^>]*><Response><Pause length="1"\/><Say voice="Google\.en-US-Chirp3-HD-Kore">Hi, this is Seri calling from eDrugstore\. Today we're offering 25% off antibiotics\.<\/Say><Gather /
+    );
     expect(xml).toContain('input="speech dtmf"');
     expect(xml).toContain('numDigits="1"');
     expect(xml).toContain('speechTimeout="auto"');
-    // "Hello?" over the question is not the answer; silence is reported, not skipped.
-    expect(xml).toContain('bargeIn="false"');
+    // Twilio's own model: its short-answer one was tried on a real call (T13) - no faster, and far less sure.
+    expect(xml).not.toContain('speechModel');
+    // An answer over the end of the question is heard; silence is reported, not skipped.
+    expect(xml).toContain('bargeIn="true"');
     expect(xml).toContain('actionOnEmptyResult="true"');
     expect(xml).toContain(
       `action="https://calls.example.com/api/webhooks/twilio/auto/gather?call=42&amp;step=${OFFER.id}&amp;try=1"`
     );
-    expect(xml).toContain('<Say voice="Google.en-US-Chirp3-HD-Kore">Hi, this is Seri calling from eDrugstore.');
-    expect(xml).toMatch(/<\/Say><\/Gather><\/Response>$/);
+    expect(xml).toMatch(/<Say voice="Google\.en-US-Chirp3-HD-Kore">Are you interested in ordering\?<\/Say><\/Gather><\/Response>$/);
   });
 
   it('listens hardest for the step\'s own words and the stop words', () => {

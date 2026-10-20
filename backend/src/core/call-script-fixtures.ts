@@ -11,7 +11,7 @@ import type { CallScript } from './call-script';
 export const OFFER_STEP = 1;
 export const LINK_STEP = 2;
 
-const ASK_AGAIN = "Sorry, I didn't catch that. Press 1 for yes, 2 for no, or 9 to stop these calls.";
+const ASK_AGAIN = "Sorry, I did not catch that. Press 1 for yes, 2 for no, or 9 to stop these calls.";
 
 export const ANTIBIOTICS_CALL: CallScript = {
   id: 1,
@@ -19,7 +19,7 @@ export const ANTIBIOTICS_CALL: CallScript = {
   name: 'eDrugstore antibiotics',
   voice: 'Google.en-US-Chirp3-HD-Kore',
   optOutWords: ['stop calling', 'stop', 'remove me', 'take me off', 'do not call', "don't call", 'unsubscribe'],
-  optOutBody: "Okay, we won't call you again. Goodbye.",
+  optOutBody: "Okay, we will not call you again. Goodbye.",
   noResponseBody: 'Thank you for your time. Have a great day.',
   voicemailBody:
     "Hi, this is Seri calling from eDrugstore with a quick message - we're offering antibiotics at 25% off right now. We'd love to connect. Please call us back at {callback_number}. Thanks, and have a great day!",

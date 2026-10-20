@@ -10,6 +10,19 @@
 import type { CallChoice, CallEnding, CallScript, CallStep } from '../core/call-script';
 import type { Db } from './flows';
 
+/** Below this, a spoken answer is not trusted - `auto_call_min_confidence`, T7. */
+export const DEFAULT_MIN_CONFIDENCE = 0.4;
+
+/**
+ * `settings.auto_call_min_confidence`, read on every answer like the script:
+ * 0.4 when it is missing or not between 0 and 1.
+ */
+export async function readMinConfidence(q: Db): Promise<number> {
+  const { rows } = await q.query(`SELECT value FROM settings WHERE key = 'auto_call_min_confidence'`);
+  const value = Number(rows[0]?.value);
+  return Number.isFinite(value) && value >= 0 && value <= 1 ? value : DEFAULT_MIN_CONFIDENCE;
+}
+
 /** The script calls use - null when there is none. */
 export async function loadActiveCallScript(q: Db): Promise<CallScript | null> {
   const { rows } = await q.query(`SELECT id FROM call_scripts WHERE is_active`);
