@@ -273,7 +273,7 @@ async function main(): Promise<void> {
 
   console.log('\nkeeping an answer (T13)');
   {
-    const { callId } = await placedCall('+15550000508', 'CA-ANS-1');
+    const { callId, leadId } = await placedCall('+15550000508', 'CA-ANS-1');
     const yes = {
       callId,
       step: q1,
@@ -283,7 +283,7 @@ async function main(): Promise<void> {
       result: 'transfer_missed' as const,
       blockNumber: false,
     };
-    check('kept', await keepAnswer(yes), { kept: true });
+    check('kept, naming the call\'s lead', await keepAnswer(yes), { kept: true, leadId });
     const { rows } = await pool.query(
       `SELECT step_key, attempt, heard, confidence::text, digits, result, choice_key, choice_label
        FROM call_answers WHERE call_id = $1`,
@@ -294,16 +294,17 @@ async function main(): Promise<void> {
     ]);
     check('the call\'s result saved', await scriptResult(callId), 'transfer_missed');
 
-    check('the same request again keeps nothing new', await keepAnswer(yes), { kept: false });
+    check('the same request again keeps nothing new', await keepAnswer(yes), { kept: false, leadId });
     const { rows: count } = await pool.query(`SELECT count(*)::int AS n FROM call_answers WHERE call_id = $1`, [callId]);
     check('still one answer', count[0].n, 1);
 
     await keepAnswer({ ...yes, attempt: 2, record: { result: 'silence', choiceKey: null, choiceLabel: null }, result: 'no_response' });
     check('a result is never overwritten', await scriptResult(callId), 'transfer_missed');
 
-    const { callId: quiet } = await placedCall('+15550000509', 'CA-ANS-2');
+    const { callId: quiet, leadId: quietLead } = await placedCall('+15550000509', 'CA-ANS-2');
     check('a hang-up with nothing said: nothing kept', await keepAnswer({ ...yes, callId: quiet, record: null, result: null }), {
       kept: false,
+      leadId: quietLead,
     });
     const { rows: none } = await pool.query(`SELECT count(*)::int AS n FROM call_answers WHERE call_id = $1`, [quiet]);
     check('no answer row, no result', [none[0].n, await scriptResult(quiet)], [0, null]);
@@ -315,6 +316,7 @@ async function main(): Promise<void> {
 
     check('an agent\'s call is not an automated call\'s to keep answers on', await keepAnswer({ ...yes, callId: 999999 }), {
       kept: false,
+      leadId: null,
     });
   }
 

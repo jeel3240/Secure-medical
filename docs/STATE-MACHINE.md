@@ -663,7 +663,7 @@ one automated text that is not part of this flow, so its rules are stated here
 once:
 
 - **When.** A lead rings our number and nobody answers. `message_missed_call`
-  from `settings` is sent, once per call (`db/missed-call-text.ts`).
+  from `settings` is sent, once per call (`db/lead-texts.ts`).
 - **To whom.** Any lead, whatever their conversation's status - `open`,
   `completed`, `review`, `expired`, or `suppressed` with the block since
   released. Only a live `dnc_list` row stops it, through the same check every

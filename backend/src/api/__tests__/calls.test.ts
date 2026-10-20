@@ -30,7 +30,7 @@ const saveRecording = jest.fn<Promise<boolean>, RecordingArgs>();
 jest.mock('../../db/transcripts', () => ({ saveRecording: (...a: RecordingArgs) => saveRecording(...a) }));
 
 const sendMissedCallText = jest.fn<Promise<boolean>, [number]>();
-jest.mock('../../db/missed-call-text', () => ({
+jest.mock('../../db/lead-texts', () => ({
   sendMissedCallText: (leadId: number) => sendMissedCallText(leadId),
 }));
 

@@ -70,9 +70,10 @@ function recordings() {
   return require('../db/transcripts') as typeof import('../db/transcripts');
 }
 
-function missedText() {
+/** The texts a call leads to - after a missed call, and the link (T14). Loaded lazily, as above. */
+function leadTexts() {
   // eslint-disable-next-line @typescript-eslint/no-require-imports
-  return require('../db/missed-call-text') as typeof import('../db/missed-call-text');
+  return require('../db/lead-texts') as typeof import('../db/lead-texts');
 }
 
 /** The automated call's row, and the script it says - loaded lazily, as above. */
@@ -190,7 +191,7 @@ export function twilioWebhooksRouter(deps: AppDeps): Router {
     const durationSec = talkSeconds(outcome, duration);
     const { recorded, missedLeadId } = await db().finishCall({ callSid, outcome, durationSec });
     log.info('call.finished', { callSid, outcome, durationSec, recorded, missed: missedLeadId !== null });
-    if (missedLeadId !== null) await missedText().sendMissedCallText(missedLeadId);
+    if (missedLeadId !== null) await leadTexts().sendMissedCallText(missedLeadId);
   };
 
   router.post(
@@ -280,7 +281,7 @@ export function twilioWebhooksRouter(deps: AppDeps): Router {
 
       log.info('call.incoming', { callSid, missed: true, known: incoming.kind === 'missed' });
       if (incoming.kind === 'missed' && incoming.firstReport) {
-        await missedText().sendMissedCallText(incoming.leadId);
+        await leadTexts().sendMissedCallText(incoming.leadId);
       }
       res.send(missedCallTwiml());
     })
@@ -367,6 +368,8 @@ export function twilioWebhooksRouter(deps: AppDeps): Router {
     '/auto/gather',
     asyncHandler(async (req, res) => {
       res.type('text/xml');
+      /** The lead to text the link to, once Twilio has its answer. */
+      let linkFor: number | null = null;
       try {
         const call = await automatedCall(req);
         const stepId = autoCallId(req.query.step);
@@ -396,7 +399,7 @@ export function twilioWebhooksRouter(deps: AppDeps): Router {
         const hungUp = field(body, 'CallStatus') === 'completed';
         const outcome = handleAnswer(script, stepId, attempt, match, hungUp);
 
-        const { kept } = await ac.keepAnswer({
+        const { kept, leadId } = await ac.keepAnswer({
           callId: call.callId,
           step: step && { id: step.id, key: step.key },
           attempt,
@@ -417,8 +420,10 @@ export function twilioWebhooksRouter(deps: AppDeps): Router {
           kept,
         });
         if (outcome.brokenScript) log.error('auto_call.broken_script', { callId: call.callId, step: stepId });
-        // T14 texts the link; until then it is only asked for.
-        if (outcome.sendLink) log.warn('auto_call.link_not_sent', { callId: call.callId, reason: 'until_t14' });
+        // Texted once - only for the first copy of this request, `kept` - and
+        // after Twilio has its answer, so the lead hears "check your SMS"
+        // without waiting on EZ Texting (T14).
+        if (outcome.sendLink && kept && leadId !== null) linkFor = leadId;
 
         res.send(
           outcome.next
@@ -429,6 +434,9 @@ export function twilioWebhooksRouter(deps: AppDeps): Router {
         log.error('auto_call.gather_failed', { callId: req.query.call, err: errText(err) });
         res.send(hangupTwiml());
       }
+      // Never throws: a text that could not be sent is logged, and the call's
+      // answer is already saved as `link_sent`.
+      if (linkFor !== null) await leadTexts().sendCallLinkText(linkFor);
     })
   );
 

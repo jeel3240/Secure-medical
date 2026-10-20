@@ -202,7 +202,7 @@ anyway could be sent question 1 again, their next answer then scored against
 question 2.
 
 **The text after a missed call is an automated row too** (`sent_by` null,
-`db/missed-call-text.ts`). It cannot reach a lead still waiting on question 1
+`db/lead-texts.ts`). It cannot reach a lead still waiting on question 1
 in normal use - a lead rings us back after an agent has called - but if it
 did, a sent one would count as a text of ours that went out and end the
 retries, and a refused one would count as an attempt.

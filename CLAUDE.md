@@ -174,7 +174,7 @@ you change something the docs describe, update the doc in the same commit.
     src/api/twilio-webhooks.ts  Twilio's signed webhooks: connect a call, a lead calling in, how it ended, who picked up, the recording, the recording notice; the automated call's /auto/* (T12)
     src/core/calls.ts       call rules, pure: identity, outcomes, refusals
     src/db/calls.ts         may this call be placed, who an incoming call rings, and recording it
-    src/db/missed-call-text.ts  the text sent after a call to us nobody answered
+    src/db/lead-texts.ts    the texts a call leads to: after a call to us nobody answered, and the link a lead said yes to on the automated call (T14)
     src/integrations/twilio.ts  the file the routes use for the twilio library (twilio-health.ts, twilio-transcripts.ts and the configure CLI use it too); the automated call's TwiML, and how it listens - Deepgram, measured (T13b)
     src/integrations/twilio-health.ts  the health report's calling check: do the number and the TwiML App point here
     src/core/twilio-pointing.ts  what twilio:configure may point, and what it refuses - production's number from a laptop, above all
@@ -219,6 +219,7 @@ you change something the docs describe, update the doc in the same commit.
     src/worker/place-auto-call.ts  places one automated call: the row, then Twilio, then its answer - the dev command's and the dialler's path (T12)
     scripts/dev-auto-call.ts  local testing only: the server calls one lead - npm run dev:auto-call; --again gives the number to a fresh test lead, --unblock lifts a test block (T13); scripts/dev-phone.ts reads the number
     scripts/auto-calls-live-check.ts  proves placing one: the row, every refusal, linking, failing, two placements racing
+    scripts/lead-texts-live-check.ts  proves the two texts: their words, the lead's thread, a blocked number getting neither (T14)
     src/core/questions.ts   what the screens call a question: "Q2", and "Q1-a" for a sub-question - one rule for every screen
     src/api/reply-flow.ts   runs the state machine for an inbound reply
     src/worker/expiry.ts    marks stale open conversations expired
@@ -241,7 +242,7 @@ you change something the docs describe, update the doc in the same commit.
     scripts/activity-live-check.ts  proves every action is recorded, and that the log cannot be altered
     src/db/holder.ts        who holds a lead - checked before every write on it
     src/db/failed-sends.ts  keeps an agent's own text that EZ Texting refused, marked failed
-    src/db/outbound.ts      sends an automated text and records it: opener, retry, reply flow, missed-call text
+    src/db/outbound.ts      sends an automated text and records it: opener, retry, reply flow, missed-call text, the call's link
     src/worker/index.ts     the worker loop: poll, expire, retry openers, fetch transcripts; src/worker/poller.ts is the poll
     src/api/app.ts          builds the Express app; index.ts starts it; deps.ts, http.ts are shared plumbing
     src/config.ts           reads the environment, and exits if a required variable is missing
