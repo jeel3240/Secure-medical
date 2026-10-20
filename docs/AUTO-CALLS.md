@@ -228,7 +228,9 @@ this order:
    some speech models send none. Every answer's figure is kept, and read on
    every answer from `settings`. **The first real calls** (T13, 2026-10-19)
    gave clear answers 0.52 to 0.95 - "No." 0.52-0.70, "Yes." 0.61, "No,
-   thanks." 0.81, "Stop calling me." 0.95 - so 0.4 holds.
+   thanks." 0.81, "Stop calling me." 0.95 - so 0.4 holds. With Deepgram (T13b)
+   "no", "no thank you" and "stop calling me" came back 0.97-0.999, but a
+   clear "yes" only 0.53: "yes" is the one to watch against 0.4.
 5. **Otherwise the choices' words are found inside the sentence**, as whole
    words, longest phrase first, each word used once: "Yes, I am" and "Yeah
    sure" are Yes; "No, I'm not interested" is No - `not interested` takes those
@@ -247,13 +249,31 @@ itself - is said with listening on, so an answer that starts before it ends
 is heard. T12 kept the whole question deaf, and the first real calls lost
 answers said over its last word.
 
-**How fast** - a key press is near-instant; a spoken answer took about 4 to 5
-seconds to come back on the first real calls. Our server answers Twilio in
-about 0.2 seconds (Twilio's own request log), so the time is Twilio deciding
-the lead has stopped and working out the words - not making the voice: after
-a key, the reply starts at once. Twilio's short-answer model
-(`experimental_utterances`) was tried and dropped the same day: no faster, and
-a clear "yes" came back 0.24, then 0.00. Making it faster is T13b.
+**How fast** (T13b, 2026-10-19) - a key press is near-instant; a spoken answer
+left about 4 seconds of silence before the call went on. Measured on recorded
+real calls, split into its parts:
+
+| Listening with | Twilio hearing the answer | The reply starting | Silence the lead hears |
+|---|---|---|---|
+| Twilio's own model, `speechTimeout` auto | 3.3 - 3.4 s | 0.6 - 0.8 s | 4.0 - 4.3 s |
+| Twilio's own model, `speechTimeout` 1 | 2.1 s - 5.4 s when a noise restarted the wait | 0.7 - 0.8 s | 2.8 - 6.2 s |
+| **Deepgram `nova-3`, `speechTimeout` 1 - in use** | **1.6 - 1.7 s** | 0.8 - 1.5 s | **2.4 - 3.3 s** |
+| Twilio's short-answer model (T13) | no faster | - | - |
+
+Deepgram is used (`integrations/twilio.ts`): half Twilio's wait, and surer of
+what it heard. Twilio does not fail over a provider's own model in an outage;
+a spoken answer would then come back empty, and the call asks again for keys,
+which need no speech service. Of the reply's start, our server takes about
+0.2 seconds; the rest is Twilio making the voice - which also leaves about 0.9
+seconds between a question's lead-in and the question itself, each said on
+its own. Audio made once, in place of text spoken during the call,
+would shrink both; not built.
+
+*How it was measured* - repeatable: the test call recorded on both sides
+through Twilio's recordings API (two channels, deleted after); in each
+channel, speech found by loudness every 20 ms; the lead's last word, the
+moment the answer reached our server (`webhook_events.received_at`) and the
+reply's first sound lined up on the recording's clock.
 
 ### What the call does after each answer
 
@@ -431,7 +451,7 @@ ticket's own PR.
 | | **The call - on the dev number** | | |
 | T12 | The server places one call | T3, T4, T6 | Done 2026-10-18 - a real call to Jeel's phone; the opening and voice changed after it (018) |
 | T13 | The questions | T7, T8, T12 | Done 2026-10-19 - six real calls, every path |
-| T13b | Spoken answers understood faster | T13 | Not started |
+| T13b | Spoken answers understood faster | T13 | Done 2026-10-19 - Deepgram: 4 s of silence down to 2.4-3.3 s, measured |
 | T14 | Text the link | T13 | Not started |
 | T15 | The transfer | T10, T11, T13 | Not started |
 | T16 | The hold line | T15 | Not started |
@@ -1172,7 +1192,8 @@ nothing listening and the question itself with listening on
 call you again", the line after a stop: "won't" and "didn't" are written out
 in migration 018. And **a spoken answer takes about 4-5 seconds** to come
 back against a key's instant one; Twilio's short-answer model, tried, was no
-faster and far less sure, so it was dropped - T13b. A "yes" hears the busy
+faster and far less sure, so it was dropped - T13b then halved Twilio's part
+with Deepgram. A "yes" hears the busy
 line until T15. The link is saved as asked for, and texted from T14. `dev:auto-call`
 gained `--again` and `--unblock` for testing with one phone. The DNC page
 names the new reason, "Said stop on automated call".
@@ -1215,9 +1236,23 @@ answer", "How a call is placed"), `AUDIT.md`, `SCHEMA.md`, `LOGGING.md`,
   press 1."), which are instant and never misheard.
 
 **Done when**
-- [ ] The gap measured on a recorded call, before and after.
-- [ ] The chosen setting no less sure of yes, no and stop on real calls.
-- [ ] Jeel hears the difference on his phone.
+- [x] The gap measured on a recorded call, before and after - 4.0-4.3 s of
+      silence before, 2.4-3.3 s after; Twilio's part 3.3 s before, 1.6-1.7 s
+      after.
+- [x] The chosen setting no less sure of yes, no and stop on real calls -
+      "no" 0.97, "no thank you" 0.999, "stop calling me" 0.998, "yes" 0.53
+      (0.61 before).
+- [x] Jeel hears the difference on his phone - six recorded calls,
+      2026-10-19.
+
+As built: "Understanding an answer", "How fast". Three settings were measured
+on recorded calls and Deepgram's `nova-3` with a one-second end was kept. A
+fixed one-second end on Twilio's own model was faster on a quiet line but
+slower than before when a noise restarted its wait. Not done: the reply's
+voice still takes 0.8-1.5 s to start, and a question's lead-in and the
+question itself have about 0.9 s between them - audio made once would shrink
+both, a separate change if wanted. Inviting keys in the questions was not
+needed.
 
 **Files:** `backend/src/integrations/twilio.ts` (+ test).
 **Doc:** this one, "Understanding an answer".
