@@ -26,6 +26,7 @@ import {
   startAutomatedCall,
 } from '../src/db/auto-calls';
 import { finishCall, recordAnsweredBy } from '../src/db/calls';
+import { startConversation } from '../src/db/flows';
 import { pool } from '../src/db/pool';
 
 let failures = 0;
@@ -320,9 +321,11 @@ async function main(): Promise<void> {
     });
   }
 
-  console.log('\nstop - the number blocked, once (T13)');
+  console.log('\nstop - the number blocked, once (T13), and the text questions ended');
   {
     const { leadId, callId } = await placedCall('+15550000511', 'CA-STOP-1');
+    // Still waiting on the first text's question, as most leads the robot calls are.
+    await startConversation(pool, leadId, 'open');
     const stop = {
       callId,
       step: q1,
@@ -336,6 +339,11 @@ async function main(): Promise<void> {
     const block = (await pool.query(`SELECT reason, released_at FROM dnc_list WHERE phone = '+15550000511'`)).rows[0];
     check('blocked, as said on the automated call', [block.reason, block.released_at], ['call_opt_out', null]);
     check('the call\'s result', await scriptResult(callId), 'opted_out');
+    const conversations = async (id: number) =>
+      (await pool.query(`SELECT status FROM conversations WHERE lead_id = $1 ORDER BY id`, [id])).rows.map((r) => r.status);
+    check('the open text conversation ended - the same end state as a STOP text', await conversations(leadId), [
+      'suppressed',
+    ]);
     const record = await lastRecord(leadId);
     check('recorded as blocked by the system', [record.action, record.actor_id, record.detail.reason], [
       'dnc.blocked',
@@ -348,6 +356,14 @@ async function main(): Promise<void> {
       (await pool.query(`SELECT count(*)::int AS n FROM activity_log WHERE action = 'dnc.blocked' AND detail->>'phone' = $1`, [phone]))
         .rows[0].n;
     check('the same request again does not block it again', await blocks('+15550000511'), 1);
+
+    const { leadId: finishedLead, callId: finishedCall } = await placedCall('+15550000520', 'CA-STOP-3');
+    await pool.query(
+      `INSERT INTO conversations (lead_id, status, step, score, tier, completed_at) VALUES ($1, 'completed', 30, 60, 'WARM', now())`,
+      [finishedLead]
+    );
+    await keepAnswer({ ...stop, callId: finishedCall });
+    check('a conversation already finished keeps its status', await conversations(finishedLead), ['completed']);
 
     const { callId: already } = await placedCall('+15550000512', 'CA-STOP-2');
     await pool.query(`INSERT INTO dnc_list (phone, reason) VALUES ('+15550000512', 'sms_stop')`);

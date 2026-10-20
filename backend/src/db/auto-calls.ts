@@ -161,7 +161,10 @@ const MAX_HEARD = 500;
  * - how the script ended, `result`, only if the call has none yet - never
  *   overwritten;
  * - when the lead said stop, the number blocked (`call_opt_out`, with its
- *   `dnc.blocked` record) - only if it is not blocked already.
+ *   `dnc.blocked` record) - only if it is not blocked already - and the
+ *   lead's open text conversation ended (`suppressed`): the same end state as
+ *   a STOP text or an agent's DNC (`db/dispositions.ts`), so a later START is
+ *   never read as an answer to a question nobody is asking.
  *
  * `kept` is whether an answer row was written: false for a repeated request,
  * and for an answer with no step to keep it under - so what an answer leads
@@ -228,6 +231,10 @@ export async function keepAnswer(opts: {
     if (opts.blockNumber) {
       const live = await client.query(`SELECT 1 FROM dnc_list WHERE phone = $1 AND released_at IS NULL`, [call.phone]);
       if (live.rowCount === 0) await blockNumber(client, call.phone, DNC_REASONS.callOptOut);
+      await client.query(
+        `UPDATE conversations SET status = 'suppressed', updated_at = now() WHERE lead_id = $1 AND status = 'open'`,
+        [call.lead_id]
+      );
     }
 
     await client.query('COMMIT');
