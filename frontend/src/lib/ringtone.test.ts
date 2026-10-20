@@ -12,8 +12,25 @@ class FakeAudio {
   preload = '';
   currentTime = 0;
   playing = false;
+  private listeners = new Map<string, (() => void)[]>();
   constructor(public src: string) {
     FakeAudio.made.push(this);
+  }
+  get paused() {
+    return !this.playing;
+  }
+  addEventListener(name: string, listener: () => void) {
+    this.listeners.set(name, [...(this.listeners.get(name) ?? []), listener]);
+  }
+  /** The browser telling the page what the element is doing. */
+  emit(name: string) {
+    (this.listeners.get(name) ?? []).forEach((listener) => listener());
+  }
+  /** The browser playing it with nobody asking - what Safari did. */
+  resumeByItself() {
+    this.playing = true;
+    if (!this.muted && this.volume > 0) this.heard = true;
+    this.emit('playing');
   }
   play = vi.fn(() => {
     if (!FakeAudio.allowed) return Promise.reject(new Error('NotAllowedError'));
@@ -139,6 +156,49 @@ describe('ringing', () => {
     expect(FakeAudio.made[0].playing).toBe(true);
     expect([FakeAudio.made[0].muted, FakeAudio.made[0].volume]).toEqual([false, 1]);
     stop();
+  });
+
+  it('started again by the browser itself once the ring is over - Safari did, every time: stopped at once', async () => {
+    const { audio, startRinging } = await clicked();
+    const stop = startRinging();
+    stop();
+    audio.pause.mockClear();
+    audio.resumeByItself();
+    expect(audio.pause).toHaveBeenCalledTimes(1);
+    expect(audio.playing).toBe(false);
+    // Caught however it comes back: the tune moving on says it too.
+    audio.playing = true;
+    audio.emit('timeupdate');
+    expect(audio.playing).toBe(false);
+  });
+
+  it('a ring, or the silent first play, is never cut short by that', async () => {
+    const { armRingtone, startRinging } = await fresh();
+    armRingtone();
+    window.dispatchEvent(new Event('click'));
+    const audio = FakeAudio.made[0];
+    // The silent first play, still under way.
+    audio.emit('playing');
+    expect(audio.pause).not.toHaveBeenCalled();
+    await settle();
+
+    const stop = startRinging();
+    audio.pause.mockClear();
+    audio.emit('playing');
+    audio.emit('timeupdate');
+    expect(audio.pause).not.toHaveBeenCalled();
+    expect(audio.playing).toBe(true);
+    stop();
+  });
+
+  it('stopping only pauses it - the next ring starts from the top', async () => {
+    const { audio, startRinging } = await clicked();
+    const stop = startRinging();
+    audio.currentTime = 1.7;
+    stop();
+    expect(audio.currentTime).toBe(1.7);
+    startRinging();
+    expect(audio.currentTime).toBe(0);
   });
 
   it('does nothing where there is no audio at all', async () => {
