@@ -31,6 +31,12 @@ export const ACTIVITY_ACTIONS = [
   'call.refused',
   'call.incoming',
   'call.missed',
+  /**
+   * A person took an automated call's transfer - `detail.callId`, and
+   * `tookOverFrom` when the lead was someone else's (T15a, AUTO-CALLS.md).
+   * Written once per call, whoever held the lead before.
+   */
+  'call.transferred',
   /** Twilio's verdict on who picked up a call we placed - a person or a machine. */
   'call.answered_by',
   /** A call's recording is in, and its transcript is in line. */

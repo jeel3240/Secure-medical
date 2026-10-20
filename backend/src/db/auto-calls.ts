@@ -12,6 +12,7 @@
  */
 
 import type { SpokenAnswer } from '../core/answers';
+import type { AnsweredBy } from '../core/calls';
 import type { AnswerRecord, CallResult } from '../core/call-script';
 import { activityInsertSql, recordActivity } from './activity';
 import { blockNumber, DNC_REASONS } from './dnc';
@@ -258,6 +259,130 @@ export async function settleAutomatedCall(callId: number): Promise<void> {
     `UPDATE calls
      SET script_result = CASE WHEN outcome IN ('answered', 'voicemail') THEN 'hung_up' ELSE 'unanswered' END
      WHERE id = $1 AND direction = 'automated' AND script_result IS NULL AND outcome IS NOT NULL`,
+    [callId]
+  );
+}
+
+/**
+ * What a transfer needs to know about the automated call `callId` - T15a: its
+ * lead, as a ring says who is calling (`ringAgentTwiml`'s same three), and
+ * Twilio's verdict on who answered the phone, if it has come. Null when the
+ * row is not an automated call.
+ */
+export async function transferContext(
+  callId: number
+): Promise<{ lead: { id: number; name: string; phone: string }; answeredBy: AnsweredBy | null } | null> {
+  const { rows } = await pool.query<{
+    id: number;
+    first_name: string | null;
+    last_name: string | null;
+    phone: string;
+    answered_by: AnsweredBy | null;
+  }>(
+    `SELECT l.id, l.first_name, l.last_name, l.phone, c.answered_by
+     FROM calls c JOIN leads l ON l.id = c.lead_id
+     WHERE c.id = $1 AND c.direction = 'automated'`,
+    [callId]
+  );
+  const row = rows[0];
+  if (!row) return null;
+  return {
+    lead: { id: row.id, name: [row.first_name, row.last_name].filter(Boolean).join(' '), phone: row.phone },
+    answeredBy: row.answered_by,
+  };
+}
+
+export type TakeTransferResult =
+  | { ok: true; leadId: number; tookOverFrom: number | null }
+  /** `taken`: another person has it; `inactive`: this account was deactivated while it rang. */
+  | { ok: false; reason: 'not_found' | 'taken' | 'inactive' };
+
+/**
+ * `agentId` accepted the transfer of the automated call `callId` - T15a, in
+ * one transaction, both rows locked:
+ *
+ * - the call becomes theirs (`agent_id`) and `transferred`, from which it
+ *   counts as a person's work - Working, a missed call returned (T4);
+ * - the lead becomes theirs, **taking over from anyone who held it** - unlike
+ *   an agent picking a lead up, a lead who said yes goes to whoever answered
+ *   (Jeel, 2026-10-15). `lead.picked_up` records it, with the call and who it
+ *   was taken from. Already theirs - their own lead, or their browser picked it
+ *   up a moment before this request arrived - no new pick-up;
+ * - and `call.transferred` records taking the transfer itself, whoever held
+ *   the lead: without it, a holder taking their own lead's transfer, or a
+ *   browser's pick-up arriving first, would leave no record that a transfer
+ *   was taken (found on the first real transfer, 2026-10-20).
+ *
+ * The same request again changes nothing and records nothing. A call another person has already
+ * taken is refused: Twilio connects only the first to accept, so a second is
+ * a mistake, not a race to settle.
+ */
+export async function takeTransfer(callId: number, agentId: number): Promise<TakeTransferResult> {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const { rows } = await client.query<{ lead_id: number; agent_id: number | null; assigned_to: number | null }>(
+      `SELECT c.lead_id, c.agent_id, l.assigned_to
+       FROM calls c JOIN leads l ON l.id = c.lead_id
+       WHERE c.id = $1 AND c.direction = 'automated'
+       FOR UPDATE OF c, l`,
+      [callId]
+    );
+    const call = rows[0];
+    const refuse = async (reason: 'not_found' | 'taken' | 'inactive') => {
+      await client.query('ROLLBACK');
+      return { ok: false as const, reason };
+    };
+    if (!call) return await refuse('not_found');
+    if (call.agent_id !== null && call.agent_id !== agentId) return await refuse('taken');
+    const agent = await client.query(`SELECT 1 FROM users WHERE id = $1 AND is_active`, [agentId]);
+    if (agent.rowCount === 0) return await refuse('inactive');
+
+    const firstTime = call.agent_id === null;
+    await client.query(
+      `UPDATE calls SET agent_id = $2, script_result = COALESCE(script_result, 'transferred') WHERE id = $1`,
+      [callId, agentId]
+    );
+    const tookOverFrom = call.assigned_to !== null && call.assigned_to !== agentId ? call.assigned_to : null;
+    if (firstTime) {
+      await recordActivity(client, {
+        action: 'call.transferred',
+        actorId: agentId,
+        leadId: call.lead_id,
+        detail: { callId, ...(tookOverFrom === null ? {} : { tookOverFrom }) },
+      });
+    }
+    if (call.assigned_to !== agentId) {
+      await client.query(`UPDATE leads SET assigned_to = $2, assigned_at = now(), updated_at = now() WHERE id = $1`, [
+        call.lead_id,
+        agentId,
+      ]);
+      await recordActivity(client, {
+        action: 'lead.picked_up',
+        actorId: agentId,
+        leadId: call.lead_id,
+        detail: { via: 'transfer', callId, ...(tookOverFrom === null ? {} : { tookOverFrom }) },
+      });
+    }
+
+    await client.query('COMMIT');
+    return { ok: true, leadId: call.lead_id, tookOverFrom };
+  } catch (err) {
+    await client.query('ROLLBACK');
+    throw err;
+  } finally {
+    client.release();
+  }
+}
+
+/**
+ * Nobody took the transfer - T15a: the call ends as `transfer_missed`, unless
+ * it already has a result. An agent calls the lead back; T22 puts them first.
+ */
+export async function missTransfer(callId: number): Promise<void> {
+  await pool.query(
+    `UPDATE calls SET script_result = 'transfer_missed'
+     WHERE id = $1 AND direction = 'automated' AND script_result IS NULL`,
     [callId]
   );
 }

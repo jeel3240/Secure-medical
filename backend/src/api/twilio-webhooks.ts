@@ -16,6 +16,8 @@
  *   POST /api/webhooks/twilio/auto/gather     the lead answered a question, or said nothing (T13)
  *   POST /api/webhooks/twilio/auto/status     how the call ended
  *   POST /api/webhooks/twilio/auto/amd        who picked up: a person or a machine
+ *   POST /api/webhooks/twilio/auto/claim      a person accepted the transfer (T15a)
+ *   POST /api/webhooks/twilio/auto/after      the transfer's ringing is over (T15a)
  *
  * Unauthenticated, like the EZ Texting webhook, but unlike it Twilio signs
  * every request (X-Twilio-Signature), so anything unsigned or mis-signed is
@@ -29,8 +31,15 @@
 
 import express, { type NextFunction, type Request, type Response, Router } from 'express';
 import { matchSpokenChoice, type SpokenAnswer } from '../core/answers';
-import { firstAsk, handleAnswer, OPT_OUT_KEY } from '../core/call-script';
-import { agentIdFromIdentity, answeredByFor, outcomeForStatus, REFUSAL_SPEECH, talkSeconds } from '../core/calls';
+import { firstAsk, handleAnswer, OPT_OUT_KEY, planTransfer, type AskOrEnd, type CallResult } from '../core/call-script';
+import {
+  agentIdFromIdentity,
+  answeredByFor,
+  outcomeForStatus,
+  REFUSAL_SPEECH,
+  talkSeconds,
+  tookByMachine,
+} from '../core/calls';
 import {
   autoCallTwiml,
   dialTwiml,
@@ -41,6 +50,7 @@ import {
   recordingNoticeTwiml,
   refusalTwiml,
   ringAgentTwiml,
+  transferTwiml,
 } from '../integrations/twilio';
 import { errText, log } from '../lib/log';
 import type { AppDeps } from './deps';
@@ -83,13 +93,20 @@ function autoCalls() {
   // eslint-disable-next-line @typescript-eslint/no-require-imports
   const script = require('../db/call-script') as typeof import('../db/call-script');
   // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const presence = require('../db/presence') as typeof import('../db/presence');
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
   const { pool } = require('../db/pool') as typeof import('../db/pool');
   return {
     linkAutomatedCall: rows.linkAutomatedCall,
     keepAnswer: rows.keepAnswer,
     settleAutomatedCall: rows.settleAutomatedCall,
+    transferContext: rows.transferContext,
+    takeTransfer: rows.takeTransfer,
+    missTransfer: rows.missTransfer,
+    freePeople: () => presence.freePeople(pool),
     loadScript: () => script.loadActiveCallScript(pool),
     readMinConfidence: () => script.readMinConfidence(pool),
+    readRingSeconds: () => script.readRingSeconds(pool),
   };
 }
 
@@ -399,13 +416,35 @@ export function twilioWebhooksRouter(deps: AppDeps): Router {
         const hungUp = field(body, 'CallStatus') === 'completed';
         const outcome = handleAnswer(script, stepId, attempt, match, hungUp);
 
+        // A "yes" to a transfer rings whoever is free right now (T15a).
+        let next: AskOrEnd | null = null;
+        let ring: { say: string[]; agentIds: number[]; lead: { id: number; name: string; phone: string } } | null = null;
+        let result: CallResult | null = outcome.result;
+        if (outcome.next?.kind === 'transfer') {
+          const [context, free] = await Promise.all([ac.transferContext(call.callId), ac.freePeople()]);
+          if (!context) throw new Error('the automated call has no row');
+          const plan = planTransfer(script, outcome.next, { free, machine: tookByMachine(context.answeredBy) });
+          if (plan.kind === 'ring') {
+            ring = { say: plan.say, agentIds: plan.agentIds, lead: context.lead };
+          } else {
+            next = plan;
+            result = plan.result;
+          }
+          log.info(ring ? 'auto_call.transfer' : 'auto_call.transfer_missed', {
+            callId: call.callId,
+            ...(ring ? { rung: ring.agentIds.length } : { reason: free.length === 0 ? 'nobody_free' : 'machine' }),
+          });
+        } else {
+          next = outcome.next;
+        }
+
         const { kept, leadId } = await ac.keepAnswer({
           callId: call.callId,
           step: step && { id: step.id, key: step.key },
           attempt,
           spoken,
           record: outcome.answer,
-          result: outcome.result,
+          result,
           blockNumber: outcome.blockNumber,
         });
         // What was heard stays in the database, never in the logs.
@@ -416,7 +455,7 @@ export function twilioWebhooksRouter(deps: AppDeps): Router {
           meaning: match.result === 'choice' ? match.choice.label : match.result,
           confidence: spoken.confidence,
           hungUp,
-          result: outcome.result,
+          result,
           kept,
         });
         if (outcome.brokenScript) log.error('auto_call.broken_script', { callId: call.callId, step: stepId });
@@ -425,11 +464,22 @@ export function twilioWebhooksRouter(deps: AppDeps): Router {
         // without waiting on EZ Texting (T14).
         if (outcome.sendLink && kept && leadId !== null) linkFor = leadId;
 
-        res.send(
-          outcome.next
-            ? autoCallTwiml(deps.twilio!, { callId: call.callId, script, action: outcome.next })
-            : hangupTwiml()
-        );
+        if (ring) {
+          res.send(
+            transferTwiml(deps.twilio!, {
+              callId: call.callId,
+              callSid: call.callSid,
+              script,
+              say: ring.say,
+              agentIds: ring.agentIds,
+              lead: ring.lead,
+              step: step?.heading ?? '',
+              ringSeconds: await ac.readRingSeconds(),
+            })
+          );
+        } else {
+          res.send(next ? autoCallTwiml(deps.twilio!, { callId: call.callId, script, action: next }) : hangupTwiml());
+        }
       } catch (err) {
         log.error('auto_call.gather_failed', { callId: req.query.call, err: errText(err) });
         res.send(hangupTwiml());
@@ -470,6 +520,82 @@ export function twilioWebhooksRouter(deps: AppDeps): Router {
         log.info('call.answered_by', { callSid: call.callSid, answeredBy, recorded });
       }
       res.sendStatus(204);
+    })
+  );
+
+  // A person accepted the transfer - Twilio runs this on their leg, before
+  // they are connected (T15a). The lead becomes theirs (`takeTransfer`). The
+  // leg is the person's: the automated call is its parent, and the person is
+  // who it rang (`To`, our signed browser name). Anything wrong after they
+  // accepted still connects them - the lead is waiting for a person.
+  router.post(
+    '/auto/claim',
+    asyncHandler(async (req, res) => {
+      res.type('text/xml');
+      const body = (req.body ?? {}) as Record<string, unknown>;
+      const callId = autoCallId(req.query.call);
+      const parentSid = field(body, 'ParentCallSid');
+      const agentId = agentIdFromIdentity(body.To, deps.twilio!.identityPrefix);
+      if (callId === null || !parentSid || agentId === null) {
+        log.warn('auto_call.unknown_call', { path: req.path, callId: req.query.call });
+        res.send(hangupTwiml());
+        return;
+      }
+      try {
+        const ac = autoCalls();
+        const taken = (await ac.linkAutomatedCall(callId, parentSid))
+          ? await ac.takeTransfer(callId, agentId)
+          : ({ ok: false, reason: 'not_found' } as const);
+        if (!taken.ok) {
+          log.warn('auto_call.transfer_refused', { callId, agentId, reason: taken.reason });
+          res.send(hangupTwiml());
+          return;
+        }
+        log.info('auto_call.transferred', { callId, agentId, leadId: taken.leadId, tookOverFrom: taken.tookOverFrom });
+      } catch (err) {
+        log.error('auto_call.claim_failed', { callId, agentId, err: errText(err) });
+      }
+      res.send(emptyTwiml());
+    })
+  );
+
+  // The transfer's ringing is over (T15a). Someone took it and they talked:
+  // nothing more to say. Nobody took it - or the lead hung up while it rang:
+  // `transfer_missed`, so an agent calls them back, and the busy line if they
+  // are still there.
+  router.post(
+    '/auto/after',
+    asyncHandler(async (req, res) => {
+      res.type('text/xml');
+      const status = field((req.body ?? {}) as Record<string, unknown>, 'DialCallStatus');
+      if (status === 'completed' || status === 'answered') {
+        res.send(emptyTwiml());
+        return;
+      }
+      try {
+        const call = await automatedCall(req);
+        if (!call) {
+          log.warn('auto_call.unknown_call', { path: req.path, callId: req.query.call });
+          res.send(hangupTwiml());
+          return;
+        }
+        const ac = autoCalls();
+        await ac.missTransfer(call.callId);
+        log.info('auto_call.transfer_missed', { callId: call.callId, reason: 'not_taken', dialStatus: status });
+        const script = await ac.loadScript();
+        res.send(
+          script
+            ? autoCallTwiml(deps.twilio!, {
+                callId: call.callId,
+                script,
+                action: { kind: 'end', say: [script.busyBody], result: 'transfer_missed' },
+              })
+            : hangupTwiml()
+        );
+      } catch (err) {
+        log.error('auto_call.after_failed', { callId: req.query.call, err: errText(err) });
+        res.send(hangupTwiml());
+      }
     })
   );
 

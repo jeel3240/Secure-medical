@@ -171,11 +171,11 @@ you change something the docs describe, update the doc in the same commit.
     src/db/notes.ts         agent notes, append-only
     src/api/callbacks.ts    My Callbacks: list, reschedule, mark done
     src/api/calls.ts        browser calling: whether it is set up, and the call token; the browser's word and the "Taking calls" switch (T9, T10)
-    src/api/twilio-webhooks.ts  Twilio's signed webhooks: connect a call, a lead calling in, how it ended, who picked up, the recording, the recording notice; the automated call's /auto/* (T12)
+    src/api/twilio-webhooks.ts  Twilio's signed webhooks: connect a call, a lead calling in, how it ended, who picked up, the recording, the recording notice; the automated call's /auto/* (T12), and its transfer, /auto/claim and /auto/after (T15a)
     src/core/calls.ts       call rules, pure: identity, outcomes, refusals
     src/db/calls.ts         may this call be placed, who an incoming call rings, and recording it
     src/db/lead-texts.ts    the texts a call leads to: after a call to us nobody answered, and the link a lead said yes to on the automated call (T14)
-    src/integrations/twilio.ts  the file the routes use for the twilio library (twilio-health.ts, twilio-transcripts.ts and the configure CLI use it too); the automated call's TwiML, and how it listens - Deepgram, measured (T13b)
+    src/integrations/twilio.ts  the file the routes use for the twilio library (twilio-health.ts, twilio-transcripts.ts and the configure CLI use it too); the automated call's TwiML, and how it listens - Deepgram, measured (T13b); its transfer's ring (T15a)
     src/integrations/twilio-health.ts  the health report's calling check: do the number and the TwiML App point here
     src/core/twilio-pointing.ts  what twilio:configure may point, and what it refuses - production's number from a laptop, above all
     src/integrations/twilio-transcripts.ts  Twilio's transcription service; src/core/transcripts.ts who said what, pure
@@ -206,19 +206,19 @@ you change something the docs describe, update the doc in the same commit.
     src/core/answers.ts     matches a reply to a choice of the question asked, pure - an SMS reply, and a spoken answer on the automated call (T7)
     src/db/flows.ts         loads a flow, starts a conversation on the active one, and gives its first question
     src/core/flow-fixtures.ts  the antibiotics flow as a constant, for tests only
-    src/core/call-script.ts the automated call's script, pure: its shape, what the call does after each answer (firstAsk, afterAnswer - T8), on a live call with a lead who may have hung up (handleAnswer), and when it listens (splitForListening) - T13
+    src/core/call-script.ts the automated call's script, pure: its shape, what the call does after each answer (firstAsk, afterAnswer - T8), on a live call with a lead who may have hung up (handleAnswer), and when it listens (splitForListening) - T13; who a "yes" rings (planTransfer) - T15a
     src/core/call-script-fixtures.ts  the call script as a constant, for tests only - the live check holds it to the database
-    src/db/call-script.ts   loads the automated call's script (migration 015)
+    src/db/call-script.ts   loads the automated call's script (migration 015), and the settings a call reads: confidence, ring time
     scripts/call-script-live-check.ts  proves migrations 015 and 018: the script as agreed, its guards, answers add-only
     src/db/presence.ts      who can take a call now: each open browser says so, it holds two minutes (T9); FREE_SQL, who is free (T10)
     scripts/presence-live-check.ts  proves it: the two minutes, busy, sign-out and deactivation clear it; the switch; who is free
     src/api/taking-calls.ts the "Taking calls" switch: why it changed, and its activity row (T10)
     src/auto-calls-settings.ts  AUTO_CALLS: on only when exactly "on" (T10); AUTO_CALL_TEST_NUMBERS, the only numbers rung outside production (T12)
-    src/db/auto-calls.ts    an automated call's row: written before Twilio is asked, linked to Twilio's call, ended if refused (T12); each answer, its result and a stop's block kept, and the end settled (T13)
+    src/db/auto-calls.ts    an automated call's row: written before Twilio is asked, linked to Twilio's call, ended if refused (T12); each answer, its result and a stop's block kept, and the end settled (T13); a transfer taken or missed (T15a)
     src/integrations/twilio-calls.ts  the only file that asks Twilio to ring a phone - once, never retried (T12)
     src/worker/place-auto-call.ts  places one automated call: the row, then Twilio, then its answer - the dev command's and the dialler's path (T12)
     scripts/dev-auto-call.ts  local testing only: the server calls one lead - npm run dev:auto-call; --again gives the number to a fresh test lead, --unblock lifts a test block (T13); scripts/dev-phone.ts reads the number
-    scripts/auto-calls-live-check.ts  proves placing one: the row, every refusal, linking, failing, two placements racing
+    scripts/auto-calls-live-check.ts  proves placing one: the row, every refusal, linking, failing, two placements racing; each answer kept once; taking a transfer
     scripts/lead-texts-live-check.ts  proves the two texts: their words, the lead's thread, a blocked number getting neither (T14)
     src/core/questions.ts   what the screens call a question: "Q2", and "Q1-a" for a sub-question - one rule for every screen
     src/api/reply-flow.ts   runs the state machine for an inbound reply
@@ -300,7 +300,7 @@ you change something the docs describe, update the doc in the same commit.
     AUTH.md  POLLER.md  WORKFLOW.md  WEBHOOKS.md  ADMIN-LEADS.md  STATE-MACHINE.md  TWILIO.md
     AUDIT.md                the activity log: nothing is lost
     FLOWS.md                how SMS scripts are stored as rows, how to add one, and how questions are named
-    AUTO-CALLS.md           automated outbound calls: the agreed design and the build tracker (T0-T14 done as of 2026-10-19: the server places a call, asks the script, keeps the answers, texts the link; the transfer, T15 on, not built)
+    AUTO-CALLS.md           automated outbound calls: the agreed design and the build tracker (T0-T15a done as of 2026-10-20: the server places a call, asks the script, keeps the answers, texts the link, puts a "yes" through to everyone free; the lead's own agent first, T15b on, not built)
     QUEUE.md  AGENT-WORKSPACE.md  ADMIN.md  LOGGING.md  FRONTEND.md
 ```
 
@@ -402,7 +402,7 @@ same treatment when they are built. The queue API was built that way:
 `GET /api/leads`, 2026-09-22. *(2026-10-01: Twilio built that way too -
 `POST /api/calls/token`, `POST /api/webhooks/twilio/voice` and
 `POST /api/webhooks/twilio/status`, and for a lead calling in
-`POST /api/webhooks/twilio/incoming` and `/incoming/after`; and `/answered-by`, Twilio's verdict on who picked up; `/recording`, a call's recording is ready (2026-10-02); and `/notice`, the recording notice a lead we called hears first (2026-10-05). `docs/TWILIO.md`.)* *(2026-10-18: the automated call's `/api/webhooks/twilio/auto/answer`, `/auto/gather`, `/auto/status` and `/auto/amd`, only while `AUTO_CALLS` is on - `docs/AUTO-CALLS.md`, "How a call is placed".)*
+`POST /api/webhooks/twilio/incoming` and `/incoming/after`; and `/answered-by`, Twilio's verdict on who picked up; `/recording`, a call's recording is ready (2026-10-02); and `/notice`, the recording notice a lead we called hears first (2026-10-05). `docs/TWILIO.md`.)* *(2026-10-18: the automated call's `/api/webhooks/twilio/auto/answer`, `/auto/gather`, `/auto/status` and `/auto/amd`, only while `AUTO_CALLS` is on - `docs/AUTO-CALLS.md`, "How a call is placed".)* *(2026-10-20: its transfer's `/auto/claim` and `/auto/after` - "The transfer".)*
 
 ---
 

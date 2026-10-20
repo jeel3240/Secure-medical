@@ -4,6 +4,7 @@ import { ANTIBIOTICS_CALL as SCRIPT } from '../core/call-script-fixtures';
 import {
   autoCallTwiml,
   autoCallUrl,
+  transferTwiml,
   AUTO_ANSWER_PATH,
   dialTwiml,
   emptyTwiml,
@@ -205,5 +206,58 @@ describe('the automated call, in Twilio\'s words (T12)', () => {
 
   it('ends a call it cannot act on without a word', () => {
     expect(hangupTwiml()).toMatch(/<Response><Hangup\/><\/Response>$/);
+  });
+});
+
+describe('the transfer, in Twilio\'s words (T15a)', () => {
+  const base = {
+    callId: 42,
+    callSid: 'CA900',
+    script: SCRIPT,
+    say: ['Great, connecting you with a live agent now. Please hold.'],
+    agentIds: [16, 21],
+    lead: { id: 7, name: 'Priya Sharma', phone: '+15550100016' },
+    step: 'Offer',
+    ringSeconds: 25,
+  };
+
+  it('the line, then every free person rung together, for the ring time, the end going to /auto/after', () => {
+    const xml = transferTwiml({ ...SETTINGS, identityPrefix: 'dev-' }, base);
+    expect(xml).toContain('<Say voice="Google.en-US-Chirp3-HD-Kore">Great, connecting you with a live agent now. Please hold.</Say><Dial');
+    expect(xml).toContain('timeout="25"');
+    expect(xml).toContain('action="https://calls.example.com/api/webhooks/twilio/auto/after?call=42"');
+    expect(xml.match(/<Client /g)).toHaveLength(2);
+    expect(xml).toContain('<Identity>dev-agent-16</Identity>');
+    expect(xml).toContain('<Identity>dev-agent-21</Identity>');
+  });
+
+  it('accepting runs /auto/claim on the person\'s leg; no per-person end reports', () => {
+    const xml = transferTwiml(SETTINGS, base);
+    expect(xml).toContain('<Client url="https://calls.example.com/api/webhooks/twilio/auto/claim?call=42" method="POST">');
+    expect(xml).not.toContain('statusCallback');
+  });
+
+  it('each ring says who is calling, and that it is a transfer of a yes to the offer (T11)', () => {
+    const xml = transferTwiml(SETTINGS, base);
+    for (const [name, value] of [
+      ['leadId', '7'],
+      ['leadName', 'Priya Sharma'],
+      ['leadPhone', '+15550100016'],
+      ['ring', 'group'],
+      ['reason', 'transfer'],
+      ['step', 'Offer'],
+    ]) {
+      expect(xml.split(`<Parameter name="${name}" value="${value}"/>`)).toHaveLength(3);
+    }
+  });
+
+  it('on a recorded call: the notice before the ringing, and the recording from the answer, both sides apart', () => {
+    const recorded = { ...SETTINGS, transcriptionServiceSid: `GA${'4'.repeat(32)}` };
+    const xml = transferTwiml(recorded, base);
+    expect(xml).toContain('This call may be recorded and transcribed');
+    expect(xml.indexOf('may be recorded')).toBeLessThan(xml.indexOf('<Dial'));
+    expect(xml).toContain('record="record-from-answer-dual"');
+    expect(xml).toContain('recordingStatusCallback="https://calls.example.com/api/webhooks/twilio/recording?call=CA900"');
+    expect(transferTwiml(SETTINGS, base)).not.toContain('record=');
   });
 });

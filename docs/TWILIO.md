@@ -236,8 +236,8 @@ be loaded it still rings and can still be accepted.
   ringing or live.
 
 **A ring that goes to several people** (T11, 2026-10-18 - for the automated
-call's transfer, T15, and a lead calling back whom no agent owns, T19).
-Nothing sends one yet. The server marks it with `<Parameter>`s on each
+call's transfer, sent since T15a, and a lead calling back whom no agent owns,
+T19). The server marks it with `<Parameter>`s on each
 `<Client>`, beside `leadId`, `leadName` and `leadPhone`:
 
 | Parameter | Means |
@@ -258,7 +258,8 @@ person, exactly as before. On the screen:
   and never shown, so a note being written is never lost to it. Twilio keeps
   ringing the others: one browser declining is busy for that one only, and
   the whole ring is busy only when every browser was ("Busy Everywhere",
-  error 31600). To be confirmed on the first real group ring (T15).
+  error 31600). Confirmed on the first real group ring (T15a, 2026-10-20):
+  one browser declined, the other kept ringing and took it.
 - **Decline** declines it for this person; the others keep ringing.
 - **A transfer says so** in place of "Calling back": "Transfer · said yes to
   the offer", from `step` (`lib/caller-context.ts`, `transferContext`).
@@ -474,8 +475,9 @@ and prints the id for `.env`.
    transcription service for any `pending` one, then asks after it until it
    is done - in testing, under a minute for a 47-second call. The sentences are
    stored with their speaker, worked out from the channel and who called whom
-   (`core/transcripts.ts`): a call we placed has the agent on channel 1, a call
-   the lead placed has the lead there.
+   (`core/transcripts.ts`): a call an agent placed has the agent on channel 1;
+   a call the lead placed, and the automated call's transfer, have the lead
+   there - the transfer's checked on a real one (T15a, 2026-10-20).
 4. If Twilio will not start one, it is tried again on each tick, five times,
    then marked failed. One Twilio is still working on after six hours is given
    up. The screen then says "Transcript not available".
@@ -579,10 +581,13 @@ trusted without a session.
 With calling not set up, every Twilio webhook route answers 404.
 
 **The automated call's webhooks** (`/auto/answer`, `/auto/gather`,
-`/auto/status`, `/auto/amd` - T12) are checked the same way, and name their
-call's row in the address (`?call=<id>`), which is part of what Twilio signs:
-the row cannot be swapped. They answer 404 while automated calls are off.
-What each does: `AUTO-CALLS.md`, "How a call is placed".
+`/auto/status`, `/auto/amd` - T12; `/auto/claim`, `/auto/after` - the
+transfer, T15a) are checked the same way, and name their call's row in the
+address (`?call=<id>`), which is part of what Twilio signs: the row cannot be
+swapped. `/auto/claim` takes the person from `To`, our own signed browser
+name, as the voice webhook does. They answer 404 while automated calls are
+off. What each does: `AUTO-CALLS.md`, "How a call is placed" and "The
+transfer".
 
 ## Settings
 
@@ -784,8 +789,8 @@ own phone.
 - **Voicemail drop, transfer, playing a recording in the app.** Not in the
   plan for agents' calls. (Recording, transcripts and voicemail *detection* are built - above. The lead
   is told a call is recorded before it connects - "Recordings and
-  transcripts".) The automated call plans its own: a transfer to a person
-  (T15) and a voicemail message (T18) - `AUTO-CALLS.md`.
+  transcripts".) The automated call has its own: a transfer to a person
+  (built, T15a) and a voicemail message (T18, not yet) - `AUTO-CALLS.md`.
 - **A call queue for incoming calls.** One agent is rung, or nobody -
   "Incoming calls", above. The automated call's hold line (T16) is only for
   its own transfers.

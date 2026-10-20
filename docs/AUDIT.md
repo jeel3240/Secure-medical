@@ -39,7 +39,7 @@ it.
 
 | Action | When | `detail` keeps |
 |---|---|---|
-| `lead.picked_up` | An agent picks a lead up. Resuming a lead already held is not a new pick-up and records nothing | `tookOverFrom`, when taken from a deactivated agent |
+| `lead.picked_up` | An agent picks a lead up. Resuming a lead already held is not a new pick-up and records nothing. Taking an automated call's transfer picks the lead up too, from whoever held it (T15a) | `tookOverFrom`, when taken from a deactivated agent - or, with `via: 'transfer'` and the `callId`, from any agent |
 | `lead.released` | The Release button (until 2026-10-08, Back to queue); a superadmin's force-release; an outcome letting go of the lead | `heldSince`, `forced`, `because: 'outcome'` |
 | `reply.read` | An unread reply is opened - once, by whoever cleared it | |
 | `note.added` | A note is saved | `noteId` - the text stays in `notes`, not copied |
@@ -52,6 +52,7 @@ it.
 | `call.started`, `call.ended`, `call.refused` | A call. A refused call leaves no `calls` row, so the log is its only record. An automated call's are the system's (no actor) and say `direction: automated` (T12): refused as `not_found`, `blocked`, `already_called`, `no_script` or `not_test_number`; ended as `failed` with `reason: twilio_refused`, `twilioStatus` and `twilioCode` when Twilio would not place it - `AUTO-CALLS.md`, "How a call is placed" | `callSid`, `callId`, `outcome`, `durationSec`, `reason` |
 | `call.incoming` | A lead rings our number and an agent is rung - the subject is that agent. From a number we hold no lead for there is no `calls` row, so the log is its only record | `callId`, `callSid`; for an unknown number, `phone` and `known: false` |
 | `call.missed` | An incoming call nobody answered. The subject is the agent it rang | `callId`, `callSid`; `direction`, `outcome`, `durationSec` when a ring went unanswered; `because: 'no_agent'` when there was nobody to ring |
+| `call.transferred` | A person took an automated call's transfer (T15a, `AUTO-CALLS.md` "The transfer") - once per call, whoever held the lead. Without it, a transfer taken by the lead's own holder, or after the browser's own pick-up reached the server first, would leave no record | `callId`; `tookOverFrom` when the lead was someone else's |
 | `call.answered_by` | Twilio's verdict on who picked up a call we placed | `callId`, `callSid`, `answeredBy`, `outcome`; and `outcomeWas` when the verdict changed an `answered` call to `voicemail` - the row is overwritten, so this is what it said |
 | `call.recorded` | A call's recording is ready, and its transcript is put in line | `callId`, `callSid`, `recordingSid`, `durationSec` |
 | `call.transcribed`, `call.transcript_failed` | The transcript is in, or given up | `callId`, `transcriptSid` and the number of `lines`; or the `reason` |

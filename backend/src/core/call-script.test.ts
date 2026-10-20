@@ -9,6 +9,8 @@ import {
   answerRecord,
   firstAsk,
   handleAnswer,
+  MAX_RUNG_AT_ONCE,
+  planTransfer,
   splitForListening,
   type CallChoice,
   type CallScript,
@@ -146,18 +148,14 @@ describe('one answer on a live call - handleAnswer (T13)', () => {
   const answer = (stepId: number, attempt: 1 | 2, match: SpokenMatch<CallChoice>, hungUp = false) =>
     handleAnswer(SCRIPT, stepId, attempt, match, hungUp);
 
-  it('yes to the offer: kept; nobody can take it until T15, so the busy line, and transfer_missed', () => {
+  it('yes to the offer: kept, and handed on as a transfer - who rings is planned against who is free (T15a)', () => {
     expect(answer(OFFER_STEP, 1, pick(OFFER, 'Yes'))).toEqual({
       answer: { result: 'choice', choiceKey: '1', choiceLabel: 'Yes' },
-      result: 'transfer_missed',
+      result: null,
       blockNumber: false,
       sendLink: false,
       brokenScript: false,
-      next: {
-        kind: 'end',
-        say: ['Great, connecting you with a live agent now. Please hold.', SCRIPT.busyBody],
-        result: 'transfer_missed',
-      },
+      next: { kind: 'transfer', say: ['Great, connecting you with a live agent now. Please hold.'] },
     });
   });
 
@@ -249,5 +247,40 @@ describe('an asking, split for listening - splitForListening (T13)', () => {
   it('one sentence is all question; nothing is nothing', () => {
     expect(splitForListening(['Are you there?'])).toEqual({ leadIn: [], question: 'Are you there?' });
     expect(splitForListening([])).toEqual({ leadIn: [], question: '' });
+  });
+});
+
+describe('a yes to a transfer, planned against who is free - planTransfer (T15a)', () => {
+  const transfer = { kind: 'transfer' as const, say: ['Great, connecting you with a live agent now. Please hold.'] };
+
+  it('people free: the line, then all of them rung together', () => {
+    expect(planTransfer(SCRIPT, transfer, { free: [16, 21], machine: false })).toEqual({
+      kind: 'ring',
+      say: ['Great, connecting you with a live agent now. Please hold.'],
+      agentIds: [16, 21],
+    });
+  });
+
+  it('never more than Twilio rings at once', () => {
+    const free = Array.from({ length: 14 }, (_, i) => i + 1);
+    const plan = planTransfer(SCRIPT, transfer, { free, machine: false });
+    expect(plan.kind === 'ring' && plan.agentIds).toEqual(free.slice(0, MAX_RUNG_AT_ONCE));
+    expect(MAX_RUNG_AT_ONCE).toBe(10);
+  });
+
+  it('nobody free: the line, then the busy line - transfer_missed, so an agent calls back', () => {
+    expect(planTransfer(SCRIPT, transfer, { free: [], machine: false })).toEqual({
+      kind: 'end',
+      say: ['Great, connecting you with a live agent now. Please hold.', SCRIPT.busyBody],
+      result: 'transfer_missed',
+    });
+  });
+
+  it('a machine on the line is never put through - a voicemail greeting is not a yes', () => {
+    expect(planTransfer(SCRIPT, transfer, { free: [16], machine: true })).toEqual({
+      kind: 'end',
+      say: [SCRIPT.noResponseBody],
+      result: 'no_response',
+    });
   });
 });
