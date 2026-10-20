@@ -123,9 +123,11 @@ cd backend && npm test
 ```
 
 The HTTP tests run the real Express app against an in-memory user store, so
-they need no database. They cover every row in the session table above,
-rate limiting, validation, and access control. The Postgres store itself is
-exercised by running the app locally.
+they need no database. They cover every row in the session table above -
+but the browser's word on taking a call being cleared, which is SQL in
+`db/users.ts` and is proved against Postgres by `scripts/presence-live-check.ts`
+- and rate limiting, validation, and access control. The Postgres store
+itself is exercised by running the app locally.
 
 ## What is recorded
 

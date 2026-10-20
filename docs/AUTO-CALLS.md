@@ -1,7 +1,9 @@
 # Automated outbound calls
 
-**Planned 2026-10-15. Being built: the groundwork, T0 to T3, is done
-(2026-10-17); the robot calls themselves, T4 onwards, are not built yet.** This
+**Planned 2026-10-15. Being built: T0 to T14 are done (2026-10-19) - the
+server places a call, asks the script, keeps every answer and texts the link;
+the transfer (T15) onwards, and the robot calling by itself (T20), are not
+built yet.** This
 doc is the agreed design and the tracker for building it. Each ticket below updates its row when it is merged,
 and the sections it touches, so the doc always says what is built and what is
 not.
@@ -393,9 +395,10 @@ Refuses in production.
 One phone gets one automated call - one lead per number, one call per lead -
 so two flags, for the local database only (T13):
 
-- `--again`: the number is given to a fresh test lead, as if the partner had
-  sent it new, and that lead is called. The old one keeps all its history
-  under a made-up number, `+1555` and its id; nothing is deleted.
+- `--again`: when the lead holding the number has had its call, the number
+  is given to a fresh test lead, as if the partner had sent it new, and that
+  lead is called - otherwise the lead holding it is. The old one keeps all its
+  history under a made-up number, `+1555` and its id; nothing is deleted.
 - `--unblock`: lifts the block a stop test left on the number, released as
   `dev_test`, so the next test can call it.
 
@@ -408,7 +411,7 @@ Nothing is overwritten (`AUDIT.md`).
 | The call | `calls`, with `direction = 'automated'`; `agent_id` empty until someone takes a transfer. `script_result`: `transferred`, `transfer_missed`, `link_sent`, `not_interested`, `opted_out`, `no_response`, `voicemail_left`, `hung_up`, `unanswered` |
 | What the lead said | `call_answers`, one add-only row per answer: what Twilio heard, how sure, keys pressed, the choice it matched |
 | The script | `call_scripts`, `call_steps`, `call_choices` - rows, changed by migration, like the SMS flow (015). The script's own words - stop, no response, voicemail, busy, hold, the link text - are on its `call_scripts` row, so another script brings its own |
-| When it calls | `settings`: `auto_call_hours_start` 11:00, `auto_call_hours_end` 17:00, `auto_call_time_zone` America/Phoenix, `auto_call_days` mon-fri, `auto_call_wait_minutes` 60, `auto_call_ring_seconds` 25, `auto_call_hold_max_minutes` 10, `auto_call_min_confidence` 0.4 |
+| When it calls | `settings`: `auto_call_hours_start` 11:00, `auto_call_hours_end` 17:00, `auto_call_time_zone` America/Phoenix, `auto_call_days` mon,tue,wed,thu,fri, `auto_call_wait_minutes` 60, `auto_call_ring_seconds` 25, `auto_call_hold_max_minutes` 10, `auto_call_min_confidence` 0.4 |
 | The link text | `messages`, like every text |
 | Who is free | `users.taking_calls`, `users.ringable_until` |
 | Every action | `activity_log` |
@@ -852,7 +855,7 @@ understood" - never a guess.
 - [x] Every SMS matching test still passes - 65 answer tests in all.
 
 As built: the tests use `core/call-script-fixtures.ts`, the script as
-migration 015 seeds it, and `call-script-live-check.ts` compares that copy with
+migration 015 seeds it (and, since, 018 changes it), and `call-script-live-check.ts` compares that copy with
 the database word for word, so the tests always use the real words. Sound-alike
 number words ("to", "won") were added while building - the repeat line asks for
 keys, and some people say the number instead.
@@ -1000,8 +1003,8 @@ is on.
       errors.
 
 As built: `AUTO_CALLS` is read by `auto-calls-settings.ts` - on only when it
-says exactly `on`; anything else is off and logged once (`auto_calls.off`),
-never a reason to refuse to start. Automated calls count as on only with
+says exactly `on`; `off` or empty is off, and any other value is off and
+logged once (`auto_calls.off`) - never a reason to refuse to start. Automated calls count as on only with
 calling set up too, decided once in `api/index.ts` (`deps.autoCalls`). The
 switch lives on the user (`takingCalls` on the signed-in user), so the app
 bar reads it from the sign-in store. It flips only once the server has it.
@@ -1054,9 +1057,10 @@ nothing odd, and nobody loses an unsaved note.
       a transfer reads "Transfer · said yes to the offer"; an ordinary call
       back keeps its "Calling back" line; no console errors.
 
-As built: the server marks a ring with `<Parameter>`s - `ring=group`,
+As built: a ring is marked with `<Parameter>`s - `ring=group`,
 `reason=transfer`, and `step`, the heading of the question the lead said yes
-to, so the card's words come from the script's rows: "said yes to the offer"
+to - which the server starts sending with T15 and T19; nothing sends them
+yet, so the card's words come from the script's rows: "said yes to the offer"
 from the step "Offer" (`transferContext`). `ringKind` in `lib/calling.ts`
 reads them; each ring carries its `RingKind` through `lib/incoming-state.ts`.
 A group ring arriving while anything keeps the browser busy - including a
@@ -1131,8 +1135,10 @@ must take that as hung up, never as silence to ask again. **Voicemail
 detection said `unknown` for a person** who listened - T18 carries on for
 `unknown`, as planned. And Jeel asked for **no "This is an automated call"
 line, the offer before the question, and a more natural voice**: migration
-018, after a sample call of five newer voices - "The script". Each of its two changes names the value it
-replaces and must change exactly one row, or the migration stops.
+018, after a sample call of five newer voices - "The script". Each of its changes names the value it
+replaces and must change exactly the rows it expects, or the migration stops.
+(T13 then added the stop and repeat lines to 018: four guarded changes in all,
+over three of 015's rows.)
 
 **Files:** `backend/src/integrations/twilio-calls.ts` (+ test),
 `backend/src/integrations/twilio.ts` (the TwiML, + test), `backend/src/api/twilio-webhooks.ts`,
@@ -1174,7 +1180,10 @@ response, not interested, and stop.
 - Stop -> the number is blocked (`blockNumber`, new reason `call_opt_out`),
   recorded in the activity log.
 - The first question cannot be interrupted, so "Hello?" is not an answer.
-- A "yes" ends the call politely until T15 builds the transfer.
+  (As built: the greeting cannot be; the question itself can - "When the
+  call listens".)
+- A "yes" ends the call politely until T15 builds the transfer. (As built:
+  the busy line, `transfer_missed`.)
 
 **Done when**
 - [x] Route tests for each path, and for the same request twice - 27 webhook

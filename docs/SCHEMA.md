@@ -85,7 +85,8 @@ a row with `released_at IS NULL` blocks anything**; every read - the poller,
 `sendMessage`, the Admin > Leads status, placing a call, and the callback a
 missed call would book - filters on it. Today the only thing
 that releases a row is a lead texting START; see STATE-MACHINE.md, "Opting back
-in".
+in". (On a laptop, `npm run dev:auto-call -- --unblock` also lifts a test block,
+released as `dev_test` - local testing only, `AUTO-CALLS.md`.)
 
 It has no `added_by`, and none is planned. An agent can now mark a number DNC
 (reason `agent_disposition`); who did is the actor of the `dnc.blocked` row in

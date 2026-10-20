@@ -79,7 +79,7 @@ highest in this list wins.
 
 | Status | Means | In the queue? |
 |---|---|---|
-| **Opted out** | Texted STOP, an agent pressed DNC, or the lead said stop on the automated call (T13). The number is blocked. (A lead who later texted START still reads Opted out here, though unblocked - "Ways back") | No |
+| **Opted out** | Texted STOP, an agent pressed DNC, or the lead said stop on the automated call (T13). The number is blocked. (A lead who later texted START still reads Opted out here, though unblocked - "Ways back". Not yet for a stop said on the call: it blocks the number but leaves the text conversation open, so after START that lead reads by its conversation again) | No |
 | **Closed** | An agent pressed Closed | No, until something reopens it - "Ways back", below |
 | **Working** | An agent holds it, or has left a note, a callback, a call they placed or answered, an SMS or an outcome on it. An automated call counts only once a person took it | Yes |
 | **Needs review** | Two replies we could not understand | Yes |

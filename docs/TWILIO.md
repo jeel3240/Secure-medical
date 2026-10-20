@@ -115,8 +115,9 @@ There is no ringing of a mobile phone.
 
 Each check also tells the server whether this browser can take a call now -
 registered, and no call, ring or after-call note open - with
-`POST /api/calls/ringable` (T9, 2026-10-18). It is said at once when a call
-starts or ends, and holds two minutes on the server (`users.ringable_until`).
+`POST /api/calls/ringable` (T9, 2026-10-18). It is said at once when that
+changes - a call or a ring starts, or the note box after one is saved or
+skipped - and holds two minutes on the server (`users.ringable_until`).
 It is for the automated call's transfer, which rings only people who are free;
 the incoming calls above do not read it. "Who is free" in `AUTO-CALLS.md`.
 
@@ -367,8 +368,9 @@ it is run on the server again. Nothing errors while that happens.
 - **Voicemail.** A missed caller hears the message and the call ends. Nothing
   is recorded.
 - **Nobody is rung for a lead no agent has touched.** It becomes a missed call
-  and waits in the queue. Ringing whoever is free needs agent presence, which
-  is the later queue work.
+  and waits in the queue. Who is free is known since T9 and T10
+  (`FREE_SQL`, `AUTO-CALLS.md`), but incoming calls do not use it yet: ringing
+  everyone free for such a lead is T19.
 - **A second device.** An agent signed in on two browsers rings on both;
   the first to answer takes it.
 - **A stale ring.** If neither of Twilio's two reports arrives, the row keeps
@@ -780,11 +782,13 @@ own phone.
   as a conference on the server, which Phase 4 did not build, and a button
   that only muted would mislead.
 - **Voicemail drop, transfer, playing a recording in the app.** Not in the
-  plan. (Recording, transcripts and voicemail *detection* are built - above. The lead
+  plan for agents' calls. (Recording, transcripts and voicemail *detection* are built - above. The lead
   is told a call is recorded before it connects - "Recordings and
-  transcripts".)
+  transcripts".) The automated call plans its own: a transfer to a person
+  (T15) and a voicemail message (T18) - `AUTO-CALLS.md`.
 - **A call queue for incoming calls.** One agent is rung, or nobody -
-  "Incoming calls", above.
+  "Incoming calls", above. The automated call's hold line (T16) is only for
+  its own transfers.
 - **A stale call is not closed.** If Twilio's end-of-call report never arrives,
   the row keeps `ended_at` null and the timeline says "in progress". Not seen
   in testing; Twilio retries its callbacks.

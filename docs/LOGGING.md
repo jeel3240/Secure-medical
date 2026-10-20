@@ -79,7 +79,7 @@ firing a real webhook: the number appears nowhere in the output.
 
 | Event | Where |
 |---|---|
-| `api.started`, `api.refused_start` | `api/index.ts`. `started` carries `calling` and `autoCalls` (`on` or `off`). `refused_start` carries `reason`: `weak_jwt_secret`, `no_webhook_token` or `twilio_incomplete` - the last with `missing`, the settings not set (`api/startup-checks.ts`) |
+| `api.started`, `api.refused_start` | `api/index.ts`. `started` carries `calling` (`on`, `off` or `incomplete`) and `autoCalls` (`on` or `off`). `refused_start` carries `reason`: `weak_jwt_secret`, `no_webhook_token` or `twilio_incomplete` - the last with `missing`, the settings not set (`api/startup-checks.ts`) |
 | `worker.started`, `poll.tick`, `poll.failed` | `worker/index.ts` |
 | `conversation.expired`, `expiry.failed` | `worker/index.ts` |
 | `call.token_issued`, `call.started`, `call.refused`, `call.failed_to_start`, `call.finished`, `call.answered_by`, `call.recorded`, `call.incoming`, `call.incoming_failed`, `call.missed_not_recorded`, `twilio.webhook_rejected`, `twilio.archive_failed`, `calling.off`, `auto_calls.off` | `api/calls.ts`, `api/twilio-webhooks.ts`, `api/index.ts` - browser calling, `TWILIO.md`. `call.refused` carries `reason`; `twilio.webhook_rejected` usually means `PUBLIC_URL` is not the address Twilio calls. `auto_calls.off` (warn, at start-up): `AUTO_CALLS` said something other than `on` or `off` (`reason: unknown_value`, with the `value`), or `on` without calling set up (`reason: calling_off`) |

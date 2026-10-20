@@ -158,7 +158,7 @@ you change something the docs describe, update the doc in the same commit.
     src/api/admin/health.ts    deep health check, superadmin only
     src/db/health.ts        database, poller, webhook, expiry, sending
     src/db/admin-config.ts  live copy, scoring and tiers, with segment counts
-    src/db/admin-overview.ts  KPIs, funnel, per-agent table, activity feed
+    src/db/admin-overview.ts  KPIs, per-agent table, activity feed (no funnel since 2026-09-28)
     src/db/admin-dnc.ts     the DNC list, released rows included
     src/api/leads.ts        the agents' priority queue, and claim/release
     src/api/lead-workspace.ts  every route on one lead: card, timeline, notes, callbacks, SMS, dispositions, read
@@ -209,7 +209,7 @@ you change something the docs describe, update the doc in the same commit.
     src/core/call-script.ts the automated call's script, pure: its shape, what the call does after each answer (firstAsk, afterAnswer - T8), on a live call with a lead who may have hung up (handleAnswer), and when it listens (splitForListening) - T13
     src/core/call-script-fixtures.ts  the call script as a constant, for tests only - the live check holds it to the database
     src/db/call-script.ts   loads the automated call's script (migration 015)
-    scripts/call-script-live-check.ts  proves migration 015: the script as agreed, its guards, answers add-only
+    scripts/call-script-live-check.ts  proves migrations 015 and 018: the script as agreed, its guards, answers add-only
     src/db/presence.ts      who can take a call now: each open browser says so, it holds two minutes (T9); FREE_SQL, who is free (T10)
     scripts/presence-live-check.ts  proves it: the two minutes, busy, sign-out and deactivation clear it; the switch; who is free
     src/api/taking-calls.ts the "Taking calls" switch: why it changed, and its activity row (T10)
@@ -300,7 +300,7 @@ you change something the docs describe, update the doc in the same commit.
     AUTH.md  POLLER.md  WORKFLOW.md  WEBHOOKS.md  ADMIN-LEADS.md  STATE-MACHINE.md  TWILIO.md
     AUDIT.md                the activity log: nothing is lost
     FLOWS.md                how SMS scripts are stored as rows, how to add one, and how questions are named
-    AUTO-CALLS.md           automated outbound calls: the agreed design and the build tracker (T0-T3 done 2026-10-17; the robot calls, T4 on, not built)
+    AUTO-CALLS.md           automated outbound calls: the agreed design and the build tracker (T0-T14 done as of 2026-10-19: the server places a call, asks the script, keeps the answers, texts the link; the transfer, T15 on, not built)
     QUEUE.md  AGENT-WORKSPACE.md  ADMIN.md  LOGGING.md  FRONTEND.md
 ```
 
@@ -342,7 +342,7 @@ them. It differs from the list above:
 - **leads.previous_lead_id** exists but is unused and expected to be dropped - see §6.
 - **leads.assigned_at** records when an agent claimed the lead. Claims do not expire; it is what lets a superadmin see one held too long. Added 2026-09-15.
 - **flows**, **flow_questions**, **flow_choices** and **conversation_answers** - migration 012, 2026-10-05. The SMS script is rows, not code: a flow's questions, each question's choices with its reply, points and where the lead goes next, and one add-only row per answer given. **conversations** gained `flow_id`, `current_question_id`, `question_sent_at` (when the text the lead must answer went out - a reply before then is not counted) and `end_outcome`, and `step` now holds the question's position (10, 11, 20, 30), no longer 1-3; its `q1`-`q3` columns and labels, `scoring_rules`, and the question, clarification, thanks and review rows in `settings` are no longer read. A question is named by its key, a sub-question after its parent: `q1-a`, shown "Q1-a". `docs/FLOWS.md`.
-- Migration 018, 2026-10-18 (after T12's first real call, `docs/AUTO-CALLS.md`, "The script"): the call's opening no longer says "This is an automated call" and says the offer before asking ("Today we're offering 25% off antibiotics. Are you interested in ordering?"); "won't" and "didn't" are written out, since Kore's "we won't call you again" sounded like "will" (T13); and its voice is Google Chirp3-HD Kore in place of Polly Joanna. It stops unless the two rows are exactly as 015 left them.
+- Migration 018, 2026-10-18 (after T12's first real call, `docs/AUTO-CALLS.md`, "The script"): the call's opening no longer says "This is an automated call" and says the offer before asking ("Today we're offering 25% off antibiotics. Are you interested in ordering?"); "won't" and "didn't" are written out, since Kore's "we won't call you again" sounded like "will" (T13); and its voice is Google Chirp3-HD Kore in place of Polly Joanna. It stops unless the three rows it changes are exactly as 015 left them.
 - Migration 015, 2026-10-18 (T6, `docs/AUTO-CALLS.md`): the automated call's script as rows - **call_scripts** (with the lines every step shares and the link text), **call_steps**, **call_choices** - and **call_answers**, add-only, one row per answer with what Twilio heard; and the `auto_call_*` rows in **settings** (11:00-17:00 America/Phoenix, Monday-Friday, 60 minutes after the first text, and the call's limits).
 - Migration 014, 2026-10-18 (T4, `docs/AUTO-CALLS.md`): **calls** can be `automated` - placed by the server, with no `agent_id` until a person takes its transfer - and gain `script_result`; one automated call per lead (`calls_one_automated_per_lead`). An automated call nobody took never makes a lead Working nor returns a missed call.
 - Migration 013, 2026-10-06: three indexes the queue and Admin > Leads needed - `callbacks (lead_id)`, agents' own texts in `messages`, and `leads` by arrival. With 50,000 leads the queue took 8 seconds; `docs/QUEUE.md`, "How fast it is".
@@ -528,7 +528,7 @@ They do not. Admin shows the configuration; it does not change it:
 | Scoring rules and tiers (6b) | Editable inline, with **Recalculate existing** | A read-only card. No Save, no Recalculate - the feature is dropped |
 | Message copy (6c) | Seven editable fields | Read-only, shown on the same page as the score table |
 | Settings (6f) | Expiry, delivery type, poll interval, caller ID | Not built. Expiry stays 7 days; the rest stay environment variables |
-| DNC list (6e) | Table plus **Add manually** | Read-only. Blocking happens through an agent's DNC disposition, a STOP reply, or an EZ Texting opt-out |
+| DNC list (6e) | Table plus **Add manually** | Read-only. Blocking happens through an agent's DNC disposition, a STOP reply, an EZ Texting opt-out, or a stop said on the automated call (T13) |
 | Agents (6d) | Editable | Unchanged - creating and deactivating accounts is the point of it |
 
 **Why:** scoring and copy are not small changes. A mistyped point value silently
@@ -574,7 +574,7 @@ retry, the end-to-end script, and a README with how to test and known limits.
 - **Source always reads "API" in production** - it is how the contact was
   added to EZ Texting, not which partner sent it. Keep the column, or find the
   partner elsewhere.
-- **Deploy:** `npm run migrate` applies whatever the server has not run, up to 013. *(2026-10-18: production runs 001 to 013; 014 to 018, automated calls, are on `dev` for the next deploy, with `AUTO_CALLS` left unset - `docs/WORKFLOW.md`.)* `main` holds 001 to 011 since 2026-10-05, so a deploy of today's `dev` adds 012, the SMS flows and the antibiotics script (`docs/FLOWS.md`), and 013, indexes for the two list screens (`docs/QUEUE.md`) - merged into `dev` on 2026-10-06. What 005 to 011 were (011: call recordings and transcripts, which also need `TWILIO_TRANSCRIPTION_SERVICE_SID` - `docs/TWILIO.md`; 010: voicemail detection; 009: the word kept with each answer - `docs/STATE-MACHINE.md`; 005, 2026-09-29: poll every 30s; 006, 2026-10-01: the activity log, the raw webhook archive, and leads that cannot be deleted - `docs/AUDIT.md`; 007 and 008, the same day: incoming calls and the callback a missed call books - `docs/TWILIO.md`). Calling also needs the seven Twilio settings - all or none, a partly set group stops the API starting - and `npm run twilio:configure` run on the server, last: the phone number rings only one deployment. Production also needs `EZT_WEBHOOK_TOKEN` set, or the API will not start - it is already set there.
+- **Deploy:** `npm run migrate` applies whatever the server has not run. `main` and production hold 001 to 013 - 012, the SMS flows and the antibiotics script (`docs/FLOWS.md`), and 013, indexes for the two list screens (`docs/QUEUE.md`), the last to reach them. `dev` adds 014 to 018, automated calls, for the next deploy, with `AUTO_CALLS` left unset - `docs/WORKFLOW.md`. What 005 to 011 were (011: call recordings and transcripts, which also need `TWILIO_TRANSCRIPTION_SERVICE_SID` - `docs/TWILIO.md`; 010: voicemail detection; 009: the word kept with each answer - `docs/STATE-MACHINE.md`; 005, 2026-09-29: poll every 30s; 006, 2026-10-01: the activity log, the raw webhook archive, and leads that cannot be deleted - `docs/AUDIT.md`; 007 and 008, the same day: incoming calls and the callback a missed call books - `docs/TWILIO.md`). Calling also needs the seven Twilio settings - all or none, a partly set group stops the API starting - and `npm run twilio:configure` run on the server, last: the phone number rings only one deployment. Production also needs `EZT_WEBHOOK_TOKEN` set, or the API will not start - it is already set there.
 
 Task 29 found nothing to fix in the app: all three bugs the end-to-end script
 surfaced were in the script itself. Two apparent failures were the app being

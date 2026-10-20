@@ -186,9 +186,9 @@ added it": `dnc_list` has no such column; the agent behind a DNC outcome is in
 the activity log (`AUDIT.md`).
 
 Read-only, and there is no manual add (Jeel, 2026-09-23): a number reaches the
-list through an agent's DNC disposition, an SMS STOP, or an EZ Texting opt-out
-found by the poller. `AGENT-WORKSPACE.md` has the disposition path,
-`STATE-MACHINE.md` the SMS ones.
+list through an agent's DNC disposition, an SMS STOP, an EZ Texting opt-out
+found by the poller, or a stop said on the automated call (T13). `AGENT-WORKSPACE.md` has the disposition path,
+`STATE-MACHINE.md` the SMS ones, `AUTO-CALLS.md` the call's.
 
 No delete, by design - the design brief calls it a compliance record. A number
 can still be released by the lead texting START, which keeps the row and stamps
