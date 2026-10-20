@@ -185,8 +185,10 @@ export function incomingLead(params: Map<string, string>, from: string | undefin
 
 /**
  * How the server rang this browser, from what it attached to the call - T11,
- * AUTO-CALLS.md: `ring=group` when several people are rung at once,
- * `reason=transfer` and `step` for a lead put through from the automated call.
+ * AUTO-CALLS.md: `ring=group` when the call goes on without this person if
+ * they do not take it - several people rung at once, or the lead's own agent
+ * rung first (T15b); `reason=transfer` and `step` for a lead put through from
+ * the automated call.
  * Nothing attached is a ring to this person alone, as every call was before.
  */
 export function ringKind(params: Map<string, string>): RingKind {

@@ -209,15 +209,17 @@ describe('the automated call, in Twilio\'s words (T12)', () => {
   });
 });
 
-describe('the transfer, in Twilio\'s words (T15a)', () => {
+describe('the transfer, in Twilio\'s words (T15a, T15b)', () => {
   const base = {
     callId: 42,
     callSid: 'CA900',
     script: SCRIPT,
     say: ['Great, connecting you with a live agent now. Please hold.'],
+    notice: true,
     agentIds: [16, 21],
+    holderFirst: false,
     lead: { id: 7, name: 'Priya Sharma', phone: '+15550100016' },
-    step: 'Offer',
+    step: { id: 10, heading: 'Offer' },
     ringSeconds: 25,
   };
 
@@ -225,7 +227,7 @@ describe('the transfer, in Twilio\'s words (T15a)', () => {
     const xml = transferTwiml({ ...SETTINGS, identityPrefix: 'dev-' }, base);
     expect(xml).toContain('<Say voice="Google.en-US-Chirp3-HD-Kore">Great, connecting you with a live agent now. Please hold.</Say><Dial');
     expect(xml).toContain('timeout="25"');
-    expect(xml).toContain('action="https://calls.example.com/api/webhooks/twilio/auto/after?call=42"');
+    expect(xml).toContain('action="https://calls.example.com/api/webhooks/twilio/auto/after?call=42&amp;step=10"');
     expect(xml.match(/<Client /g)).toHaveLength(2);
     expect(xml).toContain('<Identity>dev-agent-16</Identity>');
     expect(xml).toContain('<Identity>dev-agent-21</Identity>');
@@ -259,5 +261,22 @@ describe('the transfer, in Twilio\'s words (T15a)', () => {
     expect(xml).toContain('record="record-from-answer-dual"');
     expect(xml).toContain('recordingStatusCallback="https://calls.example.com/api/webhooks/twilio/recording?call=CA900"');
     expect(transferTwiml(SETTINGS, base)).not.toContain('record=');
+  });
+
+  it('the lead\'s own agent alone first: /auto/after is told who, so the others are rung next (T15b)', () => {
+    const xml = transferTwiml(SETTINGS, { ...base, agentIds: [21], holderFirst: true });
+    expect(xml.match(/<Client /g)).toHaveLength(1);
+    expect(xml).toContain('<Identity>agent-21</Identity>');
+    expect(xml).toContain('action="https://calls.example.com/api/webhooks/twilio/auto/after?call=42&amp;step=10&amp;holder=21"');
+    // Shared all the same: it goes on without them - cleared quietly, declined while busy (T11).
+    expect(xml).toContain('<Parameter name="ring" value="group"/>');
+  });
+
+  it('the ring after them: nothing said, and no notice again - the lead has heard it', () => {
+    const recorded = { ...SETTINGS, transcriptionServiceSid: `GA${'4'.repeat(32)}` };
+    const xml = transferTwiml(recorded, { ...base, say: [], notice: false });
+    expect(xml).not.toContain('<Say');
+    expect(xml).toMatch(/<Response><Dial /);
+    expect(xml).toContain('record="record-from-answer-dual"');
   });
 });

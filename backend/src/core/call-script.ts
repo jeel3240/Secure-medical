@@ -293,30 +293,52 @@ export const MAX_RUNG_AT_ONCE = 10;
 
 /** What a "yes" to a transfer becomes once who is free is known - `planTransfer`. */
 export type TransferPlan =
-  /** Say the lines, then ring these people together; the first to accept takes the lead. */
-  | { kind: 'ring'; say: string[]; agentIds: number[] }
+  /**
+   * Say the lines, then ring these people together; the first to accept takes
+   * the lead. `holderFirst`: the one person rung is the lead's own agent, and
+   * everyone else free is rung next if they do not take it (`planAfterHolder`).
+   */
+  | { kind: 'ring'; say: string[]; agentIds: number[]; holderFirst: boolean }
   | Extract<AskOrEnd, { kind: 'end' }>;
 
 /**
- * What a "yes" to a transfer becomes - T15a, AUTO-CALLS.md "The transfer".
+ * What a "yes" to a transfer becomes - AUTO-CALLS.md "The transfer".
  *
  * - **A machine answered the phone** (Twilio's verdict, when it has come):
  *   nobody is rung - a voicemail greeting is not a lead saying yes. Ended
  *   politely, as no response; T18 leaves the voicemail message instead.
+ * - **The lead's own agent is free** - `holder`, the agent holding the lead,
+ *   among `free`: the line, then they ring alone first, as the lead's own
+ *   agent (T15b). Not free, they are not waited for.
  * - **Nobody free**: the line, then the busy line - `transfer_missed`, so an
  *   agent calls the lead back (T22 puts them first in the queue).
  * - **Otherwise** the line, then the free people rung together, at most
- *   `MAX_RUNG_AT_ONCE`, in the order given. Who takes it, or that nobody did,
- *   is decided when the ringing ends.
+ *   `MAX_RUNG_AT_ONCE`, in the order given (T15a). Who takes it, or that
+ *   nobody did, is decided when the ringing ends.
  */
 export function planTransfer(
   script: CallScript,
   transfer: TransferAction,
-  opts: { free: readonly number[]; machine: boolean }
+  opts: { free: readonly number[]; machine: boolean; holder: number | null }
 ): TransferPlan {
   if (opts.machine) return { kind: 'end', say: [script.noResponseBody], result: 'no_response' };
+  if (opts.holder !== null && opts.free.includes(opts.holder)) {
+    return { kind: 'ring', say: [...transfer.say], agentIds: [opts.holder], holderFirst: true };
+  }
   if (opts.free.length === 0) {
     return { kind: 'end', say: [...transfer.say, script.busyBody], result: 'transfer_missed' };
   }
-  return { kind: 'ring', say: [...transfer.say], agentIds: opts.free.slice(0, MAX_RUNG_AT_ONCE) };
+  return { kind: 'ring', say: [...transfer.say], agentIds: opts.free.slice(0, MAX_RUNG_AT_ONCE), holderFirst: false };
+}
+
+/**
+ * The lead's own agent, rung alone first, let the transfer ring out - T15b:
+ * everyone else free is rung together, at once, with nothing said first - the
+ * lead has been listening to it ring. Not the agent who just let it ring.
+ * Nobody else free: the busy line - `transfer_missed`.
+ */
+export function planAfterHolder(script: CallScript, opts: { free: readonly number[]; holder: number }): TransferPlan {
+  const others = opts.free.filter((id) => id !== opts.holder);
+  if (others.length === 0) return { kind: 'end', say: [script.busyBody], result: 'transfer_missed' };
+  return { kind: 'ring', say: [], agentIds: others.slice(0, MAX_RUNG_AT_ONCE), holderFirst: false };
 }

@@ -79,6 +79,7 @@ beforeEach(() => {
   settleAutomatedCall.mockReset().mockResolvedValue(undefined);
   transferContext.mockReset().mockResolvedValue({
     lead: { id: 7, name: 'Priya Sharma', phone: '+15550100016' },
+    heldBy: null,
     answeredBy: 'human',
   });
   takeTransfer.mockReset().mockResolvedValue({ ok: true, leadId: 7, tookOverFrom: null });
@@ -339,11 +340,87 @@ describe('the transfer (T15a)', () => {
     expect(res.text).toContain('<Parameter name="step" value="Offer"/>');
     expect(res.text).toContain('<Parameter name="leadName" value="Priya Sharma"/>');
     expect(res.text).toContain('timeout="25"');
+    expect(res.text).toContain(`auto/after?call=42&amp;step=${OFFER_STEP}"`);
+  });
+
+  describe('the lead\'s own agent first (T15b)', () => {
+    const heldBy = (agentId: number) =>
+      transferContext.mockResolvedValue({
+        lead: { id: 7, name: 'Priya Sharma', phone: '+15550100016' },
+        heldBy: agentId,
+        answeredBy: 'human',
+      });
+
+    it('free: they ring alone, and the end is told who, so the others are rung next', async () => {
+      freePeople.mockResolvedValue([16, 21]);
+      heldBy(21);
+      const { app } = await on();
+      const res = await fromTwilio(app, GATHER, yes);
+      expect(res.text.match(/<Client /g)).toHaveLength(1);
+      expect(res.text).toContain('<Identity>dev-agent-21</Identity>');
+      expect(res.text).toContain(`auto/after?call=42&amp;step=${OFFER_STEP}&amp;holder=21"`);
+    });
+
+    it('not free: everyone free at once, nobody waited for', async () => {
+      freePeople.mockResolvedValue([16, 30]);
+      heldBy(21);
+      const { app } = await on();
+      const res = await fromTwilio(app, GATHER, yes);
+      expect(res.text.match(/<Client /g)).toHaveLength(2);
+      expect(res.text).not.toContain('holder=');
+    });
+
+    describe('they let it ring out', () => {
+      const HOLDER_AFTER = `/api/webhooks/twilio/auto/after?call=42&step=${OFFER_STEP}&holder=21`;
+      const rangOut = { CallSid: 'CA900', CallStatus: 'in-progress', DialCallStatus: 'no-answer' };
+
+      it('everyone else free rings now - not them, nothing said, still a transfer of a yes to the offer', async () => {
+        freePeople.mockResolvedValue([16, 21, 30]);
+        const { app } = await on();
+        const res = await fromTwilio(app, HOLDER_AFTER, rangOut);
+        expect(res.text).toMatch(/<Response><Dial /);
+        expect(res.text).not.toContain('dev-agent-21');
+        expect(res.text).toContain('<Identity>dev-agent-16</Identity>');
+        expect(res.text).toContain('<Identity>dev-agent-30</Identity>');
+        expect(res.text).toContain('<Parameter name="step" value="Offer"/>');
+        expect(res.text).toContain(`auto/after?call=42&amp;step=${OFFER_STEP}"`);
+        expect(missTransfer).not.toHaveBeenCalled();
+      });
+
+      it('declined because they were busy - the same', async () => {
+        freePeople.mockResolvedValue([16]);
+        const { app } = await on();
+        const res = await fromTwilio(app, HOLDER_AFTER, { ...rangOut, DialCallStatus: 'busy' });
+        expect(res.text).toContain('<Identity>dev-agent-16</Identity>');
+      });
+
+      it('nobody else free: the busy line, transfer_missed', async () => {
+        freePeople.mockResolvedValue([21]);
+        const { app } = await on();
+        const res = await fromTwilio(app, HOLDER_AFTER, rangOut);
+        expect(missTransfer).toHaveBeenCalledWith(42);
+        expect(res.text).toContain('All our agents are busy right now.');
+        expect(res.text).not.toContain('<Dial');
+      });
+
+      it('the lead hung up while it rang: nobody else is rung - transfer_missed, so an agent calls back', async () => {
+        freePeople.mockResolvedValue([16]);
+        const { app } = await on();
+        const res = await fromTwilio(app, HOLDER_AFTER, { ...rangOut, CallStatus: 'completed' });
+        expect(freePeople).not.toHaveBeenCalled();
+        expect(missTransfer).toHaveBeenCalledWith(42);
+        expect(res.text).toMatch(/<Response><Hangup\/><\/Response>$/);
+      });
+    });
   });
 
   it('a machine on the line is never put through - ended as no response', async () => {
     freePeople.mockResolvedValue([16]);
-    transferContext.mockResolvedValue({ lead: { id: 7, name: 'Priya Sharma', phone: '+15550100016' }, answeredBy: 'machine' });
+    transferContext.mockResolvedValue({
+      lead: { id: 7, name: 'Priya Sharma', phone: '+15550100016' },
+      heldBy: 16,
+      answeredBy: 'machine',
+    });
     const { app } = await on();
     const res = await fromTwilio(app, GATHER, yes);
     expect(keepAnswer.mock.calls[0][0]).toMatchObject({ result: 'no_response' });
@@ -413,6 +490,13 @@ describe('the transfer (T15a)', () => {
       const res = await fromTwilio(app, AFTER, { CallSid: 'CA900', DialCallStatus: status });
       expect(missTransfer).toHaveBeenCalledWith(42);
       expect(res.text).toContain('All our agents are busy right now. An agent will call you back shortly.</Say><Hangup/>');
+    });
+
+    it('the lead hung up while it rang: transfer_missed, and nothing said to nobody', async () => {
+      const { app } = await on();
+      const res = await fromTwilio(app, AFTER, { CallSid: 'CA900', CallStatus: 'completed', DialCallStatus: 'canceled' });
+      expect(missTransfer).toHaveBeenCalledWith(42);
+      expect(res.text).toMatch(/<Response><Hangup\/><\/Response>$/);
     });
   });
 });

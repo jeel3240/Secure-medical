@@ -263,23 +263,31 @@ export async function settleAutomatedCall(callId: number): Promise<void> {
   );
 }
 
+/** What a transfer needs to know about its automated call - `transferContext`. */
+export interface TransferContext {
+  /** As a ring says who is calling - `ringAgentTwiml`'s same three. */
+  lead: { id: number; name: string; phone: string };
+  /** The agent holding the lead now, rung first if free (T15b) - or null. */
+  heldBy: number | null;
+  /** Twilio's verdict on who answered the phone, if it has come. */
+  answeredBy: AnsweredBy | null;
+}
+
 /**
- * What a transfer needs to know about the automated call `callId` - T15a: its
- * lead, as a ring says who is calling (`ringAgentTwiml`'s same three), and
- * Twilio's verdict on who answered the phone, if it has come. Null when the
- * row is not an automated call.
+ * What a transfer needs to know about the automated call `callId` (T15a,
+ * T15b), read as the lead says yes. Null when the row is not an automated
+ * call.
  */
-export async function transferContext(
-  callId: number
-): Promise<{ lead: { id: number; name: string; phone: string }; answeredBy: AnsweredBy | null } | null> {
+export async function transferContext(callId: number): Promise<TransferContext | null> {
   const { rows } = await pool.query<{
     id: number;
     first_name: string | null;
     last_name: string | null;
     phone: string;
+    assigned_to: number | null;
     answered_by: AnsweredBy | null;
   }>(
-    `SELECT l.id, l.first_name, l.last_name, l.phone, c.answered_by
+    `SELECT l.id, l.first_name, l.last_name, l.phone, l.assigned_to, c.answered_by
      FROM calls c JOIN leads l ON l.id = c.lead_id
      WHERE c.id = $1 AND c.direction = 'automated'`,
     [callId]
@@ -288,6 +296,7 @@ export async function transferContext(
   if (!row) return null;
   return {
     lead: { id: row.id, name: [row.first_name, row.last_name].filter(Boolean).join(' '), phone: row.phone },
+    heldBy: row.assigned_to,
     answeredBy: row.answered_by,
   };
 }

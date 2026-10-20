@@ -32,10 +32,11 @@ export interface Caller {
  */
 export interface RingKind {
   /**
-   * Rung together with other people (`ring=group`), and the first to accept
-   * takes it. Over without this person answering, it clears with no "Missed
-   * call": someone else took it, or it went on to the hold or busy line - it
-   * was never theirs alone.
+   * Shared (`ring=group`): rung together with other people, the first to
+   * accept taking it - or, a transfer to the lead's own agent, rung alone
+   * first with the others next (T15b). Over without this person answering, it
+   * clears with no "Missed call": someone else took it, or it went on to the
+   * others, the hold or the busy line - it was never theirs alone.
    */
   group: boolean;
   /**

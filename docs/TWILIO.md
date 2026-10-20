@@ -242,7 +242,7 @@ T19). The server marks it with `<Parameter>`s on each
 
 | Parameter | Means |
 |---|---|
-| `ring=group` | Several people are rung at once; the first to accept takes it |
+| `ring=group` | The ring goes on without this person if they do not take it: several people rung at once, the first to accept taking it - or the lead's own agent rung alone first, the others next (T15b) |
 | `reason=transfer` | A lead who said yes on the automated call, being put through |
 | `step` | With a transfer: the heading of the question they said yes to - "Offer" |
 
