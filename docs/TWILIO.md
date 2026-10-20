@@ -288,6 +288,15 @@ through with muted alone - which is what lets it play aloud later with nobody
 clicking. Checked in Chrome: it decodes, rings, loops and stops. Confirmed by ear in Safari by
 Jeel, the same day.
 
+**Safari starts it again by itself - stopped at once** (2026-10-20). After a
+ring ended and the tune was paused, Safari started the same element playing
+again a few seconds later - every time, in Safari only, with no `play()` from
+our code or Twilio's (watched in Safari's console) - and it looped until the
+page was reloaded, with no card on screen. So the element watches itself:
+playing while nothing is ringing, and not the silent first play, it is paused
+at once, whatever started it (`hush` in `lib/ringtone.ts`); seen catching it
+seven seconds after a ring. Stopping only pauses; a ring starts it from the top.
+
 **A browser will not play sound on a page nobody has clicked on.** Signing in
 counts as a click; a reload does not. So after a reload the corner shows
 "Call sound off · click to turn on" until the agent
