@@ -314,6 +314,13 @@ row: a choice with its key and label as they are now, or what else it was.
   already. All in one transaction.
 - **Stop blocks the number** with reason `call_opt_out` and its `dnc.blocked`
   record, by the system; texts and calls both stop.
+- **A yes to the link is texted** (T14, `sendCallLinkText` in
+  `db/lead-texts.ts`): the active script's `link_text`, on the lead's thread
+  like every automated text, and refused for a blocked number. Only for the
+  first copy of the request - the one that kept the answer - so Twilio
+  repeating it never texts twice; and after Twilio has its answer, so the
+  lead hears "check your SMS" without waiting on EZ Texting. A yes said as
+  the lead hung up is still texted: they asked for it.
 - **The call's end gives an unfinished script its result** (`/auto/status`,
   `settleAutomatedCall`): `unanswered` if it was never picked up, `hung_up` if
   it was and the script never reached its own end. A call Twilio would not
@@ -372,7 +379,7 @@ be trusted").
 | Webhook | Now | Later |
 |---|---|---|
 | `POST /api/webhooks/twilio/auto/answer` | The lead picked up: a second's quiet, the greeting with nothing listening, then the question itself inside a `<Gather>` - speech or one key, heard from its first word ("When the call listens"); silence reported too; the step's words and the stop words as hints. Anything wrong - no row, no script, the database down - ends the call quietly, never Twilio's "application error" | - |
-| `POST /api/webhooks/twilio/auto/gather` | The answer read (`matchSpokenChoice`), what follows decided (`handleAnswer`), kept with its result and any block (`keepAnswer`), and the next line said - T13, "On a live call". The address names the step and which asking it was | T14 texts the link; T15 the transfer |
+| `POST /api/webhooks/twilio/auto/gather` | The answer read (`matchSpokenChoice`), what follows decided (`handleAnswer`), kept with its result and any block (`keepAnswer`), and the next line said - T13, "On a live call". The address names the step and which asking it was. A yes to the link is texted after Twilio has its answer (T14) | T15: the transfer |
 | `POST /api/webhooks/twilio/auto/status` | How it ended, saved as every call's end is (`finishCall`): outcome, talk time, `call.ended`; then an unfinished script given its result (T13). Never a missed-call text | - |
 | `POST /api/webhooks/twilio/auto/amd` | Who picked up, kept as `answered_by`; a machine on an answered call makes it `voicemail` | T18: the voicemail message |
 
@@ -452,7 +459,7 @@ ticket's own PR.
 | T12 | The server places one call | T3, T4, T6 | Done 2026-10-18 - a real call to Jeel's phone; the opening and voice changed after it (018) |
 | T13 | The questions | T7, T8, T12 | Done 2026-10-19 - six real calls, every path |
 | T13b | Spoken answers understood faster | T13 | Done 2026-10-19 - Deepgram: 4 s of silence down to 2.4-3.3 s, measured |
-| T14 | Text the link | T13 | Not started |
+| T14 | Text the link | T13 | Done 2026-10-19 - the link reached Jeel's phone |
 | T15 | The transfer | T10, T11, T13 | Not started |
 | T16 | The hold line | T15 | Not started |
 | T17 | The next free person gets the waiting lead | T16 | Not started |
@@ -1194,7 +1201,7 @@ in migration 018. And **a spoken answer takes about 4-5 seconds** to come
 back against a key's instant one; Twilio's short-answer model, tried, was no
 faster and far less sure, so it was dropped - T13b then halved Twilio's part
 with Deepgram. A "yes" hears the busy
-line until T15. The link is saved as asked for, and texted from T14. `dev:auto-call`
+line until T15. The link is saved as asked for, and texted since T14. `dev:auto-call`
 gained `--again` and `--unblock` for testing with one phone. The DNC page
 names the new reason, "Said stop on automated call".
 
@@ -1275,13 +1282,31 @@ needed.
   none.
 
 **Done when**
-- [ ] Tests: the same request twice -> one text.
-- [ ] Tests: a blocked number -> no text.
-- [ ] The missed-call text tests still pass.
-- [ ] A real call: the link arrives on Jeel's phone.
+- [x] Tests: the same request twice -> one text; a yes said as the lead hung
+      up -> texted; Twilio answered without waiting on the text; no to the
+      link -> none.
+- [x] Tests: a blocked number -> no text, nothing on the thread
+      (`lead-texts-live-check`, 15 checks, EZ Texting stubbed below its
+      do-not-call check).
+- [x] The missed-call text tests still pass - and it now has its own live
+      checks, which it never had.
+- [x] A real call: the link arrives on Jeel's phone - 2026-10-19, call 19:
+      "No." 0.76, "Yes." 0.93, sent once, on the lead's thread.
 
-**Files:** `backend/src/db/missed-call-text.ts`, `backend/src/api/twilio-webhooks.ts`.
-**Doc:** this one.
+As built: `db/missed-call-text.ts` became `db/lead-texts.ts` - one sender
+for both texts, each reading its words (the settings row, the active script's
+`link_text`); a missing one is `sms.no_template`. The link goes out only for
+the request that kept the answer (`keepAnswer`'s `kept`, which now also names
+the call's lead), after the response to Twilio; `link_sent` is saved in the
+same transaction as the answer, before the text.
+
+**Files:** `backend/src/db/lead-texts.ts` (was `missed-call-text.ts`),
+`backend/src/db/auto-calls.ts`, `backend/src/api/twilio-webhooks.ts`,
+`backend/src/api/__tests__/auto-call-webhooks.test.ts`,
+`backend/src/api/__tests__/calls.test.ts`, `backend/scripts/lead-texts-live-check.ts`,
+`backend/scripts/auto-calls-live-check.ts`.
+**Doc:** this one, "On a live call"; `TWILIO.md`, `POLLER.md`,
+`STATE-MACHINE.md`, `LOGGING.md`, `AUDIT.md`, `README.md`, `CLAUDE.md`.
 
 ---
 

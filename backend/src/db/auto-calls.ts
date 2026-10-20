@@ -164,7 +164,9 @@ const MAX_HEARD = 500;
  *   `dnc.blocked` record) - only if it is not blocked already.
  *
  * `kept` is whether an answer row was written: false for a repeated request,
- * and for an answer with no step to keep it under.
+ * and for an answer with no step to keep it under - so what an answer leads
+ * to outside the database, the link's text (T14), happens once. `leadId` is
+ * the call's lead; null when the row is not an automated call.
  */
 export async function keepAnswer(opts: {
   callId: number;
@@ -174,7 +176,7 @@ export async function keepAnswer(opts: {
   record: AnswerRecord | null;
   result: CallResult | null;
   blockNumber: boolean;
-}): Promise<{ kept: boolean }> {
+}): Promise<{ kept: boolean; leadId: number | null }> {
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
@@ -189,7 +191,7 @@ export async function keepAnswer(opts: {
     const call = rows[0];
     if (!call) {
       await client.query('ROLLBACK');
-      return { kept: false };
+      return { kept: false, leadId: null };
     }
 
     let kept = false;
@@ -229,7 +231,7 @@ export async function keepAnswer(opts: {
     }
 
     await client.query('COMMIT');
-    return { kept };
+    return { kept, leadId: call.lead_id };
   } catch (err) {
     await client.query('ROLLBACK');
     throw err;

@@ -2,9 +2,10 @@
  * Sends an automated text and records it, in an order that can never send the
  * same text twice or mark a delivered one failed.
  *
- * Used by the four automated send paths - the poller's opener, the opener
- * retry, the reply flow's next question, and the text after a missed call
- * (db/missed-call-text.ts). Until 2026-09-28 each sent first,
+ * Used by the automated send paths - the poller's opener, the opener retry,
+ * the reply flow's next question, and the texts a call leads to: after a
+ * missed call, and the link from the automated call (db/lead-texts.ts). Until
+ * 2026-09-28 each sent first,
  * wrote the message row after, and treated *any* error as a failed send. So if
  * EZ Texting accepted a text and the database write after it failed, the text
  * was recorded as refused - a red "!" on a text the lead received - and the

@@ -67,7 +67,8 @@ there first, so the vocabulary stays in one place.
 
 **Not recorded here, because their own rows already are the record:** the
 automated SMS flow (every message is in `messages`, including the first
-questions the resend after an outage sends - `POLLER.md`), a lead arriving
+questions the resend after an outage sends - `POLLER.md` - the text after a
+missed call, and the link a lead asked for on the automated call), a lead arriving
 (`leads`), a conversation completing or expiring (`conversations`), and each
 answer a lead gives (`conversation_answers` - add-only, and tied to the
 inbound text it was read from; on an automated call, `call_answers` - add-only

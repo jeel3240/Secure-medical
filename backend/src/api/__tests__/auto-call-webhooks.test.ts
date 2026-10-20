@@ -12,7 +12,7 @@ import { buildApp } from './helpers';
 
 const linkAutomatedCall = jest.fn<Promise<boolean>, [number, string]>();
 type KeepArgs = Parameters<typeof import('../../db/auto-calls').keepAnswer>;
-const keepAnswer = jest.fn<Promise<{ kept: boolean }>, KeepArgs>();
+const keepAnswer = jest.fn<Promise<{ kept: boolean; leadId: number | null }>, KeepArgs>();
 const settleAutomatedCall = jest.fn();
 jest.mock('../../db/auto-calls', () => ({
   linkAutomatedCall: (...a: [number, string]) => linkAutomatedCall(...a),
@@ -32,7 +32,11 @@ jest.mock('../../db/calls', () => ({
   recordAnsweredBy: (...a: unknown[]) => recordAnsweredBy(...a),
 }));
 const sendMissedCallText = jest.fn();
-jest.mock('../../db/missed-call-text', () => ({ sendMissedCallText: (...a: unknown[]) => sendMissedCallText(...a) }));
+const sendCallLinkText = jest.fn<Promise<boolean>, [number]>();
+jest.mock('../../db/lead-texts', () => ({
+  sendMissedCallText: (...a: unknown[]) => sendMissedCallText(...a),
+  sendCallLinkText: (leadId: number) => sendCallLinkText(leadId),
+}));
 const poolQuery = jest.fn(async (_sql: string, _values?: unknown[]) => ({ rows: [], rowCount: 1 }));
 jest.mock('../../db/pool', () => ({ pool: { query: (...a: [string, unknown[]?]) => poolQuery(...a) } }));
 
@@ -58,7 +62,8 @@ const on = () => buildApp({ twilio: SETTINGS, autoCalls: true });
 
 beforeEach(() => {
   linkAutomatedCall.mockReset().mockResolvedValue(true);
-  keepAnswer.mockReset().mockResolvedValue({ kept: true });
+  keepAnswer.mockReset().mockResolvedValue({ kept: true, leadId: 7 });
+  sendCallLinkText.mockReset().mockResolvedValue(true);
   settleAutomatedCall.mockReset().mockResolvedValue(undefined);
   loadActiveCallScript.mockReset().mockResolvedValue(ANTIBIOTICS_CALL);
   readMinConfidence.mockReset().mockResolvedValue(0.4);
@@ -182,6 +187,52 @@ describe('the lead answers (T13)', () => {
     const res = await fromTwilio(app, gather(LINK_STEP, 1), { CallSid: 'CA900', CallStatus: 'in-progress', Digits: '2' });
     expect(kept()).toMatchObject({ spoken: { heard: null, digits: '2', confidence: null }, result: 'not_interested' });
     expect(res.text).toContain('Thank you for your time. Have a great day.</Say><Hangup/>');
+  });
+
+  describe('a yes to the link (T14)', () => {
+    const yesToLink = { CallSid: 'CA900', CallStatus: 'in-progress', Digits: '1' };
+
+    it('is texted to the call\'s lead - once the answer is kept', async () => {
+      const { app } = await on();
+      const res = await fromTwilio(app, gather(LINK_STEP, 1), yesToLink);
+      expect(res.text).toContain('Perfect. Check your SMS.');
+      expect(kept()).toMatchObject({ result: 'link_sent' });
+      await new Promise((resolve) => setImmediate(resolve));
+      expect(sendCallLinkText).toHaveBeenCalledTimes(1);
+      expect(sendCallLinkText).toHaveBeenCalledWith(7);
+      expect(keepAnswer.mock.invocationCallOrder[0]).toBeLessThan(sendCallLinkText.mock.invocationCallOrder[0]);
+    });
+
+    it('never twice: the same request again keeps nothing new, and texts nothing', async () => {
+      keepAnswer.mockResolvedValue({ kept: false, leadId: 7 });
+      const { app } = await on();
+      await fromTwilio(app, gather(LINK_STEP, 1), yesToLink);
+      await new Promise((resolve) => setImmediate(resolve));
+      expect(sendCallLinkText).not.toHaveBeenCalled();
+    });
+
+    it('a yes said as the lead hung up is still texted - they asked for it', async () => {
+      const { app } = await on();
+      await fromTwilio(app, gather(LINK_STEP, 1), { ...yesToLink, CallStatus: 'completed' });
+      await new Promise((resolve) => setImmediate(resolve));
+      expect(sendCallLinkText).toHaveBeenCalledWith(7);
+    });
+
+    it('Twilio has its answer without waiting on the text', async () => {
+      sendCallLinkText.mockReturnValue(new Promise<boolean>(() => undefined));
+      const { app } = await on();
+      const res = await fromTwilio(app, gather(LINK_STEP, 1), yesToLink);
+      expect(res.status).toBe(200);
+      expect(res.text).toContain('Perfect. Check your SMS.');
+    });
+
+    it('no to the link, or any other answer: no text', async () => {
+      const { app } = await on();
+      await fromTwilio(app, gather(LINK_STEP, 1), { ...yesToLink, Digits: '2' });
+      await fromTwilio(app, gather(OFFER_STEP, 1), { ...yesToLink, Digits: '1' });
+      await new Promise((resolve) => setImmediate(resolve));
+      expect(sendCallLinkText).not.toHaveBeenCalled();
+    });
   });
 
   it('"stop calling me", or 9: the number to be blocked, and goodbye', async () => {

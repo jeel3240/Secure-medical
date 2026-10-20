@@ -15,7 +15,7 @@ routes), `twilio-settings.ts` (the settings). Screen: `frontend/src/lib/call-sta
 `lib/calling.ts`, `pages/workspace/useLeadCall.ts`, `pages/workspace/CallControl.tsx`,
 `CallBar.tsx`. Setup: `backend/src/cli/twilio-configure.ts`.
 
-For incoming calls, backend: `db/missed-call-text.ts` (the text),
+For incoming calls, backend: `db/lead-texts.ts` (the text - `sendMissedCallText`),
 `db/callbacks.ts` (`finishMissedCallCallbacks`), `db/lead-state.ts`
 (`MISSED_CALL_SQL`). Screen: `frontend/src/lib/incoming-state.ts`,
 `lib/incoming-call.ts`, `lib/ringtone.ts` (armed from `main.tsx`),
