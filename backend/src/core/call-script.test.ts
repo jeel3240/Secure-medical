@@ -10,6 +10,7 @@ import {
   firstAsk,
   handleAnswer,
   MAX_RUNG_AT_ONCE,
+  planAfterHolder,
   planTransfer,
   splitForListening,
   type CallChoice,
@@ -250,26 +251,29 @@ describe('an asking, split for listening - splitForListening (T13)', () => {
   });
 });
 
-describe('a yes to a transfer, planned against who is free - planTransfer (T15a)', () => {
+describe('a yes to a transfer, planned against who is free - planTransfer (T15a, T15b)', () => {
   const transfer = { kind: 'transfer' as const, say: ['Great, connecting you with a live agent now. Please hold.'] };
+  const plan = (free: number[], holder: number | null = null, machine = false) =>
+    planTransfer(SCRIPT, transfer, { free, machine, holder });
 
   it('people free: the line, then all of them rung together', () => {
-    expect(planTransfer(SCRIPT, transfer, { free: [16, 21], machine: false })).toEqual({
+    expect(plan([16, 21])).toEqual({
       kind: 'ring',
       say: ['Great, connecting you with a live agent now. Please hold.'],
       agentIds: [16, 21],
+      holderFirst: false,
     });
   });
 
   it('never more than Twilio rings at once', () => {
     const free = Array.from({ length: 14 }, (_, i) => i + 1);
-    const plan = planTransfer(SCRIPT, transfer, { free, machine: false });
-    expect(plan.kind === 'ring' && plan.agentIds).toEqual(free.slice(0, MAX_RUNG_AT_ONCE));
+    const ring = plan(free);
+    expect(ring.kind === 'ring' && ring.agentIds).toEqual(free.slice(0, MAX_RUNG_AT_ONCE));
     expect(MAX_RUNG_AT_ONCE).toBe(10);
   });
 
   it('nobody free: the line, then the busy line - transfer_missed, so an agent calls back', () => {
-    expect(planTransfer(SCRIPT, transfer, { free: [], machine: false })).toEqual({
+    expect(plan([])).toEqual({
       kind: 'end',
       say: ['Great, connecting you with a live agent now. Please hold.', SCRIPT.busyBody],
       result: 'transfer_missed',
@@ -277,10 +281,54 @@ describe('a yes to a transfer, planned against who is free - planTransfer (T15a)
   });
 
   it('a machine on the line is never put through - a voicemail greeting is not a yes', () => {
-    expect(planTransfer(SCRIPT, transfer, { free: [16], machine: true })).toEqual({
-      kind: 'end',
-      say: [SCRIPT.noResponseBody],
-      result: 'no_response',
+    expect(plan([16], 16, true)).toEqual({ kind: 'end', say: [SCRIPT.noResponseBody], result: 'no_response' });
+  });
+
+  describe('the lead\'s own agent first (T15b)', () => {
+    it('free: the line, then they ring alone, first', () => {
+      expect(plan([16, 21], 21)).toEqual({
+        kind: 'ring',
+        say: ['Great, connecting you with a live agent now. Please hold.'],
+        agentIds: [21],
+        holderFirst: true,
+      });
     });
+
+    it('free, and the only one: still alone first', () => {
+      expect(plan([21], 21)).toMatchObject({ agentIds: [21], holderFirst: true });
+    });
+
+    it('not free - on a call, away, or the switch off: everyone free at once, not waited for', () => {
+      expect(plan([16, 30], 21)).toMatchObject({ agentIds: [16, 30], holderFirst: false });
+      expect(plan([], 21)).toMatchObject({ kind: 'end', result: 'transfer_missed' });
+    });
+
+    it('free beyond the first ten: still rung first', () => {
+      const free = Array.from({ length: 14 }, (_, i) => i + 1);
+      expect(plan(free, 14)).toMatchObject({ agentIds: [14], holderFirst: true });
+    });
+  });
+});
+
+describe('the lead\'s own agent let it ring out - planAfterHolder (T15b)', () => {
+  it('everyone else free, together, at once - nothing said: the lead has been listening to it ring', () => {
+    expect(planAfterHolder(SCRIPT, { free: [16, 21, 30], holder: 21 })).toEqual({
+      kind: 'ring',
+      say: [],
+      agentIds: [16, 30],
+      holderFirst: false,
+    });
+  });
+
+  it('never more than Twilio rings at once', () => {
+    const free = Array.from({ length: 14 }, (_, i) => i + 1);
+    const ring = planAfterHolder(SCRIPT, { free, holder: 1 });
+    expect(ring.kind === 'ring' && ring.agentIds).toEqual(free.slice(1, 1 + MAX_RUNG_AT_ONCE));
+  });
+
+  it('nobody else free - or nobody at all: the busy line, transfer_missed', () => {
+    const busy = { kind: 'end', say: [SCRIPT.busyBody], result: 'transfer_missed' };
+    expect(planAfterHolder(SCRIPT, { free: [21], holder: 21 })).toEqual(busy);
+    expect(planAfterHolder(SCRIPT, { free: [], holder: 21 })).toEqual(busy);
   });
 });

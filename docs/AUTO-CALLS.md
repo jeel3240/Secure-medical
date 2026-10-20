@@ -1,9 +1,10 @@
 # Automated outbound calls
 
-**Planned 2026-10-15. Being built: T0 to T15a are done (2026-10-20) - the
+**Planned 2026-10-15. Being built: T0 to T15b are done (2026-10-20) - the
 server places a call, asks the script, keeps every answer, texts the link, and
-puts a "yes" through to everyone free; the lead's own agent first (T15b)
-onwards, and the robot calling by itself (T20), are not built yet.** This
+puts a "yes" through to the lead's own agent first, then everyone free;
+switching off a person who let a transfer ring out (T15c) onwards, and the
+robot calling by itself (T20), are not built yet.** This
 doc is the agreed design and the tracker for building it. Each ticket below updates its row when it is merged,
 and the sections it touches, so the doc always says what is built and what is
 not.
@@ -384,11 +385,11 @@ be trusted").
 | Webhook | Now | Later |
 |---|---|---|
 | `POST /api/webhooks/twilio/auto/answer` | The lead picked up: a second's quiet, the greeting with nothing listening, then the question itself inside a `<Gather>` - speech or one key, heard from its first word ("When the call listens"); silence reported too; the step's words and the stop words as hints. Anything wrong - no row, no script, the database down - ends the call quietly, never Twilio's "application error" | - |
-| `POST /api/webhooks/twilio/auto/gather` | The answer read (`matchSpokenChoice`), what follows decided (`handleAnswer`), kept with its result and any block (`keepAnswer`), and the next line said - T13, "On a live call". The address names the step and which asking it was. A yes to the link is texted after Twilio has its answer (T14); a yes to the transfer rings everyone free (T15a, "The transfer") | T15b: the lead's own agent first |
+| `POST /api/webhooks/twilio/auto/gather` | The answer read (`matchSpokenChoice`), what follows decided (`handleAnswer`), kept with its result and any block (`keepAnswer`), and the next line said - T13, "On a live call". The address names the step and which asking it was. A yes to the link is texted after Twilio has its answer (T14); a yes to the transfer rings the lead's own agent first, then everyone free (T15a, T15b, "The transfer") | - |
 | `POST /api/webhooks/twilio/auto/status` | How it ended, saved as every call's end is (`finishCall`): outcome, talk time, `call.ended`; then an unfinished script given its result (T13). Never a missed-call text | - |
 | `POST /api/webhooks/twilio/auto/amd` | Who picked up, kept as `answered_by`; a machine on an answered call makes it `voicemail` | T18: the voicemail message |
 | `POST /api/webhooks/twilio/auto/claim` | A person accepted the transfer: the call and the lead become theirs (`takeTransfer`) - run on their leg before they are connected (T15a) | - |
-| `POST /api/webhooks/twilio/auto/after` | The transfer's ringing is over: taken, nothing more; not taken, `transfer_missed` and the busy line (T15a) | T16: the hold line first |
+| `POST /api/webhooks/twilio/auto/after` | The transfer's ringing is over: taken, nothing more; the lead's own agent did not take it, everyone else free rung (T15b); not taken, `transfer_missed` and the busy line (T15a) | T16: the hold line first |
 
 **Trying it locally** - `npm run dev:auto-call -- <phone>` (`scripts/dev-auto-call.ts`)
 calls the local lead with that number. It needs, in the environment the api
@@ -409,26 +410,34 @@ so two flags, for the local database only (T13):
 
 ## The transfer
 
-Built in T15a (2026-10-20). A "yes" to a step whose choice ends in `transfer`
-(Q1) is put through to a person, in `/auto/gather`; the rules are pure,
-`planTransfer` in `core/call-script.ts`.
+Built in T15a and T15b (2026-10-20). A "yes" to a step whose choice ends in
+`transfer` (Q1) is put through to a person, in `/auto/gather`; the rules are
+pure, `planTransfer` and `planAfterHolder` in `core/call-script.ts`.
 
 1. **Who can take it is read at that moment**: everyone free (`freePeople`,
-   "Who is free") and Twilio's verdict on who picked up, if it has come
-   (`transferContext`).
+   "Who is free"), who holds the lead, and Twilio's verdict on who picked up,
+   if it has come (`transferContext`).
    - **A machine** (or a fax): nobody is rung - a voicemail greeting is not a
      lead saying yes. The no-response line, `no_response`; T18 leaves the
      voicemail message instead.
+   - **The lead's own agent is free** (T15b): the choice's reply ("Great,
+     connecting you with a live agent now. Please hold."), the recording
+     notice, then they ring **alone** for `auto_call_ring_seconds`. Not free -
+     on a call, away, or the switch off - they are not waited for: everyone
+     free rings at once, below.
    - **Nobody free**: the choice's reply, then the busy line -
      `transfer_missed`, saved with the answer.
-   - **Otherwise**: the choice's reply ("Great, connecting you with a live
-     agent now. Please hold."), the recording notice, then everyone free rung
-     together (`transferTwiml`) - at most 10, Twilio's limit in one `<Dial>` -
-     for `auto_call_ring_seconds` (25; read on every transfer, and 25 when it
-     is missing or not 5-60). Each ring carries the lead and marks itself a
-     transfer - `ring=group`, `reason=transfer`, and the step said yes to -
-     so the browsers show it as one (T11). No report per person: the end is
-     the call's own.
+   - **Otherwise**: the choice's reply, the recording notice, then everyone
+     free rung together (`transferTwiml`) - at most 10, Twilio's limit in one
+     `<Dial>` - for `auto_call_ring_seconds` (25; read on every transfer, and
+     25 when it is missing or not 5-60).
+
+   Each ring carries the lead and marks itself a transfer - `ring=group`,
+   `reason=transfer`, and the step said yes to - so the browsers show it as
+   one (T11). The lead's own agent, rung alone, gets `ring=group` too: the
+   ring goes on without them if they do not take it, so their browser treats
+   it as any shared ring - it clears with no "Missed call", and is declined
+   while they are busy. No report per person: the end is the call's own.
 2. **The first to accept is connected**; Twilio stops ringing the rest. Before
    connecting them it runs `/auto/claim` on their leg: who they are is `To`,
    our own signed browser name; the call is `ParentCallSid`, matched to the
@@ -446,8 +455,13 @@ Built in T15a (2026-10-20). A "yes" to a step whose choice ends in `transfer`
    database error after they accepted still connects them: the lead is
    waiting for a person, and the error is logged (`auto_call.claim_failed`).
 3. **When the ringing is over**, Twilio asks `/auto/after` with how it went
-   (`DialCallStatus`). Taken - they talked, nothing more to say. Anything
-   else - nobody accepted, or the lead hung up while it rang -
+   (`DialCallStatus`); the address names the step and, after a ring to the
+   lead's own agent, who they were. Taken - they talked, nothing more to say.
+   The lead's own agent let it ring out, or declined: **everyone else free
+   rings at once** (`planAfterHolder`) - not them, with nothing said, since
+   the lead has been listening to it ring and has heard the notice; nobody
+   else free, the busy line. Anything else - nobody accepted, or the lead hung
+   up while it rang (`CallStatus=completed`; nobody further is rung) -
    `missTransfer`: `transfer_missed`, unless the call already has a result,
    and the busy line if the lead is still there. An agent calls them back;
    T22 puts them first in the queue.
@@ -455,9 +469,8 @@ Built in T15a (2026-10-20). A "yes" to a step whose choice ends in `transfer`
    call is: the lead on channel 1, the person on channel 2 - so the
    transcript says who said what (`core/transcripts.ts`).
 
-Not built yet: the lead's own agent rung alone first (T15b); a person who lets
-a transfer ring out has their switch turned off (T15c); the hold line before
-the busy line (T16).
+Not built yet: a person who lets a transfer ring out has their switch turned
+off (T15c); the hold line before the busy line (T16).
 
 **What the real transfers showed** (2026-10-20, Jeel's phone, two browsers on
 the dev number):
@@ -479,6 +492,17 @@ the dev number):
 - A finished transfer leaves its note box open, as every call does, and the
   browser counts as busy - not rung for the next transfer - until the note is
   saved or skipped (T9).
+- **Reloading the window that is ringing turns the ring down** - Twilio reports
+  `busy`, as for Decline - and the transfer goes on to the others (T15b, call
+  24).
+- **When the lead hangs up while it rings, Twilio says so**: `/auto/after`
+  comes with `CallStatus=completed` (T15b, call 26), so nobody further is
+  rung and nothing is said to an empty line.
+- **Twilio's voicemail detection called a person a machine** (call 24): its
+  verdict came after the lead had said "Yes." at 0.89, so the transfer went
+  ahead, rightly - but the call's outcome was then saved as `voicemail`, as
+  T12 does for any answered call a machine picked up. T18 must not act on a
+  late "machine" once the lead has answered - "T18".
 
 ## What is saved
 
@@ -542,7 +566,7 @@ ticket's own PR.
 | T13b | Spoken answers understood faster | T13 | Done 2026-10-19 - Deepgram: 4 s of silence down to 2.4-3.3 s, measured |
 | T14 | Text the link | T13 | Done 2026-10-19 - the link reached Jeel's phone |
 | T15a | The transfer: everyone free | T10, T11, T13 | Done 2026-10-20 - real transfers: taken, taken after a decline, taken by nobody |
-| T15b | The transfer: the lead's own agent first | T15a | Not started |
+| T15b | The transfer: the lead's own agent first | T15a | Done 2026-10-20 - real calls: rung alone first, then the others; not free, not waited for |
 | T15c | Letting a transfer ring out turns the switch off | T15a | Not started |
 | T16 | The hold line | T15a | Not started |
 | T17 | The next free person gets the waiting lead | T16 | Not started |
@@ -1479,23 +1503,47 @@ that agent is free.
 **Needs:** T15a. **Production:** none.
 
 **Build**
-- The lead is held by someone free -> ring only them, 25 seconds, as a
-  one-person transfer (no `ring=group`).
+- The lead is held by someone free -> ring only them, 25 seconds. (As built:
+  marked `ring=group` all the same - below.)
 - Not taken in 25 seconds -> everyone else free, as in T15a - not the holder
   who just let it ring. Whoever takes it holds the lead.
 - The lead held by someone not free -> straight to everyone free.
 
 **Done when**
-- [ ] Tests: holder free -> rung alone first; holder not free -> everyone
-      free; not taken -> everyone free next; taken -> nothing more.
-- [ ] Two browsers, a real call: lead held by A, A free -> only A rings; A
-      does not take it -> B rings.
-- [ ] Lead held by A, A on a call -> only B rings, and B taking it takes the
-      lead from A (`tookOverFrom`).
+- [x] Tests: holder free -> rung alone first (also beyond the first ten free);
+      holder not free -> everyone free at once; not taken, or declined ->
+      everyone else free, with nothing said and no notice again; nobody else
+      free -> the busy line; the lead hung up while it rang -> nobody further
+      rung; taken -> nothing more (`planTransfer`, `planAfterHolder`,
+      `transferTwiml`, 53 webhook tests). A live check: the lead's holder in
+      what a transfer reads, and none for a lead nobody holds
+      (`auto-calls-live-check`, 77 checks).
+- [x] Two browsers, a real call: lead held by A, A free -> only A rings; A
+      does not take it -> B rings - 2026-10-20, call 25 (each rang its full
+      time; Twilio's own log of the two rings).
+- [x] Lead held by A, A not free - switch off (the same rule as on a call,
+      `FREE_SQL`) -> only B rings, at once - call 26; B taking it takes the
+      lead from A (`tookOverFrom`) - call 24.
 
-**Files:** `backend/src/core/call-script.ts`, `backend/src/integrations/twilio.ts`,
-`backend/src/api/twilio-webhooks.ts`, `backend/src/db/auto-calls.ts`.
-**Doc:** this one, "The transfer".
+As built: the lead's own agent's ring is marked **`ring=group`**, though they
+ring alone - decided while building. The ring goes on without them if they
+do not take it, which is what the browser's shared-ring rules are for: it
+clears with no "Missed call" notice, and it is declined at once if they are
+busy, so an open note box is never replaced. Unmarked, it would have been a
+lead's own call to them, showing "Missed call" while a colleague talked to the
+lead. The browser is unchanged. `/auto/after` is told who was rung alone
+(`holder`) and the step, both in the address Twilio signs; a reload of the
+ringing window counts as declining, and moves on too. The real calls also
+showed Twilio's voicemail detection calling a person a machine - for T18,
+"The transfer".
+
+**Files:** `backend/src/core/call-script.ts` (+ test),
+`backend/src/integrations/twilio.ts` (+ test), `backend/src/api/twilio-webhooks.ts`,
+`backend/src/api/__tests__/auto-call-webhooks.test.ts`, `backend/src/db/auto-calls.ts`,
+`backend/scripts/auto-calls-live-check.ts`, `frontend/src/lib/incoming-state.ts`,
+`frontend/src/lib/calling.ts` (comments only).
+**Doc:** this one, "The transfer"; `TWILIO.md`, `FRONTEND.md`, `LOGGING.md`,
+`README.md`, `CLAUDE.md`.
 
 ---
 
@@ -1601,11 +1649,19 @@ transferred.
 - The verdict is saved as `answered_by`, as for agents' calls.
 - A verdict that arrives while a transfer is ringing stops it and leaves the
   message.
+- **A late "machine" is not trusted once the lead has answered** - found on a
+  real transfer, 2026-10-20 (call 24): the verdict said machine after the lead
+  had said "Yes." at 0.89 and was being put through. Acting on it would have
+  hung up on a person who said yes. Once a call has a kept answer - a choice,
+  or a key - a "machine" verdict changes nothing: no message, no stopped
+  transfer, and the outcome stays `answered`, not `voicemail` (today T12 saves
+  `voicemail` for any answered call a machine picked up). Noted 2026-10-20.
 
 **Done when**
 - [ ] A real call to Jeel's voicemail: the whole message is recorded after
       the beep; "Voicemail left" is saved.
-- [ ] Route tests: machine, fax, person, not sure.
+- [ ] Route tests: machine, fax, person, not sure; "machine" after the lead
+      has answered -> ignored.
 
 **Files:** `backend/src/api/twilio-webhooks.ts`, `backend/src/integrations/twilio-calls.ts`,
 `backend/src/db/auto-calls.ts`.

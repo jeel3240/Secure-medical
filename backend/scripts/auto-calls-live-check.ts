@@ -432,8 +432,9 @@ async function main(): Promise<void> {
 
     const { leadId, callId } = await placedCall('+15550000521', 'CA-XFER-1');
     await pool.query(`UPDATE leads SET first_name = 'Priya', last_name = 'Sharma', assigned_to = $2, assigned_at = now() WHERE id = $1`, [leadId, sam]);
-    check('what a ring says: the lead, and no verdict yet on who answered', await transferContext(callId), {
+    check('what a ring says: the lead, who holds them - rung first if free (T15b) - and no verdict yet', await transferContext(callId), {
       lead: { id: leadId, name: 'Priya Sharma', phone: '+15550000521' },
+      heldBy: sam,
       answeredBy: null,
     });
 
@@ -454,6 +455,7 @@ async function main(): Promise<void> {
     check('still hers', [await callOf(callId), await holderOf(leadId)], [{ agent_id: maya, script_result: 'transferred' }, maya]);
 
     const { leadId: freeLead, callId: freeCall } = await placedCall('+15550000522', 'CA-XFER-2');
+    check('a lead nobody held has nobody to ring first', (await transferContext(freeCall))?.heldBy, null);
     check('a lead nobody held: taken, from nobody', await takeTransfer(freeCall, sam), { ok: true, leadId: freeLead, tookOverFrom: null });
     check('recorded without a takeover', (await pickups(freeLead)).map((r) => sortedKeys(r.detail)), [
       sortedKeys({ via: 'transfer', callId: freeCall }),

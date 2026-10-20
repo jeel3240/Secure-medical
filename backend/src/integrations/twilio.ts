@@ -308,17 +308,23 @@ export function autoCallTwiml(
 /**
  * A "yes" put through to people - T15a, AUTO-CALLS.md "The transfer".
  *
- * The lines, then - on a recorded call - the recording notice, then every
- * person in `agentIds` rung together for `ringSeconds`. The first to accept
- * is connected; Twilio stops ringing the rest. Each ring carries the lead and
- * marks itself a transfer - `ring=group`, `reason=transfer`, and the step said
- * yes to - so the browsers show it as one (T11).
+ * The lines, then - on a transfer's first ring of a recorded call - the
+ * recording notice, then every person in `agentIds` rung together for
+ * `ringSeconds`. The first to accept is connected; Twilio stops ringing the
+ * rest. Each ring carries the lead and marks itself a transfer - `ring=group`,
+ * `reason=transfer`, and the step said yes to - so the browsers show it as one
+ * (T11). `ring=group` goes on the lead's own agent rung alone first (T15b) as
+ * well: the ring goes on without them if they do not take it, so their browser
+ * treats it as it does any shared ring - it clears quietly, and is declined
+ * while they are busy.
  *
  * Accepting runs `/auto/claim` on that person's leg before they are connected:
  * it makes the lead theirs. When the ringing is over, taken or not, Twilio
- * asks `/auto/after`. No per-person status reports: the end is the call's
- * own, as for the one-agent ring. Recorded from the moment a person answers,
- * both sides apart - the lead on channel 1 - as every call is.
+ * asks `/auto/after` - told the step, and when the one person rung was the
+ * lead's own agent (`holderFirst`), who it was, so the others are rung next.
+ * No per-person status reports: the end is the call's own, as for the
+ * one-agent ring. Recorded from the moment a person answers, both sides
+ * apart - the lead on channel 1 - as every call is.
  */
 export function transferTwiml(
   settings: TwilioSettings,
@@ -328,20 +334,25 @@ export function transferTwiml(
     callSid: string;
     script: CallScript;
     say: string[];
+    /** Say the recording notice before ringing: a transfer's first ring - by a second, the lead has heard it. */
+    notice: boolean;
     agentIds: readonly number[];
+    /** The one person rung is the lead's own agent, rung alone first (T15b). */
+    holderFirst: boolean;
     lead: { id: number; name: string; phone: string };
-    /** The heading of the step the lead said yes to - "Offer". */
-    step: string;
+    /** The step the lead said yes to: its heading ("Offer") is shown on the ring. */
+    step: { id: number; heading: string };
     ringSeconds: number;
   }
 ): string {
   const voice = scriptVoice(opts.script);
   const response = new twilio.twiml.VoiceResponse();
   for (const line of opts.say) response.say(voice, line);
-  if (settings.transcriptionServiceSid) response.say(voice, RECORDING_NOTICE);
+  if (opts.notice && settings.transcriptionServiceSid) response.say(voice, RECORDING_NOTICE);
+  const after = { step: opts.step.id, ...(opts.holderFirst ? { holder: opts.agentIds[0] } : {}) };
   const dial = response.dial({
     timeout: opts.ringSeconds,
-    action: autoCallUrl(settings, AUTO_AFTER_PATH, opts.callId),
+    action: autoCallUrl(settings, AUTO_AFTER_PATH, opts.callId, after),
     method: 'POST',
     ...recordingAttributes(settings, opts.callSid),
   });
@@ -353,7 +364,7 @@ export function transferTwiml(
     client.parameter({ name: 'leadPhone', value: opts.lead.phone });
     client.parameter({ name: 'ring', value: 'group' });
     client.parameter({ name: 'reason', value: 'transfer' });
-    client.parameter({ name: 'step', value: opts.step });
+    client.parameter({ name: 'step', value: opts.step.heading });
   }
   return response.toString();
 }
