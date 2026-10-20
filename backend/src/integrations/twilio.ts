@@ -209,6 +209,10 @@ export const AUTO_GATHER_PATH = '/api/webhooks/twilio/auto/gather';
 export const AUTO_STATUS_PATH = '/api/webhooks/twilio/auto/status';
 /** Twilio's verdict on who picked up: a person or a machine. */
 export const AUTO_AMD_PATH = '/api/webhooks/twilio/auto/amd';
+/** A person accepted the transfer - run on their leg before they are connected (T15a). */
+export const AUTO_CLAIM_PATH = '/api/webhooks/twilio/auto/claim';
+/** The transfer's ringing is over: taken, or nobody did (T15a). */
+export const AUTO_AFTER_PATH = '/api/webhooks/twilio/auto/after';
 
 /** The full address of one of those webhooks, for one call. */
 export function autoCallUrl(
@@ -241,6 +245,11 @@ export function autoCallUrl(
 const SPEECH_MODEL = 'deepgram_nova-3';
 const SPEECH_TIMEOUT_SECONDS = '1';
 
+/** The script's voice, for `<Say>`. It is a row; Twilio's list of names is the type. */
+function scriptVoice(script: CallScript): VoiceResponse.SayAttributes {
+  return { voice: script.voice as VoiceResponse.SayAttributes['voice'] };
+}
+
 /** The words a step's answer may hold - Twilio listens harder for them. */
 function hintsFor(script: CallScript, step: CallStep): string {
   const words = [...step.choices.flatMap((choice) => choice.words), ...script.optOutWords];
@@ -269,8 +278,7 @@ export function autoCallTwiml(
   opts: { callId: number; script: CallScript; action: AskOrEnd; pauseFirst?: boolean }
 ): string {
   const { script, action } = opts;
-  // The script's voice is a row; Twilio's list of names is the type.
-  const voice = { voice: script.voice as VoiceResponse.SayAttributes['voice'] };
+  const voice = scriptVoice(script);
   const response = new twilio.twiml.VoiceResponse();
   if (opts.pauseFirst) response.pause({ length: 1 });
 
@@ -294,5 +302,58 @@ export function autoCallTwiml(
     method: 'POST',
   });
   if (question) gather.say(voice, question);
+  return response.toString();
+}
+
+/**
+ * A "yes" put through to people - T15a, AUTO-CALLS.md "The transfer".
+ *
+ * The lines, then - on a recorded call - the recording notice, then every
+ * person in `agentIds` rung together for `ringSeconds`. The first to accept
+ * is connected; Twilio stops ringing the rest. Each ring carries the lead and
+ * marks itself a transfer - `ring=group`, `reason=transfer`, and the step said
+ * yes to - so the browsers show it as one (T11).
+ *
+ * Accepting runs `/auto/claim` on that person's leg before they are connected:
+ * it makes the lead theirs. When the ringing is over, taken or not, Twilio
+ * asks `/auto/after`. No per-person status reports: the end is the call's
+ * own, as for the one-agent ring. Recorded from the moment a person answers,
+ * both sides apart - the lead on channel 1 - as every call is.
+ */
+export function transferTwiml(
+  settings: TwilioSettings,
+  opts: {
+    callId: number;
+    /** The automated call's own id at Twilio - what its recording is reported against. */
+    callSid: string;
+    script: CallScript;
+    say: string[];
+    agentIds: readonly number[];
+    lead: { id: number; name: string; phone: string };
+    /** The heading of the step the lead said yes to - "Offer". */
+    step: string;
+    ringSeconds: number;
+  }
+): string {
+  const voice = scriptVoice(opts.script);
+  const response = new twilio.twiml.VoiceResponse();
+  for (const line of opts.say) response.say(voice, line);
+  if (settings.transcriptionServiceSid) response.say(voice, RECORDING_NOTICE);
+  const dial = response.dial({
+    timeout: opts.ringSeconds,
+    action: autoCallUrl(settings, AUTO_AFTER_PATH, opts.callId),
+    method: 'POST',
+    ...recordingAttributes(settings, opts.callSid),
+  });
+  for (const agentId of opts.agentIds) {
+    const client = dial.client({ url: autoCallUrl(settings, AUTO_CLAIM_PATH, opts.callId), method: 'POST' });
+    client.identity(identityFor(agentId, settings.identityPrefix));
+    client.parameter({ name: 'leadId', value: String(opts.lead.id) });
+    client.parameter({ name: 'leadName', value: opts.lead.name });
+    client.parameter({ name: 'leadPhone', value: opts.lead.phone });
+    client.parameter({ name: 'ring', value: 'group' });
+    client.parameter({ name: 'reason', value: 'transfer' });
+    client.parameter({ name: 'step', value: opts.step });
+  }
   return response.toString();
 }

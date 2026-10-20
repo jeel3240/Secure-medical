@@ -11,9 +11,11 @@
  * as every call's is; that two placements racing for one lead place one
  * call; that an answer is kept once however often Twilio sends it, a result
  * is never overwritten, and a stop blocks the number once; and that a call's
- * end gives an unfinished script its result. Getting those wrong rings a lead
- * twice, rings a number we may not, calls someone who said stop, or loses the
- * record of a call or of what the lead said.
+ * end gives an unfinished script its result; and that a transfer goes to whoever
+ * took it - the lead taken over from any holder, recorded - once, and never to
+ * a second person or a deactivated one (T15a). Getting those wrong rings a lead
+ * twice, rings a number we may not, calls someone who said stop, gives a lead to
+ * the wrong person, or loses the record of a call or of what the lead said.
  *
  * It writes rows, so it refuses to run against a database that holds leads.
  * Run it with the others: scripts/live-checks.sh auto-calls
@@ -22,8 +24,11 @@ import {
   failAutomatedCall,
   keepAnswer,
   linkAutomatedCall,
+  missTransfer,
   settleAutomatedCall,
   startAutomatedCall,
+  takeTransfer,
+  transferContext,
 } from '../src/db/auto-calls';
 import { finishCall, recordAnsweredBy } from '../src/db/calls';
 import { startConversation } from '../src/db/flows';
@@ -401,6 +406,83 @@ async function main(): Promise<void> {
     const { callId: going } = await placedCall('+15550000516', 'CA-END-4');
     await settleAutomatedCall(going);
     check('a call still going is left alone', await scriptResult(going), null);
+  }
+
+  console.log('\nthe transfer (T15a)');
+  {
+    const person = async (email: string, active = true) =>
+      (
+        await pool.query(
+          `INSERT INTO users (email, name, role, password_hash, is_active) VALUES ($1, $2, 'agent', 'x', $3) RETURNING id`,
+          [email, email.split('@')[0], active]
+        )
+      ).rows[0].id as number;
+    const maya = await person('maya@example.com');
+    const sam = await person('sam@example.com');
+    const gone = await person('gone@example.com', false);
+    const callOf = async (id: number) =>
+      (await pool.query(`SELECT agent_id, script_result FROM calls WHERE id = $1`, [id])).rows[0];
+    const holderOf = async (id: number) =>
+      (await pool.query(`SELECT assigned_to FROM leads WHERE id = $1`, [id])).rows[0].assigned_to;
+    const pickups = async (id: number) =>
+      (await pool.query(`SELECT actor_id, detail FROM activity_log WHERE lead_id = $1 AND action = 'lead.picked_up' ORDER BY id`, [id])).rows;
+    const transfers = async (id: number) =>
+      (await pool.query(`SELECT actor_id, detail FROM activity_log WHERE lead_id = $1 AND action = 'call.transferred' ORDER BY id`, [id]))
+        .rows.map((r) => [r.actor_id, sortedKeys(r.detail)]);
+
+    const { leadId, callId } = await placedCall('+15550000521', 'CA-XFER-1');
+    await pool.query(`UPDATE leads SET first_name = 'Priya', last_name = 'Sharma', assigned_to = $2, assigned_at = now() WHERE id = $1`, [leadId, sam]);
+    check('what a ring says: the lead, and no verdict yet on who answered', await transferContext(callId), {
+      lead: { id: leadId, name: 'Priya Sharma', phone: '+15550000521' },
+      answeredBy: null,
+    });
+
+    check('Maya accepts: hers, taken over from Sam', await takeTransfer(callId, maya), { ok: true, leadId, tookOverFrom: sam });
+    check('the call is hers, and transferred', await callOf(callId), { agent_id: maya, script_result: 'transferred' });
+    check('the lead is hers', await holderOf(leadId), maya);
+    check('recorded as picked up through the transfer, from Sam', (await pickups(leadId)).map((r) => [r.actor_id, sortedKeys(r.detail)]), [
+      [maya, sortedKeys({ via: 'transfer', callId, tookOverFrom: sam })],
+    ]);
+
+    check('the transfer taken is its own record, by Maya, from Sam', await transfers(leadId), [
+      [maya, sortedKeys({ callId, tookOverFrom: sam })],
+    ]);
+
+    check('the same request again: still hers, nothing new', await takeTransfer(callId, maya), { ok: true, leadId, tookOverFrom: null });
+    check('one pick-up, one transfer', [(await pickups(leadId)).length, (await transfers(leadId)).length], [1, 1]);
+    check('Sam cannot take a call Maya has', await takeTransfer(callId, sam), { ok: false, reason: 'taken' });
+    check('still hers', [await callOf(callId), await holderOf(leadId)], [{ agent_id: maya, script_result: 'transferred' }, maya]);
+
+    const { leadId: freeLead, callId: freeCall } = await placedCall('+15550000522', 'CA-XFER-2');
+    check('a lead nobody held: taken, from nobody', await takeTransfer(freeCall, sam), { ok: true, leadId: freeLead, tookOverFrom: null });
+    check('recorded without a takeover', (await pickups(freeLead)).map((r) => sortedKeys(r.detail)), [
+      sortedKeys({ via: 'transfer', callId: freeCall }),
+    ]);
+
+    // Her browser picked the lead up a moment before Twilio's request arrived -
+    // the first real transfer, 2026-10-20 - or it was already hers.
+    const { leadId: ownLead, callId: ownCall } = await placedCall('+15550000524', 'CA-XFER-4');
+    await pool.query(`UPDATE leads SET assigned_to = $2, assigned_at = now() WHERE id = $1`, [ownLead, maya]);
+    check('already hers when the request came: taken', await takeTransfer(ownCall, maya), {
+      ok: true,
+      leadId: ownLead,
+      tookOverFrom: null,
+    });
+    check('no second pick-up', (await pickups(ownLead)).length, 0);
+    check('but the transfer is still recorded', await transfers(ownLead), [[maya, sortedKeys({ callId: ownCall })]]);
+
+    const { leadId: lateLead, callId: lateCall } = await placedCall('+15550000523', 'CA-XFER-3');
+    check('an account deactivated while it rang takes nothing', await takeTransfer(lateCall, gone), { ok: false, reason: 'inactive' });
+    check('the call and the lead untouched', [await callOf(lateCall), await holderOf(lateLead)], [
+      { agent_id: null, script_result: null },
+      null,
+    ]);
+    check('a call that is not ours to transfer', await takeTransfer(999999, maya), { ok: false, reason: 'not_found' });
+
+    await missTransfer(lateCall);
+    check('nobody took it: transfer_missed', (await callOf(lateCall)).script_result, 'transfer_missed');
+    await missTransfer(callId);
+    check('a transfer someone took is never made missed', (await callOf(callId)).script_result, 'transferred');
   }
 
   console.log(failures === 0 ? '\nall checks passed' : `\n${failures} check(s) FAILED`);

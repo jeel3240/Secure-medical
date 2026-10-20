@@ -25,8 +25,8 @@ export interface TranscriptLine {
  *   agent's browser (channel 2).
  * - The server called the lead (automated, T4): the recording starts when an
  *   agent takes the transfer, and the call is the lead's leg (channel 1), which
- *   dialled the agent's browser (channel 2) - as when the lead calls us. To be
- *   confirmed on the first real transfer (`AUTO-CALLS.md`, T15).
+ *   dialled the agent's browser (channel 2) - as when the lead calls us.
+ *   Confirmed on a real transfer, 2026-10-20 (`AUTO-CALLS.md`, T15a).
  */
 export function speakerFor(direction: CallDirection, channel: number): Speaker {
   const first: Speaker = direction === 'outbound' ? 'agent' : 'lead';

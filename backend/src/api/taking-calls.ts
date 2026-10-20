@@ -13,7 +13,7 @@
 
 import type { AppDeps } from './deps';
 
-/** Why it changed. `missed_transfer` joins these with T15. */
+/** Why it changed. `missed_transfer` joins these with T15c. */
 export type TakingCallsWhy = 'by_hand' | 'sign_in' | 'sign_out';
 
 /** Records that `userId` switched it to `on`. Call it only when it changed. */

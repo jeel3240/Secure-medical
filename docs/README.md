@@ -130,7 +130,7 @@ scripts/live-checks.sh              # all of them
 scripts/live-checks.sh flows queue  # just these
 ```
 
-There are twenty live checks, covering the texts a call leads to (the link, and the text after a missed call - EZ Texting stubbed), the automated call (its row, every refusal, linking it to Twilio's call, two placements racing; each answer kept once, a result never overwritten, a stop blocking once and ending the text questions, the end settling an unfinished script), who can take a call (migrations 016 and 017: the browser's word, the "Taking calls" switch, and who is free), the automated call's script (migrations 015 and 018), the SMS flows (a second flow added as
+There are twenty live checks, covering the texts a call leads to (the link, and the text after a missed call - EZ Texting stubbed), the automated call (its row, every refusal, linking it to Twilio's call, two placements racing; each answer kept once, a result never overwritten, a stop blocking once and ending the text questions, the end settling an unfinished script; a transfer taken - from the lead's holder, once, never by a second person - or missed), who can take a call (migrations 016 and 017: the browser's word, the "Taking calls" switch, and who is free), the automated call's script (migrations 015 and 018), the SMS flows (a second flow added as
 rows only), the queue, claims, the read flag, the lead card,
 the timeline, callbacks, dispositions, agent SMS, calls (outgoing, incoming and
 missed), the activity log, Admin > Leads, the admin read models, health, the
@@ -282,7 +282,7 @@ commit.
 | `POLLER.md` | How leads are pulled in | The poller or worker loop |
 | `WEBHOOKS.md` | How replies are received | The webhook handler |
 | `TWILIO.md` | Browser calling: how a call works, incoming calls and missed calls, what is saved, settings, testing, deploying | Anything about calls, Twilio's webhooks, the Call button, the incoming-call card or the call bar |
-| `AUTO-CALLS.md` | Automated outbound calls: the agreed script and flow, the transfer and hold rules, the "Taking calls" switch, and the build tracker. T0-T14 are done (2026-10-19): the server places a call, asks the script, keeps every answer and texts the link; the transfer (T15) on, and the robot calling by itself (T20), are not built yet | A ticket from its tracker is merged, or any decision about automated calls |
+| `AUTO-CALLS.md` | Automated outbound calls: the agreed script and flow, the transfer and hold rules, the "Taking calls" switch, and the build tracker. T0-T15a are done (2026-10-20): the server places a call, asks the script, keeps every answer, texts the link and puts a "yes" through to everyone free; the lead's own agent first (T15b) on, and the robot calling by itself (T20), are not built yet | A ticket from its tracker is merged, or any decision about automated calls |
 | `AUDIT.md` | The activity log and the raw webhook archive: what is recorded, why nothing can be edited or deleted, what it does not cover | **Any new action a person or the system can take** - it records itself, or this doc says why not |
 | `ADMIN-LEADS.md` | The superadmin Leads page | That page or its API |
 | `QUEUE.md` | The agents' priority queue API: who is in it, the order, the tags | `GET /api/leads`, the queue query or the tag rules |

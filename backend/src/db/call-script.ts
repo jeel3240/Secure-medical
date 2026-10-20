@@ -23,6 +23,19 @@ export async function readMinConfidence(q: Db): Promise<number> {
   return Number.isFinite(value) && value >= 0 && value <= 1 ? value : DEFAULT_MIN_CONFIDENCE;
 }
 
+/** How long a transfer rings people - `auto_call_ring_seconds`, T15a. */
+export const DEFAULT_RING_SECONDS = 25;
+
+/**
+ * `settings.auto_call_ring_seconds`, read on every transfer: 25 when it is
+ * missing or not between 5 and 60 seconds.
+ */
+export async function readRingSeconds(q: Db): Promise<number> {
+  const { rows } = await q.query(`SELECT value FROM settings WHERE key = 'auto_call_ring_seconds'`);
+  const value = Number(rows[0]?.value);
+  return Number.isInteger(value) && value >= 5 && value <= 60 ? value : DEFAULT_RING_SECONDS;
+}
+
 /** The script calls use - null when there is none. */
 export async function loadActiveCallScript(q: Db): Promise<CallScript | null> {
   const { rows } = await q.query(`SELECT id FROM call_scripts WHERE is_active`);

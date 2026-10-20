@@ -92,7 +92,7 @@ export type CallAction =
    * second asking - then listen for the answer. `attempt` 2 is the last chance.
    */
   | { kind: 'ask'; step: CallStep; attempt: 1 | 2; say: string[] }
-  /** A "yes": say the line, then ring people (T15). How it ends is decided there. */
+  /** A "yes": say the line, then ring people - `planTransfer` (T15a). How it ends is decided there. */
   | { kind: 'transfer'; say: string[] }
   /**
    * Say the lines and hang up, with how the script ended. `sendLink`: text the
@@ -111,6 +111,9 @@ export type CallAction =
 
 /** An action that is only words and listening - everything but a transfer. */
 export type AskOrEnd = Extract<CallAction, { kind: 'ask' | 'end' }>;
+
+/** A "yes" that is to reach a person, before who rings is known - `planTransfer`. */
+export type TransferAction = Extract<CallAction, { kind: 'transfer' }>;
 
 /** The first thing said when the lead picks up: the first step's question. Never a transfer. */
 export function firstAsk(script: CallScript): AskOrEnd {
@@ -206,8 +209,12 @@ export interface AnswerOutcome {
   sendLink: boolean;
   /** A mistake in our rows, not the lead's: to be logged as an error. */
   brokenScript: boolean;
-  /** What to say next. Null when the lead has hung up - there is nobody to say it to. */
-  next: AskOrEnd | null;
+  /**
+   * What to say next: words, or a transfer still to be planned against who is
+   * free (`planTransfer`). Null when the lead has hung up - there is nobody to
+   * say it to.
+   */
+  next: AskOrEnd | TransferAction | null;
 }
 
 /**
@@ -222,9 +229,10 @@ export interface AnswerOutcome {
  *   still texted - but nothing that needs them on the line happens, and
  *   ending for want of an answer is not their result: the call's end saves
  *   `hung_up` instead.
- * - **A "yes" to a transfer** reaches nobody until T15 rings people: the lead
- *   hears the line, then the busy line, and the result is `transfer_missed` -
- *   what T15 does when nobody is free.
+ * - **A "yes" to a transfer** is handed on as it is: who rings depends on who
+ *   is free at that moment, which only the database knows - `planTransfer`
+ *   (T15a). Said as the lead hung up, it reaches nobody: the call's end saves
+ *   `hung_up`.
  * - An answer to a step this script does not have is not kept: there is no
  *   step to keep it under.
  */
@@ -250,11 +258,7 @@ export function handleAnswer(
 
   if (action.kind === 'ask') return { ...none, answer, next: hungUp ? null : action };
 
-  if (action.kind === 'transfer') {
-    if (hungUp) return { ...none, answer };
-    const busy: AskOrEnd = { kind: 'end', say: [...action.say, script.busyBody], result: 'transfer_missed' };
-    return { ...none, answer, result: 'transfer_missed', next: busy };
-  }
+  if (action.kind === 'transfer') return { ...none, answer, next: hungUp ? null : action };
 
   return {
     answer,
@@ -282,4 +286,37 @@ export function splitForListening(lines: readonly string[]): { leadIn: string[];
   const question = sentences.pop() ?? '';
   const leadIn = [...lines.slice(0, -1), ...(sentences.length > 0 ? [sentences.join(' ')] : [])];
   return { leadIn, question };
+}
+
+/** At most this many people ring at once - Twilio's limit on `<Client>`s in one `<Dial>`. */
+export const MAX_RUNG_AT_ONCE = 10;
+
+/** What a "yes" to a transfer becomes once who is free is known - `planTransfer`. */
+export type TransferPlan =
+  /** Say the lines, then ring these people together; the first to accept takes the lead. */
+  | { kind: 'ring'; say: string[]; agentIds: number[] }
+  | Extract<AskOrEnd, { kind: 'end' }>;
+
+/**
+ * What a "yes" to a transfer becomes - T15a, AUTO-CALLS.md "The transfer".
+ *
+ * - **A machine answered the phone** (Twilio's verdict, when it has come):
+ *   nobody is rung - a voicemail greeting is not a lead saying yes. Ended
+ *   politely, as no response; T18 leaves the voicemail message instead.
+ * - **Nobody free**: the line, then the busy line - `transfer_missed`, so an
+ *   agent calls the lead back (T22 puts them first in the queue).
+ * - **Otherwise** the line, then the free people rung together, at most
+ *   `MAX_RUNG_AT_ONCE`, in the order given. Who takes it, or that nobody did,
+ *   is decided when the ringing ends.
+ */
+export function planTransfer(
+  script: CallScript,
+  transfer: TransferAction,
+  opts: { free: readonly number[]; machine: boolean }
+): TransferPlan {
+  if (opts.machine) return { kind: 'end', say: [script.noResponseBody], result: 'no_response' };
+  if (opts.free.length === 0) {
+    return { kind: 'end', say: [...transfer.say, script.busyBody], result: 'transfer_missed' };
+  }
+  return { kind: 'ring', say: [...transfer.say], agentIds: opts.free.slice(0, MAX_RUNG_AT_ONCE) };
 }
