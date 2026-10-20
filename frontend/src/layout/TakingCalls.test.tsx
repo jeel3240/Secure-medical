@@ -1,5 +1,6 @@
 /**
- * The "Taking calls" switch in the app bar - T10, AUTO-CALLS.md "Who is free".
+ * The "Taking calls" switch in the app bar - T10, AUTO-CALLS.md "Who is free";
+ * and the notice when the server turned it off for a missed transfer (T15c).
  */
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -24,12 +25,13 @@ const MAYA: PublicUser = {
   lastLoginAt: null,
   createdAt: '2026-09-01T00:00:00.000Z',
   takingCalls: false,
+  takingCallsWhy: 'sign_in',
 };
 const ON = { enabled: true, callerId: '+14804708259', autoCalls: true };
 
 beforeEach(() => {
   getCallConfig.mockReset().mockResolvedValue(ON);
-  setTakingCalls.mockReset().mockImplementation(async (on: boolean) => on);
+  setTakingCalls.mockReset().mockImplementation(async (on: boolean) => ({ takingCalls: on, takingCallsWhy: 'by_hand' }));
   useAuth.setState({ status: 'authenticated', user: MAYA });
 });
 
@@ -79,7 +81,9 @@ describe('switching it', () => {
 
   it('flips only once the server has it, and takes no second click meanwhile', async () => {
     let answer: (on: boolean) => void = () => undefined;
-    setTakingCalls.mockImplementation(() => new Promise<boolean>((resolve) => (answer = resolve)));
+    setTakingCalls.mockImplementation(
+      () => new Promise((resolve) => (answer = (on) => resolve({ takingCalls: on, takingCallsWhy: 'by_hand' })))
+    );
     const toggle = await shown();
 
     fireEvent.click(toggle);
@@ -100,5 +104,35 @@ describe('switching it', () => {
     await waitFor(() => expect(toggle.title).toBe('Could not switch it. Try again.'));
     expect(toggle.getAttribute('aria-checked')).toBe('false');
     expect(useAuth.getState().user?.takingCalls).toBe(false);
+  });
+});
+
+describe('turned off for a missed transfer (T15c)', () => {
+  const NOTICE = 'Missed a transfer · Taking calls off';
+
+  it('says so beside the switch, which is off', async () => {
+    useAuth.setState({ status: 'authenticated', user: { ...MAYA, takingCallsWhy: 'missed_transfer' } });
+    const toggle = await shown();
+    expect(screen.getByRole('status').textContent).toBe(NOTICE);
+    expect(toggle.getAttribute('aria-checked')).toBe('false');
+  });
+
+  it('gone once switched on again', async () => {
+    useAuth.setState({ status: 'authenticated', user: { ...MAYA, takingCallsWhy: 'missed_transfer' } });
+    const toggle = await shown();
+    fireEvent.click(toggle);
+    await waitFor(() => expect(toggle.getAttribute('aria-checked')).toBe('true'));
+    expect(screen.queryByText(NOTICE)).toBeNull();
+    expect(useAuth.getState().user?.takingCallsWhy).toBe('by_hand');
+  });
+
+  it('not for any other reason it is off', async () => {
+    for (const why of ['sign_in', 'sign_out', 'by_hand', null] as const) {
+      useAuth.setState({ status: 'authenticated', user: { ...MAYA, takingCallsWhy: why } });
+      const { unmount } = render(<TakingCalls />);
+      await screen.findByRole('switch');
+      expect(screen.queryByText(NOTICE)).toBeNull();
+      unmount();
+    }
   });
 });

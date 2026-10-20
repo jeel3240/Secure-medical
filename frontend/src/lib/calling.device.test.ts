@@ -255,6 +255,33 @@ describe('telling the server whether this browser can take a call', () => {
     stop();
   });
 
+  it('the answer carries the switch: turned off for a missed transfer, the signed-in user says so (T15c)', async () => {
+    postRingable.mockResolvedValue({ takingCalls: false, takingCallsWhy: 'missed_transfer' } as never);
+    const calling = await fresh();
+    // The same copy calling.ts reads and writes.
+    const { useAuth } = await import('../auth/store');
+    useAuth.setState({
+      status: 'authenticated',
+      user: {
+        id: 21,
+        email: 'maya@example.com',
+        name: 'Maya Chen',
+        role: 'agent',
+        isActive: true,
+        mustChangePassword: false,
+        lastLoginAt: null,
+        createdAt: '2026-09-01T00:00:00.000Z',
+        takingCalls: true,
+        takingCallsWhy: 'by_hand',
+      },
+    });
+    const stop = calling.listenForCalls({ onRing: vi.fn(), onRingOver: vi.fn() });
+    await vi.waitFor(() =>
+      expect(useAuth.getState().user).toMatchObject({ takingCalls: false, takingCallsWhy: 'missed_transfer' })
+    );
+    stop();
+  });
+
   it('a failed report is left for the next check - nothing breaks', async () => {
     postRingable.mockRejectedValueOnce(new Error('offline'));
     const { stop, presence } = await listening();

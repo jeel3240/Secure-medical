@@ -34,6 +34,7 @@ const user = (id: number, name: string, role: PublicUser['role'] = 'agent'): Pub
   lastLoginAt: null,
   createdAt: '2026-09-01T00:00:00.000Z',
   takingCalls: false,
+  takingCallsWhy: null,
 });
 
 const MAYA = user(11, 'Maya Chen');

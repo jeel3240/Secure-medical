@@ -37,6 +37,7 @@ import {
   OPT_OUT_KEY,
   planAfterHolder,
   planTransfer,
+  rangOut,
   type AskOrEnd,
   type CallResult,
   type TransferPlan,
@@ -106,6 +107,8 @@ function autoCalls() {
   const presence = require('../db/presence') as typeof import('../db/presence');
   // eslint-disable-next-line @typescript-eslint/no-require-imports
   const { pool } = require('../db/pool') as typeof import('../db/pool');
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const twilioCalls = require('../integrations/twilio-calls') as typeof import('../integrations/twilio-calls');
   return {
     linkAutomatedCall: rows.linkAutomatedCall,
     keepAnswer: rows.keepAnswer,
@@ -114,6 +117,9 @@ function autoCalls() {
     takeTransfer: rows.takeTransfer,
     missTransfer: rows.missTransfer,
     freePeople: () => presence.freePeople(pool),
+    switchOffAfterMissedRing: (agentId: number, callId: number) =>
+      presence.switchOffAfterMissedRing(pool, agentId, callId),
+    transferRings: twilioCalls.transferRings,
     loadScript: () => script.loadActiveCallScript(pool),
     readMinConfidence: () => script.readMinConfidence(pool),
     readRingSeconds: () => script.readRingSeconds(pool),
@@ -126,6 +132,29 @@ const field = (body: Record<string, unknown>, key: string): string =>
 /** A positive whole number from a webhook's address - the call's row, a step - or null. */
 function autoCallId(raw: unknown): number | null {
   return typeof raw === 'string' && /^[1-9]\d{0,9}$/.test(raw) ? Number(raw) : null;
+}
+
+/** Who a transfer rang together, from its end's address (`rung=16,21`) - none when it is not that. */
+function rungFrom(raw: unknown): number[] {
+  if (typeof raw !== 'string' || !/^[1-9]\d{0,9}(,[1-9]\d{0,9}){0,9}$/.test(raw)) return [];
+  return raw.split(',').map(Number);
+}
+
+/**
+ * How each person's ring ended, by agent - only this server's browsers, and
+ * for someone rung more than once on the call, their latest ring.
+ */
+function latestRingByAgent(
+  rings: readonly { to: string; status: string; startedAt: Date | null }[],
+  prefix: string
+): Map<number, string> {
+  const latest = new Map<number, { status: string; at: number }>();
+  for (const ring of rings) {
+    const agentId = agentIdFromIdentity(ring.to, prefix);
+    const at = ring.startedAt?.getTime() ?? 0;
+    if (agentId !== null && (latest.get(agentId)?.at ?? -1) < at) latest.set(agentId, { status: ring.status, at });
+  }
+  return new Map([...latest].map(([agentId, ring]) => [agentId, ring.status]));
 }
 
 /** What the lead said or pressed, as Twilio's `<Gather>` reports it. */
@@ -578,7 +607,8 @@ export function twilioWebhooksRouter(deps: AppDeps): Router {
   // more to say. The lead's own agent, rung alone first, let it ring out:
   // everyone else free is rung now (T15b). Otherwise nobody took it - or the
   // lead hung up while it rang: `transfer_missed`, so an agent calls them
-  // back, and the busy line if they are still there (T15a).
+  // back, and the busy line if they are still there (T15a). Whoever let it
+  // ring out has their switch turned off, once Twilio has its answer (T15c).
   router.post(
     '/auto/after',
     asyncHandler(async (req, res) => {
@@ -589,17 +619,26 @@ export function twilioWebhooksRouter(deps: AppDeps): Router {
         res.send(emptyTwiml());
         return;
       }
+      /** Who was rung, and the call - to switch off whoever let it ring out, once Twilio has its answer. */
+      let missed: { callId: number; callSid: string; rung: number[]; hungUp: boolean } | null = null;
+      let reply = hangupTwiml();
       try {
         const call = await automatedCall(req);
         if (!call) {
           log.warn('auto_call.unknown_call', { path: req.path, callId: req.query.call });
-          res.send(hangupTwiml());
+          res.send(reply);
           return;
         }
         const ac = autoCalls();
         const hungUp = field(body, 'CallStatus') === 'completed';
         const holder = autoCallId(req.query.holder);
         const stepId = autoCallId(req.query.step);
+        missed = {
+          callId: call.callId,
+          callSid: call.callSid,
+          rung: holder !== null ? [holder] : rungFrom(req.query.rung),
+          hungUp,
+        };
         const ringOthers = holder !== null && !hungUp;
         const [script, free, context] = await Promise.all([
           ac.loadScript(),
@@ -607,47 +646,66 @@ export function twilioWebhooksRouter(deps: AppDeps): Router {
           ringOthers ? ac.transferContext(call.callId) : Promise.resolve(null),
         ]);
 
+        let ringing: string | null = null;
         if (holder !== null && !hungUp && script && context && stepId !== null) {
           log.info('auto_call.holder_not_taken', { callId: call.callId, agentId: holder, dialStatus: status });
           const plan = planAfterHolder(script, { free, holder });
           if (plan.kind === 'ring') {
             log.info('auto_call.transfer', { callId: call.callId, rung: plan.agentIds.length, holderFirst: false });
-            res.send(
-              transferTwiml(deps.twilio!, {
-                callId: call.callId,
-                callSid: call.callSid,
-                script,
-                say: plan.say,
-                notice: false,
-                agentIds: plan.agentIds,
-                holderFirst: false,
-                lead: context.lead,
-                step: { id: stepId, heading: script.steps.find((s) => s.id === stepId)?.heading ?? '' },
-                ringSeconds: await ac.readRingSeconds(),
-              })
-            );
-            return;
+            ringing = transferTwiml(deps.twilio!, {
+              callId: call.callId,
+              callSid: call.callSid,
+              script,
+              say: plan.say,
+              notice: false,
+              agentIds: plan.agentIds,
+              holderFirst: false,
+              lead: context.lead,
+              step: { id: stepId, heading: script.steps.find((s) => s.id === stepId)?.heading ?? '' },
+              ringSeconds: await ac.readRingSeconds(),
+            });
           }
         }
 
-        await ac.missTransfer(call.callId);
-        log.info('auto_call.transfer_missed', {
-          callId: call.callId,
-          reason: hungUp ? 'hung_up' : 'not_taken',
-          dialStatus: status,
-        });
-        res.send(
-          script && !hungUp
-            ? autoCallTwiml(deps.twilio!, {
-                callId: call.callId,
-                script,
-                action: { kind: 'end', say: [script.busyBody], result: 'transfer_missed' },
-              })
-            : hangupTwiml()
-        );
+        if (ringing) {
+          reply = ringing;
+        } else {
+          await ac.missTransfer(call.callId);
+          log.info('auto_call.transfer_missed', {
+            callId: call.callId,
+            reason: hungUp ? 'hung_up' : 'not_taken',
+            dialStatus: status,
+          });
+          if (script && !hungUp) {
+            reply = autoCallTwiml(deps.twilio!, {
+              callId: call.callId,
+              script,
+              action: { kind: 'end', say: [script.busyBody], result: 'transfer_missed' },
+            });
+          }
+        }
       } catch (err) {
         log.error('auto_call.after_failed', { callId: req.query.call, err: errText(err) });
-        res.send(hangupTwiml());
+        reply = hangupTwiml();
+      }
+      res.send(reply);
+
+      // Twilio has its answer. Only a ring that ran out turns a switch off -
+      // asked of Twilio when several were rung, and not at all when it was
+      // taken, declined or the lead hung up (`rangOut`).
+      if (missed && !missed.hungUp && status === 'no-answer' && missed.rung.length > 0) {
+        try {
+          const ac = autoCalls();
+          const rings = missed.rung.length > 1 ? await ac.transferRings(deps.twilio!, missed.callSid) : [];
+          if (rings === null) log.warn('auto_call.rings_unread', { callId: missed.callId });
+          const byAgent = latestRingByAgent(rings ?? [], deps.twilio!.identityPrefix);
+          for (const agentId of rangOut({ dialStatus: status, hungUp: missed.hungUp, rung: missed.rung, rings: byAgent })) {
+            const switchedOff = await ac.switchOffAfterMissedRing(agentId, missed.callId);
+            log.info('auto_call.ring_missed', { callId: missed.callId, agentId, switchedOff });
+          }
+        } catch (err) {
+          log.error('auto_call.switch_off_failed', { callId: missed.callId, err: errText(err) });
+        }
       }
     })
   );

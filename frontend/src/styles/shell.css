@@ -152,6 +152,17 @@
   transform: translateX(14px);
 }
 
+/* Turned off by the server: the person let a transfer ring out (T15c). Amber on
+   the navy bar, the app's warning colour; until it is switched on again. */
+.taking-calls__notice {
+  padding: var(--space-1) var(--space-2);
+  border-radius: var(--radius-sm);
+  background: rgba(253, 230, 138, 0.12);
+  color: var(--color-warning-border);
+  font-size: var(--text-small);
+  white-space: nowrap;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .taking-calls__track,
   .taking-calls__thumb {

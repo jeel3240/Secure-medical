@@ -10,9 +10,12 @@
  * deactivated - clears it at once (`db/users.ts`).
  *
  * Not recorded in the activity log: it is the present moment, overwritten
- * every half minute, not something anyone did (AUDIT.md).
+ * every half minute, not something anyone did (AUDIT.md). The switch turned
+ * off after a missed transfer (T15c) is recorded: it is a change to it.
  */
 
+import type { TakingCallsWhy } from '../api/users/types';
+import { activityInsertSql } from './activity';
 import type { Querier } from './sql';
 
 /** How long one "I'm here" holds: four times the browser's 30-second check. */
@@ -20,6 +23,17 @@ export const RINGABLE_SECONDS = 120;
 
 /** Whether `u` (users) has a browser open that can be rung now - one part of `FREE_SQL`. */
 export const RINGABLE_SQL = `(u.ringable_until IS NOT NULL AND u.ringable_until > now())`;
+
+/**
+ * Whether `u` (users) has a call of theirs still going - one part of
+ * `FREE_SQL`. Only one started in the last 2 hours - the window a missed
+ * call's "under way" uses (`db/lead-state.ts`) - so a call whose end Twilio
+ * never reported cannot keep someone busy for good.
+ */
+export const ON_A_CALL_SQL = `EXISTS (
+  SELECT 1 FROM calls oc
+  WHERE oc.agent_id = u.id AND oc.outcome IS NULL AND oc.started_at > now() - interval '2 hours'
+)`;
 
 /**
  * Whether `u` (users) is free to take a transfer now - AUTO-CALLS.md, "Who is
@@ -30,20 +44,15 @@ export const RINGABLE_SQL = `(u.ringable_until IS NOT NULL AND u.ringable_until 
  * - "Taking calls" switched on (T10) - the switch decides, not the role,
  * - a browser open that can be rung (`RINGABLE_SQL`) - which also means no
  *   call, ring or note box open on its screen,
- * - and no call of theirs still going, checked here too, so a call counts the
- *   moment it starts rather than at the browser's next word. Only one started
- *   in the last 2 hours - the window a missed call's "under way" uses
- *   (`db/lead-state.ts`) - so a call whose end Twilio never reported cannot
- *   keep someone busy for good.
+ * - and no call of theirs still going (`ON_A_CALL_SQL`), checked here too,
+ *   so a call counts the moment it starts rather than at the browser's next
+ *   word.
  */
 export const FREE_SQL = `(
   u.is_active
   AND u.taking_calls
   AND ${RINGABLE_SQL}
-  AND NOT EXISTS (
-    SELECT 1 FROM calls oc
-    WHERE oc.agent_id = u.id AND oc.outcome IS NULL AND oc.started_at > now() - interval '2 hours'
-  )
+  AND NOT ${ON_A_CALL_SQL}
 )`;
 
 /** Everyone free now, by id. */
@@ -52,15 +61,56 @@ export async function freePeople(q: Querier): Promise<number[]> {
   return rows.map((r) => r.id as number);
 }
 
+/** The "Taking calls" switch as the server holds it, and why - what a browser is told. */
+export interface TakingCallsState {
+  takingCalls: boolean;
+  takingCallsWhy: TakingCallsWhy | null;
+}
+
 /**
  * Saves what a browser says: available for the next two minutes, or not.
- * Only for an active account - a deactivated one is never rung.
+ * Only for an active account - a deactivated one is never rung. Answers with
+ * the switch, so the browser learns when the server turned it off (T15c);
+ * off for an account that is not active.
  */
-export async function setRingable(q: Querier, userId: number, available: boolean): Promise<void> {
-  await q.query(
+export async function setRingable(q: Querier, userId: number, available: boolean): Promise<TakingCallsState> {
+  const { rows } = await q.query(
     `UPDATE users
      SET ringable_until = CASE WHEN $2 THEN now() + ($3 || ' seconds')::interval END
-     WHERE id = $1 AND is_active`,
+     WHERE id = $1 AND is_active
+     RETURNING taking_calls, taking_calls_why`,
     [userId, available, String(RINGABLE_SECONDS)]
   );
+  const row = rows[0] as { taking_calls: boolean; taking_calls_why: TakingCallsWhy | null } | undefined;
+  return { takingCalls: row?.taking_calls ?? false, takingCallsWhy: row?.taking_calls_why ?? null };
+}
+
+/**
+ * `userId` let a transfer's ring run its course, untouched - T15c,
+ * AUTO-CALLS.md "Who is free": their "Taking calls" switch goes off, so a desk
+ * left with it on stops being rung, and their screen says why.
+ *
+ * Only if it is still on, the account active, and they are not on a call by
+ * now - someone who started a call of their own while it rang keeps it on.
+ * Their browser's word is not asked: the ring itself made it busy. One
+ * statement with its `calls.availability_changed` record - the system's doing,
+ * so no actor; the person is its subject, the call in `detail`. True when it
+ * was switched off.
+ */
+export async function switchOffAfterMissedRing(q: Querier, userId: number, callId: number): Promise<boolean> {
+  const { rows } = await q.query(
+    `WITH off AS (
+       UPDATE users u
+       SET taking_calls = false, taking_calls_at = now(), taking_calls_why = 'missed_transfer', updated_at = now()
+       WHERE u.id = $1 AND u.taking_calls AND u.is_active AND NOT ${ON_A_CALL_SQL}
+       RETURNING u.id
+     )
+     ${activityInsertSql}
+     SELECT NULL, 'calls.availability_changed', NULL, off.id,
+            jsonb_build_object('on', false, 'why', 'missed_transfer', 'callId', $2::int)
+     FROM off
+     RETURNING subject_user_id`,
+    [userId, callId]
+  );
+  return rows.length > 0;
 }

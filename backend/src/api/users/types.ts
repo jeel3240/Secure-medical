@@ -1,6 +1,14 @@
 export const ROLES = ['superadmin', 'agent'] as const;
 export type Role = (typeof ROLES)[number];
 
+/**
+ * Why the "Taking calls" switch is as it is now - T10, and `missed_transfer`
+ * since T15c: the server turned it off after the person let a transfer ring
+ * out (AUTO-CALLS.md, "Who is free").
+ */
+export const TAKING_CALLS_WHY = ['by_hand', 'sign_in', 'sign_out', 'missed_transfer'] as const;
+export type TakingCallsWhy = (typeof TAKING_CALLS_WHY)[number];
+
 export interface UserRow {
   id: number;
   email: string;
@@ -14,6 +22,8 @@ export interface UserRow {
   createdAt: Date;
   /** The "Taking calls" switch - T10, AUTO-CALLS.md "Who is free". */
   takingCalls: boolean;
+  /** Why it is as it is now; null for a switch never set. */
+  takingCallsWhy: TakingCallsWhy | null;
 }
 
 /** What the API ever returns about a user. Never includes the hash or session version. */
@@ -27,6 +37,7 @@ export interface PublicUser {
   lastLoginAt: string | null;
   createdAt: string;
   takingCalls: boolean;
+  takingCallsWhy: TakingCallsWhy | null;
 }
 
 export interface CreateUserInput {
@@ -45,8 +56,11 @@ export interface UpdateUserInput {
   mustChangePassword?: boolean;
   /** Ends every existing session for the user. */
   bumpSession?: boolean;
-  /** Switches "Taking calls"; the time it changed is kept only when it does. */
-  takingCalls?: boolean;
+  /**
+   * Sets "Taking calls", and why it is so. The time it changed is kept only
+   * when it does; the reason is written every time.
+   */
+  takingCalls?: { on: boolean; why: TakingCallsWhy };
 }
 
 /**
@@ -81,5 +95,6 @@ export function toPublicUser(user: UserRow): PublicUser {
     lastLoginAt: user.lastLoginAt ? user.lastLoginAt.toISOString() : null,
     createdAt: user.createdAt.toISOString(),
     takingCalls: user.takingCalls,
+    takingCallsWhy: user.takingCallsWhy,
   };
 }

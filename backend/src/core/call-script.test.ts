@@ -12,6 +12,7 @@ import {
   MAX_RUNG_AT_ONCE,
   planAfterHolder,
   planTransfer,
+  rangOut,
   splitForListening,
   type CallChoice,
   type CallScript,
@@ -330,5 +331,34 @@ describe('the lead\'s own agent let it ring out - planAfterHolder (T15b)', () =>
     const busy = { kind: 'end', say: [SCRIPT.busyBody], result: 'transfer_missed' };
     expect(planAfterHolder(SCRIPT, { free: [21], holder: 21 })).toEqual(busy);
     expect(planAfterHolder(SCRIPT, { free: [], holder: 21 })).toEqual(busy);
+  });
+});
+
+describe('who let a transfer ring out - rangOut (T15c)', () => {
+  const ran = (dialStatus: string, rung: number[], rings: [number, string][] | null = null, hungUp = false) =>
+    rangOut({ dialStatus, hungUp, rung, rings: rings && new Map(rings) });
+
+  it('the lead\'s own agent, rung alone, and it ran out: they did', () => {
+    expect(ran('no-answer', [21])).toEqual([21]);
+  });
+
+  it('several rung, nobody took it: those whose own ring ran out - not who declined', () => {
+    expect(ran('no-answer', [16, 19, 30], [[16, 'no-answer'], [19, 'busy'], [30, 'no-answer']])).toEqual([16, 30]);
+  });
+
+  it('several rung, and how each ended is not known: nobody', () => {
+    expect(ran('no-answer', [16, 19], null)).toEqual([]);
+    expect(ran('no-answer', [16, 19], [])).toEqual([]);
+  });
+
+  it('taken, every ring declined, or it failed: nobody', () => {
+    for (const status of ['completed', 'answered', 'busy', 'failed', 'canceled']) {
+      expect(ran(status, [16, 19], [[16, 'no-answer'], [19, 'no-answer']])).toEqual([]);
+    }
+  });
+
+  it('the lead hung up while it rang: nobody - it was not left to run out', () => {
+    expect(ran('no-answer', [21], null, true)).toEqual([]);
+    expect(ran('no-answer', [16, 19], [[16, 'no-answer'], [19, 'no-answer']], true)).toEqual([]);
   });
 });

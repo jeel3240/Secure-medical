@@ -227,15 +227,15 @@ describe('the transfer, in Twilio\'s words (T15a, T15b)', () => {
     const xml = transferTwiml({ ...SETTINGS, identityPrefix: 'dev-' }, base);
     expect(xml).toContain('<Say voice="Google.en-US-Chirp3-HD-Kore">Great, connecting you with a live agent now. Please hold.</Say><Dial');
     expect(xml).toContain('timeout="25"');
-    expect(xml).toContain('action="https://calls.example.com/api/webhooks/twilio/auto/after?call=42&amp;step=10"');
+    expect(xml).toContain('action="https://calls.example.com/api/webhooks/twilio/auto/after?call=42&amp;step=10&amp;rung=16%2C21"');
     expect(xml.match(/<Client /g)).toHaveLength(2);
     expect(xml).toContain('<Identity>dev-agent-16</Identity>');
     expect(xml).toContain('<Identity>dev-agent-21</Identity>');
   });
 
-  it('accepting runs /auto/claim on the person\'s leg; no per-person end reports', () => {
+  it('accepting runs /auto/claim on the person\'s leg; no per-person end reports - only the whole ring\'s end can say who let it ring out', () => {
     const xml = transferTwiml(SETTINGS, base);
-    expect(xml).toContain('<Client url="https://calls.example.com/api/webhooks/twilio/auto/claim?call=42" method="POST">');
+    expect(xml.split('<Client url="https://calls.example.com/api/webhooks/twilio/auto/claim?call=42" method="POST">')).toHaveLength(3);
     expect(xml).not.toContain('statusCallback');
   });
 

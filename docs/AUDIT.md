@@ -61,7 +61,7 @@ it.
 | `auth.signed_in`, `auth.signed_out`, `auth.password_changed` | | |
 | `auth.sign_in_failed` | A refused sign-in | The `email` tried and `why`. Never the password |
 | `user.created`, `user.updated`, `user.password_reset` | A superadmin changes an agent's account | `changes`: each field as `{ from, to }`. Never a password |
-| `calls.availability_changed` | The "Taking calls" switch went on or off (T10, `AUTO-CALLS.md` "Who is free") - by the person, or because they signed in or out. Only when it really changed | `on`, and `why`: `by_hand`, `sign_in` or `sign_out` |
+| `calls.availability_changed` | The "Taking calls" switch went on or off (T10, `AUTO-CALLS.md` "Who is free") - by the person, or because they signed in or out; or off by the system because they let a transfer ring out (T15c) - then no actor, the person its subject. Only when it really changed | `on`, and `why`: `by_hand`, `sign_in`, `missed_transfer` (with the `callId`) or `sign_out` |
 
 The list is `ACTIVITY_ACTIONS` in `core/activity.ts`. A new action is added
 there first, so the vocabulary stays in one place.
