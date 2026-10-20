@@ -1,5 +1,6 @@
 /**
- * Proves db/auto-calls.ts against a real Postgres - T12, docs/AUTO-CALLS.md.
+ * Proves db/auto-calls.ts against a real Postgres - T12 and T13,
+ * docs/AUTO-CALLS.md.
  *
  * What a mock cannot show: that an automated call's row is written with no
  * agent and its `call.started` record, before anything rings; that every
@@ -7,14 +8,23 @@
  * that is not one of ours - writes no row and leaves its record; that a
  * webhook can only ever be linked to the row it names and to one Twilio call;
  * that a call Twilio refused is ended once, as failed; that the end is saved
- * as every call's is; and that two placements racing for one lead place one
- * call. Getting those wrong rings a lead twice, rings a number we may not, or
- * loses the record of a call.
+ * as every call's is; that two placements racing for one lead place one
+ * call; that an answer is kept once however often Twilio sends it, a result
+ * is never overwritten, and a stop blocks the number once; and that a call's
+ * end gives an unfinished script its result. Getting those wrong rings a lead
+ * twice, rings a number we may not, calls someone who said stop, or loses the
+ * record of a call or of what the lead said.
  *
  * It writes rows, so it refuses to run against a database that holds leads.
  * Run it with the others: scripts/live-checks.sh auto-calls
  */
-import { failAutomatedCall, linkAutomatedCall, startAutomatedCall } from '../src/db/auto-calls';
+import {
+  failAutomatedCall,
+  keepAnswer,
+  linkAutomatedCall,
+  settleAutomatedCall,
+  startAutomatedCall,
+} from '../src/db/auto-calls';
 import { finishCall, recordAnsweredBy } from '../src/db/calls';
 import { pool } from '../src/db/pool';
 
@@ -63,6 +73,20 @@ async function callRow(callId: number) {
     [callId]
   );
   return rows[0];
+}
+
+async function scriptResult(callId: number): Promise<string | null> {
+  const { rows } = await pool.query(`SELECT script_result FROM calls WHERE id = $1`, [callId]);
+  return rows[0].script_result;
+}
+
+/** A placed call, linked to its Twilio call - as after `/auto/answer`. */
+async function placedCall(phone: string, callSid: string): Promise<{ leadId: number; callId: number }> {
+  const leadId = await makeLead(phone);
+  const started = await startAutomatedCall({ leadId, mayRing: ANY });
+  const callId = started.ok ? started.callId : 0;
+  await linkAutomatedCall(callId, callSid);
+  return { leadId, callId };
 }
 
 async function automatedCalls(leadId: number): Promise<number> {
@@ -208,6 +232,7 @@ async function main(): Promise<void> {
     await failAutomatedCall(refusedId, { status: 400, code: 21211 });
     const row = await callRow(refusedId);
     check('ended as failed, no talk time', [row.outcome, row.duration, row.ended], ['failed', 0, true]);
+    check('and never answered', await scriptResult(refusedId), 'unanswered');
     const record = await lastRecord(lee);
     check('recorded with Twilio\'s status and code', [record.action, sortedKeys(record.detail)], [
       'call.ended',
@@ -242,6 +267,122 @@ async function main(): Promise<void> {
       ['already_called', 'placed']
     );
     check('one row', await automatedCalls(sam), 1);
+  }
+
+  const q1 = (await pool.query(`SELECT id, key FROM call_steps WHERE key = 'q1'`)).rows[0] as { id: number; key: string };
+
+  console.log('\nkeeping an answer (T13)');
+  {
+    const { callId } = await placedCall('+15550000508', 'CA-ANS-1');
+    const yes = {
+      callId,
+      step: q1,
+      attempt: 1 as const,
+      spoken: { heard: '  Yes please ', confidence: 0.91234, digits: null },
+      record: { result: 'choice' as const, choiceKey: '1', choiceLabel: 'Yes' },
+      result: 'transfer_missed' as const,
+      blockNumber: false,
+    };
+    check('kept', await keepAnswer(yes), { kept: true });
+    const { rows } = await pool.query(
+      `SELECT step_key, attempt, heard, confidence::text, digits, result, choice_key, choice_label
+       FROM call_answers WHERE call_id = $1`,
+      [callId]
+    );
+    check('as heard, how sure, and what it meant', rows, [
+      { step_key: 'q1', attempt: 1, heard: 'Yes please', confidence: '0.912', digits: null, result: 'choice', choice_key: '1', choice_label: 'Yes' },
+    ]);
+    check('the call\'s result saved', await scriptResult(callId), 'transfer_missed');
+
+    check('the same request again keeps nothing new', await keepAnswer(yes), { kept: false });
+    const { rows: count } = await pool.query(`SELECT count(*)::int AS n FROM call_answers WHERE call_id = $1`, [callId]);
+    check('still one answer', count[0].n, 1);
+
+    await keepAnswer({ ...yes, attempt: 2, record: { result: 'silence', choiceKey: null, choiceLabel: null }, result: 'no_response' });
+    check('a result is never overwritten', await scriptResult(callId), 'transfer_missed');
+
+    const { callId: quiet } = await placedCall('+15550000509', 'CA-ANS-2');
+    check('a hang-up with nothing said: nothing kept', await keepAnswer({ ...yes, callId: quiet, record: null, result: null }), {
+      kept: false,
+    });
+    const { rows: none } = await pool.query(`SELECT count(*)::int AS n FROM call_answers WHERE call_id = $1`, [quiet]);
+    check('no answer row, no result', [none[0].n, await scriptResult(quiet)], [0, null]);
+
+    const { callId: long } = await placedCall('+15550000510', 'CA-ANS-3');
+    await keepAnswer({ ...yes, callId: long, spoken: { heard: 'a'.repeat(900) }, record: { result: 'unclear', choiceKey: null, choiceLabel: null }, result: null });
+    const heard = (await pool.query(`SELECT length(heard) AS n, confidence FROM call_answers WHERE call_id = $1`, [long])).rows[0];
+    check('a very long hearing is kept to 500 characters; no figure is kept as none', [heard.n, heard.confidence], [500, null]);
+
+    check('an agent\'s call is not an automated call\'s to keep answers on', await keepAnswer({ ...yes, callId: 999999 }), {
+      kept: false,
+    });
+  }
+
+  console.log('\nstop - the number blocked, once (T13)');
+  {
+    const { leadId, callId } = await placedCall('+15550000511', 'CA-STOP-1');
+    const stop = {
+      callId,
+      step: q1,
+      attempt: 1 as const,
+      spoken: { heard: 'stop calling me', confidence: 0.8 },
+      record: { result: 'opt_out' as const, choiceKey: null, choiceLabel: null },
+      result: 'opted_out' as const,
+      blockNumber: true,
+    };
+    await keepAnswer(stop);
+    const block = (await pool.query(`SELECT reason, released_at FROM dnc_list WHERE phone = '+15550000511'`)).rows[0];
+    check('blocked, as said on the automated call', [block.reason, block.released_at], ['call_opt_out', null]);
+    check('the call\'s result', await scriptResult(callId), 'opted_out');
+    const record = await lastRecord(leadId);
+    check('recorded as blocked by the system', [record.action, record.actor_id, record.detail.reason], [
+      'dnc.blocked',
+      null,
+      'call_opt_out',
+    ]);
+
+    await keepAnswer(stop);
+    const blocks = async (phone: string) =>
+      (await pool.query(`SELECT count(*)::int AS n FROM activity_log WHERE action = 'dnc.blocked' AND detail->>'phone' = $1`, [phone]))
+        .rows[0].n;
+    check('the same request again does not block it again', await blocks('+15550000511'), 1);
+
+    const { callId: already } = await placedCall('+15550000512', 'CA-STOP-2');
+    await pool.query(`INSERT INTO dnc_list (phone, reason) VALUES ('+15550000512', 'sms_stop')`);
+    await keepAnswer({ ...stop, callId: already });
+    const kept = (await pool.query(`SELECT reason FROM dnc_list WHERE phone = '+15550000512'`)).rows[0];
+    check('a number already blocked keeps its block and its reason', [kept.reason, await blocks('+15550000512')], ['sms_stop', 0]);
+  }
+
+  console.log('\nthe end of a call gives an unfinished script its result (T13)');
+  {
+    const { callId: answered } = await placedCall('+15550000513', 'CA-END-1');
+    await finishCall({ callSid: 'CA-END-1', outcome: 'answered', durationSec: 9 });
+    await settleAutomatedCall(answered);
+    check('answered, script never finished: hung_up', await scriptResult(answered), 'hung_up');
+
+    const { callId: rang } = await placedCall('+15550000514', 'CA-END-2');
+    await finishCall({ callSid: 'CA-END-2', outcome: 'no_answer', durationSec: 0 });
+    await settleAutomatedCall(rang);
+    check('never answered: unanswered', await scriptResult(rang), 'unanswered');
+
+    const { callId: finished } = await placedCall('+15550000515', 'CA-END-3');
+    await keepAnswer({
+      callId: finished,
+      step: q1,
+      attempt: 1,
+      spoken: { digits: '2' },
+      record: { result: 'choice', choiceKey: '2', choiceLabel: 'No' },
+      result: 'not_interested',
+      blockNumber: false,
+    });
+    await finishCall({ callSid: 'CA-END-3', outcome: 'answered', durationSec: 20 });
+    await settleAutomatedCall(finished);
+    check('a script that reached its own end keeps its result', await scriptResult(finished), 'not_interested');
+
+    const { callId: going } = await placedCall('+15550000516', 'CA-END-4');
+    await settleAutomatedCall(going);
+    check('a call still going is left alone', await scriptResult(going), null);
   }
 
   console.log(failures === 0 ? '\nall checks passed' : `\n${failures} check(s) FAILED`);

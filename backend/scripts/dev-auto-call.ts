@@ -2,7 +2,7 @@
  * Local testing only: the server calls one lead, as the robot will - T12,
  * docs/AUTO-CALLS.md.
  *
- *   docker compose exec api npm run dev:auto-call -- +16025550123
+ *   docker compose exec api npm run dev:auto-call -- +16025550123 [--again] [--unblock]
  *
  * The lead must already be in the local database with that number, and the
  * number must be on `AUTO_CALL_TEST_NUMBERS` - outside production nothing else
@@ -13,11 +13,22 @@
  * One automated call per lead, as in production: a lead already called is
  * refused. Placed through `worker/place-auto-call.ts`, the dialler's own path.
  *
+ * Testing needs more calls than that to one phone (T13), so two flags, both
+ * for this local database only and neither touching the production path:
+ *
+ * - `--again`: when the lead holding the number has had its call, the number
+ *   is given to a fresh test lead - as if the partner had sent it new - and
+ *   that lead is called. The old lead keeps all its history under a made-up
+ *   number, `+1555` and its id; nothing is deleted.
+ * - `--unblock`: lifts the block a "stop" test left on the number, recorded as
+ *   released for `dev_test`, so the next test can call it.
+ *
  * Refuses in production - `NODE_ENV`: the file is not compiled into dist/, but
  * the server's image does hold scripts/.
  */
 import { readAutoCalls, readAutoCallTestNumbers } from '../src/auto-calls-settings';
 import { config } from '../src/config';
+import { releaseNumber } from '../src/db/dnc';
 import { pool } from '../src/db/pool';
 import { placeAutoCall, type PlaceAutoCallResult } from '../src/worker/place-auto-call';
 import { phoneFromArg } from './dev-phone';
@@ -27,9 +38,11 @@ async function main(): Promise<number> {
     console.error('Refusing: this is for local testing, never production.');
     return 1;
   }
-  const phone = phoneFromArg(process.argv[2]);
-  if (!phone) {
-    console.error('Usage: npm run dev:auto-call -- <phone, e.g. +16025550123>');
+  const args = process.argv.slice(2);
+  const phone = phoneFromArg(args.find((a) => !a.startsWith('--')));
+  const unknown = args.filter((a) => a.startsWith('--') && a !== '--again' && a !== '--unblock');
+  if (!phone || unknown.length > 0) {
+    console.error('Usage: npm run dev:auto-call -- <phone, e.g. +16025550123> [--again] [--unblock]');
     return 1;
   }
   if (config.twilio.status !== 'on') {
@@ -41,8 +54,11 @@ async function main(): Promise<number> {
     return 1;
   }
 
-  const { rows } = await pool.query(`SELECT id FROM leads WHERE phone = $1`, [phone]);
-  if (!rows[0]) {
+  if (args.includes('--unblock') && (await releaseNumber(pool, phone, 'dev_test')) > 0) {
+    console.log('The block on the number was lifted (released: dev_test).');
+  }
+  const leadId = args.includes('--again') ? await freshLeadIfCalled(phone) : await leadFor(phone);
+  if (leadId === null) {
     console.error('No lead with that number in this database.');
     return 1;
   }
@@ -51,9 +67,52 @@ async function main(): Promise<number> {
   if (numbers.invalid > 0) {
     console.warn(`${numbers.invalid} entr${numbers.invalid === 1 ? 'y' : 'ies'} in AUTO_CALL_TEST_NUMBERS not E.164 - ignored.`);
   }
-  const result = await placeAutoCall({ leadId: rows[0].id, settings: config.twilio.settings, numbers });
-  console.log(`Lead ${rows[0].id}: ${describe(result)}`);
+  const result = await placeAutoCall({ leadId, settings: config.twilio.settings, numbers });
+  console.log(`Lead ${leadId}: ${describe(result)}`);
   return result.kind === 'placed' ? 0 : 1;
+}
+
+async function leadFor(phone: string): Promise<number | null> {
+  const { rows } = await pool.query(`SELECT id FROM leads WHERE phone = $1`, [phone]);
+  return rows[0]?.id ?? null;
+}
+
+/**
+ * The lead to call for `--again`: the one holding the number, unless it has
+ * had its automated call - then a fresh test lead with the same name takes the
+ * number, and the old one keeps its history under `+1555` and its id. One
+ * transaction, with the old lead locked.
+ */
+async function freshLeadIfCalled(phone: string): Promise<number | null> {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const { rows } = await client.query(
+      `SELECT l.id, l.first_name, l.last_name,
+              EXISTS (SELECT 1 FROM calls c WHERE c.lead_id = l.id AND c.direction = 'automated') AS called
+       FROM leads l WHERE l.phone = $1 FOR UPDATE`,
+      [phone]
+    );
+    const old = rows[0];
+    if (!old || !old.called) {
+      await client.query('COMMIT');
+      return old?.id ?? null;
+    }
+    await client.query(`UPDATE leads SET phone = '+1555' || lpad(id::text, 7, '0') WHERE id = $1`, [old.id]);
+    const fresh = await client.query(
+      `INSERT INTO leads (phone, first_name, last_name, source, ezt_added_at)
+       VALUES ($1, $2, $3, 'dev_test', now()) RETURNING id`,
+      [phone, old.first_name, old.last_name]
+    );
+    await client.query('COMMIT');
+    console.log(`Lead ${old.id} has had its call: the number now belongs to fresh test lead ${fresh.rows[0].id}.`);
+    return fresh.rows[0].id;
+  } catch (err) {
+    await client.query('ROLLBACK');
+    throw err;
+  } finally {
+    client.release();
+  }
 }
 
 function describe(result: PlaceAutoCallResult): string {
@@ -61,7 +120,7 @@ function describe(result: PlaceAutoCallResult): string {
     case 'placed':
       return `placed, call ${result.callId}: the phone should ring now. How it ends is saved to the call.`;
     case 'refused':
-      return `not placed: ${result.reason}.`;
+      return `not placed: ${result.reason}.${result.reason === 'already_called' ? ' Add --again to call a fresh test lead.' : result.reason === 'blocked' ? ' Add --unblock to lift a test block.' : ''}`;
     case 'failed':
       return `Twilio refused call ${result.callId}; it is saved as failed.`;
     case 'unconfirmed':

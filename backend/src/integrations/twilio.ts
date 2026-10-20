@@ -9,7 +9,7 @@
 
 import twilio from 'twilio';
 import type VoiceResponse from 'twilio/lib/twiml/VoiceResponse';
-import type { AskOrEnd, CallScript, CallStep } from '../core/call-script';
+import { splitForListening, type AskOrEnd, type CallScript, type CallStep } from '../core/call-script';
 import { identityFor, INCOMING_RING_SECONDS, MISSED_CALL_SPEECH, RECORDING_NOTICE } from '../core/calls';
 import type { TwilioSettings } from '../twilio-settings';
 
@@ -232,12 +232,14 @@ function hintsFor(script: CallScript, step: CallStep): string {
  * What the automated call says and does next, in Twilio's words - T12.
  * `core/call-script.ts` decides it; this only writes it down.
  *
- * - **ask**: the lines, said inside a `<Gather>` that listens for speech and
- *   for one key. `bargeIn` off: the lead cannot talk over the question, so a
- *   "Hello?" while it plays is not taken as the answer. `actionOnEmptyResult`:
- *   silence is reported too, so the server decides what silence means - ask
- *   again, or end. The answer goes to `/auto/gather`, with the step and which
- *   asking it was.
+ * - **ask**: the lead-in said first, with nothing listening - a "Hello?" over
+ *   the greeting is not the answer - then the question itself inside a
+ *   `<Gather>` that listens for speech and one key from its first word
+ *   (`splitForListening`; `bargeIn` on, so an answer over the end of the
+ *   question is heard - T13, after answers were lost on the first real calls).
+ *   `actionOnEmptyResult`: silence is reported too, so the server decides what
+ *   silence means - ask again, or end. The answer goes to `/auto/gather`, with
+ *   the step and which asking it was.
  * - **end**: the lines, then hang up.
  *
  * `pauseFirst`, when the lead has just picked up: a second of quiet first, so
@@ -259,16 +261,18 @@ export function autoCallTwiml(
     return response.toString();
   }
 
+  const { leadIn, question } = splitForListening(action.say);
+  for (const line of leadIn) response.say(voice, line);
   const gather = response.gather({
     input: ['speech', 'dtmf'],
     numDigits: 1,
     speechTimeout: 'auto',
-    bargeIn: false,
+    bargeIn: true,
     actionOnEmptyResult: true,
     hints: hintsFor(script, action.step),
     action: autoCallUrl(settings, AUTO_GATHER_PATH, opts.callId, { step: action.step.id, try: action.attempt }),
     method: 'POST',
   });
-  for (const line of action.say) gather.say(voice, line);
+  if (question) gather.say(voice, question);
   return response.toString();
 }

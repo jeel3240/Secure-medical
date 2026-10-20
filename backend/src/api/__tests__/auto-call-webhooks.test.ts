@@ -5,17 +5,26 @@
  */
 import request from 'supertest';
 import twilio from 'twilio';
-import { ANTIBIOTICS_CALL, OFFER_STEP } from '../../core/call-script-fixtures';
+import { ANTIBIOTICS_CALL, LINK_STEP, OFFER_STEP } from '../../core/call-script-fixtures';
 import type { CallScript } from '../../core/call-script';
 import type { TwilioSettings } from '../../twilio-settings';
 import { buildApp } from './helpers';
 
 const linkAutomatedCall = jest.fn<Promise<boolean>, [number, string]>();
+type KeepArgs = Parameters<typeof import('../../db/auto-calls').keepAnswer>;
+const keepAnswer = jest.fn<Promise<{ kept: boolean }>, KeepArgs>();
+const settleAutomatedCall = jest.fn();
 jest.mock('../../db/auto-calls', () => ({
   linkAutomatedCall: (...a: [number, string]) => linkAutomatedCall(...a),
+  keepAnswer: (...a: KeepArgs) => keepAnswer(...a),
+  settleAutomatedCall: (...a: unknown[]) => settleAutomatedCall(...a),
 }));
 const loadActiveCallScript = jest.fn<Promise<CallScript | null>, unknown[]>();
-jest.mock('../../db/call-script', () => ({ loadActiveCallScript: (...a: unknown[]) => loadActiveCallScript(...a) }));
+const readMinConfidence = jest.fn<Promise<number>, unknown[]>();
+jest.mock('../../db/call-script', () => ({
+  loadActiveCallScript: (...a: unknown[]) => loadActiveCallScript(...a),
+  readMinConfidence: (...a: unknown[]) => readMinConfidence(...a),
+}));
 const finishCall = jest.fn();
 const recordAnsweredBy = jest.fn();
 jest.mock('../../db/calls', () => ({
@@ -49,7 +58,10 @@ const on = () => buildApp({ twilio: SETTINGS, autoCalls: true });
 
 beforeEach(() => {
   linkAutomatedCall.mockReset().mockResolvedValue(true);
+  keepAnswer.mockReset().mockResolvedValue({ kept: true });
+  settleAutomatedCall.mockReset().mockResolvedValue(undefined);
   loadActiveCallScript.mockReset().mockResolvedValue(ANTIBIOTICS_CALL);
+  readMinConfidence.mockReset().mockResolvedValue(0.4);
   finishCall.mockReset().mockResolvedValue({ recorded: true, missedLeadId: null });
   recordAnsweredBy.mockReset().mockResolvedValue(true);
   sendMissedCallText.mockReset();
@@ -100,8 +112,8 @@ describe('the lead picks up', () => {
     expect(res.status).toBe(200);
     expect(res.type).toBe('text/xml');
     expect(linkAutomatedCall).toHaveBeenCalledWith(42, 'CA900');
-    expect(res.text).toContain('<Pause length="1"/><Gather');
-    expect(res.text).toContain("Today we're offering 25% off antibiotics. Are you interested in ordering?");
+    expect(res.text).toContain("<Pause length=\"1\"/><Say voice=\"Google.en-US-Chirp3-HD-Kore\">Hi, this is Seri calling from eDrugstore. Today we're offering 25% off antibiotics.</Say><Gather");
+    expect(res.text).toContain('<Say voice="Google.en-US-Chirp3-HD-Kore">Are you interested in ordering?</Say></Gather>');
     expect(res.text).toContain(`/auto/gather?call=42&amp;step=${OFFER_STEP}&amp;try=1`);
   });
 
@@ -135,28 +147,108 @@ describe('the lead picks up', () => {
   });
 });
 
-describe('the lead answers (T12: thanked, and the call ends - T13 reads the answer)', () => {
-  it('whatever was said', async () => {
+describe('the lead answers (T13)', () => {
+  const gather = (step: number, attempt: number) => `/api/webhooks/twilio/auto/gather?call=42&step=${step}&try=${attempt}`;
+  const said = (words: string, confidence = '0.9') => ({ CallSid: 'CA900', CallStatus: 'in-progress', SpeechResult: words, Confidence: confidence });
+  const kept = () => keepAnswer.mock.calls[0][0];
+
+  it('"yes please" to the offer: kept as Yes; nobody can take it until T15 - the busy line, transfer_missed', async () => {
     const { app } = await on();
-    const res = await fromTwilio(app, `/api/webhooks/twilio/auto/gather?call=42&step=${OFFER_STEP}&try=1`, {
-      CallSid: 'CA900',
-      SpeechResult: 'Yes please',
-      Confidence: '0.9',
+    const res = await fromTwilio(app, gather(OFFER_STEP, 1), said('Yes please'));
+    expect(kept()).toEqual({
+      callId: 42,
+      step: { id: OFFER_STEP, key: 'q1' },
+      attempt: 1,
+      spoken: { heard: 'Yes please', digits: null, confidence: 0.9 },
+      record: { result: 'choice', choiceKey: '1', choiceLabel: 'Yes' },
+      result: 'transfer_missed',
+      blockNumber: false,
     });
+    expect(res.text).toContain('Please hold.</Say><Say voice="Google.en-US-Chirp3-HD-Kore">All our agents are busy right now.');
+    expect(res.text).toMatch(/<Hangup\/><\/Response>$/);
+  });
+
+  it('"no" to the offer: the reply and the link question, listening on the next step', async () => {
+    const { app } = await on();
+    const res = await fromTwilio(app, gather(OFFER_STEP, 1), said("No, I'm not interested"));
+    expect(kept()).toMatchObject({ record: { choiceLabel: 'No' }, result: null });
+    expect(res.text).toContain("No problem - I'll just ask one more quick thing.");
+    expect(res.text).toContain('Can we send you a link');
+    expect(res.text).toContain(`step=${LINK_STEP}&amp;try=1`);
+  });
+
+  it('key 2 on the link: not interested, thanked, and the call ends', async () => {
+    const { app } = await on();
+    const res = await fromTwilio(app, gather(LINK_STEP, 1), { CallSid: 'CA900', CallStatus: 'in-progress', Digits: '2' });
+    expect(kept()).toMatchObject({ spoken: { heard: null, digits: '2', confidence: null }, result: 'not_interested' });
     expect(res.text).toContain('Thank you for your time. Have a great day.</Say><Hangup/>');
-    expect(res.text).not.toContain('<Gather');
+  });
+
+  it('"stop calling me", or 9: the number to be blocked, and goodbye', async () => {
+    const { app } = await on();
+    const res = await fromTwilio(app, gather(OFFER_STEP, 1), said('Stop calling me'));
+    expect(kept()).toMatchObject({ record: { result: 'opt_out' }, result: 'opted_out', blockNumber: true });
+    expect(res.text).toContain("Okay, we will not call you again. Goodbye.</Say><Hangup/>");
+  });
+
+  it('silence: asked again, for keys, as the second try; silence again: no response, and the call ends', async () => {
+    const { app } = await on();
+    const first = await fromTwilio(app, gather(OFFER_STEP, 1), { CallSid: 'CA900', CallStatus: 'in-progress' });
+    expect(first.text).toContain("Sorry, I did not catch that.</Say><Gather");
+    expect(first.text).toContain('Press 1 for yes, 2 for no, or 9 to stop these calls.</Say></Gather>');
+    expect(first.text).toContain(`step=${OFFER_STEP}&amp;try=2`);
+    expect(first.text).not.toContain('<Pause');
+
+    const second = await fromTwilio(app, gather(OFFER_STEP, 2), { CallSid: 'CA900', CallStatus: 'in-progress' });
+    expect(keepAnswer.mock.calls[1][0]).toMatchObject({ attempt: 2, record: { result: 'silence' }, result: 'no_response' });
+    expect(second.text).toMatch(/<Hangup\/><\/Response>$/);
+  });
+
+  it('a "yes" Twilio was unsure of is not trusted - the threshold is the setting\'s', async () => {
+    readMinConfidence.mockResolvedValue(0.95);
+    const { app } = await on();
+    const res = await fromTwilio(app, gather(OFFER_STEP, 1), said('yes', '0.9'));
+    expect(kept()).toMatchObject({ record: { result: 'unclear' }, result: null });
+    expect(res.text).toContain("Sorry, I did not catch that.");
+  });
+
+  it('after a hang-up, with nothing said: nothing kept as an answer, and nothing said back', async () => {
+    const { app } = await on();
+    const res = await fromTwilio(app, gather(OFFER_STEP, 1), { CallSid: 'CA900', CallStatus: 'completed' });
+    expect(kept()).toMatchObject({ record: null, result: null, blockNumber: false });
+    expect(res.text).toMatch(/<Response><Hangup\/><\/Response>$/);
+  });
+
+  it.each([
+    ['no step', `/api/webhooks/twilio/auto/gather?call=42&try=1`],
+    ['no try', `/api/webhooks/twilio/auto/gather?call=42&step=${OFFER_STEP}`],
+    ['a third try', `/api/webhooks/twilio/auto/gather?call=42&step=${OFFER_STEP}&try=3`],
+  ])('an address with %s: the call ends, nothing is kept', async (_, path) => {
+    const { app } = await on();
+    expect((await fromTwilio(app, path, said('yes'))).text).toMatch(/<Response><Hangup\/><\/Response>$/);
+    expect(keepAnswer).not.toHaveBeenCalled();
+  });
+
+  it('the database failing: the call ends quietly', async () => {
+    keepAnswer.mockRejectedValue(new Error('connection refused'));
+    const { app } = await on();
+    const res = await fromTwilio(app, gather(OFFER_STEP, 1), said('yes'));
+    expect(res.status).toBe(200);
+    expect(res.text).toMatch(/<Response><Hangup\/><\/Response>$/);
   });
 });
 
 describe('how it ended', () => {
   const STATUS = '/api/webhooks/twilio/auto/status?call=42';
 
-  it('is saved on the row, as every call\'s end is - answered, with its length', async () => {
+  it('is saved on the row, as every call\'s end is - answered, with its length - then the script given an end', async () => {
     const { app } = await on();
     const res = await fromTwilio(app, STATUS, { CallSid: 'CA900', CallStatus: 'completed', CallDuration: '31' });
     expect(res.status).toBe(204);
     expect(linkAutomatedCall).toHaveBeenCalledWith(42, 'CA900');
     expect(finishCall).toHaveBeenCalledWith({ callSid: 'CA900', outcome: 'answered', durationSec: 31 });
+    expect(settleAutomatedCall).toHaveBeenCalledWith(42);
+    expect(finishCall.mock.invocationCallOrder[0]).toBeLessThan(settleAutomatedCall.mock.invocationCallOrder[0]);
     expect(sendMissedCallText).not.toHaveBeenCalled();
   });
 

@@ -55,7 +55,7 @@ it.
 | `call.answered_by` | Twilio's verdict on who picked up a call we placed | `callId`, `callSid`, `answeredBy`, `outcome`; and `outcomeWas` when the verdict changed an `answered` call to `voicemail` - the row is overwritten, so this is what it said |
 | `call.recorded` | A call's recording is ready, and its transcript is put in line | `callId`, `callSid`, `recordingSid`, `durationSec` |
 | `call.transcribed`, `call.transcript_failed` | The transcript is in, or given up | `callId`, `transcriptSid` and the number of `lines`; or the `reason` |
-| `dnc.blocked` | A number is blocked: by a STOP reply, by an agent's DNC outcome, or because a contact arrived from EZ Texting already opted out (2026-10-01 - until then that one left no record) | `phone`, `reason`, and `previous` - what the row said before a re-block overwrote it |
+| `dnc.blocked` | A number is blocked: by a STOP reply, by an agent's DNC outcome, because a contact arrived from EZ Texting already opted out (2026-10-01 - until then that one left no record), or by a lead saying stop on the automated call (reason `call_opt_out`, by the system - T13; once, however often Twilio repeats the request) | `phone`, `reason`, and `previous` - what the row said before a re-block overwrote it |
 | `dnc.released` | A block is lifted, by a START reply - the only thing that releases one | `phone`, `releaseReason`, `blockReason`, `blockedAt` |
 | `auth.signed_in`, `auth.signed_out`, `auth.password_changed` | | |
 | `auth.sign_in_failed` | A refused sign-in | The `email` tried and `why`. Never the password |

@@ -206,7 +206,7 @@ you change something the docs describe, update the doc in the same commit.
     src/core/answers.ts     matches a reply to a choice of the question asked, pure - an SMS reply, and a spoken answer on the automated call (T7)
     src/db/flows.ts         loads a flow, starts a conversation on the active one, and gives its first question
     src/core/flow-fixtures.ts  the antibiotics flow as a constant, for tests only
-    src/core/call-script.ts the automated call's script, pure: its shape, and what the call does after each answer (firstAsk, afterAnswer - T8)
+    src/core/call-script.ts the automated call's script, pure: its shape, what the call does after each answer (firstAsk, afterAnswer - T8), on a live call with a lead who may have hung up (handleAnswer), and when it listens (splitForListening) - T13
     src/core/call-script-fixtures.ts  the call script as a constant, for tests only - the live check holds it to the database
     src/db/call-script.ts   loads the automated call's script (migration 015)
     scripts/call-script-live-check.ts  proves migration 015: the script as agreed, its guards, answers add-only
@@ -214,10 +214,10 @@ you change something the docs describe, update the doc in the same commit.
     scripts/presence-live-check.ts  proves it: the two minutes, busy, sign-out and deactivation clear it; the switch; who is free
     src/api/taking-calls.ts the "Taking calls" switch: why it changed, and its activity row (T10)
     src/auto-calls-settings.ts  AUTO_CALLS: on only when exactly "on" (T10); AUTO_CALL_TEST_NUMBERS, the only numbers rung outside production (T12)
-    src/db/auto-calls.ts    an automated call's row: written before Twilio is asked, linked to Twilio's call, ended if refused (T12)
+    src/db/auto-calls.ts    an automated call's row: written before Twilio is asked, linked to Twilio's call, ended if refused (T12); each answer, its result and a stop's block kept, and the end settled (T13)
     src/integrations/twilio-calls.ts  the only file that asks Twilio to ring a phone - once, never retried (T12)
     src/worker/place-auto-call.ts  places one automated call: the row, then Twilio, then its answer - the dev command's and the dialler's path (T12)
-    scripts/dev-auto-call.ts  local testing only: the server calls one lead - npm run dev:auto-call; scripts/dev-phone.ts reads the number
+    scripts/dev-auto-call.ts  local testing only: the server calls one lead - npm run dev:auto-call; --again gives the number to a fresh test lead, --unblock lifts a test block (T13); scripts/dev-phone.ts reads the number
     scripts/auto-calls-live-check.ts  proves placing one: the row, every refusal, linking, failing, two placements racing
     src/core/questions.ts   what the screens call a question: "Q2", and "Q1-a" for a sub-question - one rule for every screen
     src/api/reply-flow.ts   runs the state machine for an inbound reply
@@ -341,7 +341,7 @@ them. It differs from the list above:
 - **leads.previous_lead_id** exists but is unused and expected to be dropped - see §6.
 - **leads.assigned_at** records when an agent claimed the lead. Claims do not expire; it is what lets a superadmin see one held too long. Added 2026-09-15.
 - **flows**, **flow_questions**, **flow_choices** and **conversation_answers** - migration 012, 2026-10-05. The SMS script is rows, not code: a flow's questions, each question's choices with its reply, points and where the lead goes next, and one add-only row per answer given. **conversations** gained `flow_id`, `current_question_id`, `question_sent_at` (when the text the lead must answer went out - a reply before then is not counted) and `end_outcome`, and `step` now holds the question's position (10, 11, 20, 30), no longer 1-3; its `q1`-`q3` columns and labels, `scoring_rules`, and the question, clarification, thanks and review rows in `settings` are no longer read. A question is named by its key, a sub-question after its parent: `q1-a`, shown "Q1-a". `docs/FLOWS.md`.
-- Migration 018, 2026-10-18 (after T12's first real call, `docs/AUTO-CALLS.md`, "The script"): the call's opening no longer says "This is an automated call" and says the offer before asking ("Today we're offering 25% off antibiotics. Are you interested in ordering?"), and its voice is Google Chirp3-HD Kore in place of Polly Joanna. It stops unless the two rows are exactly as 015 left them.
+- Migration 018, 2026-10-18 (after T12's first real call, `docs/AUTO-CALLS.md`, "The script"): the call's opening no longer says "This is an automated call" and says the offer before asking ("Today we're offering 25% off antibiotics. Are you interested in ordering?"); "won't" and "didn't" are written out, since Kore's "we won't call you again" sounded like "will" (T13); and its voice is Google Chirp3-HD Kore in place of Polly Joanna. It stops unless the two rows are exactly as 015 left them.
 - Migration 015, 2026-10-18 (T6, `docs/AUTO-CALLS.md`): the automated call's script as rows - **call_scripts** (with the lines every step shares and the link text), **call_steps**, **call_choices** - and **call_answers**, add-only, one row per answer with what Twilio heard; and the `auto_call_*` rows in **settings** (11:00-17:00 America/Phoenix, Monday-Friday, 60 minutes after the first text, and the call's limits).
 - Migration 014, 2026-10-18 (T4, `docs/AUTO-CALLS.md`): **calls** can be `automated` - placed by the server, with no `agent_id` until a person takes its transfer - and gain `script_result`; one automated call per lead (`calls_one_automated_per_lead`). An automated call nobody took never makes a lead Working nor returns a missed call.
 - Migration 013, 2026-10-06: three indexes the queue and Admin > Leads needed - `callbacks (lead_id)`, agents' own texts in `messages`, and `leads` by arrival. With 50,000 leads the queue took 8 seconds; `docs/QUEUE.md`, "How fast it is".

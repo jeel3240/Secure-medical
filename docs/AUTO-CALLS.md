@@ -40,7 +40,10 @@ call. Are you interested in ordering antibiotics at 25% off today?", in Amazon
 Polly's Joanna (Neural), which sounded machine-made. It now says the offer
 first and ends on one short yes-or-no question, in Google's Chirp3-HD
 **Kore**, US English, chosen by ear on a real phone from five of Twilio's
-newer voices (Twilio lists them as public beta). Migration 018.
+newer voices (Twilio lists them as public beta). Migration 018 - which also
+writes out "won't" and "didn't" (Jeel, 2026-10-19): Kore's "we won't call you
+again" sounded like "we will call you again", the opposite of the line after
+a stop.
 
 ```
 Q1  "Hi, this is Seri calling from eDrugstore. Today we're offering 25% off
@@ -54,11 +57,11 @@ Q2  "Can we send you a link to see all our medication at discount prices?"
       NO  -> "Thank you for your time. Have a great day."                  Not interested
 
 Not understood, first time:
-      "Sorry, I didn't catch that. Press 1 for yes, 2 for no, or 9 to stop these calls."
+      "Sorry, I did not catch that. Press 1 for yes, 2 for no, or 9 to stop these calls."
 Not understood, second time:
       "Thank you for your time. Have a great day."                         No response
 "Stop calling me", or 9, at any point:
-      "Okay, we won't call you again. Goodbye."   (number blocked)         Opted out
+      "Okay, we will not call you again. Goodbye."   (number blocked)         Opted out
 
 Voicemail:
       "Hi, this is Seri calling from eDrugstore with a quick message - we're offering
@@ -222,8 +225,10 @@ this order:
    it is (0-1). Below 0.4 (`auto_call_min_confidence`) the answer is not
    trusted and the question is asked again - with keys, which are always
    certain. No figure at all, or 0, is not counted against the answer, since
-   some speech models send none. Every answer's figure is kept, and 0.4 is set
-   from the first real calls.
+   some speech models send none. Every answer's figure is kept, and read on
+   every answer from `settings`. **The first real calls** (T13, 2026-10-19)
+   gave clear answers 0.52 to 0.95 - "No." 0.52-0.70, "Yes." 0.61, "No,
+   thanks." 0.81, "Stop calling me." 0.95 - so 0.4 holds.
 5. **Otherwise the choices' words are found inside the sentence**, as whole
    words, longest phrase first, each word used once: "Yes, I am" and "Yeah
    sure" are Yes; "No, I'm not interested" is No - `not interested` takes those
@@ -233,8 +238,22 @@ this order:
 
 A sentence longer than 300 characters is not an answer. The SMS flow's
 matching (`matchChoice`) is unchanged: there the whole reply must be the
-answer. "Hello?" as the call is answered is not taken as an answer: the first
-question cannot be interrupted (T12).
+answer.
+
+**When the call listens** (T13, `splitForListening`): everything before a
+question's last sentence is said first with nothing listening, so "Hello?"
+over the greeting is never the answer; the last sentence - the question
+itself - is said with listening on, so an answer that starts before it ends
+is heard. T12 kept the whole question deaf, and the first real calls lost
+answers said over its last word.
+
+**How fast** - a key press is near-instant; a spoken answer took about 4 to 5
+seconds to come back on the first real calls. Our server answers Twilio in
+about 0.2 seconds (Twilio's own request log), so the time is Twilio deciding
+the lead has stopped and working out the words - not making the voice: after
+a key, the reply starts at once. Twilio's short-answer model
+(`experimental_utterances`) was tried and dropped the same day: no faster, and
+a clear "yes" came back 0.24, then 0.00. Making it faster is T13b.
 
 ### What the call does after each answer
 
@@ -247,12 +266,12 @@ was taken to mean, they say what to say and what comes next. The webhooks
 |---|---|---|
 | The lead picks up | The first step's question | listen |
 | A choice that leads on (Q1 No) | Its reply, then the next step's question, together | listen |
-| A choice that transfers (Q1 Yes) | Its reply | ring people (T15) |
+| A choice that transfers (Q1 Yes) | Its reply | ring people (T15). Until then, nobody can take it: the busy line - `transfer_missed`, what T15 does when nobody is free |
 | A choice that sends the link (Q2 Yes) | Its reply | hang up, then text the link (T14) - `link_sent` |
 | A choice that declines (Q2 No) | Its reply | hang up - `not_interested` |
 | Not understood or silence, first asking | The step's repeat line, asking for keys | listen, the last chance |
 | Not understood or silence, second asking | "Thank you for your time. Have a great day." | hang up - `no_response` |
-| Stop, on any step and asking | "Okay, we won't call you again. Goodbye." | hang up, block the number - `opted_out` |
+| Stop, on any step and asking | "Okay, we will not call you again. Goodbye." | hang up, block the number - `opted_out` |
 
 An answer on the second asking counts like one on the first. **A script that
 leads nowhere it may** - an answer to a step it does not have, a next step that
@@ -260,6 +279,25 @@ is missing, or one that is not later than this one - ends the call with the
 no-response line, marked as a broken script to be logged: a mistake in our
 rows, never a loop and never a crash. Each answer is kept as a `call_answers`
 row: a choice with its key and label as they are now, or what else it was.
+
+**On a live call** (T13, `handleAnswer` and `keepAnswer`):
+
+- **The lead may already have hung up.** Twilio still asks `/auto/gather`
+  after a hang-up, marked `CallStatus=completed` - found on the first real
+  call. With nothing said, nothing is kept: a hang-up, never silence to ask
+  again about. With something said, it counts - a stop still blocks, a yes to
+  the link is still texted - but nothing that needs the lead on the line, and
+  ending for want of an answer is not their result.
+- **Every part is safe to repeat**, since Twilio may send the same request
+  twice: one answer row per asking, the result saved only if the call has
+  none - never overwritten - and the number blocked only if it is not blocked
+  already. All in one transaction.
+- **Stop blocks the number** with reason `call_opt_out` and its `dnc.blocked`
+  record, by the system; texts and calls both stop.
+- **The call's end gives an unfinished script its result** (`/auto/status`,
+  `settleAutomatedCall`): `unanswered` if it was never picked up, `hung_up` if
+  it was and the script never reached its own end. A call Twilio would not
+  place is `unanswered` too.
 
 ### Traffic
 
@@ -313,9 +351,9 @@ be trusted").
 
 | Webhook | Now | Later |
 |---|---|---|
-| `POST /api/webhooks/twilio/auto/answer` | The lead picked up: a second's quiet, then the first question in the script's voice, inside a `<Gather>` - speech or one key; `bargeIn` off, so "Hello?" over the question is not the answer; silence reported too; the step's words and the stop words as hints. Anything wrong - no row, no script, the database down - ends the call quietly, never Twilio's "application error" | - |
-| `POST /api/webhooks/twilio/auto/gather` | Whatever was said, the lead is thanked and the call ends | T13: the answer read, kept and acted on |
-| `POST /api/webhooks/twilio/auto/status` | How it ended, saved as every call's end is (`finishCall`): outcome, talk time, `call.ended`. Never a missed-call text | T13: `script_result` at the end |
+| `POST /api/webhooks/twilio/auto/answer` | The lead picked up: a second's quiet, the greeting with nothing listening, then the question itself inside a `<Gather>` - speech or one key, heard from its first word ("When the call listens"); silence reported too; the step's words and the stop words as hints. Anything wrong - no row, no script, the database down - ends the call quietly, never Twilio's "application error" | - |
+| `POST /api/webhooks/twilio/auto/gather` | The answer read (`matchSpokenChoice`), what follows decided (`handleAnswer`), kept with its result and any block (`keepAnswer`), and the next line said - T13, "On a live call". The address names the step and which asking it was | T14 texts the link; T15 the transfer |
+| `POST /api/webhooks/twilio/auto/status` | How it ended, saved as every call's end is (`finishCall`): outcome, talk time, `call.ended`; then an unfinished script given its result (T13). Never a missed-call text | - |
 | `POST /api/webhooks/twilio/auto/amd` | Who picked up, kept as `answered_by`; a machine on an answered call makes it `voicemail` | T18: the voicemail message |
 
 **Trying it locally** - `npm run dev:auto-call -- <phone>` (`scripts/dev-auto-call.ts`)
@@ -324,6 +362,15 @@ runs with: calling set up, `PUBLIC_URL` a tunnel, `AUTO_CALLS=on`, and the
 number on `AUTO_CALL_TEST_NUMBERS`. No `twilio:configure`: each call carries
 its own webhook addresses, so the number and the TwiML App are not involved.
 Refuses in production.
+
+One phone gets one automated call - one lead per number, one call per lead -
+so two flags, for the local database only (T13):
+
+- `--again`: the number is given to a fresh test lead, as if the partner had
+  sent it new, and that lead is called. The old one keeps all its history
+  under a made-up number, `+1555` and its id; nothing is deleted.
+- `--unblock`: lifts the block a stop test left on the number, released as
+  `dev_test`, so the next test can call it.
 
 ## What is saved
 
@@ -383,7 +430,8 @@ ticket's own PR.
 | T11 | Several browsers ringing at once | - | Done 2026-10-18 |
 | | **The call - on the dev number** | | |
 | T12 | The server places one call | T3, T4, T6 | Done 2026-10-18 - a real call to Jeel's phone; the opening and voice changed after it (018) |
-| T13 | The questions | T7, T8, T12 | Not started |
+| T13 | The questions | T7, T8, T12 | Done 2026-10-19 - six real calls, every path |
+| T13b | Spoken answers understood faster | T13 | Not started |
 | T14 | Text the link | T13 | Not started |
 | T15 | The transfer | T10, T11, T13 | Not started |
 | T16 | The hold line | T15 | Not started |
@@ -801,7 +849,7 @@ keys, and some people say the number instead.
 - Not understood, first time -> the repeat line ("Press 1 for yes, 2 for no,
   or 9 to stop these calls."); second time -> "Thank you for your time. Have a
   great day." and `no_response`. Silence counts as not understood.
-- Stop -> "Okay, we won't call you again. Goodbye.", `opted_out`, and the
+- Stop -> "Okay, we will not call you again. Goodbye.", `opted_out`, and the
   number to be blocked.
 - A choice -> its reply line, then its next question or its ending.
 - A script that points at a question that does not exist ends the call
@@ -1102,14 +1150,77 @@ response, not interested, and stop.
 - A "yes" ends the call politely until T15 builds the transfer.
 
 **Done when**
-- [ ] Route tests for each path, and for the same request twice.
-- [ ] Real calls: no -> Q2 -> no; silence twice; "stop calling me" (the
-      number is then blocked); keys 1, 2, 9.
-- [ ] Each answer is in `call_answers` with what was heard.
+- [x] Route tests for each path, and for the same request twice - 27 webhook
+      tests; every path and every hang-up case of `handleAnswer`; the
+      listening split. A live check proves the SQL: one answer per asking, a
+      result never overwritten, a stop blocking once, the end settling an
+      unfinished script (`auto-calls-live-check`, 54 checks).
+- [x] Real calls, 2026-10-19, to Jeel's phone: yes -> the busy line; no ->
+      Q2 -> "no thanks" -> not interested; silence twice -> no response; keys
+      2 -> 1 -> link sent; 9 -> blocked, and a call to the blocked number then
+      refused; "stop calling me" -> blocked.
+- [x] Each answer is in `call_answers` with what was heard, how sure, and the
+      keys.
 
-**Files:** `backend/src/api/twilio-webhooks.ts`, `backend/src/db/auto-calls.ts`,
-`backend/src/db/dnc.ts`, `backend/src/core/activity.ts`.
-**Doc:** this one, `AUDIT.md`.
+As built: the rules are pure - `handleAnswer` in `core/call-script.ts`, on
+top of T7 and T8 - and `keepAnswer` keeps an answer, its result and any
+block in one transaction, each part safe to repeat. The real calls changed
+three things. **Answers said over the end of a question were lost** - T12's
+`<Gather>` did not listen while it spoke - so the greeting is now said with
+nothing listening and the question itself with listening on
+(`splitForListening`). **Kore's "won't" sounded like "will"** in "we won't
+call you again", the line after a stop: "won't" and "didn't" are written out
+in migration 018. And **a spoken answer takes about 4-5 seconds** to come
+back against a key's instant one; Twilio's short-answer model, tried, was no
+faster and far less sure, so it was dropped - T13b. A "yes" hears the busy
+line until T15. The link is saved as asked for, and texted from T14. `dev:auto-call`
+gained `--again` and `--unblock` for testing with one phone. The DNC page
+names the new reason, "Said stop on automated call".
+
+**Files:** `backend/src/core/call-script.ts` (+ test), `backend/src/api/twilio-webhooks.ts`,
+`backend/src/api/__tests__/auto-call-webhooks.test.ts`, `backend/src/db/auto-calls.ts`,
+`backend/src/db/call-script.ts`, `backend/src/db/dnc.ts`, `backend/src/integrations/twilio.ts`
+(+ test), `backend/src/core/call-script-fixtures.ts`,
+`backend/src/db/migrations/018_call_opening_and_voice.sql`, `backend/scripts/dev-auto-call.ts`,
+`backend/scripts/auto-calls-live-check.ts`, `backend/scripts/call-script-live-check.ts`,
+`frontend/src/pages/admin/DncPage.tsx`.
+**Doc:** this one ("Understanding an answer", "What the call does after each
+answer", "How a call is placed"), `AUDIT.md`, `SCHEMA.md`, `LOGGING.md`,
+`README.md`, `CLAUDE.md`.
+
+---
+
+#### T13b - Spoken answers understood faster
+
+**Goal:** after a lead speaks, the call goes on about as fast as after a key.
+**Needs:** T13. **Production:** none.
+
+**Build**
+- Found on T13's real calls (2026-10-19): about 4-5 seconds between a spoken
+  answer and the call going on; a key press is near-instant. Our server
+  answers Twilio in about 0.2 seconds (Twilio's own request log), so the time
+  is Twilio deciding the lead has stopped and working out the words - not
+  making the voice, since after a key the reply starts at once.
+- Measure first: record one test call, both sides, and find in the audio when
+  the lead stopped speaking and when the reply started - the gap, in tenths
+  of a second.
+- Then try, one at a time and measured the same way: `speechTimeout` in
+  whole seconds with Twilio's own model; a provider's own model - Google's
+  `googlev2_telephony_short`, Deepgram's `deepgram_nova-3` - which Twilio does
+  not fail over in an outage. Already tried: `experimental_utterances` - no
+  faster, and a clear "yes" at 0.24 and 0.00.
+- Keep the fastest that hears "yes", "no" and "stop calling me" as surely as
+  now (0.5 to 0.95).
+- Jeel's call, not a must: the questions could invite keys ("…Say yes, or
+  press 1."), which are instant and never misheard.
+
+**Done when**
+- [ ] The gap measured on a recorded call, before and after.
+- [ ] The chosen setting no less sure of yes, no and stop on real calls.
+- [ ] Jeel hears the difference on his phone.
+
+**Files:** `backend/src/integrations/twilio.ts` (+ test).
+**Doc:** this one, "Understanding an answer".
 
 ---
 

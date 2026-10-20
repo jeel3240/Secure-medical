@@ -75,7 +75,12 @@ async function main(): Promise<void> {
       q1.body,
       "Hi, this is Seri calling from eDrugstore. Today we're offering 25% off antibiotics. Are you interested in ordering?"
     );
-    check('asking again asks for keys, and offers 9 to stop', q1.repeatBody, 'Sorry, I didn\'t catch that. Press 1 for yes, 2 for no, or 9 to stop these calls.');
+    check(
+      'asking again asks for keys, and offers 9 to stop - "did not" written out (018)',
+      q1.repeatBody,
+      'Sorry, I did not catch that. Press 1 for yes, 2 for no, or 9 to stop these calls.'
+    );
+    check('stop is said plainly - "will not", never a "won\'t" heard as "will" (018)', script?.optOutBody, 'Okay, we will not call you again. Goodbye.');
     check('q1: yes transfers, no leads to q2', q1.choices.map((c) => [c.key, c.label, c.ending, c.nextStepId]), [
       ['1', 'Yes', 'transfer', null],
       ['2', 'No', null, q2.id],

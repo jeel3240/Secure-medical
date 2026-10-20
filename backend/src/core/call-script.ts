@@ -3,7 +3,8 @@
  *
  * The shape of a script as `db/call-script.ts` loads it, and what the call
  * does next: `firstAsk` when the lead picks up, `afterAnswer` after each
- * answer (T8). Understanding an answer is `matchSpokenChoice` in
+ * answer (T8), and `handleAnswer`, which adds what only a live call has - a
+ * lead who hung up (T13). Understanding an answer is `matchSpokenChoice` in
  * `core/answers.ts` (T7). No database and no Twilio here, so every path of the
  * script is tested on its own; the webhooks (T12 on) say what this decides.
  */
@@ -185,4 +186,100 @@ export function answerRecord(match: SpokenMatch<CallChoice>): {
   return match.result === 'choice'
     ? { result: 'choice', choiceKey: match.choice.key, choiceLabel: match.choice.label }
     : { result: match.result, choiceKey: null, choiceLabel: null };
+}
+
+/** The `call_answers` row an answer becomes - `answerRecord`. */
+export type AnswerRecord = ReturnType<typeof answerRecord>;
+
+/**
+ * What `/auto/gather` does with one answer - T13. Pure: the route reads the
+ * request, carries this out, and says `next`.
+ */
+export interface AnswerOutcome {
+  /** The `call_answers` row to keep. Null when there is nothing to keep, or no step to keep it under. */
+  answer: AnswerRecord | null;
+  /** How the script ended, to save once. Null while it goes on, or when the lead left before it could end. */
+  result: CallResult | null;
+  /** The lead said stop: block the number. */
+  blockNumber: boolean;
+  /** The lead asked for the link: text it (T14). */
+  sendLink: boolean;
+  /** A mistake in our rows, not the lead's: to be logged as an error. */
+  brokenScript: boolean;
+  /** What to say next. Null when the lead has hung up - there is nobody to say it to. */
+  next: AskOrEnd | null;
+}
+
+/**
+ * What happens after the lead answered `stepId`, asked for the `attempt`th
+ * time, and `matchSpokenChoice` read the answer as `match` - `afterAnswer`,
+ * with three things only a live call has:
+ *
+ * - **The lead may have hung up** (`hungUp`): Twilio still asks `/auto/gather`
+ *   after a hang-up - found on the first real call, T12. With nothing said,
+ *   nothing is kept: it is a hang-up, never silence to ask again about. With
+ *   something said, it counts - a stop still blocks, a yes to the link is
+ *   still texted - but nothing that needs them on the line happens, and
+ *   ending for want of an answer is not their result: the call's end saves
+ *   `hung_up` instead.
+ * - **A "yes" to a transfer** reaches nobody until T15 rings people: the lead
+ *   hears the line, then the busy line, and the result is `transfer_missed` -
+ *   what T15 does when nobody is free.
+ * - An answer to a step this script does not have is not kept: there is no
+ *   step to keep it under.
+ */
+export function handleAnswer(
+  script: CallScript,
+  stepId: number,
+  attempt: 1 | 2,
+  match: SpokenMatch<CallChoice>,
+  hungUp: boolean
+): AnswerOutcome {
+  const none: AnswerOutcome = {
+    answer: null,
+    result: null,
+    blockNumber: false,
+    sendLink: false,
+    brokenScript: false,
+    next: null,
+  };
+  if (hungUp && match.result === 'silence') return none;
+
+  const answer = script.steps.some((s) => s.id === stepId) ? answerRecord(match) : null;
+  const action = afterAnswer(script, stepId, attempt, match);
+
+  if (action.kind === 'ask') return { ...none, answer, next: hungUp ? null : action };
+
+  if (action.kind === 'transfer') {
+    if (hungUp) return { ...none, answer };
+    const busy: AskOrEnd = { kind: 'end', say: [...action.say, script.busyBody], result: 'transfer_missed' };
+    return { ...none, answer, result: 'transfer_missed', next: busy };
+  }
+
+  return {
+    answer,
+    result: hungUp && action.result === 'no_response' ? null : action.result,
+    blockNumber: Boolean(action.blockNumber),
+    sendLink: Boolean(action.sendLink),
+    brokenScript: Boolean(action.brokenScript),
+    next: hungUp ? null : action,
+  };
+}
+
+/**
+ * An asking's lines, split for listening - found on the first real calls
+ * (T13): people answer as a question ends, often over its last word, and an
+ * answer begun while nothing was listening was lost.
+ *
+ * `leadIn` - every line but the last, and the last line's sentences but its
+ * final one - is said first, with nothing listening, so a "Hello?" over the
+ * greeting is never taken as the answer. `question`, the final sentence, is
+ * said with listening on, so an answer that starts before it ends is heard.
+ */
+export function splitForListening(lines: readonly string[]): { leadIn: string[]; question: string } {
+  const last = lines[lines.length - 1] ?? '';
+  const sentences = last.split(/(?<=[.!?])\s+/).filter(Boolean);
+  const question = sentences.pop() ?? '';
+  const leadIn = [...lines.slice(0, -1), ...(sentences.length > 0 ? [sentences.join(' ')] : [])];
+  return { leadIn, question };
 }
