@@ -222,6 +222,25 @@ export function autoCallUrl(
   return `${settings.publicUrl}${path}?${query.toString()}`;
 }
 
+/**
+ * How Twilio hears an answer - T13b, measured on recorded real calls
+ * (2026-10-19): from the end of a spoken answer to Twilio reporting it.
+ *
+ * - Twilio's own model, `speechTimeout` auto: 3.3-3.4 s.
+ * - Its own model, `speechTimeout` 1: 2.1 s, but 5.4 s when a noise on the
+ *   line restarted the wait.
+ * - **Deepgram's `nova-3`, `speechTimeout` 1: 1.6-1.7 s** on "yes", "no",
+ *   "no thanks" and "stop calling me", and surer of them (0.53-0.999).
+ * - Twilio's short-answer model, tried in T13: no faster, a clear "yes" 0.24.
+ *
+ * A provider's own model is not failed over by Twilio in an outage; a spoken
+ * answer would then come back empty, and the call asks again for keys, which
+ * need no speech service. Naming a model needs `speechTimeout` in whole
+ * seconds (Twilio: "Don't use auto"): it stops after one second of quiet.
+ */
+const SPEECH_MODEL = 'deepgram_nova-3';
+const SPEECH_TIMEOUT_SECONDS = '1';
+
 /** The words a step's answer may hold - Twilio listens harder for them. */
 function hintsFor(script: CallScript, step: CallStep): string {
   const words = [...step.choices.flatMap((choice) => choice.words), ...script.optOutWords];
@@ -266,7 +285,8 @@ export function autoCallTwiml(
   const gather = response.gather({
     input: ['speech', 'dtmf'],
     numDigits: 1,
-    speechTimeout: 'auto',
+    speechModel: SPEECH_MODEL,
+    speechTimeout: SPEECH_TIMEOUT_SECONDS,
     bargeIn: true,
     actionOnEmptyResult: true,
     hints: hintsFor(script, action.step),

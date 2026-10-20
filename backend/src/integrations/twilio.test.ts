@@ -168,9 +168,9 @@ describe('the automated call, in Twilio\'s words (T12)', () => {
     );
     expect(xml).toContain('input="speech dtmf"');
     expect(xml).toContain('numDigits="1"');
-    expect(xml).toContain('speechTimeout="auto"');
-    // Twilio's own model: its short-answer one was tried on a real call (T13) - no faster, and far less sure.
-    expect(xml).not.toContain('speechModel');
+    // Deepgram, ending after one second of quiet: half the wait of Twilio's own, measured (T13b).
+    expect(xml).toContain('speechModel="deepgram_nova-3"');
+    expect(xml).toContain('speechTimeout="1"');
     // An answer over the end of the question is heard; silence is reported, not skipped.
     expect(xml).toContain('bargeIn="true"');
     expect(xml).toContain('actionOnEmptyResult="true"');
