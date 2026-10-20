@@ -28,7 +28,7 @@
  */
 import { readAutoCalls, readAutoCallTestNumbers } from '../src/auto-calls-settings';
 import { config } from '../src/config';
-import { releaseNumber } from '../src/db/dnc';
+import { releaseNumber, RELEASE_REASONS } from '../src/db/dnc';
 import { pool } from '../src/db/pool';
 import { placeAutoCall, type PlaceAutoCallResult } from '../src/worker/place-auto-call';
 import { phoneFromArg } from './dev-phone';
@@ -54,7 +54,7 @@ async function main(): Promise<number> {
     return 1;
   }
 
-  if (args.includes('--unblock') && (await releaseNumber(pool, phone, 'dev_test')) > 0) {
+  if (args.includes('--unblock') && (await releaseNumber(pool, phone, RELEASE_REASONS.devTest)) > 0) {
     console.log('The block on the number was lifted (released: dev_test).');
   }
   const leadId = args.includes('--again') ? await freshLeadIfCalled(phone) : await leadFor(phone);

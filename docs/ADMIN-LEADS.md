@@ -144,7 +144,9 @@ decision that day. If it is ever changed, it is the first line of
 **The question the lead is on now - Jeel, 2026-09-29.** The question the
 conversation is on, which the state machine moves on after each valid answer;
 **Done** once the questions are finished; a hyphen for an opted-out
-conversation - blocked on arrival, or ended by STOP or a DNC outcome.
+conversation - blocked on arrival, or ended by STOP or a DNC outcome. (A stop
+said on the automated call blocks the number but does not yet end the
+conversation, so that lead reads Opted out with the question it was on.)
 
 | Lead | Status · Step |
 |---|---|

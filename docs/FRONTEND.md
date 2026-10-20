@@ -750,7 +750,7 @@ arrives after a newer one is still dropped.
 
 ## Tests
 
-`npm test` in `frontend/`. Vitest with jsdom, 282 tests in 27 files (2026-10-11).
+`npm test` in `frontend/`. Vitest with jsdom, 339 tests in 29 files (2026-10-19).
 
 Logic first, by agreement - a screen is easy to judge by eye, and a dropped
 response or an off-by-one age threshold is not:

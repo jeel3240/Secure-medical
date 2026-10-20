@@ -73,8 +73,8 @@ docker compose exec postgres psql -U app -d leads \
 | `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_API_KEY`, `TWILIO_API_SECRET`, `TWILIO_TWIML_APP_SID`, `TWILIO_PHONE_NUMBER`, `PUBLIC_URL` | Browser calling (`TWILIO.md`). All empty: calling is off and everything else works. All set: calling is on. Some set: off locally with a warning, and **the API refuses to start in production**. Where each comes from is in `.env.example`. |
 | `TWILIO_IDENTITY_PREFIX` | Optional, apart from the seven. Put in front of every browser's name at Twilio. **Empty in production; `dev-` locally**, because the laptop shares production's Twilio account and Twilio rings every browser with the same name - `TWILIO.md`, "What it needs on the Twilio account". Needed by the api |
 | `TWILIO_TRANSCRIPTION_SERVICE_SID` | Optional, apart from the seven. Set, every call is recorded and transcribed (`TWILIO.md`, "Recordings and transcripts"); empty, nothing is recorded. `npm run twilio:configure -- --transcription` creates the service and prints the id. Needed by both the api and the worker |
-| `AUTO_CALLS` | Automated calls (`AUTO-CALLS.md`). **Off unless exactly `on`**, and only with calling set up; anything else is off and logged once as `auto_calls.off`, never a reason to refuse to start. Production gets every automated-calling change with it off. On, the app bar shows the "Taking calls" switch. Needed by the api and the worker |
-| `AUTO_CALL_TEST_NUMBERS` | Outside production, **the only numbers an automated call may ring** - our own phones, comma-separated E.164 (`+16025550123,+16025550124`). Empty, nothing is rung; an entry that is not E.164 is ignored. Production does not read it. `AUTO-CALLS.md`, "How a call is placed". Needed by the api and the worker |
+| `AUTO_CALLS` | Automated calls (`AUTO-CALLS.md`). **Off unless exactly `on`**, and only with calling set up; `off` or empty is off, any other value is off and logged once as `auto_calls.off`, never a reason to refuse to start. Production gets every automated-calling change with it off. On, the app bar shows the "Taking calls" switch. Read by the api (and the dev command); passed to the worker too, which places the calls from T20 |
+| `AUTO_CALL_TEST_NUMBERS` | Outside production, **the only numbers an automated call may ring** - our own phones, comma-separated E.164 (`+16025550123,+16025550124`). Empty, nothing is rung; an entry that is not E.164 is ignored. Production does not read it. `AUTO-CALLS.md`, "How a call is placed". Read where calls are placed: today the dev command, from T20 the worker |
 | `PORT`, `SERVICE_NAME` | Not in `.env.example` and not set by the compose files. `PORT` is the API's port, 3000 by default. `SERVICE_NAME` overrides the `svc` field on every log line, which is otherwise worked out from the entry point (`api`, `worker`). |
 | `CADDY_DOMAIN` | Not read by anything. The production `Caddyfile` names `dailyleadhub.com` directly. |
 
@@ -112,17 +112,17 @@ contact in the group gets a text within a poll interval. `openers` in the
 ## How to test
 
 ```bash
-cd backend  && npm test && npm run lint    # 633 tests
-cd frontend && npm test && npm run lint    # 282 tests   (counts as of 2026-10-11)
+cd backend  && npm test && npm run lint    # 852 tests
+cd frontend && npm test && npm run lint    # 339 tests   (counts as of 2026-10-19)
 ```
 
 **Unit and route tests** mock the database and cover behaviour in isolation.
 
 **Live checks** prove the SQL against a real Postgres, because a mocked pool
 says nothing about aggregates, date windows, transactions or races. Each one
-refuses to run against a database that holds leads. Its header comment gives
-the command to run one by hand (the flows check points at `live-checks.sh
-flows`). To run them, each on its own scratch database:
+refuses to run against a database that holds leads (the presence check: users).
+Its header comment gives the command to run one by hand, or the
+`live-checks.sh` line that runs it. To run them, each on its own scratch database:
 
 ```bash
 cd backend
@@ -130,7 +130,7 @@ scripts/live-checks.sh              # all of them
 scripts/live-checks.sh flows queue  # just these
 ```
 
-There are twenty live checks, covering the texts a call leads to (the link, and the text after a missed call - EZ Texting stubbed), the automated call (its row, every refusal, linking it to Twilio's call, two placements racing; each answer kept once, a result never overwritten, a stop blocking once, the end settling an unfinished script), who can take a call (migrations 016 and 017: the browser's word, the "Taking calls" switch, and who is free), the automated call's script (migration 015), the SMS flows (a second flow added as
+There are twenty live checks, covering the texts a call leads to (the link, and the text after a missed call - EZ Texting stubbed), the automated call (its row, every refusal, linking it to Twilio's call, two placements racing; each answer kept once, a result never overwritten, a stop blocking once, the end settling an unfinished script), who can take a call (migrations 016 and 017: the browser's word, the "Taking calls" switch, and who is free), the automated call's script (migrations 015 and 018), the SMS flows (a second flow added as
 rows only), the queue, claims, the read flag, the lead card,
 the timeline, callbacks, dispositions, agent SMS, calls (outgoing, incoming and
 missed), the activity log, Admin > Leads, the admin read models, health, the
@@ -282,7 +282,7 @@ commit.
 | `POLLER.md` | How leads are pulled in | The poller or worker loop |
 | `WEBHOOKS.md` | How replies are received | The webhook handler |
 | `TWILIO.md` | Browser calling: how a call works, incoming calls and missed calls, what is saved, settings, testing, deploying | Anything about calls, Twilio's webhooks, the Call button, the incoming-call card or the call bar |
-| `AUTO-CALLS.md` | Automated outbound calls: the agreed script and flow, the transfer and hold rules, the "Taking calls" switch, and the build tracker. The groundwork (T0-T3) is done; the robot calls are not built yet | A ticket from its tracker is merged, or any decision about automated calls |
+| `AUTO-CALLS.md` | Automated outbound calls: the agreed script and flow, the transfer and hold rules, the "Taking calls" switch, and the build tracker. T0-T14 are done (2026-10-19): the server places a call, asks the script, keeps every answer and texts the link; the transfer (T15) on, and the robot calling by itself (T20), are not built yet | A ticket from its tracker is merged, or any decision about automated calls |
 | `AUDIT.md` | The activity log and the raw webhook archive: what is recorded, why nothing can be edited or deleted, what it does not cover | **Any new action a person or the system can take** - it records itself, or this doc says why not |
 | `ADMIN-LEADS.md` | The superadmin Leads page | That page or its API |
 | `QUEUE.md` | The agents' priority queue API: who is in it, the order, the tags | `GET /api/leads`, the queue query or the tag rules |

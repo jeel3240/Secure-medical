@@ -274,8 +274,8 @@ recorded as do-not-call whom we would still text, which is the failure that
 actually matters.
 
 **It is the same `dnc_list` row a STOP reply writes.** `db/dnc.ts` holds the one
-upsert all three blocking paths use - a STOP reply, the poller finding a contact
-already opted out, and this. So a number blocked by an agent behaves exactly
+upsert every blocking path uses - a STOP reply, the poller finding a contact
+already opted out, a stop said on the automated call (T13), and this. So a number blocked by an agent behaves exactly
 like one blocked by a STOP: it leaves the queue, `sendMessage` refuses it with
 `BlockedNumberError`, the lead card raises the DNC flag, and a later START
 releases it (Jeel, 2026-09-22 - START releases an agent's block too). The reason

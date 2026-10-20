@@ -43,6 +43,8 @@ export const DNC_REASONS = {
 export const RELEASE_REASONS = {
   /** The lead texted START. */
   smsStart: 'sms_start',
+  /** On a laptop only: `dev:auto-call --unblock` lifted a test block (T13, AUTO-CALLS.md). */
+  devTest: 'dev_test',
 } as const;
 
 /**
