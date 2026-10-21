@@ -255,12 +255,80 @@ export async function keepAnswer(opts: {
  * never changed.
  */
 export async function settleAutomatedCall(callId: number): Promise<void> {
+  // A lead who hung up on hold had said yes and reached nobody: an agent
+  // calls them back, as when nobody took the ring (T16).
   await pool.query(
     `UPDATE calls
-     SET script_result = CASE WHEN outcome IN ('answered', 'voicemail') THEN 'hung_up' ELSE 'unanswered' END
+     SET script_result = CASE
+       WHEN held_at IS NOT NULL THEN 'transfer_missed'
+       WHEN outcome IN ('answered', 'voicemail') THEN 'hung_up'
+       ELSE 'unanswered'
+     END
      WHERE id = $1 AND direction = 'automated' AND script_result IS NULL AND outcome IS NOT NULL`,
     [callId]
   );
+}
+
+/**
+ * A call waiting on hold: it went on hold, has no result yet, and has not
+ * ended - T16. `c` is `calls`.
+ */
+const ON_HOLD_SQL = `(c.held_at IS NOT NULL AND c.script_result IS NULL AND c.outcome IS NULL)`;
+
+/**
+ * Puts the automated call `callId` on hold - T16, AUTO-CALLS.md "The hold
+ * line". The time is kept from the first time, so the safety stop counts from
+ * then; `call.held` is recorded with it, in the same statement. True the first
+ * time.
+ */
+export async function holdCall(callId: number): Promise<boolean> {
+  const { rows } = await pool.query(
+    `WITH held AS (
+       UPDATE calls SET held_at = now()
+       WHERE id = $1 AND direction = 'automated' AND held_at IS NULL AND script_result IS NULL
+       RETURNING id, lead_id
+     )
+     ${activityInsertSql}
+     SELECT NULL, 'call.held', held.lead_id, NULL, jsonb_build_object('callId', held.id) FROM held
+     RETURNING id`,
+    [callId]
+  );
+  return rows.length > 0;
+}
+
+/**
+ * The automated call `callId` on hold: how long it has waited, and its place
+ * in line among every call waiting - first on hold, first in line. Null when
+ * it is not waiting: never held, taken, given its result, or ended.
+ */
+export async function holdState(callId: number): Promise<{ waitedSeconds: number; place: number } | null> {
+  const { rows } = await pool.query<{ waited: number; place: number }>(
+    `SELECT extract(epoch FROM now() - c.held_at)::int AS waited,
+            (SELECT count(*) FROM calls o
+             WHERE o.held_at IS NOT NULL AND o.script_result IS NULL AND o.outcome IS NULL
+               AND (o.held_at, o.id) < (c.held_at, c.id))::int + 1 AS place
+     FROM calls c
+     WHERE c.id = $1 AND c.direction = 'automated' AND ${ON_HOLD_SQL}`,
+    [callId]
+  );
+  return rows[0] ? { waitedSeconds: rows[0].waited, place: rows[0].place } : null;
+}
+
+/** Every call waiting on hold, first in line first - what the hold watcher looks at (T16). */
+export async function callsOnHold(): Promise<{ callId: number; callSid: string; waitedSeconds: number }[]> {
+  const { rows } = await pool.query<{ id: number; twilio_call_sid: string; waited: number }>(
+    `SELECT c.id, c.twilio_call_sid, extract(epoch FROM now() - c.held_at)::int AS waited
+     FROM calls c
+     WHERE c.direction = 'automated' AND c.twilio_call_sid IS NOT NULL AND ${ON_HOLD_SQL}
+     ORDER BY c.held_at, c.id`
+  );
+  return rows.map((r) => ({ callId: r.id, callSid: r.twilio_call_sid, waitedSeconds: r.waited }));
+}
+
+/** Whether any lead is waiting on hold - while one is, the robot places no new calls (T20). */
+export async function anyoneOnHold(): Promise<boolean> {
+  const { rows } = await pool.query(`SELECT EXISTS (SELECT 1 FROM calls c WHERE ${ON_HOLD_SQL}) AS waiting`);
+  return rows[0].waiting === true;
 }
 
 /** What a transfer needs to know about its automated call - `transferContext`. */

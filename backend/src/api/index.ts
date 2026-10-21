@@ -1,9 +1,14 @@
 import { readAutoCalls } from '../auto-calls-settings';
 import { config } from '../config';
 import { recordActivity } from '../db/activity';
+import { callsOnHold } from '../db/auto-calls';
+import { readHoldMaxSeconds } from '../db/call-script';
 import { pool } from '../db/pool';
+import { someoneOnCall } from '../db/presence';
 import { pgUserStore } from '../db/users';
+import { recheckHold } from '../integrations/twilio-calls';
 import { createApp } from './app';
+import { watchHolds } from './hold-watch';
 import { log } from '../lib/log';
 import { startupProblems } from './startup-checks';
 
@@ -53,3 +58,15 @@ const port = process.env.PORT || 3000;
 app.listen(port, () => {
   log.info('api.started', { port, calling: config.twilio.status, autoCalls: autoCalls ? 'on' : 'off' });
 });
+
+// A lead on hold is looked at every 30 seconds, not only when a track of hold
+// music ends - AUTO-CALLS.md "The hold line". Only with automated calls on.
+if (autoCalls && config.twilio.status === 'on') {
+  const settings = config.twilio.settings;
+  watchHolds({
+    callsOnHold,
+    someoneOnCall: () => someoneOnCall(pool),
+    readHoldMaxSeconds: () => readHoldMaxSeconds(pool),
+    recheckHold: (callSid, callId) => recheckHold(settings, callSid, callId),
+  });
+}

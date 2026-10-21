@@ -1,6 +1,6 @@
 /**
- * Proves migrations 015 and 018 and db/call-script.ts against a real Postgres
- * - T6, docs/AUTO-CALLS.md.
+ * Proves migrations 015, 018 and 019 and db/call-script.ts against a real
+ * Postgres - T6, docs/AUTO-CALLS.md.
  *
  * What a mock cannot show: that the script in the database is the one agreed,
  * word for word, as 015 seeds it and 018 changes it; that the guards on the tables hold - one active script, a choice that
@@ -95,6 +95,11 @@ async function main(): Promise<void> {
     check('stop words, on every step', script!.optOutWords.includes('stop calling'), true);
     check('no email anywhere - the voicemail ends at calling back', script!.voicemailBody.endsWith('Please call us back at {callback_number}. Thanks, and have a great day!'), true);
     check('the link is the one the SMS script sends', script!.linkText.includes('https://www.edrugstore.com/anti-ez'), true);
+    check('on hold, the place in its own words (019)', [script!.holdBody, script!.holdNextBody, script!.holdPlaceBody], [
+      'All our agents are on other calls. Please stay on the line.',
+      'You are next.',
+      'You are number {place} in line.',
+    ]);
     // The unit tests (core/answers.spoken.test.ts, and T8's) use a copy of the
     // script; it must be the script the database holds, word for word.
     check('the tests\' copy of the script is this one, word for word', shape(script!), shape(ANTIBIOTICS_CALL));
@@ -128,10 +133,15 @@ async function main(): Promise<void> {
     check(
       'a second active script is refused',
       await refusedBy(
-        `INSERT INTO call_scripts (key, name, voice, opt_out_words, opt_out_body, no_response_body, voicemail_body, busy_body, hold_body, link_text, is_active)
-         VALUES ('other', 'Other', 'v', '{}', 'x', 'x', 'x', 'x', 'x', 'x', true)`
+        `INSERT INTO call_scripts (key, name, voice, opt_out_words, opt_out_body, no_response_body, voicemail_body, busy_body, hold_body, hold_next_body, hold_place_body, link_text, is_active)
+         VALUES ('other', 'Other', 'v', '{}', 'x', 'x', 'x', 'x', 'x', 'x', '{place}', 'x', true)`
       ),
       'call_scripts_one_active'
+    );
+    check(
+      'a place line that does not say the place is refused (019)',
+      await refusedBy(`UPDATE call_scripts SET hold_place_body = 'You are in line.' WHERE key = 'antibiotics'`),
+      'call_scripts_hold_place_says_place'
     );
     check('a choice that both leads on and ends is refused', await choice(q1.id, '3', q2.id, 'declined'), 'call_choices_next_or_end');
     check('a choice that does neither is refused', await choice(q1.id, '3', null, null), 'call_choices_next_or_end');
@@ -141,8 +151,8 @@ async function main(): Promise<void> {
 
     const { rows: other } = await pool.query(
       `WITH s AS (
-         INSERT INTO call_scripts (key, name, voice, opt_out_words, opt_out_body, no_response_body, voicemail_body, busy_body, hold_body, link_text)
-         VALUES ('other', 'Other', 'v', '{}', 'x', 'x', 'x', 'x', 'x', 'x') RETURNING id
+         INSERT INTO call_scripts (key, name, voice, opt_out_words, opt_out_body, no_response_body, voicemail_body, busy_body, hold_body, hold_next_body, hold_place_body, link_text)
+         VALUES ('other', 'Other', 'v', '{}', 'x', 'x', 'x', 'x', 'x', 'x', '{place}', 'x') RETURNING id
        )
        INSERT INTO call_steps (script_id, key, position, heading, body, repeat_body)
        SELECT id, 'q1', 10, 'H', 'b', 'r' FROM s RETURNING id`

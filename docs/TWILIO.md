@@ -591,7 +591,7 @@ With calling not set up, every Twilio webhook route answers 404.
 
 **The automated call's webhooks** (`/auto/answer`, `/auto/gather`,
 `/auto/status`, `/auto/amd` - T12; `/auto/claim`, `/auto/after` - the
-transfer, T15a) are checked the same way, and name their call's row in the
+transfer, T15a; `/auto/hold` - the hold line, T16) are checked the same way, and name their call's row in the
 address (`?call=<id>`), which is part of what Twilio signs: the row cannot be
 swapped. `/auto/claim` takes the person from `To`, our own signed browser
 name, as the voice webhook does. They answer 404 while automated calls are
@@ -801,8 +801,8 @@ own phone.
   transcripts".) The automated call has its own: a transfer to a person
   (built, T15a) and a voicemail message (T18, not yet) - `AUTO-CALLS.md`.
 - **A call queue for incoming calls.** One agent is rung, or nobody -
-  "Incoming calls", above. The automated call's hold line (T16) is only for
-  its own transfers.
+  "Incoming calls", above. The automated call's hold line (built, T16) is only
+  for its own transfers.
 - **A stale call is not closed.** If Twilio's end-of-call report never arrives,
   the row keeps `ended_at` null and the timeline says "in progress". Not seen
   in testing; Twilio retries its callbacks.

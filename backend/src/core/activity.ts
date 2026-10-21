@@ -37,6 +37,11 @@ export const ACTIVITY_ACTIONS = [
    * Written once per call, whoever held the lead before.
    */
   'call.transferred',
+  /**
+   * A "yes" nobody could take went on hold, waiting for someone on a call -
+   * `detail.callId` (T16, AUTO-CALLS.md "The hold line"). The system's doing.
+   */
+  'call.held',
   /** Twilio's verdict on who picked up a call we placed - a person or a machine. */
   'call.answered_by',
   /** A call's recording is in, and its transcript is in line. */
