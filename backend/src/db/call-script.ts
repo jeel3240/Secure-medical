@@ -36,6 +36,19 @@ export async function readRingSeconds(q: Db): Promise<number> {
   return Number.isInteger(value) && value >= 5 && value <= 60 ? value : DEFAULT_RING_SECONDS;
 }
 
+/** The hold line's safety stop - `auto_call_hold_max_minutes`, T16. */
+export const DEFAULT_HOLD_MAX_MINUTES = 10;
+
+/**
+ * `settings.auto_call_hold_max_minutes`, in seconds, read on every hold check:
+ * 10 minutes when it is missing or not 1-60.
+ */
+export async function readHoldMaxSeconds(q: Db): Promise<number> {
+  const { rows } = await q.query(`SELECT value FROM settings WHERE key = 'auto_call_hold_max_minutes'`);
+  const value = Number(rows[0]?.value);
+  return (Number.isInteger(value) && value >= 1 && value <= 60 ? value : DEFAULT_HOLD_MAX_MINUTES) * 60;
+}
+
 /** The script calls use - null when there is none. */
 export async function loadActiveCallScript(q: Db): Promise<CallScript | null> {
   const { rows } = await q.query(`SELECT id FROM call_scripts WHERE is_active`);
@@ -48,7 +61,7 @@ export async function loadCallScript(q: Db, scriptId: number): Promise<CallScrip
   // and a client runs one query at a time.
   const scripts = await q.query(
     `SELECT id, key, name, voice, opt_out_words, opt_out_body, no_response_body, voicemail_body,
-            busy_body, hold_body, link_text
+            busy_body, hold_body, hold_next_body, hold_place_body, link_text
      FROM call_scripts WHERE id = $1`,
     [scriptId]
   );
@@ -91,6 +104,8 @@ export async function loadCallScript(q: Db, scriptId: number): Promise<CallScrip
     voicemailBody: script.voicemail_body,
     busyBody: script.busy_body,
     holdBody: script.hold_body,
+    holdNextBody: script.hold_next_body,
+    holdPlaceBody: script.hold_place_body,
     linkText: script.link_text,
     steps: steps.rows.map(
       (r): CallStep => ({

@@ -11,13 +11,21 @@
  * who signed out, or someone already talking to a lead. And T15c: that a ring
  * let run out turns the switch off with its record in one statement - never
  * for someone who started a call meanwhile - and that the browser's report is
- * answered with the switch and why it is so.
+ * answered with the switch and why it is so. And T16: that "someone on a
+ * call" - what keeps a lead on hold - counts only people with the switch on.
  *
  * It writes rows, so it refuses to run against a database that holds users.
  * Run it with the others: scripts/live-checks.sh presence
  */
 import { pool } from '../src/db/pool';
-import { freePeople, RINGABLE_SECONDS, RINGABLE_SQL, setRingable, switchOffAfterMissedRing } from '../src/db/presence';
+import {
+  freePeople,
+  RINGABLE_SECONDS,
+  RINGABLE_SQL,
+  setRingable,
+  someoneOnCall,
+  switchOffAfterMissedRing,
+} from '../src/db/presence';
 import { pgUserStore } from '../src/db/users';
 
 let failures = 0;
@@ -282,6 +290,33 @@ async function main(): Promise<void> {
       takingCalls: false,
       takingCallsWhy: null,
     });
+  }
+
+  console.log('\nsomeone on a call - what keeps a lead on hold (T16)');
+  {
+    // Start from nobody on a call: earlier sections leave calls going.
+    await pool.query(`UPDATE calls SET outcome = 'answered', ended_at = now() WHERE outcome IS NULL`);
+    const lead = (
+      await pool.query(`INSERT INTO leads (phone, first_name, ezt_added_at) VALUES ('+15550000903', 'Kai', now()) RETURNING id`)
+    ).rows[0].id as number;
+    const zoe = await makeUser('zoe@example.com');
+    check('nobody on a call', await someoneOnCall(pool), false);
+
+    const busy = (
+      await pool.query(
+        `INSERT INTO calls (lead_id, agent_id, twilio_call_sid, direction, started_at)
+         VALUES ($1, $2, 'CA-hold-1', 'outbound', now()) RETURNING id`,
+        [lead, zoe]
+      )
+    ).rows[0].id as number;
+    check('on a call, switch off: not counted - they would never be rung for it', await someoneOnCall(pool), false);
+    await pgUserStore.update(zoe, { takingCalls: { on: true, why: 'by_hand' } });
+    check('on a call, switch on: counted - free soon', await someoneOnCall(pool), true);
+    await pool.query(`UPDATE users SET is_active = false WHERE id = $1`, [zoe]);
+    check('deactivated meanwhile: not counted', await someoneOnCall(pool), false);
+    await pool.query(`UPDATE users SET is_active = true WHERE id = $1`, [zoe]);
+    await pool.query(`UPDATE calls SET outcome = 'answered', ended_at = now() WHERE id = $1`, [busy]);
+    check('the call ends: nobody on a call', await someoneOnCall(pool), false);
   }
 
   console.log(failures === 0 ? '\nall checks passed' : `\n${failures} check(s) FAILED`);

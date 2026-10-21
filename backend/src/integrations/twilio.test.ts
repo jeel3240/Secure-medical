@@ -2,20 +2,23 @@ import twilio from 'twilio';
 import type { TwilioSettings } from '../twilio-settings';
 import { ANTIBIOTICS_CALL as SCRIPT } from '../core/call-script-fixtures';
 import {
+  AUTO_ANSWER_PATH,
   autoCallTwiml,
   autoCallUrl,
-  transferTwiml,
-  AUTO_ANSWER_PATH,
   dialTwiml,
   emptyTwiml,
   hangupTwiml,
+  HOLD_MUSIC,
+  holdTrack,
+  holdTwiml,
   isFromTwilio,
   mintCallToken,
   missedCallTwiml,
-  refusalTwiml,
   recordingNoticeTwiml,
+  refusalTwiml,
   ringAgentTwiml,
   TOKEN_TTL_SECONDS,
+  transferTwiml,
 } from './twilio';
 
 const SETTINGS: TwilioSettings = {
@@ -278,5 +281,28 @@ describe('the transfer, in Twilio\'s words (T15a, T15b)', () => {
     expect(xml).not.toContain('<Say');
     expect(xml).toMatch(/<Response><Dial /);
     expect(xml).toContain('record="record-from-answer-dual"');
+  });
+});
+
+describe('on hold, in Twilio\'s words (T16)', () => {
+  it('a "yes" just put on hold: the lines, then straight to /auto/hold - no music yet', () => {
+    const xml = holdTwiml(SETTINGS, { callId: 42, script: SCRIPT, say: ['Please hold.', SCRIPT.holdBody], track: null });
+    expect(xml).toContain('<Say voice="Google.en-US-Chirp3-HD-Kore">Please hold.</Say><Say voice="Google.en-US-Chirp3-HD-Kore">All our agents');
+    expect(xml).not.toContain('<Play>');
+    expect(xml).toMatch(/<Redirect method="POST">https:\/\/calls\.example\.com\/api\/webhooks\/twilio\/auto\/hold\?call=42<\/Redirect><\/Response>$/);
+  });
+
+  it('waiting: the place, a track, then back to /auto/hold when it ends', () => {
+    const xml = holdTwiml(SETTINGS, { callId: 42, script: SCRIPT, say: ['You are next.'], track: HOLD_MUSIC[0] });
+    expect(xml).toContain(`You are next.</Say><Play>${HOLD_MUSIC[0]}</Play><Redirect method="POST">`);
+  });
+
+  it('Twilio\'s classical tracks, over https, the next one each time a track ends', () => {
+    expect(HOLD_MUSIC.length).toBeGreaterThan(1);
+    for (const track of HOLD_MUSIC) expect(track).toMatch(/^https:\/\/s3\.amazonaws\.com\/com\.twilio\.music\.classical\/.+\.mp3$/);
+    expect(holdTrack(0)).toBe(HOLD_MUSIC[0]);
+    // Tracks run 5 to 10 minutes, so the next request is minutes on: another track.
+    expect(holdTrack(5 * 60)).not.toBe(holdTrack(0));
+    expect(holdTrack(-3)).toBe(HOLD_MUSIC[0]);
   });
 });

@@ -55,6 +55,19 @@ export const FREE_SQL = `(
   AND NOT ${ON_A_CALL_SQL}
 )`;
 
+/**
+ * Whether someone who takes transfers is on a call now - an active account,
+ * the switch on, a call of theirs still going - and so will be free soon: a
+ * "yes" nobody can take waits on hold for them (T16, AUTO-CALLS.md "The hold
+ * line"). Someone on a call with the switch off would never be rung for it.
+ */
+export async function someoneOnCall(q: Querier): Promise<boolean> {
+  const { rows } = await q.query(
+    `SELECT EXISTS (SELECT 1 FROM users u WHERE u.is_active AND u.taking_calls AND ${ON_A_CALL_SQL}) AS on_call`
+  );
+  return rows[0]?.on_call === true;
+}
+
 /** Everyone free now, by id. */
 export async function freePeople(q: Querier): Promise<number[]> {
   const { rows } = await q.query(`SELECT u.id FROM users u WHERE ${FREE_SQL} ORDER BY u.id`);

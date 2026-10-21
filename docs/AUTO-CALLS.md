@@ -1,10 +1,12 @@
 # Automated outbound calls
 
-**Planned 2026-10-15. Being built: T0 to T15c are done (2026-10-20) - the
+**Planned 2026-10-15. Being built: T0 to T16 are done (2026-10-21) - the
 server places a call, asks the script, keeps every answer, texts the link,
-puts a "yes" through to the lead's own agent first, then everyone free, and
-switches off whoever let it ring out; the hold line (T16) onwards, and the
-robot calling by itself (T20), are not built yet.** This
+puts a "yes" through to the lead's own agent first, then everyone free,
+switches off whoever let it ring out, and holds a "yes" nobody can take yet
+while someone is on a call; the next free person getting the waiting lead
+(T17) onwards, and the robot calling by itself (T20), are not built yet.**
+This
 doc is the agreed design and the tracker for building it. Each ticket below updates its row when it is merged,
 and the sections it touches, so the doc always says what is built and what is
 not.
@@ -424,7 +426,8 @@ be trusted").
 | `POST /api/webhooks/twilio/auto/status` | How it ended, saved as every call's end is (`finishCall`): outcome, talk time, `call.ended`; then an unfinished script given its result (T13). Never a missed-call text | - |
 | `POST /api/webhooks/twilio/auto/amd` | Who picked up, kept as `answered_by`; a machine on an answered call makes it `voicemail` | T18: the voicemail message |
 | `POST /api/webhooks/twilio/auto/claim` | A person accepted the transfer: the call and the lead become theirs (`takeTransfer`) - run on their leg before they are connected (T15a) | - |
-| `POST /api/webhooks/twilio/auto/after` | The transfer's ringing is over: taken, nothing more; the lead's own agent did not take it, everyone else free rung (T15b); not taken, `transfer_missed` and the busy line (T15a); whoever let it ring out switched off, after Twilio has its answer (T15c). The address names the step and who was rung - `holder`, or `rung` | T16: the hold line first |
+| `POST /api/webhooks/twilio/auto/after` | The transfer's ringing is over: taken, nothing more; the lead's own agent did not take it, everyone else free rung (T15b); not taken, on hold while someone is on a call (T16), else `transfer_missed` and the busy line (T15a); whoever let it ring out switched off, after Twilio has its answer (T15c). The address names the step and who was rung - `holder`, or `rung` | - |
+| `POST /api/webhooks/twilio/auto/hold` | A lead waiting on hold: their place, then a track of hold music, then back here; nobody on a call any more, or the safety stop, the busy line (T16, "The hold line"). Asked when a track ends, and by the hold watcher (`via=watcher`) | T17: ringing the next free person |
 
 **Trying it locally** - `npm run dev:auto-call -- <phone>` (`scripts/dev-auto-call.ts`)
 calls the local lead with that number. It needs, in the environment the api
@@ -505,7 +508,9 @@ pure, `planTransfer` and `planAfterHolder` in `core/call-script.ts`.
    transcript says who said what (`core/transcripts.ts`).
 
 Whoever let it ring out has their switch turned off once the ringing is over
-- "Who is free". Not built yet: the hold line before the busy line (T16).
+- "Who is free". Nobody took it - or nobody was free to ring - while someone
+who takes transfers is on a call: on hold, not the busy line - "The hold
+line".
 
 **What the real transfers showed** (2026-10-20, Jeel's phone, two browsers on
 the dev number):
@@ -549,15 +554,72 @@ the dev number):
 - **Safari started the ringtone again by itself** a few seconds after a ring
   ended - fixed on its own, `TWILIO.md`, "Safari starts it again by itself".
 
+## The hold line
+
+Built in T16 (2026-10-21). A "yes" nobody can take now - nobody free to ring,
+or nobody took the ring - waits on hold while someone who takes transfers is
+on a call, and so will be free soon; otherwise the busy line at once, as
+before. The rules are pure, in `core/call-script.ts`: `planNobodyTook`,
+`holdGoesOn`, `placeLine`.
+
+1. **On hold** (`/auto/gather` or `/auto/after`): "Please hold." when it came
+   with the yes, then the script's `hold_body` - "All our agents are on other
+   calls. Please stay on the line." - and on to `/auto/hold`. The call's
+   `held_at` is set, the first time only, with its `call.held` record
+   (`holdCall`).
+2. **Waiting** (`/auto/hold`): the lead's place in the script's words - "You
+   are next." (`hold_next_body`), "You are number 2 in line."
+   (`hold_place_body`); first on hold, first in line, among every call
+   waiting (`holdState`) - then a track of hold music, then back to
+   `/auto/hold`.
+3. **Each time** it is asked: someone who takes transfers is still on a call
+   (`someoneOnCall`: an active account, the switch on, a call going) and the
+   lead has waited less than `auto_call_hold_max_minutes` (10) - the place
+   again and the next track. Otherwise the busy line, `transfer_missed`, so an
+   agent calls them back (T22 puts them first).
+4. **The hold watcher** (`api/hold-watch.ts`), every 30 seconds in the api
+   while automated calls are on: a lead who should not wait any more is sent
+   back to `/auto/hold` at once through Twilio's API, cutting the music short
+   (`recheckHold`, `via=watcher`). Who still waits is left alone.
+5. **Hanging up on hold** is `transfer_missed` at the call's end, never
+   `hung_up` - they said yes and reached nobody.
+
+**The music is Twilio's own classical hold music** (Jeel, 2026-10-21) - six
+tracks in a list in `integrations/twilio.ts` (`HOLD_MUSIC`), more to be added
+there if wanted. Each runs 5 to 10 minutes, and Twilio asks `/auto/hold` again
+only when one ends: so the lead hears their place when a track starts - every
+5 to 10 minutes - and the watcher, not the music, decides how soon they leave.
+Cutting a track to say the place again would restart the same piece, so it is
+not done.
+
+**Someone is on hold** is a call with `held_at`, no result yet, and not ended
+(`anyoneOnHold`) - while one is, the robot places no new calls (T20).
+
+**What the real calls showed** (2026-10-21, Jeel's phone, karm "on a call" -
+a call row added by hand in the local database for the test):
+
+- **On hold, then out when nobody is on a call** (call 40): the yes, the hold
+  line, "You are next." and a track; karm's call ended at 04:12:31, the
+  watcher sent the lead back 6 seconds later, and the busy line - 69 seconds
+  on hold, `transfer_missed`.
+- **The safety stop** (call 42, set to 1 minute for the test): karm still on
+  the call, the busy line after 86 seconds - the minute, then the watcher's
+  next look.
+- **Twilio asked `/auto/hold` twice as the music was cut**, the two requests
+  alike: the first gave the busy line and ended the call, the second found it
+  no longer on hold and said the same. The watcher's request is now marked
+  `via=watcher` and logged (`auto_call.hold_ended`), so T17 - which cuts the
+  music to ring someone - can see which of the two Twilio acts on.
+
 ## What is saved
 
 Nothing is overwritten (`AUDIT.md`).
 
 | What | Where |
 |---|---|
-| The call | `calls`, with `direction = 'automated'`; `agent_id` empty until someone takes a transfer. `script_result`: `transferred`, `transfer_missed`, `link_sent`, `not_interested`, `opted_out`, `no_response`, `voicemail_left`, `hung_up`, `unanswered` |
+| The call | `calls`, with `direction = 'automated'`; `agent_id` empty until someone takes a transfer. `script_result`: `transferred`, `transfer_missed`, `link_sent`, `not_interested`, `opted_out`, `no_response`, `voicemail_left`, `hung_up`, `unanswered`. `held_at`: when it went on hold (019) |
 | What the lead said | `call_answers`, one add-only row per answer: what Twilio heard, how sure, keys pressed, the choice it matched |
-| The script | `call_scripts`, `call_steps`, `call_choices` - rows, changed by migration, like the SMS flow (015). The script's own words - stop, no response, voicemail, busy, hold, the link text - are on its `call_scripts` row, so another script brings its own |
+| The script | `call_scripts`, `call_steps`, `call_choices` - rows, changed by migration, like the SMS flow (015). The script's own words - stop, no response, voicemail, busy, hold and the place on hold (019), the link text - are on its `call_scripts` row, so another script brings its own |
 | When it calls | `settings`: `auto_call_hours_start` 11:00, `auto_call_hours_end` 17:00, `auto_call_time_zone` America/Phoenix, `auto_call_days` mon,tue,wed,thu,fri, `auto_call_wait_minutes` 60, `auto_call_ring_seconds` 25, `auto_call_hold_max_minutes` 10, `auto_call_min_confidence` 0.4 |
 | The link text | `messages`, like every text |
 | Who is free | `users.taking_calls`, `taking_calls_why`, `users.ringable_until` |
@@ -613,7 +675,7 @@ ticket's own PR.
 | T15a | The transfer: everyone free | T10, T11, T13 | Done 2026-10-20 - real transfers: taken, taken after a decline, taken by nobody |
 | T15b | The transfer: the lead's own agent first | T15a | Done 2026-10-20 - real calls: rung alone first, then the others; not free, not waited for |
 | T15c | Letting a transfer ring out turns the switch off | T15a | Done 2026-10-20 - real calls: ran out, taken by another, declined, note box open |
-| T16 | The hold line | T15a | Not started |
+| T16 | The hold line | T15a | Done 2026-10-21 - real calls: on hold with music, out when nobody is on a call, the safety stop |
 | T17 | The next free person gets the waiting lead | T16 | Not started |
 | T18 | Voicemail | T12 | Not started |
 | T19 | A lead calling back reaches someone | T10, T11 | Not started |
@@ -1680,14 +1742,47 @@ soon, and is never kept waiting for nobody.
 - While anyone is on hold, the robot places no new calls (used by T20).
 
 **Done when**
-- [ ] A real call on hold hears "You are next" and the music.
-- [ ] The other call ends without taking it -> the busy line within 30 s.
-- [ ] The safety stop works (tested with a short setting).
-- [ ] "Is anyone on hold" is correct while waiting and after.
+- [x] A real call on hold hears "You are next" and the music - 2026-10-21,
+      call 40.
+- [x] The other call ends without taking it -> the busy line within 30 s -
+      6 seconds, call 40.
+- [x] The safety stop works (tested with a short setting) - 1 minute, the
+      busy line at 86 seconds, call 42.
+- [x] "Is anyone on hold" is correct while waiting and after - a live check:
+      on hold the first time only, recorded; first on hold first in line; the
+      next moves up; hanging up on hold is `transfer_missed`; a call with its
+      result cannot go on hold, nor a call that is not automated
+      (`auto-calls-live-check`, 91 checks). Who counts as on a call: the
+      switch on, active, a call going (`presence-live-check`, 50). Migration
+      019 as agreed, and a place line that does not say the place refused
+      (`call-script-live-check`, 33).
+- [x] Tests: `planNobodyTook`, `holdGoesOn`, `placeLine`, a yes put on hold;
+      the hold page - first, further back, nobody on a call, the safety stop,
+      not on hold, hung up, 404 off, 403 unsigned; the hold TwiML and its
+      tracks; the music cut short; the watcher - who it sends back, one look at
+      a time, a failed look.
 
-**Files:** `backend/src/api/twilio-webhooks.ts`, `backend/src/integrations/twilio.ts`,
-`backend/src/db/auto-calls.ts`.
-**Doc:** this one.
+As built: "The hold line". Three changes from the plan. **The music is
+Twilio's classical tracks, 5 to 10 minutes each** (Jeel's choice), so the
+place is said when a track starts, not every 30 seconds; **the 30-second
+checks are the server's own** - a watcher that cuts the music short - rather
+than Twilio asking when the music ends. **No Twilio queue (`<Enqueue>`)**: the
+place in line is counted from `held_at` in our database, which T17 needs
+anyway to offer the first in line to whoever comes free. And a "yes" with
+nobody free at all also waits on hold when someone is on a call, not only a
+ring nobody took. The words are rows - `hold_next_body`, `hold_place_body`
+(migration 019).
+
+**Files:** `backend/src/db/migrations/019_hold_line.sql`,
+`backend/src/core/call-script.ts` (+ test), `backend/src/core/call-script-fixtures.ts`,
+`backend/src/db/call-script.ts`, `backend/src/db/auto-calls.ts`, `backend/src/db/presence.ts`,
+`backend/src/core/activity.ts`, `backend/src/integrations/twilio.ts` (+ test),
+`backend/src/integrations/twilio-calls.ts` (+ test), `backend/src/api/hold-watch.ts` (+ test),
+`backend/src/api/index.ts`, `backend/src/api/twilio-webhooks.ts`,
+`backend/src/api/__tests__/auto-call-webhooks.test.ts`, `backend/scripts/auto-calls-live-check.ts`,
+`backend/scripts/presence-live-check.ts`, `backend/scripts/call-script-live-check.ts`.
+**Doc:** this one, "The hold line"; `SCHEMA.md`, `AUDIT.md`, `LOGGING.md`,
+`TWILIO.md`, `WORKFLOW.md`, `README.md`, `CLAUDE.md`.
 
 ---
 

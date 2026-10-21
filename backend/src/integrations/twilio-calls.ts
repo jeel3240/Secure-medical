@@ -1,7 +1,7 @@
 /**
  * Asking Twilio to place a call from the server - T12, docs/AUTO-CALLS.md -
  * and, once a transfer's ringing is over, how each person's ring of it ended
- * (T15c).
+ * (T15c); and cutting a lead's hold music short (T16).
  *
  * The only file that rings a phone through Twilio's REST API;
  * `integrations/twilio.ts` stays a set of pure functions.
@@ -15,7 +15,7 @@
 import twilio from 'twilio';
 import type { CallListInstanceCreateOptions } from 'twilio/lib/rest/api/v2010/account/call';
 import type { TwilioSettings } from '../twilio-settings';
-import { AUTO_AMD_PATH, AUTO_ANSWER_PATH, AUTO_STATUS_PATH, autoCallUrl } from './twilio';
+import { AUTO_AMD_PATH, AUTO_ANSWER_PATH, AUTO_HOLD_PATH, AUTO_STATUS_PATH, autoCallUrl } from './twilio';
 
 const REQUEST_TIMEOUT_MS = 10_000;
 
@@ -109,5 +109,22 @@ export async function transferRings(settings: TwilioSettings, callSid: string): 
     return legs.map((leg) => ({ to: leg.to, status: leg.status, startedAt: leg.startTime ?? null }));
   } catch {
     return null;
+  }
+}
+
+/**
+ * Sends the automated call `callSid`, waiting on hold, back to `/auto/hold`
+ * for `callId` now, cutting its music short - T16: the hold watcher found it
+ * should not wait any more. Marked `via=watcher`: Twilio was seen asking
+ * `/auto/hold` a second time as the music was cut, the two requests otherwise
+ * alike. True when Twilio took it. Never throws.
+ */
+export async function recheckHold(settings: TwilioSettings, callSid: string, callId: number): Promise<boolean> {
+  try {
+    const client = twilio(settings.accountSid, settings.authToken, { timeout: REQUEST_TIMEOUT_MS });
+    await client.calls(callSid).update({ url: autoCallUrl(settings, AUTO_HOLD_PATH, callId, { via: 'watcher' }), method: 'POST' });
+    return true;
+  } catch {
+    return false;
   }
 }

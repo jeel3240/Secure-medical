@@ -6,11 +6,13 @@ import type { TwilioSettings } from '../twilio-settings';
 
 const create = jest.fn();
 const list = jest.fn();
-const client = jest.fn((..._args: unknown[]) => ({ calls: { create, list } }));
+const update = jest.fn();
+const callsApi = Object.assign(jest.fn((_sid: string) => ({ update })), { create, list });
+const client = jest.fn((..._args: unknown[]) => ({ calls: callsApi }));
 jest.mock('twilio', () => (...args: unknown[]) => client(...args));
 
 // After the mock, so the module sees it.
-import { automatedCallRequest, LEAD_RING_SECONDS, placeAutomatedCall, transferRings } from './twilio-calls';
+import { automatedCallRequest, LEAD_RING_SECONDS, placeAutomatedCall, recheckHold, transferRings } from './twilio-calls';
 
 const SETTINGS: TwilioSettings = {
   accountSid: `AC${'1'.repeat(32)}`,
@@ -27,6 +29,8 @@ const BASE = 'https://calls.example.com/api/webhooks/twilio/auto';
 beforeEach(() => {
   create.mockReset();
   list.mockReset();
+  update.mockReset();
+  callsApi.mockClear();
   client.mockClear();
 });
 
@@ -96,5 +100,19 @@ describe('how a transfer\'s rings ended (T15c)', () => {
   it('Twilio cannot be asked: null, never a throw - nobody\'s switch is changed on a guess', async () => {
     list.mockRejectedValue(Object.assign(new Error('timeout'), { code: 'ETIMEDOUT' }));
     expect(await transferRings(SETTINGS, 'CA900')).toBeNull();
+  });
+});
+
+describe('cutting a lead\'s hold music short (T16)', () => {
+  it('sends the call back to /auto/hold for its row, now', async () => {
+    update.mockResolvedValue({});
+    expect(await recheckHold(SETTINGS, 'CA900', 42)).toBe(true);
+    expect(callsApi).toHaveBeenCalledWith('CA900');
+    expect(update).toHaveBeenCalledWith({ url: `${BASE}/hold?call=42&via=watcher`, method: 'POST' });
+  });
+
+  it('Twilio refusing - the call has ended meanwhile: false, never a throw', async () => {
+    update.mockRejectedValue(Object.assign(new Error('Call is not in-progress'), { status: 400, code: 21220 }));
+    expect(await recheckHold(SETTINGS, 'CA900', 42)).toBe(false);
   });
 });

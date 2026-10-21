@@ -61,6 +61,10 @@ export interface CallScript {
   busyBody: string;
   /** Nobody took a "yes" yet, but someone is on a call. */
   holdBody: string;
+  /** The lead's place, first in line - "You are next." (T16) */
+  holdNextBody: string;
+  /** The lead's place further back: `{place}` is the number - "You are number {place} in line." */
+  holdPlaceBody: string;
   /** Texted on a "yes" to the link. */
   linkText: string;
   /** In order: the first is asked first. */
@@ -299,6 +303,8 @@ export type TransferPlan =
    * everyone else free is rung next if they do not take it (`planAfterHolder`).
    */
   | { kind: 'ring'; say: string[]; agentIds: number[]; holderFirst: boolean }
+  /** Say the lines, then wait on hold: someone who takes transfers is on a call (T16). */
+  | { kind: 'hold'; say: string[] }
   | Extract<AskOrEnd, { kind: 'end' }>;
 
 /**
@@ -310,8 +316,10 @@ export type TransferPlan =
  * - **The lead's own agent is free** - `holder`, the agent holding the lead,
  *   among `free`: the line, then they ring alone first, as the lead's own
  *   agent (T15b). Not free, they are not waited for.
- * - **Nobody free**: the line, then the busy line - `transfer_missed`, so an
- *   agent calls the lead back (T22 puts them first in the queue).
+ * - **Nobody free**: the line, then - when someone who takes transfers is on a
+ *   call (`onCall`) - on hold (T16); otherwise the busy line,
+ *   `transfer_missed`, so an agent calls the lead back (T22 puts them first in
+ *   the queue). `planNobodyTook`.
  * - **Otherwise** the line, then the free people rung together, at most
  *   `MAX_RUNG_AT_ONCE`, in the order given (T15a). Who takes it, or that
  *   nobody did, is decided when the ringing ends.
@@ -319,27 +327,57 @@ export type TransferPlan =
 export function planTransfer(
   script: CallScript,
   transfer: TransferAction,
-  opts: { free: readonly number[]; machine: boolean; holder: number | null }
+  opts: { free: readonly number[]; machine: boolean; holder: number | null; onCall: boolean }
 ): TransferPlan {
   if (opts.machine) return { kind: 'end', say: [script.noResponseBody], result: 'no_response' };
   if (opts.holder !== null && opts.free.includes(opts.holder)) {
     return { kind: 'ring', say: [...transfer.say], agentIds: [opts.holder], holderFirst: true };
   }
-  if (opts.free.length === 0) {
-    return { kind: 'end', say: [...transfer.say, script.busyBody], result: 'transfer_missed' };
-  }
+  if (opts.free.length === 0) return planNobodyTook(script, { say: transfer.say, onCall: opts.onCall });
   return { kind: 'ring', say: [...transfer.say], agentIds: opts.free.slice(0, MAX_RUNG_AT_ONCE), holderFirst: false };
+}
+
+/**
+ * A "yes" nobody can take now - nobody free, or nobody took the ring - T16,
+ * AUTO-CALLS.md "The hold line": `say`, then on hold while someone who takes
+ * transfers is on a call (`onCall`), and so will be free soon; otherwise the
+ * busy line - nobody is coming.
+ */
+export function planNobodyTook(
+  script: CallScript,
+  opts: { say?: readonly string[]; onCall: boolean }
+): Extract<TransferPlan, { kind: 'hold' | 'end' }> {
+  const say = [...(opts.say ?? [])];
+  if (opts.onCall) return { kind: 'hold', say: [...say, script.holdBody] };
+  return { kind: 'end', say: [...say, script.busyBody], result: 'transfer_missed' };
+}
+
+/**
+ * Whether a lead waiting on hold waits on - T16: while someone who takes
+ * transfers is on a call, and for at most `maxSeconds` (the safety stop).
+ * Otherwise the busy line.
+ */
+export function holdGoesOn(opts: { waitedSeconds: number; maxSeconds: number; onCall: boolean }): boolean {
+  return opts.onCall && opts.waitedSeconds < opts.maxSeconds;
+}
+
+/** The lead's place in line, as said on hold - 1 is "You are next." (T16). */
+export function placeLine(script: CallScript, place: number): string {
+  return place <= 1 ? script.holdNextBody : script.holdPlaceBody.replace('{place}', String(place));
 }
 
 /**
  * The lead's own agent, rung alone first, let the transfer ring out - T15b:
  * everyone else free is rung together, at once, with nothing said first - the
  * lead has been listening to it ring. Not the agent who just let it ring.
- * Nobody else free: the busy line - `transfer_missed`.
+ * Nobody else free: on hold or the busy line, as `planNobodyTook`.
  */
-export function planAfterHolder(script: CallScript, opts: { free: readonly number[]; holder: number }): TransferPlan {
+export function planAfterHolder(
+  script: CallScript,
+  opts: { free: readonly number[]; holder: number; onCall: boolean }
+): TransferPlan {
   const others = opts.free.filter((id) => id !== opts.holder);
-  if (others.length === 0) return { kind: 'end', say: [script.busyBody], result: 'transfer_missed' };
+  if (others.length === 0) return planNobodyTook(script, { onCall: opts.onCall });
   return { kind: 'ring', say: [], agentIds: others.slice(0, MAX_RUNG_AT_ONCE), holderFirst: false };
 }
 

@@ -213,6 +213,8 @@ export const AUTO_AMD_PATH = '/api/webhooks/twilio/auto/amd';
 export const AUTO_CLAIM_PATH = '/api/webhooks/twilio/auto/claim';
 /** The transfer's ringing is over: taken, or nobody did (T15a). */
 export const AUTO_AFTER_PATH = '/api/webhooks/twilio/auto/after';
+/** A lead waiting on hold: their place, the music, and whether they still wait (T16). */
+export const AUTO_HOLD_PATH = '/api/webhooks/twilio/auto/hold';
 
 /** The full address of one of those webhooks, for one call. */
 export function autoCallUrl(
@@ -371,5 +373,43 @@ export function transferTwiml(
     client.parameter({ name: 'reason', value: 'transfer' });
     client.parameter({ name: 'step', value: opts.step.heading });
   }
+  return response.toString();
+}
+
+/**
+ * The hold music - Twilio's own classical tracks, free to play on a call
+ * (Jeel, 2026-10-20: these for now, more later if wanted). Each runs 5 to 10
+ * minutes, and Twilio asks `/auto/hold` again only when one ends - so the hold
+ * watcher checks every 30 seconds itself (`api/hold-watch.ts`).
+ */
+export const HOLD_MUSIC: readonly string[] = [
+  'ClockworkWaltz.mp3',
+  'BusyStrings.mp3',
+  'ith_chopin-15-2.mp3',
+  'MARKOVICHAMP-Borghestral.mp3',
+  'ith_brahms-116-4.mp3',
+  'Mellotroniac_-_Flight_Of_Young_Hearts_Flute.mp3',
+].map((file) => `https://s3.amazonaws.com/com.twilio.music.classical/${file}`);
+
+/** The track for a lead who has waited `waitedSeconds` - the next one each time a track ends. */
+export function holdTrack(waitedSeconds: number): string {
+  return HOLD_MUSIC[Math.floor(Math.max(0, waitedSeconds) / 60) % HOLD_MUSIC.length];
+}
+
+/**
+ * A lead on hold - T16, AUTO-CALLS.md "The hold line". The lines, then - with
+ * a `track` - the music, then back to `/auto/hold`, which says the place
+ * again and decides whether they still wait. Without a track - a "yes" just
+ * put on hold - straight on to `/auto/hold`.
+ */
+export function holdTwiml(
+  settings: TwilioSettings,
+  opts: { callId: number; script: CallScript; say: readonly string[]; track: string | null }
+): string {
+  const voice = scriptVoice(opts.script);
+  const response = new twilio.twiml.VoiceResponse();
+  for (const line of opts.say) response.say(voice, line);
+  if (opts.track) response.play(opts.track);
+  response.redirect({ method: 'POST' }, autoCallUrl(settings, AUTO_HOLD_PATH, opts.callId));
   return response.toString();
 }

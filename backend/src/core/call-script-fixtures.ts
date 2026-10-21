@@ -25,6 +25,8 @@ export const ANTIBIOTICS_CALL: CallScript = {
     "Hi, this is Seri calling from eDrugstore with a quick message - we're offering antibiotics at 25% off right now. We'd love to connect. Please call us back at {callback_number}. Thanks, and have a great day!",
   busyBody: 'All our agents are busy right now. An agent will call you back shortly.',
   holdBody: 'All our agents are on other calls. Please stay on the line.',
+  holdNextBody: 'You are next.',
+  holdPlaceBody: 'You are number {place} in line.',
   linkText:
     'eDrugstore: Here is your link to see our medications at discount prices: https://www.edrugstore.com/anti-ez Reply STOP to opt out.',
   steps: [

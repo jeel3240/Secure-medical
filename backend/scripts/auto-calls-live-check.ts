@@ -13,7 +13,10 @@
  * is never overwritten, and a stop blocks the number once; and that a call's
  * end gives an unfinished script its result; and that a transfer goes to whoever
  * took it - the lead taken over from any holder, recorded - once, and never to
- * a second person or a deactivated one (T15a). Getting those wrong rings a lead
+ * a second person or a deactivated one (T15a); and that a lead on hold keeps
+ * its place in line, first on hold first, is seen waiting until it leaves, and
+ * hanging up on hold is a missed transfer an agent calls back (T16). Getting
+ * those wrong rings a lead
  * twice, rings a number we may not, calls someone who said stop, gives a lead to
  * the wrong person, or loses the record of a call or of what the lead said.
  *
@@ -21,7 +24,11 @@
  * Run it with the others: scripts/live-checks.sh auto-calls
  */
 import {
+  anyoneOnHold,
+  callsOnHold,
   failAutomatedCall,
+  holdCall,
+  holdState,
   keepAnswer,
   linkAutomatedCall,
   missTransfer,
@@ -485,6 +492,64 @@ async function main(): Promise<void> {
     check('nobody took it: transfer_missed', (await callOf(lateCall)).script_result, 'transfer_missed');
     await missTransfer(callId);
     check('a transfer someone took is never made missed', (await callOf(callId)).script_result, 'transferred');
+  }
+
+  console.log('\nthe hold line (T16)');
+  {
+    const first = await placedCall('+15550000531', 'CA-HOLD-1');
+    const second = await placedCall('+15550000532', 'CA-HOLD-2');
+    const resultOf = async (id: number) =>
+      (await pool.query(`SELECT script_result FROM calls WHERE id = $1`, [id])).rows[0].script_result;
+
+    check('nobody on hold to begin with', await anyoneOnHold(), false);
+    check('on hold, the first time', await holdCall(first.callId), true);
+    const record = await lastRecord(first.leadId);
+    check('recorded with it, the system\'s doing', [record.action, record.actor_id, record.detail], [
+      'call.held',
+      null,
+      { callId: first.callId },
+    ]);
+    check('again: nothing new, recorded once', await holdCall(first.callId), false);
+    // The first went on hold a minute and a half before the second.
+    await pool.query(`UPDATE calls SET held_at = held_at - interval '90 seconds' WHERE id = $1`, [first.callId]);
+    await holdCall(second.callId);
+    check('someone is on hold - the robot waits (T20)', await anyoneOnHold(), true);
+
+    const [a, b] = [await holdState(first.callId), await holdState(second.callId)];
+    check('first on hold, first in line', [a?.place, b?.place], [1, 2]);
+    check('how long each has waited', [a!.waitedSeconds >= 90, b!.waitedSeconds < 30], [true, true]);
+    check('the watcher sees both, first in line first', (await callsOnHold()).map((c) => [c.callId, c.callSid]), [
+      [first.callId, 'CA-HOLD-1'],
+      [second.callId, 'CA-HOLD-2'],
+    ]);
+
+    await missTransfer(first.callId);
+    check('the first hears the busy line: no longer waiting', [await holdState(first.callId), await resultOf(first.callId)], [
+      null,
+      'transfer_missed',
+    ]);
+    check('and the second is next', (await holdState(second.callId))?.place, 1);
+
+    await finishCall({ callSid: 'CA-HOLD-2', outcome: 'answered', durationSec: 140 });
+    await settleAutomatedCall(second.callId);
+    check('hung up on hold: a missed transfer, so an agent calls back - never "hung up"', await resultOf(second.callId), 'transfer_missed');
+    check('nobody on hold now', [await anyoneOnHold(), await callsOnHold()], [false, []]);
+
+    const settled = await placedCall('+15550000533', 'CA-HOLD-3');
+    await missTransfer(settled.callId);
+    check('a call with its result already cannot go on hold', await holdCall(settled.callId), false);
+    const { rows: agentCall } = await pool.query(
+      `INSERT INTO calls (lead_id, agent_id, twilio_call_sid, direction, started_at)
+       VALUES ($1, (SELECT id FROM users LIMIT 1), 'CA-HOLD-4', 'outbound', now()) RETURNING id`,
+      [settled.leadId]
+    );
+    let refused = 'accepted';
+    try {
+      await pool.query(`UPDATE calls SET held_at = now() WHERE id = $1`, [agentCall[0].id]);
+    } catch (err) {
+      refused = (err as { constraint?: string }).constraint ?? 'error';
+    }
+    check('only an automated call can be on hold', refused, 'calls_held_is_automated');
   }
 
   console.log(failures === 0 ? '\nall checks passed' : `\n${failures} check(s) FAILED`);
