@@ -5,11 +5,12 @@
 import type { TwilioSettings } from '../twilio-settings';
 
 const create = jest.fn();
-const client = jest.fn((..._args: unknown[]) => ({ calls: { create } }));
+const list = jest.fn();
+const client = jest.fn((..._args: unknown[]) => ({ calls: { create, list } }));
 jest.mock('twilio', () => (...args: unknown[]) => client(...args));
 
 // After the mock, so the module sees it.
-import { automatedCallRequest, LEAD_RING_SECONDS, placeAutomatedCall } from './twilio-calls';
+import { automatedCallRequest, LEAD_RING_SECONDS, placeAutomatedCall, transferRings } from './twilio-calls';
 
 const SETTINGS: TwilioSettings = {
   accountSid: `AC${'1'.repeat(32)}`,
@@ -25,6 +26,7 @@ const BASE = 'https://calls.example.com/api/webhooks/twilio/auto';
 
 beforeEach(() => {
   create.mockReset();
+  list.mockReset();
   client.mockClear();
 });
 
@@ -74,5 +76,25 @@ describe('placing it', () => {
     create.mockRejectedValue(error);
     expect(await placeAutomatedCall(SETTINGS, { to: '+16025550123', callId: 42 })).toEqual({ kind: 'unknown', error: said });
     expect(create).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('how a transfer\'s rings ended (T15c)', () => {
+  it('the automated call\'s child calls - who was rung, and how each ring ended', async () => {
+    const at = new Date('2026-10-20T23:46:20Z');
+    list.mockResolvedValue([
+      { to: 'client:dev-agent-16', status: 'no-answer', startTime: at, from: '+14805308582' },
+      { to: 'client:dev-agent-19', status: 'busy', startTime: null, from: '+14805308582' },
+    ]);
+    expect(await transferRings(SETTINGS, 'CA900')).toEqual([
+      { to: 'client:dev-agent-16', status: 'no-answer', startedAt: at },
+      { to: 'client:dev-agent-19', status: 'busy', startedAt: null },
+    ]);
+    expect(list).toHaveBeenCalledWith({ parentCallSid: 'CA900', limit: 50 });
+  });
+
+  it('Twilio cannot be asked: null, never a throw - nobody\'s switch is changed on a guess', async () => {
+    list.mockRejectedValue(Object.assign(new Error('timeout'), { code: 'ETIMEDOUT' }));
+    expect(await transferRings(SETTINGS, 'CA900')).toBeNull();
   });
 });

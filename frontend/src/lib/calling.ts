@@ -3,6 +3,7 @@ import { toApiError } from '../api/client';
 import { getCallToken, postRingable } from '../api/calls';
 import type { RingKind } from './incoming-state';
 import { isBrowserBusy, onBusyChange } from './presence';
+import { switchMark, takeServerSwitch } from './taking-calls';
 
 /**
  * Calls in the browser, placed and received - Phase 4, TWILIO.md.
@@ -137,7 +138,8 @@ let reporting: Promise<void> = Promise.resolve();
  * sent. Each report goes after the one before it, so an older "available" can
  * never reach the server after a newer "busy". A failure is left alone: the
  * next check says it again, and until then the server's last word runs out by
- * itself.
+ * itself. The answer carries the "Taking calls" switch, which the server may
+ * have turned off for a missed transfer (T15c, `lib/taking-calls.ts`).
  */
 function reportRingable(): Promise<void> {
   reporting = reporting.then(async () => {
@@ -145,7 +147,9 @@ function reportRingable(): Promise<void> {
     const registered = await isRegistered();
     // Stopped meanwhile - signed out: nothing more to say.
     if (!listener) return;
-    await postRingable(registered && !isBrowserBusy()).catch(() => undefined);
+    const mark = switchMark();
+    const state = await postRingable(registered && !isBrowserBusy()).catch(() => null);
+    if (state && listener) takeServerSwitch(state, mark);
   });
   return reporting;
 }

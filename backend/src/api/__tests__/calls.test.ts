@@ -35,7 +35,8 @@ jest.mock('../../db/lead-texts', () => ({
 }));
 
 type RingableArgs = Parameters<typeof import('../../db/presence').setRingable>;
-const setRingable = jest.fn<Promise<void>, RingableArgs>();
+type Switch = Awaited<ReturnType<typeof import('../../db/presence').setRingable>>;
+const setRingable = jest.fn<Promise<Switch>, RingableArgs>();
 jest.mock('../../db/presence', () => ({ setRingable: (...a: RingableArgs) => setRingable(...a) }));
 
 // The raw archive writes through the pool; here it only has to be called.
@@ -50,7 +51,7 @@ beforeEach(() => {
   recordAnsweredBy.mockReset().mockResolvedValue(true);
   saveRecording.mockReset().mockResolvedValue(true);
   sendMissedCallText.mockReset().mockResolvedValue(true);
-  setRingable.mockReset().mockResolvedValue();
+  setRingable.mockReset().mockResolvedValue({ takingCalls: true, takingCallsWhy: 'by_hand' });
 });
 
 const SETTINGS: TwilioSettings = {
@@ -119,10 +120,17 @@ describe('a browser saying whether it can take a call', () => {
   it.each([true, false])('available: %s is saved for the signed-in person, and nobody else', async (available) => {
     const { maya, mayaId } = await setup(SETTINGS);
     const res = await maya.post('/api/calls/ringable').send({ available });
-    expect(res.status).toBe(204);
+    expect(res.status).toBe(200);
     expect(setRingable).toHaveBeenCalledTimes(1);
     const [, userId, saved] = setRingable.mock.calls[0];
     expect([userId, saved]).toEqual([mayaId, available]);
+  });
+
+  it('answers with the switch as the server holds it - how a browser learns it was turned off for a missed transfer (T15c)', async () => {
+    setRingable.mockResolvedValue({ takingCalls: false, takingCallsWhy: 'missed_transfer' });
+    const { maya } = await setup(SETTINGS);
+    const res = await maya.post('/api/calls/ringable').send({ available: true });
+    expect(res.body).toEqual({ takingCalls: false, takingCallsWhy: 'missed_transfer' });
   });
 
   it.each([

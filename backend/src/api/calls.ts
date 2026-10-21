@@ -63,8 +63,10 @@ export function callsRouter(deps: AppDeps): Router {
       const { pool } = require('../db/pool') as typeof import('../db/pool');
       // eslint-disable-next-line @typescript-eslint/no-require-imports
       const presence = require('../db/presence') as typeof import('../db/presence');
-      await presence.setRingable(pool, req.user!.id, available);
-      res.status(204).end();
+      // Answered with the switch as the server holds it, so a browser learns
+      // within half a minute that it was turned off for a missed transfer
+      // (T15c) - the screen says so.
+      res.json(await presence.setRingable(pool, req.user!.id, available));
     })
   );
 
@@ -85,10 +87,10 @@ export function callsRouter(deps: AppDeps): Router {
       }
       const user = req.user!;
       if (user.takingCalls !== on) {
-        await deps.users.update(user.id, { takingCalls: on });
+        await deps.users.update(user.id, { takingCalls: { on, why: 'by_hand' } });
         await recordTakingCalls(deps, user.id, on, 'by_hand');
       }
-      res.json({ takingCalls: on });
+      res.json({ takingCalls: on, takingCallsWhy: user.takingCalls !== on ? 'by_hand' : user.takingCallsWhy });
     })
   );
 

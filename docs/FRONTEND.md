@@ -435,6 +435,16 @@ fetch of its own and a reload shows what the server holds. A click saves
 first and flips after, disabled meanwhile; a failure leaves it as it was and
 says so on hover. Signing in starts it off.
 
+**Turned off by the server** (T15c, 2026-10-20): a person who lets a transfer
+ring out has the switch turned off. The browser learns it from the answer to
+its 30-second report (`lib/calling.ts`), which carries the switch and why
+(`takingCallsWhy`); `lib/taking-calls.ts` takes it into the signed-in user -
+unless a switch made in this browser crossed that report, whose own answer is
+newer. Off because of a missed transfer, the app bar shows "Missed a transfer
+· Taking calls off" beside the switch, amber on the navy bar
+(`.taking-calls__notice`, `role="status"`), until it is switched on again -
+after a reload too.
+
 **The centre column is a conversation, not a log.** `workspace/Conversation.tsx`
 shows the SMS thread, each call as one quiet line (since Phase 4) and the
 system markers - inbound on the left, ours on
@@ -775,7 +785,7 @@ response or an off-by-one age threshold is not:
 | `lib/call-state.test.ts`, `lib/calling.test.ts` | A call's states and wording; error sentences; who is calling |
 | `lib/calling.device.test.ts` | The join to Twilio's SDK, against a stand-in: placing a call, being rung, accept, decline, sign-out; telling the server whether it can take a call - registered or not, busy at once, every 30 seconds, in order |
 | `lib/presence.test.ts` | What keeps the browser busy: several reasons at once, listeners told only of a change, `useBusyWhile` following its component |
-| `layout/TakingCalls.test.tsx` | The "Taking calls" switch: shown only with automated calls on, flips once saved, one save at a time, a failure leaves it as it was |
+| `layout/TakingCalls.test.tsx`, `lib/taking-calls.test.ts` | The "Taking calls" switch: shown only with automated calls on, flips once saved, one save at a time, a failure leaves it as it was; the server's word taken from the report unless a switch here crossed it; "Missed a transfer" shown for that reason only, gone once switched on |
 | `pages/workspace/CallBar.test.tsx` | The call bar in every state, and its note box |
 | `lib/incoming-state.test.ts`, `layout/IncomingCall.test.tsx` | A lead calling in: ringing, answered, missed, declined, one call at a time; what the card shows; Call back; keeping the browser busy until the note box is done; a ring several people got - cleared quietly, declined while busy with the note kept as typed, a transfer's card |
 | `lib/ringtone.test.ts`, `lib/call-notification.test.ts`, `lib/caller-context.test.ts` | The ring and its first-click unlock; the desktop notification; the "Calling back" line, and a transfer's line |

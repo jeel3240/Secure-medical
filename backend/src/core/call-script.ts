@@ -342,3 +342,32 @@ export function planAfterHolder(script: CallScript, opts: { free: readonly numbe
   if (others.length === 0) return { kind: 'end', say: [script.busyBody], result: 'transfer_missed' };
   return { kind: 'ring', say: [], agentIds: others.slice(0, MAX_RUNG_AT_ONCE), holderFirst: false };
 }
+
+/**
+ * Who let a transfer's ring run out - T15c, AUTO-CALLS.md "Who is free":
+ * their "Taking calls" switch goes off. Decided once the ringing is over, from
+ * how the whole ring ended (`dialStatus`, Twilio's `DialCallStatus`):
+ *
+ * - **Taken, or the lead hung up while it rang**: nobody - the ring was not
+ *   left to run out. (`hungUp`: the lead's call had ended by then.)
+ * - **Every ring declined** (`busy`) or it failed: nobody - declining is a
+ *   person who is there.
+ * - **It ran out** (`no-answer`): one person rung - the lead's own agent,
+ *   alone - is that person. Several: those whose own ring ran out, from
+ *   `rings` (how each person's ring ended, by agent); not who declined. Not
+ *   known, nobody.
+ *
+ * A person's own ring cannot decide it alone: Twilio reports a ring cut short
+ * by someone else answering exactly as one that ran out - `no-answer` both,
+ * found on a real call, 2026-10-20.
+ */
+export function rangOut(opts: {
+  dialStatus: string;
+  hungUp: boolean;
+  rung: readonly number[];
+  rings: ReadonlyMap<number, string> | null;
+}): number[] {
+  if (opts.hungUp || opts.dialStatus !== 'no-answer') return [];
+  if (opts.rung.length === 1) return [...opts.rung];
+  return opts.rung.filter((agentId) => opts.rings?.get(agentId) === 'no-answer');
+}

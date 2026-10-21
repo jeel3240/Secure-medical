@@ -320,11 +320,13 @@ export function autoCallTwiml(
  *
  * Accepting runs `/auto/claim` on that person's leg before they are connected:
  * it makes the lead theirs. When the ringing is over, taken or not, Twilio
- * asks `/auto/after` - told the step, and when the one person rung was the
- * lead's own agent (`holderFirst`), who it was, so the others are rung next.
- * No per-person status reports: the end is the call's own, as for the
- * one-agent ring. Recorded from the moment a person answers, both sides
- * apart - the lead on channel 1 - as every call is.
+ * asks `/auto/after` - told the step, and who was rung: the lead's own agent
+ * alone (`holder`, so the others are rung next), or everyone together
+ * (`rung`) - so it can tell who let it ring out (T15c). No per-person status
+ * reports: Twilio reports a ring cut short by someone else answering exactly
+ * as one that ran out, so only the end of the whole ring can say. Recorded
+ * from the moment a person answers, both sides apart - the lead on channel 1 -
+ * as every call is.
  */
 export function transferTwiml(
   settings: TwilioSettings,
@@ -349,7 +351,10 @@ export function transferTwiml(
   const response = new twilio.twiml.VoiceResponse();
   for (const line of opts.say) response.say(voice, line);
   if (opts.notice && settings.transcriptionServiceSid) response.say(voice, RECORDING_NOTICE);
-  const after = { step: opts.step.id, ...(opts.holderFirst ? { holder: opts.agentIds[0] } : {}) };
+  const after = {
+    step: opts.step.id,
+    ...(opts.holderFirst ? { holder: opts.agentIds[0] } : { rung: opts.agentIds.join(',') }),
+  };
   const dial = response.dial({
     timeout: opts.ringSeconds,
     action: autoCallUrl(settings, AUTO_AFTER_PATH, opts.callId, after),

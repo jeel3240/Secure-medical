@@ -206,16 +206,16 @@ you change something the docs describe, update the doc in the same commit.
     src/core/answers.ts     matches a reply to a choice of the question asked, pure - an SMS reply, and a spoken answer on the automated call (T7)
     src/db/flows.ts         loads a flow, starts a conversation on the active one, and gives its first question
     src/core/flow-fixtures.ts  the antibiotics flow as a constant, for tests only
-    src/core/call-script.ts the automated call's script, pure: its shape, what the call does after each answer (firstAsk, afterAnswer - T8), on a live call with a lead who may have hung up (handleAnswer), and when it listens (splitForListening) - T13; who a "yes" rings (planTransfer, planAfterHolder) - T15a, T15b
+    src/core/call-script.ts the automated call's script, pure: its shape, what the call does after each answer (firstAsk, afterAnswer - T8), on a live call with a lead who may have hung up (handleAnswer), and when it listens (splitForListening) - T13; who a "yes" rings (planTransfer, planAfterHolder) - T15a, T15b; who let it ring out (rangOut) - T15c
     src/core/call-script-fixtures.ts  the call script as a constant, for tests only - the live check holds it to the database
     src/db/call-script.ts   loads the automated call's script (migration 015), and the settings a call reads: confidence, ring time
     scripts/call-script-live-check.ts  proves migrations 015 and 018: the script as agreed, its guards, answers add-only
-    src/db/presence.ts      who can take a call now: each open browser says so, it holds two minutes (T9); FREE_SQL, who is free (T10)
+    src/db/presence.ts      who can take a call now: each open browser says so, it holds two minutes (T9); FREE_SQL, who is free (T10); the switch turned off after a ring let run out (T15c)
     scripts/presence-live-check.ts  proves it: the two minutes, busy, sign-out and deactivation clear it; the switch; who is free
     src/api/taking-calls.ts the "Taking calls" switch: why it changed, and its activity row (T10)
     src/auto-calls-settings.ts  AUTO_CALLS: on only when exactly "on" (T10); AUTO_CALL_TEST_NUMBERS, the only numbers rung outside production (T12)
     src/db/auto-calls.ts    an automated call's row: written before Twilio is asked, linked to Twilio's call, ended if refused (T12); each answer, its result and a stop's block kept, and the end settled (T13); a transfer taken or missed (T15a)
-    src/integrations/twilio-calls.ts  the only file that asks Twilio to ring a phone - once, never retried (T12)
+    src/integrations/twilio-calls.ts  the only file that asks Twilio to ring a phone - once, never retried (T12); and how each ring of a transfer ended (T15c)
     src/worker/place-auto-call.ts  places one automated call: the row, then Twilio, then its answer - the dev command's and the dialler's path (T12)
     scripts/dev-auto-call.ts  local testing only: the server calls one lead - npm run dev:auto-call; --again gives the number to a fresh test lead, --unblock lifts a test block (T13); scripts/dev-phone.ts reads the number
     scripts/auto-calls-live-check.ts  proves placing one: the row, every refusal, linking, failing, two placements racing; each answer kept once; taking a transfer
@@ -265,7 +265,8 @@ you change something the docs describe, update the doc in the same commit.
     src/lib/incoming-state.ts  a lead calling in: ringing, answered, missed; alone or one of several (T11) - pure
     src/lib/incoming-call.ts   the store that joins those states to Twilio
     src/lib/presence.ts     what keeps this browser busy - a call, a ring, a note box; calling.ts tells the server (T9)
-    src/layout/TakingCalls.tsx  the "Taking calls" switch in the app bar, shown only with automated calls on (T10)
+    src/layout/TakingCalls.tsx  the "Taking calls" switch in the app bar, shown only with automated calls on (T10); "Missed a transfer · Taking calls off" (T15c)
+    src/lib/taking-calls.ts the switch as the server holds it, taken from the browser's 30-second report (T15c)
     src/layout/IncomingCall.tsx  the incoming-call card and missed-call notice, on every screen
     src/lib/caller-context.ts  "Calling back · you tried 2× today", and a transfer's line (T11), pure
     src/lib/ringtone.ts        the ring of an incoming call, made in the browser
@@ -300,7 +301,7 @@ you change something the docs describe, update the doc in the same commit.
     AUTH.md  POLLER.md  WORKFLOW.md  WEBHOOKS.md  ADMIN-LEADS.md  STATE-MACHINE.md  TWILIO.md
     AUDIT.md                the activity log: nothing is lost
     FLOWS.md                how SMS scripts are stored as rows, how to add one, and how questions are named
-    AUTO-CALLS.md           automated outbound calls: the agreed design and the build tracker (T0-T15b done as of 2026-10-20: the server places a call, asks the script, keeps the answers, texts the link, puts a "yes" through to the lead's own agent first, then everyone free; T15c on, not built)
+    AUTO-CALLS.md           automated outbound calls: the agreed design and the build tracker (T0-T15c done as of 2026-10-20: the server places a call, asks the script, keeps the answers, texts the link, puts a "yes" through to the lead's own agent first, then everyone free, switches off whoever let it ring out; the hold line, T16 on, not built)
     QUEUE.md  AGENT-WORKSPACE.md  ADMIN.md  LOGGING.md  FRONTEND.md
 ```
 
@@ -331,7 +332,7 @@ Rule: **only one `open` conversation per phone number, ever.**
 to 018 as of 2026-10-18 - are the source of truth and `docs/SCHEMA.md` explains
 them. It differs from the list above:
 
-- **users** also has `session_version` and `last_login_at`, and since 016 (T9, 2026-10-18) `ringable_until`: until when the person's browser can take a call - said every 30 seconds, held two minutes, cleared when the session ends. `docs/AUTO-CALLS.md`, "Who is free". Since 017 (T10) `taking_calls` and `taking_calls_at`: the "Taking calls" switch, off at every sign-in and sign-out.
+- **users** also has `session_version` and `last_login_at`, and since 016 (T9, 2026-10-18) `ringable_until`: until when the person's browser can take a call - said every 30 seconds, held two minutes, cleared when the session ends. `docs/AUTO-CALLS.md`, "Who is free". Since 017 (T10) `taking_calls` and `taking_calls_at`: the "Taking calls" switch, off at every sign-in and sign-out; and `taking_calls_why` (T15c), why it is so - `missed_transfer` when the server turned it off after a ring let run out.
 - **leads** has `group_id`, `group_name` and `ezt_added_at` instead of `group` and `ezt_contact_id`; EZ Texting returns no contact id.
 - **conversations** also has `agent_took_over_at` (003), `completed_at` (004), and `q1_label` to `q3_label` (009): the word the lead chose, kept with the number, so renaming a choice never renames an earlier answer.
 - **dnc_list** also has `released_at` and `released_reason` (002): a block is lifted, never deleted.

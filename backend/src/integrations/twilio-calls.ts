@@ -1,5 +1,7 @@
 /**
- * Asking Twilio to place a call from the server - T12, docs/AUTO-CALLS.md.
+ * Asking Twilio to place a call from the server - T12, docs/AUTO-CALLS.md -
+ * and, once a transfer's ringing is over, how each person's ring of it ended
+ * (T15c).
  *
  * The only file that rings a phone through Twilio's REST API;
  * `integrations/twilio.ts` stays a set of pure functions.
@@ -83,5 +85,29 @@ export async function placeAutomatedCall(
       return { kind: 'refused', status, code: typeof code === 'number' ? code : null };
     }
     return { kind: 'unknown', error: typeof code === 'string' ? code : typeof status === 'number' ? `http_${status}` : 'no_response' };
+  }
+}
+
+/** One ring of a transfer, as Twilio keeps it - `transferRings`. */
+export interface TransferRing {
+  /** Who was rung: `client:agent-16`. */
+  to: string;
+  /** `no-answer` (ran out, or cut short), `busy` (declined), `completed` (taken). */
+  status: string;
+  startedAt: Date | null;
+}
+
+/**
+ * How each ring of the automated call `callSid`'s transfer ended - its rings
+ * are the call's child calls. Read once the ringing is over (T15c). Null when
+ * Twilio could not be asked: then nobody's switch is changed.
+ */
+export async function transferRings(settings: TwilioSettings, callSid: string): Promise<TransferRing[] | null> {
+  try {
+    const client = twilio(settings.accountSid, settings.authToken, { timeout: REQUEST_TIMEOUT_MS });
+    const legs = await client.calls.list({ parentCallSid: callSid, limit: 50 });
+    return legs.map((leg) => ({ to: leg.to, status: leg.status, startedAt: leg.startTime ?? null }));
+  } catch {
+    return null;
   }
 }

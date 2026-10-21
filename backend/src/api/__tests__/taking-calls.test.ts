@@ -28,11 +28,11 @@ describe('switching it by hand', () => {
 
     const on = await agent.post('/api/calls/taking-calls').send({ on: true });
     expect(on.status).toBe(200);
-    expect(on.body).toEqual({ takingCalls: true });
+    expect(on.body).toEqual({ takingCalls: true, takingCallsWhy: 'by_hand' });
     expect((await users.findById(maya.id))!.takingCalls).toBe(true);
 
     const off = await agent.post('/api/calls/taking-calls').send({ on: false });
-    expect(off.body).toEqual({ takingCalls: false });
+    expect(off.body).toEqual({ takingCalls: false, takingCallsWhy: 'by_hand' });
     expect((await users.findById(maya.id))!.takingCalls).toBe(false);
 
     const rows = activity.filter((a) => a.action === 'calls.availability_changed');
@@ -42,9 +42,12 @@ describe('switching it by hand', () => {
     ]);
   });
 
-  it('saying what it already is records nothing - only a change is a change', async () => {
+  it('saying what it already is records nothing - only a change is a change - and keeps its reason', async () => {
     const { agent, activity } = await setup();
-    await agent.post('/api/calls/taking-calls').send({ on: false });
+    expect((await agent.post('/api/calls/taking-calls').send({ on: false })).body).toEqual({
+      takingCalls: false,
+      takingCallsWhy: 'sign_in',
+    });
     await agent.post('/api/calls/taking-calls').send({ on: true });
     await agent.post('/api/calls/taking-calls').send({ on: true });
     expect(switches(activity)).toEqual([[true, 'by_hand']]);
@@ -105,7 +108,7 @@ describe('off at every sign-in and sign-out', () => {
     await agent.post('/api/calls/taking-calls').send({ on: true });
 
     const res = await request(app).post('/api/auth/login').send({ email: 'maya@example.com', password: PASSWORD });
-    expect(res.body.user.takingCalls).toBe(false);
+    expect(res.body.user).toMatchObject({ takingCalls: false, takingCallsWhy: 'sign_in' });
     expect((await users.findById(maya.id))!.takingCalls).toBe(false);
     expect(activity.map((a) => a.action).slice(-2)).toEqual(['auth.signed_in', 'calls.availability_changed']);
     expect(switches(activity)).toEqual([
@@ -119,6 +122,21 @@ describe('off at every sign-in and sign-out', () => {
     await agent.post('/api/auth/logout');
     await signIn(app, 'maya@example.com', PASSWORD);
     expect(switches(activity)).toEqual([]);
+  });
+
+  it('off because of a missed transfer, a sign-in gives it a new reason - yesterday\'s miss is not shown today', async () => {
+    const { app, users, maya } = await setup();
+    await users.update(maya.id, { takingCalls: { on: false, why: 'missed_transfer' } });
+    const res = await request(app).post('/api/auth/login').send({ email: 'maya@example.com', password: PASSWORD });
+    expect(res.body.user.takingCallsWhy).toBe('sign_in');
+    expect((await users.findById(maya.id))!.takingCallsWhy).toBe('sign_in');
+  });
+
+  it('signing out gives it its reason', async () => {
+    const { agent, users, maya } = await setup();
+    await agent.post('/api/calls/taking-calls').send({ on: true });
+    await agent.post('/api/auth/logout');
+    expect((await users.findById(maya.id))!.takingCallsWhy).toBe('sign_out');
   });
 });
 

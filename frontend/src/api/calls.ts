@@ -1,4 +1,8 @@
 import { api } from './client';
+import type { PublicUser } from './types';
+
+/** The "Taking calls" switch as the server holds it, and why. */
+export type TakingCallsState = Pick<PublicUser, 'takingCalls' | 'takingCallsWhy'>;
 
 /**
  * Browser calling - Phase 4, TWILIO.md.
@@ -44,14 +48,16 @@ export async function getCallToken(): Promise<string> {
 /**
  * Tells the server whether this browser can take a call now. It holds for two
  * minutes. Given up after ten seconds: these are sent one after another, and
- * one stuck request must not hold back the rest.
+ * one stuck request must not hold back the rest. Answered with the switch as
+ * the server holds it - how the screen learns the server turned it off (T15c).
  */
-export async function postRingable(available: boolean): Promise<void> {
-  await api.post('/calls/ringable', { available }, { timeout: 10_000 });
+export async function postRingable(available: boolean): Promise<TakingCallsState> {
+  const { data } = await api.post<TakingCallsState>('/calls/ringable', { available }, { timeout: 10_000 });
+  return data;
 }
 
 /** Switches "Taking calls" on or off for the signed-in person. Resolves to what it now is. */
-export async function setTakingCalls(on: boolean): Promise<boolean> {
-  const { data } = await api.post<{ takingCalls: boolean }>('/calls/taking-calls', { on });
-  return data.takingCalls;
+export async function setTakingCalls(on: boolean): Promise<TakingCallsState> {
+  const { data } = await api.post<TakingCallsState>('/calls/taking-calls', { on });
+  return data;
 }

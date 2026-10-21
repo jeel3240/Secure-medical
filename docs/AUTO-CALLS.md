@@ -1,9 +1,9 @@
 # Automated outbound calls
 
-**Planned 2026-10-15. Being built: T0 to T15b are done (2026-10-20) - the
-server places a call, asks the script, keeps every answer, texts the link, and
-puts a "yes" through to the lead's own agent first, then everyone free;
-switching off a person who let a transfer ring out (T15c) onwards, and the
+**Planned 2026-10-15. Being built: T0 to T15c are done (2026-10-20) - the
+server places a call, asks the script, keeps every answer, texts the link,
+puts a "yes" through to the lead's own agent first, then everyone free, and
+switches off whoever let it ring out; the hold line (T16) onwards, and the
 robot calling by itself (T20), are not built yet.** This
 doc is the agreed design and the tracker for building it. Each ticket below updates its row when it is merged,
 and the sections it touches, so the doc always says what is built and what is
@@ -163,9 +163,44 @@ nothing.
   saved could leave someone believing they will be rung when they will not. A
   failure leaves it where it was, and says so on hover.
 - **Signing in turns it off even if another browser left it on**: the person
-  chooses again. That other browser still shows "on" until it is reloaded -
-  the safe way round, since it is not rung. T15c, which turns it off from the
-  server, needs the browser told; noted there.
+  chooses again. That other browser shows "off" within half a minute - every
+  browser learns the switch from the answer to its 30-second report (T15c,
+  below).
+
+**Letting a transfer ring out turns it off** - built in T15c (2026-10-20).
+Decided when the ringing is over (`/auto/after`, `rangOut` in
+`core/call-script.ts`), never from one person's ring on its own: Twilio
+reports a ring cut short by someone else answering exactly as one that ran
+its course - `no-answer`, SIP 487, both - found on a real call that switched
+off the person who had not been given the chance.
+
+- **Someone took it, or the lead hung up while it rang**: nobody's switch
+  changes - the ring was not left to run out.
+- **It ran out**: the lead's own agent rung alone (T15b) is switched off. With
+  several rung, Twilio is asked how each person's ring ended - the transfer's
+  rings are the automated call's child calls (`transferRings` in
+  `integrations/twilio-calls.ts`) - and only those whose own ring ran out
+  (`no-answer`) are switched off, never who declined (`busy`) - and for
+  someone rung more than once on one call, their latest ring. Not answered by
+  Twilio: nobody (`auto_call.rings_unread`).
+- **Only if still on, the account active, and not on a call by now**
+  (`switchOffAfterMissedRing` in `db/presence.ts`) - someone who started a
+  call of their own while it rang keeps it on. The browser's word is not asked:
+  the ring itself made it busy.
+- **One statement with its record**: `calls.availability_changed`, `on:
+  false`, `why: missed_transfer` and the `callId` - the system's doing, so no
+  actor; the person is its subject.
+- **Why it is so is kept with it**: `users.taking_calls_why` - `by_hand`,
+  `sign_in`, `sign_out` or `missed_transfer` - written on every write of the
+  switch (migration 017, extended before release). Sign-in always writes
+  `sign_in`, so yesterday's missed transfer is never shown today.
+- **The screen learns it from the browser's 30-second report**:
+  `POST /api/calls/ringable` answers with the switch and why
+  (`setRingable`); the browser takes it into the signed-in user
+  (`lib/taking-calls.ts`), unless a switch made in that browser crossed it.
+  The app bar then shows "Missed a transfer · Taking calls off" beside the
+  switch, in the app's warning colour, until it is switched on again - also
+  after a reload. Seen within about ten seconds on real calls.
 - A deactivated account is never free, whatever its switch says; signing in
   again after reactivation turns it off.
 
@@ -389,7 +424,7 @@ be trusted").
 | `POST /api/webhooks/twilio/auto/status` | How it ended, saved as every call's end is (`finishCall`): outcome, talk time, `call.ended`; then an unfinished script given its result (T13). Never a missed-call text | - |
 | `POST /api/webhooks/twilio/auto/amd` | Who picked up, kept as `answered_by`; a machine on an answered call makes it `voicemail` | T18: the voicemail message |
 | `POST /api/webhooks/twilio/auto/claim` | A person accepted the transfer: the call and the lead become theirs (`takeTransfer`) - run on their leg before they are connected (T15a) | - |
-| `POST /api/webhooks/twilio/auto/after` | The transfer's ringing is over: taken, nothing more; the lead's own agent did not take it, everyone else free rung (T15b); not taken, `transfer_missed` and the busy line (T15a) | T16: the hold line first |
+| `POST /api/webhooks/twilio/auto/after` | The transfer's ringing is over: taken, nothing more; the lead's own agent did not take it, everyone else free rung (T15b); not taken, `transfer_missed` and the busy line (T15a); whoever let it ring out switched off, after Twilio has its answer (T15c). The address names the step and who was rung - `holder`, or `rung` | T16: the hold line first |
 
 **Trying it locally** - `npm run dev:auto-call -- <phone>` (`scripts/dev-auto-call.ts`)
 calls the local lead with that number. It needs, in the environment the api
@@ -469,8 +504,8 @@ pure, `planTransfer` and `planAfterHolder` in `core/call-script.ts`.
    call is: the lead on channel 1, the person on channel 2 - so the
    transcript says who said what (`core/transcripts.ts`).
 
-Not built yet: a person who lets a transfer ring out has their switch turned
-off (T15c); the hold line before the busy line (T16).
+Whoever let it ring out has their switch turned off once the ringing is over
+- "Who is free". Not built yet: the hold line before the busy line (T16).
 
 **What the real transfers showed** (2026-10-20, Jeel's phone, two browsers on
 the dev number):
@@ -503,6 +538,16 @@ the dev number):
   ahead, rightly - but the call's outcome was then saved as `voicemail`, as
   T12 does for any answered call a machine picked up. T18 must not act on a
   late "machine" once the lead has answered - "T18".
+- **Twilio reports every ring cut short as `no-answer`** (T15c, calls 33 and
+  35): a ring that ran out and one stopped because someone else answered
+  arrive identical, SIP 487 both - which is why who let it ring out is decided
+  at the end of the whole ring ("Who is free").
+- **Accepting with no microphone turns the ring down**: on a Mac mini with
+  none, Accept showed an error and Twilio counted the ring `busy` - the
+  transfer went on to the others, and that person's switch stayed on (call 34).
+  A microphone plugged in afterwards is seen after a reload.
+- **Safari started the ringtone again by itself** a few seconds after a ring
+  ended - fixed on its own, `TWILIO.md`, "Safari starts it again by itself".
 
 ## What is saved
 
@@ -515,7 +560,7 @@ Nothing is overwritten (`AUDIT.md`).
 | The script | `call_scripts`, `call_steps`, `call_choices` - rows, changed by migration, like the SMS flow (015). The script's own words - stop, no response, voicemail, busy, hold, the link text - are on its `call_scripts` row, so another script brings its own |
 | When it calls | `settings`: `auto_call_hours_start` 11:00, `auto_call_hours_end` 17:00, `auto_call_time_zone` America/Phoenix, `auto_call_days` mon,tue,wed,thu,fri, `auto_call_wait_minutes` 60, `auto_call_ring_seconds` 25, `auto_call_hold_max_minutes` 10, `auto_call_min_confidence` 0.4 |
 | The link text | `messages`, like every text |
-| Who is free | `users.taking_calls`, `users.ringable_until` |
+| Who is free | `users.taking_calls`, `taking_calls_why`, `users.ringable_until` |
 | Every action | `activity_log` |
 
 **Why not the SMS flow tables:** only one flow can be active, and two active
@@ -567,7 +612,7 @@ ticket's own PR.
 | T14 | Text the link | T13 | Done 2026-10-19 - the link reached Jeel's phone |
 | T15a | The transfer: everyone free | T10, T11, T13 | Done 2026-10-20 - real transfers: taken, taken after a decline, taken by nobody |
 | T15b | The transfer: the lead's own agent first | T15a | Done 2026-10-20 - real calls: rung alone first, then the others; not free, not waited for |
-| T15c | Letting a transfer ring out turns the switch off | T15a | Not started |
+| T15c | Letting a transfer ring out turns the switch off | T15a | Done 2026-10-20 - real calls: ran out, taken by another, declined, note box open |
 | T16 | The hold line | T15a | Not started |
 | T17 | The next free person gets the waiting lead | T16 | Not started |
 | T18 | Voicemail | T12 | Not started |
@@ -1558,7 +1603,7 @@ missed transfer, and its screen says so.
   switch turned off and sees "Missed a transfer · Taking calls off". Someone
   who started a call in those seconds keeps it on.
 - Who was rung is known only to the call: keep it, so `/auto/after` can turn
-  off exactly those people.
+  off exactly those people. (As built: the end's address names them.)
 - The browser must learn that: its switch shows what the server holds (T10),
   and today it reads it only at sign-in and when switched. One way: the
   30-second report (T9) answers with the switch's state. The switch-off is a
@@ -1566,17 +1611,54 @@ missed transfer, and its screen says so.
   same statement. Noted 2026-10-18.
 
 **Done when**
-- [ ] A live check: rung and still free -> off, recorded `missed_transfer`;
-      on a call by then -> still on; someone else took it -> nobody's switch
-      changes.
-- [ ] Two browsers, a real call nobody takes: both switches off, both screens
-      say so within 30 seconds.
-- [ ] B on a call -> B is not rung, and B's switch stays on.
+- [x] A live check: rung and still free -> off, recorded `missed_transfer` in
+      the same statement, the system's doing; the report then answered with
+      it; the same again changes nothing; on a call by then -> still on; a
+      deactivated account -> nothing; the reason kept on every write
+      (`presence-live-check`, 45 checks).
+- [x] Tests: `rangOut` - alone and ran out, several with one declined, not
+      known, taken, every ring declined, the lead hung up; the webhook - only
+      whose own ring ran out, someone rung twice by their latest ring, the
+      lead's own agent without asking Twilio, a decline, a hang-up, Twilio
+      not answering, a forged list; reading the
+      rings; the reason at sign-in, sign-out and by hand; the report's answer;
+      the notice shown only for that reason and gone once switched on; a report
+      that crossed a switch made here not taken (906 backend, 351 frontend
+      tests).
+- [x] Two browsers, a real call nobody takes: both switches off, both screens
+      say so - 2026-10-20, calls 27, 28 and 38 (38 through Twilio's own record
+      of each ring).
+- [x] Someone else takes it -> nobody else's switch changes - call 37. (Call
+      35, before the fix, switched the other person off: Twilio reports a ring
+      cut short by another's answer as `no-answer`, like one that ran out.)
+- [x] B not free -> B is not rung, and B's switch stays on - call 36: karm's
+      note box was still open, so only Jeel was rung; karm's switch stayed on.
+      A decline keeps it on too - call 34.
 
-**Files:** `backend/src/api/twilio-webhooks.ts`, `backend/src/db/auto-calls.ts`,
-`backend/src/db/presence.ts`, `backend/src/api/calls.ts`,
-`frontend/src/layout/TakingCalls.tsx`, `frontend/src/lib/calling.ts`.
-**Doc:** this one, "Who is free"; `AUDIT.md`.
+As built: "Who is free", "Letting a transfer ring out turns it off". Two
+changes from the plan. **Decided at the end of the whole ring, not from each
+person's ring**: built first with a report per person's ring (`/auto/rang`),
+it switched off a person whose ring was cut short by a colleague answering -
+Twilio reports that exactly as a ring that ran out - so that webhook was
+removed, and `/auto/after` decides, reading from Twilio how each ring ended
+when several were rung. **Why the switch is as it is is stored**
+(`users.taking_calls_why`, in migration 017 before release), so the screen
+says "Missed a transfer" for that reason only, after a reload too, and never
+for yesterday's. Every browser now learns the switch within half a minute,
+not only the one rung.
+
+**Files:** `backend/src/core/call-script.ts` (+ test),
+`backend/src/integrations/twilio.ts` (+ test), `backend/src/integrations/twilio-calls.ts`
+(+ test), `backend/src/api/twilio-webhooks.ts`,
+`backend/src/api/__tests__/auto-call-webhooks.test.ts`, `backend/src/db/presence.ts`,
+`backend/src/db/users.ts`, `backend/src/db/migrations/017_taking_calls.sql`,
+`backend/src/api/calls.ts`, `backend/src/api/auth/routes.ts`,
+`backend/src/api/taking-calls.ts`, `backend/src/api/users/types.ts`, their tests,
+`backend/scripts/presence-live-check.ts`, `frontend/src/lib/taking-calls.ts` (+ test),
+`frontend/src/lib/calling.ts`, `frontend/src/api/calls.ts`, `frontend/src/api/types.ts`,
+`frontend/src/layout/TakingCalls.tsx` (+ test), `frontend/src/styles/shell.css`.
+**Doc:** this one, "Who is free" and "The transfer"; `SCHEMA.md`, `AUDIT.md`,
+`AUTH.md`, `FRONTEND.md`, `LOGGING.md`, `README.md`, `CLAUDE.md`.
 
 ---
 
