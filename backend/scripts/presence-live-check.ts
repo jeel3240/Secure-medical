@@ -23,7 +23,7 @@ import {
   RINGABLE_SECONDS,
   RINGABLE_SQL,
   setRingable,
-  someoneOnCall,
+  someoneOnOrJustOffCall,
   switchOffAfterMissedRing,
 } from '../src/db/presence';
 import { pgUserStore } from '../src/db/users';
@@ -292,15 +292,17 @@ async function main(): Promise<void> {
     });
   }
 
-  console.log('\nsomeone on a call - what keeps a lead on hold (T16)');
+  console.log('\nsomeone on a call, or just off one - what keeps a lead on hold (T16, T17)');
   {
-    // Start from nobody on a call: earlier sections leave calls going.
+    // Start from nobody on a call: earlier sections leave calls going, and
+    // calls they ended - an hour ago here, so nobody has just finished one.
     await pool.query(`UPDATE calls SET outcome = 'answered', ended_at = now() WHERE outcome IS NULL`);
+    await pool.query(`UPDATE calls SET ended_at = now() - interval '1 hour' WHERE ended_at > now() - interval '1 hour'`);
     const lead = (
       await pool.query(`INSERT INTO leads (phone, first_name, ezt_added_at) VALUES ('+15550000903', 'Kai', now()) RETURNING id`)
     ).rows[0].id as number;
     const zoe = await makeUser('zoe@example.com');
-    check('nobody on a call', await someoneOnCall(pool), false);
+    check('nobody on a call', await someoneOnOrJustOffCall(pool), false);
 
     const busy = (
       await pool.query(
@@ -309,14 +311,20 @@ async function main(): Promise<void> {
         [lead, zoe]
       )
     ).rows[0].id as number;
-    check('on a call, switch off: not counted - they would never be rung for it', await someoneOnCall(pool), false);
+    check('on a call, switch off: not counted - they would never be rung for it', await someoneOnOrJustOffCall(pool), false);
     await pgUserStore.update(zoe, { takingCalls: { on: true, why: 'by_hand' } });
-    check('on a call, switch on: counted - free soon', await someoneOnCall(pool), true);
+    check('on a call, switch on: counted - free soon', await someoneOnOrJustOffCall(pool), true);
     await pool.query(`UPDATE users SET is_active = false WHERE id = $1`, [zoe]);
-    check('deactivated meanwhile: not counted', await someoneOnCall(pool), false);
+    check('deactivated meanwhile: not counted', await someoneOnOrJustOffCall(pool), false);
     await pool.query(`UPDATE users SET is_active = true WHERE id = $1`, [zoe]);
     await pool.query(`UPDATE calls SET outcome = 'answered', ended_at = now() WHERE id = $1`, [busy]);
-    check('the call ends: nobody on a call', await someoneOnCall(pool), false);
+    await setRingable(pool, zoe, false);
+    check('the call ends, the note box open: still counted - free in a moment', await someoneOnOrJustOffCall(pool), true);
+    await setRingable(pool, zoe, true);
+    check('the note done, the browser free: not counted - free now, rung rather than waited for', await someoneOnOrJustOffCall(pool), false);
+    await setRingable(pool, zoe, false);
+    await pool.query(`UPDATE calls SET ended_at = now() - interval '3 minutes' WHERE id = $1`, [busy]);
+    check('the note box open three minutes after the call: no longer counted', await someoneOnOrJustOffCall(pool), false);
   }
 
   console.log(failures === 0 ? '\nall checks passed' : `\n${failures} check(s) FAILED`);

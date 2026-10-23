@@ -114,6 +114,8 @@ async function main(): Promise<void> {
       auto_call_hours_end: '17:00',
       auto_call_hours_start: '11:00',
       auto_call_min_confidence: '0.4',
+      // 020 (T17): how long a lead on hold rings the person who came free.
+      auto_call_offer_ring_seconds: '20',
       auto_call_ring_seconds: '25',
       auto_call_time_zone: 'America/Phoenix',
       auto_call_wait_minutes: '60',

@@ -12,7 +12,14 @@ const client = jest.fn((..._args: unknown[]) => ({ calls: callsApi }));
 jest.mock('twilio', () => (...args: unknown[]) => client(...args));
 
 // After the mock, so the module sees it.
-import { automatedCallRequest, LEAD_RING_SECONDS, placeAutomatedCall, recheckHold, transferRings } from './twilio-calls';
+import {
+  automatedCallRequest,
+  LEAD_RING_SECONDS,
+  placeAutomatedCall,
+  recheckHold,
+  sendToOffer,
+  transferRings,
+} from './twilio-calls';
 
 const SETTINGS: TwilioSettings = {
   accountSid: `AC${'1'.repeat(32)}`,
@@ -114,5 +121,19 @@ describe('cutting a lead\'s hold music short (T16)', () => {
   it('Twilio refusing - the call has ended meanwhile: false, never a throw', async () => {
     update.mockRejectedValue(Object.assign(new Error('Call is not in-progress'), { status: 400, code: 21220 }));
     expect(await recheckHold(SETTINGS, 'CA900', 42)).toBe(false);
+  });
+});
+
+describe('ringing the person who came free (T17)', () => {
+  it('sends the call, on hold, to the offer page for its row and offer - now', async () => {
+    update.mockResolvedValue({});
+    expect(await sendToOffer(SETTINGS, 'CA900', 42, 7)).toBe(true);
+    expect(callsApi).toHaveBeenCalledWith('CA900');
+    expect(update).toHaveBeenCalledWith({ url: `${BASE}/offer?call=42&offer=7`, method: 'POST' });
+  });
+
+  it('Twilio refusing: false, never a throw', async () => {
+    update.mockRejectedValue(Object.assign(new Error('Call is not in-progress'), { status: 400 }));
+    expect(await sendToOffer(SETTINGS, 'CA900', 42, 7)).toBe(false);
   });
 });

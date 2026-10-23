@@ -37,21 +37,32 @@ const transferRings = jest.fn<Promise<Rings>, unknown[]>();
 jest.mock('../../integrations/twilio-calls', () => ({ transferRings: (...a: unknown[]) => transferRings(...a) }));
 const freePeople = jest.fn<Promise<number[]>, unknown[]>();
 const switchOffAfterMissedRing = jest.fn<Promise<boolean>, unknown[]>();
-const someoneOnCall = jest.fn<Promise<boolean>, unknown[]>();
+const someoneOnOrJustOffCall = jest.fn<Promise<boolean>, unknown[]>();
 jest.mock('../../db/presence', () => ({
   freePeople: (...a: unknown[]) => freePeople(...a),
   switchOffAfterMissedRing: (...a: unknown[]) => switchOffAfterMissedRing(...a),
-  someoneOnCall: (...a: unknown[]) => someoneOnCall(...a),
+  someoneOnOrJustOffCall: (...a: unknown[]) => someoneOnOrJustOffCall(...a),
 }));
 const loadActiveCallScript = jest.fn<Promise<CallScript | null>, unknown[]>();
 const readMinConfidence = jest.fn<Promise<number>, unknown[]>();
 const readRingSeconds = jest.fn<Promise<number>, unknown[]>();
 const readHoldMaxSeconds = jest.fn<Promise<number>, unknown[]>();
+const readOfferRingSeconds = jest.fn<Promise<number>, unknown[]>();
 jest.mock('../../db/call-script', () => ({
   loadActiveCallScript: (...a: unknown[]) => loadActiveCallScript(...a),
   readMinConfidence: (...a: unknown[]) => readMinConfidence(...a),
   readRingSeconds: (...a: unknown[]) => readRingSeconds(...a),
   readHoldMaxSeconds: (...a: unknown[]) => readHoldMaxSeconds(...a),
+  readOfferRingSeconds: (...a: unknown[]) => readOfferRingSeconds(...a),
+}));
+const someoneComing = jest.fn<Promise<boolean>, unknown[]>();
+type Live = Awaited<ReturnType<typeof import('../../db/hold-offers').liveOffer>>;
+const liveOffer = jest.fn<Promise<Live>, unknown[]>();
+const endOffer = jest.fn<Promise<number | null>, unknown[]>();
+jest.mock('../../db/hold-offers', () => ({
+  someoneComing: (...a: unknown[]) => someoneComing(...a),
+  liveOffer: (...a: unknown[]) => liveOffer(...a),
+  endOffer: (...a: unknown[]) => endOffer(...a),
 }));
 const finishCall = jest.fn();
 const recordAnsweredBy = jest.fn();
@@ -103,15 +114,20 @@ beforeEach(() => {
     lead: { id: 7, name: 'Priya Sharma', phone: '+15550100016' },
     heldBy: null,
     answeredBy: 'human',
+    yesStepId: OFFER_STEP,
   });
   takeTransfer.mockReset().mockResolvedValue({ ok: true, leadId: 7, tookOverFrom: null });
   missTransfer.mockReset().mockResolvedValue(undefined);
   freePeople.mockReset().mockResolvedValue([]);
   switchOffAfterMissedRing.mockReset().mockResolvedValue(true);
-  someoneOnCall.mockReset().mockResolvedValue(false);
+  someoneOnOrJustOffCall.mockReset().mockResolvedValue(false);
   holdCall.mockReset().mockResolvedValue(true);
   holdState.mockReset().mockResolvedValue(null);
   readHoldMaxSeconds.mockReset().mockResolvedValue(600);
+  readOfferRingSeconds.mockReset().mockResolvedValue(20);
+  someoneComing.mockReset().mockResolvedValue(false);
+  liveOffer.mockReset().mockResolvedValue(null);
+  endOffer.mockReset().mockResolvedValue(19);
   transferRings.mockReset().mockResolvedValue([]);
   readRingSeconds.mockReset().mockResolvedValue(25);
   loadActiveCallScript.mockReset().mockResolvedValue(ANTIBIOTICS_CALL);
@@ -378,6 +394,7 @@ describe('the transfer (T15a)', () => {
         lead: { id: 7, name: 'Priya Sharma', phone: '+15550100016' },
         heldBy: agentId,
         answeredBy: 'human',
+        yesStepId: OFFER_STEP,
       });
 
     it('free: they ring alone, and the end is told who, so the others are rung next', async () => {
@@ -449,6 +466,7 @@ describe('the transfer (T15a)', () => {
       lead: { id: 7, name: 'Priya Sharma', phone: '+15550100016' },
       heldBy: 16,
       answeredBy: 'machine',
+      yesStepId: OFFER_STEP,
     });
     const { app } = await on();
     const res = await fromTwilio(app, GATHER, yes);
@@ -658,7 +676,7 @@ describe('the hold line (T16)', () => {
   const toHold = 'https://calls.example.com/api/webhooks/twilio/auto/hold?call=42';
 
   it('a yes with nobody free, while someone is on a call: the line, the hold line, then on hold - the answer kept first', async () => {
-    someoneOnCall.mockResolvedValue(true);
+    someoneOnOrJustOffCall.mockResolvedValue(true);
     const { app } = await on();
     const res = await fromTwilio(app, GATHER, yes);
     expect(keepAnswer.mock.calls[0][0]).toMatchObject({ record: { choiceLabel: 'Yes' }, result: null });
@@ -676,7 +694,7 @@ describe('the hold line (T16)', () => {
   });
 
   it('the ring ran out, someone is on a call: on hold, not missed', async () => {
-    someoneOnCall.mockResolvedValue(true);
+    someoneOnOrJustOffCall.mockResolvedValue(true);
     const { app } = await on();
     const res = await fromTwilio(app, `${AFTER}&rung=16,19`, { ...live, DialCallStatus: 'no-answer' });
     expect(res.text).toContain('All our agents are on other calls. Please stay on the line.');
@@ -687,7 +705,7 @@ describe('the hold line (T16)', () => {
 
   it('the lead\'s own agent let it ring out, nobody else free, someone on a call: on hold', async () => {
     freePeople.mockResolvedValue([21]);
-    someoneOnCall.mockResolvedValue(true);
+    someoneOnOrJustOffCall.mockResolvedValue(true);
     const { app } = await on();
     const res = await fromTwilio(app, `${AFTER}&holder=21`, { ...live, DialCallStatus: 'no-answer' });
     expect(res.text).toContain('Please stay on the line.');
@@ -695,7 +713,7 @@ describe('the hold line (T16)', () => {
   });
 
   it('the lead hung up while it rang: never on hold', async () => {
-    someoneOnCall.mockResolvedValue(true);
+    someoneOnOrJustOffCall.mockResolvedValue(true);
     const { app } = await on();
     await fromTwilio(app, `${AFTER}&rung=16,19`, { ...live, CallStatus: 'completed', DialCallStatus: 'no-answer' });
     expect(holdCall).not.toHaveBeenCalled();
@@ -704,7 +722,7 @@ describe('the hold line (T16)', () => {
 
   describe('waiting', () => {
     it('first in line: "You are next.", a track of Twilio\'s hold music, then back here', async () => {
-      someoneOnCall.mockResolvedValue(true);
+      someoneComing.mockResolvedValue(true);
       holdState.mockResolvedValue({ waitedSeconds: 5, place: 1 });
       const { app } = await on();
       const res = await fromTwilio(app, HOLD, live);
@@ -714,13 +732,13 @@ describe('the hold line (T16)', () => {
     });
 
     it('further back: "You are number 2 in line."', async () => {
-      someoneOnCall.mockResolvedValue(true);
+      someoneComing.mockResolvedValue(true);
       holdState.mockResolvedValue({ waitedSeconds: 400, place: 2 });
       const { app } = await on();
       expect((await fromTwilio(app, HOLD, live)).text).toContain('>You are number 2 in line.</Say>');
     });
 
-    it('nobody on a call any more: the busy line - transfer_missed, so an agent calls back', async () => {
+    it('nobody coming any more - nobody on a call, nobody free who has not had them: the busy line, transfer_missed', async () => {
       holdState.mockResolvedValue({ waitedSeconds: 90, place: 1 });
       const { app } = await on();
       const res = await fromTwilio(app, HOLD, live);
@@ -728,8 +746,8 @@ describe('the hold line (T16)', () => {
       expect(missTransfer).toHaveBeenCalledWith(42);
     });
 
-    it('waited the safety stop\'s length: the busy line, though someone is still on a call', async () => {
-      someoneOnCall.mockResolvedValue(true);
+    it('waited the safety stop\'s length: the busy line, though someone may still come', async () => {
+      someoneComing.mockResolvedValue(true);
       readHoldMaxSeconds.mockResolvedValue(300);
       holdState.mockResolvedValue({ waitedSeconds: 300, place: 1 });
       const { app } = await on();
@@ -738,7 +756,7 @@ describe('the hold line (T16)', () => {
     });
 
     it('no longer on hold - sent here twice at once: the busy line again, never music', async () => {
-      someoneOnCall.mockResolvedValue(true);
+      someoneComing.mockResolvedValue(true);
       const { app } = await on();
       const res = await fromTwilio(app, HOLD, live);
       expect(res.text).toContain('All our agents are busy right now.');
@@ -760,5 +778,136 @@ describe('the hold line (T16)', () => {
       expect((await request(app).post(HOLD).type('form').send(live)).status).toBe(403);
       expect(holdState).not.toHaveBeenCalled();
     });
+  });
+});
+
+describe('a lead on hold offered to whoever came free (T17)', () => {
+  const OFFER = '/api/webhooks/twilio/auto/offer?call=42&offer=7';
+  const HOLD = '/api/webhooks/twilio/auto/hold?call=42';
+  const AFTER = `/api/webhooks/twilio/auto/after?call=42&step=${OFFER_STEP}&offer=7`;
+  const live = { CallSid: 'CA900', CallStatus: 'in-progress' };
+  const toHold = 'https://calls.example.com/api/webhooks/twilio/auto/hold?call=42';
+
+  describe('the ring', () => {
+    it('rings only the person the offer names, for the offer\'s ring time, as a transfer of the lead\'s yes', async () => {
+      liveOffer.mockResolvedValue({ offerId: 7, agentId: 19 });
+      const { app } = await on();
+      const res = await fromTwilio(app, OFFER, live);
+      expect(liveOffer).toHaveBeenCalledWith(42, 7);
+      expect(res.text).toMatch(/<Response><Dial timeout="20"/);
+      expect(res.text.match(/<Client /g)).toHaveLength(1);
+      expect(res.text).toContain('<Identity>dev-agent-19</Identity>');
+      expect(res.text).toContain('<Parameter name="step" value="Offer"/>');
+      expect(res.text).toContain('<Parameter name="ring" value="group"/>');
+      expect(res.text).toContain(`auto/after?call=42&amp;step=${OFFER_STEP}&amp;offer=7"`);
+      // The music stops and it rings: nothing said, no notice again.
+      expect(res.text).not.toContain('<Say');
+    });
+
+    it('the offer gone - ended, or never heard back: back on hold, where it is decided again', async () => {
+      const { app } = await on();
+      const res = await fromTwilio(app, OFFER, live);
+      expect(res.text).toContain(`<Redirect method="POST">${toHold}</Redirect>`);
+      expect(res.text).not.toContain('<Dial');
+    });
+
+    it('the lead hung up as the music was cut: the offer ended hung_up, nothing rung', async () => {
+      liveOffer.mockResolvedValue({ offerId: 7, agentId: 19 });
+      const { app } = await on();
+      const res = await fromTwilio(app, OFFER, { ...live, CallStatus: 'completed' });
+      expect(endOffer).toHaveBeenCalledWith(42, 7, 'hung_up');
+      expect(res.text).toMatch(/<Response><Hangup\/><\/Response>$/);
+      expect(liveOffer).not.toHaveBeenCalled();
+    });
+
+    it('a call that is not ours to ring: the offer ended unsent, back on hold', async () => {
+      liveOffer.mockResolvedValue({ offerId: 7, agentId: 19 });
+      transferContext.mockResolvedValue(null);
+      const { app } = await on();
+      const res = await fromTwilio(app, OFFER, live);
+      expect(endOffer).toHaveBeenCalledWith(42, 7, 'unsent');
+      expect(res.text).toContain(`<Redirect method="POST">${toHold}</Redirect>`);
+    });
+
+    it('reached as the others are: never while off, only signed by Twilio', async () => {
+      const { app: off } = await buildApp({ twilio: SETTINGS, autoCalls: false });
+      expect((await fromTwilio(off, OFFER, live)).status).toBe(404);
+      const { app } = await on();
+      expect((await request(app).post(OFFER).type('form').send(live)).status).toBe(403);
+      expect(liveOffer).not.toHaveBeenCalled();
+    });
+  });
+
+  it('the music page\'s own request as the music is cut for the ring: the same ring, nothing changed', async () => {
+    holdState.mockResolvedValue({ waitedSeconds: 90, place: 1 });
+    liveOffer.mockResolvedValue({ offerId: 7, agentId: 19 });
+    const { app } = await on();
+    const res = await fromTwilio(app, HOLD, live);
+    expect(res.text).toContain('<Identity>dev-agent-19</Identity>');
+    expect(missTransfer).not.toHaveBeenCalled();
+    expect(someoneComing).not.toHaveBeenCalled();
+  });
+
+  describe('not taken', () => {
+    it('rang out: the offer ended missed, back on hold, and their switch off - no need to ask Twilio', async () => {
+      const { app } = await on();
+      const res = await fromTwilio(app, AFTER, { ...live, DialCallStatus: 'no-answer' });
+      expect(endOffer).toHaveBeenCalledWith(42, 7, 'missed');
+      expect(res.text).toContain(`<Redirect method="POST">${toHold}</Redirect>`);
+      expect(missTransfer).not.toHaveBeenCalled();
+      expect(holdCall).not.toHaveBeenCalled();
+      await afterResponse();
+      expect(transferRings).not.toHaveBeenCalled();
+      expect(switchOffAfterMissedRing.mock.calls.map((c) => [c[1], c[2]])).toEqual([[19, 42]]);
+    });
+
+    it('declined: ended declined, back on hold, the switch left on', async () => {
+      const { app } = await on();
+      const res = await fromTwilio(app, AFTER, { ...live, DialCallStatus: 'busy' });
+      expect(endOffer).toHaveBeenCalledWith(42, 7, 'declined');
+      expect(res.text).toContain(`<Redirect method="POST">${toHold}</Redirect>`);
+      await afterResponse();
+      expect(switchOffAfterMissedRing).not.toHaveBeenCalled();
+    });
+
+    it('the ring never completed - Twilio failed or cancelled it: ended failed, not declined, the switch left on', async () => {
+      const { app } = await on();
+      for (const status of ['failed', 'canceled']) {
+        endOffer.mockClear();
+        const res = await fromTwilio(app, AFTER, { ...live, DialCallStatus: status });
+        expect(endOffer).toHaveBeenCalledWith(42, 7, 'failed');
+        expect(res.text).toContain(`<Redirect method="POST">${toHold}</Redirect>`);
+      }
+      await afterResponse();
+      expect(switchOffAfterMissedRing).not.toHaveBeenCalled();
+    });
+
+    it('the lead hung up while it rang: ended hung_up, transfer_missed - an agent calls back', async () => {
+      const { app } = await on();
+      const res = await fromTwilio(app, AFTER, { ...live, CallStatus: 'completed', DialCallStatus: 'no-answer' });
+      expect(endOffer).toHaveBeenCalledWith(42, 7, 'hung_up');
+      expect(missTransfer).toHaveBeenCalledWith(42);
+      expect(res.text).toMatch(/<Response><Hangup\/><\/Response>$/);
+      await afterResponse();
+      expect(switchOffAfterMissedRing).not.toHaveBeenCalled();
+    });
+
+    it('taken: nothing more here - the claim ended the offer', async () => {
+      const { app } = await on();
+      const res = await fromTwilio(app, AFTER, { ...live, DialCallStatus: 'completed' });
+      expect(res.text).toMatch(/<Response\/>$/);
+      expect(endOffer).not.toHaveBeenCalled();
+    });
+  });
+
+  it('a yes put on hold before any ring hears the recording notice - whoever takes them later is recorded', async () => {
+    someoneOnOrJustOffCall.mockResolvedValue(true);
+    const { app } = await buildApp({ twilio: { ...SETTINGS, transcriptionServiceSid: `GA${'4'.repeat(32)}` }, autoCalls: true });
+    const res = await fromTwilio(app, `/api/webhooks/twilio/auto/gather?call=42&step=${OFFER_STEP}&try=1`, {
+      ...live,
+      SpeechResult: 'Yes please',
+      Confidence: '0.9',
+    });
+    expect(res.text).toContain('Please stay on the line.</Say><Say voice="Google.en-US-Chirp3-HD-Kore">This call may be recorded');
   });
 });

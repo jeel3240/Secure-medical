@@ -52,7 +52,7 @@ it.
 | `call.started`, `call.ended`, `call.refused` | A call. A refused call leaves no `calls` row, so the log is its only record. An automated call's are the system's (no actor) and say `direction: automated` (T12): refused as `not_found`, `blocked`, `already_called`, `no_script` or `not_test_number`; ended as `failed` with `reason: twilio_refused`, `twilioStatus` and `twilioCode` when Twilio would not place it - `AUTO-CALLS.md`, "How a call is placed" | `callSid`, `callId`, `outcome`, `durationSec`, `reason` |
 | `call.incoming` | A lead rings our number and an agent is rung - the subject is that agent. From a number we hold no lead for there is no `calls` row, so the log is its only record | `callId`, `callSid`; for an unknown number, `phone` and `known: false` |
 | `call.missed` | An incoming call nobody answered. The subject is the agent it rang | `callId`, `callSid`; `direction`, `outcome`, `durationSec` when a ring went unanswered; `because: 'no_agent'` when there was nobody to ring |
-| `call.held` | A "yes" nobody could take went on hold, waiting for someone on a call (T16, `AUTO-CALLS.md` "The hold line") - the system's doing, once per call | `callId` |
+| `call.held` | A "yes" nobody could take went on hold, waiting for someone on a call or just off one (T16, T17, `AUTO-CALLS.md` "The hold line") - the system's doing, once per call | `callId` |
 | `call.transferred` | A person took an automated call's transfer (T15a, `AUTO-CALLS.md` "The transfer") - once per call, whoever held the lead. Without it, a transfer taken by the lead's own holder, or after the browser's own pick-up reached the server first, would leave no record | `callId`; `tookOverFrom` when the lead was someone else's |
 | `call.answered_by` | Twilio's verdict on who picked up a call we placed | `callId`, `callSid`, `answeredBy`, `outcome`; and `outcomeWas` when the verdict changed an `answered` call to `voicemail` - the row is overwritten, so this is what it said |
 | `call.recorded` | A call's recording is ready, and its transcript is put in line | `callId`, `callSid`, `recordingSid`, `durationSec` |
@@ -74,7 +74,9 @@ missed call, and the link a lead asked for on the automated call), a lead arrivi
 (`leads`), a conversation completing or expiring (`conversations`), and each
 answer a lead gives (`conversation_answers` - add-only, and tied to the
 inbound text it was read from; on an automated call, `call_answers` - add-only
-too, with what Twilio heard, since migration 015). A reply that was not counted because it
+too, with what Twilio heard, since migration 015), and each time a lead on
+hold rang someone who came free (`call_offers`, since 020 - who, when, and how
+it ended). A reply that was not counted because it
 arrived before our text had gone out is kept in `messages` like any other,
 and logged as `reply.before_our_text`.
 
@@ -117,6 +119,12 @@ activity_log is add-only: rows cannot be changed or deleted
 
 A record that can be edited is not proof, so the database refuses whoever
 asks - the app, a script, or someone in `psql`.
+
+`call_offers` (020) is written as a ring from hold starts and has its end
+written once, when it is over: a trigger refuses any other change, a second
+end, and every `DELETE` (`call_offers: only an offer's end can be written`,
+`call_offers: an ended offer cannot be changed`, `call_offers: rows cannot be
+deleted`).
 
 ## The raw webhook archive
 

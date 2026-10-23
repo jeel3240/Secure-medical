@@ -59,7 +59,7 @@ export interface CallScript {
   voicemailBody: string;
   /** Nobody took a "yes", and nobody is about to be free. */
   busyBody: string;
-  /** Nobody took a "yes" yet, but someone is on a call. */
+  /** Nobody took a "yes" yet, but someone is on a call, or writing the note of one. */
   holdBody: string;
   /** The lead's place, first in line - "You are next." (T16) */
   holdNextBody: string;
@@ -303,7 +303,7 @@ export type TransferPlan =
    * everyone else free is rung next if they do not take it (`planAfterHolder`).
    */
   | { kind: 'ring'; say: string[]; agentIds: number[]; holderFirst: boolean }
-  /** Say the lines, then wait on hold: someone who takes transfers is on a call (T16). */
+  /** Say the lines, then wait on hold: someone who takes transfers is on a call, or just off one (T16, T17). */
   | { kind: 'hold'; say: string[] }
   | Extract<AskOrEnd, { kind: 'end' }>;
 
@@ -317,7 +317,8 @@ export type TransferPlan =
  *   among `free`: the line, then they ring alone first, as the lead's own
  *   agent (T15b). Not free, they are not waited for.
  * - **Nobody free**: the line, then - when someone who takes transfers is on a
- *   call (`onCall`) - on hold (T16); otherwise the busy line,
+ *   call or writing the note of one (`onCall`, `someoneOnOrJustOffCall`) - on
+ *   hold (T16, T17); otherwise the busy line,
  *   `transfer_missed`, so an agent calls the lead back (T22 puts them first in
  *   the queue). `planNobodyTook`.
  * - **Otherwise** the line, then the free people rung together, at most
@@ -340,8 +341,9 @@ export function planTransfer(
 /**
  * A "yes" nobody can take now - nobody free, or nobody took the ring - T16,
  * AUTO-CALLS.md "The hold line": `say`, then on hold while someone who takes
- * transfers is on a call (`onCall`), and so will be free soon; otherwise the
- * busy line - nobody is coming.
+ * transfers is on a call, or writing the note of one that just ended
+ * (`onCall`, `someoneOnOrJustOffCall` - T17), and so will be free soon;
+ * otherwise the busy line - nobody is coming.
  */
 export function planNobodyTook(
   script: CallScript,
@@ -353,12 +355,44 @@ export function planNobodyTook(
 }
 
 /**
- * Whether a lead waiting on hold waits on - T16: while someone who takes
- * transfers is on a call, and for at most `maxSeconds` (the safety stop).
+ * Whether a lead waiting on hold waits on - T16, T17: while someone may yet
+ * take them (`someoneComing` - never offered this lead, and on a call, just
+ * off one, free, or being offered another), and for at most `maxSeconds` (the
+ * safety stop).
  * Otherwise the busy line.
  */
-export function holdGoesOn(opts: { waitedSeconds: number; maxSeconds: number; onCall: boolean }): boolean {
-  return opts.onCall && opts.waitedSeconds < opts.maxSeconds;
+export function holdGoesOn(opts: { waitedSeconds: number; maxSeconds: number; someoneComing: boolean }): boolean {
+  return opts.someoneComing && opts.waitedSeconds < opts.maxSeconds;
+}
+
+/** A lead waiting on hold, as an offer is chosen - `pickOffer`. */
+export interface WaitingLead {
+  callId: number;
+  /** Everyone this lead has been offered to already, however it ended. */
+  offeredTo: readonly number[];
+  /** Ringing someone right now. */
+  offerLive: boolean;
+}
+
+/**
+ * Who a waiting lead rings now - T17, AUTO-CALLS.md "The hold line": the lead
+ * who has waited longest (`waiting` in that order), not already ringing
+ * someone, rings the first free person (`free` in order) never offered that
+ * lead - or only `only`, the person who has just come free. Null when there is
+ * no such pair.
+ */
+export function pickOffer(
+  waiting: readonly WaitingLead[],
+  free: readonly number[],
+  only: number | null = null
+): { callId: number; agentId: number } | null {
+  const people = only === null ? free : free.filter((id) => id === only);
+  for (const lead of waiting) {
+    if (lead.offerLive) continue;
+    const agentId = people.find((id) => !lead.offeredTo.includes(id));
+    if (agentId !== undefined) return { callId: lead.callId, agentId };
+  }
+  return null;
 }
 
 /** The lead's place in line, as said on hold - 1 is "You are next." (T16). */
