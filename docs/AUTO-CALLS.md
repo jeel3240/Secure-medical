@@ -452,6 +452,18 @@ so two flags, for the local database only (T13):
 - `--unblock`: lifts the block a stop test left on the number, released as
   `dev_test`, so the next test can call it.
 
+**A lead it calls has a text conversation**, as every lead the poller saves
+has (2026-10-23): the fresh test lead, or one made by hand without one, is
+given one - open, on the first question, marked as sent with its seven days to
+reply, as the opener marks it once the text goes out - but nothing is texted.
+So a test lead is what the robot calls: asked by text, no reply. Before this,
+the fresh lead had none, and the queue - which reads each lead's newest
+conversation - left it out even while an agent held it after a transfer
+(found on T17's real calls). Marked as sent, the opener retry never takes it
+for a first question that failed and texts the phone. Checked on a scratch
+database: given once, not again; the retry takes neither lead; the queue lists
+the one held.
+
 ## The transfer
 
 Built in T15a and T15b (2026-10-20). A "yes" to a step whose choice ends in
