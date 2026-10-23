@@ -36,6 +36,19 @@ export async function readRingSeconds(q: Db): Promise<number> {
   return Number.isInteger(value) && value >= 5 && value <= 60 ? value : DEFAULT_RING_SECONDS;
 }
 
+/** How long a lead on hold rings the person who came free - `auto_call_offer_ring_seconds`, T17. */
+export const DEFAULT_OFFER_RING_SECONDS = 20;
+
+/**
+ * `settings.auto_call_offer_ring_seconds`, read on every offer: 20 when it is
+ * missing or not between 5 and 60 seconds.
+ */
+export async function readOfferRingSeconds(q: Db): Promise<number> {
+  const { rows } = await q.query(`SELECT value FROM settings WHERE key = 'auto_call_offer_ring_seconds'`);
+  const value = Number(rows[0]?.value);
+  return Number.isInteger(value) && value >= 5 && value <= 60 ? value : DEFAULT_OFFER_RING_SECONDS;
+}
+
 /** The hold line's safety stop - `auto_call_hold_max_minutes`, T16. */
 export const DEFAULT_HOLD_MAX_MINUTES = 10;
 

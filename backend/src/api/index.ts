@@ -3,10 +3,10 @@ import { config } from '../config';
 import { recordActivity } from '../db/activity';
 import { callsOnHold } from '../db/auto-calls';
 import { readHoldMaxSeconds } from '../db/call-script';
+import { endOffer, endStaleOffers, someoneComing, startOffer } from '../db/hold-offers';
 import { pool } from '../db/pool';
-import { someoneOnCall } from '../db/presence';
 import { pgUserStore } from '../db/users';
-import { recheckHold } from '../integrations/twilio-calls';
+import { recheckHold, sendToOffer } from '../integrations/twilio-calls';
 import { createApp } from './app';
 import { watchHolds } from './hold-watch';
 import { log } from '../lib/log';
@@ -60,12 +60,17 @@ app.listen(port, () => {
 });
 
 // A lead on hold is looked at every 30 seconds, not only when a track of hold
-// music ends - AUTO-CALLS.md "The hold line". Only with automated calls on.
+// music ends, and offered to whoever is free - AUTO-CALLS.md "The hold line".
+// Only with automated calls on.
 if (autoCalls && config.twilio.status === 'on') {
   const settings = config.twilio.settings;
   watchHolds({
+    endStaleOffers,
+    startOffer,
+    sendToOffer: (offer) => sendToOffer(settings, offer.callSid, offer.callId, offer.offerId),
+    endOffer,
     callsOnHold,
-    someoneOnCall: () => someoneOnCall(pool),
+    someoneComing,
     readHoldMaxSeconds: () => readHoldMaxSeconds(pool),
     recheckHold: (callSid, callId) => recheckHold(settings, callSid, callId),
   });

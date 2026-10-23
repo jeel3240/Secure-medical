@@ -19,6 +19,7 @@
  *   POST /api/webhooks/twilio/auto/claim      a person accepted the transfer (T15a)
  *   POST /api/webhooks/twilio/auto/after      the transfer's ringing is over (T15a)
  *   POST /api/webhooks/twilio/auto/hold       a lead waiting on hold: their place, the music (T16)
+ *   POST /api/webhooks/twilio/auto/offer      a lead on hold ringing the person who came free (T17)
  *
  * Unauthenticated, like the EZ Texting webhook, but unlike it Twilio signs
  * every request (X-Twilio-Signature), so anything unsigned or mis-signed is
@@ -44,6 +45,7 @@ import {
   rangOut,
   type AskOrEnd,
   type CallResult,
+  type CallScript,
   type TransferPlan,
 } from '../core/call-script';
 import {
@@ -115,6 +117,8 @@ function autoCalls() {
   const { pool } = require('../db/pool') as typeof import('../db/pool');
   // eslint-disable-next-line @typescript-eslint/no-require-imports
   const twilioCalls = require('../integrations/twilio-calls') as typeof import('../integrations/twilio-calls');
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const offers = require('../db/hold-offers') as typeof import('../db/hold-offers');
   return {
     linkAutomatedCall: rows.linkAutomatedCall,
     keepAnswer: rows.keepAnswer,
@@ -125,10 +129,14 @@ function autoCalls() {
     freePeople: () => presence.freePeople(pool),
     switchOffAfterMissedRing: (agentId: number, callId: number) =>
       presence.switchOffAfterMissedRing(pool, agentId, callId),
-    someoneOnCall: () => presence.someoneOnCall(pool),
+    someoneOnOrJustOffCall: () => presence.someoneOnOrJustOffCall(pool),
     holdCall: rows.holdCall,
     holdState: rows.holdState,
     readHoldMaxSeconds: () => script.readHoldMaxSeconds(pool),
+    someoneComing: offers.someoneComing,
+    liveOffer: offers.liveOffer,
+    endOffer: offers.endOffer,
+    readOfferRingSeconds: () => script.readOfferRingSeconds(pool),
     transferRings: twilioCalls.transferRings,
     loadScript: () => script.loadActiveCallScript(pool),
     readMinConfidence: () => script.readMinConfidence(pool),
@@ -395,6 +403,40 @@ export function twilioWebhooksRouter(deps: AppDeps): Router {
     return (await autoCalls().linkAutomatedCall(callId, callSid)) ? { callId, callSid } : null;
   };
 
+  /**
+   * A lead on hold ringing the person their offer names - T17: that browser
+   * alone, for the offer's ring time, shown as a transfer of the lead's "yes".
+   * Nothing said first: the music stops and it rings. Null when the call is
+   * not ours to ring.
+   */
+  const offerTwiml = async (
+    call: { callId: number; callSid: string },
+    offer: { offerId: number; agentId: number },
+    script: CallScript
+  ): Promise<string | null> => {
+    const ac = autoCalls();
+    const [context, ringSeconds] = await Promise.all([ac.transferContext(call.callId), ac.readOfferRingSeconds()]);
+    if (!context) return null;
+    const step = script.steps.find((s) => s.id === context.yesStepId);
+    return transferTwiml(deps.twilio!, {
+      callId: call.callId,
+      callSid: call.callSid,
+      script,
+      say: [],
+      notice: false,
+      agentIds: [offer.agentId],
+      holderFirst: false,
+      offerId: offer.offerId,
+      lead: context.lead,
+      step: { id: step?.id ?? 0, heading: step?.heading ?? '' },
+      ringSeconds,
+    });
+  };
+
+  /** Back on hold: straight on to `/auto/hold`, which says the place and decides again. */
+  const backOnHold = (callId: number, script: CallScript) =>
+    holdTwiml(deps.twilio!, { callId, script, say: [], track: null });
+
   // The lead picked up: a second's quiet, then the first question, listening
   // for the answer. Anything wrong and the call simply ends - the lead is
   // never left listening to Twilio's "application error".
@@ -476,7 +518,7 @@ export function twilioWebhooksRouter(deps: AppDeps): Router {
           const [context, free, onCall] = await Promise.all([
             ac.transferContext(call.callId),
             ac.freePeople(),
-            ac.someoneOnCall(),
+            ac.someoneOnOrJustOffCall(),
           ]);
           if (!context) throw new Error('the automated call has no row');
           const machine = tookByMachine(context.answeredBy);
@@ -540,7 +582,8 @@ export function twilioWebhooksRouter(deps: AppDeps): Router {
           // After the answer is kept: on hold, the time it began, `call.held`.
           await ac.holdCall(call.callId);
           log.info('auto_call.hold', { callId: call.callId });
-          res.send(holdTwiml(deps.twilio!, { callId: call.callId, script, say: hold, track: null }));
+          // The notice too: whoever takes them from hold is recorded (T17).
+          res.send(holdTwiml(deps.twilio!, { callId: call.callId, script, say: hold, track: null, notice: true }));
         } else {
           res.send(next ? autoCallTwiml(deps.twilio!, { callId: call.callId, script, action: next }) : hangupTwiml());
         }
@@ -651,59 +694,75 @@ export function twilioWebhooksRouter(deps: AppDeps): Router {
         }
         const ac = autoCalls();
         const hungUp = field(body, 'CallStatus') === 'completed';
-        const holder = autoCallId(req.query.holder);
-        const stepId = autoCallId(req.query.step);
-        missed = {
-          callId: call.callId,
-          callSid: call.callSid,
-          rung: holder !== null ? [holder] : rungFrom(req.query.rung),
-          hungUp,
-        };
-        const ringOthers = holder !== null && !hungUp;
-        const [script, free, context, onCall] = await Promise.all([
-          ac.loadScript(),
-          ringOthers ? ac.freePeople() : Promise.resolve([]),
-          ringOthers ? ac.transferContext(call.callId) : Promise.resolve(null),
-          hungUp ? Promise.resolve(false) : ac.someoneOnCall(),
-        ]);
 
-        // What follows: everyone else free rung, after the lead's own agent
-        // (T15b); on hold for someone on a call (T16); or the busy line.
-        let plan: TransferPlan | null = null;
-        if (holder !== null && !hungUp && script && context && stepId !== null) {
-          log.info('auto_call.holder_not_taken', { callId: call.callId, agentId: holder, dialStatus: status });
-          plan = planAfterHolder(script, { free, holder, onCall });
-        } else if (script && !hungUp) {
-          plan = planNobodyTook(script, { onCall });
-        }
-
-        if (plan?.kind === 'ring' && script && context && stepId !== null) {
-          log.info('auto_call.transfer', { callId: call.callId, rung: plan.agentIds.length, holderFirst: false });
-          reply = transferTwiml(deps.twilio!, {
+        // A lead on hold offered to whoever came free, not taken (T17): the
+        // offer ended, and back on hold - unless the lead hung up meanwhile.
+        const offerId = autoCallId(req.query.offer);
+        if (offerId !== null) {
+          // Declined is the browser saying no (`busy`); a ring that never
+          // completed - `failed`, `canceled` - is neither theirs nor a decline.
+          const outcome = hungUp ? 'hung_up' : status === 'no-answer' ? 'missed' : status === 'busy' ? 'declined' : 'failed';
+          const agentId = await ac.endOffer(call.callId, offerId, outcome);
+          missed = { callId: call.callId, callSid: call.callSid, rung: agentId === null ? [] : [agentId], hungUp };
+          log.info('auto_call.offer_not_taken', { callId: call.callId, offerId, agentId, outcome, dialStatus: status });
+          const script = hungUp ? null : await ac.loadScript();
+          if (hungUp) await ac.missTransfer(call.callId);
+          else if (script) reply = backOnHold(call.callId, script);
+        } else {
+          const holder = autoCallId(req.query.holder);
+          const stepId = autoCallId(req.query.step);
+          missed = {
             callId: call.callId,
             callSid: call.callSid,
-            script,
-            say: plan.say,
-            notice: false,
-            agentIds: plan.agentIds,
-            holderFirst: false,
-            lead: context.lead,
-            step: { id: stepId, heading: script.steps.find((s) => s.id === stepId)?.heading ?? '' },
-            ringSeconds: await ac.readRingSeconds(),
-          });
-        } else if (plan?.kind === 'hold' && script) {
-          await ac.holdCall(call.callId);
-          log.info('auto_call.hold', { callId: call.callId });
-          reply = holdTwiml(deps.twilio!, { callId: call.callId, script, say: plan.say, track: null });
-        } else {
-          await ac.missTransfer(call.callId);
-          log.info('auto_call.transfer_missed', {
-            callId: call.callId,
-            reason: hungUp ? 'hung_up' : 'not_taken',
-            dialStatus: status,
-          });
-          if (plan?.kind === 'end' && script) {
-            reply = autoCallTwiml(deps.twilio!, { callId: call.callId, script, action: plan });
+            rung: holder !== null ? [holder] : rungFrom(req.query.rung),
+            hungUp,
+          };
+          const ringOthers = holder !== null && !hungUp;
+          const [script, free, context, onCall] = await Promise.all([
+            ac.loadScript(),
+            ringOthers ? ac.freePeople() : Promise.resolve([]),
+            ringOthers ? ac.transferContext(call.callId) : Promise.resolve(null),
+            hungUp ? Promise.resolve(false) : ac.someoneOnOrJustOffCall(),
+          ]);
+
+          // What follows: everyone else free rung, after the lead's own agent
+          // (T15b); on hold for someone on a call (T16); or the busy line.
+          let plan: TransferPlan | null = null;
+          if (holder !== null && !hungUp && script && context && stepId !== null) {
+            log.info('auto_call.holder_not_taken', { callId: call.callId, agentId: holder, dialStatus: status });
+            plan = planAfterHolder(script, { free, holder, onCall });
+          } else if (script && !hungUp) {
+            plan = planNobodyTook(script, { onCall });
+          }
+
+          if (plan?.kind === 'ring' && script && context && stepId !== null) {
+            log.info('auto_call.transfer', { callId: call.callId, rung: plan.agentIds.length, holderFirst: false });
+            reply = transferTwiml(deps.twilio!, {
+              callId: call.callId,
+              callSid: call.callSid,
+              script,
+              say: plan.say,
+              notice: false,
+              agentIds: plan.agentIds,
+              holderFirst: false,
+              lead: context.lead,
+              step: { id: stepId, heading: script.steps.find((s) => s.id === stepId)?.heading ?? '' },
+              ringSeconds: await ac.readRingSeconds(),
+            });
+          } else if (plan?.kind === 'hold' && script) {
+            await ac.holdCall(call.callId);
+            log.info('auto_call.hold', { callId: call.callId });
+            reply = holdTwiml(deps.twilio!, { callId: call.callId, script, say: plan.say, track: null });
+          } else {
+            await ac.missTransfer(call.callId);
+            log.info('auto_call.transfer_missed', {
+              callId: call.callId,
+              reason: hungUp ? 'hung_up' : 'not_taken',
+              dialStatus: status,
+            });
+            if (plan?.kind === 'end' && script) {
+              reply = autoCallTwiml(deps.twilio!, { callId: call.callId, script, action: plan });
+            }
           }
         }
       } catch (err) {
@@ -734,9 +793,12 @@ export function twilioWebhooksRouter(deps: AppDeps): Router {
 
   // A lead waiting on hold (T16) - Twilio asks when a track of hold music
   // ends, and the hold watcher sends them here when they should not wait any
-  // more (`api/hold-watch.ts`). Someone who takes transfers still on a call,
-  // and not the safety stop yet: their place, then the next track. Otherwise
-  // the busy line - `transfer_missed`, so an agent calls them back.
+  // more (`api/hold-watch.ts`). Someone may yet take them, and not the safety
+  // stop yet: their place, then the next track. Otherwise the busy line -
+  // `transfer_missed`, so an agent calls them back. While they are ringing
+  // someone who came free (T17), this is the music page's own request, sent as
+  // the music was cut for that ring: it changes nothing and repeats the ring -
+  // Twilio follows the ring's redirect, not this.
   router.post(
     '/auto/hold',
     asyncHandler(async (req, res) => {
@@ -751,15 +813,18 @@ export function twilioWebhooksRouter(deps: AppDeps): Router {
           return;
         }
         const ac = autoCalls();
-        const [script, state, onCall, maxSeconds] = await Promise.all([
+        const [script, state, live, maxSeconds] = await Promise.all([
           ac.loadScript(),
           ac.holdState(call.callId),
-          ac.someoneOnCall(),
+          ac.liveOffer(call.callId),
           ac.readHoldMaxSeconds(),
         ]);
+        const coming = state && !live ? await ac.someoneComing(call.callId) : false;
         if (!script) {
           log.error('auto_call.no_script', { callId: call.callId });
-        } else if (state && holdGoesOn({ waitedSeconds: state.waitedSeconds, maxSeconds, onCall })) {
+        } else if (state && live) {
+          reply = (await offerTwiml(call, live, script)) ?? reply;
+        } else if (state && holdGoesOn({ waitedSeconds: state.waitedSeconds, maxSeconds, someoneComing: coming })) {
           reply = holdTwiml(deps.twilio!, {
             callId: call.callId,
             script,
@@ -772,7 +837,7 @@ export function twilioWebhooksRouter(deps: AppDeps): Router {
           await ac.missTransfer(call.callId);
           log.info('auto_call.hold_ended', {
             callId: call.callId,
-            reason: !state ? 'not_on_hold' : onCall ? 'waited_too_long' : 'nobody_on_a_call',
+            reason: !state ? 'not_on_hold' : coming ? 'waited_too_long' : 'nobody_coming',
             waitedSeconds: state?.waitedSeconds ?? null,
             // The watcher cutting the music, or the music's own end.
             via: req.query.via === 'watcher' ? 'watcher' : 'music',
@@ -785,6 +850,53 @@ export function twilioWebhooksRouter(deps: AppDeps): Router {
         }
       } catch (err) {
         log.error('auto_call.hold_failed', { callId: req.query.call, err: errText(err) });
+        reply = hangupTwiml();
+      }
+      res.send(reply);
+    })
+  );
+
+  // A lead on hold, sent here to ring the person who came free (T17) - the
+  // offer the address names, while it is still open. Gone - ended, or never
+  // heard back - back on hold, where it is decided again.
+  router.post(
+    '/auto/offer',
+    asyncHandler(async (req, res) => {
+      res.type('text/xml');
+      let reply = hangupTwiml();
+      try {
+        const call = await automatedCall(req);
+        const offerId = autoCallId(req.query.offer);
+        const hungUp = field((req.body ?? {}) as Record<string, unknown>, 'CallStatus') === 'completed';
+        if (!call || offerId === null) {
+          log.warn('auto_call.unknown_call', { path: req.path, callId: req.query.call });
+          res.send(reply);
+          return;
+        }
+        const ac = autoCalls();
+        // The lead hung up as the music was cut: the offer is over, never rung.
+        if (hungUp) {
+          await ac.endOffer(call.callId, offerId, 'hung_up');
+          res.send(reply);
+          return;
+        }
+        const [script, offer] = await Promise.all([ac.loadScript(), ac.liveOffer(call.callId, offerId)]);
+        if (!script) {
+          log.error('auto_call.no_script', { callId: call.callId });
+        } else if (offer) {
+          const ring = await offerTwiml(call, offer, script);
+          if (ring) {
+            log.info('auto_call.offer_ringing', { callId: call.callId, offerId, agentId: offer.agentId });
+            reply = ring;
+          } else {
+            await ac.endOffer(call.callId, offerId, 'unsent');
+            reply = backOnHold(call.callId, script);
+          }
+        } else {
+          reply = backOnHold(call.callId, script);
+        }
+      } catch (err) {
+        log.error('auto_call.offer_failed', { callId: req.query.call, err: errText(err) });
         reply = hangupTwiml();
       }
       res.send(reply);

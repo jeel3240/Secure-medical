@@ -2,7 +2,8 @@
  * `GET /api/calls/config` and `POST /api/calls/token` - what the browser needs
  * to place a call. Phase 4, TWILIO.md. And for automated calls (AUTO-CALLS.md,
  * "Who is free"): `POST /api/calls/ringable` - whether this browser can take a
- * call now (T9) - and `POST /api/calls/taking-calls`, the switch (T10).
+ * call now (T9) - and `POST /api/calls/taking-calls`, the switch (T10). Either
+ * saying someone is free now offers them a lead waiting on hold (T17).
  *
  * Signed-in users only. The token lets a browser place calls as that agent
  * through our TwiML App, nothing more; which lead it may call is decided per
@@ -14,8 +15,35 @@ import { requireAuth, requirePasswordChanged } from './auth/middleware';
 import type { AppDeps } from './deps';
 import { asyncHandler, HttpError } from './http';
 import { mintCallToken, TOKEN_TTL_SECONDS } from '../integrations/twilio';
-import { log } from '../lib/log';
+import { errText, log } from '../lib/log';
+import { offerWaiting } from './hold-watch';
 import { recordTakingCalls } from './taking-calls';
+
+/**
+ * Someone has just come free - their browser says so (note saved or skipped)
+ * or they switched "Taking calls" on: a lead waiting on hold rings them now
+ * (T17, AUTO-CALLS.md "The hold line"), rather than at the hold watcher's
+ * next look. After the answer to the browser, and never a reason for it to
+ * fail. Nothing happens unless automated calls are on, someone is on hold,
+ * and the person is free.
+ */
+function offerHoldTo(deps: AppDeps, userId: number): void {
+  if (!deps.autoCalls || !deps.twilio) return;
+  const settings = deps.twilio;
+  // Loaded lazily, as the routes' SQL is - see the note in `/ringable`.
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const offers = require('../db/hold-offers') as typeof import('../db/hold-offers');
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const twilioCalls = require('../integrations/twilio-calls') as typeof import('../integrations/twilio-calls');
+  offerWaiting(
+    {
+      startOffer: offers.startOffer,
+      sendToOffer: (offer) => twilioCalls.sendToOffer(settings, offer.callSid, offer.callId, offer.offerId),
+      endOffer: offers.endOffer,
+    },
+    userId
+  ).catch((err) => log.error('auto_call.offer_failed', { userId, err: errText(err) }));
+}
 
 export function callsRouter(deps: AppDeps): Router {
   const router = Router();
@@ -67,6 +95,7 @@ export function callsRouter(deps: AppDeps): Router {
       // within half a minute that it was turned off for a missed transfer
       // (T15c) - the screen says so.
       res.json(await presence.setRingable(pool, req.user!.id, available));
+      if (available) offerHoldTo(deps, req.user!.id);
     })
   );
 
@@ -91,6 +120,7 @@ export function callsRouter(deps: AppDeps): Router {
         await recordTakingCalls(deps, user.id, on, 'by_hand');
       }
       res.json({ takingCalls: on, takingCallsWhy: user.takingCalls !== on ? 'by_hand' : user.takingCallsWhy });
+      if (on) offerHoldTo(deps, user.id);
     })
   );
 

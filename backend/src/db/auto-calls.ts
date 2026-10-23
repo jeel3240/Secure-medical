@@ -273,7 +273,7 @@ export async function settleAutomatedCall(callId: number): Promise<void> {
  * A call waiting on hold: it went on hold, has no result yet, and has not
  * ended - T16. `c` is `calls`.
  */
-const ON_HOLD_SQL = `(c.held_at IS NOT NULL AND c.script_result IS NULL AND c.outcome IS NULL)`;
+export const ON_HOLD_SQL = `(c.held_at IS NOT NULL AND c.script_result IS NULL AND c.outcome IS NULL)`;
 
 /**
  * Puts the automated call `callId` on hold - T16, AUTO-CALLS.md "The hold
@@ -314,15 +314,19 @@ export async function holdState(callId: number): Promise<{ waitedSeconds: number
   return rows[0] ? { waitedSeconds: rows[0].waited, place: rows[0].place } : null;
 }
 
-/** Every call waiting on hold, first in line first - what the hold watcher looks at (T16). */
-export async function callsOnHold(): Promise<{ callId: number; callSid: string; waitedSeconds: number }[]> {
-  const { rows } = await pool.query<{ id: number; twilio_call_sid: string; waited: number }>(
-    `SELECT c.id, c.twilio_call_sid, extract(epoch FROM now() - c.held_at)::int AS waited
+/**
+ * Every call waiting on hold, first in line first - what the hold watcher
+ * looks at (T16); `offerLive` when it is ringing someone who came free (T17).
+ */
+export async function callsOnHold(): Promise<{ callId: number; callSid: string; waitedSeconds: number; offerLive: boolean }[]> {
+  const { rows } = await pool.query<{ id: number; twilio_call_sid: string; waited: number; offer_live: boolean }>(
+    `SELECT c.id, c.twilio_call_sid, extract(epoch FROM now() - c.held_at)::int AS waited,
+            EXISTS (SELECT 1 FROM call_offers o WHERE o.call_id = c.id AND o.ended_at IS NULL) AS offer_live
      FROM calls c
      WHERE c.direction = 'automated' AND c.twilio_call_sid IS NOT NULL AND ${ON_HOLD_SQL}
      ORDER BY c.held_at, c.id`
   );
-  return rows.map((r) => ({ callId: r.id, callSid: r.twilio_call_sid, waitedSeconds: r.waited }));
+  return rows.map((r) => ({ callId: r.id, callSid: r.twilio_call_sid, waitedSeconds: r.waited, offerLive: r.offer_live }));
 }
 
 /** Whether any lead is waiting on hold - while one is, the robot places no new calls (T20). */
@@ -339,6 +343,8 @@ export interface TransferContext {
   heldBy: number | null;
   /** Twilio's verdict on who answered the phone, if it has come. */
   answeredBy: AnsweredBy | null;
+  /** The step of the lead's last chosen answer - the "yes" being put through; a ring shows its heading. */
+  yesStepId: number | null;
 }
 
 /**
@@ -354,8 +360,11 @@ export async function transferContext(callId: number): Promise<TransferContext |
     phone: string;
     assigned_to: number | null;
     answered_by: AnsweredBy | null;
+    yes_step_id: number | null;
   }>(
-    `SELECT l.id, l.first_name, l.last_name, l.phone, l.assigned_to, c.answered_by
+    `SELECT l.id, l.first_name, l.last_name, l.phone, l.assigned_to, c.answered_by,
+            (SELECT a.step_id FROM call_answers a
+             WHERE a.call_id = c.id AND a.result = 'choice' ORDER BY a.id DESC LIMIT 1) AS yes_step_id
      FROM calls c JOIN leads l ON l.id = c.lead_id
      WHERE c.id = $1 AND c.direction = 'automated'`,
     [callId]
@@ -366,6 +375,7 @@ export async function transferContext(callId: number): Promise<TransferContext |
     lead: { id: row.id, name: [row.first_name, row.last_name].filter(Boolean).join(' '), phone: row.phone },
     heldBy: row.assigned_to,
     answeredBy: row.answered_by,
+    yesStepId: row.yes_step_id,
   };
 }
 
@@ -418,6 +428,12 @@ export async function takeTransfer(callId: number, agentId: number): Promise<Tak
     const firstTime = call.agent_id === null;
     await client.query(
       `UPDATE calls SET agent_id = $2, script_result = COALESCE(script_result, 'transferred') WHERE id = $1`,
+      [callId, agentId]
+    );
+    // Taken from hold, offered to them (T17): that offer ended, taken.
+    await client.query(
+      `UPDATE call_offers SET ended_at = now(), outcome = 'taken'
+       WHERE call_id = $1 AND agent_id = $2 AND ended_at IS NULL`,
       [callId, agentId]
     );
     const tookOverFrom = call.assigned_to !== null && call.assigned_to !== agentId ? call.assigned_to : null;

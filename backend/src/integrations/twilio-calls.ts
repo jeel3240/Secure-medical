@@ -1,7 +1,8 @@
 /**
  * Asking Twilio to place a call from the server - T12, docs/AUTO-CALLS.md -
  * and, once a transfer's ringing is over, how each person's ring of it ended
- * (T15c); and cutting a lead's hold music short (T16).
+ * (T15c); and cutting a lead's hold music short - to end the hold (T16), or
+ * to ring the person who came free (T17).
  *
  * The only file that rings a phone through Twilio's REST API;
  * `integrations/twilio.ts` stays a set of pure functions.
@@ -15,7 +16,7 @@
 import twilio from 'twilio';
 import type { CallListInstanceCreateOptions } from 'twilio/lib/rest/api/v2010/account/call';
 import type { TwilioSettings } from '../twilio-settings';
-import { AUTO_AMD_PATH, AUTO_ANSWER_PATH, AUTO_HOLD_PATH, AUTO_STATUS_PATH, autoCallUrl } from './twilio';
+import { AUTO_AMD_PATH, AUTO_ANSWER_PATH, AUTO_HOLD_PATH, AUTO_OFFER_PATH, AUTO_STATUS_PATH, autoCallUrl } from './twilio';
 
 const REQUEST_TIMEOUT_MS = 10_000;
 
@@ -123,6 +124,22 @@ export async function recheckHold(settings: TwilioSettings, callSid: string, cal
   try {
     const client = twilio(settings.accountSid, settings.authToken, { timeout: REQUEST_TIMEOUT_MS });
     await client.calls(callSid).update({ url: autoCallUrl(settings, AUTO_HOLD_PATH, callId, { via: 'watcher' }), method: 'POST' });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Sends the automated call `callSid`, waiting on hold, to ring the person its
+ * offer `offerId` names - now, cutting the hold music short (T17). Twilio
+ * follows this redirect, not the music page's own request that comes with it
+ * (tested on a real call, 2026-10-22, call 46). True when Twilio took it. Never throws.
+ */
+export async function sendToOffer(settings: TwilioSettings, callSid: string, callId: number, offerId: number): Promise<boolean> {
+  try {
+    const client = twilio(settings.accountSid, settings.authToken, { timeout: REQUEST_TIMEOUT_MS });
+    await client.calls(callSid).update({ url: autoCallUrl(settings, AUTO_OFFER_PATH, callId, { offer: offerId }), method: 'POST' });
     return true;
   } catch {
     return false;

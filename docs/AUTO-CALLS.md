@@ -1,11 +1,12 @@
 # Automated outbound calls
 
-**Planned 2026-10-15. Being built: T0 to T16 are done (2026-10-21) - the
+**Planned 2026-10-15. Being built: T0 to T17 are done (2026-10-22) - the
 server places a call, asks the script, keeps every answer, texts the link,
 puts a "yes" through to the lead's own agent first, then everyone free,
-switches off whoever let it ring out, and holds a "yes" nobody can take yet
-while someone is on a call; the next free person getting the waiting lead
-(T17) onwards, and the robot calling by itself (T20), are not built yet.**
+switches off whoever let it ring out, holds a "yes" nobody can take yet while
+someone is on a call or writing its note, and rings the next person who comes
+free with the lead who has waited longest; voicemail (T18) onwards, and the robot calling by
+itself (T20), are not built yet.**
 This
 doc is the agreed design and the tracker for building it. Each ticket below updates its row when it is merged,
 and the sections it touches, so the doc always says what is built and what is
@@ -98,13 +99,16 @@ TRANSFER ("Great, connecting you with a live agent now. Please hold." + recordin
        not free, or not taken -> on to everyone free; whoever takes it holds the lead
    otherwise -> everyone free rings for 25 s; the first to accept holds the lead
    nobody accepts:
-       someone is on a call -> HOLD
+       someone is on a call, or writing the note of one -> HOLD
            hold music, and "You are next." / "You are number 2 in line."
+           someone comes free (note saved or skipped, or switched on)
+               -> the lead who has waited longest rings them alone, 20 s
+                  taken -> theirs; not taken -> back on hold, never offered
+                  to them again (rang out: their switch off, as above)
            checked again every 30 s:
-               someone finishes (note saved or skipped) -> rings them first
-               nobody on a call any more              -> busy line
+               nobody coming for them any more        -> busy line
                10 minutes (safety stop)               -> busy line
-       nobody on a call -> busy line at once
+       nobody on a call or writing a note -> busy line at once
    busy line: "All our agents are busy right now. An agent will call you back shortly."
        -> the lead goes to the top of the agents' queue as "Wants a call"
 
@@ -215,7 +219,8 @@ automated call nobody has taken keeps nobody busy, and a call whose end
 Twilio never reported stops counting after 2 hours - the window a missed
 call's "under way" uses. A small index of the calls still going
 (`calls_under_way_by_agent`, migration 017) keeps it instant. `freePeople`
-lists them; a transfer rings them (T15a), T20 counts them.
+lists them; a transfer rings them (T15a), a lead on hold rings them (T17),
+T20 counts them.
 
 **The app is open** - built in T9 (2026-10-18): `db/presence.ts` on the
 server, `lib/presence.ts` and `lib/calling.ts` in the browser. Each signed-in
@@ -415,7 +420,7 @@ only with a transfer ("The transfer").
 **The call's webhooks** - each names the call's row, `?call=<id>`, in the
 address Twilio signs, so the row cannot be swapped: a request for row 43
 signed as row 42 is refused. A webhook whose row is not an automated call, or
-is linked to another Twilio call, is not acted on. All six answer 404 while
+is linked to another Twilio call, is not acted on. All eight answer 404 while
 automated calls are off, and 403 unsigned (`TWILIO.md`, "Why the webhooks can
 be trusted").
 
@@ -426,8 +431,9 @@ be trusted").
 | `POST /api/webhooks/twilio/auto/status` | How it ended, saved as every call's end is (`finishCall`): outcome, talk time, `call.ended`; then an unfinished script given its result (T13). Never a missed-call text | - |
 | `POST /api/webhooks/twilio/auto/amd` | Who picked up, kept as `answered_by`; a machine on an answered call makes it `voicemail` | T18: the voicemail message |
 | `POST /api/webhooks/twilio/auto/claim` | A person accepted the transfer: the call and the lead become theirs (`takeTransfer`) - run on their leg before they are connected (T15a) | - |
-| `POST /api/webhooks/twilio/auto/after` | The transfer's ringing is over: taken, nothing more; the lead's own agent did not take it, everyone else free rung (T15b); not taken, on hold while someone is on a call (T16), else `transfer_missed` and the busy line (T15a); whoever let it ring out switched off, after Twilio has its answer (T15c). The address names the step and who was rung - `holder`, or `rung` | - |
-| `POST /api/webhooks/twilio/auto/hold` | A lead waiting on hold: their place, then a track of hold music, then back here; nobody on a call any more, or the safety stop, the busy line (T16, "The hold line"). Asked when a track ends, and by the hold watcher (`via=watcher`) | T17: ringing the next free person |
+| `POST /api/webhooks/twilio/auto/after` | The transfer's ringing is over: taken, nothing more; the lead's own agent did not take it, everyone else free rung (T15b); not taken, on hold while someone is on a call or writing its note (T16), else `transfer_missed` and the busy line (T15a); whoever let it ring out switched off, after Twilio has its answer (T15c). A ring from hold not taken: its offer ended, back on hold (T17). The address names the step and who was rung - `holder`, `rung`, or `offer` | - |
+| `POST /api/webhooks/twilio/auto/hold` | A lead waiting on hold: their place, then a track of hold music, then back here; nobody coming for them any more, or the safety stop, the busy line (T16, T17, "The hold line"). Asked when a track ends, and by the hold watcher (`via=watcher`). While the lead is ringing someone from hold, the same ring again, nothing changed | - |
+| `POST /api/webhooks/twilio/auto/offer` | A lead on hold ringing the person who came free: the server cuts the music and sends the call here - when someone's browser says it can take a call, or they switch on (`api/calls.ts`), or on the hold watcher's look; that browser alone rings, for `auto_call_offer_ring_seconds` (20), as a transfer of the lead's yes (T17, "The hold line"). The offer gone, back on hold | - |
 
 **Trying it locally** - `npm run dev:auto-call -- <phone>` (`scripts/dev-auto-call.ts`)
 calls the local lead with that number. It needs, in the environment the api
@@ -463,7 +469,8 @@ pure, `planTransfer` and `planAfterHolder` in `core/call-script.ts`.
      notice, then they ring **alone** for `auto_call_ring_seconds`. Not free -
      on a call, away, or the switch off - they are not waited for: everyone
      free rings at once, below.
-   - **Nobody free**: the choice's reply, then the busy line -
+   - **Nobody free**: the choice's reply, then on hold while someone is on a
+     call or writing its note ("The hold line"); otherwise the busy line -
      `transfer_missed`, saved with the answer.
    - **Otherwise**: the choice's reply, the recording notice, then everyone
      free rung together (`transferTwiml`) - at most 10, Twilio's limit in one
@@ -497,20 +504,21 @@ pure, `planTransfer` and `planAfterHolder` in `core/call-script.ts`.
    lead's own agent, who they were. Taken - they talked, nothing more to say.
    The lead's own agent let it ring out, or declined: **everyone else free
    rings at once** (`planAfterHolder`) - not them, with nothing said, since
-   the lead has been listening to it ring and has heard the notice; nobody
-   else free, the busy line. Anything else - nobody accepted, or the lead hung
-   up while it rang (`CallStatus=completed`; nobody further is rung) -
-   `missTransfer`: `transfer_missed`, unless the call already has a result,
-   and the busy line if the lead is still there. An agent calls them back;
-   T22 puts them first in the queue.
+   the lead has been listening to it ring and has heard the notice. Nobody
+   else free, or nobody accepted: on hold while someone is on a call or
+   writing its note ("The hold line"); otherwise `missTransfer` -
+   `transfer_missed`, unless the call already has a result - and the busy
+   line. The lead hung up while it rang (`CallStatus=completed`): nobody
+   further is rung, `transfer_missed`. An agent calls them back; T22 puts
+   them first in the queue.
 4. **Recorded from the moment a person answers**, both sides apart, as every
    call is: the lead on channel 1, the person on channel 2 - so the
    transcript says who said what (`core/transcripts.ts`).
 
 Whoever let it ring out has their switch turned off once the ringing is over
 - "Who is free". Nobody took it - or nobody was free to ring - while someone
-who takes transfers is on a call: on hold, not the busy line - "The hold
-line".
+who takes transfers is on a call, or has just finished one: on hold, not the
+busy line - "The hold line".
 
 **What the real transfers showed** (2026-10-20, Jeel's phone, two browsers on
 the dev number):
@@ -556,33 +564,49 @@ the dev number):
 
 ## The hold line
 
-Built in T16 (2026-10-21). A "yes" nobody can take now - nobody free to ring,
-or nobody took the ring - waits on hold while someone who takes transfers is
-on a call, and so will be free soon; otherwise the busy line at once, as
-before. The rules are pure, in `core/call-script.ts`: `planNobodyTook`,
-`holdGoesOn`, `placeLine`.
+Built in T16 (2026-10-21); T17 (2026-10-22) rings the next person who comes
+free. A "yes" nobody can take now - nobody free to ring, or nobody took the
+ring - waits on hold while someone who takes transfers is on a call, or has
+just finished one and is writing its note, and so will be free soon;
+otherwise the busy line at once, as before. The rules are pure, in
+`core/call-script.ts`: `planNobodyTook`, `holdGoesOn`, `placeLine`,
+`pickOffer`.
 
 1. **On hold** (`/auto/gather` or `/auto/after`): "Please hold." when it came
    with the yes, then the script's `hold_body` - "All our agents are on other
-   calls. Please stay on the line." - and on to `/auto/hold`. The call's
-   `held_at` is set, the first time only, with its `call.held` record
-   (`holdCall`).
+   calls. Please stay on the line." - and on to `/auto/hold`. A yes put on
+   hold before any ring also hears the recording notice here (T17): whoever
+   takes them later is recorded from the moment they answer, and the ring
+   from hold says nothing. The call's `held_at` is set, the first time only,
+   with its `call.held` record (`holdCall`).
 2. **Waiting** (`/auto/hold`): the lead's place in the script's words - "You
    are next." (`hold_next_body`), "You are number 2 in line."
    (`hold_place_body`); first on hold, first in line, among every call
    waiting (`holdState`) - then a track of hold music, then back to
    `/auto/hold`.
-3. **Each time** it is asked: someone who takes transfers is still on a call
-   (`someoneOnCall`: an active account, the switch on, a call going) and the
-   lead has waited less than `auto_call_hold_max_minutes` (10) - the place
-   again and the next track. Otherwise the busy line, `transfer_missed`, so an
-   agent calls them back (T22 puts them first).
-4. **The hold watcher** (`api/hold-watch.ts`), every 30 seconds in the api
-   while automated calls are on: a lead who should not wait any more is sent
-   back to `/auto/hold` at once through Twilio's API, cutting the music short
-   (`recheckHold`, `via=watcher`). Who still waits is left alone.
-5. **Hanging up on hold** is `transfer_missed` at the call's end, never
+3. **Someone comes free** (T17, below): the lead who has waited longest rings
+   them alone.
+4. **Each time** `/auto/hold` is asked: someone is still coming for the lead
+   (`someoneComing`, below) and the lead has waited less than
+   `auto_call_hold_max_minutes` (10) - the place again and the next track.
+   Otherwise the busy line, `transfer_missed`, so an agent calls them back
+   (T22 puts them first).
+5. **The hold watcher** (`api/hold-watch.ts`), every 30 seconds in the api
+   while automated calls are on: offers that never heard back ended, leads
+   offered to whoever is free, then a lead nobody is coming for, or past the
+   safety stop, sent back to `/auto/hold` at once through Twilio's API,
+   cutting the music short (`recheckHold`, `via=watcher`). Who still waits is
+   left alone.
+6. **Hanging up on hold** is `transfer_missed` at the call's end, never
    `hung_up` - they said yes and reached nobody.
+
+**Whether a yes goes on hold at all** is `someoneOnOrJustOffCall`
+(`db/presence.ts`): an active account with the switch on, and a call of
+theirs going - or one that ended in the last two minutes while their browser
+has not said it is free since (`JUST_OFF_A_CALL_SQL`): its note box is open.
+Two minutes, as a browser's word holds ("Who is free"): a note box left open
+longer, or a browser closed on it, stops counting by itself. Someone free who
+did not take the ring does not count - they had their chance.
 
 **The music is Twilio's own classical hold music** (Jeel, 2026-10-21) - six
 tracks in a list in `integrations/twilio.ts` (`HOLD_MUSIC`), more to be added
@@ -595,8 +619,62 @@ not done.
 **Someone is on hold** is a call with `held_at`, no result yet, and not ended
 (`anyoneOnHold`) - while one is, the robot places no new calls (T20).
 
-**What the real calls showed** (2026-10-21, Jeel's phone, karm "on a call" -
-a call row added by hand in the local database for the test):
+### The next person who comes free gets the waiting lead (T17)
+
+- **When**: whenever someone's browser says it can take a call - at once
+  when the note of their call is saved or skipped, and on each 30-second
+  report (`POST /api/calls/ringable`, T9) - or they switch "Taking calls" on
+  (`api/calls.ts`, `offerHoldTo`). After the browser has its answer. The watcher also offers on every look, to anyone
+  free: a browser whose word was missed, or someone who came free another way
+  (their call ended with no note box - a call row the browser never saw).
+- **Who**: the lead who has waited longest and is not ringing someone already
+  rings the first free person who has never been offered that lead
+  (`pickOffer`, `startOffer`), alone, for `auto_call_offer_ring_seconds` (20).
+  One offer at a time per lead and per person.
+- **How it rings**: an offer is a `call_offers` row (migration 020), written
+  before Twilio is asked; then Twilio's API sends the call to `/auto/offer`
+  (`sendToOffer`), cutting the music. That rings the one browser as a
+  transfer - `ring=group`, `reason=transfer`, the step the lead said yes to -
+  so the card reads "Transfer · said yes to the offer", it never replaces an
+  open note box, and a ring nobody took clears without "Missed call" (T11).
+  Nothing is said first: the music stops and it rings.
+- **Taken**: as any transfer - `/auto/claim`, the lead and the call become
+  theirs (`takeTransfer`, which also ends the offer `taken`), `transferred`.
+- **Not taken**: `/auto/after` (its address names the `offer`) ends it -
+  `declined`, `missed` when it rang out, or `failed` when the ring never
+  completed (Twilio's `failed` or `canceled`) - and the lead goes back on hold,
+  where `/auto/hold` decides again. Rang out: their switch is turned off, as
+  for any transfer ("Who is free"); declined: it stays on. Either way that
+  person is never offered that lead again.
+- **Ended once, never removed**: `taken`, `declined`, `missed`, `failed`, `hung_up`
+  (the lead hung up while it rang), `expired` (open a minute and never heard
+  back - the watcher ends it), `unsent` (Twilio would not take the redirect,
+  or the call was not ours to ring). The database holds one live offer per
+  lead and per person, so two triggers at once - a browser saying it is free
+  and the watcher's look - can never both ring (`call_offers_one_live_per_call`,
+  `call_offers_one_live_per_agent`).
+
+**Someone is still coming for a lead** (`someoneComing`, `db/hold-offers.ts`)
+while anyone who takes transfers, and has never been offered this lead, is on
+a call, has just finished one (the two minutes above), is free, or is ringing
+with another lead now. Nobody coming: the busy line at the watcher's next look,
+rather than music for nobody. Someone who has had the lead and not taken it is
+not coming for it, whatever they are doing.
+
+**Accepted:** someone free who declined the group ring of a yes, while
+someone else was on a call, is offered that lead once more, alone, from hold -
+group rings are not offers. Rare, and a second chance rather than a lost one.
+
+**Twilio's two requests as the music is cut** - proved on a real call before
+building (2026-10-22, call 46, the watcher redirecting to a page that said
+"Two."): Twilio sends the music page's own `<Redirect>` to `/auto/hold`, and
+the API redirect's address too, and **follows the API redirect** - "Two." was
+heard and the call ended 2 seconds after. The music page's request comes
+first. So the offer row is written before Twilio is asked, and `/auto/hold`,
+asked while an offer is live, answers with the same ring and changes nothing.
+
+**What the real calls showed** - T16 (2026-10-21, Jeel's phone, karm "on a
+call" - a call row added by hand in the local database for the test):
 
 - **On hold, then out when nobody is on a call** (call 40): the yes, the hold
   line, "You are next." and a track; karm's call ended at 04:12:31, the
@@ -607,9 +685,31 @@ a call row added by hand in the local database for the test):
   next look.
 - **Twilio asked `/auto/hold` twice as the music was cut**, the two requests
   alike: the first gave the busy line and ended the call, the second found it
-  no longer on hold and said the same. The watcher's request is now marked
-  `via=watcher` and logged (`auto_call.hold_ended`), so T17 - which cuts the
-  music to ring someone - can see which of the two Twilio acts on.
+  no longer on hold and said the same. The watcher's request is marked
+  `via=watcher` and logged (`auto_call.hold_ended`) - the start of call 46's
+  experiment above.
+
+T17 (2026-10-22, Jeel's phone on hold, karm on a call added by hand, then
+karm's real browser):
+
+- **karm's call ends, karm's window rings, karm takes it** (call 50): rung 17
+  seconds after the call row ended - the browser saw no call end, so it was
+  its next 30-second word - accepted 7 seconds later; karm holds the lead,
+  `transferred`.
+- **The note saved** (call 53): karm's note box open from a real call, the
+  lead on hold; the call row ended and nothing rang for 35 seconds, the lead
+  still on hold; the note saved at 06:01:13.904 and karm's window rang 16 ms
+  later; taken.
+- **The note skipped, then declined** (call 55): rang at once on Skip;
+  declined - the offer `declined`, karm's switch left on, and with nobody else
+  coming, the busy line 6 seconds later, `transfer_missed`.
+- **Rang out** (call 48): the offer `missed`, karm's switch turned off, and
+  the busy line straight after - nobody else was coming.
+- **Found on the note test, and fixed before it:** someone writing the note of
+  a call that just ended counted as nobody - not on a call, not free - so a
+  lead on hold would have heard the busy line within 30 seconds of the call
+  ending, before the note could be saved. Hence the two minutes above, both for
+  going on hold and for waiting on it.
 
 ## What is saved
 
@@ -620,9 +720,10 @@ Nothing is overwritten (`AUDIT.md`).
 | The call | `calls`, with `direction = 'automated'`; `agent_id` empty until someone takes a transfer. `script_result`: `transferred`, `transfer_missed`, `link_sent`, `not_interested`, `opted_out`, `no_response`, `voicemail_left`, `hung_up`, `unanswered`. `held_at`: when it went on hold (019) |
 | What the lead said | `call_answers`, one add-only row per answer: what Twilio heard, how sure, keys pressed, the choice it matched |
 | The script | `call_scripts`, `call_steps`, `call_choices` - rows, changed by migration, like the SMS flow (015). The script's own words - stop, no response, voicemail, busy, hold and the place on hold (019), the link text - are on its `call_scripts` row, so another script brings its own |
-| When it calls | `settings`: `auto_call_hours_start` 11:00, `auto_call_hours_end` 17:00, `auto_call_time_zone` America/Phoenix, `auto_call_days` mon,tue,wed,thu,fri, `auto_call_wait_minutes` 60, `auto_call_ring_seconds` 25, `auto_call_hold_max_minutes` 10, `auto_call_min_confidence` 0.4 |
+| When it calls | `settings`: `auto_call_hours_start` 11:00, `auto_call_hours_end` 17:00, `auto_call_time_zone` America/Phoenix, `auto_call_days` mon,tue,wed,thu,fri, `auto_call_wait_minutes` 60, `auto_call_ring_seconds` 25, `auto_call_hold_max_minutes` 10, `auto_call_min_confidence` 0.4, `auto_call_offer_ring_seconds` 20 (020) |
 | The link text | `messages`, like every text |
 | Who is free | `users.taking_calls`, `taking_calls_why`, `users.ringable_until` |
+| Each ring from hold | `call_offers` (020): the call, who was rung, when, and how it ended - written once, ended once, never removed |
 | Every action | `activity_log` |
 
 **Why not the SMS flow tables:** only one flow can be active, and two active
@@ -676,7 +777,7 @@ ticket's own PR.
 | T15b | The transfer: the lead's own agent first | T15a | Done 2026-10-20 - real calls: rung alone first, then the others; not free, not waited for |
 | T15c | Letting a transfer ring out turns the switch off | T15a | Done 2026-10-20 - real calls: ran out, taken by another, declined, note box open |
 | T16 | The hold line | T15a | Done 2026-10-21 - real calls: on hold with music, out when nobody is on a call, the safety stop |
-| T17 | The next free person gets the waiting lead | T16 | Not started |
+| T17 | The next free person gets the waiting lead | T16 | Done 2026-10-22 - real calls: rung when the call ended, when the note was saved, when skipped; declined and rang out back on hold |
 | T18 | Voicemail | T12 | Not started |
 | T19 | A lead calling back reaches someone | T10, T11 | Not started |
 | | **Calling on its own** | | |
@@ -1800,14 +1901,59 @@ anything else.
   their switch turns off as in T15c.
 
 **Done when**
-- [ ] Two browsers: A on a call, the lead on hold, A ends and saves the note
-      -> A's browser rings with the lead -> A accepts and holds it.
-- [ ] A skips the note instead -> the same.
-- [ ] A does not accept -> the lead is back on hold.
+- [x] Two browsers: A on a call, the lead on hold, A ends and saves the note
+      -> A's browser rings with the lead -> A accepts and holds it -
+      2026-10-22, calls 50 and 53: rung 16 ms after the note was saved.
+- [x] A skips the note instead -> the same - call 55, rung at once.
+- [x] A does not accept -> the lead is back on hold - calls 48 (rang out:
+      the switch off) and 55 (declined: the switch on); nobody else coming,
+      so the busy line straight after.
+- [x] Tests: `pickOffer` - longest waiting first, never the same person
+      twice, a lead already ringing passed over, only the person who came
+      free; `holdGoesOn` with who is coming; the watcher - offers before
+      sending anyone to the busy line, one offer for the person who came
+      free, a ring Twilio would not take ended `unsent`, a lead ringing left
+      alone; the webhooks - the ring from hold, gone, hung up, not ours, 404
+      off and 403 unsigned, the music page's own request changing nothing,
+      rang out, declined, a ring that never completed, hung up while ringing,
+      taken, the notice on a yes put on hold; the browser's word and the
+      switch offering a lead (965 backend tests). A live check proves migration 020 and the SQL:
+      longest waiting first, one live offer per lead and per person, never
+      offered twice, ended once and never removed, the switch off and a busy
+      browser never offered, taken ends the offer, an offer never heard back
+      expired, a lead no longer on hold never offered, and who is still coming
+      (`hold-offers-live-check`, 31 checks); the two minutes after a call
+      (`presence-live-check`, 52).
 
-**Files:** `backend/src/api/calls.ts`, `backend/src/api/twilio-webhooks.ts`,
-`backend/src/db/auto-calls.ts`.
-**Doc:** this one.
+As built: "The hold line", "The next person who comes free gets the waiting
+lead". Four things beyond the ticket. **A ring from hold is a `call_offers`
+row** (migration 020), so the same lead is never offered twice to one person
+and two triggers can never ring at once - and the offer is written before
+Twilio is asked, because Twilio follows the redirect while still sending the
+music page's own request (call 46). **Someone writing the note of a call that
+just ended keeps a lead waiting**, for two minutes - found on the first note
+test: such a person counted as nobody, so the lead would have heard the busy
+line before the note was saved. **A lead waits while anyone is coming for
+it** - on a call, writing a note, free, or ringing with another lead - not only
+while someone is on a call. And **a yes put on hold before any ring hears the
+recording notice** then: T16 never said it, and the ring from hold says
+nothing. The ring time is a setting, `auto_call_offer_ring_seconds`.
+
+**Files:** `backend/src/db/migrations/020_hold_offers.sql`,
+`backend/src/db/hold-offers.ts`, `backend/src/core/call-script.ts` (+ test),
+`backend/src/api/hold-watch.ts` (+ test), `backend/src/api/calls.ts`,
+`backend/src/api/index.ts`, `backend/src/api/twilio-webhooks.ts`,
+`backend/src/db/auto-calls.ts`, `backend/src/db/presence.ts`,
+`backend/src/db/call-script.ts`, `backend/src/integrations/twilio.ts`,
+`backend/src/integrations/twilio-calls.ts` (+ test),
+`backend/src/api/__tests__/auto-call-webhooks.test.ts`,
+`backend/src/api/__tests__/calls.test.ts`,
+`backend/scripts/hold-offers-live-check.ts`,
+`backend/scripts/presence-live-check.ts`,
+`backend/scripts/auto-calls-live-check.ts`,
+`backend/scripts/call-script-live-check.ts`.
+**Doc:** this one, "The hold line"; `SCHEMA.md`, `AUDIT.md`, `LOGGING.md`,
+`TWILIO.md`, `WORKFLOW.md`, `README.md`, `CLAUDE.md`.
 
 ---
 

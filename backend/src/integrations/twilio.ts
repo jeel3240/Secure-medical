@@ -215,6 +215,8 @@ export const AUTO_CLAIM_PATH = '/api/webhooks/twilio/auto/claim';
 export const AUTO_AFTER_PATH = '/api/webhooks/twilio/auto/after';
 /** A lead waiting on hold: their place, the music, and whether they still wait (T16). */
 export const AUTO_HOLD_PATH = '/api/webhooks/twilio/auto/hold';
+/** A lead on hold, now ringing the person who came free (T17). */
+export const AUTO_OFFER_PATH = '/api/webhooks/twilio/auto/offer';
 
 /** The full address of one of those webhooks, for one call. */
 export function autoCallUrl(
@@ -343,6 +345,8 @@ export function transferTwiml(
     agentIds: readonly number[];
     /** The one person rung is the lead's own agent, rung alone first (T15b). */
     holderFirst: boolean;
+    /** The ring is a lead on hold offered to whoever came free (T17): the end names the offer. */
+    offerId?: number;
     lead: { id: number; name: string; phone: string };
     /** The step the lead said yes to: its heading ("Offer") is shown on the ring. */
     step: { id: number; heading: string };
@@ -353,10 +357,12 @@ export function transferTwiml(
   const response = new twilio.twiml.VoiceResponse();
   for (const line of opts.say) response.say(voice, line);
   if (opts.notice && settings.transcriptionServiceSid) response.say(voice, RECORDING_NOTICE);
-  const after = {
-    step: opts.step.id,
-    ...(opts.holderFirst ? { holder: opts.agentIds[0] } : { rung: opts.agentIds.join(',') }),
-  };
+  // The end is told the step, and who was rung: an offer from hold, the lead's
+  // own agent alone, or everyone together.
+  const after: Record<string, string | number> = { step: opts.step.id };
+  if (opts.offerId !== undefined) after.offer = opts.offerId;
+  else if (opts.holderFirst) after.holder = opts.agentIds[0];
+  else after.rung = opts.agentIds.join(',');
   const dial = response.dial({
     timeout: opts.ringSeconds,
     action: autoCallUrl(settings, AUTO_AFTER_PATH, opts.callId, after),
@@ -404,11 +410,23 @@ export function holdTrack(waitedSeconds: number): string {
  */
 export function holdTwiml(
   settings: TwilioSettings,
-  opts: { callId: number; script: CallScript; say: readonly string[]; track: string | null }
+  opts: {
+    callId: number;
+    script: CallScript;
+    say: readonly string[];
+    track: string | null;
+    /**
+     * Say the recording notice after the lines: a "yes" put on hold before
+     * any ring - whoever takes them later is recorded from the moment they
+     * answer, so the lead is told now (T17). Only on a recorded call.
+     */
+    notice?: boolean;
+  }
 ): string {
   const voice = scriptVoice(opts.script);
   const response = new twilio.twiml.VoiceResponse();
   for (const line of opts.say) response.say(voice, line);
+  if (opts.notice && settings.transcriptionServiceSid) response.say(voice, RECORDING_NOTICE);
   if (opts.track) response.play(opts.track);
   response.redirect({ method: 'POST' }, autoCallUrl(settings, AUTO_HOLD_PATH, opts.callId));
   return response.toString();

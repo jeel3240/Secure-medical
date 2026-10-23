@@ -242,7 +242,7 @@ T19). The server marks it with `<Parameter>`s on each
 
 | Parameter | Means |
 |---|---|
-| `ring=group` | The ring goes on without this person if they do not take it: several people rung at once, the first to accept taking it - or the lead's own agent rung alone first, the others next (T15b) |
+| `ring=group` | The ring goes on without this person if they do not take it: several people rung at once, the first to accept taking it - or the lead's own agent rung alone first, the others next (T15b) - or a lead waiting on hold rung to one person who came free (T17) |
 | `reason=transfer` | A lead who said yes on the automated call, being put through |
 | `step` | With a transfer: the heading of the question they said yes to - "Offer" |
 
@@ -591,7 +591,8 @@ With calling not set up, every Twilio webhook route answers 404.
 
 **The automated call's webhooks** (`/auto/answer`, `/auto/gather`,
 `/auto/status`, `/auto/amd` - T12; `/auto/claim`, `/auto/after` - the
-transfer, T15a; `/auto/hold` - the hold line, T16) are checked the same way, and name their call's row in the
+transfer, T15a; `/auto/hold` - the hold line, T16; `/auto/offer` - a lead on
+hold ringing the person who came free, T17) are checked the same way, and name their call's row in the
 address (`?call=<id>`), which is part of what Twilio signs: the row cannot be
 swapped. `/auto/claim` takes the person from `To`, our own signed browser
 name, as the voice webhook does. They answer 404 while automated calls are
@@ -730,7 +731,11 @@ docker compose exec api npm run dev:twilio:configure
 ```
 
 A quick tunnel's address changes every time it starts, so repeat the last
-three lines each time. Verified this way on 2026-10-01: a request signed the
+three lines each time. Forgetting is easy to miss: an automated call and its
+transfers still work, because each call carries its own addresses, but the
+Call button fails at once - "The call did not connect" - and nothing reaches
+the server, because the TwiML App still points at the old tunnel (seen
+2026-10-22). Verified this way on 2026-10-01: a request signed the
 way Twilio signs, sent through the tunnel, was refused unsigned (403),
 connected for the agent holding the lead, refused for another agent, and its
 end-of-call report saved as answered, 42 seconds.

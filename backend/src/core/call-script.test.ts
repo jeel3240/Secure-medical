@@ -11,6 +11,7 @@ import {
   handleAnswer,
   MAX_RUNG_AT_ONCE,
   holdGoesOn,
+  pickOffer,
   placeLine,
   planAfterHolder,
   planNobodyTook,
@@ -389,16 +390,48 @@ describe('the hold line (T16)', () => {
     expect(planNobodyTook(SCRIPT, { say: ['Please hold.'], onCall: false })).toMatchObject({ say: ['Please hold.', SCRIPT.busyBody] });
   });
 
-  it('waits on while someone is on a call, and not past the safety stop', () => {
-    expect(holdGoesOn({ waitedSeconds: 0, maxSeconds: 600, onCall: true })).toBe(true);
-    expect(holdGoesOn({ waitedSeconds: 599, maxSeconds: 600, onCall: true })).toBe(true);
-    expect(holdGoesOn({ waitedSeconds: 600, maxSeconds: 600, onCall: true })).toBe(false);
-    expect(holdGoesOn({ waitedSeconds: 30, maxSeconds: 600, onCall: false })).toBe(false);
+  it('waits on while someone may yet take them, and not past the safety stop', () => {
+    expect(holdGoesOn({ waitedSeconds: 0, maxSeconds: 600, someoneComing: true })).toBe(true);
+    expect(holdGoesOn({ waitedSeconds: 599, maxSeconds: 600, someoneComing: true })).toBe(true);
+    expect(holdGoesOn({ waitedSeconds: 600, maxSeconds: 600, someoneComing: true })).toBe(false);
+    expect(holdGoesOn({ waitedSeconds: 30, maxSeconds: 600, someoneComing: false })).toBe(false);
   });
 
   it('the place in line, in the script\'s words', () => {
     expect(placeLine(SCRIPT, 1)).toBe('You are next.');
     expect(placeLine(SCRIPT, 2)).toBe('You are number 2 in line.');
     expect(placeLine(SCRIPT, 11)).toBe('You are number 11 in line.');
+  });
+});
+
+describe('who a lead on hold rings - pickOffer (T17)', () => {
+  const lead = (callId: number, offeredTo: number[] = [], offerLive = false) => ({ callId, offeredTo, offerLive });
+
+  it('the lead who has waited longest rings the first person free', () => {
+    expect(pickOffer([lead(40), lead(41)], [16, 19])).toEqual({ callId: 40, agentId: 16 });
+  });
+
+  it('never someone this lead was offered to already - however that ended', () => {
+    expect(pickOffer([lead(40, [16])], [16, 19])).toEqual({ callId: 40, agentId: 19 });
+    expect(pickOffer([lead(40, [16, 19])], [16, 19])).toBeNull();
+  });
+
+  it('a lead already ringing someone is passed over for the next in line', () => {
+    expect(pickOffer([lead(40, [16], true), lead(41)], [19])).toEqual({ callId: 41, agentId: 19 });
+  });
+
+  it('the next in line, when the first has had everyone free', () => {
+    expect(pickOffer([lead(40, [19]), lead(41)], [19])).toEqual({ callId: 41, agentId: 19 });
+  });
+
+  it('only the person who has just come free, when one is named', () => {
+    expect(pickOffer([lead(40)], [16, 19], 19)).toEqual({ callId: 40, agentId: 19 });
+    expect(pickOffer([lead(40)], [16], 19)).toBeNull();
+    expect(pickOffer([lead(40, [19])], [16, 19], 19)).toBeNull();
+  });
+
+  it('nobody waiting, or nobody free: nothing', () => {
+    expect(pickOffer([], [16])).toBeNull();
+    expect(pickOffer([lead(40)], [])).toBeNull();
   });
 });

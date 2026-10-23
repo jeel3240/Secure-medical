@@ -38,6 +38,15 @@ type RingableArgs = Parameters<typeof import('../../db/presence').setRingable>;
 type Switch = Awaited<ReturnType<typeof import('../../db/presence').setRingable>>;
 const setRingable = jest.fn<Promise<Switch>, RingableArgs>();
 jest.mock('../../db/presence', () => ({ setRingable: (...a: RingableArgs) => setRingable(...a) }));
+type Offer = NonNullable<Awaited<ReturnType<typeof import('../../db/hold-offers').startOffer>>>;
+const startOffer = jest.fn<Promise<Offer | null>, [number | null]>();
+const endOffer = jest.fn();
+jest.mock('../../db/hold-offers', () => ({
+  startOffer: (only: number | null) => startOffer(only),
+  endOffer: (...a: unknown[]) => endOffer(...a),
+}));
+const sendToOffer = jest.fn<Promise<boolean>, unknown[]>();
+jest.mock('../../integrations/twilio-calls', () => ({ sendToOffer: (...a: unknown[]) => sendToOffer(...a) }));
 
 // The raw archive writes through the pool; here it only has to be called.
 const poolQuery = jest.fn(async (_sql: string, _values?: unknown[]) => ({ rows: [], rowCount: 1 }));
@@ -107,6 +116,61 @@ describe('the browser’s routes', () => {
     expect(res.body.identity).toMatch(/^agent-\d+$/);
     expect(typeof res.body.token).toBe('string');
     expect(res.body.ttlSeconds).toBe(3600);
+  });
+});
+
+describe('someone coming free is offered a lead on hold at once (T17)', () => {
+  async function setup(autoCalls: boolean) {
+    const { app, users } = await buildApp({ twilio: SETTINGS, autoCalls });
+    const user = await seedUser(users, { email: 'maya@example.com', name: 'Maya', password: PASSWORD });
+    return { mayaId: user.id, maya: await signIn(app, 'maya@example.com', PASSWORD) };
+  }
+  const settle = async () => {
+    for (let i = 0; i < 5; i++) await new Promise((resolve) => setImmediate(resolve));
+  };
+
+  beforeEach(() => {
+    startOffer.mockReset().mockResolvedValue({ offerId: 7, callId: 42, callSid: 'CA900', agentId: 0 });
+    endOffer.mockReset();
+    sendToOffer.mockReset().mockResolvedValue(true);
+  });
+
+  it('a browser saying it is free - note saved or skipped: the lead rings them, after the browser has its answer', async () => {
+    const { maya, mayaId } = await setup(true);
+    const res = await maya.post('/api/calls/ringable').send({ available: true });
+    expect(res.status).toBe(200);
+    await settle();
+    expect(startOffer).toHaveBeenCalledWith(mayaId);
+    expect(sendToOffer).toHaveBeenCalledWith(SETTINGS, 'CA900', 42, 7);
+  });
+
+  it('saying it is busy offers nothing', async () => {
+    const { maya } = await setup(true);
+    await maya.post('/api/calls/ringable').send({ available: false });
+    await settle();
+    expect(startOffer).not.toHaveBeenCalled();
+  });
+
+  it('switching "Taking calls" on: offered at once too', async () => {
+    const { maya, mayaId } = await setup(true);
+    await maya.post('/api/calls/taking-calls').send({ on: true });
+    await settle();
+    expect(startOffer).toHaveBeenCalledWith(mayaId);
+  });
+
+  it('with automated calls off, nothing is ever offered', async () => {
+    const { maya } = await setup(false);
+    await maya.post('/api/calls/ringable').send({ available: true });
+    await settle();
+    expect(startOffer).not.toHaveBeenCalled();
+  });
+
+  it('Twilio not taking it: the offer ended unsent - the browser\'s answer was never held up', async () => {
+    sendToOffer.mockResolvedValue(false);
+    const { maya } = await setup(true);
+    expect((await maya.post('/api/calls/ringable').send({ available: true })).status).toBe(200);
+    await settle();
+    expect(endOffer).toHaveBeenCalledWith(42, 7, 'unsent');
   });
 });
 

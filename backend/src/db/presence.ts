@@ -36,6 +36,19 @@ export const ON_A_CALL_SQL = `EXISTS (
 )`;
 
 /**
+ * Whether `u` (users) has just finished a call and not yet said they are free:
+ * a call of theirs ended in the last two minutes, and their browser is not
+ * ringable - its note box still open, most often (T17). They are free in a
+ * moment, once the note is saved or skipped. Two minutes, as a browser's word
+ * holds: a note box left open longer, or a browser closed on it, stops
+ * counting by itself.
+ */
+export const JUST_OFF_A_CALL_SQL = `(NOT ${RINGABLE_SQL} AND EXISTS (
+  SELECT 1 FROM calls jc
+  WHERE jc.agent_id = u.id AND jc.ended_at > now() - interval '${RINGABLE_SECONDS} seconds'
+))`;
+
+/**
  * Whether `u` (users) is free to take a transfer now - AUTO-CALLS.md, "Who is
  * free". The one definition: who is rung for a transfer, and how many calls
  * the robot places at once, both come from it.
@@ -56,14 +69,18 @@ export const FREE_SQL = `(
 )`;
 
 /**
- * Whether someone who takes transfers is on a call now - an active account,
- * the switch on, a call of theirs still going - and so will be free soon: a
- * "yes" nobody can take waits on hold for them (T16, AUTO-CALLS.md "The hold
- * line"). Someone on a call with the switch off would never be rung for it.
+ * Whether someone who takes transfers is on a call now, or has just finished
+ * one and is writing its note - an active account, the switch on - and so will
+ * be free soon: a "yes" nobody can take waits on hold for them (T16, T17,
+ * AUTO-CALLS.md "The hold line"). Someone with the switch off would never be
+ * rung for it.
  */
-export async function someoneOnCall(q: Querier): Promise<boolean> {
+export async function someoneOnOrJustOffCall(q: Querier): Promise<boolean> {
   const { rows } = await q.query(
-    `SELECT EXISTS (SELECT 1 FROM users u WHERE u.is_active AND u.taking_calls AND ${ON_A_CALL_SQL}) AS on_call`
+    `SELECT EXISTS (
+       SELECT 1 FROM users u
+       WHERE u.is_active AND u.taking_calls AND (${ON_A_CALL_SQL} OR ${JUST_OFF_A_CALL_SQL})
+     ) AS on_call`
   );
   return rows[0]?.on_call === true;
 }

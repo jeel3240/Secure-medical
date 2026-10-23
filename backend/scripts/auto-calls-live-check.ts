@@ -443,6 +443,8 @@ async function main(): Promise<void> {
       lead: { id: leadId, name: 'Priya Sharma', phone: '+15550000521' },
       heldBy: sam,
       answeredBy: null,
+      // No answer kept in this check: no step said yes (T17 shows its heading on a ring from hold).
+      yesStepId: null,
     });
 
     check('Maya accepts: hers, taken over from Sam', await takeTransfer(callId, maya), { ok: true, leadId, tookOverFrom: sam });
