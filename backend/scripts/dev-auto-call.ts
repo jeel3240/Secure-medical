@@ -23,13 +23,19 @@
  * - `--unblock`: lifts the block a "stop" test left on the number, recorded as
  *   released for `dev_test`, so the next test can call it.
  *
+ * A lead it calls has a text conversation, as every lead the poller saves
+ * has: one with none - the fresh test lead, or one made by hand - is given
+ * one, its first question marked as sent. Nothing is texted.
+ *
  * Refuses in production - `NODE_ENV`: the file is not compiled into dist/, but
  * the server's image does hold scripts/.
  */
 import { readAutoCalls, readAutoCallTestNumbers } from '../src/auto-calls-settings';
 import { config } from '../src/config';
 import { releaseNumber, RELEASE_REASONS } from '../src/db/dnc';
+import { startConversation, type Db } from '../src/db/flows';
 import { pool } from '../src/db/pool';
+import { readExpiryDays } from '../src/db/sql';
 import { placeAutoCall, type PlaceAutoCallResult } from '../src/worker/place-auto-call';
 import { phoneFromArg } from './dev-phone';
 
@@ -62,6 +68,9 @@ async function main(): Promise<number> {
     console.error('No lead with that number in this database.');
     return 1;
   }
+  if (await giveConversation(pool, leadId)) {
+    console.log(`Lead ${leadId} had no text conversation: given one, its first question marked as sent - nothing was texted.`);
+  }
 
   const numbers = readAutoCallTestNumbers(process.env, false);
   if (numbers.invalid > 0) {
@@ -75,6 +84,30 @@ async function main(): Promise<number> {
 async function leadFor(phone: string): Promise<number | null> {
   const { rows } = await pool.query(`SELECT id FROM leads WHERE phone = $1`, [phone]);
   return rows[0]?.id ?? null;
+}
+
+/**
+ * Gives the lead `leadId` a text conversation if it has none, as the poller
+ * gives every lead it saves, with its first question marked as sent - as the
+ * opener marks it once the text goes out (`worker/opener.ts`) - though nothing
+ * is texted. So a test lead is what the robot calls: asked by text, no reply,
+ * the reply window open. The queue then lists it once someone holds it - it
+ * reads each lead's newest conversation, and a lead with none is left out -
+ * and the opener retry never takes it for a first question that failed. True
+ * when one was given.
+ */
+async function giveConversation(q: Db, leadId: number): Promise<boolean> {
+  const { rows } = await q.query(`SELECT 1 FROM conversations WHERE lead_id = $1 LIMIT 1`, [leadId]);
+  if (rows.length > 0) return false;
+  await startConversation(q, leadId, 'open');
+  const days = await readExpiryDays(q);
+  await q.query(
+    `UPDATE conversations
+     SET expires_at = now() + ($2 || ' days')::interval, question_sent_at = now(), updated_at = now()
+     WHERE lead_id = $1 AND status = 'open'`,
+    [leadId, String(days)]
+  );
+  return true;
 }
 
 /**

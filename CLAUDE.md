@@ -219,7 +219,7 @@ you change something the docs describe, update the doc in the same commit.
     src/db/hold-offers.ts   a lead on hold rung to whoever comes free: the offer written before Twilio is asked, one at a time per lead and per person, never twice to one person; who is still coming for a lead (T17)
     src/integrations/twilio-calls.ts  the only file that asks Twilio to ring a phone - once, never retried (T12); how each ring of a transfer ended (T15c); and redirects a live call - back to the hold page (T16), to ring someone from hold (T17)
     src/worker/place-auto-call.ts  places one automated call: the row, then Twilio, then its answer - the dev command's and the dialler's path (T12)
-    scripts/dev-auto-call.ts  local testing only: the server calls one lead - npm run dev:auto-call; --again gives the number to a fresh test lead, --unblock lifts a test block (T13); scripts/dev-phone.ts reads the number
+    scripts/dev-auto-call.ts  local testing only: the server calls one lead - npm run dev:auto-call; --again gives the number to a fresh test lead, --unblock lifts a test block (T13); a lead with no text conversation is given one, nothing texted; scripts/dev-phone.ts reads the number
     scripts/auto-calls-live-check.ts  proves placing one: the row, every refusal, linking, failing, two placements racing; each answer kept once; taking a transfer
     scripts/hold-offers-live-check.ts  proves migration 020: who a lead on hold rings, one at a time, never twice to one person; who is still coming (T17)
     scripts/lead-texts-live-check.ts  proves the two texts: their words, the lead's thread, a blocked number getting neither (T14)
