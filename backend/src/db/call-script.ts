@@ -7,8 +7,10 @@
  * rather than after a restart.
  */
 
+import { DEFAULT_CALL_HOURS, parseClock, parseDays, type CallHours } from '../core/auto-dial';
 import type { CallChoice, CallEnding, CallScript, CallStep } from '../core/call-script';
 import type { Db } from './flows';
+import { isTimeZone } from './sql';
 
 /** Below this, a spoken answer is not trusted - `auto_call_min_confidence`, T7. */
 export const DEFAULT_MIN_CONFIDENCE = 0.4;
@@ -60,6 +62,33 @@ export async function readHoldMaxSeconds(q: Db): Promise<number> {
   const { rows } = await q.query(`SELECT value FROM settings WHERE key = 'auto_call_hold_max_minutes'`);
   const value = Number(rows[0]?.value);
   return (Number.isInteger(value) && value >= 1 && value <= 60 ? value : DEFAULT_HOLD_MAX_MINUTES) * 60;
+}
+
+/**
+ * When the robot calls - T20: `auto_call_hours_start`, `_hours_end`,
+ * `_time_zone`, `_days` and `_wait_minutes`, read on every look so a change by
+ * migration applies at once. Each one missing or malformed is migration 015's
+ * value (`DEFAULT_CALL_HOURS`) - a typo is never a reason to call at another
+ * time - and so is a window that ends before it starts.
+ */
+export async function readCallHours(q: Db): Promise<CallHours> {
+  const { rows } = await q.query(
+    `SELECT key, value FROM settings
+     WHERE key IN ('auto_call_hours_start', 'auto_call_hours_end', 'auto_call_time_zone', 'auto_call_days', 'auto_call_wait_minutes')`
+  );
+  const value = (key: string) => rows.find((r) => r.key === key)?.value as string | undefined;
+  const start = parseClock(value('auto_call_hours_start'));
+  const end = parseClock(value('auto_call_hours_end'));
+  const window = start !== null && end !== null && start < end;
+  const zone = value('auto_call_time_zone');
+  const wait = Number(value('auto_call_wait_minutes'));
+  return {
+    startMinute: window ? start : DEFAULT_CALL_HOURS.startMinute,
+    endMinute: window ? end : DEFAULT_CALL_HOURS.endMinute,
+    timeZone: isTimeZone(zone) ? zone : DEFAULT_CALL_HOURS.timeZone,
+    days: parseDays(value('auto_call_days')) ?? DEFAULT_CALL_HOURS.days,
+    waitMinutes: Number.isInteger(wait) && wait >= 1 && wait <= 7 * 24 * 60 ? wait : DEFAULT_CALL_HOURS.waitMinutes,
+  };
 }
 
 /** The script calls use - null when there is none. */

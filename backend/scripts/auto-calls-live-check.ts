@@ -25,7 +25,6 @@
  */
 import {
   actOnVerdict,
-  anyoneOnHold,
   callsOnHold,
   failAutomatedCall,
   holdCall,
@@ -39,6 +38,7 @@ import {
   takenByVerdict,
   transferContext,
 } from '../src/db/auto-calls';
+import { dialRoom } from '../src/db/auto-dial';
 import { finishCall, recordAnsweredBy } from '../src/db/calls';
 import { startConversation } from '../src/db/flows';
 import { pool } from '../src/db/pool';
@@ -506,7 +506,7 @@ async function main(): Promise<void> {
     const resultOf = async (id: number) =>
       (await pool.query(`SELECT script_result FROM calls WHERE id = $1`, [id])).rows[0].script_result;
 
-    check('nobody on hold to begin with', await anyoneOnHold(), false);
+    check('nobody on hold to begin with', (await dialRoom()).onHold, false);
     check('on hold, the first time', await holdCall(first.callId), true);
     const record = await lastRecord(first.leadId);
     check('recorded with it, the system\'s doing', [record.action, record.actor_id, record.detail], [
@@ -518,7 +518,7 @@ async function main(): Promise<void> {
     // The first went on hold a minute and a half before the second.
     await pool.query(`UPDATE calls SET held_at = held_at - interval '90 seconds' WHERE id = $1`, [first.callId]);
     await holdCall(second.callId);
-    check('someone is on hold - the robot waits (T20)', await anyoneOnHold(), true);
+    check('someone is on hold - the robot waits (T20)', (await dialRoom()).onHold, true);
 
     const [a, b] = [await holdState(first.callId), await holdState(second.callId)];
     check('first on hold, first in line', [a?.place, b?.place], [1, 2]);
@@ -538,7 +538,7 @@ async function main(): Promise<void> {
     await finishCall({ callSid: 'CA-HOLD-2', outcome: 'answered', durationSec: 140 });
     await settleAutomatedCall(second.callId);
     check('hung up on hold: a missed transfer, so an agent calls back - never "hung up"', await resultOf(second.callId), 'transfer_missed');
-    check('nobody on hold now', [await anyoneOnHold(), await callsOnHold()], [false, []]);
+    check('nobody on hold now', [(await dialRoom()).onHold, await callsOnHold()], [false, []]);
 
     const settled = await placedCall('+15550000533', 'CA-HOLD-3');
     await missTransfer(settled.callId);

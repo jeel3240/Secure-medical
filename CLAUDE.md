@@ -209,7 +209,7 @@ you change something the docs describe, update the doc in the same commit.
     src/core/flow-fixtures.ts  the antibiotics flow as a constant, for tests only
     src/core/call-script.ts the automated call's script, pure: its shape, what the call does after each answer (firstAsk, afterAnswer - T8), on a live call with a lead who may have hung up (handleAnswer), and when it listens (splitForListening) - T13; who a "yes" rings (planTransfer, planAfterHolder) - T15a, T15b; who let it ring out (rangOut) - T15c; who a lead on hold rings (pickOffer) - T17; what Twilio's verdict does - the beep decides (machineVerdict, onVerdict, voicemailLine) - T18
     src/core/call-script-fixtures.ts  the call script as a constant, for tests only - the live check holds it to the database
-    src/db/call-script.ts   loads the automated call's script (migration 015), and the settings a call reads: confidence, ring time, a ring from hold's ring time (T17)
+    src/db/call-script.ts   loads the automated call's script (migration 015), and the settings a call reads: confidence, ring time, a ring from hold's ring time (T17), when the robot calls (readCallHours, T20)
     scripts/call-script-live-check.ts  proves migrations 015, 018 and 019: the script as agreed, its guards, answers add-only; and the call settings, 020's included
     src/db/presence.ts      who can take a call now: each open browser says so, it holds two minutes (T9); FREE_SQL, who is free (T10); the switch turned off after a ring let run out (T15c); who is on a call or just off one, writing its note (T16, T17)
     scripts/presence-live-check.ts  proves it: the two minutes, busy, sign-out and deactivation clear it; the switch; who is free
@@ -219,6 +219,10 @@ you change something the docs describe, update the doc in the same commit.
     src/db/hold-offers.ts   a lead on hold rung to whoever comes free: the offer written before Twilio is asked, one at a time per lead and per person, never twice to one person; who is still coming for a lead (T17)
     src/integrations/twilio-calls.ts  the only file that asks Twilio to ring a phone - once, never retried (T12); how each ring of a transfer ended (T15c); and redirects a live call - back to the hold page (T16), to ring someone from hold (T17); and replaces it with the voicemail message (T18)
     src/worker/place-auto-call.ts  places one automated call: the row, then Twilio, then its answer - the dev command's and the dialler's path (T12)
+    src/worker/auto-calls.ts  the robot placing its calls by itself: one look each tick - close calls that never reached Twilio, inside the hours only, the room, the leads due, oldest first (T20)
+    src/db/auto-dial.ts     who the robot calls next (leadsToCall), the room (dialRoom), auto_calls_since, calls that never reached Twilio, one look at a time (T20)
+    src/core/auto-dial.ts   when the robot calls (insideCallHours, in the settings' own zone) and how many at once (callsToPlace), pure (T20)
+    scripts/auto-dial-live-check.ts  proves it: who is picked, when, the room, the lock, closing calls that never reached Twilio (T20)
     scripts/dev-auto-call.ts  local testing only: the server calls one lead - npm run dev:auto-call; --again gives the number to a fresh test lead, --unblock lifts a test block (T13); a lead with no text conversation is given one, nothing texted; scripts/dev-phone.ts reads the number
     scripts/auto-calls-live-check.ts  proves placing one: the row, every refusal, linking, failing, two placements racing; each answer kept once; taking a transfer; acting on a voicemail verdict, under the call's lock (T18)
     scripts/hold-offers-live-check.ts  proves migration 020: who a lead on hold rings, one at a time, never twice to one person; who is still coming (T17)
@@ -246,7 +250,7 @@ you change something the docs describe, update the doc in the same commit.
     src/db/holder.ts        who holds a lead - checked before every write on it
     src/db/failed-sends.ts  keeps an agent's own text that EZ Texting refused, marked failed
     src/db/outbound.ts      sends an automated text and records it: opener, retry, reply flow, missed-call text, the call's link
-    src/worker/index.ts     the worker loop: poll, expire, retry openers, fetch transcripts; src/worker/poller.ts is the poll
+    src/worker/index.ts     the worker loop: poll, expire, retry openers, fetch transcripts, and the robot's calls (T20); src/worker/poller.ts is the poll
     src/api/app.ts          builds the Express app; index.ts starts it; deps.ts, http.ts are shared plumbing
     src/config.ts           reads the environment, and exits if a required variable is missing
     scripts/admin-leads-live-check.ts  proves the Admin > Leads statuses
@@ -304,7 +308,7 @@ you change something the docs describe, update the doc in the same commit.
     AUTH.md  POLLER.md  WORKFLOW.md  WEBHOOKS.md  ADMIN-LEADS.md  STATE-MACHINE.md  TWILIO.md
     AUDIT.md                the activity log: nothing is lost
     FLOWS.md                how SMS scripts are stored as rows, how to add one, and how questions are named
-    AUTO-CALLS.md           automated outbound calls: the agreed design and the build tracker (T0-T19 done as of 2026-10-24: the server places a call, asks the script, keeps the answers, texts the link, puts a "yes" through to the lead's own agent first, then everyone free, switches off whoever let it ring out, holds a "yes" while someone is on a call or writing its note, rings the next person who comes free with the lead who has waited longest, leaves the voicemail message once a machine's greeting is over, rings everyone free for a lead calling back whom nobody owns; T20 on, not built)
+    AUTO-CALLS.md           automated outbound calls: the agreed design and the build tracker (T0-T20 done as of 2026-10-24: the server places a call, asks the script, keeps the answers, texts the link, puts a "yes" through to the lead's own agent first, then everyone free, switches off whoever let it ring out, holds a "yes" while someone is on a call or writing its note, rings the next person who comes free with the lead who has waited longest, leaves the voicemail message once a machine's greeting is over, rings everyone free for a lead calling back whom nobody owns, calls the right leads by itself at the pace the people free can take; T21 on, not built)
     QUEUE.md  AGENT-WORKSPACE.md  ADMIN.md  LOGGING.md  FRONTEND.md
 ```
 
