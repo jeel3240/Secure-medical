@@ -167,7 +167,7 @@ you change something the docs describe, update the doc in the same commit.
     src/db/claims.ts        claiming and releasing a lead
     src/db/read-flag.ts     clears has_unread_inbound
     src/db/lead-detail.ts   the lead card
-    src/db/timeline.ts      the merged lead timeline
+    src/db/timeline.ts      the merged lead timeline; a robot call's result and what the lead said on it (T21)
     src/db/notes.ts         agent notes, append-only
     src/api/callbacks.ts    My Callbacks: list, reschedule, mark done
     src/api/calls.ts        browser calling: whether it is set up, and the call token; the browser's word and the "Taking calls" switch (T9, T10); either saying someone is free rings them with a lead on hold (T17)
@@ -192,7 +192,7 @@ you change something the docs describe, update the doc in the same commit.
     scripts/claims-live-check.ts  proves that SQL, including the claim race
     scripts/read-flag-live-check.ts  proves a read lead leaves the queue
     scripts/lead-detail-live-check.ts  proves the card's SQL
-    scripts/timeline-live-check.ts  proves the merge and the derived events
+    scripts/timeline-live-check.ts  proves the merge and the derived events; the robot's call with its result and answers (T21)
     scripts/callbacks-live-check.ts  proves the tab windows against a real clock
     scripts/dispositions-live-check.ts  proves the DNC block and the queue effect
     scripts/agent-sms-live-check.ts  proves the take-over stops the questions
@@ -279,6 +279,7 @@ you change something the docs describe, update the doc in the same commit.
     src/lib/ringtone.ts        the ring of an incoming call, made in the browser
     src/lib/call-notification.ts  the desktop notification for an incoming call
     src/components/CallTranscript.tsx  a call's transcript, under the call
+    src/components/CallAnswers.tsx  what the lead said on the robot's call, under it (T21)
     src/lib/useSecond.ts    a clock that re-renders every second
     src/App.tsx, src/main.tsx  the routes; the entry point, which also arms the ringtone
     src/auth/               the session store and the route guards
@@ -308,7 +309,7 @@ you change something the docs describe, update the doc in the same commit.
     AUTH.md  POLLER.md  WORKFLOW.md  WEBHOOKS.md  ADMIN-LEADS.md  STATE-MACHINE.md  TWILIO.md
     AUDIT.md                the activity log: nothing is lost
     FLOWS.md                how SMS scripts are stored as rows, how to add one, and how questions are named
-    AUTO-CALLS.md           automated outbound calls: the agreed design and the build tracker (T0-T20 done as of 2026-10-24: the server places a call, asks the script, keeps the answers, texts the link, puts a "yes" through to the lead's own agent first, then everyone free, switches off whoever let it ring out, holds a "yes" while someone is on a call or writing its note, rings the next person who comes free with the lead who has waited longest, leaves the voicemail message once a machine's greeting is over, rings everyone free for a lead calling back whom nobody owns, calls the right leads by itself at the pace the people free can take; T21 on, not built)
+    AUTO-CALLS.md           automated outbound calls: the agreed design and the build tracker (T0-T21 done as of 2026-10-24: the server places a call, asks the script, keeps the answers, texts the link, puts a "yes" through to the lead's own agent first, then everyone free, switches off whoever let it ring out, holds a "yes" while someone is on a call or writing its note, rings the next person who comes free with the lead who has waited longest, leaves the voicemail message once a machine's greeting is over, rings everyone free for a lead calling back whom nobody owns, calls the right leads by itself at the pace the people free can take, shows each robot call on the lead's timeline with what was said; T22 on, not built)
     QUEUE.md  AGENT-WORKSPACE.md  ADMIN.md  LOGGING.md  FRONTEND.md
 ```
 

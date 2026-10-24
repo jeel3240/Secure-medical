@@ -12,6 +12,7 @@
 
 import type { CallDirection } from '../core/calls';
 import type { ActivityAction } from '../core/activity';
+import { questionShort } from '../core/questions';
 import { pool } from './pool';
 
 export type TimelineKind =
@@ -75,8 +76,9 @@ const QUERIES: { kind: TimelineKind; sql: string }[] = [
     sql: `
       SELECT COALESCE(c.started_at, c.created_at) AS at,
              u.name AS author,
-             c.outcome, c.duration_sec, c.direction,
-             t.status AS transcript_status, t.sentences AS transcript_lines
+             c.outcome, c.duration_sec, c.direction, c.script_result,
+             t.status AS transcript_status, t.sentences AS transcript_lines,
+             ans.answers
       FROM calls c
       LEFT JOIN users u ON u.id = c.agent_id
       -- Its transcript, if the call was recorded - TWILIO.md, "Recordings and
@@ -85,6 +87,17 @@ const QUERIES: { kind: TimelineKind; sql: string }[] = [
         SELECT ct.status, ct.sentences FROM call_transcripts ct
         WHERE ct.call_id = c.id ORDER BY ct.id DESC LIMIT 1
       ) t ON true
+      -- The robot's call: what the lead said to each question, in the order
+      -- it was said (T21, AUTO-CALLS.md). Empty for every other call.
+      LEFT JOIN LATERAL (
+        SELECT json_agg(json_build_object(
+                 'stepKey', a.step_key, 'heading', s.heading, 'attempt', a.attempt,
+                 'heard', a.heard, 'keys', a.digits, 'result', a.result, 'choice', a.choice_label
+               ) ORDER BY a.id) AS answers
+        FROM call_answers a
+        LEFT JOIN call_steps s ON s.id = a.step_id
+        WHERE a.call_id = c.id
+      ) ans ON true
       WHERE c.lead_id = $1
     `,
   },
@@ -243,11 +256,43 @@ interface TimelineRow {
   reason?: string | null;
   transcript_status?: string | null;
   transcript_lines?: unknown[] | null;
+  /** The robot's call: how its script ended, and what the lead said (T21). */
+  script_result?: string | null;
+  answers?: CallAnswerRow[] | null;
   done_at?: Date | null;
   value?: string;
   action?: string;
   detail?: Record<string, unknown>;
   subject_name?: string | null;
+}
+
+/** One answer on the robot's call, as the query builds it. */
+interface CallAnswerRow {
+  stepKey: string;
+  heading: string | null;
+  attempt: number;
+  heard: string | null;
+  keys: string | null;
+  /** `choice`, `unclear`, `silence` or `opt_out` - `call_answers.result`. */
+  result: string;
+  choice: string | null;
+}
+
+/**
+ * What the lead said on the robot's call, for the screen: each answer with its
+ * question named as every screen names one ("Q1" - `questionShort`), which
+ * asking it was, what was heard and any key pressed, and what it was taken
+ * to mean - the choice ("Yes"), or `unclear`, `silence`, `opt_out`.
+ */
+function callAnswers(rows: CallAnswerRow[]) {
+  return rows.map((a) => ({
+    question: questionShort({ key: a.stepKey, heading: a.heading ?? a.stepKey }),
+    attempt: a.attempt,
+    heard: a.heard,
+    keys: a.keys,
+    result: a.result,
+    choice: a.choice,
+  }));
 }
 
 function toEntry(kind: TimelineKind, row: TimelineRow): TimelineEntry {
@@ -276,6 +321,11 @@ function toEntry(kind: TimelineKind, row: TimelineRow): TimelineEntry {
           outcome: row.outcome,
           durationSec: row.duration_sec,
           direction: row.direction,
+          // The robot's call: how its script ended - null while it is going -
+          // and what the lead said (T21).
+          ...(row.direction === 'automated'
+            ? { scriptResult: row.script_result ?? null, answers: callAnswers(row.answers ?? []) }
+            : {}),
           // Absent when the call was not recorded.
           ...(row.transcript_status
             ? { transcript: { status: row.transcript_status, lines: row.transcript_lines ?? [] } }

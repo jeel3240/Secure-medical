@@ -1,15 +1,15 @@
 # Automated outbound calls
 
-**Planned 2026-10-15. Being built: T0 to T20 are done (2026-10-24) - the
+**Planned 2026-10-15. Being built: T0 to T21 are done (2026-10-24) - the
 server places a call, asks the script, keeps every answer, texts the link,
 puts a "yes" through to the lead's own agent first, then everyone free,
 switches off whoever let it ring out, holds a "yes" nobody can take yet while
 someone is on a call or writing its note, rings the next person who comes
 free with the lead who has waited longest, leaves the voicemail message once a
 machine's greeting is over, rings everyone free for a lead calling back whom
-nobody owns, and calls the right leads by itself at the pace the people free
-can take; the screens (T21-T24) and the finish (T25, T26) are not built
-yet.**
+nobody owns, calls the right leads by itself at the pace the people free can
+take, and shows each robot call on the lead's timeline with what was said;
+the other screens (T22-T24) and the finish (T25, T26) are not built yet.**
 This
 doc is the agreed design and the tracker for building it. Each ticket below updates its row when it is merged,
 and the sections it touches, so the doc always says what is built and what is
@@ -913,7 +913,7 @@ does not answer a missed call - until an agent takes the transfer.
 
 | Screen | What |
 |---|---|
-| Lead timeline and workspace | "Automated call · voicemail left", "· said yes · Maya Chen took it · 2:14", "· link sent", "· not interested", "· opted out", "· no response", "· no answer" - with what the lead said underneath |
+| Lead timeline and workspace | "Automated call · voicemail left", "· said yes · Maya Chen took it · 2:14", "· said yes · nobody took it", "· link sent", "· not interested", "· opted out", "· no response", "· hung up", "· no answer" - with what the lead said underneath, under **Answers** (T21, `AGENT-WORKSPACE.md` "The timeline") |
 | Agents' queue | Only a "yes" nobody took: at the top, "Wants a call", until an agent calls, texts or closes the lead |
 | Admin > Leads | A **Call** column with the last robot call's result, and a filter on it. No new status or tab - a lead is on two tracks at once ("Awaiting reply" and "Voicemail left") |
 | Admin > Configuration | The call script, hours, time zone and texts, read-only |
@@ -958,7 +958,7 @@ ticket's own PR.
 | | **Calling on its own** | | |
 | T20 | The robot places the calls by itself | T12-T19 | Done 2026-10-24 - a real look found a due lead and called it, once |
 | | **Screens** | | |
-| T21 | The timeline shows the robot calls | T13 | Not started |
+| T21 | The timeline shows the robot calls | T13 | Done 2026-10-24 - seen on real calls: taken, not interested with its answers, nobody took it |
 | T22 | The queue puts a missed "yes" first | T15a | Not started |
 | T23 | Admin > Leads: the Call column | T4 | Not started |
 | T24 | Admin > Configuration shows the call script | T6 | Not started |
@@ -1228,7 +1228,7 @@ confirmed on a real transfer (T15a, 2026-10-20). `CallDirection` in
 - The call direction type includes `automated`.
 - "Calling back · you tried 2× today" counts only agents' calls.
 - The timeline and the workspace conversation show a robot call as
-  "Automated call", until T21 gives it its full wording.
+  "Automated call", until T21 gives it its full wording (built - "Where it shows").
 
 **Done when**
 - [x] Tests: a robot call is not counted in "you tried" - alone it gives no
@@ -2372,12 +2372,29 @@ said.
   the lead said ("Q1 · 'yeah sure' -> Yes").
 
 **Done when**
-- [ ] Tests for every line.
-- [ ] Seen in the browser on a lead after a real call.
+- [x] Tests for every line - every result, who took it named once, the
+      reasons a call was never picked up, no result yet; each answer in words
+      (said, pressed, asked again, not understood, stop, nothing said), the
+      fold closed until opened, nothing for any other call; the same in the
+      conversation (374 frontend tests). A live check proves the query: a
+      call going has no result and nothing said; taken, with who and how
+      long; each answer in order, its question named "Q1"; an agent's call
+      carries neither (`timeline-live-check`, 30).
+- [x] Seen in the browser on a lead after a real call - 2026-10-24, Jeel:
+      lead 50, "said yes · karm took it"; lead 59, "not interested", its
+      Answers opened; lead 51, "said yes · nobody took it".
 
-**Files:** `backend/src/db/timeline.ts`, `frontend/src/components/Timeline.tsx`,
-`frontend/src/pages/workspace/Conversation.tsx`.
-**Doc:** `AGENT-WORKSPACE.md`.
+As built: `AGENT-WORKSPACE.md`, "The timeline". Two wording choices beyond
+the ticket: **"said yes · nobody took it"**, not "nobody free" - the same
+result covers people who let it ring and a lead who hung up waiting; and
+**who took it is named in the line**, so not again beside it. Also "· hung
+up" for a lead who left before the script finished, and Twilio's own word
+for a call never picked up - no answer, busy, failed.
+
+**Files:** `backend/src/db/timeline.ts`, `backend/scripts/timeline-live-check.ts`,
+`frontend/src/components/Timeline.tsx` (+ test), `frontend/src/components/CallAnswers.tsx`
+(+ test), `frontend/src/pages/workspace/Conversation.tsx` (+ render test).
+**Doc:** `AGENT-WORKSPACE.md`; this one; `FRONTEND.md`, `README.md`, `CLAUDE.md`.
 
 ---
 

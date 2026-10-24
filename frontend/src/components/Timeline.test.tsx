@@ -128,6 +128,56 @@ describe('calls', () => {
     expect(screen.getByText(text)).toBeDefined();
   });
 
+  describe('the robot\'s call, by how its script ended (T21)', () => {
+    const robot = (scriptResult: string | null, more: Record<string, unknown> = {}, author: string | null = null) =>
+      entry({ kind: 'call', author, detail: { direction: 'automated', outcome: 'answered', durationSec: 40, scriptResult, answers: [], ...more } });
+
+    it.each([
+      ['voicemail_left', 'Automated call · voicemail left'],
+      ['link_sent', 'Automated call · link sent'],
+      ['not_interested', 'Automated call · not interested'],
+      ['opted_out', 'Automated call · opted out'],
+      ['no_response', 'Automated call · no response'],
+      ['hung_up', 'Automated call · hung up'],
+      ['transfer_missed', 'Automated call · said yes · nobody took it'],
+    ])('%s', (scriptResult, text) => {
+      render(<Timeline entries={[robot(scriptResult)]} />);
+      expect(screen.getByText(text)).toBeDefined();
+    });
+
+    it('taken: who took it, and how long - named once, in the line, not again under it', () => {
+      const { container } = render(<Timeline entries={[robot('transferred', { durationSec: 134 }, 'Maya Chen')]} />);
+      expect(screen.getByText('Automated call · said yes · Maya Chen took it · 2:14')).toBeDefined();
+      expect(container.querySelector('.timeline__author')).toBeNull();
+    });
+
+    it.each([
+      ['no_answer', 'Automated call · no answer'],
+      ['busy', 'Automated call · busy'],
+      ['failed', 'Automated call · failed'],
+      // A fax, hung up on (T18): nobody answered it either.
+      ['voicemail', 'Automated call · no answer'],
+    ])('never picked up, %s: Twilio\'s word for why', (outcome, text) => {
+      render(<Timeline entries={[robot('unanswered', { outcome, durationSec: 0 })]} />);
+      expect(screen.getByText(text)).toBeDefined();
+    });
+
+    it('no result yet: as the call itself reads (T5)', () => {
+      render(<Timeline entries={[robot(null, { outcome: null, durationSec: null })]} />);
+      expect(screen.getByText('Automated call · in progress')).toBeDefined();
+    });
+
+    it('what the lead said, closed until opened', () => {
+      const { container } = render(
+        <Timeline entries={[robot('not_interested', { answers: [{ question: 'Q1', attempt: 1, heard: 'No.', keys: null, result: 'choice', choice: 'No' }] })]} />
+      );
+      const fold = container.querySelector('details');
+      expect(fold?.hasAttribute('open')).toBe(false);
+      expect(fold?.querySelector('summary')?.textContent).toBe('Answers');
+      expect(screen.getByText('Q1 · "No." → No')).toBeDefined();
+    });
+  });
+
   it('a call with no outcome yet is in progress', () => {
     render(<Timeline entries={[entry({ kind: 'call', detail: { outcome: null, durationSec: null } })]} />);
     expect(screen.getByText('Outbound call · in progress')).toBeDefined();

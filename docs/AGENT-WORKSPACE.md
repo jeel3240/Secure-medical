@@ -541,12 +541,33 @@ entries → other system events, so the story reads in the sequence it happened.
 **What an entry carries.** A call: `outcome`, `durationSec` and `direction`. A
 callback: `scheduledAt`, `doneAt` and `reason`. `components/Timeline.tsx` words
 them - "Outbound call · answered · 2:14", "Incoming call · answered · 1:15",
-"Missed call · told we will call back", and the server's own call "Automated
-call · answered · 0:40" (T5, 2026-10-18 - worded as its own, never as an
-agent's; how its script ended is added by T21); a callback the system booked
-for a missed call reads "Callback added · missed call", then "Missed call
+"Missed call · told we will call back"; a callback the system booked for a
+missed call reads "Callback added · missed call", then "Missed call
 returned". The Lead Timeline's "Attempts" counts an automated call as one of
 ours, like an agent's.
+
+**The robot's call** (T21, 2026-10-24) also carries `scriptResult` - how its
+script ended, null while it is going - and `answers`, what the lead said: each
+with its question named as every screen names one (`questionShort`, "Q1"),
+which asking it was, what was heard and any key pressed, and what it was taken
+to mean. So an agent opening the lead sees what already happened before they
+call:
+
+| `scriptResult` | The line |
+|---|---|
+| `transferred` | Automated call · said yes · Maya Chen took it · 2:14 - the name in the line, so not again beside it |
+| `transfer_missed` | Automated call · said yes · nobody took it - not "nobody free": people may have let it ring, or the lead hung up waiting |
+| `voicemail_left`, `link_sent`, `not_interested`, `opted_out`, `no_response`, `hung_up` | Automated call · voicemail left, · link sent, · not interested, · opted out, · no response, · hung up |
+| `unanswered` | Automated call · no answer - or busy, or failed: Twilio's word for why |
+| none yet | As T5 had it: Automated call · in progress (T5, 2026-10-18 - worded as its own, never as an agent's) |
+
+Under the line, closed until opened like the transcript beside it, **Answers**:
+`Q1 · "yeah sure" → Yes`, `Q2, asked again · pressed 2 → No`, `Q1 · "what is
+this" → not understood`, `Q1 · nothing said`, `Q1 · pressed 9 → stop`
+(`components/CallAnswers.tsx`). The same line and the same fold in the
+workspace conversation and on the Lead Timeline - one `callText` for both.
+Not shown on the lead card's "What … told us", which is the text questions'
+answers.
 
 **Three kinds come out of `messages`.** An inbound row is a reply; an outbound
 row with `sent_by` null is one of ours; an outbound row with an agent is their

@@ -60,6 +60,25 @@ describe('a call in the thread - Phase 4', () => {
     expect(line?.textContent).toMatch(/^Outbound call · no answer · Maya Chen · /);
     expect(screen.getAllByRole('img', { name: 'Sent' })).toHaveLength(1);
   });
+
+  it('the robot\'s call says how it ended, names who took it once, and keeps what the lead said folded under it (T21)', () => {
+    const robot = {
+      kind: 'call',
+      at: '2026-09-28T10:00:00Z',
+      author: 'Maya Chen',
+      detail: {
+        direction: 'automated',
+        outcome: 'answered',
+        durationSec: 134,
+        scriptResult: 'transferred',
+        answers: [{ question: 'Q1', attempt: 1, heard: 'yeah sure', keys: null, result: 'choice', choice: 'Yes' }],
+      },
+    } as TimelineEntry;
+    const { container } = renderThread([robot]);
+    expect(container.querySelector('.convo__system')?.textContent).toMatch(/^Automated call · said yes · Maya Chen took it · 2:14 · \d/);
+    expect(container.querySelector('details summary')?.textContent).toBe('Answers');
+    expect(screen.getByText('Q1 · "yeah sure" → Yes')).toBeDefined();
+  });
 });
 
 
