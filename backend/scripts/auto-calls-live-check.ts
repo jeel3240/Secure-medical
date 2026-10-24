@@ -24,6 +24,7 @@
  * Run it with the others: scripts/live-checks.sh auto-calls
  */
 import {
+  actOnVerdict,
   anyoneOnHold,
   callsOnHold,
   failAutomatedCall,
@@ -35,6 +36,7 @@ import {
   settleAutomatedCall,
   startAutomatedCall,
   takeTransfer,
+  takenByVerdict,
   transferContext,
 } from '../src/db/auto-calls';
 import { finishCall, recordAnsweredBy } from '../src/db/calls';
@@ -233,8 +235,8 @@ async function main(): Promise<void> {
       'automated',
       'answered',
     ]);
-    check('a machine on the line makes it a voicemail', await recordAnsweredBy({ callSid: 'CA-AUTO-1', answeredBy: 'machine' }), true);
-    check('outcome', (await callRow(callId)).outcome, 'voicemail');
+    check('a machine\'s verdict is kept, even after the end', await recordAnsweredBy({ callSid: 'CA-AUTO-1', answeredBy: 'machine' }), true);
+    check('but never acted on then: still answered (T18)', (await callRow(callId)).outcome, 'answered');
   }
 
   console.log('\nTwilio refused it');
@@ -296,7 +298,7 @@ async function main(): Promise<void> {
       result: 'transfer_missed' as const,
       blockNumber: false,
     };
-    check('kept, naming the call\'s lead', await keepAnswer(yes), { kept: true, leadId });
+    check('kept, naming the call\'s lead', await keepAnswer(yes), { kept: true, leadId, takenByVerdict: false });
     const { rows } = await pool.query(
       `SELECT step_key, attempt, heard, confidence::text, digits, result, choice_key, choice_label
        FROM call_answers WHERE call_id = $1`,
@@ -307,7 +309,7 @@ async function main(): Promise<void> {
     ]);
     check('the call\'s result saved', await scriptResult(callId), 'transfer_missed');
 
-    check('the same request again keeps nothing new', await keepAnswer(yes), { kept: false, leadId });
+    check('the same request again keeps nothing new', await keepAnswer(yes), { kept: false, leadId, takenByVerdict: false });
     const { rows: count } = await pool.query(`SELECT count(*)::int AS n FROM call_answers WHERE call_id = $1`, [callId]);
     check('still one answer', count[0].n, 1);
 
@@ -318,6 +320,7 @@ async function main(): Promise<void> {
     check('a hang-up with nothing said: nothing kept', await keepAnswer({ ...yes, callId: quiet, record: null, result: null }), {
       kept: false,
       leadId: quietLead,
+      takenByVerdict: false,
     });
     const { rows: none } = await pool.query(`SELECT count(*)::int AS n FROM call_answers WHERE call_id = $1`, [quiet]);
     check('no answer row, no result', [none[0].n, await scriptResult(quiet)], [0, null]);
@@ -330,6 +333,7 @@ async function main(): Promise<void> {
     check('an agent\'s call is not an automated call\'s to keep answers on', await keepAnswer({ ...yes, callId: 999999 }), {
       kept: false,
       leadId: null,
+      takenByVerdict: false,
     });
   }
 
@@ -439,10 +443,9 @@ async function main(): Promise<void> {
 
     const { leadId, callId } = await placedCall('+15550000521', 'CA-XFER-1');
     await pool.query(`UPDATE leads SET first_name = 'Priya', last_name = 'Sharma', assigned_to = $2, assigned_at = now() WHERE id = $1`, [leadId, sam]);
-    check('what a ring says: the lead, who holds them - rung first if free (T15b) - and no verdict yet', await transferContext(callId), {
+    check('what a ring says: the lead, and who holds them - rung first if free (T15b)', await transferContext(callId), {
       lead: { id: leadId, name: 'Priya Sharma', phone: '+15550000521' },
       heldBy: sam,
-      answeredBy: null,
       // No answer kept in this check: no step said yes (T17 shows its heading on a ring from hold).
       yesStepId: null,
     });
@@ -552,6 +555,128 @@ async function main(): Promise<void> {
       refused = (err as { constraint?: string }).constraint ?? 'error';
     }
     check('only an automated call can be on hold', refused, 'calls_held_is_automated');
+  }
+
+  console.log('\nvoicemail - what Twilio\'s verdict does to a live call (T18)');
+  {
+    /** Twilio taking the call over - or refusing - as told; who it was asked for. */
+    const asked: [string, string][] = [];
+    const twilioTakes = (ok: boolean) => async (action: string, callSid: string) => {
+      asked.push([action, callSid]);
+      return ok;
+    };
+    const answer = (callId: number, digits: string | null, choice: boolean) =>
+      keepAnswer({
+        callId,
+        step: q1,
+        attempt: 1,
+        spoken: { heard: choice ? 'No' : 'hello', confidence: 0.9, digits },
+        record: choice
+          ? { result: 'choice', choiceKey: '2', choiceLabel: 'No' }
+          : { result: 'unclear', choiceKey: null, choiceLabel: null },
+        result: null,
+        blockNumber: false,
+      });
+
+    const { callId: quiet } = await placedCall('+15550000901', 'CA-VM-1');
+    check('a machine, nothing answered: the message', await actOnVerdict(quiet, 'machine', twilioTakes(true)), {
+      action: 'voicemail',
+      tookOver: true,
+    });
+    check('asked of Twilio for this call', asked.pop(), ['voicemail', 'CA-VM-1']);
+    check('voicemail_left, and the call is the message\'s now', [await scriptResult(quiet), await takenByVerdict(quiet)], [
+      'voicemail_left',
+      true,
+    ]);
+    check('an answer Twilio sends after it is not kept', await answer(quiet, null, true), {
+      kept: false,
+      leadId: (await pool.query(`SELECT lead_id FROM calls WHERE id = $1`, [quiet])).rows[0].lead_id,
+      takenByVerdict: true,
+    });
+    const { rows: none } = await pool.query(`SELECT count(*)::int AS n FROM call_answers WHERE call_id = $1`, [quiet]);
+    check('no answer row', none[0].n, 0);
+    check('a second verdict: the script has its result - nothing more', await actOnVerdict(quiet, 'beep', twilioTakes(true)), {
+      action: 'carry_on',
+      tookOver: false,
+    });
+    check('Twilio was not asked again', asked.length, 0);
+
+    const { callId: over } = await placedCall('+15550000902', 'CA-VM-2');
+    check('Twilio refusing - the call already over', await actOnVerdict(over, 'beep', twilioTakes(false)), {
+      action: 'voicemail',
+      tookOver: false,
+    });
+    asked.length = 0;
+    check('saves nothing: the call\'s end gives it its result', [await scriptResult(over), await takenByVerdict(over)], [null, false]);
+
+    const { callId: said } = await placedCall('+15550000903', 'CA-VM-3');
+    await answer(said, null, true);
+    check('a machine with no beep, after the lead answered (call 24): carries on, Twilio not asked', await actOnVerdict(said, 'machine', twilioTakes(true)), {
+      action: 'carry_on',
+      tookOver: false,
+    });
+    check('no result', [await scriptResult(said), asked.length], [null, 0]);
+    check('a beep, after an answer - the greeting\'s "no one is available": the message', await actOnVerdict(said, 'beep', twilioTakes(true)), {
+      action: 'voicemail',
+      tookOver: true,
+    });
+    asked.length = 0;
+
+    const { callId: keyed } = await placedCall('+15550000904', 'CA-VM-4');
+    await answer(keyed, '5', false);
+    check('a key pressed - any key: a person, beep or not', await actOnVerdict(keyed, 'beep', twilioTakes(true)), {
+      action: 'carry_on',
+      tookOver: false,
+    });
+
+    const { callId: taken } = await placedCall('+15550000905', 'CA-VM-5');
+    const ana = (
+      await pool.query(`INSERT INTO users (email, name, role, password_hash) VALUES ('ana-vm@example.com', 'Ana', 'agent', 'x') RETURNING id`)
+    ).rows[0].id as number;
+    await takeTransfer(taken, ana);
+    check('someone took the transfer: carries on, beep or not', await actOnVerdict(taken, 'beep', twilioTakes(true)), {
+      action: 'carry_on',
+      tookOver: false,
+    });
+
+    const { callId: fax } = await placedCall('+15550000906', 'CA-VM-6');
+    await recordAnsweredBy({ callSid: 'CA-VM-6', answeredBy: 'fax' });
+    check('a fax, nothing answered: hung up on', await actOnVerdict(fax, 'fax', twilioTakes(true)), {
+      action: 'hang_up',
+      tookOver: true,
+    });
+    check('unanswered, and taken over', [await scriptResult(fax), await takenByVerdict(fax)], ['unanswered', true]);
+    asked.length = 0;
+    check('an unanswered call no fax took is not "taken over"', await takenByVerdict(over), false);
+
+    check('a row that is not an automated call of ours', await actOnVerdict(999999, 'beep', twilioTakes(true)), null);
+    check('Twilio never asked for it', asked.length, 0);
+
+    // The call is locked while the verdict decides: an answer arriving while
+    // Twilio is being asked waits, then finds the message has the call.
+    const { callId: race } = await placedCall('+15550000907', 'CA-VM-7');
+    let release: () => void = () => undefined;
+    const slowTwilio = async () => {
+      await new Promise<void>((resolve) => (release = resolve));
+      return true;
+    };
+    const verdict = actOnVerdict(race, 'beep', slowTwilio);
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    const late = answer(race, null, true);
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    release();
+    check('an answer kept at the same moment waits for the verdict', (await verdict)?.action, 'voicemail');
+    check('then is not kept: the message has the call', (await late).takenByVerdict, true);
+
+    // Two verdicts at once - Twilio sending it twice: one takeover.
+    const { callId: twice } = await placedCall('+15550000908', 'CA-VM-8');
+    asked.length = 0;
+    const both = await Promise.all([actOnVerdict(twice, 'beep', twilioTakes(true)), actOnVerdict(twice, 'beep', twilioTakes(true))]);
+    check('two verdicts at once: one takes the call over, the other carries on', both.map((b) => b?.action).sort(), [
+      'carry_on',
+      'voicemail',
+    ]);
+    check('Twilio asked once', asked.length, 1);
   }
 
   console.log(failures === 0 ? '\nall checks passed' : `\n${failures} check(s) FAILED`);

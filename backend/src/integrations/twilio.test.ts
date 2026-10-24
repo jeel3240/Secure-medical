@@ -19,6 +19,7 @@ import {
   ringAgentTwiml,
   TOKEN_TTL_SECONDS,
   transferTwiml,
+  voicemailTwiml,
 } from './twilio';
 
 const SETTINGS: TwilioSettings = {
@@ -304,5 +305,16 @@ describe('on hold, in Twilio\'s words (T16)', () => {
     // Tracks run 5 to 10 minutes, so the next request is minutes on: another track.
     expect(holdTrack(5 * 60)).not.toBe(holdTrack(0));
     expect(holdTrack(-3)).toBe(HOLD_MUSIC[0]);
+  });
+});
+
+describe('the voicemail message, in Twilio\'s words (T18)', () => {
+  it('said in the script\'s voice, our number digit by digit, a second\'s quiet, then the call ends - nothing before it', () => {
+    expect(voicemailTwiml(SETTINGS, SCRIPT)).toBe(
+      '<?xml version="1.0" encoding="UTF-8"?><Response><Say voice="Google.en-US-Chirp3-HD-Kore">' +
+        "Hi, this is Seri calling from eDrugstore with a quick message - we're offering antibiotics at 25% off right now. " +
+        "We'd love to connect. Please call us back at 4 8 0, 4 7 0, 8 2 5 9. Thanks, and have a great day!</Say>" +
+        '<Pause length="1"/><Hangup/></Response>'
+    );
   });
 });

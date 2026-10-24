@@ -16,6 +16,15 @@ import { finishMissedCallCallbacks } from './callbacks';
 import { pool } from './pool';
 import type { AnsweredBy, CallOutcome, CallRefusal } from '../core/calls';
 
+/**
+ * An automated call Twilio's verdict took over - T18, AUTO-CALLS.md
+ * "Voicemail": the voicemail message left, or a fax hung up on (the only
+ * `unanswered` call a fax picked up). Only such a call is saved as
+ * `voicemail` for a machine's verdict: one the call ignored - a person Twilio
+ * got wrong - stays `answered`. Bare column names, for any query on `calls`.
+ */
+export const TAKEN_BY_VERDICT_SQL = `(script_result = 'voicemail_left' OR (script_result = 'unanswered' AND answered_by = 'fax'))`;
+
 export type StartCallResult = { ok: true; phone: string } | { ok: false; reason: CallRefusal };
 
 /**
@@ -136,8 +145,10 @@ export async function finishCall(opts: {
        UPDATE calls
        SET outcome = CASE
              WHEN direction = 'inbound' AND $2 <> 'answered' THEN 'missed'
-             -- Picked up, but by a machine: the verdict got here first.
-             WHEN $2 = 'answered' AND answered_by IN ('machine', 'fax') THEN 'voicemail'
+             -- Picked up, but by a machine: the verdict got here first. An
+             -- automated call only when the verdict took it over (T18).
+             WHEN $2 = 'answered' AND answered_by IN ('machine', 'fax')
+                  AND (direction <> 'automated' OR ${TAKEN_BY_VERDICT_SQL}) THEN 'voicemail'
              ELSE $2
            END,
            duration_sec = $3,
@@ -190,13 +201,15 @@ export async function finishCall(opts: {
 
 /**
  * Records who picked up a call we placed - a person or a machine - and, when it
- * was a machine, saves the call as `voicemail` rather than `answered`. An
- * agent's call or an automated one (T4).
+ * was a machine, saves an agent's call as `voicemail` rather than `answered`.
+ * An agent's call or an automated one (T4); an automated call is `voicemail`
+ * only when the verdict took it over (T18, `TAKEN_BY_VERDICT_SQL`), which
+ * `finishCall` reads at its end - a verdict after the end is never acted on.
  *
  * The verdict and the end of the call arrive in either order: detection takes
  * a few seconds, and a short call can be over before it reports. So this
- * corrects an `answered` call that has already ended, and `finishCall` reads
- * the verdict for one that has not. Only the first verdict counts.
+ * corrects an agent's `answered` call that has already ended, and `finishCall`
+ * reads the verdict for one that has not. Only the first verdict counts.
  *
  * Changing `answered` to `voicemail` overwrites what the row said, so the
  * record keeps both - docs/AUDIT.md. One statement: the row and its record
@@ -205,14 +218,17 @@ export async function finishCall(opts: {
 export async function recordAnsweredBy(opts: { callSid: string; answeredBy: AnsweredBy }): Promise<boolean> {
   const { rowCount } = await pool.query(
     `WITH prev AS (
-       SELECT id, outcome FROM calls
+       SELECT id, outcome, direction FROM calls
        WHERE twilio_call_sid = $1 AND direction IN ('outbound', 'automated') AND answered_by IS NULL
        FOR UPDATE
      ),
      verdict AS (
        UPDATE calls c
        SET answered_by = $2,
-           outcome = CASE WHEN prev.outcome = 'answered' AND $2 IN ('machine', 'fax') THEN 'voicemail' ELSE c.outcome END
+           outcome = CASE
+             WHEN prev.outcome = 'answered' AND $2 IN ('machine', 'fax') AND prev.direction = 'outbound' THEN 'voicemail'
+             ELSE c.outcome
+           END
        FROM prev
        WHERE c.id = prev.id
        RETURNING c.id, c.lead_id, c.agent_id, c.outcome, prev.outcome AS outcome_was

@@ -95,14 +95,6 @@ export function answeredByFor(raw: unknown): AnsweredBy | null {
 }
 
 /**
- * True when nobody was there to talk to. A fax line counts: it picked up, and
- * it is not the lead.
- */
-export function tookByMachine(answeredBy: AnsweredBy | null): boolean {
-  return answeredBy === 'machine' || answeredBy === 'fax';
-}
-
-/**
  * Why a call was not placed. The screen stops all of these before the call
  * starts; the voice webhook checks again because the screen is a courtesy and
  * the server is the lock - the same split as every other write on a lead.

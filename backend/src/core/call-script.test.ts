@@ -11,6 +11,8 @@ import {
   handleAnswer,
   MAX_RUNG_AT_ONCE,
   holdGoesOn,
+  machineVerdict,
+  onVerdict,
   pickOffer,
   placeLine,
   planAfterHolder,
@@ -18,6 +20,7 @@ import {
   planTransfer,
   rangOut,
   splitForListening,
+  voicemailLine,
   type CallChoice,
   type CallScript,
 } from './call-script';
@@ -258,8 +261,8 @@ describe('an asking, split for listening - splitForListening (T13)', () => {
 
 describe('a yes to a transfer, planned against who is free - planTransfer (T15a, T15b)', () => {
   const transfer = { kind: 'transfer' as const, say: ['Great, connecting you with a live agent now. Please hold.'] };
-  const plan = (free: number[], holder: number | null = null, machine = false, onCall = false) =>
-    planTransfer(SCRIPT, transfer, { free, machine, holder, onCall });
+  const plan = (free: number[], holder: number | null = null, onCall = false) =>
+    planTransfer(SCRIPT, transfer, { free, holder, onCall });
 
   it('people free: the line, then all of them rung together', () => {
     expect(plan([16, 21])).toEqual({
@@ -285,13 +288,8 @@ describe('a yes to a transfer, planned against who is free - planTransfer (T15a,
     });
   });
 
-  it('a machine on the line is never put through - a voicemail greeting is not a yes', () => {
-    expect(plan([16], 16, true)).toEqual({ kind: 'end', say: [SCRIPT.noResponseBody], result: 'no_response' });
-    expect(plan([], null, true, true)).toEqual({ kind: 'end', say: [SCRIPT.noResponseBody], result: 'no_response' });
-  });
-
   it('nobody free, but someone who takes transfers on a call: the line, then on hold (T16)', () => {
-    expect(plan([], null, false, true)).toEqual({
+    expect(plan([], null, true)).toEqual({
       kind: 'hold',
       say: ['Great, connecting you with a live agent now. Please hold.', SCRIPT.holdBody],
     });
@@ -433,5 +431,72 @@ describe('who a lead on hold rings - pickOffer (T17)', () => {
   it('nobody waiting, or nobody free: nothing', () => {
     expect(pickOffer([], [16])).toBeNull();
     expect(pickOffer([lead(40)], [])).toBeNull();
+  });
+});
+
+describe('Twilio\'s verdict on who answered (T18)', () => {
+  it('reads the beep apart from a machine without one', () => {
+    expect(machineVerdict('machine_end_beep')).toBe('beep');
+    expect(machineVerdict('machine_end_silence')).toBe('machine');
+    expect(machineVerdict('machine_end_other')).toBe('machine');
+    expect(machineVerdict('machine_start')).toBe('machine');
+    expect(machineVerdict('fax')).toBe('fax');
+    expect(machineVerdict('human')).toBe('person');
+    expect(machineVerdict('unknown')).toBe('person');
+    expect(machineVerdict('robot')).toBeNull();
+    expect(machineVerdict(undefined)).toBeNull();
+  });
+
+  const call = (over: Partial<Parameters<typeof onVerdict>[1]> = {}) => ({
+    ended: false,
+    agentTook: false,
+    keyPressed: false,
+    answered: false,
+    ...over,
+  });
+
+  it('a person, or Twilio not sure: the script carries on', () => {
+    expect(onVerdict('person', call())).toBe('carry_on');
+  });
+
+  it('a beep heard: the message - even after an answer, which was the greeting talking ("no one is available")', () => {
+    expect(onVerdict('beep', call())).toBe('voicemail');
+    expect(onVerdict('beep', call({ answered: true }))).toBe('voicemail');
+  });
+
+  it('a machine with no beep: the message only before any answer - call 24 called a person who said yes a machine', () => {
+    expect(onVerdict('machine', call())).toBe('voicemail');
+    expect(onVerdict('machine', call({ answered: true }))).toBe('carry_on');
+  });
+
+  it('a fax: hung up on, likewise only before any answer', () => {
+    expect(onVerdict('fax', call())).toBe('hang_up');
+    expect(onVerdict('fax', call({ answered: true }))).toBe('carry_on');
+  });
+
+  it('a key pressed, or someone took the transfer: a person - never the message, beep or not', () => {
+    for (const verdict of ['beep', 'machine', 'fax'] as const) {
+      expect(onVerdict(verdict, call({ keyPressed: true }))).toBe('carry_on');
+      expect(onVerdict(verdict, call({ agentTook: true }))).toBe('carry_on');
+    }
+  });
+
+  it('the script over, or the call: nothing to leave', () => {
+    expect(onVerdict('beep', call({ ended: true }))).toBe('carry_on');
+    expect(onVerdict('machine', call({ ended: true }))).toBe('carry_on');
+  });
+});
+
+describe('the voicemail message as said (T18)', () => {
+  it('our number read out digit by digit, in its groups', () => {
+    expect(voicemailLine(SCRIPT, '+14804708259')).toBe(
+      "Hi, this is Seri calling from eDrugstore with a quick message - we're offering antibiotics at 25% off right now. We'd love to connect. Please call us back at 4 8 0, 4 7 0, 8 2 5 9. Thanks, and have a great day!"
+    );
+  });
+
+  it('a number that is not a US one: every digit, whole', () => {
+    expect(voicemailLine({ ...SCRIPT, voicemailBody: 'Call {callback_number}.' }, '+442071234567')).toBe(
+      'Call 4 4 2 0 7 1 2 3 4 5 6 7.'
+    );
   });
 });

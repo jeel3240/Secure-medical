@@ -447,8 +447,11 @@ The second is worth knowing: a real person was not reported as `human` but as
 `unknown`. That is why `unknown` stays `answered` - treating it as a machine
 would have filed a real conversation as voicemail.
 
-Not covered: leaving a recorded message automatically (voicemail drop), and
-anything for calls a lead places to us.
+Not covered: leaving a recorded message automatically (voicemail drop) on an
+agent's call, and anything for calls a lead places to us. The automated call
+does leave one, after the beep, and is saved as `voicemail` only then - its
+rules, and why a "machine" verdict is not always believed, are in
+`AUTO-CALLS.md`, "Voicemail" (T18).
 
 ## Recordings and transcripts
 
@@ -544,7 +547,7 @@ made `agent_id` optional for them (migration 007).
 | `script_result` | Automated calls only (014): how the script ended - `transferred`, `transfer_missed`, `link_sent`, `not_interested`, `opted_out`, `no_response`, `voicemail_left`, `hung_up`, `unanswered`. `outcome` keeps Twilio's view beside it. One automated call per lead, ever: a unique index (`calls_one_automated_per_lead`) |
 | `started_at` | When Twilio asked us how to connect it |
 | `ended_at` | When Twilio reported the far leg ended - the lead's for a call we placed, the agent's for one we received - or at once for an incoming call that rang nobody. Null while the call is in progress |
-| `outcome` | `answered`, `no_answer`, `busy`, `failed` or `canceled` - `core/calls.ts` - `voicemail` for a call we placed that a machine picked up, and `missed` for an incoming call nobody answered. Null while in progress |
+| `outcome` | `answered`, `no_answer`, `busy`, `failed` or `canceled` - `core/calls.ts` - `voicemail` for a call we placed that a machine picked up - an automated one only when the voicemail message took it over (T18, `AUTO-CALLS.md` "Voicemail") - and `missed` for an incoming call nobody answered. Null while in progress |
 | `answered_by` | Who picked up a call we placed: `human`, `machine`, `fax` or `unknown` - "Voicemail", above. Null for an incoming call, one nobody picked up, or one from before migration 010 |
 | `duration_sec` | Seconds of conversation. 0 unless answered |
 
@@ -804,7 +807,7 @@ own phone.
   plan for agents' calls. (Recording, transcripts and voicemail *detection* are built - above. The lead
   is told a call is recorded before it connects - "Recordings and
   transcripts".) The automated call has its own: a transfer to a person
-  (built, T15a) and a voicemail message (T18, not yet) - `AUTO-CALLS.md`.
+  (built, T15a) and a voicemail message (built, T18) - `AUTO-CALLS.md`.
 - **A call queue for incoming calls.** One agent is rung, or nobody -
   "Incoming calls", above. The automated call's hold line (built, T16) is only
   for its own transfers.

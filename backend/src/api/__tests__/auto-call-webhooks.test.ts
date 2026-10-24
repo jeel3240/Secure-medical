@@ -12,7 +12,11 @@ import { buildApp } from './helpers';
 
 const linkAutomatedCall = jest.fn<Promise<boolean>, [number, string]>();
 type KeepArgs = Parameters<typeof import('../../db/auto-calls').keepAnswer>;
-const keepAnswer = jest.fn<Promise<{ kept: boolean; leadId: number | null }>, KeepArgs>();
+const keepAnswer = jest.fn<Promise<{ kept: boolean; leadId: number | null; takenByVerdict: boolean }>, KeepArgs>();
+type ActArgs = Parameters<typeof import('../../db/auto-calls').actOnVerdict>;
+type Acted = Awaited<ReturnType<typeof import('../../db/auto-calls').actOnVerdict>>;
+const actOnVerdict = jest.fn<Promise<Acted>, ActArgs>();
+const takenByVerdict = jest.fn<Promise<boolean>, [number]>();
 const settleAutomatedCall = jest.fn();
 type Context = Awaited<ReturnType<typeof import('../../db/auto-calls').transferContext>>;
 const transferContext = jest.fn<Promise<Context>, [number]>();
@@ -25,6 +29,8 @@ const holdState = jest.fn<Promise<HoldState>, unknown[]>();
 jest.mock('../../db/auto-calls', () => ({
   linkAutomatedCall: (...a: [number, string]) => linkAutomatedCall(...a),
   keepAnswer: (...a: KeepArgs) => keepAnswer(...a),
+  actOnVerdict: (...a: ActArgs) => actOnVerdict(...a),
+  takenByVerdict: (callId: number) => takenByVerdict(callId),
   settleAutomatedCall: (...a: unknown[]) => settleAutomatedCall(...a),
   transferContext: (callId: number) => transferContext(callId),
   takeTransfer: (callId: number, agentId: number) => takeTransfer(callId, agentId),
@@ -34,7 +40,11 @@ jest.mock('../../db/auto-calls', () => ({
 }));
 type Rings = Awaited<ReturnType<typeof import('../../integrations/twilio-calls').transferRings>>;
 const transferRings = jest.fn<Promise<Rings>, unknown[]>();
-jest.mock('../../integrations/twilio-calls', () => ({ transferRings: (...a: unknown[]) => transferRings(...a) }));
+const replaceCall = jest.fn<Promise<boolean>, [TwilioSettings, string, string]>();
+jest.mock('../../integrations/twilio-calls', () => ({
+  transferRings: (...a: unknown[]) => transferRings(...a),
+  replaceCall: (...a: [TwilioSettings, string, string]) => replaceCall(...a),
+}));
 const freePeople = jest.fn<Promise<number[]>, unknown[]>();
 const switchOffAfterMissedRing = jest.fn<Promise<boolean>, unknown[]>();
 const someoneOnOrJustOffCall = jest.fn<Promise<boolean>, unknown[]>();
@@ -107,13 +117,19 @@ afterEach(afterResponse);
 
 beforeEach(() => {
   linkAutomatedCall.mockReset().mockResolvedValue(true);
-  keepAnswer.mockReset().mockResolvedValue({ kept: true, leadId: 7 });
+  keepAnswer.mockReset().mockResolvedValue({ kept: true, leadId: 7, takenByVerdict: false });
+  // Acts as the database would on a verdict it takes the call over for.
+  actOnVerdict.mockReset().mockImplementation(async (_callId, verdict, takeOver) => {
+    const action = verdict === 'fax' ? 'hang_up' : 'voicemail';
+    return { action, tookOver: await takeOver(action, 'CA900') };
+  });
+  takenByVerdict.mockReset().mockResolvedValue(false);
+  replaceCall.mockReset().mockResolvedValue(true);
   sendCallLinkText.mockReset().mockResolvedValue(true);
   settleAutomatedCall.mockReset().mockResolvedValue(undefined);
   transferContext.mockReset().mockResolvedValue({
     lead: { id: 7, name: 'Priya Sharma', phone: '+15550100016' },
     heldBy: null,
-    answeredBy: 'human',
     yesStepId: OFFER_STEP,
   });
   takeTransfer.mockReset().mockResolvedValue({ ok: true, leadId: 7, tookOverFrom: null });
@@ -269,7 +285,7 @@ describe('the lead answers (T13)', () => {
     });
 
     it('never twice: the same request again keeps nothing new, and texts nothing', async () => {
-      keepAnswer.mockResolvedValue({ kept: false, leadId: 7 });
+      keepAnswer.mockResolvedValue({ kept: false, leadId: 7, takenByVerdict: false });
       const { app } = await on();
       await fromTwilio(app, gather(LINK_STEP, 1), yesToLink);
       await new Promise((resolve) => setImmediate(resolve));
@@ -393,7 +409,6 @@ describe('the transfer (T15a)', () => {
       transferContext.mockResolvedValue({
         lead: { id: 7, name: 'Priya Sharma', phone: '+15550100016' },
         heldBy: agentId,
-        answeredBy: 'human',
         yesStepId: OFFER_STEP,
       });
 
@@ -460,19 +475,13 @@ describe('the transfer (T15a)', () => {
     });
   });
 
-  it('a machine on the line is never put through - ended as no response', async () => {
+  it('a yes after the voicemail message took the call (T18) rings nobody - it was the greeting, or the page replaced', async () => {
     freePeople.mockResolvedValue([16]);
-    transferContext.mockResolvedValue({
-      lead: { id: 7, name: 'Priya Sharma', phone: '+15550100016' },
-      heldBy: 16,
-      answeredBy: 'machine',
-      yesStepId: OFFER_STEP,
-    });
+    keepAnswer.mockResolvedValue({ kept: false, leadId: 7, takenByVerdict: true });
     const { app } = await on();
     const res = await fromTwilio(app, GATHER, yes);
-    expect(keepAnswer.mock.calls[0][0]).toMatchObject({ result: 'no_response' });
-    expect(res.text).not.toContain('<Dial');
-    expect(res.text).toContain('Thank you for your time. Have a great day.</Say><Hangup/>');
+    expect(res.text).toMatch(/<Response><Hangup\/><\/Response>$/);
+    expect(holdCall).not.toHaveBeenCalled();
   });
 
   it('a yes said as the lead hung up rings nobody', async () => {
@@ -657,13 +666,105 @@ describe('who picked up', () => {
   it('is kept on the row: a machine, however Twilio words it', async () => {
     const { app } = await on();
     expect((await fromTwilio(app, AMD, { CallSid: 'CA900', AnsweredBy: 'machine_end_beep' })).status).toBe(204);
+    await afterResponse();
     expect(recordAnsweredBy).toHaveBeenCalledWith({ callSid: 'CA900', answeredBy: 'machine' });
   });
 
   it('a verdict it does not know is ignored', async () => {
     const { app } = await on();
     await fromTwilio(app, AMD, { CallSid: 'CA900', AnsweredBy: 'robot' });
+    await afterResponse();
     expect(recordAnsweredBy).not.toHaveBeenCalled();
+    expect(actOnVerdict).not.toHaveBeenCalled();
+  });
+
+  describe('voicemail (T18)', () => {
+    it('a beep heard: the message, in the script\'s voice, our number digit by digit, then the call ends', async () => {
+      const { app } = await on();
+      expect((await fromTwilio(app, AMD, { CallSid: 'CA900', AnsweredBy: 'machine_end_beep' })).status).toBe(204);
+      await afterResponse();
+      expect(actOnVerdict.mock.calls[0].slice(0, 2)).toEqual([42, 'beep']);
+      const [settings, callSid, twiml] = replaceCall.mock.calls[0];
+      expect([settings, callSid]).toEqual([SETTINGS, 'CA900']);
+      expect(twiml).toBe(
+        '<?xml version="1.0" encoding="UTF-8"?><Response><Say voice="Google.en-US-Chirp3-HD-Kore">' +
+          'Hi, this is Seri calling from eDrugstore with a quick message - we\'re offering antibiotics at 25% off right now. ' +
+          'We\'d love to connect. Please call us back at 4 8 0, 5 3 0, 8 5 8 2. Thanks, and have a great day!</Say><Pause length="1"/><Hangup/></Response>'
+      );
+    });
+
+    it('a machine with no beep heard is acted on too - the database decides with what the call has heard (onVerdict)', async () => {
+      const { app } = await on();
+      await fromTwilio(app, AMD, { CallSid: 'CA900', AnsweredBy: 'machine_end_other' });
+      await afterResponse();
+      expect(actOnVerdict.mock.calls[0].slice(0, 2)).toEqual([42, 'machine']);
+    });
+
+    it('a fax: hung up on', async () => {
+      const { app } = await on();
+      await fromTwilio(app, AMD, { CallSid: 'CA900', AnsweredBy: 'fax' });
+      await afterResponse();
+      expect(actOnVerdict.mock.calls[0].slice(0, 2)).toEqual([42, 'fax']);
+      expect(replaceCall.mock.calls[0][2]).toMatch(/<Response><Hangup\/><\/Response>$/);
+    });
+
+    it('a person, or Twilio not sure: kept, and nothing else happens', async () => {
+      const { app } = await on();
+      for (const verdict of ['human', 'unknown']) {
+        await fromTwilio(app, AMD, { CallSid: 'CA900', AnsweredBy: verdict });
+      }
+      await afterResponse();
+      expect(recordAnsweredBy).toHaveBeenCalledTimes(2);
+      expect(actOnVerdict).not.toHaveBeenCalled();
+    });
+
+    it('a verdict already kept - Twilio sending it again: acted on once only', async () => {
+      recordAnsweredBy.mockResolvedValue(false);
+      const { app } = await on();
+      await fromTwilio(app, AMD, { CallSid: 'CA900', AnsweredBy: 'machine_end_beep' });
+      await afterResponse();
+      expect(actOnVerdict).not.toHaveBeenCalled();
+    });
+
+    it('Twilio has its answer first: the database failing after it changes nothing Twilio sees', async () => {
+      actOnVerdict.mockRejectedValue(new Error('database down'));
+      const { app } = await on();
+      expect((await fromTwilio(app, AMD, { CallSid: 'CA900', AnsweredBy: 'machine_end_beep' })).status).toBe(204);
+      await afterResponse();
+      expect(replaceCall).not.toHaveBeenCalled();
+    });
+
+    it('no script: nothing to say, nothing done', async () => {
+      loadActiveCallScript.mockResolvedValue(null);
+      const { app } = await on();
+      await fromTwilio(app, AMD, { CallSid: 'CA900', AnsweredBy: 'machine_end_beep' });
+      await afterResponse();
+      expect(actOnVerdict).not.toHaveBeenCalled();
+    });
+
+    it('a row that is not this call: nothing kept, nothing done', async () => {
+      linkAutomatedCall.mockResolvedValue(false);
+      const { app } = await on();
+      expect((await fromTwilio(app, AMD, { CallSid: 'CA999', AnsweredBy: 'machine_end_beep' })).status).toBe(204);
+      await afterResponse();
+      expect(recordAnsweredBy).not.toHaveBeenCalled();
+      expect(actOnVerdict).not.toHaveBeenCalled();
+    });
+
+    it('a ring cut short by the message: nobody switched off, nothing more said', async () => {
+      takenByVerdict.mockResolvedValue(true);
+      const { app } = await on();
+      const res = await fromTwilio(app, `/api/webhooks/twilio/auto/after?call=42&step=${OFFER_STEP}&rung=16%2C21`, {
+        CallSid: 'CA900',
+        CallStatus: 'in-progress',
+        DialCallStatus: 'no-answer',
+      });
+      expect(res.text).toMatch(/<Response><Hangup\/><\/Response>$/);
+      await afterResponse();
+      expect(missTransfer).not.toHaveBeenCalled();
+      expect(transferRings).not.toHaveBeenCalled();
+      expect(switchOffAfterMissedRing).not.toHaveBeenCalled();
+    });
   });
 });
 

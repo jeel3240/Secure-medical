@@ -1,8 +1,9 @@
 /**
  * Asking Twilio to place a call from the server - T12, docs/AUTO-CALLS.md -
  * and, once a transfer's ringing is over, how each person's ring of it ended
- * (T15c); and cutting a lead's hold music short - to end the hold (T16), or
- * to ring the person who came free (T17).
+ * (T15c); cutting a lead's hold music short - to end the hold (T16), or to
+ * ring the person who came free (T17); and handing a call a machine answered
+ * to the voicemail message (T18).
  *
  * The only file that rings a phone through Twilio's REST API;
  * `integrations/twilio.ts` stays a set of pure functions.
@@ -140,6 +141,23 @@ export async function sendToOffer(settings: TwilioSettings, callSid: string, cal
   try {
     const client = twilio(settings.accountSid, settings.authToken, { timeout: REQUEST_TIMEOUT_MS });
     await client.calls(callSid).update({ url: autoCallUrl(settings, AUTO_OFFER_PATH, callId, { offer: offerId }), method: 'POST' });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Replaces what the live call `callSid` is doing with `twiml`, now - T18: the
+ * voicemail message after the beep, or a fax hung up on. Whatever it was
+ * doing stops - a question, a transfer ringing, the hold music. True when
+ * Twilio took it; false when it refused - most often, the call already over.
+ * Never throws.
+ */
+export async function replaceCall(settings: TwilioSettings, callSid: string, twiml: string): Promise<boolean> {
+  try {
+    const client = twilio(settings.accountSid, settings.authToken, { timeout: REQUEST_TIMEOUT_MS });
+    await client.calls(callSid).update({ twiml });
     return true;
   } catch {
     return false;
