@@ -1,13 +1,14 @@
 # Automated outbound calls
 
-**Planned 2026-10-15. Being built: T0 to T19 are done (2026-10-24) - the
+**Planned 2026-10-15. Being built: T0 to T20 are done (2026-10-24) - the
 server places a call, asks the script, keeps every answer, texts the link,
 puts a "yes" through to the lead's own agent first, then everyone free,
 switches off whoever let it ring out, holds a "yes" nobody can take yet while
 someone is on a call or writing its note, rings the next person who comes
 free with the lead who has waited longest, leaves the voicemail message once a
-machine's greeting is over, and rings everyone free for a lead calling back
-whom nobody owns; the robot calling by itself (T20) onwards is not built
+machine's greeting is over, rings everyone free for a lead calling back whom
+nobody owns, and calls the right leads by itself at the pace the people free
+can take; the screens (T21-T24) and the finish (T25, T26) are not built
 yet.**
 This
 doc is the agreed design and the tracker for building it. Each ticket below updates its row when it is merged,
@@ -136,6 +137,30 @@ LEAD CALLS (480) 470-8259 BACK
   says.
 - Only leads that arrive after `AUTO_CALLS` is first switched on - never the
   backlog.
+
+**As built** (T20, 2026-10-24): the worker's last job on each tick, every 30
+seconds, with automated calls on and calling set up (`worker/auto-calls.ts`).
+A lead is called (`leadsToCall`, `db/auto-dial.ts`) when:
+
+- it arrived after `auto_calls_since` - written in `settings` the first time
+  the worker looks with automated calls on, and never again;
+- its first text went out at least `auto_call_wait_minutes` (60) ago - the
+  conversation's `question_sent_at` - and that conversation is still open:
+  not answered, expired or stopped;
+- it has not replied - no text from it, **and no call from it either**: a
+  lead reaching us by phone is a person's to deal with;
+- nobody holds it, and nobody has worked it (`WORKED_SQL`: a note, a
+  callback, an outcome - Closed among them - an agent's call or text);
+- its number is not blocked (a block lifted by START is not), and the robot
+  has never called it.
+
+Oldest first, by when the first text went out. The hours are
+`auto_call_hours_start`/`_end` in `auto_call_time_zone` on `auto_call_days`
+(`readCallHours`; a malformed one is migration 015's value - a typo never
+moves the hours), checked in that zone (`insideCallHours`, `core/auto-dial.ts`).
+**Outside production only the test numbers are looked at at all**, so a
+laptop's fake leads are never even tried. Each lead is then placed as from
+T12 (`placeAutoCall`), one after another.
 
 ### Who is free - the "Taking calls" switch
 
@@ -388,6 +413,18 @@ The robot slows down and stops by itself:
 - none when nobody is free;
 - none outside 11am-5pm.
 
+**As built** (T20, `callsToPlace`, `dialRoom`): the room is the people free
+(`FREE_SQL`) less the robot's calls still going with nobody on them - no end,
+started within 10 minutes - and nothing while a lead waits on hold. A call
+taken by someone is theirs, so they are no longer free. One look at a time:
+the room and the leads are read holding an advisory lock (`withDialLock`), so
+two workers never dial together; and the same lead is never called twice
+regardless (`startAutomatedCall`, `calls_one_automated_per_lead`). A call of
+the robot's that never reached Twilio - T12 left its row when Twilio did not
+answer, in case it went out - is closed after those 10 minutes with no webhook
+naming it: `failed`, `unanswered`, its `call.ended` saying
+`never_reached_twilio` (`closeUnplacedCalls`).
+
 ## How a call is placed
 
 Built in T12 (2026-10-18). One path, `worker/place-auto-call.ts`, for the dev
@@ -636,7 +673,8 @@ Cutting a track to say the place again would restart the same piece, so it is
 not done.
 
 **Someone is on hold** is a call with `held_at`, no result yet, and not ended
-(`anyoneOnHold`) - while one is, the robot places no new calls (T20).
+(`ON_HOLD_SQL`) - while one is, the robot places no new calls (T20,
+`dialRoom`).
 
 ### The next person who comes free gets the waiting lead (T17)
 
@@ -918,7 +956,7 @@ ticket's own PR.
 | T18 | Voicemail | T12 | Done 2026-10-24 - real calls: a real voicemail, the whole message; a beep while the call spoke, and while a transfer rang |
 | T19 | A lead calling back reaches someone | T10, T11 | Done 2026-10-24 - real calls back: everyone free rang, one took it; nobody took it, missed and texted |
 | | **Calling on its own** | | |
-| T20 | The robot places the calls by itself | T12-T19 | Not started |
+| T20 | The robot places the calls by itself | T12-T19 | Done 2026-10-24 - a real look found a due lead and called it, once |
 | | **Screens** | | |
 | T21 | The timeline shows the robot calls | T13 | Not started |
 | T22 | The queue puts a missed "yes" first | T15a | Not started |
@@ -1570,7 +1608,7 @@ ended.
       racing for one lead (`auto-calls-live-check`, 34 checks).
 
 As built: "How a call is placed", above. The steps are one path,
-`worker/place-auto-call.ts`, which the dialler will use. The webhooks name
+`worker/place-auto-call.ts`, which the dialler uses too (T20). The webhooks name
 our row (`?call=<id>`), not Twilio's call, because the row exists before
 Twilio answers. The voicemail verdict already has its webhook,
 `/auto/amd`, which keeps it as for an agent's call; T18 adds the message. Until
@@ -2275,19 +2313,45 @@ people taking them can handle.
   is not "under way" for ever.
 
 **Done when**
-- [ ] A live check of who is picked: the 1-hour wait, the hours, the days,
+- [x] A live check of who is picked: the 1-hour wait, the hours, the days,
       held, Closed, blocked, already called, arrived before
-      `auto_calls_since`.
-- [ ] A live check of timing: picked on the first check after its hour is
-      up; one whose hour ended overnight is picked first at 11am.
-- [ ] A live check of pace: never more calls than people free; none while
-      someone is on hold; two workers never call the same lead.
-- [ ] A real run on the dev number, to test numbers only.
+      `auto_calls_since`. And: never texted, replied, rang us, a note, a
+      lifted block picked, the conversation completed, expired or stopped,
+      oldest first, the test numbers only, up to the room
+      (`auto-dial-live-check`, 40 checks). The hours and the days in
+      Arizona's own time, and malformed settings: unit tests.
+- [x] A live check of timing: picked on the first check after its hour is
+      up - not a second before; one whose hour ended overnight is picked
+      first at 11am, before the morning's lead.
+- [x] A live check of pace: never more calls than people free - a look with
+      two free and one call going places one, the next none; none while
+      someone is on hold; two workers never dial at once (the lock), and
+      never call the same lead (T12's race). A call that never reached Twilio
+      closed after 10 minutes, once.
+- [x] A real run on the dev number, to test numbers only - 2026-10-24, a
+      Saturday: one look, outside the days, wrote `auto_calls_since` and
+      called nobody; with Saturday allowed in the local settings for the test
+      and a lead whose first text went out 61 minutes before, one look found
+      it and called it (call 65 - "No.", "No", not interested); the next look
+      found nobody due. Run through the worker's own parts as one look
+      (`dialDueLeads` with `autoDialler`'s pieces), not the whole worker: its
+      poll would have texted every test contact added since the local
+      checkpoint, 6 October.
 
-**Files:** `backend/src/worker/auto-calls.ts`, `backend/src/worker/index.ts`,
-`backend/src/db/auto-calls.ts`, `scripts/auto-calls-live-check.ts`,
-`scripts/live-checks.sh`.
-**Doc:** this one, `POLLER.md` (the worker loop).
+As built: "When a lead is called" and "Traffic" above. Beyond the ticket:
+**no reply means no call from them either**, and **nobody has worked the
+lead** (`WORKED_SQL`), not only held or Closed - the same care as T0's
+resend; **outside production only the test numbers are looked at**, so a
+laptop's fake leads are not refused every half minute into the activity log;
+and **an advisory lock** keeps a look to one worker. Settings read every look
+(`readCallHours`), each falling back to migration 015's value. 1,011 backend
+tests (the hours, the room, a look's order).
+
+**Files:** `backend/src/core/auto-dial.ts` (+ test), `backend/src/db/auto-dial.ts`,
+`backend/src/db/call-script.ts`, `backend/src/worker/auto-calls.ts` (+ test),
+`backend/src/worker/index.ts`, `backend/scripts/auto-dial-live-check.ts`.
+**Doc:** this one, "When a lead is called" and "Traffic"; `POLLER.md` (the
+worker loop), `SCHEMA.md`, `AUDIT.md`, `LOGGING.md`, `README.md`, `CLAUDE.md`.
 
 ---
 

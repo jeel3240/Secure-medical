@@ -49,7 +49,7 @@ it.
 | `callback.done` | Marked done, finished by an outcome, or - a missed call's callback - by the lead being got back to. Actor is who did that | `scheduledAt`, `because`: `outcome`, `called_back`, `texted_back` or `answered` |
 | `callback.reopened` | A done callback is un-done | `wasDoneAt` |
 | `sms.sent`, `sms.failed`, `sms.blocked` | An agent's own text. `blocked` leaves no message row, so the log is its only record | `messageId`, `tookOver` |
-| `call.started`, `call.ended`, `call.refused` | A call. A refused call leaves no `calls` row, so the log is its only record. An automated call's are the system's (no actor) and say `direction: automated` (T12): refused as `not_found`, `blocked`, `already_called`, `no_script` or `not_test_number`; ended as `failed` with `reason: twilio_refused`, `twilioStatus` and `twilioCode` when Twilio would not place it - `AUTO-CALLS.md`, "How a call is placed" | `callSid`, `callId`, `outcome`, `durationSec`, `reason` |
+| `call.started`, `call.ended`, `call.refused` | A call. A refused call leaves no `calls` row, so the log is its only record. An automated call's are the system's (no actor) and say `direction: automated` (T12): refused as `not_found`, `blocked`, `already_called`, `no_script` or `not_test_number`; ended as `failed` with `reason: twilio_refused`, `twilioStatus` and `twilioCode` when Twilio would not place it - `AUTO-CALLS.md`, "How a call is placed" - or `reason: never_reached_twilio` when no webhook named it within 10 minutes of being placed (T20, "Traffic") | `callSid`, `callId`, `outcome`, `durationSec`, `reason` |
 | `call.incoming` | A lead rings our number and an agent is rung - the subject is that agent; or, for a lead nobody owns, everyone free (T19) - no subject. From a number we hold no lead for there is no `calls` row, so the log is its only record | `callId`, `callSid`; `ring: 'group'` and `rung`, how many, when everyone free rang; for an unknown number, `phone` and `known: false` |
 | `call.taken` | A person accepted a lead's call that rang everyone free - the call is theirs from then, and so is the lead (`lead.picked_up`, `via: 'call_back'`) (T19, `TWILIO.md` "Who rings"). Once per call: the first to accept. Without it, nothing would say who took a call no one was rung for by name | `callId`, `callSid`; `tookOverFrom` when the lead was someone else's |
 | `call.missed` | An incoming call nobody answered. The subject is the agent it rang - none when it rang everyone free | `callId`, `callSid`; `direction`, `outcome`, `durationSec` when a ring went unanswered; `because: 'no_agent'` when there was nobody to ring |
@@ -77,7 +77,9 @@ answer a lead gives (`conversation_answers` - add-only, and tied to the
 inbound text it was read from; on an automated call, `call_answers` - add-only
 too, with what Twilio heard, since migration 015), and each time a lead on
 hold rang someone who came free (`call_offers`, since 020 - who, when, and how
-it ended). A reply that was not counted because it
+it ended); and when automated calls were first switched on (`auto_calls_since`
+in `settings`, T20 - written once, never overwritten). Each robot call the
+worker places is its `call.started`, as one placed by hand. A reply that was not counted because it
 arrived before our text had gone out is kept in `messages` like any other,
 and logged as `reply.before_our_text`.
 

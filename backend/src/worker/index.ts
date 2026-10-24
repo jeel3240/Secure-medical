@@ -1,6 +1,11 @@
-import '../config';
+import { config } from '../config';
+import { readAutoCalls, readAutoCallTestNumbers } from '../auto-calls-settings';
+import { autoCallsSince, closeUnplacedCalls, dialRoom, leadsToCall, withDialLock } from '../db/auto-dial';
+import { readCallHours } from '../db/call-script';
 import { pool } from '../db/pool';
+import { dialDueLeads, worthLogging, type DialDeps } from './auto-calls';
 import { expireStaleConversations } from './expiry';
+import { placeAutoCall } from './place-auto-call';
 import { pollOnce } from './poller';
 import { errText, log } from '../lib/log';
 import { retryFailedOpeners } from './retry-openers';
@@ -18,6 +23,29 @@ async function pollIntervalMs(): Promise<number> {
   const seconds = rows.length > 0 ? Number(rows[0].value) : DEFAULT_POLL_INTERVAL_SECONDS;
   return (Number.isFinite(seconds) && seconds > 0 ? seconds : DEFAULT_POLL_INTERVAL_SECONDS) * 1000;
 }
+
+/**
+ * The robot placing its calls (T20, `worker/auto-calls.ts`) - only with
+ * `AUTO_CALLS` on and calling set up; null otherwise. Outside production, only
+ * the test numbers are ever looked at (`AUTO_CALL_TEST_NUMBERS`).
+ */
+function autoDialler(): DialDeps | null {
+  if (!readAutoCalls(process.env).on || config.twilio.status !== 'on') return null;
+  const settings = config.twilio.settings;
+  const numbers = readAutoCallTestNumbers(process.env, process.env.NODE_ENV === 'production');
+  const only = numbers.only === null ? null : [...numbers.only];
+  return {
+    closeUnplacedCalls,
+    autoCallsSince,
+    readCallHours: () => readCallHours(pool),
+    dialRoom,
+    leadsToCall: (opts) => leadsToCall({ ...opts, only }),
+    placeAutoCall: (leadId) => placeAutoCall({ leadId, settings, numbers }),
+    withDialLock,
+  };
+}
+
+const dialler = autoDialler();
 
 // Serialised on purpose: one poller instance, one cycle at a time, so the
 // checkpoint can't be advanced by two overlapping runs.
@@ -83,6 +111,18 @@ async function loop(): Promise<void> {
       log.error('transcript.tick_failed', { err: errText(err) });
     }
 
+    // The robot's calls - AUTO-CALLS.md "When a lead is called". Apart from
+    // the rest, and last: a lead's call never waits on the poll, and a failure
+    // here never stops the poll.
+    if (dialler) {
+      try {
+        const look = await dialDueLeads(dialler);
+        if (worthLogging(look)) log.info('auto_call.dial', { ...look });
+      } catch (err) {
+        log.error('auto_call.dial_failed', { err: errText(err) });
+      }
+    }
+
     let waitMs = DEFAULT_POLL_INTERVAL_SECONDS * 1000;
     try {
       waitMs = await pollIntervalMs();
@@ -94,5 +134,5 @@ async function loop(): Promise<void> {
   }
 }
 
-log.info('worker.started');
+log.info('worker.started', { autoCalls: dialler ? 'on' : 'off' });
 loop();

@@ -21,9 +21,12 @@ The worker tick does four things, in this order: this poll, the expiry sweep
 in `worker/expiry.ts`, the retry of openers that never went out
 (`worker/retry-openers.ts`, "Retrying a failed opener" below), then fetching
 call transcripts (`TWILIO.md`) - each in its own try/catch so a failure
-on one does not stop the others. **Every call to EZ Texting gives up after 30
-seconds** (2026-10-06): without a limit one hung connection stopped all four,
-with nothing in the logs. Expiring is local work that must keep happening while EZ Texting is
+on one does not stop the others. With automated calls on (`AUTO_CALLS`) and
+calling set up, a fifth, last: the robot's calls (`worker/auto-calls.ts`,
+T20, `AUTO-CALLS.md` "When a lead is called") - so a lead's call never waits
+on the poll, and a failure placing calls never stops it. **Every call to EZ
+Texting gives up after 30 seconds** (2026-10-06): without a limit one hung
+connection stopped all four, with nothing in the logs. Expiring is local work that must keep happening while EZ Texting is
 unreachable. The sweep's rules are in STATE-MACHINE.md, "Expiry"; what the
 poller owns is setting `expires_at` and `question_sent_at` when the opener
 goes out (`worker/opener.ts`) - the second is what lets the lead's first

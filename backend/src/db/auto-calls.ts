@@ -159,7 +159,6 @@ export async function failAutomatedCall(
 /** Kept as heard, up to this long - Twilio's own are a sentence at most. */
 const MAX_HEARD = 500;
 
-
 /**
  * Keeps one answer on the automated call `callId` - T13, in one transaction.
  * Each part is safe to repeat, since Twilio may send the same request twice:
@@ -428,12 +427,6 @@ export async function callsOnHold(): Promise<{ callId: number; callSid: string; 
      ORDER BY c.held_at, c.id`
   );
   return rows.map((r) => ({ callId: r.id, callSid: r.twilio_call_sid, waitedSeconds: r.waited, offerLive: r.offer_live }));
-}
-
-/** Whether any lead is waiting on hold - while one is, the robot places no new calls (T20). */
-export async function anyoneOnHold(): Promise<boolean> {
-  const { rows } = await pool.query(`SELECT EXISTS (SELECT 1 FROM calls c WHERE ${ON_HOLD_SQL}) AS waiting`);
-  return rows[0].waiting === true;
 }
 
 /** What a transfer needs to know about its automated call - `transferContext`. */
