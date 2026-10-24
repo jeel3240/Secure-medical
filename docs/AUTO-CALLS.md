@@ -6,7 +6,7 @@ puts a "yes" through to the lead's own agent first, then everyone free,
 switches off whoever let it ring out, holds a "yes" nobody can take yet while
 someone is on a call or writing its note, rings the next person who comes
 free with the lead who has waited longest, and leaves the voicemail message
-after the beep; a lead calling back (T19) onwards, and the robot calling by
+once a machine's greeting is over; a lead calling back (T19) onwards, and the robot calling by
 itself (T20), are not built yet.**
 This
 doc is the agreed design and the tracker for building it. Each ticket below updates its row when it is merged,
@@ -473,9 +473,11 @@ pure, `planTransfer` and `planAfterHolder` in `core/call-script.ts`.
 
 1. **Who can take it is read at that moment**: everyone free (`freePeople`,
    "Who is free") and who holds the lead (`transferContext`). Until T18 a
-   "yes" was also refused when Twilio's verdict said machine; now a machine's
-   verdict hands the call to the voicemail message before any answer can
-   follow it - "Voicemail".
+   "yes" was also refused when Twilio's verdict said machine. Now a machine's
+   verdict that is acted on hands the call to the voicemail message, and
+   nothing after it is taken as an answer; one the call ignores - a machine
+   with no beep after an answer, call 24 - is a person's, whose yes rings -
+   "Voicemail".
    - **The lead's own agent is free** (T15b): the choice's reply ("Great,
      connecting you with a live agent now. Please hold."), the recording
      notice, then they ring **alone** for `auto_call_ring_seconds`. Not free -
@@ -727,7 +729,7 @@ karm's real browser):
 ## Voicemail
 
 Built in T18 (2026-10-24). When a machine answers, the voicemail message is
-left after the beep - "Hi, this is Seri calling from eDrugstore with a quick
+left once its greeting is over - "Hi, this is Seri calling from eDrugstore with a quick
 message... Please call us back at 4 8 0, 4 7 0, 8 2 5 9..." - and the call
 ends, saved as `voicemail_left`. The rules are pure, in `core/call-script.ts`:
 `machineVerdict`, `onVerdict`, `voicemailLine`.
@@ -767,7 +769,11 @@ message has the call. The result is saved first, then Twilio's API replaces
 whatever the call is doing - a question, a transfer ringing, the hold music -
 with the message (`replaceCall`, `voicemailTwiml`); refused - the call already
 over - the result is rolled back, and the call's end gives it one as for any
-other. A second's quiet comes after the message, before hanging up: the first
+other. Only Twilio's own refusal counts as one: a request that got no answer
+in time, or never reached Twilio, is taken as done - Twilio may well have done
+it, and a call a machine answered is better ended than asked on. A ring from
+hold the message cuts short (T17) is ended with it, `failed`, so its person
+is free for another lead at once. A second's quiet comes after the message, before hanging up: the first
 real voicemail's transcript stopped at "Thanks and have a" (call 58).
 
 **What Twilio sends after a takeover changes nothing** (`takenByVerdict`) -
@@ -778,6 +784,9 @@ it is the page the message replaced:
 - `/auto/after`, when a transfer was ringing - reported `no-answer`, exactly
   as a ring let run out (call 62). Nobody is switched off, nothing more said.
 
+Each is logged as `auto_call.after_takeover` and nothing else - never as an
+answer or a transfer.
+
 **What is saved:** `script_result = 'voicemail_left'` (a fax: `unanswered`);
 `answered_by`, Twilio's verdict as for every call; and the outcome
 `voicemail` - for an automated call, only when the verdict took it over
@@ -787,9 +796,15 @@ machine picked up was saved as `voicemail`, as for agents' calls - call 24,
 a transfer a person took, among them.
 
 **A transfer no longer checks for a machine.** T15a ended a "yes" as no
-response once Twilio's verdict said machine. Now a machine's verdict hands
-the call to the message before any answer can follow it, and a verdict the
-call ignored is a person's - whose yes must ring.
+response once Twilio's verdict said machine. Now a machine's verdict that is
+acted on hands the call to the message, and a verdict the call ignored is a
+person's - whose yes must ring.
+
+**Not covered:** a greeting heard as a "yes" whose machine Twilio reports with
+no beep (`machine_end_silence`, `machine_end_other`) is put through, as call
+24's person was: the rule cannot tell the two apart, and a person who said yes
+is the one not to lose. The agent who takes it hears a recording and hangs up.
+A beep after such a yes still stops the ring and leaves the message.
 
 **The real calls** (2026-10-23 and 24, Jeel's phone, the dev number):
 
@@ -1793,7 +1808,8 @@ As built: "The transfer". One addition: **`call.transferred`**, a new action -
 the first real transfer was taken in a browser whose own pick-up of the lead
 reached the server first, so `lead.picked_up` was the browser's and nothing
 recorded that a transfer had been taken. A yes from a machine, if Twilio's
-verdict has come, rings nobody and ends as `no_response`. The ring time is
+verdict has come, rang nobody and ended as `no_response` - until T18, which
+hands a machine to the voicemail message instead ("Voicemail"). The ring time is
 the `auto_call_ring_seconds` row, read on every transfer (`readRingSeconds`).
 
 **Files:** `backend/src/core/call-script.ts` (+ test),
@@ -2079,8 +2095,10 @@ transferred.
   had said "Yes." at 0.89 and was being put through. Acting on it would have
   hung up on a person who said yes. Once a call has a kept answer - a choice,
   or a key - a "machine" verdict changes nothing: no message, no stopped
-  transfer, and the outcome stays `answered`, not `voicemail` (today T12 saves
+  transfer, and the outcome stays `answered`, not `voicemail` (T12 saved
   `voicemail` for any answered call a machine picked up). Noted 2026-10-20.
+  *(Superseded while building: for a choice, the beep decides - "As built"
+  below; a key still always means a person.)*
 
 **Done when**
 - [x] A real call to Jeel's voicemail: the whole message is recorded after
@@ -2093,13 +2111,16 @@ transferred.
       script over; the message's words, the number digit by digit; the
       webhook - the TwiML, the fax, a repeat, the database failing after
       Twilio's answer, no script, not this call; an answer and a ring's end
-      after a takeover changing nothing; `replaceCall` (984 backend tests).
+      after a takeover changing nothing, and logged as nothing else;
+      `replaceCall` - a refusal, and no answer in time counted as taken
+      (985 backend tests).
       `tookByMachine` (`core/calls.ts`), which the transfer's check used, is
       gone with it.
 - [x] A live check proves the SQL: each branch on a real row, Twilio
       refusing saves nothing, an answer arriving during the takeover waits
-      and is not kept, two verdicts at once take over once, a fax `unanswered`
-      (`auto-calls-live-check`, 114 checks); an automated call `voicemail`
+      and is not kept, two verdicts at once take over once, a fax `unanswered`,
+      a ring from hold cut short ended `failed` (`auto-calls-live-check`, 117
+      checks); an automated call `voicemail`
       only when taken over (`calls-live-check`, 105).
 - [x] A beep while a transfer rang - sent by hand, signed as Twilio signs:
       the ring stopped, the message played, and nobody was switched off, though
@@ -2117,6 +2138,14 @@ once the message has the call; the second would have switched an agent off.
 **A transfer no longer checks for a machine itself**: a verdict that was
 ignored is a person's, whose yes must ring. And **a second's quiet after the
 message**: the first one's transcript ended "Thanks and have a".
+
+Found by an independent read of the docs against the code, after merging,
+and fixed the same day: a ring from hold the message cut short stayed open a
+minute - now ended with the takeover; Twilio not answering the takeover in
+time counted as a refusal, so a message could play unsaved - now only
+Twilio's own refusal does; and a request after a takeover could still be
+logged as an answer or a transfer - now only as `after_takeover`. A greeting
+heard as a "yes", with no beep reported, is put through - "Not covered".
 
 **Files:** `backend/src/core/call-script.ts` (+ test), `backend/src/db/auto-calls.ts`,
 `backend/src/db/calls.ts`, `backend/src/core/calls.ts` (+ test), `backend/src/integrations/twilio.ts` (+ test),

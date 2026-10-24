@@ -528,13 +528,11 @@ export function twilioWebhooksRouter(deps: AppDeps): Router {
           const plan = planTransfer(script, outcome.next, { free, holder: context.heldBy, onCall });
           if (plan.kind === 'ring') {
             ring = { ...plan, lead: context.lead };
-            log.info('auto_call.transfer', { callId: call.callId, rung: plan.agentIds.length, holderFirst: plan.holderFirst });
           } else if (plan.kind === 'hold') {
             hold = plan.say;
           } else {
             next = plan;
             result = plan.result;
-            log.info('auto_call.transfer_missed', { callId: call.callId, reason: 'nobody_free' });
           }
         } else {
           next = outcome.next;
@@ -549,6 +547,19 @@ export function twilioWebhooksRouter(deps: AppDeps): Router {
           result,
           blockNumber: outcome.blockNumber,
         });
+        // The voicemail message has the call (T18): this is the greeting, or
+        // the page the message replaced - nothing follows from it, and nothing
+        // is logged as if it had.
+        if (takenByVerdict) {
+          log.info('auto_call.after_takeover', { callId: call.callId, path: req.path });
+          res.send(hangupTwiml());
+          return;
+        }
+        if (ring) {
+          log.info('auto_call.transfer', { callId: call.callId, rung: ring.agentIds.length, holderFirst: ring.holderFirst });
+        } else if (outcome.next?.kind === 'transfer' && !hold) {
+          log.info('auto_call.transfer_missed', { callId: call.callId, reason: 'nobody_free' });
+        }
         // What was heard stays in the database, never in the logs.
         log.info('auto_call.answer', {
           callId: call.callId,
@@ -561,13 +572,6 @@ export function twilioWebhooksRouter(deps: AppDeps): Router {
           kept,
         });
         if (outcome.brokenScript) log.error('auto_call.broken_script', { callId: call.callId, step: stepId });
-        // The voicemail message has the call (T18): this is the greeting, or
-        // the page the message replaced - nothing follows from it.
-        if (takenByVerdict) {
-          log.info('auto_call.after_takeover', { callId: call.callId, path: req.path });
-          res.send(hangupTwiml());
-          return;
-        }
         // Texted once - only for the first copy of this request, `kept` - and
         // after Twilio has its answer, so the lead hears "check your SMS"
         // without waiting on EZ Texting (T14).

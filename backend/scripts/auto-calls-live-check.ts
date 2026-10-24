@@ -649,6 +649,18 @@ async function main(): Promise<void> {
     asked.length = 0;
     check('an unanswered call no fax took is not "taken over"', await takenByVerdict(over), false);
 
+    // A ring from hold cut short by the message (T17): over at once.
+    const { callId: held } = await placedCall('+15550000909', 'CA-VM-9');
+    await holdCall(held);
+    const offerOf = async () =>
+      (await pool.query(`SELECT outcome, ended_at IS NOT NULL AS ended FROM call_offers WHERE call_id = $1`, [held])).rows[0];
+    await pool.query(`INSERT INTO call_offers (call_id, agent_id) VALUES ($1, $2)`, [held, ana]);
+    await actOnVerdict(held, 'beep', twilioTakes(false));
+    check('Twilio refusing: the ring from hold left as it was', await offerOf(), { outcome: null, ended: false });
+    check('a beep while it rang from hold: the message', (await actOnVerdict(held, 'beep', twilioTakes(true)))?.action, 'voicemail');
+    check('and that ring over at once - its person free for another lead', await offerOf(), { outcome: 'failed', ended: true });
+    asked.length = 0;
+
     check('a row that is not an automated call of ours', await actOnVerdict(999999, 'beep', twilioTakes(true)), null);
     check('Twilio never asked for it', asked.length, 0);
 

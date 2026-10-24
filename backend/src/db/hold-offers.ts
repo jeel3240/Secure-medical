@@ -4,7 +4,8 @@
  *
  * Each time a lead waiting on hold rings one person, it is a `call_offers`
  * row, written before Twilio is asked and ended once: taken, declined, rung
- * out (`missed`), the ring never completing (`failed`), the lead hanging up,
+ * out (`missed`), the ring never completing (`failed` - or cut short by the
+ * voicemail message, T18), the lead hanging up,
  * never heard of again (`expired`), or never rung - Twilio not taking the
  * redirect, or the call not ours to ring (`unsent`). The database holds one offer at
  * a time per lead and per person, so two triggers at once - a browser saying

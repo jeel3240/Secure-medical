@@ -290,9 +290,10 @@ export async function settleAutomatedCall(callId: number): Promise<void> {
  * AUTO-CALLS.md "Voicemail". The call is locked while it decides
  * (`onVerdict`), so an answer kept at the same moment (`keepAnswer`) is either
  * seen or waits. A takeover - the message, or hanging up on a fax - saves its
- * result first, `voicemail_left` or `unanswered`, and keeps it only once
- * `takeOver` says Twilio has taken the call: refused - the call already over -
- * nothing is saved, and the call's end gives it its result as for any other.
+ * result first, `voicemail_left` or `unanswered`, and ends a ring from hold it
+ * cuts short (`call_offers`, `failed`); all of it is kept only once `takeOver`
+ * says Twilio has taken the call: refused - the call already over - nothing
+ * is saved, and the call's end gives it its result as for any other.
  * Null when the row is not a live automated call of ours.
  */
 export async function actOnVerdict(
@@ -339,6 +340,12 @@ export async function actOnVerdict(
       callId,
       action === 'voicemail' ? 'voicemail_left' : 'unanswered',
     ]);
+    // A ring from hold cut short by the takeover (T17): over now, so its
+    // person is free for another lead at once, not after the stale sweep.
+    await client.query(
+      `UPDATE call_offers SET ended_at = now(), outcome = 'failed' WHERE call_id = $1 AND ended_at IS NULL`,
+      [callId]
+    );
     const tookOver = await takeOver(action, call.twilio_call_sid);
     await client.query(tookOver ? 'COMMIT' : 'ROLLBACK');
     return { action, tookOver };

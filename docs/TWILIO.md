@@ -416,8 +416,8 @@ and Twilio posts its verdict to `POST /api/webhooks/twilio/answered-by`.
   no pause, both sides heard each other at once.
 - **The verdict and the end of the call arrive in either order.** Detection
   takes a few seconds, and a short call can be over first. `finishCall` reads
-  a verdict that is already there; `recordAnsweredBy` corrects an `answered`
-  call that has already ended. Only the first verdict counts.
+  a verdict that is already there; `recordAnsweredBy` corrects an agent's
+  `answered` call that has already ended. Only the first verdict counts.
 - **Which call it is about is in the URL.** The report is made on the lead's
   leg and our row is keyed by the browser's, so the browser leg's id is put in
   the callback address (`?call=`). The address is part of what Twilio signs,
@@ -449,9 +449,11 @@ would have filed a real conversation as voicemail.
 
 Not covered: leaving a recorded message automatically (voicemail drop) on an
 agent's call, and anything for calls a lead places to us. The automated call
-does leave one, after the beep, and is saved as `voicemail` only then - its
-rules, and why a "machine" verdict is not always believed, are in
-`AUTO-CALLS.md`, "Voicemail" (T18).
+does leave one - when Twilio hears the beep, or reports a machine before the
+lead has answered anything - and is saved as `voicemail` only when Twilio's
+verdict took the call over: the message left, or a fax hung up on. Its rules,
+and why a "machine" verdict is not always believed, are in `AUTO-CALLS.md`,
+"Voicemail" (T18).
 
 ## Recordings and transcripts
 
@@ -547,13 +549,13 @@ made `agent_id` optional for them (migration 007).
 | `script_result` | Automated calls only (014): how the script ended - `transferred`, `transfer_missed`, `link_sent`, `not_interested`, `opted_out`, `no_response`, `voicemail_left`, `hung_up`, `unanswered`. `outcome` keeps Twilio's view beside it. One automated call per lead, ever: a unique index (`calls_one_automated_per_lead`) |
 | `started_at` | When Twilio asked us how to connect it |
 | `ended_at` | When Twilio reported the far leg ended - the lead's for a call we placed, the agent's for one we received - or at once for an incoming call that rang nobody. Null while the call is in progress |
-| `outcome` | `answered`, `no_answer`, `busy`, `failed` or `canceled` - `core/calls.ts` - `voicemail` for a call we placed that a machine picked up - an automated one only when the voicemail message took it over (T18, `AUTO-CALLS.md` "Voicemail") - and `missed` for an incoming call nobody answered. Null while in progress |
+| `outcome` | `answered`, `no_answer`, `busy`, `failed` or `canceled` - `core/calls.ts` - `voicemail` for a call we placed that a machine picked up - an automated one only when Twilio's verdict took it over, the message left or a fax hung up on (T18, `AUTO-CALLS.md` "Voicemail") - and `missed` for an incoming call nobody answered. Null while in progress |
 | `answered_by` | Who picked up a call we placed: `human`, `machine`, `fax` or `unknown` - "Voicemail", above. Null for an incoming call, one nobody picked up, or one from before migration 010 |
 | `duration_sec` | Seconds of conversation. 0 unless answered |
 
 | Twilio says | We record |
 |---|---|
-| `completed` | `answered` - or `voicemail`, when detection says a machine picked up |
+| `completed` | `answered` - or `voicemail`, when detection says a machine picked up (an automated call only when the verdict took it over, T18) |
 | `no-answer` | `no_answer` |
 | `busy` | `busy` |
 | `failed` | `failed` |
