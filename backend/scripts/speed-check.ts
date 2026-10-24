@@ -102,6 +102,24 @@ async function load(): Promise<void> {
            SELECT n, 1 + (n % 10), 'CA' || n || '-' || k, at + interval '1 hour' * k, at + interval '1 hour' * k + interval '2 minutes', 120,
                   CASE WHEN k = 1 THEN 'no_answer' ELSE 'answered' END, 'outbound', at + interval '1 hour' * k
            FROM speed_plan, generate_series(1, 2) k WHERE kind >= 40 AND kind < 75`);
+  // The robot's call to every lead who never answered, an hour after the first
+  // text (AUTO-CALLS.md), ending as such calls do. A "yes" nobody took was
+  // called back by an agent an hour later - except in the last day, so a few
+  // are still waiting, first in the queue (T22).
+  await q(`INSERT INTO calls (lead_id, agent_id, twilio_call_sid, started_at, ended_at, duration_sec, outcome, direction,
+                              script_result, created_at)
+           SELECT n, CASE WHEN n % 20 = 18 THEN 1 + (n % 10) END, 'RB' || n, at + interval '1 hour',
+                  at + interval '1 hour 1 minute', 60,
+                  CASE WHEN n % 20 < 8 THEN 'no_answer' WHEN n % 20 < 12 THEN 'voicemail' ELSE 'answered' END, 'automated',
+                  CASE WHEN n % 20 < 8 THEN 'unanswered' WHEN n % 20 < 12 THEN 'voicemail_left' WHEN n % 20 < 15 THEN 'not_interested'
+                       WHEN n % 20 = 15 THEN 'link_sent' WHEN n % 20 = 16 THEN 'no_response' WHEN n % 20 = 17 THEN 'hung_up'
+                       WHEN n % 20 = 18 THEN 'transferred' ELSE 'transfer_missed' END,
+                  at + interval '1 hour'
+           FROM speed_plan WHERE kind < 30`);
+  await q(`INSERT INTO calls (lead_id, agent_id, twilio_call_sid, started_at, ended_at, duration_sec, outcome, direction, created_at)
+           SELECT n, 1 + (n % 10), 'CB' || n, at + interval '2 hours', at + interval '2 hours 3 minutes', 180, 'answered', 'outbound',
+                  at + interval '2 hours'
+           FROM speed_plan WHERE kind < 30 AND n % 20 = 19 AND at < now() - interval '1 day'`);
   await q(`INSERT INTO callbacks (lead_id, agent_id, scheduled_at, done_at, created_at)
            SELECT n, 1 + (n % 10), at + interval '2 days', CASE WHEN n % 3 = 0 THEN NULL ELSE at + interval '2 days' END, at + interval '1 hour'
            FROM speed_plan WHERE kind >= 40 AND kind < 75 AND n % 10 = 0`);

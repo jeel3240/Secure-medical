@@ -1,6 +1,6 @@
 # Automated outbound calls
 
-**Planned 2026-10-15. Being built: T0 to T21 are done (2026-10-24) - the
+**Planned 2026-10-15. Being built: T0 to T22 are done (2026-10-24) - the
 server places a call, asks the script, keeps every answer, texts the link,
 puts a "yes" through to the lead's own agent first, then everyone free,
 switches off whoever let it ring out, holds a "yes" nobody can take yet while
@@ -8,8 +8,9 @@ someone is on a call or writing its note, rings the next person who comes
 free with the lead who has waited longest, leaves the voicemail message once a
 machine's greeting is over, rings everyone free for a lead calling back whom
 nobody owns, calls the right leads by itself at the pace the people free can
-take, and shows each robot call on the lead's timeline with what was said;
-the other screens (T22-T24) and the finish (T25, T26) are not built yet.**
+take, shows each robot call on the lead's timeline with what was said, and
+puts a "yes" nobody took first in the agents' queue; the other screens (T23,
+T24) and the finish (T25, T26) are not built yet.**
 This
 doc is the agreed design and the tracker for building it. Each ticket below updates its row when it is merged,
 and the sections it touches, so the doc always says what is built and what is
@@ -598,8 +599,8 @@ pure, `planTransfer` and `planAfterHolder` in `core/call-script.ts`.
    writing its note ("The hold line"); otherwise `missTransfer` -
    `transfer_missed`, unless the call already has a result - and the busy
    line. The lead hung up while it rang (`CallStatus=completed`): nobody
-   further is rung, `transfer_missed`. An agent calls them back; T22 puts
-   them first in the queue.
+   further is rung, `transfer_missed`. An agent calls them back: the queue
+   puts them first, as Wants a call (T22, `QUEUE.md`).
 4. **Recorded from the moment a person answers**, both sides apart, as every
    call is: the lead on channel 1, the person on channel 2 - so the
    transcript says who said what (`core/transcripts.ts`).
@@ -680,7 +681,7 @@ otherwise the busy line at once, as before. The rules are pure, in
    (`someoneComing`, below) and the lead has waited less than
    `auto_call_hold_max_minutes` (10) - the place again and the next track.
    Otherwise the busy line, `transfer_missed`, so an agent calls them back
-   (T22 puts them first).
+   (first in the queue, T22).
 5. **The hold watcher** (`api/hold-watch.ts`), every 30 seconds in the api
    while automated calls are on: offers that never heard back ended, leads
    offered to whoever is free, then a lead nobody is coming for, or past the
@@ -959,7 +960,7 @@ does not answer a missed call - until an agent takes the transfer.
 | Screen | What |
 |---|---|
 | Lead timeline and workspace | "Automated call · voicemail left", "· said yes · Maya Chen took it · 2:14", "· said yes · nobody took it", "· link sent", "· not interested", "· opted out", "· no response", "· hung up", "· no answer" - with what the lead said underneath, under **Answers** (T21, `AGENT-WORKSPACE.md` "The timeline") |
-| Agents' queue | Only a "yes" nobody took: at the top, "Wants a call", until an agent calls, texts or closes the lead |
+| Agents' queue | Only a "yes" nobody took: first, the longest waiting on top, "Wants a call" - and a Wants a call badge on the lead's card - until an agent calls or texts them, answers when they ring, or saves an outcome (T22, `QUEUE.md` "Who is in it", "The order", "The tag") |
 | Admin > Leads | A **Call** column with the last robot call's result, and a filter on it. No new status or tab - a lead is on two tracks at once ("Awaiting reply" and "Voicemail left") |
 | Admin > Configuration | The call script, hours, time zone and texts, read-only |
 | App bar | The "Taking calls" switch |
@@ -1004,7 +1005,7 @@ ticket's own PR.
 | T20 | The robot places the calls by itself | T12-T19 | Done 2026-10-24 - a real look found a due lead and called it, once |
 | | **Screens** | | |
 | T21 | The timeline shows the robot calls | T13 | Done 2026-10-24 - seen on real calls: taken, not interested with its answers, nobody took it |
-| T22 | The queue puts a missed "yes" first | T15a | Not started |
+| T22 | The queue puts a missed "yes" first | T15a | Done 2026-10-24 - seen in the browser: two "yes" leads nobody took at the top, Wants a call, above a 100-point lead |
 | T23 | Admin > Leads: the Call column | T4 | Not started |
 | T24 | Admin > Configuration shows the call script | T6 | Not started |
 | | **Finish** | | |
@@ -2481,13 +2482,47 @@ calls.
 - One shared definition in `db/lead-state.ts`, used by the queue.
 
 **Done when**
-- [ ] A live check: in the queue, at the top; gone after an agent's call,
-      text or outcome.
-- [ ] `npm run speed`: the queue still loads quickly with 50,000 leads.
+- [x] A live check: in the queue, at the top; gone after an agent's call,
+      text or outcome. Through the real writes - the robot's call, nobody
+      taking it, an agent's call, an outcome: first, before a 90-point lead,
+      the longest waiting on top; Wants a call with no score; on the lead
+      card; a robot call that ended any other way puts nobody in; an
+      automated text, or an agent's EZ Texting refused, does not clear it;
+      picked up, Working and still first (`queue-live-check`, 70). Unit tests:
+      the tag's rank - above an unread reply, a callback and needing review,
+      below Working and a missed call (1,026 backend tests); the page's words
+      with automated calls on and off (376 frontend tests).
+- [x] `npm run speed`: the queue still loads quickly with 50,000 leads -
+      faster: 96 ms before, 75 ms after (`QUEUE.md`, "How fast it is").
+- [x] Seen in the browser, 2026-10-24, Jeel: leads 48 and 51 - real calls
+      that ended "said yes · nobody took it" - first in the local queue, the
+      older on top, Wants a call, above a 100-point lead; lead 51's card
+      flagged `missedYes`. Both were made before `dev-auto-call` gave a test
+      lead its text conversation, which every real lead has and the queue
+      reads; they were given one by hand, in the local database.
+
+As built: `QUEUE.md`, "Who is in it", "The order" and "The tag". Beyond the
+ticket: **the lead card says it too** - a Wants a call badge
+(`flags.missedYes`), since the queue says only Working once the lead is picked
+up; **the tag ranks with the missed call**, just below it and above an unread
+reply - the lead was promised a call back; **the page states the order**,
+"Missed transfers first, then highest score, then newest.", only while
+automated calls are on; and **the rule is the missed call's**, one
+`nobodyGotBackSince` in `db/lead-state.ts`. Written against the call's own
+lead, it lets Postgres work out both once per refresh rather than once per
+lead, so the queue got faster though it asks more (122 ms in the first
+version) - and Admin > Leads with it, through "Closed". The speed check now
+loads robot calls. A missed "yes" has no tier, so it shows under All only.
 
 **Files:** `backend/src/db/lead-state.ts`, `backend/src/db/queue.ts`,
-`backend/src/core/queue-tags.ts`, `frontend/src/components/QueueStatus.tsx`.
-**Doc:** `QUEUE.md`.
+`backend/src/db/lead-detail.ts`, `backend/src/core/queue-tags.ts` (+ test),
+`backend/src/api/__tests__/lead-detail.test.ts`,
+`backend/scripts/queue-live-check.ts`, `backend/scripts/lead-detail-live-check.ts`,
+`backend/scripts/speed-check.ts`, `frontend/src/api/workspace.ts`,
+`frontend/src/pages/WorkspacePage.tsx`, `frontend/src/pages/QueuePage.tsx` (+ test),
+`frontend/src/components/QueueStatus.tsx`.
+**Doc:** `QUEUE.md`; this one; `AGENT-WORKSPACE.md`, `FRONTEND.md`,
+`LEAD-FLOW.md`, `DESIGN-PROMPT.md`, `README.md`, `CLAUDE.md`.
 
 ---
 

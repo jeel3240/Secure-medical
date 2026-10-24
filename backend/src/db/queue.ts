@@ -10,7 +10,7 @@
 
 import { queueTag, type QueueTag } from '../core/queue-tags';
 import { NOT_FOR_AGENTS } from '../core/state-machine';
-import { CLOSED_SQL, MISSED_CALL_SQL } from './lead-state';
+import { CLOSED_SQL, MISSED_CALL_SQL, MISSED_YES_AT_SQL, MISSED_YES_SQL } from './lead-state';
 import { likeLiteral } from './sql';
 import { pool } from './pool';
 
@@ -127,6 +127,11 @@ const BASE = `
  * from Admin > Leads - read Working there but was missing from the queue,
  * including for the person holding it. Holding now stands on its own; the
  * score test applies to everything else.
+ *
+ * **So does a missed "yes"** - T22, 2026-10-24 (`MISSED_YES_SQL`). The lead
+ * said yes on the robot's call and nobody took it. The robot calls only leads
+ * who never replied, so such a lead has no score, and it is never closed: an
+ * outcome saved after the call is what clears it.
  */
 /** Safe to inline: a constant from this codebase, each value checked to be a plain word. */
 const notForAgents = NOT_FOR_AGENTS.map((ending) => {
@@ -142,6 +147,7 @@ const INCLUDED = `
     u.id IS NOT NULL
     OR l.has_unread_inbound
     OR ${MISSED_CALL_SQL}
+    OR ${MISSED_YES_SQL}
     OR (
       c.score > 0
       AND NOT ${CLOSED_SQL}
@@ -233,6 +239,8 @@ interface QueueDbRow {
   agent_name: string | null;
   has_unread_inbound: boolean;
   missed_call: boolean;
+  /** When the robot's call that ended in a missed "yes" was made; null for none. */
+  missed_yes_at: Date | null;
   callback_agent_id: number | null;
   callback_agent_name: string | null;
   callback_at: Date | null;
@@ -245,6 +253,12 @@ interface QueueDbRow {
  * down the list always has the highest-intent lead in front of them, and
  * between equal scores the freshest one, because speed to contact is the whole
  * point of the screen.
+ *
+ * **A missed "yes" comes before all of it** - T22, 2026-10-24. The lead said
+ * yes to a person on the robot's call and was told an agent would call them
+ * back shortly. Nothing outranks that, and with no score it would otherwise
+ * sink to the bottom. Several: the one waiting longest first, as on the hold
+ * line.
  *
  * **One statement, and one pass over the leads** - 2026-10-06. Whether a lead
  * belongs in the queue is worked out from several tables, for every lead we
@@ -276,7 +290,8 @@ export async function listQueue(query: QueueQuery = {}): Promise<QueuePage> {
        SELECT l.id, l.phone, l.first_name, l.last_name, l.source,
               ${RECEIVED} AS received_at,
               c.id AS conversation_id, c.score, c.tier, c.status, c.end_outcome,
-              u.id AS agent_id, u.name AS agent_name, l.has_unread_inbound
+              u.id AS agent_id, u.name AS agent_name, l.has_unread_inbound,
+              ${MISSED_YES_AT_SQL} AS missed_yes_at
        ${BASE}
        ${inQueue}
      ),
@@ -295,13 +310,14 @@ export async function listQueue(query: QueueQuery = {}): Promise<QueuePage> {
                FROM conversation_answers a WHERE a.conversation_id = l.conversation_id) AS answers,
               l.agent_id, l.agent_name, l.has_unread_inbound,
               ${MISSED_CALL_SQL} AS missed_call,
+              l.missed_yes_at,
               ncb.agent_id AS callback_agent_id, ncb.agent_name AS callback_agent_name,
               ncb.scheduled_at AS callback_at
        -- Named l, as the lead is everywhere else: the missed-call rule reads l.id.
        FROM (
          SELECT q.* FROM q
          ${onPage}
-         ORDER BY q.score DESC, q.received_at DESC, q.id DESC
+         ORDER BY q.missed_yes_at ASC NULLS LAST, q.score DESC, q.received_at DESC, q.id DESC
          LIMIT ${limit}
        ) l
        LEFT JOIN LATERAL (
@@ -312,7 +328,7 @@ export async function listQueue(query: QueueQuery = {}): Promise<QueuePage> {
          LIMIT 1
        ) ncb ON true
      ) page ON true
-     ORDER BY page.score DESC, page.received_at DESC, page.id DESC`,
+     ORDER BY page.missed_yes_at ASC NULLS LAST, page.score DESC, page.received_at DESC, page.id DESC`,
     values
   );
 
@@ -361,6 +377,7 @@ export async function listQueue(query: QueueQuery = {}): Promise<QueuePage> {
         holder: r.agent_id === null ? null : { id: r.agent_id, name: r.agent_name ?? 'Another agent' },
         hasUnreadInbound: r.has_unread_inbound,
         missedCall: r.missed_call,
+        missedYes: r.missed_yes_at !== null,
         wantsContact: r.end_outcome === 'wants_contact',
         nextCallback:
           r.callback_agent_id === null || !r.callback_at

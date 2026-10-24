@@ -8,7 +8,7 @@
 
 import { pool } from './pool';
 import { questionShort } from '../core/questions';
-import { CLOSED_SQL, MISSED_CALL_SQL } from './lead-state';
+import { CLOSED_SQL, MISSED_CALL_SQL, MISSED_YES_SQL } from './lead-state';
 import { answerChips, scoreBreakdown, type SavedAnswer } from '../core/score-breakdown';
 import type { AnswerChip, BreakdownLine } from '../core/score-breakdown';
 
@@ -66,6 +66,12 @@ export interface LeadDetail {
     expired: boolean;
     /** The lead rang us, nobody answered, and nobody has called or texted back. */
     missedCall: boolean;
+    /**
+     * The lead said yes on the robot's call, nobody took it, and nobody has
+     * called or texted back - T22. The queue's "Wants a call", kept on the
+     * card once the lead is picked up and the queue says Working.
+     */
+    missedYes: boolean;
   };
 }
 
@@ -96,6 +102,7 @@ const SQL = `
     (d.id IS NOT NULL) AS on_dnc,
     ${CLOSED_SQL} AS is_closed,
     ${MISSED_CALL_SQL} AS missed_call,
+    ${MISSED_YES_SQL} AS missed_yes,
     od.created_at AS outcome_at,
     ou.name AS outcome_by
   FROM leads l
@@ -198,6 +205,7 @@ export async function getLeadDetail(leadId: number): Promise<LeadDetail | null> 
       unread: r.has_unread_inbound,
       expired: r.status === 'expired',
       missedCall: r.missed_call,
+      missedYes: r.missed_yes,
     },
   };
 }

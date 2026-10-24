@@ -26,6 +26,8 @@ import { StatusIcon, type StatusIconName } from './StatusIcon';
  *
  * **Wants a call - 2026-10-05.** The lead said No to the first question and
  * then asked to hear from a rep. It says why a low-scoring lead is in the queue.
+ * Since T22 also a "yes" on the robot's call that nobody took - the server
+ * ranks that one higher, and the queue puts it first.
  *
  * **Missed call - 2026-10-01.** The lead rang our number and nobody picked up.
  * Bold for the same reason, and it stays until someone calls or texts back.

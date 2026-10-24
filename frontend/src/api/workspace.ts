@@ -67,6 +67,8 @@ export interface LeadDetail {
     expired: boolean;
     /** They rang us, nobody answered, and nobody has called or texted back. */
     missedCall: boolean;
+    /** They said yes on the robot's call, nobody took it, and nobody has called or texted back (T22). */
+    missedYes: boolean;
   };
 }
 
