@@ -1,4 +1,4 @@
-import { agentIdFromIdentity, answeredByFor, identityFor, outcomeForStatus, talkSeconds, tookByMachine } from './calls';
+import { agentIdFromIdentity, answeredByFor, identityFor, outcomeForStatus, talkSeconds } from './calls';
 
 describe('who a browser is', () => {
   it('round-trips an agent id through the identity Twilio sends back - production, no prefix', () => {
@@ -78,14 +78,6 @@ describe('who picked up - Twilio\'s answering machine detection', () => {
     expect(answeredByFor('robot')).toBeNull();
     expect(answeredByFor('')).toBeNull();
     expect(answeredByFor(undefined)).toBeNull();
-  });
-
-  it('a machine or a fax line is nobody to talk to; a person or "not sure" is left as answered', () => {
-    expect(tookByMachine('machine')).toBe(true);
-    expect(tookByMachine('fax')).toBe(true);
-    expect(tookByMachine('human')).toBe(false);
-    expect(tookByMachine('unknown')).toBe(false);
-    expect(tookByMachine(null)).toBe(false);
   });
 
   it('Twilio never reports voicemail as an ending - only the verdict makes one', () => {

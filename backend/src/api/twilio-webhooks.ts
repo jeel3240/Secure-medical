@@ -15,7 +15,7 @@
  *   POST /api/webhooks/twilio/auto/answer     the lead picked up: the first question
  *   POST /api/webhooks/twilio/auto/gather     the lead answered a question, or said nothing (T13)
  *   POST /api/webhooks/twilio/auto/status     how the call ended
- *   POST /api/webhooks/twilio/auto/amd        who picked up: a person or a machine
+ *   POST /api/webhooks/twilio/auto/amd        who picked up: a person or a machine - a machine's voicemail (T18)
  *   POST /api/webhooks/twilio/auto/claim      a person accepted the transfer (T15a)
  *   POST /api/webhooks/twilio/auto/after      the transfer's ringing is over (T15a)
  *   POST /api/webhooks/twilio/auto/hold       a lead waiting on hold: their place, the music (T16)
@@ -37,6 +37,7 @@ import {
   firstAsk,
   handleAnswer,
   holdGoesOn,
+  machineVerdict,
   OPT_OUT_KEY,
   placeLine,
   planAfterHolder,
@@ -54,7 +55,6 @@ import {
   outcomeForStatus,
   REFUSAL_SPEECH,
   talkSeconds,
-  tookByMachine,
 } from '../core/calls';
 import {
   autoCallTwiml,
@@ -69,6 +69,7 @@ import {
   refusalTwiml,
   ringAgentTwiml,
   transferTwiml,
+  voicemailTwiml,
 } from '../integrations/twilio';
 import type { TransferContext } from '../db/auto-calls';
 import { errText, log } from '../lib/log';
@@ -122,6 +123,9 @@ function autoCalls() {
   return {
     linkAutomatedCall: rows.linkAutomatedCall,
     keepAnswer: rows.keepAnswer,
+    actOnVerdict: rows.actOnVerdict,
+    takenByVerdict: rows.takenByVerdict,
+    replaceCall: twilioCalls.replaceCall,
     settleAutomatedCall: rows.settleAutomatedCall,
     transferContext: rows.transferContext,
     takeTransfer: rows.takeTransfer,
@@ -521,8 +525,7 @@ export function twilioWebhooksRouter(deps: AppDeps): Router {
             ac.someoneOnOrJustOffCall(),
           ]);
           if (!context) throw new Error('the automated call has no row');
-          const machine = tookByMachine(context.answeredBy);
-          const plan = planTransfer(script, outcome.next, { free, machine, holder: context.heldBy, onCall });
+          const plan = planTransfer(script, outcome.next, { free, holder: context.heldBy, onCall });
           if (plan.kind === 'ring') {
             ring = { ...plan, lead: context.lead };
             log.info('auto_call.transfer', { callId: call.callId, rung: plan.agentIds.length, holderFirst: plan.holderFirst });
@@ -531,13 +534,13 @@ export function twilioWebhooksRouter(deps: AppDeps): Router {
           } else {
             next = plan;
             result = plan.result;
-            log.info('auto_call.transfer_missed', { callId: call.callId, reason: machine ? 'machine' : 'nobody_free' });
+            log.info('auto_call.transfer_missed', { callId: call.callId, reason: 'nobody_free' });
           }
         } else {
           next = outcome.next;
         }
 
-        const { kept, leadId } = await ac.keepAnswer({
+        const { kept, leadId, takenByVerdict } = await ac.keepAnswer({
           callId: call.callId,
           step: step && { id: step.id, key: step.key },
           attempt,
@@ -558,6 +561,13 @@ export function twilioWebhooksRouter(deps: AppDeps): Router {
           kept,
         });
         if (outcome.brokenScript) log.error('auto_call.broken_script', { callId: call.callId, step: stepId });
+        // The voicemail message has the call (T18): this is the greeting, or
+        // the page the message replaced - nothing follows from it.
+        if (takenByVerdict) {
+          log.info('auto_call.after_takeover', { callId: call.callId, path: req.path });
+          res.send(hangupTwiml());
+          return;
+        }
         // Texted once - only for the first copy of this request, `kept` - and
         // after Twilio has its answer, so the lead hears "check your SMS"
         // without waiting on EZ Texting (T14).
@@ -615,18 +625,37 @@ export function twilioWebhooksRouter(deps: AppDeps): Router {
     })
   );
 
-  // Who picked up: kept on the row, as for an agent's call. T18 acts on a
-  // machine - leaves the voicemail message.
+  // Who picked up: kept on the row, as for an agent's call - then acted on
+  // (T18, `onVerdict`): a machine gets the voicemail message, a fax is hung up
+  // on, and a person - or a "machine" Twilio got wrong - carries on. Twilio
+  // waits for nothing here, so it has its answer first. Only the first verdict
+  // is acted on: a repeated request changes nothing.
   router.post(
     '/auto/amd',
     asyncHandler(async (req, res) => {
-      const answeredBy = answeredByFor(((req.body ?? {}) as Record<string, unknown>).AnsweredBy);
+      const raw = ((req.body ?? {}) as Record<string, unknown>).AnsweredBy;
+      const answeredBy = answeredByFor(raw);
       const call = await automatedCall(req);
-      if (call && answeredBy) {
+      res.sendStatus(204);
+      if (!call || !answeredBy) return;
+      try {
         const recorded = await db().recordAnsweredBy({ callSid: call.callSid, answeredBy });
         log.info('call.answered_by', { callSid: call.callSid, answeredBy, recorded });
+        const verdict = machineVerdict(raw);
+        if (!recorded || !verdict || verdict === 'person') return;
+        const ac = autoCalls();
+        const script = await ac.loadScript();
+        if (!script) {
+          log.error('auto_call.no_script', { callId: call.callId });
+          return;
+        }
+        const acted = await ac.actOnVerdict(call.callId, verdict, (action, callSid) =>
+          ac.replaceCall(deps.twilio!, callSid, action === 'voicemail' ? voicemailTwiml(deps.twilio!, script) : hangupTwiml())
+        );
+        if (acted) log.info('auto_call.verdict', { callId: call.callId, verdict, action: acted.action, tookOver: acted.tookOver });
+      } catch (err) {
+        log.error('auto_call.verdict_failed', { callId: call.callId, err: errText(err) });
       }
-      res.sendStatus(204);
     })
   );
 
@@ -693,6 +722,14 @@ export function twilioWebhooksRouter(deps: AppDeps): Router {
           return;
         }
         const ac = autoCalls();
+        // The voicemail message took the call while it rang (T18): the ring
+        // was cut short by it, not let run out - nobody is switched off, and
+        // nothing more is said.
+        if (await ac.takenByVerdict(call.callId)) {
+          log.info('auto_call.after_takeover', { callId: call.callId, path: req.path, dialStatus: status });
+          res.send(reply);
+          return;
+        }
         const hungUp = field(body, 'CallStatus') === 'completed';
 
         // A lead on hold offered to whoever came free, not taken (T17): the

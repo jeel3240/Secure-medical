@@ -12,9 +12,15 @@
  */
 
 import type { SpokenAnswer } from '../core/answers';
-import type { AnsweredBy } from '../core/calls';
-import type { AnswerRecord, CallResult } from '../core/call-script';
+import {
+  onVerdict,
+  type AnswerRecord,
+  type CallResult,
+  type MachineVerdict,
+  type VerdictAction,
+} from '../core/call-script';
 import { activityInsertSql, recordActivity } from './activity';
+import { TAKEN_BY_VERDICT_SQL } from './calls';
 import { blockNumber, DNC_REASONS } from './dnc';
 import { pool } from './pool';
 
@@ -153,6 +159,7 @@ export async function failAutomatedCall(
 /** Kept as heard, up to this long - Twilio's own are a sentence at most. */
 const MAX_HEARD = 500;
 
+
 /**
  * Keeps one answer on the automated call `callId` - T13, in one transaction.
  * Each part is safe to repeat, since Twilio may send the same request twice:
@@ -171,6 +178,9 @@ const MAX_HEARD = 500;
  * and for an answer with no step to keep it under - so what an answer leads
  * to outside the database, the link's text (T14), happens once. `leadId` is
  * the call's lead; null when the row is not an automated call.
+ * `takenByVerdict`: Twilio's verdict has handed the call to the voicemail
+ * message, or hung up on a fax (T18) - nothing is kept, and nothing should
+ * follow from it.
  */
 export async function keepAnswer(opts: {
   callId: number;
@@ -180,13 +190,13 @@ export async function keepAnswer(opts: {
   record: AnswerRecord | null;
   result: CallResult | null;
   blockNumber: boolean;
-}): Promise<{ kept: boolean; leadId: number | null }> {
+}): Promise<{ kept: boolean; leadId: number | null; takenByVerdict: boolean }> {
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
 
-    const { rows } = await client.query<{ lead_id: number; phone: string }>(
-      `SELECT c.lead_id, l.phone
+    const { rows } = await client.query<{ lead_id: number; phone: string; taken: boolean }>(
+      `SELECT c.lead_id, l.phone, ${TAKEN_BY_VERDICT_SQL} AS taken
        FROM calls c JOIN leads l ON l.id = c.lead_id
        WHERE c.id = $1 AND c.direction = 'automated'
        FOR UPDATE OF c`,
@@ -195,7 +205,13 @@ export async function keepAnswer(opts: {
     const call = rows[0];
     if (!call) {
       await client.query('ROLLBACK');
-      return { kept: false, leadId: null };
+      return { kept: false, leadId: null, takenByVerdict: false };
+    }
+    // The call is the voicemail message's now (T18): what Twilio sends after
+    // is the greeting, or the page it replaced - never the lead's answer.
+    if (call.taken) {
+      await client.query('ROLLBACK');
+      return { kept: false, leadId: call.lead_id, takenByVerdict: true };
     }
 
     let kept = false;
@@ -239,7 +255,7 @@ export async function keepAnswer(opts: {
     }
 
     await client.query('COMMIT');
-    return { kept, leadId: call.lead_id };
+    return { kept, leadId: call.lead_id, takenByVerdict: false };
   } catch (err) {
     await client.query('ROLLBACK');
     throw err;
@@ -267,6 +283,84 @@ export async function settleAutomatedCall(callId: number): Promise<void> {
      WHERE id = $1 AND direction = 'automated' AND script_result IS NULL AND outcome IS NOT NULL`,
     [callId]
   );
+}
+
+/**
+ * Acts on Twilio's verdict on who answered the automated call `callId` - T18,
+ * AUTO-CALLS.md "Voicemail". The call is locked while it decides
+ * (`onVerdict`), so an answer kept at the same moment (`keepAnswer`) is either
+ * seen or waits. A takeover - the message, or hanging up on a fax - saves its
+ * result first, `voicemail_left` or `unanswered`, and keeps it only once
+ * `takeOver` says Twilio has taken the call: refused - the call already over -
+ * nothing is saved, and the call's end gives it its result as for any other.
+ * Null when the row is not a live automated call of ours.
+ */
+export async function actOnVerdict(
+  callId: number,
+  verdict: MachineVerdict,
+  takeOver: (action: Exclude<VerdictAction, 'carry_on'>, callSid: string) => Promise<boolean>
+): Promise<{ action: VerdictAction; tookOver: boolean } | null> {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const { rows } = await client.query<{
+      twilio_call_sid: string | null;
+      ended: boolean;
+      agent_took: boolean;
+      key_pressed: boolean;
+      answered: boolean;
+    }>(
+      `SELECT c.twilio_call_sid,
+              c.script_result IS NOT NULL OR c.ended_at IS NOT NULL AS ended,
+              c.agent_id IS NOT NULL AS agent_took,
+              EXISTS (SELECT 1 FROM call_answers a WHERE a.call_id = c.id AND a.digits IS NOT NULL) AS key_pressed,
+              EXISTS (SELECT 1 FROM call_answers a WHERE a.call_id = c.id AND a.result = 'choice') AS answered
+       FROM calls c
+       WHERE c.id = $1 AND c.direction = 'automated'
+       FOR UPDATE`,
+      [callId]
+    );
+    const call = rows[0];
+    if (!call?.twilio_call_sid) {
+      await client.query('ROLLBACK');
+      return null;
+    }
+    const action = onVerdict(verdict, {
+      ended: call.ended,
+      agentTook: call.agent_took,
+      keyPressed: call.key_pressed,
+      answered: call.answered,
+    });
+    if (action === 'carry_on') {
+      await client.query('ROLLBACK');
+      return { action, tookOver: false };
+    }
+    await client.query(`UPDATE calls SET script_result = $2 WHERE id = $1 AND script_result IS NULL`, [
+      callId,
+      action === 'voicemail' ? 'voicemail_left' : 'unanswered',
+    ]);
+    const tookOver = await takeOver(action, call.twilio_call_sid);
+    await client.query(tookOver ? 'COMMIT' : 'ROLLBACK');
+    return { action, tookOver };
+  } catch (err) {
+    await client.query('ROLLBACK');
+    throw err;
+  } finally {
+    client.release();
+  }
+}
+
+/**
+ * Whether Twilio's verdict has taken the automated call `callId` over - the
+ * voicemail message, or a fax hung up on (T18). A request Twilio sends after
+ * that is the page the takeover replaced, and changes nothing.
+ */
+export async function takenByVerdict(callId: number): Promise<boolean> {
+  const { rows } = await pool.query<{ taken: boolean }>(
+    `SELECT ${TAKEN_BY_VERDICT_SQL} AS taken FROM calls WHERE id = $1 AND direction = 'automated'`,
+    [callId]
+  );
+  return rows[0]?.taken === true;
 }
 
 /**
@@ -341,8 +435,6 @@ export interface TransferContext {
   lead: { id: number; name: string; phone: string };
   /** The agent holding the lead now, rung first if free (T15b) - or null. */
   heldBy: number | null;
-  /** Twilio's verdict on who answered the phone, if it has come. */
-  answeredBy: AnsweredBy | null;
   /** The step of the lead's last chosen answer - the "yes" being put through; a ring shows its heading. */
   yesStepId: number | null;
 }
@@ -359,10 +451,9 @@ export async function transferContext(callId: number): Promise<TransferContext |
     last_name: string | null;
     phone: string;
     assigned_to: number | null;
-    answered_by: AnsweredBy | null;
     yes_step_id: number | null;
   }>(
-    `SELECT l.id, l.first_name, l.last_name, l.phone, l.assigned_to, c.answered_by,
+    `SELECT l.id, l.first_name, l.last_name, l.phone, l.assigned_to,
             (SELECT a.step_id FROM call_answers a
              WHERE a.call_id = c.id AND a.result = 'choice' ORDER BY a.id DESC LIMIT 1) AS yes_step_id
      FROM calls c JOIN leads l ON l.id = c.lead_id
@@ -374,7 +465,6 @@ export async function transferContext(callId: number): Promise<TransferContext |
   return {
     lead: { id: row.id, name: [row.first_name, row.last_name].filter(Boolean).join(' '), phone: row.phone },
     heldBy: row.assigned_to,
-    answeredBy: row.answered_by,
     yesStepId: row.yes_step_id,
   };
 }

@@ -614,7 +614,31 @@ async function main(): Promise<void> {
     await finishCall({ callSid: 'AUTO-6', outcome: 'answered', durationSec: 25 });
     check("the voicemail verdict is kept for an automated call", await recordAnsweredBy({ callSid: 'AUTO-6', answeredBy: 'machine' }), true);
     const { rows: vm } = await pool.query(`SELECT outcome, answered_by FROM calls WHERE twilio_call_sid = 'AUTO-6'`);
-    check('and a machine makes it voicemail', vm, [{ outcome: 'voicemail', answered_by: 'machine' }]);
+    check('but a verdict after it ended was never acted on: still answered (T18)', vm, [{ outcome: 'answered', answered_by: 'machine' }]);
+
+    // T18: an automated call is voicemail only when the verdict took it over.
+    const left = await makeLead('+15550000707', 'MessageLeft', null);
+    await automated(left, 'AUTO-7');
+    await recordAnsweredBy({ callSid: 'AUTO-7', answeredBy: 'machine' });
+    await pool.query(`UPDATE calls SET script_result = 'voicemail_left' WHERE twilio_call_sid = 'AUTO-7'`);
+    await finishCall({ callSid: 'AUTO-7', outcome: 'answered', durationSec: 25 });
+    const ignored = await makeLead('+15550000708', 'WronglyAMachine', null);
+    await automated(ignored, 'AUTO-8');
+    await recordAnsweredBy({ callSid: 'AUTO-8', answeredBy: 'machine' });
+    await finishCall({ callSid: 'AUTO-8', outcome: 'answered', durationSec: 40 });
+    const faxed = await makeLead('+15550000709', 'Fax', null);
+    await automated(faxed, 'AUTO-9');
+    await recordAnsweredBy({ callSid: 'AUTO-9', answeredBy: 'fax' });
+    await pool.query(`UPDATE calls SET script_result = 'unanswered' WHERE twilio_call_sid = 'AUTO-9'`);
+    await finishCall({ callSid: 'AUTO-9', outcome: 'answered', durationSec: 3 });
+    const { rows: ends } = await pool.query(
+      `SELECT twilio_call_sid AS sid, outcome FROM calls WHERE twilio_call_sid IN ('AUTO-7', 'AUTO-8', 'AUTO-9') ORDER BY twilio_call_sid`
+    );
+    check('the message left: voicemail; a machine verdict the call ignored - a person: answered; a fax hung up on: voicemail', ends, [
+      { sid: 'AUTO-7', outcome: 'voicemail' },
+      { sid: 'AUTO-8', outcome: 'answered' },
+      { sid: 'AUTO-9', outcome: 'voicemail' },
+    ]);
   }
 
   console.log(failures === 0 ? '\nall checks passed' : `\n${failures} check(s) FAILED`);

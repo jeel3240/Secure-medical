@@ -310,9 +310,6 @@ export type TransferPlan =
 /**
  * What a "yes" to a transfer becomes - AUTO-CALLS.md "The transfer".
  *
- * - **A machine answered the phone** (Twilio's verdict, when it has come):
- *   nobody is rung - a voicemail greeting is not a lead saying yes. Ended
- *   politely, as no response; T18 leaves the voicemail message instead.
  * - **The lead's own agent is free** - `holder`, the agent holding the lead,
  *   among `free`: the line, then they ring alone first, as the lead's own
  *   agent (T15b). Not free, they are not waited for.
@@ -324,13 +321,16 @@ export type TransferPlan =
  * - **Otherwise** the line, then the free people rung together, at most
  *   `MAX_RUNG_AT_ONCE`, in the order given (T15a). Who takes it, or that
  *   nobody did, is decided when the ringing ends.
+ *
+ * A machine never gets here: its verdict hands the call to the voicemail
+ * message, and no answer is taken after that (T18, `onVerdict`); a "machine"
+ * verdict Twilio got wrong is ignored, so a person's yes still rings.
  */
 export function planTransfer(
   script: CallScript,
   transfer: TransferAction,
-  opts: { free: readonly number[]; machine: boolean; holder: number | null; onCall: boolean }
+  opts: { free: readonly number[]; holder: number | null; onCall: boolean }
 ): TransferPlan {
-  if (opts.machine) return { kind: 'end', say: [script.noResponseBody], result: 'no_response' };
   if (opts.holder !== null && opts.free.includes(opts.holder)) {
     return { kind: 'ring', say: [...transfer.say], agentIds: [opts.holder], holderFirst: true };
   }
@@ -442,4 +442,76 @@ export function rangOut(opts: {
   if (opts.hungUp || opts.dialStatus !== 'no-answer') return [];
   if (opts.rung.length === 1) return [...opts.rung];
   return opts.rung.filter((agentId) => opts.rings?.get(agentId) === 'no-answer');
+}
+
+/**
+ * Twilio's verdict on who answered, as an automated call reads it - T18,
+ * AUTO-CALLS.md "Voicemail". `beep`: a machine whose greeting has ended and
+ * whose beep was heard (`machine_end_beep`). `machine`: a machine, but no beep
+ * heard (`machine_end_silence`, `machine_end_other` - Twilio giving up after
+ * its 30 seconds - or `machine_start`). `fax`. `person`: a person, or Twilio
+ * not sure (`human`, `unknown`). Null for anything else.
+ */
+export type MachineVerdict = 'beep' | 'machine' | 'fax' | 'person';
+
+export function machineVerdict(raw: unknown): MachineVerdict | null {
+  if (raw === 'machine_end_beep') return 'beep';
+  if (typeof raw === 'string' && raw.startsWith('machine')) return 'machine';
+  if (raw === 'fax') return 'fax';
+  if (raw === 'human' || raw === 'unknown') return 'person';
+  return null;
+}
+
+/** The call as the verdict arrives - what `onVerdict` reads. */
+export interface VerdictCall {
+  /** The script has its result already, or the call is over. */
+  ended: boolean;
+  /** A person took the transfer and is on the call. */
+  agentTook: boolean;
+  /** A key was pressed - any key. Only a person presses keys. */
+  keyPressed: boolean;
+  /** The lead answered: a choice, said or pressed. */
+  answered: boolean;
+}
+
+/** What a verdict does: the voicemail message, hanging up on a fax, or nothing. */
+export type VerdictAction = 'voicemail' | 'hang_up' | 'carry_on';
+
+/**
+ * What Twilio's verdict does to a live automated call - T18, AUTO-CALLS.md
+ * "Voicemail". Twilio is sometimes wrong: on a real transfer it called a
+ * person who had said "Yes." a machine (call 24, `machine_end_other` after 30
+ * seconds). And a greeting is sometimes heard as an answer - "Sorry, no one is
+ * available" holds a "no". So the beep decides (Jeel, 2026-10-23):
+ *
+ * - **A person, or not sure**: the script carries on.
+ * - **A person is on the call** - a key was pressed, or someone took the
+ *   transfer: whatever Twilio says, it carries on.
+ * - **The script has ended**, or the call: nothing to leave.
+ * - **A beep heard**: the voicemail message - even after an "answer", which
+ *   was the greeting talking. It stops a transfer still ringing, or a hold.
+ * - **A machine, no beep heard**: the message only if the lead has answered
+ *   nothing; after an answer, it carries on. A fax is hung up on, likewise.
+ */
+export function onVerdict(verdict: MachineVerdict, call: VerdictCall): VerdictAction {
+  if (verdict === 'person' || call.ended || call.agentTook || call.keyPressed) return 'carry_on';
+  if (verdict === 'beep') return 'voicemail';
+  if (call.answered) return 'carry_on';
+  return verdict === 'fax' ? 'hang_up' : 'voicemail';
+}
+
+/**
+ * The voicemail message as said: `{callback_number}` - our number, E.164 -
+ * read out digit by digit, in its groups: "4 8 0, 4 7 0, 8 2 5 9". A number
+ * that is not a US one is read digit by digit, whole.
+ */
+export function voicemailLine(script: CallScript, callbackNumber: string): string {
+  const digits = callbackNumber.replace(/\D/g, '');
+  const national = digits.length === 11 && digits.startsWith('1') ? digits.slice(1) : digits;
+  const spaced = (part: string) => part.split('').join(' ');
+  const spoken =
+    national.length === 10
+      ? [national.slice(0, 3), national.slice(3, 6), national.slice(6)].map(spaced).join(', ')
+      : spaced(national);
+  return script.voicemailBody.split('{callback_number}').join(spoken);
 }

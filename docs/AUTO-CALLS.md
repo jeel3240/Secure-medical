@@ -1,11 +1,12 @@
 # Automated outbound calls
 
-**Planned 2026-10-15. Being built: T0 to T17 are done (2026-10-22) - the
+**Planned 2026-10-15. Being built: T0 to T18 are done (2026-10-24) - the
 server places a call, asks the script, keeps every answer, texts the link,
 puts a "yes" through to the lead's own agent first, then everyone free,
 switches off whoever let it ring out, holds a "yes" nobody can take yet while
-someone is on a call or writing its note, and rings the next person who comes
-free with the lead who has waited longest; voicemail (T18) onwards, and the robot calling by
+someone is on a call or writing its note, rings the next person who comes
+free with the lead who has waited longest, and leaves the voicemail message
+after the beep; a lead calling back (T19) onwards, and the robot calling by
 itself (T20), are not built yet.**
 This
 doc is the agreed design and the tracker for building it. Each ticket below updates its row when it is merged,
@@ -429,7 +430,7 @@ be trusted").
 | `POST /api/webhooks/twilio/auto/answer` | The lead picked up: a second's quiet, the greeting with nothing listening, then the question itself inside a `<Gather>` - speech or one key, heard from its first word ("When the call listens"); silence reported too; the step's words and the stop words as hints. Anything wrong - no row, no script, the database down - ends the call quietly, never Twilio's "application error" | - |
 | `POST /api/webhooks/twilio/auto/gather` | The answer read (`matchSpokenChoice`), what follows decided (`handleAnswer`), kept with its result and any block (`keepAnswer`), and the next line said - T13, "On a live call". The address names the step and which asking it was. A yes to the link is texted after Twilio has its answer (T14); a yes to the transfer rings the lead's own agent first, then everyone free (T15a, T15b, "The transfer") | - |
 | `POST /api/webhooks/twilio/auto/status` | How it ended, saved as every call's end is (`finishCall`): outcome, talk time, `call.ended`; then an unfinished script given its result (T13). Never a missed-call text | - |
-| `POST /api/webhooks/twilio/auto/amd` | Who picked up, kept as `answered_by`; a machine on an answered call makes it `voicemail` | T18: the voicemail message |
+| `POST /api/webhooks/twilio/auto/amd` | Who picked up, kept as `answered_by`; then acted on (T18, "Voicemail"): a machine gets the voicemail message, a fax is hung up on - the beep decides. Twilio has its answer first | - |
 | `POST /api/webhooks/twilio/auto/claim` | A person accepted the transfer: the call and the lead become theirs (`takeTransfer`) - run on their leg before they are connected (T15a) | - |
 | `POST /api/webhooks/twilio/auto/after` | The transfer's ringing is over: taken, nothing more; the lead's own agent did not take it, everyone else free rung (T15b); not taken, on hold while someone is on a call or writing its note (T16), else `transfer_missed` and the busy line (T15a); whoever let it ring out switched off, after Twilio has its answer (T15c). A ring from hold not taken: its offer ended, back on hold (T17). The address names the step and who was rung - `holder`, `rung`, or `offer` | - |
 | `POST /api/webhooks/twilio/auto/hold` | A lead waiting on hold: their place, then a track of hold music, then back here; nobody coming for them any more, or the safety stop, the busy line (T16, T17, "The hold line"). Asked when a track ends, and by the hold watcher (`via=watcher`). While the lead is ringing someone from hold, the same ring again, nothing changed | - |
@@ -471,11 +472,10 @@ Built in T15a and T15b (2026-10-20). A "yes" to a step whose choice ends in
 pure, `planTransfer` and `planAfterHolder` in `core/call-script.ts`.
 
 1. **Who can take it is read at that moment**: everyone free (`freePeople`,
-   "Who is free"), who holds the lead, and Twilio's verdict on who picked up,
-   if it has come (`transferContext`).
-   - **A machine** (or a fax): nobody is rung - a voicemail greeting is not a
-     lead saying yes. The no-response line, `no_response`; T18 leaves the
-     voicemail message instead.
+   "Who is free") and who holds the lead (`transferContext`). Until T18 a
+   "yes" was also refused when Twilio's verdict said machine; now a machine's
+   verdict hands the call to the voicemail message before any answer can
+   follow it - "Voicemail".
    - **The lead's own agent is free** (T15b): the choice's reply ("Great,
      connecting you with a live agent now. Please hold."), the recording
      notice, then they ring **alone** for `auto_call_ring_seconds`. Not free -
@@ -561,8 +561,9 @@ the dev number):
 - **Twilio's voicemail detection called a person a machine** (call 24): its
   verdict came after the lead had said "Yes." at 0.89, so the transfer went
   ahead, rightly - but the call's outcome was then saved as `voicemail`, as
-  T12 does for any answered call a machine picked up. T18 must not act on a
-  late "machine" once the lead has answered - "T18".
+  T12 did for any answered call a machine picked up. T18 does not act on a
+  "machine" with no beep once the lead has answered, and such a call stays
+  `answered` - "Voicemail".
 - **Twilio reports every ring cut short as `no-answer`** (T15c, calls 33 and
   35): a ring that ran out and one stopped because someone else answered
   arrive identical, SIP 487 both - which is why who let it ring out is decided
@@ -723,13 +724,102 @@ karm's real browser):
   ending, before the note could be saved. Hence the two minutes above, both for
   going on hold and for waiting on it.
 
+## Voicemail
+
+Built in T18 (2026-10-24). When a machine answers, the voicemail message is
+left after the beep - "Hi, this is Seri calling from eDrugstore with a quick
+message... Please call us back at 4 8 0, 4 7 0, 8 2 5 9..." - and the call
+ends, saved as `voicemail_left`. The rules are pure, in `core/call-script.ts`:
+`machineVerdict`, `onVerdict`, `voicemailLine`.
+
+**How it is known.** Twilio listens beside the call from the moment it is
+answered (`asyncAmd`, `DetectMessageEnd` - "How a call is placed") and posts
+its verdict to `/auto/amd`: for a machine, once its greeting is over. The
+script starts at once regardless, so a lead hears no delay.
+
+**Twilio can be wrong, and a greeting can sound like an answer** - the two
+reasons for the rule below:
+
+- On the 43 real calls to a person, 2026-10-18 to 10-22, Twilio said
+  `unknown` 37 times and `human` 5 times, after 3.4 to 6.6 seconds of
+  listening - and once, call 24, `machine_end_other` after its full 30
+  seconds: a person who had said "Yes." and was being put through.
+- A greeting is heard as an answer when it holds a word a choice accepts:
+  "Sorry, **no** one is available" is a "No" to the first question.
+
+**The beep decides** (Jeel, 2026-10-23) - `onVerdict`:
+
+| Twilio says | Nothing answered yet | After an answer (a choice) | A key pressed, or someone took the transfer |
+|---|---|---|---|
+| `machine_end_beep` - the beep heard | the message | **the message** - the "answer" was the greeting | carries on - a person |
+| `machine_end_silence`, `machine_end_other`, `machine_start` - no beep | the message | carries on - call 24 | carries on |
+| `fax` | hung up on (`unanswered`) | carries on | carries on |
+| `human`, `unknown` | carries on | carries on | carries on |
+
+A call whose script has its result already, or that is over, is left alone.
+Only the first verdict is acted on: Twilio sends one, and a repeat changes
+nothing (`recordAnsweredBy` keeps the first).
+
+**Taking the call over** (`actOnVerdict`, `db/auto-calls.ts`): the call row
+is locked while it decides - the same lock an answer is kept under
+(`keepAnswer`), so an answer arriving at that moment waits, then finds the
+message has the call. The result is saved first, then Twilio's API replaces
+whatever the call is doing - a question, a transfer ringing, the hold music -
+with the message (`replaceCall`, `voicemailTwiml`); refused - the call already
+over - the result is rolled back, and the call's end gives it one as for any
+other. A second's quiet comes after the message, before hanging up: the first
+real voicemail's transcript stopped at "Thanks and have a" (call 58).
+
+**What Twilio sends after a takeover changes nothing** (`takenByVerdict`) -
+it is the page the message replaced:
+
+- `/auto/gather`, with what the greeting said ("...When you have finished
+  recording, you may...", calls 58 and 59): not kept, nothing follows.
+- `/auto/after`, when a transfer was ringing - reported `no-answer`, exactly
+  as a ring let run out (call 62). Nobody is switched off, nothing more said.
+
+**What is saved:** `script_result = 'voicemail_left'` (a fax: `unanswered`);
+`answered_by`, Twilio's verdict as for every call; and the outcome
+`voicemail` - for an automated call, only when the verdict took it over
+(`TAKEN_BY_VERDICT_SQL`, `db/calls.ts`). A "machine" the call ignored - a
+person Twilio got wrong - stays `answered`. Until T18 every answered call a
+machine picked up was saved as `voicemail`, as for agents' calls - call 24,
+a transfer a person took, among them.
+
+**A transfer no longer checks for a machine.** T15a ended a "yes" as no
+response once Twilio's verdict said machine. Now a machine's verdict hands
+the call to the message before any answer can follow it, and a verdict the
+call ignored is a person's - whose yes must ring.
+
+**The real calls** (2026-10-23 and 24, Jeel's phone, the dev number):
+
+- **Declining, twice** (calls 56, 57): Jeel's carrier answered `busy` -
+  never the voicemail; saved `busy`, `unanswered`, nothing said. To reach a
+  voicemail, the phone is left to ring.
+- **A real voicemail** (call 58): it picked up after 20 seconds; Twilio heard
+  the beep 9.3 seconds into listening (`machine_end_beep`); the message was
+  recorded whole, from "Hi, this is Seri" - nothing before it - the number
+  transcribed "480-530-8582"; `voicemail`, `voicemail_left`. Its transcript
+  ended "Thanks and have a", hence the second's quiet; call 59, with it, was
+  whole to the end.
+- **A beep while the call spoke** (calls 60, 61): the "connecting you" line
+  and the recording notice cut off mid-sentence, the message instead. The
+  beep was sent by hand - signed as Twilio signs, Twilio's own `unknown`
+  verdict cleared first in the local database - since a phone that says yes
+  cannot also beep.
+- **A beep while karm's window rang** (call 62): the ring began 14 seconds
+  after the yes - the line and the notice take that long - and stopped 4
+  seconds later at the beep; the message played; karm's window cleared with
+  no notice, and karm's switch stayed on, though Twilio reported the ring
+  `no-answer`.
+
 ## What is saved
 
 Nothing is overwritten (`AUDIT.md`).
 
 | What | Where |
 |---|---|
-| The call | `calls`, with `direction = 'automated'`; `agent_id` empty until someone takes a transfer. `script_result`: `transferred`, `transfer_missed`, `link_sent`, `not_interested`, `opted_out`, `no_response`, `voicemail_left`, `hung_up`, `unanswered`. `held_at`: when it went on hold (019) |
+| The call | `calls`, with `direction = 'automated'`; `agent_id` empty until someone takes a transfer. `script_result`: `transferred`, `transfer_missed`, `link_sent`, `not_interested`, `opted_out`, `no_response`, `voicemail_left`, `hung_up`, `unanswered`. `held_at`: when it went on hold (019). `outcome` is `voicemail` only when Twilio's verdict took the call over (T18) |
 | What the lead said | `call_answers`, one add-only row per answer: what Twilio heard, how sure, keys pressed, the choice it matched |
 | The script | `call_scripts`, `call_steps`, `call_choices` - rows, changed by migration, like the SMS flow (015). The script's own words - stop, no response, voicemail, busy, hold and the place on hold (019), the link text - are on its `call_scripts` row, so another script brings its own |
 | When it calls | `settings`: `auto_call_hours_start` 11:00, `auto_call_hours_end` 17:00, `auto_call_time_zone` America/Phoenix, `auto_call_days` mon,tue,wed,thu,fri, `auto_call_wait_minutes` 60, `auto_call_ring_seconds` 25, `auto_call_hold_max_minutes` 10, `auto_call_min_confidence` 0.4, `auto_call_offer_ring_seconds` 20 (020) |
@@ -790,7 +880,7 @@ ticket's own PR.
 | T15c | Letting a transfer ring out turns the switch off | T15a | Done 2026-10-20 - real calls: ran out, taken by another, declined, note box open |
 | T16 | The hold line | T15a | Done 2026-10-21 - real calls: on hold with music, out when nobody is on a call, the safety stop |
 | T17 | The next free person gets the waiting lead | T16 | Done 2026-10-22 - real calls: rung when the call ended, when the note was saved, when skipped; declined and rang out back on hold |
-| T18 | Voicemail | T12 | Not started |
+| T18 | Voicemail | T12 | Done 2026-10-24 - real calls: a real voicemail, the whole message; a beep while the call spoke, and while a transfer rang |
 | T19 | A lead calling back reaches someone | T10, T11 | Not started |
 | | **Calling on its own** | | |
 | T20 | The robot places the calls by itself | T12-T19 | Not started |
@@ -1993,14 +2083,48 @@ transferred.
   `voicemail` for any answered call a machine picked up). Noted 2026-10-20.
 
 **Done when**
-- [ ] A real call to Jeel's voicemail: the whole message is recorded after
-      the beep; "Voicemail left" is saved.
-- [ ] Route tests: machine, fax, person, not sure; "machine" after the lead
-      has answered -> ignored.
+- [x] A real call to Jeel's voicemail: the whole message is recorded after
+      the beep; "Voicemail left" is saved - 2026-10-24, calls 58 and 59: the
+      beep heard 9.3 seconds into listening, the message whole from its first
+      word, the number transcribed "480-530-8582".
+- [x] Route tests: machine, fax, person, not sure; "machine" after the lead
+      has answered -> ignored. And: `machineVerdict` and every branch of
+      `onVerdict` - a beep after an answer, a key or a transfer taken, the
+      script over; the message's words, the number digit by digit; the
+      webhook - the TwiML, the fax, a repeat, the database failing after
+      Twilio's answer, no script, not this call; an answer and a ring's end
+      after a takeover changing nothing; `replaceCall` (984 backend tests).
+      `tookByMachine` (`core/calls.ts`), which the transfer's check used, is
+      gone with it.
+- [x] A live check proves the SQL: each branch on a real row, Twilio
+      refusing saves nothing, an answer arriving during the takeover waits
+      and is not kept, two verdicts at once take over once, a fax `unanswered`
+      (`auto-calls-live-check`, 114 checks); an automated call `voicemail`
+      only when taken over (`calls-live-check`, 105).
+- [x] A beep while a transfer rang - sent by hand, signed as Twilio signs:
+      the ring stopped, the message played, and nobody was switched off, though
+      Twilio reported the ring `no-answer` - call 62.
 
-**Files:** `backend/src/api/twilio-webhooks.ts`, `backend/src/integrations/twilio-calls.ts`,
-`backend/src/db/auto-calls.ts`.
-**Doc:** this one, `TWILIO.md`, "Voicemail".
+As built: "Voicemail". **The beep decides** - found while building, from the
+43 real calls' verdicts and the script's words, and agreed with Jeel on
+2026-10-23: the ticket's rule, any answer means a person, would have left no
+message on a voicemail whose greeting says "no one is available" - heard as
+"No". A beep after an answer is the greeting talking; a machine with no beep
+after an answer is call 24. Three things beyond the ticket. **Twilio sends the
+replaced page's request after a takeover** - the question's, with the
+greeting's words, and a ring's end reported `no-answer` - so both are ignored
+once the message has the call; the second would have switched an agent off.
+**A transfer no longer checks for a machine itself**: a verdict that was
+ignored is a person's, whose yes must ring. And **a second's quiet after the
+message**: the first one's transcript ended "Thanks and have a".
+
+**Files:** `backend/src/core/call-script.ts` (+ test), `backend/src/db/auto-calls.ts`,
+`backend/src/db/calls.ts`, `backend/src/core/calls.ts` (+ test), `backend/src/integrations/twilio.ts` (+ test),
+`backend/src/integrations/twilio-calls.ts` (+ test), `backend/src/api/twilio-webhooks.ts`,
+`backend/src/api/__tests__/auto-call-webhooks.test.ts`,
+`backend/scripts/auto-calls-live-check.ts`, `backend/scripts/calls-live-check.ts`.
+**Doc:** this one, "Voicemail"; `TWILIO.md`, `SCHEMA.md`, `AUDIT.md`,
+`LOGGING.md`, `README.md`, `CLAUDE.md`.
 
 ---
 

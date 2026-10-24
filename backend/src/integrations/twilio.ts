@@ -9,7 +9,7 @@
 
 import twilio from 'twilio';
 import type VoiceResponse from 'twilio/lib/twiml/VoiceResponse';
-import { splitForListening, type AskOrEnd, type CallScript, type CallStep } from '../core/call-script';
+import { splitForListening, voicemailLine, type AskOrEnd, type CallScript, type CallStep } from '../core/call-script';
 import { identityFor, INCOMING_RING_SECONDS, MISSED_CALL_SPEECH, RECORDING_NOTICE } from '../core/calls';
 import type { TwilioSettings } from '../twilio-settings';
 
@@ -429,5 +429,21 @@ export function holdTwiml(
   if (opts.notice && settings.transcriptionServiceSid) response.say(voice, RECORDING_NOTICE);
   if (opts.track) response.play(opts.track);
   response.redirect({ method: 'POST' }, autoCallUrl(settings, AUTO_HOLD_PATH, opts.callId));
+  return response.toString();
+}
+
+/**
+ * The voicemail message, left after the beep, then the call ends - T18,
+ * AUTO-CALLS.md "Voicemail". Said in the script's voice, with our number - the
+ * one the lead saw - read out digit by digit. Replaces whatever the call was
+ * doing (`replaceCall`), so nothing comes before it. A second's quiet before
+ * hanging up: a voicemail can clip what was said just as the caller left - the
+ * first real one's transcript stopped at "Thanks and have a" (call 58).
+ */
+export function voicemailTwiml(settings: TwilioSettings, script: CallScript): string {
+  const response = new twilio.twiml.VoiceResponse();
+  response.say(scriptVoice(script), voicemailLine(script, settings.callerId));
+  response.pause({ length: 1 });
+  response.hangup();
   return response.toString();
 }

@@ -17,6 +17,7 @@ import {
   LEAD_RING_SECONDS,
   placeAutomatedCall,
   recheckHold,
+  replaceCall,
   sendToOffer,
   transferRings,
 } from './twilio-calls';
@@ -135,5 +136,19 @@ describe('ringing the person who came free (T17)', () => {
   it('Twilio refusing: false, never a throw', async () => {
     update.mockRejectedValue(Object.assign(new Error('Call is not in-progress'), { status: 400 }));
     expect(await sendToOffer(SETTINGS, 'CA900', 42, 7)).toBe(false);
+  });
+});
+
+describe('handing a call to the voicemail message (T18)', () => {
+  it('replaces what the call is doing with the TwiML given - now', async () => {
+    update.mockResolvedValue({});
+    expect(await replaceCall(SETTINGS, 'CA900', '<Response><Hangup/></Response>')).toBe(true);
+    expect(callsApi).toHaveBeenCalledWith('CA900');
+    expect(update).toHaveBeenCalledWith({ twiml: '<Response><Hangup/></Response>' });
+  });
+
+  it('Twilio refusing - the call already over: false, never a throw', async () => {
+    update.mockRejectedValue(Object.assign(new Error('Call is not in-progress'), { status: 400 }));
+    expect(await replaceCall(SETTINGS, 'CA900', '<Response><Hangup/></Response>')).toBe(false);
   });
 });
