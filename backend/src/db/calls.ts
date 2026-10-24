@@ -14,7 +14,9 @@
 import { activityInsertSql, recordActivity } from './activity';
 import { finishMissedCallCallbacks } from './callbacks';
 import { pool } from './pool';
+import { FREE_SQL } from './presence';
 import type { AnsweredBy, CallOutcome, CallRefusal } from '../core/calls';
+import { MAX_RUNG_AT_ONCE } from '../core/call-script';
 
 /**
  * An automated call Twilio's verdict took over - T18, AUTO-CALLS.md
@@ -253,6 +255,12 @@ export type IncomingCall =
   /** Ring this agent's browser. */
   | { kind: 'ring'; agentId: number; lead: { id: number; name: string; phone: string } }
   /**
+   * Ring everyone free together - a lead nobody holds or has called (T19,
+   * with automated calls on). The call is nobody's until one of them takes it
+   * (`takeIncomingCall`).
+   */
+  | { kind: 'group'; agentIds: number[]; lead: { id: number; name: string; phone: string } }
+  /**
    * A lead we hold, but no agent to ring. Already saved as missed. `firstReport`
    * is false on a retried webhook, so the lead is not texted twice.
    */
@@ -266,16 +274,22 @@ export type IncomingCall =
  *
  * **Whose.** The agent holding the lead; failing that, the agent who last
  * called them, since theirs is the call being returned. Only an active agent
- * counts. With neither, nobody rings: there is no "everyone" to ring yet - a
- * shared incoming queue is a later piece of work - and the call is saved as
- * missed straight away, so the lead is texted and shows in the queue.
+ * counts, switch or not. With neither, and `ringFree` - automated calls on
+ * (T19, AUTO-CALLS.md "A lead calling back") - everyone free rings together
+ * (`FREE_SQL`, at most ten): a lead returning the robot's voicemail has no
+ * agent yet. With nobody to ring, the call is saved as missed straight away,
+ * so the lead is texted and shows in the queue.
  *
  * A number we hold no lead for is `unknown`. `calls` needs a lead, so that call
  * is kept only in the activity log, by its phone number.
  *
  * Idempotent like `startCall`: a retried webhook finds the row and rings again.
  */
-export async function startIncomingCall(opts: { callSid: string; fromPhone: string }): Promise<IncomingCall> {
+export async function startIncomingCall(opts: {
+  callSid: string;
+  fromPhone: string;
+  ringFree?: boolean;
+}): Promise<IncomingCall> {
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
@@ -313,8 +327,18 @@ export async function startIncomingCall(opts: { callSid: string; fromPhone: stri
       return { kind: 'unknown' };
     }
 
+    // Nobody's own: everyone free, when automated calls are on (T19).
+    const free =
+      lead.agent_id === null && opts.ringFree
+        ? (
+            await client.query<{ id: number }>(
+              `SELECT u.id FROM users u WHERE ${FREE_SQL} ORDER BY u.id LIMIT ${MAX_RUNG_AT_ONCE}`
+            )
+          ).rows.map((r) => r.id)
+        : [];
+
     // With nobody to ring it is over before it starts: saved as missed now.
-    const nobody = lead.agent_id === null;
+    const nobody = lead.agent_id === null && free.length === 0;
     const inserted = await client.query(
       `INSERT INTO calls (lead_id, agent_id, twilio_call_sid, started_at, direction, outcome, duration_sec, ended_at)
        VALUES ($1, $2, $3, now(), 'inbound',
@@ -331,7 +355,12 @@ export async function startIncomingCall(opts: { callSid: string; fromPhone: stri
         actorId: null,
         leadId: lead.id,
         subjectUserId: lead.agent_id,
-        detail: { callId: inserted.rows[0].id, callSid: opts.callSid, ...(nobody ? { because: 'no_agent' } : {}) },
+        detail: {
+          callId: inserted.rows[0].id,
+          callSid: opts.callSid,
+          ...(nobody ? { because: 'no_agent' } : {}),
+          ...(free.length > 0 ? { ring: 'group', rung: free.length } : {}),
+        },
       });
     }
 
@@ -340,15 +369,57 @@ export async function startIncomingCall(opts: { callSid: string; fromPhone: stri
     if (nobody) {
       return { kind: 'missed', leadId: lead.id, firstReport: inserted.rowCount === 1 };
     }
-    return {
-      kind: 'ring',
-      agentId: lead.agent_id!,
-      lead: {
-        id: lead.id,
-        name: [lead.first_name, lead.last_name].filter(Boolean).join(' '),
-        phone: lead.phone,
-      },
-    };
+    const who = { id: lead.id, name: [lead.first_name, lead.last_name].filter(Boolean).join(' '), phone: lead.phone };
+    if (lead.agent_id === null) return { kind: 'group', agentIds: free, lead: who };
+    return { kind: 'ring', agentId: lead.agent_id, lead: who };
+  } catch (err) {
+    await client.query('ROLLBACK');
+    throw err;
+  } finally {
+    client.release();
+  }
+}
+
+export type TakeIncomingResult = { ok: true; leadId: number } | { ok: false; reason: 'taken' | 'inactive' | 'not_found' };
+
+/**
+ * A person accepted a lead's call that rang everyone free (T19): the call
+ * becomes theirs - `agent_id`, so they are on a call, and the call counts as
+ * theirs from now on - with its `call.taken` record, in one transaction. The
+ * first to accept only: Twilio connects one person, and a second request -
+ * someone else's, or an account deactivated meanwhile - is refused, and that
+ * leg is hung up. The same person again is no change. `callSid` is the lead's
+ * call - our row's.
+ */
+export async function takeIncomingCall(callSid: string, agentId: number): Promise<TakeIncomingResult> {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const { rows } = await client.query<{ id: number; lead_id: number; agent_id: number | null; active: boolean | null }>(
+      `SELECT c.id, c.lead_id, c.agent_id, (SELECT u.is_active FROM users u WHERE u.id = $2) AS active
+       FROM calls c
+       WHERE c.twilio_call_sid = $1 AND c.direction = 'inbound' AND c.ended_at IS NULL
+       FOR UPDATE OF c`,
+      [callSid, agentId]
+    );
+    const call = rows[0];
+    let result: TakeIncomingResult;
+    if (!call) result = { ok: false, reason: 'not_found' };
+    else if (call.agent_id === agentId) result = { ok: true, leadId: call.lead_id };
+    else if (call.agent_id !== null) result = { ok: false, reason: 'taken' };
+    else if (!call.active) result = { ok: false, reason: 'inactive' };
+    else {
+      await client.query(`UPDATE calls SET agent_id = $2 WHERE id = $1`, [call.id, agentId]);
+      await recordActivity(client, {
+        action: 'call.taken',
+        actorId: agentId,
+        leadId: call.lead_id,
+        detail: { callId: call.id, callSid },
+      });
+      result = { ok: true, leadId: call.lead_id };
+    }
+    await client.query('COMMIT');
+    return result;
   } catch (err) {
     await client.query('ROLLBACK');
     throw err;

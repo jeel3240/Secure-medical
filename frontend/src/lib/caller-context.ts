@@ -5,14 +5,21 @@ import { formatRelative } from './format';
  * Why this lead is probably calling, in one line for the incoming-call card -
  * "Calling back · you tried 2× today". Pure: it reads the lead's timeline.
  *
- * Only calls an agent placed count - not one the lead placed, and not the
+ * Calls an agent placed come first - not one the lead placed, and not the
  * server's automated call (T5, docs/AUTO-CALLS.md): "you tried 2×" and "Sam
- * tried" are about people. Null when no agent has called them: the card then
- * says nothing rather than guessing.
+ * tried" are about people. With none, the automated call is what they are
+ * returning - its voicemail asks them to call back (T19): "Calling back ·
+ * automated call, 2h ago". Null when we never called them: the card then says
+ * nothing rather than guessing.
  */
 export function callerContext(entries: TimelineEntry[], myName: string, now: Date): string | null {
   const placed = entries.filter((e) => e.kind === 'call' && e.detail.direction === 'outbound');
-  if (placed.length === 0) return null;
+  if (placed.length === 0) {
+    const robot = entries.filter((e) => e.kind === 'call' && e.detail.direction === 'automated');
+    if (robot.length === 0) return null;
+    const last = robot.reduce((a, b) => (a.at > b.at ? a : b));
+    return `Calling back · automated call, ${formatRelative(last.at, now)}`;
+  }
 
   const today = placed.filter((e) => new Date(e.at).toDateString() === now.toDateString());
   const mine = today.filter((e) => e.author === myName).length;

@@ -18,11 +18,14 @@ const finishCall = jest.fn<Promise<FinishedCall>, FinishArgs>();
 const startIncomingCall = jest.fn<Promise<IncomingCall>, IncomingArgs>();
 type AnsweredArgs = Parameters<typeof import('../../db/calls').recordAnsweredBy>;
 const recordAnsweredBy = jest.fn<Promise<boolean>, AnsweredArgs>();
+type Taken = Awaited<ReturnType<typeof import('../../db/calls').takeIncomingCall>>;
+const takeIncomingCall = jest.fn<Promise<Taken>, [string, number]>();
 jest.mock('../../db/calls', () => ({
   startCall: (...a: StartArgs) => startCall(...a),
   finishCall: (...a: FinishArgs) => finishCall(...a),
   startIncomingCall: (...a: IncomingArgs) => startIncomingCall(...a),
   recordAnsweredBy: (...a: AnsweredArgs) => recordAnsweredBy(...a),
+  takeIncomingCall: (callSid: string, agentId: number) => takeIncomingCall(callSid, agentId),
 }));
 
 type RecordingArgs = Parameters<typeof import('../../db/transcripts').saveRecording>;
@@ -58,6 +61,7 @@ beforeEach(() => {
   finishCall.mockReset().mockResolvedValue({ recorded: true, missedLeadId: null });
   startIncomingCall.mockReset().mockResolvedValue({ kind: 'unknown' });
   recordAnsweredBy.mockReset().mockResolvedValue(true);
+  takeIncomingCall.mockReset().mockResolvedValue({ ok: true, leadId: 7 });
   saveRecording.mockReset().mockResolvedValue(true);
   sendMissedCallText.mockReset().mockResolvedValue(true);
   setRingable.mockReset().mockResolvedValue({ takingCalls: true, takingCallsWhy: 'by_hand' });
@@ -427,7 +431,7 @@ describe('a lead calling our number', () => {
     expect(res.type).toBe('text/xml');
     expect(res.text).toContain('<Identity>agent-21</Identity>');
     expect(res.text).toContain('<Parameter name="leadId" value="7"/>');
-    expect(startIncomingCall).toHaveBeenCalledWith({ callSid: 'CA300', fromPhone: '+16026203572' });
+    expect(startIncomingCall).toHaveBeenCalledWith({ callSid: 'CA300', fromPhone: '+16026203572', ringFree: false });
     expect(sendMissedCallText).not.toHaveBeenCalled();
   });
 
@@ -497,6 +501,108 @@ describe('a lead calling our number', () => {
       const res = await fromTwilio(app, AFTER, { CallSid: 'CA300', DialCallStatus: 'completed' });
       expect(res.text).not.toContain('<Say>');
       expect(finishCall).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('a lead nobody holds or has called: everyone free rings (T19)', () => {
+    const CLAIM = '/api/webhooks/twilio/incoming/claim';
+    const GROUP_AFTER = `${AFTER}?ring=group`;
+    const group = { kind: 'group' as const, agentIds: [16, 19], lead: { id: 7, name: 'Priya Sharma', phone: '+16026203572' } };
+
+    it('only with automated calls on: asked to ring everyone free', async () => {
+      const { app } = await buildApp({ twilio: SETTINGS, autoCalls: true });
+      await fromTwilio(app, INCOMING, A_RING);
+      expect(startIncomingCall).toHaveBeenCalledWith({ callSid: 'CA300', fromPhone: '+16026203572', ringFree: true });
+    });
+
+    it('rings each of them, marked a shared ring, with the lead, the end taken from the whole ring', async () => {
+      startIncomingCall.mockResolvedValue(group);
+      const { app } = await buildApp({ twilio: SETTINGS, autoCalls: true });
+      const res = await fromTwilio(app, INCOMING, A_RING);
+      expect(res.text.match(/<Client /g)).toHaveLength(2);
+      expect(res.text).toContain('<Identity>agent-16</Identity>');
+      expect(res.text).toContain('<Identity>agent-19</Identity>');
+      expect(res.text.match(/<Parameter name="ring" value="group"\/>/g)).toHaveLength(2);
+      expect(res.text).toContain('<Parameter name="leadName" value="Priya Sharma"/>');
+      expect(res.text).toContain(`url="https://calls.example.com${CLAIM}"`);
+      expect(res.text).toContain(`action="https://calls.example.com${AFTER}?ring=group"`);
+      expect(res.text).toContain('statusCallback="https://calls.example.com/api/webhooks/twilio/status?ring=group"');
+      expect(res.text).toContain('timeout="20"');
+      expect(sendMissedCallText).not.toHaveBeenCalled();
+    });
+
+    describe('someone accepts', () => {
+      const accept = { CallSid: 'CA301', ParentCallSid: 'CA300', To: 'client:agent-19' };
+
+      it('the call is theirs, and they are connected', async () => {
+        const { app } = await buildApp({ twilio: SETTINGS, autoCalls: true });
+        const res = await fromTwilio(app, CLAIM, accept);
+        expect(takeIncomingCall).toHaveBeenCalledWith('CA300', 19);
+        expect(res.text).toMatch(/<Response\/>$/);
+      });
+
+      it.each(['taken', 'inactive', 'not_found'] as const)('refused (%s): that leg is hung up', async (reason) => {
+        takeIncomingCall.mockResolvedValue({ ok: false, reason });
+        const { app } = await buildApp({ twilio: SETTINGS, autoCalls: true });
+        expect((await fromTwilio(app, CLAIM, accept)).text).toMatch(/<Response><Hangup\/><\/Response>$/);
+      });
+
+      it('another server\'s browser name, or no lead\'s call: hung up, nothing taken', async () => {
+        const { app } = await buildApp({ twilio: SETTINGS, autoCalls: true });
+        await fromTwilio(app, CLAIM, { ...accept, To: 'client:dev-agent-19' });
+        await fromTwilio(app, CLAIM, { CallSid: 'CA301', To: 'client:agent-19' });
+        expect(takeIncomingCall).not.toHaveBeenCalled();
+      });
+
+      it('the database failing as they accept: connected anyway - the lead is waiting', async () => {
+        takeIncomingCall.mockRejectedValue(new Error('connection refused'));
+        const { app } = await buildApp({ twilio: SETTINGS, autoCalls: true });
+        expect((await fromTwilio(app, CLAIM, accept)).text).toMatch(/<Response\/>$/);
+      });
+
+      it('never while automated calls are off, and only signed by Twilio', async () => {
+        const { app: off } = await buildApp({ twilio: SETTINGS, autoCalls: false });
+        expect((await fromTwilio(off, CLAIM, accept)).status).toBe(404);
+        const { app } = await buildApp({ twilio: SETTINGS, autoCalls: true });
+        expect((await request(app).post(CLAIM).type('form').send(accept)).status).toBe(403);
+        expect(takeIncomingCall).not.toHaveBeenCalled();
+      });
+    });
+
+    describe('the whole ring\'s end', () => {
+      it('taken and talked: the call ended with its length - nothing said', async () => {
+        const { app } = await buildApp({ twilio: SETTINGS, autoCalls: true });
+        const res = await fromTwilio(app, GROUP_AFTER, { CallSid: 'CA300', DialCallStatus: 'completed', DialCallDuration: '42' });
+        expect(finishCall).toHaveBeenCalledWith({ callSid: 'CA300', outcome: 'answered', durationSec: 42 });
+        expect(res.text).not.toContain('<Say>');
+        expect(sendMissedCallText).not.toHaveBeenCalled();
+      });
+
+      it('nobody took it: missed - the lead hears we will call back, and is texted', async () => {
+        finishCall.mockResolvedValue({ recorded: true, missedLeadId: 7 });
+        const { app } = await buildApp({ twilio: SETTINGS, autoCalls: true });
+        const res = await fromTwilio(app, GROUP_AFTER, { CallSid: 'CA300', DialCallStatus: 'no-answer' });
+        expect(finishCall).toHaveBeenCalledWith({ callSid: 'CA300', outcome: 'no_answer', durationSec: 0 });
+        expect(res.text).toContain('will call you back');
+        expect(sendMissedCallText).toHaveBeenCalledWith(7);
+      });
+
+      it('one browser\'s ring cut short by someone else\'s answer says nothing about the call', async () => {
+        const { app } = await buildApp({ twilio: SETTINGS, autoCalls: true });
+        for (const status of ['no-answer', 'canceled', 'busy']) {
+          expect(
+            (await fromTwilio(app, `${STATUS}?ring=group`, { ParentCallSid: 'CA300', CallStatus: status, CallDuration: '0' })).status
+          ).toBe(204);
+        }
+        expect(finishCall).not.toHaveBeenCalled();
+        expect(sendMissedCallText).not.toHaveBeenCalled();
+      });
+
+      it('the browser that took it reports the end, as for one person rung', async () => {
+        const { app } = await buildApp({ twilio: SETTINGS, autoCalls: true });
+        await fromTwilio(app, `${STATUS}?ring=group`, { ParentCallSid: 'CA300', CallStatus: 'completed', CallDuration: '42' });
+        expect(finishCall).toHaveBeenCalledWith({ callSid: 'CA300', outcome: 'answered', durationSec: 42 });
+      });
     });
   });
 

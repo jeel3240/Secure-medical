@@ -1,13 +1,14 @@
 # Automated outbound calls
 
-**Planned 2026-10-15. Being built: T0 to T18 are done (2026-10-24) - the
+**Planned 2026-10-15. Being built: T0 to T19 are done (2026-10-24) - the
 server places a call, asks the script, keeps every answer, texts the link,
 puts a "yes" through to the lead's own agent first, then everyone free,
 switches off whoever let it ring out, holds a "yes" nobody can take yet while
 someone is on a call or writing its note, rings the next person who comes
-free with the lead who has waited longest, and leaves the voicemail message
-once a machine's greeting is over; a lead calling back (T19) onwards, and the robot calling by
-itself (T20), are not built yet.**
+free with the lead who has waited longest, leaves the voicemail message once a
+machine's greeting is over, and rings everyone free for a lead calling back
+whom nobody owns; the robot calling by itself (T20) onwards is not built
+yet.**
 This
 doc is the agreed design and the tracker for building it. Each ticket below updates its row when it is merged,
 and the sections it touches, so the doc always says what is built and what is
@@ -114,7 +115,7 @@ TRANSFER ("Great, connecting you with a live agent now. Please hold." + recordin
        -> the lead goes to the top of the agents' queue as "Wants a call"
 
 LEAD CALLS (480) 470-8259 BACK
-   -> whoever holds them -> else the last agent who called them -> else everyone free
+   -> whoever holds them -> else the last agent who called them -> else everyone free (T19)
    -> nobody -> missed call, as today (TWILIO.md, "A missed call")
 ```
 
@@ -828,6 +829,21 @@ A beep after such a yes still stops the ring and leaves the message.
   no notice, and karm's switch stayed on, though Twilio reported the ring
   `no-answer`.
 
+## A lead calling back
+
+Built in T19 (2026-10-24). The voicemail asks the lead to call back, and a lead
+the robot reached has no agent of its own - nobody holds them, and the robot's
+call has nobody on it. So with automated calls on, a call from a lead nobody
+holds or has called rings **everyone free** together (`FREE_SQL`, at most ten),
+after the lead's own agent and the last agent who called them, who still ring
+alone first, as before; nobody free, the missed call as before. The first to
+accept takes the call and picks the lead up. How it is rung and ended -
+`ringEveryoneTwiml`, `/incoming/claim`, the end from the whole ring - is in
+`TWILIO.md`, "Who rings".
+
+The card says why they are calling: "Calling back · automated call, 28m ago"
+when the robot is the only one who called them (`lib/caller-context.ts`).
+
 ## What is saved
 
 Nothing is overwritten (`AUDIT.md`).
@@ -896,7 +912,7 @@ ticket's own PR.
 | T16 | The hold line | T15a | Done 2026-10-21 - real calls: on hold with music, out when nobody is on a call, the safety stop |
 | T17 | The next free person gets the waiting lead | T16 | Done 2026-10-22 - real calls: rung when the call ended, when the note was saved, when skipped; declined and rang out back on hold |
 | T18 | Voicemail | T12 | Done 2026-10-24 - real calls: a real voicemail, the whole message; a beep while the call spoke, and while a transfer rang |
-| T19 | A lead calling back reaches someone | T10, T11 | Not started |
+| T19 | A lead calling back reaches someone | T10, T11 | Done 2026-10-24 - real calls back: everyone free rang, one took it; nobody took it, missed and texted |
 | | **Calling on its own** | | |
 | T20 | The robot places the calls by itself | T12-T19 | Not started |
 | | **Screens** | | |
@@ -2176,13 +2192,42 @@ agent owns them.
   nothing; "Calling back · automated call, 2h ago" is one way. Noted 2026-10-18.
 
 **Done when**
-- [ ] A live check: holder; last caller; everyone free; nobody free -> missed.
-- [ ] A real call back after T18's voicemail rings the free browsers.
-- [ ] With `AUTO_CALLS` off, the existing incoming-call tests pass unchanged.
+- [x] A live check: holder; last caller; everyone free; nobody free -> missed.
+      And: not the switch off, not someone on a call; nobody's while it rings,
+      recorded as a ring to everyone; a retried webhook one call; taken by the
+      first to accept, once, recorded `call.taken`; a second accept, an
+      account deactivated, a call over refused; answered and his, or missed
+      and nobody's, with no callback booked; the lead's own agent still rung
+      alone; automated calls off, missed as before (`calls-live-check`, 126).
+- [x] A real call back after T18's voicemail rings the free browsers -
+      2026-10-24, call 63: Jeel's phone called the dev number, both windows
+      rang, "Calling back · automated call, 28m ago"; karm accepted and took
+      the call and the lead; Jeel's ring, reported `no-answer` the same
+      instant, was ignored; answered, 10 seconds, recorded.
+- [x] Nobody takes it - call 64: rung, then missed, nobody's; the lead heard
+      that we would call back and got the missed-call text; nobody's switch
+      changed. It rang one person: karm's note box from call 63 was still
+      open, so karm was not free.
+- [x] With `AUTO_CALLS` off, the existing incoming-call tests pass - one
+      expectation names the new argument, `ringFree: false`. Route tests for
+      the group ring: who is rung and how it is marked, taking it, refusals,
+      unsigned and off, the whole ring's end, a cut-short ring ignored (998
+      backend tests); the card's line (352 frontend tests).
 
-**Files:** `backend/src/db/calls.ts`, `backend/src/integrations/twilio.ts`,
-`backend/src/api/twilio-webhooks.ts`.
-**Doc:** `TWILIO.md`, "Who rings".
+As built: TWILIO.md "Who rings", and "A lead calling back" above. One addition
+to the ticket: **taking the call is its own webhook**, `/incoming/claim`, run
+on the leg of whoever accepts - the row's `agent_id` is null while everyone
+rings, and must name a person the moment one is on the call, for "on a call"
+(`FREE_SQL`) and for the call to be theirs. A new action, `call.taken`. The
+card's line was decided as the ticket suggested. Letting a call-back ring run
+out turns no switch off - only a transfer does (T15c).
+
+**Files:** `backend/src/db/calls.ts`, `backend/src/core/activity.ts`,
+`backend/src/integrations/twilio.ts`, `backend/src/api/twilio-webhooks.ts`,
+`backend/src/api/__tests__/calls.test.ts`, `backend/scripts/calls-live-check.ts`,
+`frontend/src/lib/caller-context.ts` (+ test).
+**Doc:** `TWILIO.md`, "Who rings"; this one; `SCHEMA.md`, `AUDIT.md`,
+`LOGGING.md`, `FRONTEND.md`, `README.md`, `CLAUDE.md`.
 
 ---
 

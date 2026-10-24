@@ -133,7 +133,7 @@ scripts/live-checks.sh flows queue  # just these
 There are twenty-one live checks, covering the texts a call leads to (the link, and the text after a missed call - EZ Texting stubbed), the automated call (its row, every refusal, linking it to Twilio's call, two placements racing; each answer kept once, a result never overwritten, a stop blocking once and ending the text questions, the end settling an unfinished script; a transfer taken - from the lead's holder, once, never by a second person - or missed; a lead on hold, its place in line, and hanging up on hold; Twilio's voicemail verdict acted on - the beep decides, under the call's lock, never twice), a lead on hold rung to whoever comes free (migration 020: longest waiting first, one ring at a time per lead and per person, never the same person twice, and who is still coming for a lead), who can take a call (migrations 016 and 017: the browser's word, the "Taking calls" switch and why it is so, who is free, the switch turned off after a ring let run out, and who counts as on a call, or just off one, while a lead is on hold), the automated call's script (migrations 015, 018 and 019, and 020's ring time), the SMS flows (a second flow added as
 rows only), the queue, claims, the read flag, the lead card,
 the timeline, callbacks, dispositions, agent SMS, calls (outgoing, incoming and
-missed), the activity log, Admin > Leads, the admin read models, health, the
+missed, and a call back ringing everyone free), the activity log, Admin > Leads, the admin read models, health, the
 opener retry, and the resend after an outage.
 
 **How fast it is with a lot of leads** is a separate check - it loads 50,000
@@ -170,16 +170,16 @@ Things that are true today and will surprise someone who assumes otherwise.
 
 **Calling is simple.** Agents call leads from the browser (`TWILIO.md`, built
 2026-10-01). A lead who rings the number back rings one agent's browser - the
-one holding them, or who last called them - and otherwise gets a message, a
-text and a place in the queue as a missed call, and the agent it rang gets a
-callback; there is no call queue and no voicemail (`TWILIO.md`, "Incoming
-calls"). An agent's browser must be open and signed in to ring, and a number
+one holding them, or who last called them - or, with automated calls on,
+everyone free (T19); and otherwise gets a message, a text and a place in the
+queue as a missed call, and the agent it rang gets a callback; there is no
+call queue and no voicemail (`TWILIO.md`, "Incoming calls"). An agent's browser must be open and signed in to ring, and a number
 we hold no lead for rings nobody. Calls are recorded and transcribed when the
 transcription service is set, and the lead hears a recording notice first
 (`TWILIO.md`). A call that reaches voicemail is saved as
-voicemail, by Twilio's detection, which is not always right. There is no
-voicemail drop, transfer or hold, and the recording's audio is not played in
-the app. **Never run `twilio:configure` locally with production's phone number or
+voicemail, by Twilio's detection, which is not always right. An agent's call
+has no voicemail drop, transfer or hold - the automated call has all three
+(`AUTO-CALLS.md`) - and the recording's audio is not played in the app. **Never run `twilio:configure` locally with production's phone number or
 TwiML App** (2026-10-05): it points both at the laptop and production calling
 stops, silently, until it is run on the server again. Locally there is a dev
 number of its own (next paragraph) - `TWILIO.md`, "What it needs on the Twilio
@@ -282,7 +282,7 @@ commit.
 | `POLLER.md` | How leads are pulled in | The poller or worker loop |
 | `WEBHOOKS.md` | How replies are received | The webhook handler |
 | `TWILIO.md` | Browser calling: how a call works, incoming calls and missed calls, what is saved, settings, testing, deploying | Anything about calls, Twilio's webhooks, the Call button, the incoming-call card or the call bar |
-| `AUTO-CALLS.md` | Automated outbound calls: the agreed script and flow, the transfer and hold rules, the "Taking calls" switch, and the build tracker. T0-T18 are done (2026-10-24): the server places a call, asks the script, keeps every answer, texts the link, puts a "yes" through to the lead's own agent first, then everyone free, switches off whoever let it ring out, holds a "yes" while someone is on a call or writing its note, rings the next person who comes free with the lead who has waited longest, and leaves the voicemail message once a machine's greeting is over; a lead calling back (T19) on, and the robot calling by itself (T20), are not built yet | A ticket from its tracker is merged, or any decision about automated calls |
+| `AUTO-CALLS.md` | Automated outbound calls: the agreed script and flow, the transfer and hold rules, the "Taking calls" switch, and the build tracker. T0-T19 are done (2026-10-24): the server places a call, asks the script, keeps every answer, texts the link, puts a "yes" through to the lead's own agent first, then everyone free, switches off whoever let it ring out, holds a "yes" while someone is on a call or writing its note, rings the next person who comes free with the lead who has waited longest, leaves the voicemail message once a machine's greeting is over, and rings everyone free for a lead calling back whom nobody owns; the robot calling by itself (T20) on is not built yet | A ticket from its tracker is merged, or any decision about automated calls |
 | `AUDIT.md` | The activity log and the raw webhook archive: what is recorded, why nothing can be edited or deleted, what it does not cover | **Any new action a person or the system can take** - it records itself, or this doc says why not |
 | `ADMIN-LEADS.md` | The superadmin Leads page | That page or its API |
 | `QUEUE.md` | The agents' priority queue API: who is in it, the order, the tags | `GET /api/leads`, the queue query or the tag rules |
