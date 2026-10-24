@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { getCallConfig } from '../api/calls';
 import { toApiError } from '../api/client';
 import { claimLead, listQueue, type QueueLead, type QueueResponse } from '../api/leads';
 import { usePolling } from '../api/usePolling';
@@ -61,6 +62,15 @@ export function answersTitle(answers: QueueLead['answers']): string | undefined 
   return answers.length > 0 ? answers.map((a) => `${a.heading}: ${a.label}`).join('\n') : undefined;
 }
 
+/**
+ * The order, as the page states it. A "yes" on the robot's call that nobody
+ * took comes first (T22, QUEUE.md "The order") - said only while automated
+ * calls are on, so nobody reads about transfers that cannot happen.
+ */
+export function orderText(autoCalls: boolean): string {
+  return autoCalls ? 'Missed transfers first, then highest score, then newest.' : 'Highest score first, then newest.';
+}
+
 const SINCE: { key: string; label: string }[] = [
   { key: '1h', label: 'Last hour' },
   { key: '24h', label: 'Last 24 hours' },
@@ -74,6 +84,7 @@ export function QueuePage() {
   const now = useSecond();
 
   const [tier, setTier] = useState('');
+  const [autoCalls, setAutoCalls] = useState(false);
   const [source, setSource] = useState('');
   const [since, setSince] = useState('all');
   const [search, setSearch] = useState('');
@@ -85,6 +96,17 @@ export function QueuePage() {
     const id = setTimeout(() => setQuery(search.trim()), 300);
     return () => clearTimeout(id);
   }, [search]);
+
+  useEffect(() => {
+    let alive = true;
+    getCallConfig()
+      .then((config) => alive && setAutoCalls(config.enabled && config.autoCalls))
+      // Unknown: the order as it is without them - right whenever none are placed.
+      .catch(() => undefined);
+    return () => {
+      alive = false;
+    };
+  }, []);
 
   const fetcher = useCallback(
     () =>
@@ -159,7 +181,7 @@ export function QueuePage() {
       <div className="page-header">
         <div>
           <h1 className="page-title">Priority queue</h1>
-          <p className="page-subtitle">Highest score first, then newest.</p>
+          <p className="page-subtitle">{orderText(autoCalls)}</p>
         </div>
         <LiveStatus updatedAt={updatedAt} paused={Boolean(error)} />
       </div>

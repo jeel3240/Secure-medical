@@ -133,7 +133,7 @@ Rebuilt to a mockup Jeel supplied. What changed and why:
 | Tier filter | Three pills, several at once | One segmented switcher - All, Hot, Warm, Low with counts - one at a time |
 | Tier column | Coloured badge | Signal bars and the word, `components/TierSignal.tsx` |
 | Age column | "AGE", amber and red | "WAITING", monospace, one weight and colour for every lead |
-| Status column | Coloured pills, six statuses | An icon and the words, six statuses (Callback came back 2026-09-29, Missed call added 2026-10-01, Wants a call 2026-10-05), a hyphen otherwise - `components/QueueStatus.tsx` |
+| Status column | Coloured pills, six statuses | An icon and the words, six statuses (Callback came back 2026-09-29, Missed call added 2026-10-01, Wants a call 2026-10-05 - and since T22 also a "yes" on the automated call nobody took, those rows first), a hyphen otherwise - `components/QueueStatus.tsx` |
 | Button | Pick | **Pick up** - on every screen that picks, so the action has one name |
 | Someone else's lead | "Locked" | A padlock and "Locked", `components/LockIcon.tsx` |
 | Action column | Right-aligned | Centred - buttons and Locked on one axis |
@@ -164,7 +164,7 @@ to say. Which status wins, and why New went too, is in `QUEUE.md`, "The tag".
 | Needs review | Warning triangle | A person has to look at the replies |
 | Callback – name · time | Clock | Someone has a call booked on it |
 | Missed call | Handset with an arrow turned away | The lead rang and nobody answered. Bold, like Inbound reply |
-| Wants a call | Handset | The lead said No, then asked to hear from a rep (2026-10-05). The same handset as Missed call, without the arrow |
+| Wants a call | Handset | The lead said No, then asked to hear from a rep (2026-10-05); or, since T22, said yes on the automated call and nobody took it - the server ranks that one just below Missed call and sorts it first. The same handset as Missed call, without the arrow; not bold, so the two reasons look alike |
 
 Admin > Leads has two more of its own: **Offers**, a price tag, muted - a
 lead who asked for special offers and nothing else - and **Not interested**,
@@ -404,7 +404,7 @@ needs to know:
 | A call's transcript, closed under the call in the conversation and on the timeline; one speaker's sentences joined into one line | `components/CallTranscript.tsx` |
 | What the lead said on the robot's call, under it and above the transcript, closed the same way: `Q1 · "yeah sure" → Yes` (T21) | `components/CallAnswers.tsx` |
 | Missed: a notice with **Call back**, which takes the lead and opens it with router state `callBack`; the workspace dials once and clears the state, so a reload does not ring them again | `IncomingCall.tsx`, `WorkspacePage.tsx` |
-| The lead's page: a **Missed call** badge beside Closed and Needs review, from `flags.missedCall` | `WorkspacePage.tsx` |
+| The lead's page: a **Missed call** badge beside Closed and Needs review, from `flags.missedCall`; and a **Wants a call** badge for a "yes" on the automated call nobody took, from `flags.missedYes` (T22) - the queue says only Working once the lead is picked up | `WorkspacePage.tsx` |
 
 Twilio's SDK is its own chunk, loaded once someone is signed in and calling is
 set up - a browser that can be rung has to hold a registered device - and

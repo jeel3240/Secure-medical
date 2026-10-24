@@ -328,6 +328,13 @@ What changed, besides the index and the `jit` setting described there
 - "Has this lead answered anything?" is one look-up for that conversation; it
   had been planned as a read of every answer ever given.
 
+**Faster again with T22, 2026-10-24** - with no change to this page. "Closed"
+asks whether the lead has a missed call nobody returned, and that rule now
+lets Postgres work out the missed calls once per statement rather than once
+per lead (`QUEUE.md`, "How fast it is", where the reason is): one status tab
+175 ms to 156 ms, a late page 151 ms to 125 ms, the first page 92 ms to 84 ms,
+on the speed check's leads, robot calls included.
+
 `?page=` must be a whole number from 1 (400 otherwise). It used to reach the
 statement as whatever it parsed to - `2.5` skipped 75 rows, `1e30` was a 500.
 

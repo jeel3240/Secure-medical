@@ -242,7 +242,7 @@ you change something the docs describe, update the doc in the same commit.
     scripts/dev-ask-again.ts  local testing only: asks a held lead the questions again, so one phone can walk every path
     scripts/speed-check.ts  loads 50,000 fake leads into a scratch database and times every screen's read - npm run speed
     src/db/leads.ts         Admin > Leads SQL
-    src/db/lead-state.ts    closed and worked, shared by the queue and Admin > Leads
+    src/db/lead-state.ts    closed and worked, shared by the queue and Admin > Leads; a missed call, and a missed "yes" on the automated call (T22) - one "nobody got back to them" rule
     src/db/sql.ts           LIKE escaping and the expiry-days reader, shared by every query
     src/core/activity.ts    every action the activity log records
     src/db/activity.ts      writes the activity log and the raw webhook archive
@@ -309,7 +309,7 @@ you change something the docs describe, update the doc in the same commit.
     AUTH.md  POLLER.md  WORKFLOW.md  WEBHOOKS.md  ADMIN-LEADS.md  STATE-MACHINE.md  TWILIO.md
     AUDIT.md                the activity log: nothing is lost
     FLOWS.md                how SMS scripts are stored as rows, how to add one, and how questions are named
-    AUTO-CALLS.md           automated outbound calls: the agreed design and the build tracker (T0-T21 done as of 2026-10-24: the server places a call, asks the script, keeps the answers, texts the link, puts a "yes" through to the lead's own agent first, then everyone free, switches off whoever let it ring out, holds a "yes" while someone is on a call or writing its note, rings the next person who comes free with the lead who has waited longest, leaves the voicemail message once a machine's greeting is over, rings everyone free for a lead calling back whom nobody owns, calls the right leads by itself at the pace the people free can take, shows each robot call on the lead's timeline with what was said; T22 on, not built)
+    AUTO-CALLS.md           automated outbound calls: the agreed design and the build tracker (T0-T22 done as of 2026-10-24: the server places a call, asks the script, keeps the answers, texts the link, puts a "yes" through to the lead's own agent first, then everyone free, switches off whoever let it ring out, holds a "yes" while someone is on a call or writing its note, rings the next person who comes free with the lead who has waited longest, leaves the voicemail message once a machine's greeting is over, rings everyone free for a lead calling back whom nobody owns, calls the right leads by itself at the pace the people free can take, shows each robot call on the lead's timeline with what was said, puts a "yes" nobody took first in the agents' queue; T23 on, not built)
     QUEUE.md  AGENT-WORKSPACE.md  ADMIN.md  LOGGING.md  FRONTEND.md
 ```
 
@@ -402,7 +402,7 @@ Tiers: HOT 75–100, WARM 45–74, LOW 1–44
 3. On end, Twilio status callback → save to `calls`.
 4. Agent sets disposition/note/callback. DNC disposition = same as SMS STOP.
 
-Queue tags (New, Attempted 1x, In progress, Callback, Needs review, Stalled at Q2, Inbound reply, Seen before) *(2026-09-28: Stalled is gone - the queue holds only leads that need a person, `docs/QUEUE.md`)* are **computed** from these tables, not stored as a status. *(2026-09-19: "Seen before" cannot occur until repeat-lead handling is built - a future item, §10.)* *(2026-09-22: built - which tag wins when several apply is in `docs/QUEUE.md`.)* *(2026-09-28: only Working – name (was In progress), Inbound reply and Needs review are shown; the rest were dropped - `docs/QUEUE.md`, "The tag".)* *(2026-09-29: Callback – name · time is back, so four.)* *(2026-10-01: Missed call - the lead rang us and nobody answered - so five. `docs/TWILIO.md`, "A missed call".)* *(2026-10-05: Wants a call - the lead said No, then asked to hear from a rep - so six. `docs/QUEUE.md`.)*
+Queue tags (New, Attempted 1x, In progress, Callback, Needs review, Stalled at Q2, Inbound reply, Seen before) *(2026-09-28: Stalled is gone - the queue holds only leads that need a person, `docs/QUEUE.md`)* are **computed** from these tables, not stored as a status. *(2026-09-19: "Seen before" cannot occur until repeat-lead handling is built - a future item, §10.)* *(2026-09-22: built - which tag wins when several apply is in `docs/QUEUE.md`.)* *(2026-09-28: only Working – name (was In progress), Inbound reply and Needs review are shown; the rest were dropped - `docs/QUEUE.md`, "The tag".)* *(2026-09-29: Callback – name · time is back, so four.)* *(2026-10-01: Missed call - the lead rang us and nobody answered - so five. `docs/TWILIO.md`, "A missed call".)* *(2026-10-05: Wants a call - the lead said No, then asked to hear from a rep - so six. `docs/QUEUE.md`.)* *(2026-10-24, T22: Wants a call also marks a "yes" on the automated call that nobody took - ranked below Missed call, and those leads first in the queue. `docs/QUEUE.md`, "The order".)*
 
 **Paths, as of 2026-09-15.** Caddy forwards only `/api/*` to the API; everything
 else is the frontend, so every route lives under `/api`. The EZ Texting webhook

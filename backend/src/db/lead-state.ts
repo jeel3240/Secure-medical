@@ -60,14 +60,38 @@ const closingList = CLOSING_DISPOSITIONS.map((value) => {
  *
  * **A text EZ Texting refused does not count.** It never reached the lead, so
  * nobody has got back to them.
+ *
+ * "Nobody has got back to them" is `nobodyGotBackSince`, shared with the
+ * missed "yes" below (T22) - one rule for both.
  */
 export const MISSED_CALL_SQL = `(
   EXISTS (
     SELECT 1 FROM calls mc
     WHERE mc.lead_id = l.id AND mc.direction = 'inbound' AND mc.outcome = 'missed'
-      AND NOT EXISTS (
+      AND ${nobodyGotBackSince('mc')}
+  )
+)`;
+
+/**
+ * Since the call `call` (a `calls` alias of the enclosing query), no person
+ * has got back to the lead: no agent's call, no call a person was on -
+ * answered, or under way in the last two hours - no text of an agent's that
+ * EZ Texting took, and no outcome saved. `MISSED_CALL_SQL` above says why each
+ * counts.
+ *
+ * A function so the rule is written once: a missed call and a missed "yes"
+ * are both a lead waiting on us, cleared the same way.
+ *
+ * **It names the call's lead, never `l`** (T22): its only tie to the lead
+ * being asked about is then the caller's `<call>.lead_id = l.id`, so Postgres
+ * can work out every such call once per statement - a set it looks each lead
+ * up in - instead of once per lead. The queue asks it of every lead, every
+ * five seconds: `QUEUE.md`, "How fast it is".
+ */
+function nobodyGotBackSince(call: string): string {
+  return `NOT EXISTS (
         SELECT 1 FROM calls rc
-        WHERE rc.lead_id = l.id AND rc.id > mc.id
+        WHERE rc.lead_id = ${call}.lead_id AND rc.id > ${call}.id
           AND (
             rc.direction = 'outbound'
             OR (
@@ -78,14 +102,42 @@ export const MISSED_CALL_SQL = `(
       )
       AND NOT EXISTS (
         SELECT 1 FROM messages am
-        WHERE am.lead_id = l.id AND am.sent_by IS NOT NULL AND am.created_at > mc.created_at
+        WHERE am.lead_id = ${call}.lead_id AND am.sent_by IS NOT NULL AND am.created_at > ${call}.created_at
           AND am.delivery_status IS DISTINCT FROM 'failed'
       )
       AND NOT EXISTS (
         SELECT 1 FROM dispositions od
-        WHERE od.lead_id = l.id AND od.created_at > mc.created_at
-      )
-  )
+        WHERE od.lead_id = ${call}.lead_id AND od.created_at > ${call}.created_at
+      )`;
+}
+
+/**
+ * A missed "yes" - T22, `AUTO-CALLS.md`. The lead said yes on the robot's
+ * call, nobody took the transfer, and they heard "An agent will call you back
+ * shortly" (`script_result = 'transfer_missed'`). Since then nobody has got
+ * back to them - the same rule as a missed call: an agent calls them, texts
+ * them, answers when they ring, or saves an outcome.
+ *
+ * A robot call that ended any other way - not interested, voicemail, no
+ * answer - is not a lead waiting on us, and puts nobody in the queue.
+ *
+ * `MISSED_YES_SQL` says whether the lead has one; `MISSED_YES_AT_SQL` when
+ * that call was made, or null - what the queue sorts on, the longest waiting
+ * first. One automated call per lead (`calls_one_automated_per_lead`); the
+ * LIMIT keeps it one value should a second try ever be allowed.
+ */
+const MISSED_YES_CALL = `yc.direction = 'automated' AND yc.script_result = 'transfer_missed'
+    AND ${nobodyGotBackSince('yc')}`;
+
+export const MISSED_YES_SQL = `(
+  EXISTS (SELECT 1 FROM calls yc WHERE yc.lead_id = l.id AND ${MISSED_YES_CALL})
+)`;
+
+export const MISSED_YES_AT_SQL = `(
+  SELECT yc.created_at FROM calls yc
+  WHERE yc.lead_id = l.id AND ${MISSED_YES_CALL}
+  ORDER BY yc.id
+  LIMIT 1
 )`;
 
 /**

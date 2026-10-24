@@ -80,3 +80,21 @@ describe('when several could apply, the most urgent wins', () => {
     expect(queueTag(facts({ wantsContact: true, nextCallback }))).toMatchObject({ kind: 'callback' });
   });
 });
+
+describe('a "yes" on the robot\'s call that nobody took - T22', () => {
+  it('wants a call, in the words of a lead who asked for a rep: it is what they said yes to', () => {
+    expect(queueTag(facts({ missedYes: true, conversationStatus: 'open' }))).toEqual({ kind: 'wants_call' });
+  });
+
+  it('outranks a text waiting to be read and a booked callback - they were told an agent would call back', () => {
+    const nextCallback = { agentId: 21, agentName: 'Maya Chen', at: '2026-10-24T15:00:00.000Z' };
+    expect(queueTag(facts({ missedYes: true, hasUnreadInbound: true }))?.kind).toBe('wants_call');
+    expect(queueTag(facts({ missedYes: true, nextCallback }))?.kind).toBe('wants_call');
+    expect(queueTag(facts({ missedYes: true, conversationStatus: 'review' }))?.kind).toBe('wants_call');
+  });
+
+  it('but not someone working the lead, nor a call of theirs nobody answered', () => {
+    expect(queueTag(facts({ missedYes: true, holder: { id: 7, name: 'Michael' } }))?.kind).toBe('working');
+    expect(queueTag(facts({ missedYes: true, missedCall: true }))?.kind).toBe('missed_call');
+  });
+});
