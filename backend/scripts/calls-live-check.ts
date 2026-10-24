@@ -683,14 +683,29 @@ async function main(): Promise<void> {
     const again = await startIncomingCall({ callSid: 'IN-T19-1', fromPhone: '+15550000902', ringFree: true });
     check('a retried webhook rings them again, one call', [again.kind, (await callOf('IN-T19-1')).length], ['group', 1]);
 
-    check('Ben accepts first: his', await takeIncomingCall('IN-T19-1', ben), { ok: true, leadId: lead });
+    // Two accepts at once: Ann's browser picked the lead up first, Ben's leg
+    // reached /incoming/claim first - the lead follows the call.
+    await pool.query(`UPDATE leads SET assigned_to = $2, assigned_at = now() WHERE id = $1`, [lead, ann]);
+    check('Ben accepts first: his, the lead taken over from Ann', await takeIncomingCall('IN-T19-1', ben), {
+      ok: true,
+      leadId: lead,
+      tookOverFrom: ann,
+    });
     check('the call is his - he is on a call now', (await callOf('IN-T19-1'))[0].agent_id, ben);
+    check('and so is the lead', (await pool.query(`SELECT assigned_to FROM leads WHERE id = $1`, [lead])).rows[0].assigned_to, ben);
+    const picked = await pool.query(
+      `SELECT actor_id, detail->>'via' AS via, (detail->>'tookOverFrom')::int AS from_id FROM activity_log WHERE action = 'lead.picked_up' AND lead_id = $1`,
+      [lead]
+    );
+    check('picked up through the call back, from Ann', picked.rows, [{ actor_id: ben, via: 'call_back', from_id: ann }]);
+    const asked = await startIncomingCall({ callSid: 'IN-T19-1', fromPhone: '+15550000902', ringFree: true });
+    check('Twilio asking again once he has it: him, alone', [asked.kind, asked.kind === 'ring' && asked.agentId], ['ring', ben]);
     const taken = await pool.query(
       `SELECT actor_id, (detail->>'callSid') AS sid FROM activity_log WHERE action = 'call.taken' AND lead_id = $1`,
       [lead]
     );
     check('recorded as taken, his doing', taken.rows, [{ actor_id: ben, sid: 'IN-T19-1' }]);
-    check('the same again changes nothing', await takeIncomingCall('IN-T19-1', ben), { ok: true, leadId: lead });
+    check('the same again changes nothing', await takeIncomingCall('IN-T19-1', ben), { ok: true, leadId: lead, tookOverFrom: null });
     check('one record still', (await pool.query(`SELECT count(*)::int AS n FROM activity_log WHERE action = 'call.taken' AND lead_id = $1`, [lead])).rows[0].n, 1);
     check('Ann, after him: refused', await takeIncomingCall('IN-T19-1', ann), { ok: false, reason: 'taken' });
     check('they talked: answered, his', await finishCall({ callSid: 'IN-T19-1', outcome: 'answered', durationSec: 42 }), {
@@ -699,6 +714,12 @@ async function main(): Promise<void> {
     });
     check('the call ended, his', await callOf('IN-T19-1'), [{ agent_id: ben, outcome: 'answered', ended: true }]);
     check('a call already over cannot be taken', await takeIncomingCall('IN-T19-1', ann), { ok: false, reason: 'not_found' });
+    check('Twilio asking again about a call that is over: nobody rung, not texted again', await startIncomingCall({ callSid: 'IN-T19-1', fromPhone: '+15550000902', ringFree: true }), {
+      kind: 'missed',
+      leadId: lead,
+      firstReport: false,
+    });
+    await pool.query(`UPDATE leads SET assigned_to = NULL, assigned_at = NULL WHERE id = $1`, [lead]);
     check('nor one that is not a lead\'s call to us', await takeIncomingCall('CA-T19-BUSY', ann), { ok: false, reason: 'not_found' });
 
     await startIncomingCall({ callSid: 'IN-T19-2', fromPhone: '+15550000902', ringFree: true });
@@ -719,7 +740,22 @@ async function main(): Promise<void> {
     check('a lead someone holds still rings them alone, switch or not', [own.kind, own.kind === 'ring' && own.agentId], ['ring', dee]);
     void deesLead;
 
+    // Rang everyone, then Twilio asks again with nobody free any more: the
+    // call must not stay open with nothing ringing - missed now, and texted.
+    await startIncomingCall({ callSid: 'IN-T19-5', fromPhone: '+15550000902', ringFree: true });
     await pool.query(`UPDATE users SET ringable_until = NULL WHERE id = ANY($1)`, [[ann, ben]]);
+    check('rang everyone, asked again with nobody free: missed now, and texted', await startIncomingCall({ callSid: 'IN-T19-5', fromPhone: '+15550000902', ringFree: true }), {
+      kind: 'missed',
+      leadId: lead,
+      firstReport: true,
+    });
+    check('the call ended missed, nobody\'s', await callOf('IN-T19-5'), [{ agent_id: null, outcome: 'missed', ended: true }]);
+    check(
+      'recorded as missed, with nobody to ring',
+      (await pool.query(`SELECT detail->>'because' AS because FROM activity_log WHERE action = 'call.missed' AND detail->>'callSid' = 'IN-T19-5'`)).rows,
+      [{ because: 'no_agent' }]
+    );
+
     const nobodyFree = await makeLead('+15550000904', 'NobodyFree', null);
     const missed = await startIncomingCall({ callSid: 'IN-T19-4', fromPhone: '+15550000904', ringFree: true });
     check('nobody free: missed at once, as before', missed, { kind: 'missed', leadId: nobodyFree, firstReport: true });

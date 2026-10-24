@@ -172,7 +172,8 @@ Things that are true today and will surprise someone who assumes otherwise.
 2026-10-01). A lead who rings the number back rings one agent's browser - the
 one holding them, or who last called them - or, with automated calls on,
 everyone free (T19); and otherwise gets a message, a text and a place in the
-queue as a missed call, and the agent it rang gets a callback; there is no
+queue as a missed call, and the agent it rang gets a callback (none when it
+rang everyone free); there is no
 call queue and no voicemail (`TWILIO.md`, "Incoming calls"). An agent's browser must be open and signed in to ring, and a number
 we hold no lead for rings nobody. Calls are recorded and transcribed when the
 transcription service is set, and the lead hears a recording notice first

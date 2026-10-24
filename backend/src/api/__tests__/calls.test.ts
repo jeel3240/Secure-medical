@@ -61,7 +61,7 @@ beforeEach(() => {
   finishCall.mockReset().mockResolvedValue({ recorded: true, missedLeadId: null });
   startIncomingCall.mockReset().mockResolvedValue({ kind: 'unknown' });
   recordAnsweredBy.mockReset().mockResolvedValue(true);
-  takeIncomingCall.mockReset().mockResolvedValue({ ok: true, leadId: 7 });
+  takeIncomingCall.mockReset().mockResolvedValue({ ok: true, leadId: 7, tookOverFrom: null });
   saveRecording.mockReset().mockResolvedValue(true);
   sendMissedCallText.mockReset().mockResolvedValue(true);
   setRingable.mockReset().mockResolvedValue({ takingCalls: true, takingCallsWhy: 'by_hand' });
@@ -526,7 +526,9 @@ describe('a lead calling our number', () => {
       expect(res.text).toContain('<Parameter name="leadName" value="Priya Sharma"/>');
       expect(res.text).toContain(`url="https://calls.example.com${CLAIM}"`);
       expect(res.text).toContain(`action="https://calls.example.com${AFTER}?ring=group"`);
-      expect(res.text).toContain('statusCallback="https://calls.example.com/api/webhooks/twilio/status?ring=group"');
+      // No browser reports its own end: a cut-short ring says no-answer, and a
+      // refused second accept says completed - the whole ring's end decides.
+      expect(res.text).not.toContain('statusCallback');
       expect(res.text).toContain('timeout="20"');
       expect(sendMissedCallText).not.toHaveBeenCalled();
     });
@@ -587,21 +589,12 @@ describe('a lead calling our number', () => {
         expect(sendMissedCallText).toHaveBeenCalledWith(7);
       });
 
-      it('one browser\'s ring cut short by someone else\'s answer says nothing about the call', async () => {
+      it('the lead hung up while it rang: missed, and texted', async () => {
+        finishCall.mockResolvedValue({ recorded: true, missedLeadId: 7 });
         const { app } = await buildApp({ twilio: SETTINGS, autoCalls: true });
-        for (const status of ['no-answer', 'canceled', 'busy']) {
-          expect(
-            (await fromTwilio(app, `${STATUS}?ring=group`, { ParentCallSid: 'CA300', CallStatus: status, CallDuration: '0' })).status
-          ).toBe(204);
-        }
-        expect(finishCall).not.toHaveBeenCalled();
-        expect(sendMissedCallText).not.toHaveBeenCalled();
-      });
-
-      it('the browser that took it reports the end, as for one person rung', async () => {
-        const { app } = await buildApp({ twilio: SETTINGS, autoCalls: true });
-        await fromTwilio(app, `${STATUS}?ring=group`, { ParentCallSid: 'CA300', CallStatus: 'completed', CallDuration: '42' });
-        expect(finishCall).toHaveBeenCalledWith({ callSid: 'CA300', outcome: 'answered', durationSec: 42 });
+        await fromTwilio(app, GROUP_AFTER, { CallSid: 'CA300', CallStatus: 'completed', DialCallStatus: 'no-answer' });
+        expect(finishCall).toHaveBeenCalledWith({ callSid: 'CA300', outcome: 'no_answer', durationSec: 0 });
+        expect(sendMissedCallText).toHaveBeenCalledWith(7);
       });
     });
   });

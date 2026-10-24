@@ -283,12 +283,9 @@ export function twilioWebhooksRouter(deps: AppDeps): Router {
       const body = (req.body ?? {}) as Record<string, unknown>;
       // The callback is on the far leg - the lead's for a call we placed, the
       // agent's browser for one we received; our row is keyed by the first
-      // leg, which Twilio sends as the parent. One browser of a ring to
-      // everyone free (T19) speaks for the call only if it was answered: the
-      // others' rings were cut short, and the whole ring's end is
-      // `/incoming/after`'s.
-      const oneOfMany = req.query.ring === 'group' && body.CallStatus !== 'completed';
-      if (!oneOfMany) await recordEnd(field(body, 'ParentCallSid'), body.CallStatus, body.CallDuration);
+      // leg, which Twilio sends as the parent. (A ring to everyone free, T19,
+      // has none: its end is `/incoming/after`'s.)
+      await recordEnd(field(body, 'ParentCallSid'), body.CallStatus, body.CallDuration);
 
       // Always 204: there is nothing for Twilio to retry, even for a status we
       // do not record.
@@ -385,16 +382,16 @@ export function twilioWebhooksRouter(deps: AppDeps): Router {
   // nothing to add, and /status saves the call with its length. Otherwise the
   // lead is still on the line and hears that we will call back.
   //
-  // The missed call is recorded here as well as by /status. /status fires
-  // whoever ended it - including a lead who hung up, which never reaches here -
-  // but it reports on the agent's leg, and an agent whose browser is closed
-  // may have no leg to report on. Whichever arrives first records it.
+  // The missed call is recorded here as well as by /status. /status fires on
+  // the agent's leg whoever ended it, but an agent whose browser is closed may
+  // have no leg to report on; this is asked however the ring ended - the lead
+  // hanging up while it rang included (2026-10-17). Whichever arrives first
+  // records it.
   //
-  // A ring to everyone free (`ring=group`, T19) is ended here, from the whole
-  // ring - one browser's ring stopping says nothing: Twilio reports a ring cut
-  // short by someone else's answer as `no-answer`. Taken, the call's length is
-  // saved here too, as the leg of whoever took it also reports it (`/status`);
-  // whichever comes first.
+  // A ring to everyone free (`ring=group`, T19) is ended here and only here -
+  // no browser reports its own end (`ringEveryoneTwiml`): taken and over, with
+  // the call's length, or not taken, a missed call. Twilio asks this however it
+  // ends, the lead hanging up included.
   router.post(
     '/incoming/after',
     asyncHandler(async (req, res) => {
@@ -447,7 +444,7 @@ export function twilioWebhooksRouter(deps: AppDeps): Router {
           res.send(hangupTwiml());
           return;
         }
-        log.info('call.taken', { callSid: parentSid, agentId, leadId: taken.leadId });
+        log.info('call.taken', { callSid: parentSid, agentId, leadId: taken.leadId, tookOverFrom: taken.tookOverFrom });
       } catch (err) {
         log.error('call.take_failed', { callSid: parentSid, agentId, err: errText(err) });
       }

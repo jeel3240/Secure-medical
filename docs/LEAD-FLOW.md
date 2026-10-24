@@ -168,7 +168,7 @@ Calling was built, both ways - `TWILIO.md`:
 |---|---|
 | The Call button was a placeholder | Agents call a lead they hold from the browser; every call is on the timeline |
 | A lead who rang our number reached nothing | They ring the browser of the agent holding them, or who last called them |
-| - | A call nobody answers: the lead hears a message and is texted, the queue says **Missed call**, and the agent it rang gets a callback |
+| - | A call nobody answers: the lead hears a message and is texted, the queue says **Missed call**, and the agent it rang gets a callback - none when it rang everyone free (T19), and the lead waits in the queue for anyone |
 | Four queue statuses | Five: Missed call ranks second, after Working |
 | A callback was only ever booked by a person | The system books one for a missed call, and finishes it when the lead is got back to |
 
