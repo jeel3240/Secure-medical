@@ -478,10 +478,17 @@ describe('the transfer (T15a)', () => {
   it('a yes after the voicemail message took the call (T18) rings nobody - it was the greeting, or the page replaced', async () => {
     freePeople.mockResolvedValue([16]);
     keepAnswer.mockResolvedValue({ kept: false, leadId: 7, takenByVerdict: true });
+    const logged = jest.spyOn(console, 'log');
     const { app } = await on();
     const res = await fromTwilio(app, GATHER, yes);
     expect(res.text).toMatch(/<Response><Hangup\/><\/Response>$/);
     expect(holdCall).not.toHaveBeenCalled();
+    // Logged as what it is - never as a transfer or an answer.
+    const events = logged.mock.calls.map(([line]) => String(line).match(/"event":"([a-z_.]+)"/)?.[1]);
+    logged.mockRestore();
+    expect(events).toContain('auto_call.after_takeover');
+    expect(events).not.toContain('auto_call.transfer');
+    expect(events).not.toContain('auto_call.answer');
   });
 
   it('a yes said as the lead hung up rings nobody', async () => {

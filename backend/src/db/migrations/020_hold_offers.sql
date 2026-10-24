@@ -4,7 +4,8 @@
 -- When someone who takes transfers becomes free, the lead who has waited
 -- longest on hold rings them alone. Each such ring is one row: who was rung,
 -- when, and how it ended - taken, declined, rung out (`missed`), the ring
--- never completing (`failed`: Twilio's own `failed` or `canceled`), the lead
+-- never completing (`failed`: Twilio's own `failed` or `canceled`, or cut
+-- short by the voicemail message - T18), the lead
 -- hanging up, never heard of again (`expired`), or never rung - Twilio not
 -- taking the redirect, or the call not ours to ring (`unsent`). A row is written once and ended once, never removed:
 -- it is also how the same lead is never offered twice to the same person.

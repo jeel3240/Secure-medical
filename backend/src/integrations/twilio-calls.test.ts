@@ -151,4 +151,11 @@ describe('handing a call to the voicemail message (T18)', () => {
     update.mockRejectedValue(Object.assign(new Error('Call is not in-progress'), { status: 400 }));
     expect(await replaceCall(SETTINGS, 'CA900', '<Response><Hangup/></Response>')).toBe(false);
   });
+
+  it('no answer from Twilio in time, or none at all: taken - Twilio may well have done it', async () => {
+    update.mockRejectedValue(Object.assign(new Error('timeout of 10000ms exceeded'), { code: 'ECONNABORTED' }));
+    expect(await replaceCall(SETTINGS, 'CA900', '<Response><Hangup/></Response>')).toBe(true);
+    update.mockRejectedValue(Object.assign(new Error('getaddrinfo ENOTFOUND api.twilio.com'), { code: 'ENOTFOUND' }));
+    expect(await replaceCall(SETTINGS, 'CA900', '<Response><Hangup/></Response>')).toBe(true);
+  });
 });

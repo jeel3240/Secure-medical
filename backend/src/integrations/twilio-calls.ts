@@ -149,17 +149,21 @@ export async function sendToOffer(settings: TwilioSettings, callSid: string, cal
 
 /**
  * Replaces what the live call `callSid` is doing with `twiml`, now - T18: the
- * voicemail message after the beep, or a fax hung up on. Whatever it was
- * doing stops - a question, a transfer ringing, the hold music. True when
- * Twilio took it; false when it refused - most often, the call already over.
- * Never throws.
+ * voicemail message, or a fax hung up on. Whatever it was doing stops - a
+ * question, a transfer ringing, the hold music. False only when Twilio
+ * answered with a refusal - most often, the call already over. A request that
+ * got no answer in time, or never reached Twilio, counts as taken: Twilio may
+ * well have done it, and a call a machine answered is better ended than asked
+ * on as if nothing happened. Never throws.
  */
 export async function replaceCall(settings: TwilioSettings, callSid: string, twiml: string): Promise<boolean> {
   try {
     const client = twilio(settings.accountSid, settings.authToken, { timeout: REQUEST_TIMEOUT_MS });
     await client.calls(callSid).update({ twiml });
     return true;
-  } catch {
-    return false;
+  } catch (err) {
+    // Twilio's own refusals carry its HTTP status; a timeout or a network
+    // failure has none.
+    return typeof (err as { status?: unknown }).status !== 'number';
   }
 }
