@@ -792,6 +792,9 @@ describe('the hold line (T16)', () => {
     expect(res.text).toContain(`<Redirect method="POST">${toHold}</Redirect>`);
     expect(holdCall).toHaveBeenCalledWith(42);
     expect(keepAnswer.mock.invocationCallOrder[0]).toBeLessThan(holdCall.mock.invocationCallOrder[0]);
+    // Another call's transfer ringing counts as someone coming - never this
+    // call's own (T20 review).
+    expect(someoneOnOrJustOffCall.mock.calls[0][1]).toBe(42);
   });
 
   it('a yes with nobody free and nobody on a call: the busy line at once, as before', async () => {

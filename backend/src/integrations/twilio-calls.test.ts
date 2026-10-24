@@ -7,13 +7,15 @@ import type { TwilioSettings } from '../twilio-settings';
 const create = jest.fn();
 const list = jest.fn();
 const update = jest.fn();
-const callsApi = Object.assign(jest.fn((_sid: string) => ({ update })), { create, list });
+const fetch = jest.fn();
+const callsApi = Object.assign(jest.fn((_sid: string) => ({ update, fetch })), { create, list });
 const client = jest.fn((..._args: unknown[]) => ({ calls: callsApi }));
 jest.mock('twilio', () => (...args: unknown[]) => client(...args));
 
 // After the mock, so the module sees it.
 import {
   automatedCallRequest,
+  callEnd,
   LEAD_RING_SECONDS,
   placeAutomatedCall,
   recheckHold,
@@ -157,5 +159,23 @@ describe('handing a call to the voicemail message (T18)', () => {
     expect(await replaceCall(SETTINGS, 'CA900', '<Response><Hangup/></Response>')).toBe(true);
     update.mockRejectedValue(Object.assign(new Error('getaddrinfo ENOTFOUND api.twilio.com'), { code: 'ENOTFOUND' }));
     expect(await replaceCall(SETTINGS, 'CA900', '<Response><Hangup/></Response>')).toBe(true);
+  });
+});
+
+describe('how Twilio says a call ended - for a hold its end report never reached (T20 review)', () => {
+  it('over: its status and length', async () => {
+    fetch.mockResolvedValue({ status: 'completed', duration: '95' });
+    expect(await callEnd(SETTINGS, 'CA900')).toEqual({ status: 'completed', durationSec: 95 });
+    expect(callsApi).toHaveBeenCalledWith('CA900');
+  });
+
+  it('still going: null - nothing to end', async () => {
+    fetch.mockResolvedValue({ status: 'in-progress', duration: null });
+    expect(await callEnd(SETTINGS, 'CA900')).toBeNull();
+  });
+
+  it('Twilio not answering: null, never a throw', async () => {
+    fetch.mockRejectedValue(new Error('timeout'));
+    expect(await callEnd(SETTINGS, 'CA900')).toBeNull();
   });
 });

@@ -167,3 +167,27 @@ export async function replaceCall(settings: TwilioSettings, callSid: string, twi
     return typeof (err as { status?: unknown }).status !== 'number';
   }
 }
+
+/** Twilio's statuses for a call that is over. */
+const OVER = new Set(['completed', 'busy', 'failed', 'no-answer', 'canceled']);
+
+/**
+ * How Twilio says the call `callSid` ended, from its own record - for a call
+ * waiting on hold that the hold watcher could no longer reach (T20 review): its
+ * end report never got here, and without one it would look on hold for ever.
+ * Null while it is still going, or when Twilio cannot be asked. Never throws.
+ */
+export async function callEnd(
+  settings: TwilioSettings,
+  callSid: string
+): Promise<{ status: string; durationSec: number } | null> {
+  try {
+    const client = twilio(settings.accountSid, settings.authToken, { timeout: REQUEST_TIMEOUT_MS });
+    const call = await client.calls(callSid).fetch();
+    if (!OVER.has(call.status)) return null;
+    const seconds = Number(call.duration);
+    return { status: call.status, durationSec: Number.isInteger(seconds) && seconds >= 0 ? seconds : 0 };
+  } catch {
+    return null;
+  }
+}

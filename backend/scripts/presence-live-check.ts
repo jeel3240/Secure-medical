@@ -302,7 +302,7 @@ async function main(): Promise<void> {
       await pool.query(`INSERT INTO leads (phone, first_name, ezt_added_at) VALUES ('+15550000903', 'Kai', now()) RETURNING id`)
     ).rows[0].id as number;
     const zoe = await makeUser('zoe@example.com');
-    check('nobody on a call', await someoneOnOrJustOffCall(pool), false);
+    check('nobody on a call', await someoneOnOrJustOffCall(pool, null), false);
 
     const busy = (
       await pool.query(
@@ -311,20 +311,51 @@ async function main(): Promise<void> {
         [lead, zoe]
       )
     ).rows[0].id as number;
-    check('on a call, switch off: not counted - they would never be rung for it', await someoneOnOrJustOffCall(pool), false);
+    check('on a call, switch off: not counted - they would never be rung for it', await someoneOnOrJustOffCall(pool, null), false);
     await pgUserStore.update(zoe, { takingCalls: { on: true, why: 'by_hand' } });
-    check('on a call, switch on: counted - free soon', await someoneOnOrJustOffCall(pool), true);
+    check('on a call, switch on: counted - free soon', await someoneOnOrJustOffCall(pool, null), true);
     await pool.query(`UPDATE users SET is_active = false WHERE id = $1`, [zoe]);
-    check('deactivated meanwhile: not counted', await someoneOnOrJustOffCall(pool), false);
+    check('deactivated meanwhile: not counted', await someoneOnOrJustOffCall(pool, null), false);
     await pool.query(`UPDATE users SET is_active = true WHERE id = $1`, [zoe]);
     await pool.query(`UPDATE calls SET outcome = 'answered', ended_at = now() WHERE id = $1`, [busy]);
     await setRingable(pool, zoe, false);
-    check('the call ends, the note box open: still counted - free in a moment', await someoneOnOrJustOffCall(pool), true);
+    check('the call ends, the note box open: still counted - free in a moment', await someoneOnOrJustOffCall(pool, null), true);
     await setRingable(pool, zoe, true);
-    check('the note done, the browser free: not counted - free now, rung rather than waited for', await someoneOnOrJustOffCall(pool), false);
+    check('the note done, the browser free: not counted - free now, rung rather than waited for', await someoneOnOrJustOffCall(pool, null), false);
     await setRingable(pool, zoe, false);
     await pool.query(`UPDATE calls SET ended_at = now() - interval '3 minutes' WHERE id = $1`, [busy]);
-    check('the note box open three minutes after the call: no longer counted', await someoneOnOrJustOffCall(pool), false);
+    check('the note box open three minutes after the call: no longer counted', await someoneOnOrJustOffCall(pool, null), false);
+
+    // Another of the robot's calls ringing its transfer (T20 review): whoever
+    // it rings is free again in seconds, or on it.
+    const step = (await pool.query(`SELECT id, key FROM call_steps WHERE key = 'q1'`)).rows[0];
+    // One robot call per lead: each its own.
+    const robotCall = async (sid: string, phone: string, choiceKey: string, label: string): Promise<number> => {
+      const own = (
+        await pool.query(`INSERT INTO leads (phone, first_name, ezt_added_at) VALUES ($1, 'Pat', now()) RETURNING id`, [phone])
+      ).rows[0].id as number;
+      const id = (
+        await pool.query(
+          `INSERT INTO calls (lead_id, twilio_call_sid, direction, started_at) VALUES ($1, $2, 'automated', now()) RETURNING id`,
+          [own, sid]
+        )
+      ).rows[0].id as number;
+      await pool.query(
+        `INSERT INTO call_answers (call_id, lead_id, step_id, step_key, attempt, heard, result, choice_key, choice_label)
+         VALUES ($1, $2, $3, $4, 1, $5, 'choice', $6, $5)`,
+        [id, own, step.id, step.key, label, choiceKey]
+      );
+      return id;
+    };
+    await robotCall('CA-RING-1', '+15550000911', '2', 'No');
+    check('a robot call whose lead said no rings nobody', await someoneOnOrJustOffCall(pool, null), false);
+    const yesCall = await robotCall('CA-RING-2', '+15550000912', '1', 'Yes');
+    check('another robot call ringing its transfer: someone coming', await someoneOnOrJustOffCall(pool, null), true);
+    check('never the call asking itself', await someoneOnOrJustOffCall(pool, yesCall), false);
+    await pool.query(`UPDATE calls SET held_at = now() WHERE id = $1`, [yesCall]);
+    check('on hold, it rings nobody', await someoneOnOrJustOffCall(pool, null), false);
+    await pool.query(`UPDATE calls SET held_at = NULL, script_result = 'transfer_missed' WHERE id = $1`, [yesCall]);
+    check('over, nobody took it: rings nobody', await someoneOnOrJustOffCall(pool, null), false);
   }
 
   console.log(failures === 0 ? '\nall checks passed' : `\n${failures} check(s) FAILED`);

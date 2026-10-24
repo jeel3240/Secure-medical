@@ -118,13 +118,16 @@ export async function startAutomatedCall(opts: {
  * Whether Twilio's call `callSid` is our automated call `callId` - saving the
  * id on the row when the row has none yet. False for a row that is not an
  * automated call, or that is another call's: a webhook naming it is then not
- * acted on.
+ * acted on. False too for a row with no id that has already been ended -
+ * closed because no webhook named it in time (T20, `closeUnplacedCalls`): a
+ * webhook arriving after that runs nothing on it.
  */
 export async function linkAutomatedCall(callId: number, callSid: string): Promise<boolean> {
   const { rows } = await pool.query(
     `UPDATE calls
      SET twilio_call_sid = $2
-     WHERE id = $1 AND direction = 'automated' AND (twilio_call_sid IS NULL OR twilio_call_sid = $2)
+     WHERE id = $1 AND direction = 'automated'
+       AND (twilio_call_sid = $2 OR (twilio_call_sid IS NULL AND ended_at IS NULL))
      RETURNING id`,
     [callId, callSid]
   );

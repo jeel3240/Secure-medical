@@ -177,6 +177,26 @@ async function main(): Promise<void> {
     );
     check('Sam, who said no to the first, now on a call: not coming for it', await someoneComing(first), false);
     await pool.query(`UPDATE calls SET outcome = 'answered', ended_at = now() - interval '1 hour' WHERE twilio_call_sid = 'CA-SAM-1'`);
+    check('nobody coming for the first now', await someoneComing(first), false);
+    // Another lead's "yes" ringing its transfer (T20 review): whoever it rings
+    // is free in seconds, or on it - coming either way.
+    const other = (
+      await pool.query(`INSERT INTO leads (phone, first_name, ezt_added_at) VALUES ('+15550000799', 'Pat', now()) RETURNING id`)
+    ).rows[0].id as number;
+    const ringing = (
+      await pool.query(
+        `INSERT INTO calls (lead_id, twilio_call_sid, direction, started_at) VALUES ($1, 'CA-RING-9', 'automated', now()) RETURNING id`,
+        [other]
+      )
+    ).rows[0].id as number;
+    await pool.query(
+      `INSERT INTO call_answers (call_id, lead_id, step_id, step_key, attempt, heard, result, choice_key, choice_label)
+       SELECT $1, $2, id, key, 1, 'Yes', 'choice', '1', 'Yes' FROM call_steps WHERE key = 'q1'`,
+      [ringing, other]
+    );
+    check('another call\'s transfer ringing: coming', await someoneComing(first), true);
+    await pool.query(`UPDATE calls SET script_result = 'transfer_missed' WHERE id = $1`, [ringing]);
+    check('that ring over, nobody took it: not coming', await someoneComing(first), false);
     // Both hear the busy line: no longer waiting.
     await missTransfer(first);
     await missTransfer(second);

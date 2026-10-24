@@ -1,9 +1,17 @@
 import { config } from '../config';
 import { readAutoCalls, readAutoCallTestNumbers } from '../auto-calls-settings';
-import { autoCallsSince, closeUnplacedCalls, dialRoom, leadsToCall, withDialLock } from '../db/auto-dial';
+import {
+  autoCallsSince,
+  closeUnplacedCalls,
+  dialRoom,
+  leadsToCall,
+  recordAutoCallsSwitch,
+  stillDue,
+  withDialLock,
+} from '../db/auto-dial';
 import { readCallHours } from '../db/call-script';
 import { pool } from '../db/pool';
-import { dialDueLeads, worthLogging, type DialDeps } from './auto-calls';
+import { dialDueLeads, worthLogging, type DialDeps, type DialLook } from './auto-calls';
 import { expireStaleConversations } from './expiry';
 import { placeAutoCall } from './place-auto-call';
 import { pollOnce } from './poller';
@@ -40,12 +48,29 @@ function autoDialler(): DialDeps | null {
     readCallHours: () => readCallHours(pool),
     dialRoom,
     leadsToCall: (opts) => leadsToCall({ ...opts, only }),
+    stillDue: (opts) => stillDue({ ...opts, only }),
     placeAutoCall: (leadId) => placeAutoCall({ leadId, settings, numbers }),
     withDialLock,
   };
 }
 
 const dialler = autoDialler();
+
+/**
+ * Why the robot stopped - a lead waited on hold too long to be real, Twilio
+ * went silent, no script - logged once when it starts and once when it ends,
+ * not every half minute (T20 review). Waiting on hold is the robot working as
+ * it should, so it is not an alarm.
+ */
+let stoppedFor: DialLook['stopped'] = null;
+function noteStop(look: DialLook): void {
+  const now = look.stopped === 'on_hold' ? null : look.stopped;
+  if (now === stoppedFor) return;
+  if (now === 'silent') log.error('auto_call.webhooks_silent', { calls: look.silent });
+  else if (now === 'no_script') log.error('auto_call.no_script', {});
+  else log.info('auto_call.dialling_again', { after: stoppedFor });
+  stoppedFor = now;
+}
 
 // Serialised on purpose: one poller instance, one cycle at a time, so the
 // checkpoint can't be advanced by two overlapping runs.
@@ -112,12 +137,13 @@ async function loop(): Promise<void> {
     }
 
     // The robot's calls - AUTO-CALLS.md "When a lead is called". Apart from
-    // the rest, and last: a lead's call never waits on the poll, and a failure
-    // here never stops the poll.
+    // the rest, and last: a failure here never stops the poll, nor the poll's
+    // the calls - though a slow poll delays them, in the same tick.
     if (dialler) {
       try {
         const look = await dialDueLeads(dialler);
         if (worthLogging(look)) log.info('auto_call.dial', { ...look });
+        if (look.inside && !look.locked) noteStop(look);
       } catch (err) {
         log.error('auto_call.dial_failed', { err: errText(err) });
       }
@@ -135,4 +161,8 @@ async function loop(): Promise<void> {
 }
 
 log.info('worker.started', { autoCalls: dialler ? 'on' : 'off' });
-loop();
+// Each switch-on starts afresh: leads that arrived while automated calls were
+// off are never called (`recordAutoCallsSwitch`). Before the first look.
+recordAutoCallsSwitch(dialler !== null)
+  .catch((err) => log.error('auto_calls.switch_not_recorded', { err: errText(err) }))
+  .finally(() => loop());

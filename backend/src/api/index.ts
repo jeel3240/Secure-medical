@@ -1,12 +1,14 @@
 import { readAutoCalls } from '../auto-calls-settings';
 import { config } from '../config';
+import { outcomeForStatus, talkSeconds } from '../core/calls';
 import { recordActivity } from '../db/activity';
-import { callsOnHold } from '../db/auto-calls';
+import { callsOnHold, settleAutomatedCall } from '../db/auto-calls';
 import { readHoldMaxSeconds } from '../db/call-script';
+import { finishCall } from '../db/calls';
 import { endOffer, endStaleOffers, someoneComing, startOffer } from '../db/hold-offers';
 import { pool } from '../db/pool';
 import { pgUserStore } from '../db/users';
-import { recheckHold, sendToOffer } from '../integrations/twilio-calls';
+import { callEnd, recheckHold, sendToOffer } from '../integrations/twilio-calls';
 import { createApp } from './app';
 import { watchHolds } from './hold-watch';
 import { log } from '../lib/log';
@@ -73,5 +75,14 @@ if (autoCalls && config.twilio.status === 'on') {
     someoneComing,
     readHoldMaxSeconds: () => readHoldMaxSeconds(pool),
     recheckHold: (callSid, callId) => recheckHold(settings, callSid, callId),
+    // As `/auto/status` ends a call, from Twilio's own record of it.
+    closeIfOver: async (callSid, callId) => {
+      const end = await callEnd(settings, callSid);
+      const outcome = end && outcomeForStatus(end.status);
+      if (!end || !outcome) return false;
+      await finishCall({ callSid, outcome, durationSec: talkSeconds(outcome, end.durationSec) });
+      await settleAutomatedCall(callId);
+      return true;
+    },
   });
 }

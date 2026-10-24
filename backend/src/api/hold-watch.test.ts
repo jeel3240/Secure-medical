@@ -15,6 +15,7 @@ function deps(over: Partial<HoldWatchDeps> = {}) {
   const sendToOffer = jest.fn<Promise<boolean>, [Offer]>().mockResolvedValue(true);
   const endOffer = jest.fn().mockResolvedValue(16);
   const endStaleOffers = jest.fn().mockResolvedValue(0);
+  const closeIfOver = jest.fn<Promise<boolean>, [string, number]>().mockResolvedValue(false);
   const d: HoldWatchDeps = {
     endStaleOffers,
     startOffer,
@@ -27,9 +28,10 @@ function deps(over: Partial<HoldWatchDeps> = {}) {
     someoneComing: async () => true,
     readHoldMaxSeconds: async () => 600,
     recheckHold,
+    closeIfOver,
     ...over,
   };
-  return { deps: d, recheckHold, startOffer, sendToOffer, endOffer, endStaleOffers };
+  return { deps: d, recheckHold, startOffer, sendToOffer, endOffer, endStaleOffers, closeIfOver };
 }
 
 const offer = (callId: number, agentId: number, offerId = 7): Offer => ({ offerId, callId, callSid: `CA${callId}`, agentId });
@@ -122,6 +124,20 @@ describe('one look', () => {
     recheckHold.mockResolvedValueOnce(false);
     expect(await checkHolds(d)).toBe(1);
     expect(recheckHold).toHaveBeenCalledTimes(2);
+  });
+
+  it('a call Twilio refused is asked about - over, its end report lost: ended here, never on hold for ever (T20 review)', async () => {
+    const { deps: d, recheckHold, closeIfOver } = deps({ someoneComing: async () => false });
+    recheckHold.mockResolvedValueOnce(false);
+    closeIfOver.mockResolvedValue(true);
+    await checkHolds(d);
+    expect(closeIfOver.mock.calls).toEqual([['CA42', 42]]);
+  });
+
+  it('a call Twilio took is never asked about', async () => {
+    const { deps: d, closeIfOver } = deps({ someoneComing: async () => false });
+    await checkHolds(d);
+    expect(closeIfOver).not.toHaveBeenCalled();
   });
 });
 

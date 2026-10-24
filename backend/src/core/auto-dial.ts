@@ -72,14 +72,23 @@ export interface DialRoom {
   underway: number;
   /** A lead is waiting on hold: everyone free is spoken for (T16). */
   onHold: boolean;
+  /**
+   * Its calls placed a while ago that Twilio has said nothing about since - no
+   * end, no verdict: Twilio's reports are not reaching us (T20 review).
+   */
+  silent: number;
+  /** A call script is active - with none, a call has nothing to say. */
+  scripted: boolean;
 }
 
 /**
  * How many calls to place now - "Traffic": never more going at once than
  * there are people free to take a "yes", none while a lead waits on hold, and
- * none when nobody is free.
+ * none when nobody is free. None either while Twilio's reports are not
+ * reaching us - each call would reach a lead as Twilio's error, and use up the
+ * one call they get - nor with no script to say.
  */
 export function callsToPlace(room: DialRoom): number {
-  if (room.onHold) return 0;
+  if (room.onHold || room.silent > 0 || !room.scripted) return 0;
   return Math.max(0, room.free - room.underway);
 }
