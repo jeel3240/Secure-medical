@@ -43,17 +43,27 @@ describe('the calling hours - 11am to 5pm, Arizona time, Monday to Friday', () =
 });
 
 describe('how many calls at once - Traffic', () => {
+  const room = { free: 3, underway: 0, onHold: false, silent: 0, scripted: true };
+
   it('as many as there are people free, less the robot\'s calls still going with nobody on them', () => {
-    expect(callsToPlace({ free: 3, underway: 0, onHold: false })).toBe(3);
-    expect(callsToPlace({ free: 3, underway: 2, onHold: false })).toBe(1);
-    expect(callsToPlace({ free: 2, underway: 3, onHold: false })).toBe(0);
+    expect(callsToPlace(room)).toBe(3);
+    expect(callsToPlace({ ...room, underway: 2 })).toBe(1);
+    expect(callsToPlace({ ...room, free: 2, underway: 3 })).toBe(0);
   });
 
   it('nobody free: none', () => {
-    expect(callsToPlace({ free: 0, underway: 0, onHold: false })).toBe(0);
+    expect(callsToPlace({ ...room, free: 0 })).toBe(0);
   });
 
   it('a lead waiting on hold: none, however many are free', () => {
-    expect(callsToPlace({ free: 5, underway: 0, onHold: true })).toBe(0);
+    expect(callsToPlace({ ...room, free: 5, onHold: true })).toBe(0);
+  });
+
+  it('Twilio\'s reports not reaching us: none - each call would reach a lead as an error, and use up their one call', () => {
+    expect(callsToPlace({ ...room, silent: 1 })).toBe(0);
+  });
+
+  it('no call script: none - nothing to say', () => {
+    expect(callsToPlace({ ...room, scripted: false })).toBe(0);
   });
 });

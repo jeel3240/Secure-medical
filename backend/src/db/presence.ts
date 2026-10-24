@@ -69,18 +69,41 @@ export const FREE_SQL = `(
 )`;
 
 /**
+ * Whether one of the robot's calls is ringing its transfer now, other than
+ * the call `$1` names - T20 review: a "yes" being put through, nobody on it
+ * yet, not on hold, no result. Whoever it rings is free again in seconds, or
+ * on that call - but while it rings their browsers say busy and no call is
+ * theirs, so they count as neither free nor on a call. A second "yes" then
+ * waits on hold for them rather than hearing the busy line at once.
+ */
+export const TRANSFER_RINGING_SQL = `EXISTS (
+  SELECT 1 FROM calls tc
+  WHERE tc.direction = 'automated' AND tc.agent_id IS NULL AND tc.held_at IS NULL
+    AND tc.script_result IS NULL AND tc.outcome IS NULL
+    AND tc.started_at > now() - interval '10 minutes'
+    AND tc.id IS DISTINCT FROM $1::int
+    AND EXISTS (
+      SELECT 1 FROM call_answers ta
+      JOIN call_choices tch ON tch.step_id = ta.step_id AND tch.key = ta.choice_key
+      WHERE ta.call_id = tc.id AND tch.ending = 'transfer'
+    )
+)`;
+
+/**
  * Whether someone who takes transfers is on a call now, or has just finished
  * one and is writing its note - an active account, the switch on - and so will
  * be free soon: a "yes" nobody can take waits on hold for them (T16, T17,
  * AUTO-CALLS.md "The hold line"). Someone with the switch off would never be
- * rung for it.
+ * rung for it. So does another of the robot's calls ringing its transfer
+ * (`TRANSFER_RINGING_SQL`); `exceptCallId` is the call asking.
  */
-export async function someoneOnOrJustOffCall(q: Querier): Promise<boolean> {
+export async function someoneOnOrJustOffCall(q: Querier, exceptCallId: number | null): Promise<boolean> {
   const { rows } = await q.query(
     `SELECT EXISTS (
        SELECT 1 FROM users u
        WHERE u.is_active AND u.taking_calls AND (${ON_A_CALL_SQL} OR ${JUST_OFF_A_CALL_SQL})
-     ) AS on_call`
+     ) OR ${TRANSFER_RINGING_SQL} AS on_call`,
+    [exceptCallId]
   );
   return rows[0]?.on_call === true;
 }

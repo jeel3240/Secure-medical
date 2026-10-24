@@ -44,6 +44,11 @@ export interface HoldWatchDeps extends OfferDeps {
   readHoldMaxSeconds: () => Promise<number>;
   /** Sends the call back to `/auto/hold` now. True when Twilio took it. */
   recheckHold: (callSid: string, callId: number) => Promise<boolean>;
+  /**
+   * Asks Twilio whether a call it would not take is over, and if so ends it
+   * here as its own end report would have - true when it did.
+   */
+  closeIfOver: (callSid: string, callId: number) => Promise<boolean>;
 }
 
 /**
@@ -68,7 +73,8 @@ export async function offerWaiting(deps: OfferDeps, only: number | null = null):
 /**
  * One look: stale offers ended, leads offered to whoever is free, then each
  * lead still waiting with nobody coming, or past the safety stop, sent back
- * to `/auto/hold`. Returns how many were sent back.
+ * to `/auto/hold` - or, when Twilio says that call is over, ended here.
+ * Returns how many were sent back.
  */
 export async function checkHolds(deps: HoldWatchDeps): Promise<number> {
   await deps.endStaleOffers();
@@ -88,6 +94,13 @@ export async function checkHolds(deps: HoldWatchDeps): Promise<number> {
       sent: ok,
     });
     if (ok) sent += 1;
+    // Twilio would not take it: most often the call is over and its end
+    // report never reached us - the lead hung up as the api restarted. Left,
+    // it would look on hold for ever, and the robot places nothing while
+    // anyone is (T20). Ended here from Twilio's own record.
+    else if (await deps.closeIfOver(call.callSid, call.callId)) {
+      log.warn('auto_call.hold_closed', { callId: call.callId });
+    }
   }
   return sent;
 }

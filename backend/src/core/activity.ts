@@ -62,6 +62,13 @@ export const ACTIVITY_ACTIONS = [
    * `by_hand`, `sign_in` or `sign_out` (T10, AUTO-CALLS.md "Who is free").
    */
   'calls.availability_changed',
+  /**
+   * The worker started placing automated calls after they were off - or for
+   * the first time: `detail.since`, the new start, and `previousSince`, the
+   * one it replaced (T20 review, AUTO-CALLS.md "When a lead is called"). The
+   * system's doing - someone set `AUTO_CALLS=on`.
+   */
+  'auto_calls.switched_on',
   // Sign-in.
   'auth.signed_in',
   'auth.sign_in_failed',

@@ -135,7 +135,7 @@ function autoCalls() {
     freePeople: () => presence.freePeople(pool),
     switchOffAfterMissedRing: (agentId: number, callId: number) =>
       presence.switchOffAfterMissedRing(pool, agentId, callId),
-    someoneOnOrJustOffCall: () => presence.someoneOnOrJustOffCall(pool),
+    someoneOnOrJustOffCall: (exceptCallId: number) => presence.someoneOnOrJustOffCall(pool, exceptCallId),
     holdCall: rows.holdCall,
     holdState: rows.holdState,
     readHoldMaxSeconds: () => script.readHoldMaxSeconds(pool),
@@ -580,7 +580,7 @@ export function twilioWebhooksRouter(deps: AppDeps): Router {
           const [context, free, onCall] = await Promise.all([
             ac.transferContext(call.callId),
             ac.freePeople(),
-            ac.someoneOnOrJustOffCall(),
+            ac.someoneOnOrJustOffCall(call.callId),
           ]);
           if (!context) throw new Error('the automated call has no row');
           const plan = planTransfer(script, outcome.next, { free, holder: context.heldBy, onCall });
@@ -821,7 +821,7 @@ export function twilioWebhooksRouter(deps: AppDeps): Router {
             ac.loadScript(),
             ringOthers ? ac.freePeople() : Promise.resolve([]),
             ringOthers ? ac.transferContext(call.callId) : Promise.resolve(null),
-            hungUp ? Promise.resolve(false) : ac.someoneOnOrJustOffCall(),
+            hungUp ? Promise.resolve(false) : ac.someoneOnOrJustOffCall(call.callId),
           ]);
 
           // What follows: everyone else free rung, after the lead's own agent

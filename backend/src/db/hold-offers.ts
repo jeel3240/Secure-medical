@@ -15,7 +15,7 @@
 import { pickOffer, type WaitingLead } from '../core/call-script';
 import { ON_HOLD_SQL } from './auto-calls';
 import { pool } from './pool';
-import { FREE_SQL, JUST_OFF_A_CALL_SQL, ON_A_CALL_SQL, RINGABLE_SQL } from './presence';
+import { FREE_SQL, JUST_OFF_A_CALL_SQL, ON_A_CALL_SQL, RINGABLE_SQL, TRANSFER_RINGING_SQL } from './presence';
 
 /** An offer still open after this long never heard back - Twilio's ring is 20 seconds. */
 export const OFFER_STALE_SECONDS = 60;
@@ -119,7 +119,9 @@ export async function endOffer(callId: number, offerId: number, outcome: OfferOu
  * keeps them waiting (T16, T17): someone who takes transfers who is on a call,
  * or has just finished one and is writing its note, or is free, or is ringing
  * with another lead now. Someone who has had this lead and not taken it is not
- * coming for it, whatever they are doing.
+ * coming for it, whatever they are doing. And whoever another of the robot's
+ * calls is ringing for its transfer (`TRANSFER_RINGING_SQL`) is free again in
+ * seconds, or busy on it - coming either way.
  */
 export async function someoneComing(callId: number): Promise<boolean> {
   const { rows } = await pool.query<{ coming: boolean }>(
@@ -133,7 +135,7 @@ export async function someoneComing(callId: number): Promise<boolean> {
            OR ${RINGABLE_SQL}
            OR EXISTS (SELECT 1 FROM call_offers o WHERE o.agent_id = u.id AND o.ended_at IS NULL)
          )
-     ) AS coming`,
+     ) OR ${TRANSFER_RINGING_SQL} AS coming`,
     [callId]
   );
   return rows[0]?.coming === true;

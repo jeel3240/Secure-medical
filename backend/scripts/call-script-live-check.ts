@@ -107,7 +107,7 @@ async function main(): Promise<void> {
 
   console.log('\nwhen it calls - the settings');
   {
-    const { rows } = await pool.query(`SELECT key, value FROM settings WHERE key LIKE 'auto_call_%' ORDER BY key`);
+    const { rows } = await pool.query(`SELECT key, value FROM settings WHERE key LIKE 'auto\\_call\\_%' ORDER BY key`);
     check('every one, with its value', Object.fromEntries(rows.map((r) => [r.key, r.value])), {
       auto_call_days: 'mon,tue,wed,thu,fri',
       auto_call_hold_max_minutes: '10',

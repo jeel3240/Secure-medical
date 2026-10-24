@@ -28,9 +28,10 @@ function deps(over: Partial<DialDeps> = {}) {
     readCallHours: async () => DEFAULT_CALL_HOURS,
     dialRoom: async () => {
       order.push('room');
-      return { free: 2, underway: 0, onHold: false };
+      return { free: 2, underway: 0, onHold: false, silent: 0, scripted: true };
     },
     leadsToCall,
+    stillDue: async () => true,
     placeAutoCall,
     withDialLock: async (look) => look(),
     ...over,
@@ -63,14 +64,17 @@ describe('one look', () => {
   });
 
   it('no room - nobody free, or a lead on hold: no lead is even looked up', async () => {
-    for (const room of [
-      { free: 0, underway: 0, onHold: false },
-      { free: 3, underway: 3, onHold: false },
-      { free: 3, underway: 0, onHold: true },
-    ]) {
+    const open = { free: 3, underway: 0, onHold: false, silent: 0, scripted: true };
+    for (const [room, stopped] of [
+      [{ ...open, free: 0 }, null],
+      [{ ...open, underway: 3 }, null],
+      [{ ...open, onHold: true }, 'on_hold'],
+      [{ ...open, silent: 2 }, 'silent'],
+      [{ ...open, scripted: false }, 'no_script'],
+    ] as const) {
       const { deps: d, leadsToCall } = deps({ dialRoom: async () => room });
       const look = await dialDueLeads(d, NOON);
-      expect(look.room).toBe(0);
+      expect([look.room, look.stopped]).toEqual([0, stopped]);
       expect(leadsToCall).not.toHaveBeenCalled();
     }
   });
@@ -82,11 +86,18 @@ describe('one look', () => {
       { kind: 'failed', callId: 3 },
     ];
     const { deps: d } = deps({
-      dialRoom: async () => ({ free: 5, underway: 0, onHold: false }),
+      dialRoom: async () => ({ free: 5, underway: 0, onHold: false, silent: 0, scripted: true }),
       placeAutoCall: async () => results.shift() ?? { kind: 'unconfirmed', callId: 4 },
       leadsToCall: async () => [1, 2, 3, 4],
     });
     expect(await dialDueLeads(d, NOON)).toMatchObject({ due: 4, placed: 1, refused: 1, failed: 1, unconfirmed: 1 });
+  });
+
+  it('each lead asked again just before its call - one that replied or was picked up meanwhile is skipped', async () => {
+    const { deps: d, placeAutoCall } = deps({ stillDue: async ({ leadId }) => leadId !== 101 });
+    const look = await dialDueLeads(d, NOON);
+    expect(placeAutoCall.mock.calls.map(([id]) => id)).toEqual([102]);
+    expect(look).toMatchObject({ due: 2, skipped: 1, placed: 1 });
   });
 
   it('another worker dialling: nothing looked up here', async () => {
@@ -98,7 +109,20 @@ describe('one look', () => {
   });
 
   it('logged only when something happened - not every half minute', () => {
-    const quiet = { closed: 0, inside: true, room: 2, due: 0, placed: 0, refused: 0, failed: 0, unconfirmed: 0, locked: false };
+    const quiet = {
+      closed: 0,
+      inside: true,
+      room: 2,
+      stopped: null,
+      silent: 0,
+      due: 0,
+      skipped: 0,
+      placed: 0,
+      refused: 0,
+      failed: 0,
+      unconfirmed: 0,
+      locked: false,
+    };
     expect(worthLogging(quiet)).toBe(false);
     expect(worthLogging({ ...quiet, due: 1, placed: 1 })).toBe(true);
     expect(worthLogging({ ...quiet, closed: 1 })).toBe(true);

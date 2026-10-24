@@ -18,7 +18,15 @@
  */
 import { DEFAULT_CALL_HOURS } from '../src/core/auto-dial';
 import { startAutomatedCall, holdCall, linkAutomatedCall } from '../src/db/auto-calls';
-import { autoCallsSince, closeUnplacedCalls, dialRoom, leadsToCall, withDialLock } from '../src/db/auto-dial';
+import {
+  autoCallsSince,
+  closeUnplacedCalls,
+  dialRoom,
+  leadsToCall,
+  recordAutoCallsSwitch,
+  stillDue,
+  withDialLock,
+} from '../src/db/auto-dial';
 import { startConversation } from '../src/db/flows';
 import { pool } from '../src/db/pool';
 import { dialDueLeads, type DialDeps } from '../src/worker/auto-calls';
@@ -85,13 +93,45 @@ async function main(): Promise<void> {
   await refuseIfNotEmpty();
   const maya = await person('maya@example.com', false);
 
-  console.log('\nwhen automated calls were first switched on');
+  console.log('\nwhen automated calls were switched on - each time afresh');
   {
+    const pause = () => new Promise((resolve) => setTimeout(resolve, 20));
     const first = await autoCallsSince();
-    await new Promise((resolve) => setTimeout(resolve, 20));
-    const second = await autoCallsSince();
-    check('written the first time, and never again', second.toISOString(), first.toISOString());
-    check('a time, close to now', Math.abs(Date.now() - first.getTime()) < 60_000, true);
+    check('missing: written now', Math.abs(Date.now() - first.getTime()) < 60_000, true);
+    await pause();
+    check('read again: the same', (await autoCallsSince()).toISOString(), first.toISOString());
+
+    const switches = async () =>
+      (
+        await pool.query(
+          `SELECT detail->>'since' AS since, detail->>'previousSince' AS previous FROM activity_log WHERE action = 'auto_calls.switched_on' ORDER BY id`
+        )
+      ).rows;
+    await pause();
+    await recordAutoCallsSwitch(true);
+    const on = await autoCallsSince();
+    check('the worker starts with them on, never on before: a fresh start', on.getTime() > first.getTime(), true);
+    check('recorded, with the time it replaced', await switches(), [{ since: on.toISOString(), previous: first.toISOString() }]);
+    await pause();
+    await recordAutoCallsSwitch(true);
+    check('restarted while on: nothing changes', [(await autoCallsSince()).toISOString(), (await switches()).length], [on.toISOString(), 1]);
+    await recordAutoCallsSwitch(false);
+    check('switched off: the start is kept', (await autoCallsSince()).toISOString(), on.toISOString());
+    await pause();
+    await recordAutoCallsSwitch(true);
+    const again = await autoCallsSince();
+    check('on again: afresh - leads that came while off are never called', again.getTime() > on.getTime(), true);
+    check('each switch-on recorded', (await switches()).length, 2);
+
+    await pool.query(`UPDATE settings SET value = 'yesterday' WHERE key = 'auto_calls_since'`);
+    let refused = 'accepted';
+    try {
+      await autoCallsSince();
+    } catch (err) {
+      refused = (err as Error).message;
+    }
+    check('a value that is not a time: an error, never a guess', refused, 'settings.auto_calls_since is not a time: yesterday');
+    await pool.query(`UPDATE settings SET value = $1 WHERE key = 'auto_calls_since'`, [again.toISOString()]);
   }
 
   console.log('\nwho is picked');
@@ -159,7 +199,13 @@ async function main(): Promise<void> {
   {
     // The robot's call above, for the lead already called, is going: placed,
     // no end, nobody on it.
-    check('nobody free; one of the robot\'s calls going', await dialRoom(), { free: 0, underway: 1, onHold: false });
+    check('nobody free; one of the robot\'s calls going', await dialRoom(), {
+      free: 0,
+      underway: 1,
+      onHold: false,
+      silent: 0,
+      scripted: true,
+    });
     await person('ann@example.com', true);
     await person('ben@example.com', true);
     await person('off@example.com', false);
@@ -172,8 +218,27 @@ async function main(): Promise<void> {
     check('another going: two', (await dialRoom()).underway, 2);
     await holdCall(callId);
     check('a lead on hold', (await dialRoom()).onHold, true);
+    await pool.query(`UPDATE calls SET held_at = now() - interval '13 minutes' WHERE id = $1`, [callId]);
+    check('on hold longer than the safety stop and two minutes: a call whose end never came - not counted', (await dialRoom()).onHold, false);
     await pool.query(`UPDATE calls SET outcome = 'answered', ended_at = now(), script_result = 'transfer_missed' WHERE id = $1`, [callId]);
-    check('ended: neither going nor on hold', await dialRoom(), { free: 2, underway: 1, onHold: false });
+    check('ended: neither going nor on hold', await dialRoom(), { free: 2, underway: 1, onHold: false, silent: 0, scripted: true });
+
+    // Twilio's reports not reaching us: a call placed a while ago, never heard of.
+    const quiet = await lead({ sent: new Date(NOW.getTime() - minutes(90)) });
+    const q = await startAutomatedCall({ leadId: quiet, mayRing: () => true });
+    const quietId = q.ok ? q.callId : 0;
+    await linkAutomatedCall(quietId, 'CA-QUIET-1');
+    await pool.query(`UPDATE calls SET started_at = now() - interval '5 minutes' WHERE id = $1`, [quietId]);
+    check('placed 5 minutes ago, no end, no verdict: silent', (await dialRoom()).silent, 1);
+    await pool.query(`UPDATE calls SET answered_by = 'human' WHERE id = $1`, [quietId]);
+    check('a verdict came: heard of', (await dialRoom()).silent, 0);
+    await pool.query(`UPDATE calls SET answered_by = NULL, started_at = now() - interval '61 minutes' WHERE id = $1`, [quietId]);
+    check('silent, but over an hour ago: no longer stops it', (await dialRoom()).silent, 0);
+    await pool.query(`UPDATE calls SET outcome = 'completed', ended_at = now(), script_result = 'hung_up' WHERE id = $1`, [quietId]);
+
+    await pool.query(`UPDATE call_scripts SET is_active = false`);
+    check('no call script active', (await dialRoom()).scripted, false);
+    await pool.query(`UPDATE call_scripts SET is_active = true`);
   }
 
   console.log('\na look, end to end - never more calls than people free');
@@ -188,6 +253,7 @@ async function main(): Promise<void> {
       readCallHours: async () => DEFAULT_CALL_HOURS,
       dialRoom,
       leadsToCall: (opts) => leadsToCall({ ...opts, only }),
+      stillDue: (opts) => stillDue({ ...opts, only }),
       // Twilio not asked: the row is what counts here.
       placeAutoCall: async (leadId) => {
         const started = await startAutomatedCall({ leadId, mayRing: () => true });
@@ -237,8 +303,29 @@ async function main(): Promise<void> {
       `SELECT detail->>'reason' AS reason FROM activity_log WHERE action = 'call.ended' AND (detail->>'callId')::int = $1`,
       [staleId]
     );
-    check('with its record', ended.rows, [{ reason: 'never_reached_twilio' }]);
+    check('with its record - no webhook named it, which is all that is known', ended.rows, [{ reason: 'no_webhook' }]);
     check('closed once', await closeUnplacedCalls(), 0);
+    check('a webhook naming it after that is not taken for it', await linkAutomatedCall(staleId, 'CA-LATE-1'), false);
+    check('one naming a call still open is, as ever', await linkAutomatedCall(freshId, 'CA-FRESH-1'), true);
+  }
+
+  console.log('\nasked again just before its call');
+  {
+    const due = { now: NOW, since: SINCE, waitMinutes: 60, only: null };
+    const ready = await lead({ sent: new Date(NOW.getTime() - minutes(70)) });
+    check('still due', await stillDue({ ...due, leadId: ready }), true);
+    await pool.query(`INSERT INTO messages (lead_id, direction, body) VALUES ($1, 'inbound', 'call me later')`, [ready]);
+    check('replied meanwhile: no longer', await stillDue({ ...due, leadId: ready }), false);
+    const picked = await lead({ sent: new Date(NOW.getTime() - minutes(70)) });
+    await pool.query(`UPDATE leads SET assigned_to = $2, assigned_at = now() WHERE id = $1`, [picked, maya]);
+    check('picked up meanwhile: no longer', await stillDue({ ...due, leadId: picked }), false);
+  }
+
+  console.log('\nhow far back it looks');
+  {
+    const old = await lead({ sent: new Date(NOW.getTime() - minutes(70)), arrived: new Date('2026-09-20T12:00:00Z') });
+    const looked = await leadsToCall({ now: NOW, since: new Date('2026-01-01T00:00:00Z'), waitMinutes: 60, only: null, limit: 100 });
+    check('a lead from over 30 days back is not looked at - no conversation stays open that long', looked.includes(old), false);
   }
 
   console.log(failures === 0 ? '\nall checks passed' : `\n${failures} check(s) FAILED`);
