@@ -8,6 +8,7 @@
  *   POST /api/webhooks/twilio/notice          the recording notice a lead we called hears first
  *   POST /api/webhooks/twilio/incoming        a lead is calling our number
  *   POST /api/webhooks/twilio/incoming/after  ringing the agent is over: what to say
+ *   POST /api/webhooks/twilio/incoming/claim  a person accepted a lead's call that rang everyone free (T19)
  *
  * And the automated call's, T12 on (AUTO-CALLS.md) - each naming the call's
  * row, `?call=<id>`, in the address Twilio signs:
@@ -68,6 +69,7 @@ import {
   recordingNoticeTwiml,
   refusalTwiml,
   ringAgentTwiml,
+  ringEveryoneTwiml,
   transferTwiml,
   voicemailTwiml,
 } from '../integrations/twilio';
@@ -194,7 +196,10 @@ export function twilioWebhooksRouter(deps: AppDeps): Router {
   router.use(express.urlencoded({ extended: false, limit: '20kb' }));
 
   router.use((req: Request, res: Response, next: NextFunction) => {
-    if (!deps.twilio || (req.path.startsWith('/auto/') && !deps.autoCalls)) {
+    // The automated call's, and ringing everyone free for a lead calling back
+    // (T19), exist only with automated calls on.
+    const autoOnly = req.path.startsWith('/auto/') || req.path === '/incoming/claim';
+    if (!deps.twilio || (autoOnly && !deps.autoCalls)) {
       res.status(404).json({ error: 'not_found', message: 'No such endpoint.' });
       return;
     }
@@ -278,8 +283,12 @@ export function twilioWebhooksRouter(deps: AppDeps): Router {
       const body = (req.body ?? {}) as Record<string, unknown>;
       // The callback is on the far leg - the lead's for a call we placed, the
       // agent's browser for one we received; our row is keyed by the first
-      // leg, which Twilio sends as the parent.
-      await recordEnd(field(body, 'ParentCallSid'), body.CallStatus, body.CallDuration);
+      // leg, which Twilio sends as the parent. One browser of a ring to
+      // everyone free (T19) speaks for the call only if it was answered: the
+      // others' rings were cut short, and the whole ring's end is
+      // `/incoming/after`'s.
+      const oneOfMany = req.query.ring === 'group' && body.CallStatus !== 'completed';
+      if (!oneOfMany) await recordEnd(field(body, 'ParentCallSid'), body.CallStatus, body.CallDuration);
 
       // Always 204: there is nothing for Twilio to retry, even for a status we
       // do not record.
@@ -344,7 +353,9 @@ export function twilioWebhooksRouter(deps: AppDeps): Router {
       // Twilio's "application error".
       let incoming: Awaited<ReturnType<ReturnType<typeof db>['startIncomingCall']>>;
       try {
-        incoming = await db().startIncomingCall({ callSid, fromPhone });
+        // With automated calls on, a lead nobody holds or has called rings
+        // everyone free (T19) - a lead returning the robot's voicemail.
+        incoming = await db().startIncomingCall({ callSid, fromPhone, ringFree: deps.autoCalls });
       } catch (err) {
         log.error('call.incoming_failed', { callSid, err: errText(err) });
         res.send(missedCallTwiml());
@@ -354,6 +365,11 @@ export function twilioWebhooksRouter(deps: AppDeps): Router {
       if (incoming.kind === 'ring') {
         log.info('call.incoming', { callSid, leadId: incoming.lead.id, agentId: incoming.agentId });
         res.send(ringAgentTwiml(deps.twilio!, incoming.agentId, incoming.lead, callSid));
+        return;
+      }
+      if (incoming.kind === 'group') {
+        log.info('call.incoming', { callSid, leadId: incoming.lead.id, ring: 'group', rung: incoming.agentIds.length });
+        res.send(ringEveryoneTwiml(deps.twilio!, incoming.agentIds, incoming.lead, callSid));
         return;
       }
 
@@ -373,6 +389,12 @@ export function twilioWebhooksRouter(deps: AppDeps): Router {
   // whoever ended it - including a lead who hung up, which never reaches here -
   // but it reports on the agent's leg, and an agent whose browser is closed
   // may have no leg to report on. Whichever arrives first records it.
+  //
+  // A ring to everyone free (`ring=group`, T19) is ended here, from the whole
+  // ring - one browser's ring stopping says nothing: Twilio reports a ring cut
+  // short by someone else's answer as `no-answer`. Taken, the call's length is
+  // saved here too, as the leg of whoever took it also reports it (`/status`);
+  // whichever comes first.
   router.post(
     '/incoming/after',
     asyncHandler(async (req, res) => {
@@ -381,6 +403,13 @@ export function twilioWebhooksRouter(deps: AppDeps): Router {
       res.type('text/xml');
 
       if (status === 'completed' || status === 'answered') {
+        if (req.query.ring === 'group') {
+          try {
+            await recordEnd(field(body, 'CallSid'), 'completed', body.DialCallDuration);
+          } catch (err) {
+            log.error('call.end_not_recorded', { callSid: field(body, 'CallSid'), err: errText(err) });
+          }
+        }
         res.send(emptyTwiml());
         return;
       }
@@ -391,6 +420,38 @@ export function twilioWebhooksRouter(deps: AppDeps): Router {
         log.error('call.missed_not_recorded', { callSid: field(body, 'CallSid'), err: errText(err) });
       }
       res.send(missedCallTwiml());
+    })
+  );
+
+  // A person accepted a lead's call that rang everyone free (T19) - Twilio
+  // runs this on their leg, before they are connected. The call becomes theirs
+  // (`takeIncomingCall`); someone else's accept that got here first, or an
+  // account deactivated meanwhile, and this leg is hung up. Anything wrong
+  // after they accepted still connects them - the lead is waiting.
+  router.post(
+    '/incoming/claim',
+    asyncHandler(async (req, res) => {
+      res.type('text/xml');
+      const body = (req.body ?? {}) as Record<string, unknown>;
+      const parentSid = field(body, 'ParentCallSid');
+      const agentId = agentIdFromIdentity(body.To, deps.twilio!.identityPrefix);
+      if (!parentSid || agentId === null) {
+        log.warn('call.unknown_take', { parentSid, to: field(body, 'To') });
+        res.send(hangupTwiml());
+        return;
+      }
+      try {
+        const taken = await db().takeIncomingCall(parentSid, agentId);
+        if (!taken.ok) {
+          log.warn('call.take_refused', { callSid: parentSid, agentId, reason: taken.reason });
+          res.send(hangupTwiml());
+          return;
+        }
+        log.info('call.taken', { callSid: parentSid, agentId, leadId: taken.leadId });
+      } catch (err) {
+        log.error('call.take_failed', { callSid: parentSid, agentId, err: errText(err) });
+      }
+      res.send(emptyTwiml());
     })
   );
 

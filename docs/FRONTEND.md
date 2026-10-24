@@ -394,7 +394,7 @@ needs to know:
 | Piece | File |
 |---|---|
 | The card: who, how long it has rung, tier, score, the last thing they answered (under that question's own heading), how far the questions got, how often we tried them today; **Accept** (takes the lead, opens its workspace) and **Decline** | `layout/IncomingCall.tsx`, `styles/incoming-call.css` |
-| "Calling back · you tried 2× today" - agents' calls only, never the server's automated one (T5); for a transfer, "Transfer · said yes to the offer" instead (T11, `transferContext`) | `lib/caller-context.ts`, pure |
+| "Calling back · you tried 2× today" - agents' calls first, never the server's automated one among them (T5); with none, "Calling back · automated call, 28m ago" - what its voicemail asked them to return (T19); for a transfer, "Transfer · said yes to the offer" instead (T11, `transferContext`) | `lib/caller-context.ts`, pure |
 | The states - none, ringing, call, missed - and one call at a time. Each ring carries its `RingKind` (T11): alone, or shared (`group`) - one of several, or the lead's own agent rung first with the others next (T15b) - and whether it is a transfer; a shared ring that ends unanswered is gone, never "missed" | `lib/incoming-state.ts`, pure |
 | Reading the kind from the call's parameters - `ring=group`, `reason=transfer`, `step` - is `ringKind` in `lib/calling.ts`. A group ring arriving while anything keeps the browser busy (`lib/presence.ts`) is declined there and then by the store, so an open note box is never replaced by it; a ring to one person still is | `lib/incoming-call.ts` |
 | The store joining them to Twilio. A store, not page state, because a call arrives on any screen and the lead's Call button must know one is under way | `lib/incoming-call.ts` (zustand) |

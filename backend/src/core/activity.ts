@@ -32,6 +32,12 @@ export const ACTIVITY_ACTIONS = [
   'call.incoming',
   'call.missed',
   /**
+   * A person took a lead's call that rang everyone free - `detail.callId`
+   * (T19, AUTO-CALLS.md "A lead calling back"). Once per call: the first to
+   * accept; the call is theirs from then.
+   */
+  'call.taken',
+  /**
    * A person took an automated call's transfer - `detail.callId`, and
    * `tookOverFrom` when the lead was someone else's (T15a, AUTO-CALLS.md).
    * Written once per call, whoever held the lead before.

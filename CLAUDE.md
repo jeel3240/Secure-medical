@@ -172,11 +172,11 @@ you change something the docs describe, update the doc in the same commit.
     src/api/callbacks.ts    My Callbacks: list, reschedule, mark done
     src/api/calls.ts        browser calling: whether it is set up, and the call token; the browser's word and the "Taking calls" switch (T9, T10); either saying someone is free rings them with a lead on hold (T17)
     src/api/hold-watch.ts   the hold watcher: every 30 seconds, leads on hold offered to whoever is free (T17), and a lead nobody is coming for sent back to /auto/hold, cutting the music short (T16)
-    src/api/twilio-webhooks.ts  Twilio's signed webhooks: connect a call, a lead calling in, how it ended, who picked up, the recording, the recording notice; the automated call's /auto/* (T12), its transfer, /auto/claim and /auto/after (T15a), and its hold line, /auto/hold (T16), and /auto/offer, a lead on hold ringing the person who came free (T17); /auto/amd acting on Twilio's verdict - the voicemail message (T18)
+    src/api/twilio-webhooks.ts  Twilio's signed webhooks: connect a call, a lead calling in, how it ended, who picked up, the recording, the recording notice; the automated call's /auto/* (T12), its transfer, /auto/claim and /auto/after (T15a), and its hold line, /auto/hold (T16), and /auto/offer, a lead on hold ringing the person who came free (T17); /auto/amd acting on Twilio's verdict - the voicemail message (T18); /incoming/claim, a person accepting a call back that rang everyone free (T19)
     src/core/calls.ts       call rules, pure: identity, outcomes, refusals
-    src/db/calls.ts         may this call be placed, who an incoming call rings, and recording it; when an automated call is voicemail (TAKEN_BY_VERDICT_SQL, T18)
+    src/db/calls.ts         may this call be placed, who an incoming call rings, and recording it; when an automated call is voicemail (TAKEN_BY_VERDICT_SQL, T18); a lead calling back whom nobody owns rings everyone free, and who takes it (T19)
     src/db/lead-texts.ts    the texts a call leads to: after a call to us nobody answered, and the link a lead said yes to on the automated call (T14)
-    src/integrations/twilio.ts  the file the routes use for the twilio library (twilio-health.ts, twilio-transcripts.ts and the configure CLI use it too); the automated call's TwiML, and how it listens - Deepgram, measured (T13b); its transfer's ring (T15a); the voicemail message (T18)
+    src/integrations/twilio.ts  the file the routes use for the twilio library (twilio-health.ts, twilio-transcripts.ts and the configure CLI use it too); the automated call's TwiML, and how it listens - Deepgram, measured (T13b); its transfer's ring (T15a); the voicemail message (T18); ringing everyone free for a lead calling back (T19)
     src/integrations/twilio-health.ts  the health report's calling check: do the number and the TwiML App point here
     src/core/twilio-pointing.ts  what twilio:configure may point, and what it refuses - production's number from a laptop, above all
     src/integrations/twilio-transcripts.ts  Twilio's transcription service; src/core/transcripts.ts who said what, pure
@@ -271,7 +271,7 @@ you change something the docs describe, update the doc in the same commit.
     src/layout/TakingCalls.tsx  the "Taking calls" switch in the app bar, shown only with automated calls on (T10); "Missed a transfer · Taking calls off" (T15c)
     src/lib/taking-calls.ts the switch as the server holds it, taken from the browser's 30-second report (T15c)
     src/layout/IncomingCall.tsx  the incoming-call card and missed-call notice, on every screen
-    src/lib/caller-context.ts  "Calling back · you tried 2× today", and a transfer's line (T11), pure
+    src/lib/caller-context.ts  "Calling back · you tried 2× today", "· automated call, 28m ago" (T19), and a transfer's line (T11), pure
     src/lib/ringtone.ts        the ring of an incoming call, made in the browser
     src/lib/call-notification.ts  the desktop notification for an incoming call
     src/components/CallTranscript.tsx  a call's transcript, under the call
@@ -304,7 +304,7 @@ you change something the docs describe, update the doc in the same commit.
     AUTH.md  POLLER.md  WORKFLOW.md  WEBHOOKS.md  ADMIN-LEADS.md  STATE-MACHINE.md  TWILIO.md
     AUDIT.md                the activity log: nothing is lost
     FLOWS.md                how SMS scripts are stored as rows, how to add one, and how questions are named
-    AUTO-CALLS.md           automated outbound calls: the agreed design and the build tracker (T0-T18 done as of 2026-10-24: the server places a call, asks the script, keeps the answers, texts the link, puts a "yes" through to the lead's own agent first, then everyone free, switches off whoever let it ring out, holds a "yes" while someone is on a call or writing its note, rings the next person who comes free with the lead who has waited longest, leaves the voicemail message once a machine's greeting is over; T19 on, not built)
+    AUTO-CALLS.md           automated outbound calls: the agreed design and the build tracker (T0-T19 done as of 2026-10-24: the server places a call, asks the script, keeps the answers, texts the link, puts a "yes" through to the lead's own agent first, then everyone free, switches off whoever let it ring out, holds a "yes" while someone is on a call or writing its note, rings the next person who comes free with the lead who has waited longest, leaves the voicemail message once a machine's greeting is over, rings everyone free for a lead calling back whom nobody owns; T20 on, not built)
     QUEUE.md  AGENT-WORKSPACE.md  ADMIN.md  LOGGING.md  FRONTEND.md
 ```
 
@@ -408,7 +408,7 @@ same treatment when they are built. The queue API was built that way:
 `GET /api/leads`, 2026-09-22. *(2026-10-01: Twilio built that way too -
 `POST /api/calls/token`, `POST /api/webhooks/twilio/voice` and
 `POST /api/webhooks/twilio/status`, and for a lead calling in
-`POST /api/webhooks/twilio/incoming` and `/incoming/after`; and `/answered-by`, Twilio's verdict on who picked up; `/recording`, a call's recording is ready (2026-10-02); and `/notice`, the recording notice a lead we called hears first (2026-10-05). `docs/TWILIO.md`.)* *(2026-10-18: the automated call's `/api/webhooks/twilio/auto/answer`, `/auto/gather`, `/auto/status` and `/auto/amd`, only while `AUTO_CALLS` is on - `docs/AUTO-CALLS.md`, "How a call is placed".)* *(2026-10-20: its transfer's `/auto/claim` and `/auto/after` - "The transfer".)* *(2026-10-21: its hold line's `/auto/hold` - "The hold line".)* *(2026-10-22: `/auto/offer`, a lead on hold ringing the person who came free - "The hold line".)*
+`POST /api/webhooks/twilio/incoming` and `/incoming/after`; and `/answered-by`, Twilio's verdict on who picked up; `/recording`, a call's recording is ready (2026-10-02); and `/notice`, the recording notice a lead we called hears first (2026-10-05). `docs/TWILIO.md`.)* *(2026-10-18: the automated call's `/api/webhooks/twilio/auto/answer`, `/auto/gather`, `/auto/status` and `/auto/amd`, only while `AUTO_CALLS` is on - `docs/AUTO-CALLS.md`, "How a call is placed".)* *(2026-10-20: its transfer's `/auto/claim` and `/auto/after` - "The transfer".)* *(2026-10-21: its hold line's `/auto/hold` - "The hold line".)* *(2026-10-22: `/auto/offer`, a lead on hold ringing the person who came free - "The hold line".)* *(2026-10-24: `/incoming/claim`, a person accepting a lead's call that rang everyone free - `docs/TWILIO.md`, "Who rings".)*
 
 ---
 

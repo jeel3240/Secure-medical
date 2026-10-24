@@ -50,6 +50,8 @@ export const AMD_PATH = '/api/webhooks/twilio/answered-by';
 export const INCOMING_PATH = '/api/webhooks/twilio/incoming';
 /** Where Twilio goes once ringing the agent is over, to ask what to say to the lead. */
 export const INCOMING_AFTER_PATH = '/api/webhooks/twilio/incoming/after';
+/** A person accepted a lead's call that rang everyone free (T19): on their leg, before they are connected. */
+export const INCOMING_CLAIM_PATH = '/api/webhooks/twilio/incoming/claim';
 
 /**
  * The browser's permission to place calls through our TwiML App, as one agent,
@@ -160,6 +162,54 @@ export function ringAgentTwiml(
   client.parameter({ name: 'leadId', value: String(lead.id) });
   client.parameter({ name: 'leadName', value: lead.name });
   client.parameter({ name: 'leadPhone', value: lead.phone });
+  return response.toString();
+}
+
+/**
+ * Ring everyone free for a lead who is calling us and is nobody's - T19,
+ * AUTO-CALLS.md "A lead calling back". As `ringAgentTwiml`, but each browser
+ * is marked `ring=group`: the ring goes on without anyone who does not take
+ * it, so it clears there with no "Missed call" notice, and a busy browser
+ * turns it down (T11). The first to accept takes the call (`/incoming/claim`).
+ *
+ * How the whole ring ended comes from the ring itself (`/incoming/after`,
+ * `ring=group`), never from one browser's ring stopping: Twilio reports a ring
+ * cut short by someone else's answer as `no-answer`, like one let run out, and
+ * acting on it would save a call someone is on as missed and text the lead.
+ * Each leg still reports its end, marked `ring=group` - only the one that was
+ * answered counts.
+ */
+export function ringEveryoneTwiml(
+  settings: TwilioSettings,
+  agentIds: readonly number[],
+  lead: { id: number; name: string; phone: string },
+  /** The lead's call - our row for it, and what its recording is reported against. */
+  callSid: string
+): string {
+  const response = new twilio.twiml.VoiceResponse();
+  // A recorded call: the lead hears the notice first, then everyone rings.
+  if (settings.transcriptionServiceSid) response.say(RECORDING_NOTICE);
+  const dial = response.dial({
+    timeout: INCOMING_RING_SECONDS,
+    answerOnBridge: true,
+    action: `${settings.publicUrl}${INCOMING_AFTER_PATH}?ring=group`,
+    method: 'POST',
+    ...recordingAttributes(settings, callSid),
+  });
+  for (const agentId of agentIds) {
+    const client = dial.client({
+      url: settings.publicUrl + INCOMING_CLAIM_PATH,
+      method: 'POST',
+      statusCallback: `${settings.publicUrl}${STATUS_PATH}?ring=group`,
+      statusCallbackMethod: 'POST',
+      statusCallbackEvent: ['completed'],
+    });
+    client.identity(identityFor(agentId, settings.identityPrefix));
+    client.parameter({ name: 'leadId', value: String(lead.id) });
+    client.parameter({ name: 'leadName', value: lead.name });
+    client.parameter({ name: 'leadPhone', value: lead.phone });
+    client.parameter({ name: 'ring', value: 'group' });
+  }
   return response.toString();
 }
 
