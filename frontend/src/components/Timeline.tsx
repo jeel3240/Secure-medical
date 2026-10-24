@@ -2,6 +2,7 @@ import { useEffect, useRef } from 'react';
 import type { TimelineEntry, TimelineKind } from '../api/workspace';
 import { DISPOSITION_LABEL, type Disposition } from '../api/workspace';
 import { dayLabel, formatDay, formatTime, isSameDay } from '../lib/format';
+import { CallAnswers } from './CallAnswers';
 import { CallTranscript } from './CallTranscript';
 
 /**
@@ -54,7 +55,39 @@ const CALL_OUTCOME: Record<string, string> = {
   canceled: 'cancelled',
 };
 
-export function callText(detail: Record<string, unknown>): string {
+/**
+ * How the robot's call ended, from its script - T21, AUTO-CALLS.md. "Nobody
+ * took it" rather than "nobody free": the lead also reached nobody when people
+ * were free and let it ring out, or when they hung up while they waited.
+ */
+const SCRIPT_RESULT: Record<string, string> = {
+  link_sent: 'link sent',
+  not_interested: 'not interested',
+  opted_out: 'opted out',
+  no_response: 'no response',
+  voicemail_left: 'voicemail left',
+  hung_up: 'hung up',
+  transfer_missed: 'said yes · nobody took it',
+};
+
+/** The robot's call by how its script ended, or null while it has no result - then it reads as T5 had it. */
+function robotCallText(detail: Record<string, unknown>, author: string | null): string | null {
+  const result = detail.scriptResult;
+  if (typeof result !== 'string') return null;
+  if (result === 'transferred') return `Automated call · said yes · ${author ?? 'an agent'} took it · ${duration(detail.durationSec)}`;
+  // Never picked up: Twilio's words for why, as for any call we place.
+  if (result === 'unanswered') {
+    const why = typeof detail.outcome === 'string' && detail.outcome !== 'voicemail' ? CALL_OUTCOME[detail.outcome] : null;
+    return `Automated call · ${why ?? 'no answer'}`;
+  }
+  return `Automated call · ${SCRIPT_RESULT[result] ?? result.replace(/_/g, ' ')}`;
+}
+
+/**
+ * `author` is the agent on the call: theirs, the one it rang, or - on the
+ * robot's call - who took its transfer, named in the line itself.
+ */
+export function callText(detail: Record<string, unknown>, author: string | null = null): string {
   const { outcome } = detail;
   // A lead calling us. Missed says it all; an answered one has a length.
   if (detail.direction === 'inbound') {
@@ -63,8 +96,12 @@ export function callText(detail: Record<string, unknown>): string {
     if (outcome === 'answered') return `Incoming call · answered · ${duration(detail.durationSec)}`;
     return `Incoming call · ${CALL_OUTCOME[outcome] ?? outcome.replace(/_/g, ' ')}`;
   }
-  // An agent's call, or the server's automated one (T5), worded the same way.
-  // How an automated call's script ended is T21's to add.
+  // The robot's call says how its script ended (T21); until it has, and for an
+  // agent's call, the call itself in words (T5).
+  if (detail.direction === 'automated') {
+    const robot = robotCallText(detail, author);
+    if (robot) return robot;
+  }
   const what = detail.direction === 'automated' ? 'Automated call' : 'Outbound call';
   if (typeof outcome !== 'string') return `${what} · in progress`;
   if (outcome === 'answered') return `${what} · answered · ${duration(detail.durationSec)}`;
@@ -160,7 +197,7 @@ function entryText(entry: TimelineEntry): string {
     case 'system':
       return systemText(d);
     case 'call':
-      return callText(d);
+      return callText(d, entry.author);
     case 'callback': {
       const at = typeof d.scheduledAt === 'string' ? new Date(d.scheduledAt) : null;
       const when = at ? `${formatDay(at)} ${formatTime(at)}` : 'unscheduled';
@@ -212,6 +249,9 @@ export function Timeline({
         lastDay = at;
 
         const failed = entry.kind === 'sms' && entry.detail.deliveryStatus === 'failed';
+        // The robot's call names who took it in its own line (T21).
+        const robotCall = entry.kind === 'call' && entry.detail.direction === 'automated';
+        const byline = robotCall ? null : entry.author;
 
         return (
           <li key={`${entry.kind}-${entry.at}-${index}`}>
@@ -223,9 +263,10 @@ export function Timeline({
               <div className="timeline__body">
                 <p className="timeline__text">{entryText(entry)}</p>
                 <p className="timeline__meta">
-                  {entry.author && <span className="timeline__author">{entry.author}</span>}
+                  {byline && <span className="timeline__author">{byline}</span>}
                   {failed && <span className="timeline__failed">Delivery failed</span>}
                 </p>
+                {entry.kind === 'call' && <CallAnswers detail={entry.detail} />}
                 {entry.kind === 'call' && <CallTranscript detail={entry.detail} agentName={entry.author} />}
               </div>
 

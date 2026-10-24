@@ -402,6 +402,7 @@ needs to know:
 | The desktop notification, and the tab title "Incoming call" | `lib/call-notification.ts` |
 | Once accepted: the same call bar, which is why `CallBar` takes `who: { leadId, name, phone }` rather than a lead. It lives in the shell, so it survives moving between pages | `CallBar.tsx` |
 | A call's transcript, closed under the call in the conversation and on the timeline; one speaker's sentences joined into one line | `components/CallTranscript.tsx` |
+| What the lead said on the robot's call, under it and above the transcript, closed the same way: `Q1 · "yeah sure" → Yes` (T21) | `components/CallAnswers.tsx` |
 | Missed: a notice with **Call back**, which takes the lead and opens it with router state `callBack`; the workspace dials once and clears the state, so a reload does not ring them again | `IncomingCall.tsx`, `WorkspacePage.tsx` |
 | The lead's page: a **Missed call** badge beside Closed and Needs review, from `flags.missedCall` | `WorkspacePage.tsx` |
 
@@ -779,6 +780,7 @@ response or an off-by-one age threshold is not:
 | `pages/workspace/LeadHeader.test.ts` | The header's source and Questions wording, a sub-question, "Q1-a", included |
 | `pages/workspace/LeadNotes.test.tsx` | The Notes card: newest first, three then Show all, the author, the empty state |
 | `components/CallTranscript.test.tsx` | A call's transcript: closed until asked for, speakers joined, nothing for an unrecorded call |
+| `components/CallAnswers.test.tsx` | The robot call's answers in words - said, pressed, asked again, not understood, stop, nothing said - and the fold (T21) |
 | `pages/workspace/LeadAnswers.test.ts` | The score breakdown's light-blue-to-navy shades, and each line's words |
 | `components/SyncStatus.test.tsx` | The EZ Texting sync line, quiet and amber |
 | `components/Segmented.test.tsx` | The sliding switcher |

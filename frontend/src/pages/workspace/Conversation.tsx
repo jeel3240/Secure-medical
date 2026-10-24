@@ -1,5 +1,6 @@
 import { Fragment, useEffect, useRef } from 'react';
 import type { TimelineEntry } from '../../api/workspace';
+import { CallAnswers } from '../../components/CallAnswers';
 import { CallTranscript } from '../../components/CallTranscript';
 import { callText, systemText } from '../../components/Timeline';
 import { dayLabel, formatTime, isSameDay } from '../../lib/format';
@@ -178,12 +179,15 @@ function ConversationItem({
   }
 
   if (entry.kind === 'call') {
+    // The robot's call names who took it in its own line (T21).
+    const byline = entry.detail.direction === 'automated' ? null : entry.author;
     return (
       <div className="convo__call">
         <p className="convo__system">
-          {callText(entry.detail)}
-          {entry.author ? ` · ${entry.author}` : ''} · {time}
+          {callText(entry.detail, entry.author)}
+          {byline ? ` · ${byline}` : ''} · {time}
         </p>
+        <CallAnswers detail={entry.detail} />
         <CallTranscript detail={entry.detail} agentName={entry.author} leadName={leadFirstName} />
       </div>
     );
