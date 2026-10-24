@@ -172,12 +172,13 @@ export function ringAgentTwiml(
  * it, so it clears there with no "Missed call" notice, and a busy browser
  * turns it down (T11). The first to accept takes the call (`/incoming/claim`).
  *
- * How the whole ring ended comes from the ring itself (`/incoming/after`,
- * `ring=group`), never from one browser's ring stopping: Twilio reports a ring
- * cut short by someone else's answer as `no-answer`, like one let run out, and
- * acting on it would save a call someone is on as missed and text the lead.
- * Each leg still reports its end, marked `ring=group` - only the one that was
- * answered counts.
+ * How it ended comes from the ring itself (`/incoming/after`, `ring=group`)
+ * and nothing else - no browser reports its own end, as for a transfer
+ * (T15a). Twilio reports a ring cut short by someone else's answer as
+ * `no-answer`, like one let run out; and a second accept, refused and hung up,
+ * reports `completed` like the call itself. Twilio asks `/incoming/after`
+ * however it ends: taken and over, run out, or the lead hanging up while it
+ * rang (2026-10-17; calls 63 and 64).
  */
 export function ringEveryoneTwiml(
   settings: TwilioSettings,
@@ -197,13 +198,7 @@ export function ringEveryoneTwiml(
     ...recordingAttributes(settings, callSid),
   });
   for (const agentId of agentIds) {
-    const client = dial.client({
-      url: settings.publicUrl + INCOMING_CLAIM_PATH,
-      method: 'POST',
-      statusCallback: `${settings.publicUrl}${STATUS_PATH}?ring=group`,
-      statusCallbackMethod: 'POST',
-      statusCallbackEvent: ['completed'],
-    });
+    const client = dial.client({ url: settings.publicUrl + INCOMING_CLAIM_PATH, method: 'POST' });
     client.identity(identityFor(agentId, settings.identityPrefix));
     client.parameter({ name: 'leadId', value: String(lead.id) });
     client.parameter({ name: 'leadName', value: lead.name });

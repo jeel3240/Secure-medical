@@ -106,28 +106,44 @@ Twilio ── POST /api/webhooks/twilio/incoming ──► who is this, and whos
    2026-10-24) - `FREE_SQL`: the "Taking calls" switch on, a browser open
    and not busy, no call going; at most ten. A lead the robot's voicemail
    asked to call back has no agent of its own. The first to accept takes it.
+   "At most ten" is the first ten by account, lowest id first.
 4. Otherwise nobody. A lead no agent has ever held or called has nobody whose
    call it is; it goes straight to missed and into the queue. With automated
    calls off, step 3 is skipped and this is as before.
 
 The first two are rung switch or not, and alone, as before: it is their lead,
-or their call being returned.
+or their call being returned. A ring they miss is a missed call - their
+callback - not passed on to everyone free.
 
 **A ring to everyone** (`ringEveryoneTwiml`): each browser is marked
 `ring=group`, so a ring someone else took clears with no "Missed call", and a
 busy browser turns it down (T11). The call's row has no `agent_id` while it
 rings. Whoever accepts runs `POST /api/webhooks/twilio/incoming/claim` on their
 leg, before they are connected: the call becomes theirs (`takeIncomingCall`,
-`call.taken`) - first come, once; a second accept, or a deactivated account,
-is hung up. The browser then picks the lead up, as for any incoming call. **How
-it ended comes from the whole ring** - `/incoming/after?ring=group` - never from
-one browser's ring stopping: Twilio reports a ring cut short by someone else's
-answer as `no-answer`, exactly like one let run out (T15c), and acting on it
-would save a call someone is on as missed and text the lead. Each browser still
-reports its own end (`/status?ring=group`); only the one that was answered
-counts. Letting a call-back ring run out turns nobody's switch off - only a
-transfer does (T15c). Only with automated calls on; `/incoming/claim` answers
-404 otherwise.
+`call.taken`) and so does the lead, taken over from anyone who held it
+(`lead.picked_up`, `via: 'call_back'`) - first come, once; a second accept, or
+a deactivated account, is hung up. Their browser picks the lead up too as it
+accepts, and that can arrive first (call 63: 2.4 seconds before); but in two
+accepts at once it could be the other person's - the lead follows the call.
+**How it ended comes from the whole ring** - `/incoming/after?ring=group` - and
+nothing else: no browser reports its own end, as for a transfer (T15a).
+Twilio reports a ring cut short by someone else's answer as `no-answer`,
+exactly like one let run out (T15c), and a second accept it refused and hung
+up as `completed`, like the call itself; acting on either would end a call
+someone is on. Twilio asks `/incoming/after` however it ends - taken and over,
+run out, or the lead hanging up while it rang. Letting a call-back ring run
+out turns nobody's switch off - only a transfer does (T15c). Only with
+automated calls on; `/incoming/claim` answers 404 otherwise.
+
+**Twilio asking again** about the same call keeps the first decision: a call
+that is over stays over (nobody rung, not texted again), one agent's ring
+rings them again, and a ring to everyone rings whoever is free now - nobody
+free now, it is missed at once and texted, never left open with nothing
+ringing.
+
+**Taking a call back is not calling the lead.** Step 2 counts calls we placed;
+whoever took a call back holds the lead instead (step 1). Once they release
+it, the next call back rings everyone free again - call 64.
 
 A deactivated agent is never rung. The caller is matched to a lead by phone
 number; **a number we hold no lead for** hears the same message, is not
@@ -146,7 +162,8 @@ changes - a call or a ring starts, or the note box after one is saved or
 skipped - and holds two minutes on the server (`users.ringable_until`).
 It is for the automated call's transfer, which rings only people who are free,
 and for a lead calling back whom nobody owns (step 3 above, T19); a lead's own
-agent is rung either way. "Who is free" in `AUTO-CALLS.md`.
+agent, and the last agent who called them, are rung either way. "Who is free"
+in `AUTO-CALLS.md`.
 
 ### A missed call
 
@@ -156,10 +173,10 @@ Medical" until 2026-10-05.) Then:
 
 | | |
 |---|---|
-| **The call is saved** | `calls` row with `direction = 'inbound'`, `outcome = 'missed'`, whatever Twilio called it (no-answer, busy, canceled). `agent_id` is the agent it rang, or null when it rang nobody |
+| **The call is saved** | `calls` row with `direction = 'inbound'`, `outcome = 'missed'`, whatever Twilio called it (no-answer, busy, canceled). `agent_id` is the agent it rang, or null when it rang nobody or everyone free (T19) |
 | **The lead is texted** | `message_missed_call` from `settings`, sent through EZ Texting like every other text and saved in `messages`: "eDrugstore: Sorry we missed your call. A team member will call you back shortly." (reworded by migration 012; 007 seeded the first wording, signed Secure Medical). Once per call. Not sent to a blocked number - the do-not-call check is inside the sender |
 | **The lead goes to the queue** | Tagged **Missed call**, in bold, above an unread reply - unless an agent holds the lead, when the queue still says Working – name and the lead's page and the callback carry it. A closed lead is reopened by it. A lead with no score is in the queue for it too, at the bottom. `QUEUE.md`, "The tag" |
-| **The agent gets a callback** | One row on their My Callbacks, under Today, first in the list and marked **Missed call** (Overdue only from the next day) - `callbacks.reason = 'missed_call'`, migration 008. The queue tag says a lead needs calling; this says whose job it is. One per lead however many times they ring. Not booked when the call rang nobody (the lead waits in the queue for anyone), for a deactivated agent, or for a number on the do-not-call list. An agent who pressed Decline gets it too: the lead was still told we would call back |
+| **The agent gets a callback** | One row on their My Callbacks, under Today, first in the list and marked **Missed call** (Overdue only from the next day) - `callbacks.reason = 'missed_call'`, migration 008. The queue tag says a lead needs calling; this says whose job it is. One per lead however many times they ring. Not booked when the call rang nobody, or everyone free (T19) - the lead waits in the queue for anyone - for a deactivated agent, or for a number on the do-not-call list. An agent who pressed Decline gets it too: the lead was still told we would call back |
 | **The agent is told** | The card on their screen becomes a notice: "Missed call · Leo M. · Rang for 20s", with **Call back**. It stays until dismissed, or until another call rings |
 | **The lead's page says so** | A **Missed call** badge beside the lead's other states, in the queue's words, and a line on the timeline: "Missed call · told we will call back". It was a sentence in a yellow banner for a day; Jeel, 2026-10-01: a state of the lead is a badge, like Closed and Needs review |
 
@@ -188,7 +205,7 @@ missed call un-closes a lead - and has no missed-call status of its own.
 
 **What a missed call does to the lead's other states.** Its callback counts as
 a callback like any other, so the lead reads Working on Admin > Leads; a
-missed call that booked none (it rang nobody) does not make it Working. On
+missed call that booked none (it rang nobody, or everyone free) does not make it Working. On
 Admin > Overview neither the system's callback nor a call that only rang the
 agent is that agent's activity - only what they did is.
 
@@ -201,12 +218,13 @@ and flagged Inbound reply, which is right. From a lead still partway through,
 clarification. Rare - a lead mid-questions has not been called by us - and
 left as it is.
 
-**Recorded twice over, on purpose.** How the ring ended is reported by Twilio
-on the agent's leg (`/status`) and again when it asks what to say to the lead
-(`/incoming/after`). An agent with no browser open may have no leg to report
-on, and a lead who hangs up never reaches the second. Whichever arrives first
-records the missed call and sends the text; the other finds it done and does
-nothing.
+**Recorded twice over, on purpose.** How a ring to one agent ended is reported
+by Twilio on the agent's leg (`/status`) and again when it asks what to say to
+the lead (`/incoming/after`) - asked even when the lead hung up while it rang
+(2026-10-17). An agent with no browser open may have no leg to report on.
+Whichever arrives first records the missed call and sends the text; the other
+finds it done and does nothing. A ring to everyone free (T19) has only the
+second: no browser reports its own end.
 
 ### On the screen
 
@@ -575,7 +593,7 @@ made `agent_id` optional for them (migration 007).
 | `agent_id`, `lead_id` | Who called whom. For an incoming call, the agent it rang - null when it rang nobody, and while it rings everyone free, until one of them takes it (T19). An agent's outgoing call always has an agent; the database refuses one without (`calls_outbound_has_agent`). An automated call has none until a person takes its transfer, then theirs |
 | `script_result` | Automated calls only (014): how the script ended - `transferred`, `transfer_missed`, `link_sent`, `not_interested`, `opted_out`, `no_response`, `voicemail_left`, `hung_up`, `unanswered`. `outcome` keeps Twilio's view beside it. One automated call per lead, ever: a unique index (`calls_one_automated_per_lead`) |
 | `started_at` | When Twilio asked us how to connect it |
-| `ended_at` | When Twilio reported the far leg ended - the lead's for a call we placed, the agent's for one we received - or at once for an incoming call that rang nobody. Null while the call is in progress |
+| `ended_at` | When Twilio reported the far leg ended - the lead's for a call we placed, the agent's for one we received - or at once for an incoming call that rang nobody; for one that rang everyone free (T19), when the whole ring's end was reported (`/incoming/after`). Null while the call is in progress |
 | `outcome` | `answered`, `no_answer`, `busy`, `failed` or `canceled` - `core/calls.ts` - `voicemail` for a call we placed that a machine picked up - an automated one only when Twilio's verdict took it over, the message left or a fax hung up on (T18, `AUTO-CALLS.md` "Voicemail") - and `missed` for an incoming call nobody answered. Null while in progress |
 | `answered_by` | Who picked up a call we placed: `human`, `machine`, `fax` or `unknown` - "Voicemail", above. Null for an incoming call, one nobody picked up, or one from before migration 010 |
 | `duration_sec` | Seconds of conversation. 0 unless answered |
@@ -630,6 +648,12 @@ swapped. `/auto/claim` takes the person from `To`, our own signed browser
 name, as the voice webhook does. They answer 404 while automated calls are
 off. What each does: `AUTO-CALLS.md`, "How a call is placed" and "The
 transfer".
+
+**`/incoming/claim`** (T19, a person accepting a call back that rang everyone
+free) is checked the same way and answers 404 while automated calls are off
+too. It names no row in its address: it takes the lead's call from
+`ParentCallSid` and the person from `To` - both in what Twilio signs - and
+acts only on an incoming call still ringing with nobody on it yet.
 
 ## Settings
 

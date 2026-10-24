@@ -216,13 +216,16 @@ off the person who had not been given the chance.
 the switch on, the browser able to ring (`RINGABLE_SQL`), and no call of
 theirs still going - checked on the server too, so a call counts the moment
 it starts, not at the browser's next word. "Still going" is a call with no
-outcome, started in the last 2 hours: a ring for an incoming call counts, an
-automated call nobody has taken keeps nobody busy, and a call whose end
+outcome, started in the last 2 hours: a ring for an incoming call to one
+agent counts, while a call back ringing everyone free (T19) and an automated
+call nobody has taken keep nobody busy until someone takes them - the people
+rung are kept out by their own browsers saying busy - and a call whose end
 Twilio never reported stops counting after 2 hours - the window a missed
 call's "under way" uses. A small index of the calls still going
 (`calls_under_way_by_agent`, migration 017) keeps it instant. `freePeople`
-lists them; a transfer rings them (T15a), a lead on hold rings them (T17),
-T20 counts them.
+lists them; a transfer rings them (T15a), a lead on hold rings them (T17), a
+lead calling back whom nobody owns rings them (T19, at most ten, lowest ids
+first), T20 counts them.
 
 **The app is open** - built in T9 (2026-10-18): `db/presence.ts` on the
 server, `lib/presence.ts` and `lib/calling.ts` in the browser. Each signed-in
@@ -834,10 +837,11 @@ A beep after such a yes still stops the ring and leaves the message.
 Built in T19 (2026-10-24). The voicemail asks the lead to call back, and a lead
 the robot reached has no agent of its own - nobody holds them, and the robot's
 call has nobody on it. So with automated calls on, a call from a lead nobody
-holds or has called rings **everyone free** together (`FREE_SQL`, at most ten),
-after the lead's own agent and the last agent who called them, who still ring
-alone first, as before; nobody free, the missed call as before. The first to
-accept takes the call and picks the lead up. How it is rung and ended -
+holds or has called rings **everyone free** together (`FREE_SQL`, at most ten).
+A lead with an agent of its own - who holds them, or last called them - rings
+only that agent, alone, as before, and a ring they miss is a missed call, not
+passed on; nobody free, the missed call as before. The first to accept takes
+the call and the lead. How it is rung and ended -
 `ringEveryoneTwiml`, `/incoming/claim`, the end from the whole ring - is in
 `TWILIO.md`, "Who rings".
 
@@ -876,7 +880,7 @@ does not answer a missed call - until an agent takes the transfer.
 | Admin > Leads | A **Call** column with the last robot call's result, and a filter on it. No new status or tab - a lead is on two tracks at once ("Awaiting reply" and "Voicemail left") |
 | Admin > Configuration | The call script, hours, time zone and texts, read-only |
 | App bar | The "Taking calls" switch |
-| Incoming-call card | "Transfer · said yes to the offer" |
+| Incoming-call card | "Transfer · said yes to the offer"; for a lead returning the robot's call, "Calling back · automated call, 28m ago" (T19) |
 
 ## Tracker
 
@@ -1190,7 +1194,8 @@ confirmed on a real transfer (T15a, 2026-10-20). `CallDirection` in
 
 **Done when**
 - [x] Tests: a robot call is not counted in "you tried" - alone it gives no
-      "Calling back" line; beside an agent's call, only the agent's counts.
+      "Calling back" line (changed in T19: "· automated call, 28m ago");
+      beside an agent's call, only the agent's counts.
 - [x] Tests: a robot call shows on the timeline and in the conversation as
       "Automated call · answered · 40s", "· no answer", "· voicemail", "· in
       progress" - never as "Outbound call".
@@ -1504,8 +1509,8 @@ nothing odd, and nobody loses an unsaved note.
 
 As built: a ring is marked with `<Parameter>`s - `ring=group`,
 `reason=transfer`, and `step`, the heading of the question the lead said yes
-to - which the server sends for a transfer since T15a, and will for a call
-back with T19; the card's words come from the script's rows: "said yes to the offer"
+to - which the server sends for a transfer since T15a, and `ring=group`
+alone for a call back ringing everyone free since T19; the card's words come from the script's rows: "said yes to the offer"
 from the step "Offer" (`transferContext`). `ringKind` in `lib/calling.ts`
 reads them; each ring carries its `RingKind` through `lib/incoming-state.ts`.
 A group ring arriving while anything keeps the browser busy - including a
@@ -2198,20 +2203,25 @@ agent owns them.
       first to accept, once, recorded `call.taken`; a second accept, an
       account deactivated, a call over refused; answered and his, or missed
       and nobody's, with no callback booked; the lead's own agent still rung
-      alone; automated calls off, missed as before (`calls-live-check`, 126).
+      alone; automated calls off, missed as before; the lead taken over from
+      someone whose browser picked it up first; Twilio asking again - the
+      taker alone, a call over not rung, nobody free now missed and texted
+      (`calls-live-check`, 133).
 - [x] A real call back after T18's voicemail rings the free browsers -
       2026-10-24, call 63: Jeel's phone called the dev number, both windows
-      rang, "Calling back · automated call, 28m ago"; karm accepted and took
-      the call and the lead; Jeel's ring, reported `no-answer` the same
-      instant, was ignored; answered, 10 seconds, recorded.
+      rang; karm accepted and took the call and the lead; Jeel's ring,
+      reported `no-answer` the same instant, was ignored; answered, 10
+      seconds, recorded.
 - [x] Nobody takes it - call 64: rung, then missed, nobody's; the lead heard
       that we would call back and got the missed-call text; nobody's switch
       changed. It rang one person: karm's note box from call 63 was still
-      open, so karm was not free.
+      open, so karm was not free. Its card read "Calling back · automated
+      call, 28m ago" - the robot's call 62, 27 minutes 44 seconds before.
 - [x] With `AUTO_CALLS` off, the existing incoming-call tests pass - one
       expectation names the new argument, `ringFree: false`. Route tests for
       the group ring: who is rung and how it is marked, taking it, refusals,
-      unsigned and off, the whole ring's end, a cut-short ring ignored (998
+      unsigned and off, the whole ring's end - taken, run out, the lead
+      hanging up while it rang - and no browser reporting its own (997
       backend tests); the card's line (352 frontend tests).
 
 As built: TWILIO.md "Who rings", and "A lead calling back" above. One addition
@@ -2221,6 +2231,17 @@ rings, and must name a person the moment one is on the call, for "on a call"
 (`FREE_SQL`) and for the call to be theirs. A new action, `call.taken`. The
 card's line was decided as the ticket suggested. Letting a call-back ring run
 out turns no switch off - only a transfer does (T15c).
+
+Found by an independent read of the docs against the code, after merging,
+and fixed the same day: **a refused second accept could end the call** - built
+first with each browser reporting its own end and only an answered one
+counting, a second accept, answered and then hung up, reports `completed`
+like the call itself - so no browser reports its end now, and the whole ring's
+end decides; **the lead could stay with the person refused**, whose browser
+picked it up first - the lead now follows the call, as a transfer's does; and
+**Twilio asking again could decide differently** - ring people for a call
+already missed, or leave a call open with nothing ringing - now the first
+decision holds.
 
 **Files:** `backend/src/db/calls.ts`, `backend/src/core/activity.ts`,
 `backend/src/integrations/twilio.ts`, `backend/src/api/twilio-webhooks.ts`,
