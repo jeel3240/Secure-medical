@@ -1,6 +1,6 @@
 # Automated outbound calls
 
-**Planned 2026-10-15. Being built: T0 to T23 are done (2026-10-25) - the
+**Planned 2026-10-15. Being built: T0 to T24 are done (2026-10-25) - the
 server places a call, asks the script, keeps every answer, texts the link,
 puts a "yes" through to the lead's own agent first, then everyone free,
 switches off whoever let it ring out, holds a "yes" nobody can take yet while
@@ -9,9 +9,9 @@ free with the lead who has waited longest, leaves the voicemail message once a
 machine's greeting is over, rings everyone free for a lead calling back whom
 nobody owns, calls the right leads by itself at the pace the people free can
 take, shows each robot call on the lead's timeline with what was said, puts
-a "yes" nobody took first in the agents' queue, and shows how each lead's call
-went on Admin > Leads; Admin > Configuration (T24) and the finish (T25, T26)
-are not built yet.**
+a "yes" nobody took first in the agents' queue, shows how each lead's call
+went on Admin > Leads, and shows the script and its settings on Admin >
+Configuration; the finish (T25, T26) is not built yet.**
 This
 doc is the agreed design and the tracker for building it. Each ticket below updates its row when it is merged,
 and the sections it touches, so the doc always says what is built and what is
@@ -963,7 +963,7 @@ does not answer a missed call - until an agent takes the transfer.
 | Lead timeline and workspace | "Automated call · voicemail left", "· said yes · Maya Chen took it · 2:14", "· said yes · nobody took it", "· link sent", "· not interested", "· opted out", "· no response", "· hung up", "· no answer" - with what the lead said underneath, under **Answers** (T21, `AGENT-WORKSPACE.md` "The timeline") |
 | Agents' queue | Only a "yes" nobody took: first, the longest waiting on top, "Wants a call" - and a Wants a call badge on the lead's card - until an agent calls or texts them, answers when they ring, or saves an outcome (T22, `QUEUE.md` "Who is in it", "The order", "The tag") |
 | Admin > Leads | A **Call** column with the robot call's result - "Voicemail left", "Said yes · nobody took it", "Calling now" - and a filter on it. No new status or tab - a lead is on two tracks at once ("Awaiting reply" and "Voicemail left") (T23, `ADMIN-LEADS.md` "Call") |
-| Admin > Configuration | The call script, hours, time zone and texts, read-only |
+| Admin > Configuration | The call script line by line, with what picks each answer; the settings the robot reads - on or off, hours, time zone, days, the wait, ring times, the hold stop; and the link text under Messages. Read-only (T24, `ADMIN.md` "The automated call") |
 | App bar | The "Taking calls" switch |
 | Incoming-call card | "Transfer · said yes to the offer"; for a lead returning the robot's call, "Calling back · automated call, 28m ago" (T19) |
 
@@ -1008,7 +1008,7 @@ ticket's own PR.
 | T21 | The timeline shows the robot calls | T13 | Done 2026-10-24 - seen on real calls: taken, not interested with its answers, nobody took it |
 | T22 | The queue puts a missed "yes" first | T15a | Done 2026-10-24 - seen in the browser: two "yes" leads nobody took at the top, Wants a call, above a 100-point lead |
 | T23 | Admin > Leads: the Call column | T4 | Done 2026-10-25 - seen in the browser on real calls' leads: voicemail left, not interested, no answer, said yes taken and not |
-| T24 | Admin > Configuration shows the call script | T6 | Not started |
+| T24 | Admin > Configuration shows the call script | T6 | Done 2026-10-25 - seen in the browser: every line in order with its keys and words, and the settings, matching the database |
 | | **Finish** | | |
 | T25 | Everything written down and checked end to end | T0-T24 | Not started |
 | T26 | Real phone, every path, then live | T25 | Not started |
@@ -2591,10 +2591,36 @@ robot will use them.
 - Read-only, like the rest of the page.
 
 **Done when**
-- [ ] Seen in the browser, matching the database.
+- [x] Seen in the browser, matching the database - 2026-10-25, Jeel, on the
+      local app: the Call script card, all fifteen lines in order, each
+      answer with its key and words, `{place}` as "2, 3…" and the voicemail's
+      number as "our number" (calling not set up locally); the Calls card -
+      Off, 11:00 AM - 5:00 PM, America/Phoenix, Monday to Friday, 1 hour, 25
+      and 20 seconds, 10 minutes, 0.4; Call · link last under Messages.
+- [x] A live check: every line in order and word for word against the
+      script the robot uses; names, when, keys and words; the link text
+      under Messages; the settings off and on; the recording notice only on
+      recorded calls; a setting changed by migration; one the robot cannot
+      read showing what it uses; no script active (`admin-live-check`, 77).
+      Route tests: the api passes whether automated calls are on, the
+      calling number and whether calls are recorded (1,045 backend tests).
+      The settings and placeholders in words (397 frontend tests).
 
-**Files:** `backend/src/db/admin-config.ts`, `frontend/src/pages/admin/ConfigPage.tsx`.
-**Doc:** `ADMIN.md`.
+As built: `ADMIN.md`, "The automated call". Beyond the ticket: **the values
+are the robot's own readers'**, so a setting it cannot read shows what it
+uses instead; **whether automated calls are on**, and the call-back number
+the voicemail gives; **the confidence a spoken answer needs** and **a ring
+from hold's time** beside the ticket's settings; **what picks each answer** -
+its key and the words heard for it; **the recording notice**, listed when
+calls are recorded; and **the link text under Messages**, counted for
+segments like every other text, rather than in the call card.
+
+**Files:** `backend/src/db/admin-config.ts`, `backend/src/api/admin/config.ts`,
+`backend/src/api/__tests__/admin-screens.test.ts`, `backend/scripts/admin-live-check.ts`,
+`frontend/src/api/admin.ts`, `frontend/src/pages/admin/ConfigPage.tsx` (+ test),
+`frontend/src/lib/call-settings.ts` (+ test).
+**Doc:** `ADMIN.md`; this one; `FRONTEND.md`, `DESIGN-PROMPT.md`, `README.md`,
+`CLAUDE.md`.
 
 ---
 

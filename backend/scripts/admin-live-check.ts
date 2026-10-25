@@ -20,6 +20,7 @@ import { getOverview } from '../src/db/admin-overview';
 import { listAdminLeads } from '../src/db/leads';
 import { listDnc } from '../src/db/admin-dnc';
 import { blockNumber, DNC_REASONS, releaseNumber } from '../src/db/dnc';
+import { ANTIBIOTICS_CALL } from '../src/core/call-script-fixtures';
 
 let failures = 0;
 
@@ -99,8 +100,9 @@ async function main(): Promise<void> {
 
     // Against the antibiotics flow seeded by 012_flows.sql - docs/FLOWS.md.
     check('it describes the flow new leads get', config.flow, { key: 'antibiotics', name: 'eDrugstore antibiotics' });
-    // The opener, ten choices, four "sorry"s, the review text, the missed-call text.
-    check('every text a lead can receive is listed', config.messages.length, 17);
+    // The opener, ten choices, four "sorry"s, the review text, the missed-call
+    // text, and the link the automated call texts (T24).
+    check('every text a lead can receive is listed', config.messages.length, 18);
     check('the opener is first', [config.messages[0].key, config.messages[0].name], ['q1', 'Question 1']);
     check('and is personalised', config.messages[0].personalised, true);
     const afterYes = config.messages.find((m) => m.key === 'q1_1');
@@ -156,6 +158,68 @@ async function main(): Promise<void> {
     // 10 + 10 + 20 + 15 + 60. Hardcoding 100 would have hidden this.
     check('the maximum is recomputed', config.scoring.maxScore, 115);
     await pool.query(`UPDATE flow_choices SET points = 45 WHERE ${talk}`);
+  }
+
+  // T24, AUTO-CALLS.md: the automated call's script and settings, against
+  // migrations 015, 018-020 - the fixture is held to the same rows by
+  // call-script-live-check.
+  console.log('\nConfiguration reads the call script the robot uses');
+  {
+    const config = await getAdminConfig();
+    const script = ANTIBIOTICS_CALL;
+    const [offer, link] = script.steps;
+    check('the active script', [config.callScript?.key, config.callScript?.name, config.callScript?.voice], [script.key, script.name, script.voice]);
+    const lines = config.callScript?.lines ?? [];
+    const line = (key: string) => lines.find((l) => l.key === key);
+    check('every line, in the order a lead can hear them - no recording notice while calls are not recorded', lines.map((l) => l.key), [
+      'q1', 'q1_1', 'q1_2', 'repeat_q1', 'q2', 'q2_1', 'q2_2', 'repeat_q2',
+      'no_response', 'stop', 'hold', 'hold_next', 'hold_place', 'busy', 'voicemail',
+    ]);
+    check('each question named as every screen names it, and when it is asked', [line('q1'), line('q2')].map((l) => [l?.name, l?.when]), [
+      ['Q1 · Offer', 'When the lead picks up'],
+      ['Q2 · Link', 'After Q1 · No'],
+    ]);
+    check('each answer: its reply, where it leads, its key and its words', [line('q1_1'), line('q1_2'), line('q2_1'), line('q2_2')].map((l) => [l?.name, l?.when, l?.press]), [
+      ['After Q1 · Yes', 'Then puts them through to a person', '1'],
+      ['After Q1 · No', 'Then Q2', '2'],
+      ['After Q2 · Yes', 'Then texts the link, and ends', '1'],
+      ['After Q2 · No', 'Then ends the call', '2'],
+    ]);
+    check('the words are the ones the call listens for', line('q1_1')?.words, offer.choices[0].words);
+    check('stop: key 9 and its words, on any question', [line('stop')?.press, line('stop')?.words], ['9', script.optOutWords]);
+    check('every line word for word as the database has it', lines.map((l) => l.body), [
+      offer.body, offer.choices[0].reply, offer.choices[1].reply, offer.repeatBody,
+      link.body, link.choices[0].reply, link.choices[1].reply, link.repeatBody,
+      script.noResponseBody, script.optOutBody, script.holdBody, script.holdNextBody, script.holdPlaceBody,
+      script.busyBody, script.voicemailBody,
+    ]);
+    const texted = config.messages[config.messages.length - 1];
+    check('the link it texts is under the texts, counted like them', [texted.key, texted.name, texted.body, texted.segments, texted.costsExtraSegment],
+      ['call_link', 'Call · link', script.linkText, 1, false]);
+
+    check('the settings as the robot reads them - off, with calling not set up', config.callSettings, {
+      on: false, startMinute: 660, endMinute: 1020, timeZone: 'America/Phoenix', days: ['mon', 'tue', 'wed', 'thu', 'fri'],
+      waitMinutes: 60, ringSeconds: 25, offerRingSeconds: 20, holdMaxMinutes: 10, minConfidence: 0.4, callbackNumber: null,
+    });
+
+    const live = await getAdminConfig({ autoCalls: true, callbackNumber: '+14805308582', recorded: true });
+    check('on, with the number the voicemail gives', [live.callSettings.on, live.callSettings.callbackNumber], [true, '+14805308582']);
+    check('recorded: the notice, after a yes and before anyone joins', live.callScript?.lines.map((l) => l.key).slice(9, 12), ['stop', 'notice', 'hold']);
+
+    await pool.query(`UPDATE settings SET value = '30' WHERE key = 'auto_call_ring_seconds'`);
+    await pool.query(`UPDATE settings SET value = '25:00' WHERE key = 'auto_call_hours_start'`);
+    await pool.query(`UPDATE settings SET value = 'soon' WHERE key = 'auto_call_hold_max_minutes'`);
+    const edited = (await getAdminConfig()).callSettings;
+    check('a setting changed by migration shows at once', edited.ringSeconds, 30);
+    check('one the robot cannot read shows what it uses instead - never the typo', [edited.startMinute, edited.holdMaxMinutes], [660, 10]);
+    await pool.query(`UPDATE settings SET value = '25' WHERE key = 'auto_call_ring_seconds'`);
+    await pool.query(`UPDATE settings SET value = '11:00' WHERE key = 'auto_call_hours_start'`);
+    await pool.query(`UPDATE settings SET value = '10' WHERE key = 'auto_call_hold_max_minutes'`);
+
+    await pool.query(`UPDATE call_scripts SET is_active = false`);
+    const none = await getAdminConfig();
+    check('no active script: no call script, and no link text', [none.callScript, none.messages.some((m) => m.key === 'call_link')], [null, false]);
+    await pool.query(`UPDATE call_scripts SET is_active = true WHERE key = 'antibiotics'`);
   }
 
   console.log('\nOverview counts leads in the period');

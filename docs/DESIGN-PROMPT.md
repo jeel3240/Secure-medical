@@ -218,6 +218,8 @@ Left sub-navigation within the page: **Overview** · **Leads** · **Scoring** ·
 - Placeholder chips: `{first_name}`.
 - Phone-frame preview on the right showing the full happy-path conversation with current copy.
 
+*(2026-10-25, T24: the Configuration page that replaced 6b and 6c also shows the automated call's script, line by line, and the settings it reads - `ADMIN.md`, "The automated call".)*
+
 **6d. Agents**
 - Table: Name, Email, Role, Status (Active / Inactive), Last login, Actions.
 - "Add agent" drawer: name, email, role, generates a temporary password shown once.
