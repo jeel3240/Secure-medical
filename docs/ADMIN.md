@@ -28,6 +28,8 @@ here is what we ask, here is what each answer is worth.
   each question, with the maximum possible.
 - The tier bands.
 - Conversation expiry, read from `settings.expiry_days` - 7.
+- The automated call's script and settings (T24) - "The automated call",
+  below.
 
 `GET /api/admin/config` returns all of it from the flow new leads get
 (`flows`, `flow_questions`, `flow_choices` - `FLOWS.md`), `settings` and
@@ -89,6 +91,37 @@ a quiet line at its foot. The header has "Live · updated just now".
 setting is 1, and it counts clarifications: the first unclear reply is
 clarified, the second goes to review. The old label read as one unclear reply
 being enough.
+
+### The automated call - T24, 2026-10-25
+
+The same page shows the robot's call (`AUTO-CALLS.md`): what it says, and the
+settings it reads. Two more cards, and one more text under Messages.
+
+| Card | Shows |
+|---|---|
+| Call script, under Messages | Every line the robot says, in the order a lead can hear them, in the Messages card's own rows: each question ("Q1 · Offer", and when it is asked - "When the lead picks up", "After Q1 · No"); each answer's reply and what follows ("After Q1 · Yes" - "Then puts them through to a person"), with what picks it under it - "Key 1, or: yes, yeah, yep, …"; each question's repeat line ("Unclear · Q1"); then the lines every question shares, as the call goes on - No response, Stop (key 9 and its words), the recording notice when calls are recorded, Hold, Next in line, Place in line, Busy - and the Voicemail. The header names the script; the foot names the voice |
+| Calls, under Settings | Automated calls On or Off; the hours and time zone ("11:00 AM - 5:00 PM", America/Phoenix); the days ("Monday to Friday"); the first call ("1 hour after the first text"); how long a "yes" rings people (25 seconds), and a lead on hold the person who came free (20); the hold line's safety stop (10 minutes); the confidence a spoken answer needs (0.4); and the call-back number the voicemail gives |
+| Messages | One more row, last: **Call · link**, the text a "yes" to the link sends - counted for length and segments like every other text |
+
+**The robot's own readers, not the rows** - `db/call-script.ts`:
+`loadActiveCallScript`, `readCallHours`, `readRingSeconds`,
+`readOfferRingSeconds`, `readHoldMaxSeconds`, `readMinConfidence`. A setting
+the robot cannot read shows what it uses instead - `25:00` as a start shows
+11:00 AM, as the robot calls at 11 - so the page never shows a value no call
+will use. Same reason as the rest of the page: a window on live values, not
+on what was meant.
+
+**What only the api knows** comes from `api/admin/config.ts`: whether
+automated calls are on (`AUTO_CALLS=on` and calling set up - an environment
+variable, so the card says what turns it on rather than offering to), the
+calling number (`TWILIO_PHONE_NUMBER`, which the voicemail reads out digit by
+digit - shown in place of `{callback_number}`), and whether calls are
+recorded, which is when the recording notice is said. `{place}` in the hold
+line shows as "2, 3…".
+
+No script active: the card says so, and the link text is not listed. Read-only
+like the rest: the script and its settings change by migration (015, 018-020
+so far).
 
 ## Overview (6a)
 
@@ -234,4 +267,11 @@ add without Jeel saying so. Not built.
 database: the config against the antibiotics flow seeded by `012_flows.sql` (tiers
 and expiry from `001_init.sql`) and against an edited choice, the overview's period windows, totals, per-agent aggregates and
 activity feed,
-and the DNC list's states, search escaping and lead-less rows.
+and the DNC list's states, search escaping and lead-less rows. Since T24 also
+the call script and its settings: every line in order and word for word
+against the script the robot uses (`core/call-script-fixtures.ts`, itself held
+to the database by `call-script-live-check`), each question's and answer's
+name and when, keys and words, the link text under Messages, the settings
+off and on, the recording notice only on recorded calls, a setting changed
+by migration, one the robot cannot read, and no script active - 77 checks as
+of 2026-10-25.

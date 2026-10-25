@@ -2,8 +2,9 @@
  * `GET /api/admin/config` - Admin > Configuration.
  *
  * Superadmin only, read-only. Returns the live message copy, scoring rules,
- * tier bands and the settings the state machine reads, so the screen shows what
- * the system is actually using rather than a copy kept in the frontend.
+ * tier bands and the settings the state machine reads, and the automated
+ * call's script and settings (T24), so the screen shows what the system is
+ * actually using rather than a copy kept in the frontend.
  *
  * There is no writer, deliberately: Jeel's decision of 2026-09-23. ADMIN.md.
  */
@@ -26,7 +27,14 @@ export function adminConfigRouter(deps: AppDeps): Router {
       // eslint-disable-next-line @typescript-eslint/no-require-imports
       const db = require('../../db/admin-config') as typeof import('../../db/admin-config');
 
-      res.json(await db.getAdminConfig());
+      // What only the api knows about calls - AUTO-CALLS.md, T24.
+      res.json(
+        await db.getAdminConfig({
+          autoCalls: deps.autoCalls,
+          callbackNumber: deps.twilio?.callerId ?? null,
+          recorded: Boolean(deps.twilio?.transcriptionServiceSid),
+        })
+      );
     })
   );
 
