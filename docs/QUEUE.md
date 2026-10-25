@@ -333,9 +333,10 @@ milliseconds: the sets cover every call, however few leads the date leaves.
 - **`has_unread_inbound` is cleared by `POST /api/leads/:id/read`** - Phase 3
   task 3. Until it existed nothing unset the flag, so an expired lead who texted
   back stayed in the queue however often an agent read the message. Proved
-  against a real database: such a lead leaves the queue once read, while a lead
-  whose conversation is still open stays, because the flag was never what was
-  keeping it there. `STATE-MACHINE.md`, "Expiry".
+  against a real database: such a lead leaves the queue once read - so does a
+  lead an agent took over mid-questions - while a completed lead stays,
+  because the flag was never what was keeping it there
+  (`read-flag-live-check`). `STATE-MACHINE.md`, "Expiry".
 - **No paging.** `limit` truncates and `total` says by how much; at 50-100 leads
   a day the default of 100 holds several days of queue. Page when it does not.
 
@@ -353,7 +354,7 @@ booked callback shows Callback, and call attempts show no tag. The missed call
 - in the queue with no score, reopening a closed lead, its tag, and what
 settles it - is proved in `scripts/calls-live-check.ts`.
 
-The missed "yes" (T22) is proved there too, through the real writes - the
+The missed "yes" (T22) is proved in `scripts/queue-live-check.ts`, through the real writes - the
 robot's call (`startAutomatedCall`), nobody taking it (`missTransfer`), an
 agent's call (`startCall`), an outcome (`setDisposition`): first in the queue,
 before a 90-point lead, the longest waiting on top; tagged Wants a call with no

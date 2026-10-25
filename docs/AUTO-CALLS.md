@@ -1,6 +1,6 @@
 # Automated outbound calls
 
-**Planned 2026-10-15. Being built: T0 to T24 are done (2026-10-25) - the
+**Planned 2026-10-15. Being built: T0 to T25 are done (2026-10-25) - the
 server places a call, asks the script, keeps every answer, texts the link,
 puts a "yes" through to the lead's own agent first, then everyone free,
 switches off whoever let it ring out, holds a "yes" nobody can take yet while
@@ -11,7 +11,9 @@ nobody owns, calls the right leads by itself at the pace the people free can
 take, shows each robot call on the lead's timeline with what was said, puts
 a "yes" nobody took first in the agents' queue, shows how each lead's call
 went on Admin > Leads, and shows the script and its settings on Admin >
-Configuration; the finish (T25, T26) is not built yet.**
+Configuration; every doc has been read against the code, and the end-to-end
+script runs three robot calls. Left: every path on a real phone, then live
+(T26).**
 This
 doc is the agreed design and the tracker for building it. Each ticket below updates its row when it is merged,
 and the sections it touches, so the doc always says what is built and what is
@@ -138,8 +140,9 @@ LEAD CALLS (480) 470-8259 BACK
   2026-10-17): a lead who does not pick up still has the first text, and the
   voicemail asks them to call back. A second try may come later, when Jeel
   says.
-- Only leads that arrive after `AUTO_CALLS` is first switched on - never the
-  backlog.
+- Only leads that arrive after `AUTO_CALLS` was last switched on - never the
+  backlog, including leads that arrived while it was off (`recordAutoCallsSwitch`,
+  below).
 
 **As built** (T20, 2026-10-24): the worker's last job on each tick, every 30
 seconds, with automated calls on and calling set up (`worker/auto-calls.ts`).
@@ -1010,7 +1013,7 @@ ticket's own PR.
 | T23 | Admin > Leads: the Call column | T4 | Done 2026-10-25 - seen in the browser on real calls' leads: voicemail left, not interested, no answer, said yes taken and not |
 | T24 | Admin > Configuration shows the call script | T6 | Done 2026-10-25 - seen in the browser: every line in order with its keys and words, and the settings, matching the database |
 | | **Finish** | | |
-| T25 | Everything written down and checked end to end | T0-T24 | Not started |
+| T25 | Everything written down and checked end to end | T0-T24 | Done 2026-10-25 - every doc read against the code, the faults fixed; `npm run e2e`, 93 checks, three robot calls |
 | T26 | Real phone, every path, then live | T25 | Not started |
 | | **Other tickets - not calling** | | |
 | W1 | Day dividers in the agent's conversation | - | Done 2026-10-18 |
@@ -2641,11 +2644,57 @@ path.
   requests simulated.
 
 **Done when**
-- [ ] `npm run e2e` passes.
-- [ ] A read of every doc against the code finds nothing out of date.
+- [x] `npm run e2e` passes - 93 checks (52 before), on a scratch database
+      and, as `docs/README.md` runs it, inside the api container.
+- [x] A read of every doc against the code finds nothing out of date - five
+      independent reads, each confirmed in the code before it was fixed.
 
-**Files:** `scripts/end-to-end.ts`, docs.
-**Doc:** all of the above.
+As built. **The end-to-end script** gained steps 10 to 13: automated calls
+switched on; an agent who signs in, says her browser can take a call and
+switches Taking calls on, through the routes the browser uses; three leads
+who never replied. The worker's own look, wired as `worker/index.ts` wires
+it, calls them one at a time, one person being free: **Casey** says "Yes, I
+am." and Maya takes the transfer - the lead hers, the call `transferred`,
+answered, on the timeline with what was said, Working on Admin > Leads;
+**Riley** presses 1 and Maya lets it ring out - the busy line,
+`transfer_missed`, Maya switched off (`missed_transfer`), Riley first in the
+queue as Wants a call until Maya calls back; **Avery** says no, then "Sure,
+text me." - the link texted once, Awaiting reply and Link sent at once.
+Twilio is stubbed at its library's one request method, which answers only
+"place this call", so what we ask for - the number, our webhooks, voicemail
+detection - is built by the real code and checked; its webhooks are posted
+signed, each at the address the previous answer gave. Before that, the
+script's own two faults, hidden by `--transpile-only`: the app built without
+calling's settings, and an outcome retired on 2026-09-28 (`interested`) -
+step 8 now releases, then saves Closed.
+
+**The doc read** - every doc, split five ways, read against the code by
+independent reviewers, each finding confirmed before fixing. Not wrong:
+`LOGGING.md` (88 log events, every one listed), `SCHEMA.md` (25 tables).
+Fixed: a queue rule left out of `LEAD-FLOW.md` and `ADMIN-LEADS.md` (the
+missed "yes"); `QUEUE.md` pointing at the wrong live check for T22, and
+misreading what the read-flag check proves; `FRONTEND.md`'s calling and test
+counts; Admin > Leads' view said to be in memory; `WEBHOOKS.md`'s Twilio
+routes (sixteen, not seven), its blocking paths (a stop on the call) and the
+keyword punctuation (only a trailing `.`, `!` or `,`); `AUTH.md` - signing
+out ends every session of that person; `TWILIO.md` - incoming calls with
+automated calls on, the recording notice heard on real calls, an automated
+call's `started_at`, which stale calls are closed; `AUDIT.md` -
+`reply.before_our_text` is a log line, and the local `--unblock`;
+`POLLER.md`'s `suppressed` counter; `CLAUDE.md`'s calling row, `core/`,
+the root README and `lib/call-settings.ts`; `WORKFLOW.md`'s migrations
+passage rewritten plainly; this doc's "first switched on", which is "last" -
+two code comments said the same. **One behaviour to decide, not changed**
+(`STATE-MACHINE.md`, "The missed-call text"): the robot calls leads still on
+Q1, so a "thanks" to the link text, or to the missed-call text after calling
+the robot back, gets Q1's "Sorry, please reply 1 for Yes or 2 for No."
+
+**Files:** `backend/scripts/end-to-end.ts`, `backend/src/db/auto-dial.ts` and
+`backend/src/worker/auto-calls.ts` (comments only), docs.
+**Doc:** this one; `README.md` (both), `CLAUDE.md`, `LEAD-FLOW.md`,
+`QUEUE.md`, `ADMIN.md`, `ADMIN-LEADS.md`, `FRONTEND.md`, `WEBHOOKS.md`,
+`STATE-MACHINE.md`, `AUTH.md`, `TWILIO.md`, `AUDIT.md`, `POLLER.md`,
+`WORKFLOW.md`.
 
 ---
 

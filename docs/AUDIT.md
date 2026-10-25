@@ -59,7 +59,7 @@ it.
 | `call.recorded` | A call's recording is ready, and its transcript is put in line | `callId`, `callSid`, `recordingSid`, `durationSec` |
 | `call.transcribed`, `call.transcript_failed` | The transcript is in, or given up | `callId`, `transcriptSid` and the number of `lines`; or the `reason` |
 | `dnc.blocked` | A number is blocked: by a STOP reply, by an agent's DNC outcome, because a contact arrived from EZ Texting already opted out (2026-10-01 - until then that one left no record), or by a lead saying stop on the automated call (reason `call_opt_out`, by the system - T13; once, however often Twilio repeats the request) | `phone`, `reason`, and `previous` - what the row said before a re-block overwrote it |
-| `dnc.released` | A block is lifted, by a START reply - the only thing that releases one | `phone`, `releaseReason`, `blockReason`, `blockedAt` |
+| `dnc.released` | A block is lifted, by a START reply - the only thing that releases one on a server; locally also `dev:auto-call -- --unblock`, released as `dev_test` | `phone`, `releaseReason`, `blockReason`, `blockedAt` |
 | `auth.signed_in`, `auth.signed_out`, `auth.password_changed` | | |
 | `auth.sign_in_failed` | A refused sign-in | The `email` tried and `why`. Never the password |
 | `user.created`, `user.updated`, `user.password_reset` | A superadmin changes an agent's account | `changes`: each field as `{ from, to }`. Never a password |
@@ -83,7 +83,8 @@ it ended). When automated calls were last switched on (`auto_calls_since` in
 recorded with the time it replaced - `auto_calls.switched_on`. Each robot call
 the worker places is its `call.started`, as one placed by hand. A reply that was not counted because it
 arrived before our text had gone out is kept in `messages` like any other,
-and logged as `reply.before_our_text`.
+and written to the application log as `reply.before_our_text` (`LOGGING.md`) -
+not an activity-log action.
 
 **Not recorded at all:** whether a browser can take a call right now
 (`users.ringable_until`, T9). It is the present moment, said by each open

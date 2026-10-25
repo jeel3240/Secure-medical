@@ -100,7 +100,7 @@ went a different way:
 | Auth | bcrypt (cost 12) and a JWT in an httpOnly, SameSite=Strict cookie. See `docs/AUTH.md`. |
 | Frontend | React 18, Vite 4, React Router 6, zustand, plain CSS with design tokens. |
 | Production web server | The `caddy` service is built from `frontend/Dockerfile`: the React build copied into a `caddy:2` image. |
-| Calling | Built 2026-10-01: the `twilio` library on the server, `@twilio/voice-sdk` in the browser. Outgoing calls, and incoming calls to one agent's browser; voicemail detection, recordings and transcripts, 2026-10-02; a recording notice, 2026-10-05. `docs/TWILIO.md`. |
+| Calling | Built 2026-10-01: the `twilio` library on the server, `@twilio/voice-sdk` in the browser. Outgoing calls, and incoming calls to one agent's browser; voicemail detection, recordings and transcripts, 2026-10-02; a recording notice, 2026-10-05. `docs/TWILIO.md`. With automated calls on, a call back nobody owns rings everyone free (T19). Automated outbound calls, placed by the server, 2026-10-18 on - `docs/AUTO-CALLS.md`. |
 
 **EZ Texting API notes**
 - Quick start: https://developers.eztexting.com/docs/quick-start-guide
@@ -139,7 +139,7 @@ secure-medical/
     Secure-Medical-Call-Center-Mockup.pdf
 ```
 
-All documentation lives in `docs/`, except `CLAUDE.md`. Keep it that way: when
+All documentation lives in `docs/`, except `CLAUDE.md` and a root `README.md` that only links into `docs/`. Keep it that way: when
 you change something the docs describe, update the doc in the same commit.
 
 **As built, 2026-09-14.** The tree above is the target. What exists today also includes:
@@ -147,6 +147,7 @@ you change something the docs describe, update the doc in the same commit.
 ```
   docker-compose.prod.yml   server-only override: RDS, no exposed ports, caddy service
   Caddyfile.dev             not used by anything; local dev goes through Vite
+  README.md                 a short index into docs/
   backend/
     scripts/migrate.js      migration runner
     src/api/auth/           sign-in, sessions, guards
@@ -236,7 +237,7 @@ you change something the docs describe, update the doc in the same commit.
     src/worker/opener.ts    sends question 1: shared by the poller, the retry and the resend
     scripts/retry-openers-live-check.ts  proves the backoff and the two must-nots
     scripts/send-waiting-openers-live-check.ts  proves the resend takes only what the retry gave up on, never twice, at its pace
-    scripts/end-to-end.ts   the whole system in one run - npm run e2e
+    scripts/end-to-end.ts   the whole system in one run - npm run e2e; since T25 the robot's calls too, Twilio stubbed at its HTTP boundary and its webhooks signed
     scripts/live-checks.sh  runs every live check, each on its own scratch database
     scripts/flows-live-check.ts  proves a second, five-question flow works from rows alone; scripts/live-flow.ts answers a flow for the other checks
     scripts/dev-ask-again.ts  local testing only: asks a held lead the questions again, so one phone can walk every path
@@ -281,6 +282,7 @@ you change something the docs describe, update the doc in the same commit.
     src/components/CallTranscript.tsx  a call's transcript, under the call
     src/components/CallAnswers.tsx  what the lead said on the robot's call, under it (T21)
     src/lib/call-results.ts  the robot call's result in words, one list for the timeline and Admin > Leads' Call column and filter (T23)
+    src/lib/call-settings.ts  the robot's call settings in words for Admin > Configuration - hours, days, waits (T24)
     src/lib/useSecond.ts    a clock that re-renders every second
     src/App.tsx, src/main.tsx  the routes; the entry point, which also arms the ringtone
     src/auth/               the session store and the route guards
@@ -310,12 +312,15 @@ you change something the docs describe, update the doc in the same commit.
     AUTH.md  POLLER.md  WORKFLOW.md  WEBHOOKS.md  ADMIN-LEADS.md  STATE-MACHINE.md  TWILIO.md
     AUDIT.md                the activity log: nothing is lost
     FLOWS.md                how SMS scripts are stored as rows, how to add one, and how questions are named
-    AUTO-CALLS.md           automated outbound calls: the agreed design and the build tracker (T0-T24 done as of 2026-10-25: the server places a call, asks the script, keeps the answers, texts the link, puts a "yes" through to the lead's own agent first, then everyone free, switches off whoever let it ring out, holds a "yes" while someone is on a call or writing its note, rings the next person who comes free with the lead who has waited longest, leaves the voicemail message once a machine's greeting is over, rings everyone free for a lead calling back whom nobody owns, calls the right leads by itself at the pace the people free can take, shows each robot call on the lead's timeline with what was said, puts a "yes" nobody took first in the agents' queue, shows each lead's robot call on Admin > Leads, and the script and its settings on Admin > Configuration; T25 on, not built)
+    AUTO-CALLS.md           automated outbound calls: the agreed design and the build tracker (T0-T25 done as of 2026-10-25: the server places a call, asks the script, keeps the answers, texts the link, puts a "yes" through to the lead's own agent first, then everyone free, switches off whoever let it ring out, holds a "yes" while someone is on a call or writing its note, rings the next person who comes free with the lead who has waited longest, leaves the voicemail message once a machine's greeting is over, rings everyone free for a lead calling back whom nobody owns, calls the right leads by itself at the pace the people free can take, shows each robot call on the lead's timeline with what was said, puts a "yes" nobody took first in the agents' queue, shows each lead's robot call on Admin > Leads, and the script and its settings on Admin > Configuration; every doc read against the code, and the end-to-end script runs three robot calls (T25); T26, a real phone on every path then live, not done)
     QUEUE.md  AGENT-WORKSPACE.md  ADMIN.md  LOGGING.md  FRONTEND.md
 ```
 
-`core/` holds message rendering, the state machine and answer matching, all of
-it now driven from the webhook through `api/reply-flow.ts`. `docker-compose.yml`
+`core/` holds the pure rules: message rendering, the SMS state machine and
+answer matching (driven from the EZ Texting webhook through `api/reply-flow.ts`,
+and for spoken answers from `api/twilio-webhooks.ts`), the call script, the
+robot's timing and pace, call and disposition rules, and the queue's tags.
+`docker-compose.yml`
 is local only; production layers `docker-compose.prod.yml` on top of it.
 
 `api` and `worker` build from the same Dockerfile; only the start command differs.
@@ -786,7 +791,7 @@ Before building it:
 2. If `createdAt` moves, build the rules as written.
 3. If not, the poller needs another signal for a return - for example
    `updatedAt`, a group move, or the partner telling us - and that has to be
-   found first. `docs/POLLER.md`, "Returning leads", has the detail.
+   found first. `docs/POLLER.md`, "Not done yet", has the detail.
 
 ---
 

@@ -243,8 +243,9 @@ Checked in this order. The first match wins.
 ### 1. Opt-out - any status
 
 The reply is an opt-out if the payload's `optOut` is true, or the whole message
-is one of STOP, STOPALL, UNSUBSCRIBE, CANCEL, END, QUIT, REVOKE, OPTOUT (case and
-trailing punctuation ignored). This is already implemented in the webhook.
+is one of STOP, STOPALL, UNSUBSCRIBE, CANCEL, END, QUIT, REVOKE, OPTOUT (case,
+surrounding spaces and a trailing `.`, `!` or `,` ignored). This is already
+implemented in the webhook.
 
 - Add the phone to `dnc_list`, reason `sms_stop`.
 - If the conversation is `open`, set it `suppressed`. Other statuses keep their
@@ -662,9 +663,11 @@ failed opener".
 
 ## The missed-call text
 
-Added 2026-10-01 with incoming calls - `TWILIO.md`, "A missed call". It is the
-one automated text that is not part of this flow, so its rules are stated here
-once:
+Added 2026-10-01 with incoming calls - `TWILIO.md`, "A missed call". One of
+two automated texts outside this flow; the other is the link a lead said yes
+to on the automated call (T14, `AUTO-CALLS.md`), which follows the same rules
+below except **when** (that yes) and its words (the script's `link_text`). So
+they are stated here once:
 
 - **When.** A lead rings our number and nobody answers. `message_missed_call`
   from `settings` is sent, once per call (`db/lead-texts.ts`).
@@ -681,10 +684,15 @@ once:
   - conversation taken over by an agent - stored and flagged (rule 2b);
   - conversation still `open` - **read as an answer to the current question.**
     "ok thanks" gets the clarification, and a second such reply sends the
-    conversation to review; a bare "1" is scored. Not handled specially. It
-    needs a lead who is mid-questions *and* was rung by an agent *and* rang
-    back - unusual, since agents call leads who have finished - and the
-    result, at worst, is a lead in Needs review, which a person reads.
+    conversation to review; a bare "1" is scored. Not handled specially.
+    Rare for agents' calls, which go to leads who have finished - but **the
+    usual case for the automated call** (found in the T25 doc check,
+    2026-10-25): the robot calls only leads who never replied, still on Q1,
+    and neither a "yes" nor an unanswered call back changes that. So a "thanks"
+    to the link text, or to the missed-call text after calling the robot back,
+    gets Q1's "Sorry, please reply 1 for Yes or 2 for No." At worst the lead
+    reaches Needs review, which a person reads; a "1" starts the questions.
+    Left as it is until Jeel decides otherwise.
 
 ---
 

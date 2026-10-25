@@ -87,8 +87,8 @@ highest in this list wins.
 | **Offers** | Said No to the first question, then Yes to special offers. Nothing for an agent to do | No, unless they text or ring us |
 | **Not interested** | Said No to the first question, then No thanks to the offers and to a rep | No, unless they text or ring us |
 | **Expired** | Went quiet during the questions | No, unless they text or ring us |
-| **Answering** | Partway through the questions | No, unless an agent holds it, they ring us and nobody answers, or our text to them did not go out |
-| **Awaiting reply** | Has not answered question 1 | No, with the same three exceptions |
+| **Answering** | Partway through the questions | No, unless an agent holds it, they ring us and nobody answers, they said yes on the automated call and nobody took it (T22), or our text to them did not go out |
+| **Awaiting reply** | Has not answered question 1 | No, with the same four exceptions |
 
 Working outranks the SMS statuses: an expired or needs-review lead that an
 agent is handling reads Working.

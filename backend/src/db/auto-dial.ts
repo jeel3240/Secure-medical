@@ -130,7 +130,8 @@ export async function dialRoom(): Promise<DialRoom> {
  * The leads to call now, oldest first - "When a lead is called". A lead is
  * called when:
  *
- * - it arrived after `since`, when automated calls were first switched on;
+ * - it arrived after `since`, when automated calls were last switched on
+ *   (`recordAutoCallsSwitch`);
  * - its first text went out at least `waitMinutes` ago (`question_sent_at` of
  *   its conversation), and that conversation is still open - not answered,
  *   expired or stopped;

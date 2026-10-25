@@ -150,7 +150,11 @@ DATABASE_URL=postgres://app:app@localhost:5433/speed JWT_SECRET=x EZT_USERNAME=x
 
 **The end-to-end script** runs the whole system in one go - a lead arrives,
 answers the antibiotics flow's questions through the real webhook, is scored, reaches the queue,
-is claimed, worked, dispositioned, and finally blocked:
+is claimed, worked, closed, and finally blocked; then, with automated calls on,
+the robot calls three leads who never replied, one at a time as one agent is
+free - one says yes and the agent takes it, one says yes and nobody does (first
+in the queue), one says no, then yes to the link, which is texted (T25,
+`AUTO-CALLS.md`):
 
 ```bash
 docker compose exec postgres psql -U app -d postgres -c 'CREATE DATABASE e2e'
@@ -159,10 +163,16 @@ docker compose exec -e DATABASE_URL=postgres://app:app@postgres:5432/e2e api   n
 docker compose exec -e DATABASE_URL=postgres://app:app@postgres:5432/e2e   -e EZT_SEND_GROUP=stub api npm run e2e
 ```
 
-Fifty-two checks. EZ Texting is stubbed at the HTTP boundary, so it proves
-everything up to the moment a text would leave the building - and nothing about
-whether a real phone buzzes. For that, set the real `EZT_*` values and add your
-own number to the test group, as "Sending" above describes.
+Ninety-three checks (2026-10-25). EZ Texting and Twilio are stubbed at their
+HTTP boundaries - `axios.post`, and the Twilio library's one request method,
+which answers only "place this call" and fails the run on anything else - so it
+proves everything up to the moment a text or a call would leave the building,
+and nothing about whether a real phone buzzes or rings. Twilio's side of each
+call is its webhooks, posted to the real routes and signed as Twilio signs them,
+each at the address the previous answer gave. It sets its own database's calling
+hours to every hour of every day, so it passes whenever it is run. For real
+texts, set the real `EZT_*` values and add your own number to the test group, as
+"Sending" above describes; for real calls, `AUTO-CALLS.md`, T26.
 
 ## Known limits
 
@@ -283,7 +293,7 @@ commit.
 | `POLLER.md` | How leads are pulled in | The poller or worker loop |
 | `WEBHOOKS.md` | How replies are received | The webhook handler |
 | `TWILIO.md` | Browser calling: how a call works, incoming calls and missed calls, what is saved, settings, testing, deploying | Anything about calls, Twilio's webhooks, the Call button, the incoming-call card or the call bar |
-| `AUTO-CALLS.md` | Automated outbound calls: the agreed script and flow, the transfer and hold rules, the "Taking calls" switch, and the build tracker. T0-T24 are done (2026-10-25): the server places a call, asks the script, keeps every answer, texts the link, puts a "yes" through to the lead's own agent first, then everyone free, switches off whoever let it ring out, holds a "yes" while someone is on a call or writing its note, rings the next person who comes free with the lead who has waited longest, leaves the voicemail message once a machine's greeting is over, rings everyone free for a lead calling back whom nobody owns, calls the right leads by itself at the pace the people free can take, shows each robot call on the lead's timeline with what was said, puts a "yes" nobody took first in the agents' queue, shows each lead's robot call on Admin > Leads, and the script and its settings on Admin > Configuration; the finish (T25) on is not built yet | A ticket from its tracker is merged, or any decision about automated calls |
+| `AUTO-CALLS.md` | Automated outbound calls: the agreed script and flow, the transfer and hold rules, the "Taking calls" switch, and the build tracker. T0-T25 are done (2026-10-25): the server places a call, asks the script, keeps every answer, texts the link, puts a "yes" through to the lead's own agent first, then everyone free, switches off whoever let it ring out, holds a "yes" while someone is on a call or writing its note, rings the next person who comes free with the lead who has waited longest, leaves the voicemail message once a machine's greeting is over, rings everyone free for a lead calling back whom nobody owns, calls the right leads by itself at the pace the people free can take, shows each robot call on the lead's timeline with what was said, puts a "yes" nobody took first in the agents' queue, shows each lead's robot call on Admin > Leads, and the script and its settings on Admin > Configuration, every doc read against the code and the end-to-end script running robot calls; a real phone on every path, then live (T26), is left | A ticket from its tracker is merged, or any decision about automated calls |
 | `AUDIT.md` | The activity log and the raw webhook archive: what is recorded, why nothing can be edited or deleted, what it does not cover | **Any new action a person or the system can take** - it records itself, or this doc says why not |
 | `ADMIN-LEADS.md` | The superadmin Leads page | That page or its API |
 | `QUEUE.md` | The agents' priority queue API: who is in it, the order, the tags | `GET /api/leads`, the queue query or the tag rules |
