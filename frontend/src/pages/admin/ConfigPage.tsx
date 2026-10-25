@@ -1,8 +1,10 @@
 import { Fragment, useCallback, type ReactNode } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { getConfig, type AdminConfig } from '../../api/admin';
 import { usePolling } from '../../api/usePolling';
 import { Banner } from '../../components/Banner';
 import { LiveStatus } from '../../components/LiveStatus';
+import { Segmented, type SegmentedOption } from '../../components/Segmented';
 import { Spinner } from '../../components/Spinner';
 import { TierSignal } from '../../components/TierSignal';
 import { clockText, daysText, minutesText } from '../../lib/call-settings';
@@ -30,11 +32,16 @@ import { formatPhone } from '../../lib/format';
  * plain rows; each card's one caveat is a quiet line at its foot; the tiers use
  * the queue's signal bars.
  *
- * **The automated call - T24, AUTO-CALLS.md.** A Call script card under
- * Messages, every line the robot says in the order a lead can hear them, in
- * the Messages card's own rows; and a Calls card under Settings, with the
- * values the robot reads - whether it is on, when it calls, how long things
- * ring. The link it texts is under Messages, counted like the other texts.
+ * **The automated call - T24, AUTO-CALLS.md.** A Call script card, every
+ * line the robot says in the order a lead can hear them, in the Messages
+ * card's own rows; and a Calls card, with the values the robot reads -
+ * whether it is on, when it calls, how long things ring. The link it texts is
+ * with the other texts, counted like them.
+ *
+ * **Three tabs - Jeel, 2026-10-25:** the one page had grown too long to read.
+ * Texts (the messages and their settings), Scoring (points and tiers) and
+ * Calls (the call script and its settings), on the navy switcher the other
+ * pages use, the tab kept in the address.
  */
 
 /**
@@ -86,9 +93,31 @@ export function questionTitle(question: { short: string; heading: string }): str
   return question.short === question.heading ? question.heading : `${question.short} · ${question.heading}`;
 }
 
+/** The page's tabs - Jeel, 2026-10-25: one long page was too much to read. */
+type ConfigTab = 'texts' | 'scoring' | 'calls';
+
+const TABS: SegmentedOption<ConfigTab>[] = [
+  { value: 'texts', label: 'Texts' },
+  { value: 'scoring', label: 'Scoring' },
+  { value: 'calls', label: 'Calls' },
+];
+
+/**
+ * The tab in the address, `?tab=calls`, so a reload or a link keeps it - like
+ * Admin > Leads' view. Texts, the first, is the plain address; anything else
+ * reads as Texts.
+ */
+export function readConfigTab(raw: string | null): ConfigTab {
+  return TABS.find((tab) => tab.value === raw)?.value ?? 'texts';
+}
+
 export function ConfigPage() {
   const fetcher = useCallback(() => getConfig(), []);
   const { data, loading, error, updatedAt } = usePolling<AdminConfig>(fetcher);
+  const [params, setParams] = useSearchParams();
+  const tab = readConfigTab(params.get('tab'));
+  // Replaces the address, so Back leaves the page rather than stepping through tabs.
+  const show = (next: ConfigTab) => setParams(next === 'texts' ? {} : { tab: next }, { replace: true });
 
   if (loading) {
     return (
@@ -110,171 +139,215 @@ export function ConfigPage() {
             through a pull request.
           </p>
         </div>
-        <LiveStatus updatedAt={updatedAt} paused={Boolean(error)} />
+        <div className="page-header__status">
+          <Segmented label="Section" value={tab} onChange={show} options={TABS} />
+          <LiveStatus updatedAt={updatedAt} paused={Boolean(error)} />
+        </div>
       </div>
 
       {error && <Banner tone="warning">{error} Showing the last update.</Banner>}
 
+      {/* Each tab the same two columns: the long list on the left, its
+          settings beside it. */}
       <div className="config">
-        <div className="config__column">
-          <section className="card table-card">
-            <header className="card-head">
-              <h2 className="card-head__title">Messages</h2>
-              <span className="card-head__meta">
-                {data.flow ? `${data.flow.name} · as a lead receives them` : 'No flow is active'}
-              </span>
-            </header>
-
-            <ol className="config-msgs">
-              {data.messages.map((message) => {
-                return (
-                  <li key={message.key} className="config-msg">
-                    <div className="config-msg__label">
-                      <span className="config-msg__name">{message.name}</span>
-                      <span className="config-msg__when">{message.when}</span>
-                    </div>
-                    <div>
-                      <p className="config-msg__body">{withPlaceholders(message.body)}</p>
-                      <p className={`config-msg__meta${message.costsExtraSegment ? ' config-msg__meta--warn' : ''}`}>
-                        <span className="tabular">
-                          {message.personalised ? `Up to ${message.worstCaseLength}` : message.length} characters
-                        </span>
-                        {' · '}
-                        {message.segments} segment{message.segments === 1 ? '' : 's'}
-                        {message.costsExtraSegment && ' - billed as more than one'}
-                      </p>
-                    </div>
-                  </li>
-                );
-              })}
-            </ol>
-
-            <p className="card-note">
-              {data.longestNameIsFallback
-                ? `Lengths are counted with "${data.longestFirstName}", the word used when a lead has no first name - no name on file is longer.`
-                : `Lengths are counted with the longest first name on file, "${data.longestFirstName}".`}{' '}
-              Over {data.settings.segmentLimit} characters costs a second segment. The STOP confirmation
-              is sent by EZ Texting, not by us, so it is not listed.
-            </p>
-          </section>
-
-          <section className="card table-card">
-            <header className="card-head">
-              <h2 className="card-head__title">Call script</h2>
-              <span className="card-head__meta">
-                {data.callScript ? `${data.callScript.name} · as a lead hears it` : 'No call script is active'}
-              </span>
-            </header>
-
-            {data.callScript && (
-              <>
-                <ol className="config-msgs">
-                  {data.callScript.lines.map((line) => {
-                    const picked = pickedBy(line);
-                    return (
-                      <li key={line.key} className="config-msg">
-                        <div className="config-msg__label">
-                          <span className="config-msg__name">{line.name}</span>
-                          <span className="config-msg__when">{line.when}</span>
-                        </div>
-                        <div>
-                          <p className="config-msg__body">
-                            {withPlaceholders(line.body, data.callSettings.callbackNumber)}
-                          </p>
-                          {picked && <p className="config-msg__meta">{picked}</p>}
-                        </div>
-                      </li>
-                    );
-                  })}
-                </ol>
-                <p className="card-note">
-                  Spoken in the voice {data.callScript.voice}. The link it texts is under Messages.
-                </p>
-              </>
-            )}
-          </section>
-        </div>
-
-        <div className="config__column">
-          <section className="card table-card">
-            <header className="card-head">
-              <h2 className="card-head__title">Scoring</h2>
-              <span className="card-head__meta">Points per answer</span>
-            </header>
-            <dl className="kv">
-              {data.scoring.awards.map((award) => (
-                <div key={award.code} className="kv__row">
-                  <dt>{AWARD_LABEL[award.code] ?? award.label ?? award.code}</dt>
-                  <dd className="tabular">+{award.points}</dd>
-                </div>
-              ))}
-              {data.scoring.questions.map((question) => (
-                <div key={question.question} className="kv__group">
-                  <dt className="kv__group-title">{questionTitle(question)}</dt>
-                  {question.choices.map((choice) => (
-                    <div key={choice.choice} className="kv__row kv__row--sub">
-                      <dt>{choice.label ?? choice.choice}</dt>
-                      <dd className="tabular">+{choice.points}</dd>
-                    </div>
-                  ))}
-                </div>
-              ))}
-              <div className="kv__row kv__row--total">
-                <dt>Maximum</dt>
-                <dd className="tabular">{data.scoring.maxScore}</dd>
-              </div>
-            </dl>
-          </section>
-
-          <section className="card table-card">
-            <header className="card-head">
-              <h2 className="card-head__title">Tiers</h2>
-              <span className="card-head__meta">Score bands</span>
-            </header>
-            <dl className="kv">
-              {data.tiers.map((tier) => (
-                <div key={tier.name} className="kv__row">
-                  <dt>
-                    <TierSignal tier={tier.name} />
-                  </dt>
-                  <dd className="tabular">
-                    {tier.minScore} - {tier.maxScore}
-                  </dd>
-                </div>
-              ))}
-            </dl>
-            {/* Leads keep the score they were given; nothing rescores on its
-                own - CLAUDE.md §10. */}
-            <p className="card-note">A rule change does not rescore leads already scored.</p>
-          </section>
-
-          <section className="card table-card">
-            <header className="card-head">
-              <h2 className="card-head__title">Settings</h2>
-            </header>
-            <dl className="kv">
-              <div className="kv__row">
-                <dt>Conversation expires after</dt>
-                <dd className="tabular">{data.settings.expiryDays} days</dd>
-              </div>
-              <div className="kv__row">
-                {/* The setting counts clarifications, not unclear replies: at 1,
-                    the first unclear reply is clarified and the second goes to
-                    review. "Unclear replies before review: 1" read as the
-                    opposite. STATE-MACHINE.md, rule 4. */}
-                <dt>Clarifications before review</dt>
-                <dd className="tabular">{data.settings.maxInvalidBeforeReview}</dd>
-              </div>
-              <div className="kv__row">
-                <dt>Segment limit</dt>
-                <dd className="tabular">{data.settings.segmentLimit} characters</dd>
-              </div>
-            </dl>
-          </section>
-
-          <CallSettingsCard settings={data.callSettings} />
-        </div>
+        {tab === 'texts' && (
+          <>
+            <MessagesCard data={data} />
+            <SettingsCard settings={data.settings} />
+          </>
+        )}
+        {tab === 'scoring' && (
+          <>
+            <ScoringCard scoring={data.scoring} />
+            <TiersCard tiers={data.tiers} />
+          </>
+        )}
+        {tab === 'calls' && (
+          <>
+            <CallScriptCard script={data.callScript} callbackNumber={data.callSettings.callbackNumber} />
+            <CallSettingsCard settings={data.callSettings} />
+          </>
+        )}
       </div>
+    </section>
+  );
+}
+
+/** Every text a lead can receive, as it is sent, with its length and segments. */
+function MessagesCard({ data }: { data: AdminConfig }) {
+  return (
+    <section className="card table-card">
+      <header className="card-head">
+        <h2 className="card-head__title">Messages</h2>
+        <span className="card-head__meta">
+          {data.flow ? `${data.flow.name} · as a lead receives them` : 'No flow is active'}
+        </span>
+      </header>
+
+      <ol className="config-msgs">
+        {data.messages.map((message) => (
+          <li key={message.key} className="config-msg">
+            <div className="config-msg__label">
+              <span className="config-msg__name">{message.name}</span>
+              <span className="config-msg__when">{message.when}</span>
+            </div>
+            <div>
+              <p className="config-msg__body">{withPlaceholders(message.body)}</p>
+              <p className={`config-msg__meta${message.costsExtraSegment ? ' config-msg__meta--warn' : ''}`}>
+                <span className="tabular">
+                  {message.personalised ? `Up to ${message.worstCaseLength}` : message.length} characters
+                </span>
+                {' · '}
+                {message.segments} segment{message.segments === 1 ? '' : 's'}
+                {message.costsExtraSegment && ' - billed as more than one'}
+              </p>
+            </div>
+          </li>
+        ))}
+      </ol>
+
+      <p className="card-note">
+        {data.longestNameIsFallback
+          ? `Lengths are counted with "${data.longestFirstName}", the word used when a lead has no first name - no name on file is longer.`
+          : `Lengths are counted with the longest first name on file, "${data.longestFirstName}".`}{' '}
+        Over {data.settings.segmentLimit} characters costs a second segment. The STOP confirmation
+        is sent by EZ Texting, not by us, so it is not listed.
+      </p>
+    </section>
+  );
+}
+
+/** The values the texts' state machine reads that are not copy or scoring. */
+function SettingsCard({ settings }: { settings: AdminConfig['settings'] }) {
+  return (
+    <section className="card table-card">
+      <header className="card-head">
+        <h2 className="card-head__title">Settings</h2>
+      </header>
+      <dl className="kv">
+        <div className="kv__row">
+          <dt>Conversation expires after</dt>
+          <dd className="tabular">{settings.expiryDays} days</dd>
+        </div>
+        <div className="kv__row">
+          {/* The setting counts clarifications, not unclear replies: at 1,
+              the first unclear reply is clarified and the second goes to
+              review. "Unclear replies before review: 1" read as the
+              opposite. STATE-MACHINE.md, rule 4. */}
+          <dt>Clarifications before review</dt>
+          <dd className="tabular">{settings.maxInvalidBeforeReview}</dd>
+        </div>
+        <div className="kv__row">
+          <dt>Segment limit</dt>
+          <dd className="tabular">{settings.segmentLimit} characters</dd>
+        </div>
+      </dl>
+    </section>
+  );
+}
+
+function ScoringCard({ scoring }: { scoring: AdminConfig['scoring'] }) {
+  return (
+    <section className="card table-card">
+      <header className="card-head">
+        <h2 className="card-head__title">Scoring</h2>
+        <span className="card-head__meta">Points per answer</span>
+      </header>
+      <dl className="kv">
+        {scoring.awards.map((award) => (
+          <div key={award.code} className="kv__row">
+            <dt>{AWARD_LABEL[award.code] ?? award.label ?? award.code}</dt>
+            <dd className="tabular">+{award.points}</dd>
+          </div>
+        ))}
+        {scoring.questions.map((question) => (
+          <div key={question.question} className="kv__group">
+            <dt className="kv__group-title">{questionTitle(question)}</dt>
+            {question.choices.map((choice) => (
+              <div key={choice.choice} className="kv__row kv__row--sub">
+                <dt>{choice.label ?? choice.choice}</dt>
+                <dd className="tabular">+{choice.points}</dd>
+              </div>
+            ))}
+          </div>
+        ))}
+        <div className="kv__row kv__row--total">
+          <dt>Maximum</dt>
+          <dd className="tabular">{scoring.maxScore}</dd>
+        </div>
+      </dl>
+    </section>
+  );
+}
+
+function TiersCard({ tiers }: { tiers: AdminConfig['tiers'] }) {
+  return (
+    <section className="card table-card">
+      <header className="card-head">
+        <h2 className="card-head__title">Tiers</h2>
+        <span className="card-head__meta">Score bands</span>
+      </header>
+      <dl className="kv">
+        {tiers.map((tier) => (
+          <div key={tier.name} className="kv__row">
+            <dt>
+              <TierSignal tier={tier.name} />
+            </dt>
+            <dd className="tabular">
+              {tier.minScore} - {tier.maxScore}
+            </dd>
+          </div>
+        ))}
+      </dl>
+      {/* Leads keep the score they were given; nothing rescores on its
+          own - CLAUDE.md §10. */}
+      <p className="card-note">A rule change does not rescore leads already scored.</p>
+    </section>
+  );
+}
+
+/** Every line the robot says, in the order a lead can hear them - T24. */
+function CallScriptCard({
+  script,
+  callbackNumber,
+}: {
+  script: AdminConfig['callScript'];
+  callbackNumber: string | null;
+}) {
+  return (
+    <section className="card table-card">
+      <header className="card-head">
+        <h2 className="card-head__title">Call script</h2>
+        <span className="card-head__meta">
+          {script ? `${script.name} · as a lead hears it` : 'No call script is active'}
+        </span>
+      </header>
+
+      {script && (
+        <>
+          <ol className="config-msgs">
+            {script.lines.map((line) => {
+              const picked = pickedBy(line);
+              return (
+                <li key={line.key} className="config-msg">
+                  <div className="config-msg__label">
+                    <span className="config-msg__name">{line.name}</span>
+                    <span className="config-msg__when">{line.when}</span>
+                  </div>
+                  <div>
+                    <p className="config-msg__body">{withPlaceholders(line.body, callbackNumber)}</p>
+                    {picked && <p className="config-msg__meta">{picked}</p>}
+                  </div>
+                </li>
+              );
+            })}
+          </ol>
+          <p className="card-note">
+            Spoken in the voice {script.voice}. The link it texts is under Texts, with the other
+            messages.
+          </p>
+        </>
+      )}
     </section>
   );
 }

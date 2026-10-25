@@ -3,7 +3,7 @@
  * script's placeholders and what picks a line.
  */
 import { describe, expect, it } from 'vitest';
-import { pickedBy, placeholderText, questionTitle } from './ConfigPage';
+import { pickedBy, placeholderText, questionTitle, readConfigTab } from './ConfigPage';
 
 describe('a question\'s title', () => {
   it('joins the name to what it asks, and never says one twice', () => {
@@ -26,5 +26,14 @@ describe('the call script - T24', () => {
     expect(pickedBy({ press: '1', words: ['yes', 'yeah'] })).toBe('Key 1, or: yes, yeah');
     expect(pickedBy({ press: '9', words: [] })).toBe('Key 9');
     expect(pickedBy({ press: null, words: [] })).toBeNull();
+  });
+});
+
+describe('the tabs', () => {
+  it('reads the tab from the address, Texts when there is none or it is not a tab', () => {
+    expect(readConfigTab('calls')).toBe('calls');
+    expect(readConfigTab('scoring')).toBe('scoring');
+    expect(readConfigTab(null)).toBe('texts');
+    expect(readConfigTab('nonsense')).toBe('texts');
   });
 });

@@ -87,6 +87,20 @@ subtitle), the copy in a code font on grey, the upper-case row labels, the
 coloured tier pills, and three paragraphs of notes - each card's one caveat is
 a quiet line at its foot. The header has "Live · updated just now".
 
+**Three tabs - Jeel, 2026-10-25.** With the call script added the page was
+too long to read, so it is split, on the navy switcher the other pages use:
+
+| Tab | Cards |
+|---|---|
+| Texts | Messages, and the Settings beside it |
+| Scoring | Scoring, and the Tiers beside it |
+| Calls | Call script, and Calls beside it - "The automated call", below |
+
+Each tab keeps the page's two columns, the long list on the left. The tab is
+in the address - `/admin/config?tab=calls` - so a reload or a link keeps it;
+Texts is the plain address, and anything else reads as Texts. Only the screen
+changed: `GET /api/admin/config` still returns everything at once.
+
 **"Clarifications before review", not "Unclear replies before review".** The
 setting is 1, and it counts clarifications: the first unclear reply is
 clarified, the second goes to review. The old label read as one unclear reply
@@ -95,12 +109,13 @@ being enough.
 ### The automated call - T24, 2026-10-25
 
 The same page shows the robot's call (`AUTO-CALLS.md`): what it says, and the
-settings it reads. Two more cards, and one more text under Messages.
+settings it reads. Two more cards - on the Calls tab since the page was split,
+the same day - and one more text under Messages, on Texts.
 
 | Card | Shows |
 |---|---|
-| Call script, under Messages | Every line the robot says, in the order a lead can hear them, in the Messages card's own rows: each question ("Q1 · Offer", and when it is asked - "When the lead picks up", "After Q1 · No"); each answer's reply and what follows ("After Q1 · Yes" - "Then puts them through to a person"), with what picks it under it - "Key 1, or: yes, yeah, yep, …"; each question's repeat line ("Unclear · Q1"); then the lines every question shares, as the call goes on - No response, Stop (key 9 and its words), the recording notice when calls are recorded, Hold, Next in line, Place in line, Busy - and the Voicemail. The header names the script; the foot names the voice |
-| Calls, under Settings | Automated calls On or Off; the hours and time zone ("11:00 AM - 5:00 PM", America/Phoenix); the days ("Monday to Friday"); the first call ("1 hour after the first text"); how long a "yes" rings people (25 seconds), and a lead on hold the person who came free (20); the hold line's safety stop (10 minutes); the confidence a spoken answer needs (0.4); and the call-back number the voicemail gives |
+| Call script | Every line the robot says, in the order a lead can hear them, in the Messages card's own rows: each question ("Q1 · Offer", and when it is asked - "When the lead picks up", "After Q1 · No"); each answer's reply and what follows ("After Q1 · Yes" - "Then puts them through to a person"), with what picks it under it - "Key 1, or: yes, yeah, yep, …"; each question's repeat line ("Unclear · Q1"); then the lines every question shares, as the call goes on - No response, Stop (key 9 and its words), the recording notice when calls are recorded, Hold, Next in line, Place in line, Busy - and the Voicemail. The header names the script; the foot names the voice |
+| Calls | Automated calls On or Off; the hours and time zone ("11:00 AM - 5:00 PM", America/Phoenix); the days ("Monday to Friday"); the first call ("1 hour after the first text"); how long a "yes" rings people (25 seconds), and a lead on hold the person who came free (20); the hold line's safety stop (10 minutes); the confidence a spoken answer needs (0.4); and the call-back number the voicemail gives |
 | Messages | One more row, last: **Call · link**, the text a "yes" to the link sends - counted for length and segments like every other text |
 
 **The robot's own readers, not the rows** - `db/call-script.ts`:

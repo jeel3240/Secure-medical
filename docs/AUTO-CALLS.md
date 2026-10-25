@@ -963,7 +963,7 @@ does not answer a missed call - until an agent takes the transfer.
 | Lead timeline and workspace | "Automated call · voicemail left", "· said yes · Maya Chen took it · 2:14", "· said yes · nobody took it", "· link sent", "· not interested", "· opted out", "· no response", "· hung up", "· no answer" - with what the lead said underneath, under **Answers** (T21, `AGENT-WORKSPACE.md` "The timeline") |
 | Agents' queue | Only a "yes" nobody took: first, the longest waiting on top, "Wants a call" - and a Wants a call badge on the lead's card - until an agent calls or texts them, answers when they ring, or saves an outcome (T22, `QUEUE.md` "Who is in it", "The order", "The tag") |
 | Admin > Leads | A **Call** column with the robot call's result - "Voicemail left", "Said yes · nobody took it", "Calling now" - and a filter on it. No new status or tab - a lead is on two tracks at once ("Awaiting reply" and "Voicemail left") (T23, `ADMIN-LEADS.md` "Call") |
-| Admin > Configuration | The call script line by line, with what picks each answer; the settings the robot reads - on or off, hours, time zone, days, the wait, ring times, the hold stop; and the link text under Messages. Read-only (T24, `ADMIN.md` "The automated call") |
+| Admin > Configuration | On its Calls tab, the call script line by line, with what picks each answer, and the settings the robot reads - on or off, hours, time zone, days, the wait, ring times, the hold stop; the link text with the other texts, on Texts. Read-only (T24, `ADMIN.md` "The automated call") |
 | App bar | The "Taking calls" switch |
 | Incoming-call card | "Transfer · said yes to the offer"; for a lead returning the robot's call, "Calling back · automated call, 28m ago" (T19) |
 
@@ -2613,7 +2613,9 @@ the voicemail gives; **the confidence a spoken answer needs** and **a ring
 from hold's time** beside the ticket's settings; **what picks each answer** -
 its key and the words heard for it; **the recording notice**, listed when
 calls are recorded; and **the link text under Messages**, counted for
-segments like every other text, rather than in the call card.
+segments like every other text, rather than in the call card. Split into
+tabs after it was merged, at Jeel's request the same day - Texts, Scoring,
+Calls - since the one page had grown too long (`ADMIN.md`, "Three tabs").
 
 **Files:** `backend/src/db/admin-config.ts`, `backend/src/api/admin/config.ts`,
 `backend/src/api/__tests__/admin-screens.test.ts`, `backend/scripts/admin-live-check.ts`,
