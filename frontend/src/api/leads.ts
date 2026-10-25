@@ -32,6 +32,12 @@ export interface AdminLead {
   tier: string | null;
   lastActivityAt: string | null;
   lastActivityDirection: 'inbound' | 'outbound' | null;
+  /**
+   * The robot's call (T23): how its script ended, `calling` while it has no
+   * result, `unknown` when it has none an hour on. Null when it never called.
+   * Mirrors `LeadCall` in backend/src/db/leads.ts.
+   */
+  call: string | null;
 }
 
 export interface AdminLeadsResponse {
@@ -48,6 +54,8 @@ export interface AdminLeadsQuery {
   status?: string;
   source?: string[];
   since?: string;
+  /** '' or absent: every lead. `none`: not called. */
+  call?: string;
   q?: string;
   page?: number;
 }
@@ -57,6 +65,7 @@ export async function listAdminLeads(query: AdminLeadsQuery): Promise<AdminLeads
   if (query.status && query.status !== 'all') params.status = query.status;
   if (query.source?.length) params.source = query.source.join(',');
   if (query.since && query.since !== 'all') params.since = query.since;
+  if (query.call) params.call = query.call;
   if (query.q) params.q = query.q;
   if (query.page && query.page > 1) params.page = query.page;
 

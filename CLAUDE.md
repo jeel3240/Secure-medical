@@ -151,7 +151,7 @@ you change something the docs describe, update the doc in the same commit.
     scripts/migrate.js      migration runner
     src/api/auth/           sign-in, sessions, guards
     src/api/users/          superadmin account management
-    src/api/admin/leads.ts  Admin > Leads query endpoint
+    src/api/admin/leads.ts  Admin > Leads query endpoint; its Call filter (T23)
     src/api/admin/config.ts    Admin > Configuration, read-only
     src/api/admin/overview.ts  Admin > Overview statistics
     src/api/admin/dnc.ts       Admin > DNC list, read-only
@@ -241,7 +241,7 @@ you change something the docs describe, update the doc in the same commit.
     scripts/flows-live-check.ts  proves a second, five-question flow works from rows alone; scripts/live-flow.ts answers a flow for the other checks
     scripts/dev-ask-again.ts  local testing only: asks a held lead the questions again, so one phone can walk every path
     scripts/speed-check.ts  loads 50,000 fake leads into a scratch database and times every screen's read - npm run speed
-    src/db/leads.ts         Admin > Leads SQL
+    src/db/leads.ts         Admin > Leads SQL; the Call column, the robot call's result (T23)
     src/db/lead-state.ts    closed and worked, shared by the queue and Admin > Leads; a missed call, and a missed "yes" on the automated call (T22) - one "nobody got back to them" rule
     src/db/sql.ts           LIKE escaping and the expiry-days reader, shared by every query
     src/core/activity.ts    every action the activity log records
@@ -280,6 +280,7 @@ you change something the docs describe, update the doc in the same commit.
     src/lib/call-notification.ts  the desktop notification for an incoming call
     src/components/CallTranscript.tsx  a call's transcript, under the call
     src/components/CallAnswers.tsx  what the lead said on the robot's call, under it (T21)
+    src/lib/call-results.ts  the robot call's result in words, one list for the timeline and Admin > Leads' Call column and filter (T23)
     src/lib/useSecond.ts    a clock that re-renders every second
     src/App.tsx, src/main.tsx  the routes; the entry point, which also arms the ringtone
     src/auth/               the session store and the route guards
@@ -309,7 +310,7 @@ you change something the docs describe, update the doc in the same commit.
     AUTH.md  POLLER.md  WORKFLOW.md  WEBHOOKS.md  ADMIN-LEADS.md  STATE-MACHINE.md  TWILIO.md
     AUDIT.md                the activity log: nothing is lost
     FLOWS.md                how SMS scripts are stored as rows, how to add one, and how questions are named
-    AUTO-CALLS.md           automated outbound calls: the agreed design and the build tracker (T0-T22 done as of 2026-10-24: the server places a call, asks the script, keeps the answers, texts the link, puts a "yes" through to the lead's own agent first, then everyone free, switches off whoever let it ring out, holds a "yes" while someone is on a call or writing its note, rings the next person who comes free with the lead who has waited longest, leaves the voicemail message once a machine's greeting is over, rings everyone free for a lead calling back whom nobody owns, calls the right leads by itself at the pace the people free can take, shows each robot call on the lead's timeline with what was said, puts a "yes" nobody took first in the agents' queue; T23 on, not built)
+    AUTO-CALLS.md           automated outbound calls: the agreed design and the build tracker (T0-T23 done as of 2026-10-25: the server places a call, asks the script, keeps the answers, texts the link, puts a "yes" through to the lead's own agent first, then everyone free, switches off whoever let it ring out, holds a "yes" while someone is on a call or writing its note, rings the next person who comes free with the lead who has waited longest, leaves the voicemail message once a machine's greeting is over, rings everyone free for a lead calling back whom nobody owns, calls the right leads by itself at the pace the people free can take, shows each robot call on the lead's timeline with what was said, puts a "yes" nobody took first in the agents' queue, shows each lead's robot call on Admin > Leads; T24 on, not built)
     QUEUE.md  AGENT-WORKSPACE.md  ADMIN.md  LOGGING.md  FRONTEND.md
 ```
 

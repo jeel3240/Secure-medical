@@ -232,6 +232,11 @@ them:
 `QueueStatus.tsx` now draws its icons from `StatusIcon`; the queue looks the
 same.
 
+*(T23, 2026-10-25: a **Call** column and a Call filter - how the automated
+call went, in the words of `lib/call-results.ts`, which the timeline's robot
+call lines now read too, so the two screens say a result the same way.
+`ADMIN-LEADS.md`, "Call".)*
+
 **Fixed while building it:** a right-aligned column's heading stayed on the
 left - `.table th` outranked `.right` - so SCORE and WAITING on the queue sat
 away from their numbers. `.table th.right` fixes both pages.
@@ -770,7 +775,8 @@ response or an off-by-one age threshold is not:
 |---|---|
 | `api/usePolling.test.ts` | The polling hook's guarantees, the race guard included, and that a slow answer is waited for rather than asked for again |
 | `lib/format.test.ts`, `lib/lock.test.ts` | Formatting, which row action and lock a lead gets, and who may release a held lead |
-| `lib/leads-view.test.ts` | Admin > Leads' view read from and written to the address: the round trip, defaults left out, anything unrecognised read as the default |
+| `lib/leads-view.test.ts` | Admin > Leads' view read from and written to the address: the round trip, defaults left out, anything unrecognised read as the default - the Call filter (T23) included |
+| `lib/call-results.test.ts` | The robot's call in words: the Call column's, the timeline's capitalised, and the Call filter's choices (T23) |
 | `components/Timeline.test.tsx`, `pages/LeadTimelinePage.test.ts` | The timeline's wording, and the summary sidebar |
 | `pages/workspace/Conversation.test.ts` | The answer shown beside a reply: the server's, and nothing when it would repeat the reply |
 | `pages/QueuePage.test.ts` | The queue's Answers cell and its tooltip |
