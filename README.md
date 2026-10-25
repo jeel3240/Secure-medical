@@ -8,7 +8,7 @@ how to run it, and its table says which doc covers what.
 - [State machine: the SMS flow spec](docs/STATE-MACHINE.md) · [Flows: how the scripts are stored, and adding one](docs/FLOWS.md)
 - [Poller](docs/POLLER.md) · [Webhooks](docs/WEBHOOKS.md) · [EZ Texting API behaviour](docs/EZTEXTING-API.md)
 - [Priority queue](docs/QUEUE.md) · [Agent workspace](docs/AGENT-WORKSPACE.md)
-- [Calling, outgoing and incoming (Twilio)](docs/TWILIO.md)
+- [Calling, outgoing and incoming (Twilio)](docs/TWILIO.md) · [Automated calls: the robot's call, and its tracker](docs/AUTO-CALLS.md)
 - [Admin](docs/ADMIN.md) · [Admin: Leads](docs/ADMIN-LEADS.md)
 - [Auth: sign-in, sessions, roles](docs/AUTH.md)
 - [The activity log: nothing is lost](docs/AUDIT.md) · [Logging and health](docs/LOGGING.md)

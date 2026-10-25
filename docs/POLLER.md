@@ -162,7 +162,7 @@ One JSON line per poll, event `poll.tick` - structured since 2026-09-28,
 | `fetched` | rows returned by the API |
 | `inserted` | new leads written |
 | `skipped` | examined but not written - already known, or not in the group |
-| `suppressed` | opted out; lead written, added to `dnc_list` |
+| `suppressed` | opted out at EZ Texting, or already on `dnc_list`; lead written, nothing sent, and blocked if it was not already |
 | `openers` | question 1 sent. Lower than `inserted` means a send failed |
 
 These do not have to add up. Contacts below the cutoff stop the cycle and are

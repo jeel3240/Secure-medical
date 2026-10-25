@@ -55,7 +55,7 @@ expires:
 | Deactivated | Signed out everywhere on the next request. `session_version` bumped. |
 | Password reset by an admin | Signed out everywhere. `session_version` bumped. |
 | Own password changed | Other devices signed out; this browser gets a fresh cookie. |
-| Signed out | That token dies server-side too, so a copied cookie stops working. |
+| Signed out | Every session of that person ends, on every device - `session_version` bumped - so a copied cookie stops working too. |
 | Any of the above that bumps `session_version` | The browser is no longer counted as able to take a call (`ringable_until` cleared, T9 - "Who is free" in `AUTO-CALLS.md`): a signed-out or deactivated person is never rung for a transfer. |
 | Signed in, or signed out | The "Taking calls" switch goes off (T10), recorded as `calls.availability_changed` when it was on. Each sign-in the person chooses again whether to be rung for a transfer. The reason it is off is written every time (`taking_calls_why`, T15c), so a missed transfer from an earlier session is not shown after signing in. |
 | Role changed | Applies on the next request. No bump needed, since the row is re-read. |
@@ -142,4 +142,4 @@ they are read in the database.
 
 - The admin Agents table has no search or pagination. Fine at ~10 accounts.
 - Sessions are not listed or individually revocable; the options are sign out
-  everywhere (password change) or deactivate.
+  everywhere - signing out, or a password change, both do - or deactivate.

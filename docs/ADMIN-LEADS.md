@@ -10,7 +10,8 @@ words, `frontend/src/lib/call-results.ts`.
 ## Why it is separate from the queue
 
 The Priority Queue shows only leads who need a person - completed, needs
-review, an inbound reply, an unreturned missed call, or one being worked - because agents should spend
+review, an inbound reply, an unreturned missed call, a "yes" on the automated
+call nobody took (T22), a booked callback, or one being worked - because agents should spend
 their time on people who have given them a reason to. *(2026-09-28: a lead
 partway through the questions is no longer in the queue, so this page, under
 Answering, is the only place it appears - unless an agent holds it, it has an
@@ -78,8 +79,9 @@ Two renames came with it, so each word means one thing:
 
 The API values changed with the labels. `?status=in_progress` or
 `?status=completed` is now refused with a 400, as any unknown status is - see
-"Filters" below. The screen keeps its filters in memory, not the address, so no
-saved link carries the old values.
+"Filters" below. The screen's view has been in the address since 2026-10-11
+("The view is in the address", below); an old value there reads as All and
+never reaches the server.
 
 ### Closed
 

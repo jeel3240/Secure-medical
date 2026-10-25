@@ -559,10 +559,9 @@ Some US states require everyone on a call to agree to being recorded.
   rings.
 - **Only on a recorded call** - when the transcription service is set.
 - Until 2026-10-05 no notice was played, by Jeel's decision of 2026-10-02.
-- **Not yet heard on a real call.** Calling is no longer tested locally (the
-  phone number is production's), so this is covered by tests of the
-  instructions sent to Twilio and is to be checked with one call on the live
-  server.
+- **Heard on real calls** on the dev number since 2026-10-17 - the automated
+  call's transfers (`AUTO-CALLS.md`, T15a), where it was timed and once cut
+  short by a voicemail's beep (T18).
 
 **Cost**, Twilio's US prices on 2026-10-02: recording $0.0025 a minute,
 storage $0.0005 a minute a month, transcription $0.024 a minute - about three
@@ -592,7 +591,7 @@ made `agent_id` optional for them (migration 007).
 | `direction` | `outbound` - an agent called the lead - or `inbound`, the lead called us - or, since migration 014 (T4, 2026-10-18), `automated`: the server called the lead (`AUTO-CALLS.md`) |
 | `agent_id`, `lead_id` | Who called whom. For an incoming call, the agent it rang - null when it rang nobody, and while it rings everyone free, until one of them takes it (T19). An agent's outgoing call always has an agent; the database refuses one without (`calls_outbound_has_agent`). An automated call has none until a person takes its transfer, then theirs |
 | `script_result` | Automated calls only (014): how the script ended - `transferred`, `transfer_missed`, `link_sent`, `not_interested`, `opted_out`, `no_response`, `voicemail_left`, `hung_up`, `unanswered`. `outcome` keeps Twilio's view beside it. One automated call per lead, ever: a unique index (`calls_one_automated_per_lead`) |
-| `started_at` | When Twilio asked us how to connect it |
+| `started_at` | When Twilio asked us how to connect it; for an automated call, when its row was written, just before Twilio was asked (T12) |
 | `ended_at` | When Twilio reported the far leg ended - the lead's for a call we placed, the agent's for one we received - or at once for an incoming call that rang nobody; for one that rang everyone free (T19), when the whole ring's end was reported (`/incoming/after`). Null while the call is in progress |
 | `outcome` | `answered`, `no_answer`, `busy`, `failed` or `canceled` - `core/calls.ts` - `voicemail` for a call we placed that a machine picked up - an automated one only when Twilio's verdict took it over, the message left or a fax hung up on (T18, `AUTO-CALLS.md` "Voicemail") - and `missed` for an incoming call nobody answered. Null while in progress |
 | `answered_by` | Who picked up a call we placed: `human`, `machine`, `fax` or `unknown` - "Voicemail", above. Null for an incoming call, one nobody picked up, or one from before migration 010 |
@@ -861,10 +860,14 @@ own phone.
   is told a call is recorded before it connects - "Recordings and
   transcripts".) The automated call has its own: a transfer to a person
   (built, T15a) and a voicemail message (built, T18) - `AUTO-CALLS.md`.
-- **A call queue for incoming calls.** One agent is rung, or nobody -
-  "Incoming calls", above. The automated call's hold line (built, T16) is only
+- **A call queue for incoming calls.** One agent is rung; or, with automated
+  calls on, everyone free at once for a lead nobody holds or has called (T19,
+  "Who rings"); or nobody. The automated call's hold line (built, T16) is only
   for its own transfers.
-- **A stale call is not closed.** If Twilio's end-of-call report never arrives,
-  the row keeps `ended_at` null and the timeline says "in progress". Not seen
-  in testing; Twilio retries its callbacks.
+- **An agent's stale call is not closed.** If Twilio's end-of-call report never
+  arrives, the row keeps `ended_at` null and the timeline says "in progress".
+  Not seen in testing; Twilio retries its callbacks. The automated call's are:
+  one that never reached Twilio after 10 minutes (`closeUnplacedCalls`), and
+  one on hold whose end Twilio did not report (the hold watcher) -
+  `AUTO-CALLS.md`, T20.
 - **Call totals on Admin > Overview.** Removed 2026-09-28, deliberately.

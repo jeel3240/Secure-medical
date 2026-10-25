@@ -72,8 +72,9 @@ export async function dialDueLeads(deps: DialDeps, now = new Date()): Promise<Di
     locked: false,
   };
   look.closed = await deps.closeUnplacedCalls();
-  // Written the first time this looks with automated calls on - inside the
-  // hours or not - so leads that arrived before it are never called.
+  // When automated calls were last switched on - written by the worker at
+  // each switch-on (`recordAutoCallsSwitch`), and here if it is missing - so
+  // leads that arrived before it are never called.
   const since = await deps.autoCallsSince();
   const hours = await deps.readCallHours();
   look.inside = insideCallHours(now, hours);

@@ -49,7 +49,8 @@ showing "there" as a name (2026-09-29).
 question; then, for every choice, its reply joined to the question that
 follows - one text, which is how it is sent; then each question's "sorry"
 text, the review text, and the text after a missed call. Seventeen for the
-antibiotics flow. Each carries a `name` ("After Q1 · Yes") and `when` ("Then
+antibiotics flow - eighteen since T24, with the automated call's link text
+last ("The automated call", below). Each carries a `name` ("After Q1 · Yes") and `when` ("Then
 Q2", "Ends the questions"), built by the server, since the list depends on the
 flow. A question is named by its key: "Q2", and "Q1-a" for a sub-question -
 "Then Q1-a", "Unclear · Q1-a" (`FLOWS.md`, "Naming a question"). The scoring

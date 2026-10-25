@@ -766,7 +766,7 @@ arrives after a newer one is still dropped.
 
 ## Tests
 
-`npm test` in `frontend/`. Vitest with jsdom, 339 tests in 29 files (2026-10-19).
+`npm test` in `frontend/`. Vitest with jsdom, 398 tests in 34 files (2026-10-25).
 
 Logic first, by agreement - a screen is easy to judge by eye, and a dropped
 response or an off-by-one age threshold is not:
@@ -824,9 +824,11 @@ every route lives under `/api`.
 ## Not built
 
 - ~~**Calling.**~~ Built 2026-10-01, Phase 4 - `TWILIO.md`. Outgoing, and
-  incoming to one agent's browser; no call queue, voicemail box, transfer
-  or hold, and no card for a caller we hold no lead for. Recordings and
-  transcripts were added on 2026-10-02 (`TWILIO.md`).
+  incoming to the lead's agent - or, with automated calls on, to everyone
+  free when nobody owns the lead (T19). Recordings and transcripts were added
+  on 2026-10-02 (`TWILIO.md`). The automated call's transfer and hold line
+  are built (T15a-T17, `AUTO-CALLS.md`). Still no voicemail box for callers,
+  and no card for a caller we hold no lead for.
 - **Live push.** Polling stands in for it, deliberately - see above.
 - **Export CSV** on the DNC list. In the brief, and it hands a file of phone
   numbers to a browser, so it needs Jeel to ask for it.
