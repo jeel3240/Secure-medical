@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react';
 import type { TimelineEntry, TimelineKind } from '../api/workspace';
 import { DISPOSITION_LABEL, type Disposition } from '../api/workspace';
+import { CALL_RESULT_WORDS } from '../lib/call-results';
 import { dayLabel, formatDay, formatTime, isSameDay } from '../lib/format';
 import { CallAnswers } from './CallAnswers';
 import { CallTranscript } from './CallTranscript';
@@ -55,22 +56,11 @@ const CALL_OUTCOME: Record<string, string> = {
   canceled: 'cancelled',
 };
 
-/**
- * How the robot's call ended, from its script - T21, AUTO-CALLS.md. "Nobody
- * took it" rather than "nobody free": the lead also reached nobody when people
- * were free and let it ring out, or when they hung up while they waited.
- */
-const SCRIPT_RESULT: Record<string, string> = {
-  link_sent: 'link sent',
-  not_interested: 'not interested',
-  opted_out: 'opted out',
-  no_response: 'no response',
-  voicemail_left: 'voicemail left',
-  hung_up: 'hung up',
-  transfer_missed: 'said yes · nobody took it',
-};
 
-/** The robot's call by how its script ended, or null while it has no result - then it reads as T5 had it. */
+/**
+ * The robot's call by how its script ended (`lib/call-results.ts`, shared with
+ * Admin > Leads), or null while it has no result - then it reads as T5 had it.
+ */
 function robotCallText(detail: Record<string, unknown>, author: string | null): string | null {
   const result = detail.scriptResult;
   if (typeof result !== 'string') return null;
@@ -80,7 +70,7 @@ function robotCallText(detail: Record<string, unknown>, author: string | null): 
     const why = typeof detail.outcome === 'string' && detail.outcome !== 'voicemail' ? CALL_OUTCOME[detail.outcome] : null;
     return `Automated call · ${why ?? 'no answer'}`;
   }
-  return `Automated call · ${SCRIPT_RESULT[result] ?? result.replace(/_/g, ' ')}`;
+  return `Automated call · ${CALL_RESULT_WORDS[result] ?? result.replace(/_/g, ' ')}`;
 }
 
 /**

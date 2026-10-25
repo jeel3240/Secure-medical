@@ -172,6 +172,7 @@ async function main(): Promise<void> {
   await time('one status', () => listAdminLeads({ status: 'ready' }));
   await time('a late page', () => listAdminLeads({ page: 400 }));
   await time('a name search', () => listAdminLeads({ q: 'Lead4999' }));
+  await time('one call result (T23)', () => listAdminLeads({ call: 'voicemail_left' }));
 
   console.log('\none lead');
   await time('the lead card', () => getLeadDetail(finished));

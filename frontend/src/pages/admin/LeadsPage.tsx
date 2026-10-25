@@ -10,6 +10,7 @@ import { Segmented } from '../../components/Segmented';
 import { Spinner } from '../../components/Spinner';
 import { SyncStatus } from '../../components/SyncStatus';
 import { TierSignal } from '../../components/TierSignal';
+import { CALL_FILTERS, leadCallText } from '../../lib/call-results';
 import { formatPhone, formatReceived, formatRelative, leadName } from '../../lib/format';
 import { readLeadsView, writeLeadsView, type LeadsView } from '../../lib/leads-view';
 
@@ -59,7 +60,11 @@ const SINCE: { key: string; label: string }[] = [
   { key: 'all', label: 'All time' },
 ];
 
-const ALLOWED = { statuses: TABS.map((tab) => tab.key), sinces: SINCE.map((s) => s.key) };
+const ALLOWED = {
+  statuses: TABS.map((tab) => tab.key),
+  sinces: SINCE.map((s) => s.key),
+  calls: CALL_FILTERS.map((c) => c.key),
+};
 
 export function LeadsPage() {
   const navigate = useNavigate();
@@ -69,7 +74,7 @@ export function LeadsPage() {
   // returns to the same list; in memory, it came back as All, page one.
   const [params, setParams] = useSearchParams();
   const view = readLeadsView(params, ALLOWED);
-  const { status, since, source, q: query, page } = view;
+  const { status, since, source, call, q: query, page } = view;
 
   // Replaces the address rather than adding to the history: Back from a lead
   // goes to the list as it was left, and Back from the list leaves it, instead
@@ -98,10 +103,11 @@ export function LeadsPage() {
         status,
         since,
         source: source ? [source] : undefined,
+        call: call || undefined,
         q: query || undefined,
         page,
       }),
-    [status, since, source, query, page]
+    [status, since, source, call, query, page]
   );
 
   const { data, error, updatedAt, switching } = usePolling<AdminLeadsResponse>(fetcher, {
@@ -189,6 +195,20 @@ export function LeadsPage() {
               </option>
             ))}
           </select>
+          {/* The robot's call (T23): a second track beside the status - a lead
+              can be Awaiting reply and Voicemail left at once. */}
+          <select
+            className="select-input"
+            value={call}
+            onChange={(e) => show({ call: e.target.value, page: 1 })}
+            aria-label="Call"
+          >
+            {CALL_FILTERS.map((c) => (
+              <option key={c.key} value={c.key}>
+                {c.label}
+              </option>
+            ))}
+          </select>
           <select
             className="select-input"
             value={since}
@@ -219,6 +239,7 @@ export function LeadsPage() {
                   <th>Lead</th>
                   <th>Status</th>
                   <th>Step</th>
+                  <th>Call</th>
                   <th className="right">Score</th>
                   <th>Source</th>
                   <th>Received</th>
@@ -246,6 +267,7 @@ export function LeadsPage() {
                     <td className={lead.step && /^Q\d/.test(lead.step) ? 'mono' : undefined}>
                       {lead.step === 'done' ? 'Done' : (lead.step ?? EMPTY)}
                     </td>
+                    <td>{lead.call ? leadCallText(lead.call) : EMPTY}</td>
                     <td className="right tabular cell-strong">{lead.score ?? EMPTY}</td>
                     <td className="mono cell-code">{lead.source ?? EMPTY}</td>
                     <td className="cell-muted">{formatReceived(lead.receivedAt)}</td>

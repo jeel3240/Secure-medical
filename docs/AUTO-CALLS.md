@@ -1,6 +1,6 @@
 # Automated outbound calls
 
-**Planned 2026-10-15. Being built: T0 to T22 are done (2026-10-24) - the
+**Planned 2026-10-15. Being built: T0 to T23 are done (2026-10-25) - the
 server places a call, asks the script, keeps every answer, texts the link,
 puts a "yes" through to the lead's own agent first, then everyone free,
 switches off whoever let it ring out, holds a "yes" nobody can take yet while
@@ -8,9 +8,10 @@ someone is on a call or writing its note, rings the next person who comes
 free with the lead who has waited longest, leaves the voicemail message once a
 machine's greeting is over, rings everyone free for a lead calling back whom
 nobody owns, calls the right leads by itself at the pace the people free can
-take, shows each robot call on the lead's timeline with what was said, and
-puts a "yes" nobody took first in the agents' queue; the other screens (T23,
-T24) and the finish (T25, T26) are not built yet.**
+take, shows each robot call on the lead's timeline with what was said, puts
+a "yes" nobody took first in the agents' queue, and shows how each lead's call
+went on Admin > Leads; Admin > Configuration (T24) and the finish (T25, T26)
+are not built yet.**
 This
 doc is the agreed design and the tracker for building it. Each ticket below updates its row when it is merged,
 and the sections it touches, so the doc always says what is built and what is
@@ -961,7 +962,7 @@ does not answer a missed call - until an agent takes the transfer.
 |---|---|
 | Lead timeline and workspace | "Automated call · voicemail left", "· said yes · Maya Chen took it · 2:14", "· said yes · nobody took it", "· link sent", "· not interested", "· opted out", "· no response", "· hung up", "· no answer" - with what the lead said underneath, under **Answers** (T21, `AGENT-WORKSPACE.md` "The timeline") |
 | Agents' queue | Only a "yes" nobody took: first, the longest waiting on top, "Wants a call" - and a Wants a call badge on the lead's card - until an agent calls or texts them, answers when they ring, or saves an outcome (T22, `QUEUE.md` "Who is in it", "The order", "The tag") |
-| Admin > Leads | A **Call** column with the last robot call's result, and a filter on it. No new status or tab - a lead is on two tracks at once ("Awaiting reply" and "Voicemail left") |
+| Admin > Leads | A **Call** column with the robot call's result - "Voicemail left", "Said yes · nobody took it", "Calling now" - and a filter on it. No new status or tab - a lead is on two tracks at once ("Awaiting reply" and "Voicemail left") (T23, `ADMIN-LEADS.md` "Call") |
 | Admin > Configuration | The call script, hours, time zone and texts, read-only |
 | App bar | The "Taking calls" switch |
 | Incoming-call card | "Transfer · said yes to the offer"; for a lead returning the robot's call, "Calling back · automated call, 28m ago" (T19) |
@@ -1006,7 +1007,7 @@ ticket's own PR.
 | | **Screens** | | |
 | T21 | The timeline shows the robot calls | T13 | Done 2026-10-24 - seen on real calls: taken, not interested with its answers, nobody took it |
 | T22 | The queue puts a missed "yes" first | T15a | Done 2026-10-24 - seen in the browser: two "yes" leads nobody took at the top, Wants a call, above a 100-point lead |
-| T23 | Admin > Leads: the Call column | T4 | Not started |
+| T23 | Admin > Leads: the Call column | T4 | Done 2026-10-25 - seen in the browser on real calls' leads: voicemail left, not interested, no answer, said yes taken and not |
 | T24 | Admin > Configuration shows the call script | T6 | Not started |
 | | **Finish** | | |
 | T25 | Everything written down and checked end to end | T0-T24 | Not started |
@@ -2538,13 +2539,41 @@ it.
 - No new status or tab.
 
 **Done when**
-- [ ] Tests: the column and the filter.
-- [ ] Seen in the browser.
-- [ ] `npm run speed`: Admin > Leads still loads quickly.
+- [x] Tests: the column and the filter. A live check through the robot's own
+      write (`startAutomatedCall`): each result; two tracks at once, Awaiting
+      reply and Voicemail left; a "yes" taken reading Working; Calling now and
+      No result by the call's age; a lead never called, and an agent's own
+      call, reading nothing; the filter alone, with a tab, and narrowing the
+      tab counts; Not called (`admin-leads-live-check`, 51). Route tests: every
+      value passed through, anything else 400 `invalid_call` (1,042 backend
+      tests). The words, the filter's choices, and the address keeping the
+      filter (390 frontend tests).
+- [x] Seen in the browser, 2026-10-25, Jeel: the Call column on the leads
+      of the real test calls - Voicemail left, Not interested, No answer,
+      Said yes · nobody took it, Said yes · taken (those two Working) - each
+      beside its own status, Awaiting reply or Working. The filter on the
+      same local data: Voicemail left, 5 leads, the tabs 4 Awaiting reply and
+      1 Working.
+- [x] `npm run speed`: Admin > Leads still loads quickly - unchanged within
+      a few milliseconds; filtering on one call result 39 ms at 50,000 leads
+      (`ADMIN-LEADS.md`, "How fast it is").
+
+As built: `ADMIN-LEADS.md`, "Call". Beyond the ticket: **two values the
+script never writes** - "Calling now" while a call has no result yet, and "No
+result" when it still has none an hour on, so a call whose end never reached
+us does not read "Calling now" for ever; **"Not called" as a filter**; and
+**one wording for the timeline and this page**, `lib/call-results.ts`, which
+took over the timeline's own list. The filter narrows the tab counts, as
+Source and Received do.
 
 **Files:** `backend/src/db/leads.ts`, `backend/src/api/admin/leads.ts`,
-`frontend/src/pages/admin/LeadsPage.tsx`, `frontend/src/lib/leads-view.ts`.
-**Doc:** `ADMIN-LEADS.md`.
+`backend/src/api/__tests__/admin-leads.test.ts`,
+`backend/scripts/admin-leads-live-check.ts`, `backend/scripts/speed-check.ts`,
+`frontend/src/lib/call-results.ts` (+ test), `frontend/src/components/Timeline.tsx`,
+`frontend/src/api/leads.ts`, `frontend/src/pages/admin/LeadsPage.tsx`,
+`frontend/src/lib/leads-view.ts` (+ test).
+**Doc:** `ADMIN-LEADS.md`; this one; `FRONTEND.md`, `LEAD-FLOW.md`,
+`DESIGN-PROMPT.md`, `README.md`, `CLAUDE.md`.
 
 ---
 

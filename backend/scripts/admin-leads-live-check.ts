@@ -13,6 +13,7 @@
 import { pool } from '../src/db/pool';
 import { startFlow } from './live-flow';
 import { listAdminLeads } from '../src/db/leads';
+import { startAutomatedCall } from '../src/db/auto-calls';
 
 let failures = 0;
 
@@ -234,6 +235,55 @@ async function main(): Promise<void> {
   check('a later page carries on in the same order, newest first', [second.leads.length, second.page, second.total], [10, 2, 26]);
   const firstIds = (await listAdminLeads({ pageSize: 10 })).leads.map((l) => l.id);
   check('and repeats nothing from the first', second.leads.some((l) => firstIds.includes(l.id)), false);
+
+  // The Call column - T23. The robot's call written as the robot writes it
+  // (`startAutomatedCall`), then ended as each kind of call ends. A lead is on
+  // two tracks at once: its text status, and its call.
+  console.log('\nthe call column');
+  const robotCall = async (name: string, end: { result: string | null; minutesAgo?: number; agent?: number }) => {
+    const id = await lead(name, { status: 'open' });
+    const started = await startAutomatedCall({ leadId: id, mayRing: () => true });
+    if (!started.ok) throw new Error(`the robot's call was refused: ${started.reason}`);
+    await pool.query(
+      `UPDATE calls SET script_result = $2, agent_id = $3,
+              outcome = CASE WHEN $2::text IS NULL THEN NULL WHEN $2 = 'unanswered' THEN 'no_answer' ELSE 'answered' END,
+              created_at = now() - ($4 || ' minutes')::interval
+       WHERE id = $1`,
+      [started.callId, end.result, end.agent ?? null, String(end.minutesAgo ?? 0)]
+    );
+    return id;
+  };
+  await robotCall('Voicemail', { result: 'voicemail_left' });
+  await robotCall('NotInterested', { result: 'not_interested' });
+  await robotCall('NoAnswer', { result: 'unanswered' });
+  await robotCall('YesMissed', { result: 'transfer_missed' });
+  await robotCall('YesTaken', { result: 'transferred', agent: maya });
+  await robotCall('Calling', { result: null, minutesAgo: 2 });
+  await robotCall('Unreported', { result: null, minutesAgo: 90 });
+
+  const withCalls = await listAdminLeads({ pageSize: 200 });
+  const row = (name: string) => withCalls.leads.find((l) => l.firstName === name);
+  check('each call as its script ended', ['Voicemail', 'NotInterested', 'NoAnswer', 'YesMissed', 'YesTaken'].map((n) => row(n)?.call),
+    ['voicemail_left', 'not_interested', 'unanswered', 'transfer_missed', 'transferred']);
+  check('two tracks: awaiting a text reply, and the voicemail left', [row('Voicemail')?.status, row('Voicemail')?.call], ['awaiting_reply', 'voicemail_left']);
+  check('a "yes" a person took: Working, and the call says so', [row('YesTaken')?.status, row('YesTaken')?.call], ['working', 'transferred']);
+  check('a call with no result yet: calling', row('Calling')?.call, 'calling');
+  check('none an hour and a half on: its end never reached us - unknown, not calling', row('Unreported')?.call, 'unknown');
+  check('a lead the robot never called: nothing', row('Waiting')?.call, null);
+  check('nor is an agent\'s call the robot\'s', row('Called')?.call, null);
+
+  const voicemails = await listAdminLeads({ call: 'voicemail_left', pageSize: 200 });
+  check('the filter keeps exactly those leads', voicemails.leads.map((l) => l.firstName), ['Voicemail']);
+  check('and the tab counts follow it, as the other filters', [voicemails.counts, voicemails.total], [{ all: 1, awaiting_reply: 1 }, 1]);
+  check('with a tab: called and Working', (await listAdminLeads({ call: 'transferred', status: 'working' })).leads.map((l) => l.firstName), ['YesTaken']);
+  check('the wrong tab: nobody', (await listAdminLeads({ call: 'transferred', status: 'awaiting_reply' })).total, 0);
+  check('calling and unknown are filters too', [
+    (await listAdminLeads({ call: 'calling' })).leads.map((l) => l.firstName),
+    (await listAdminLeads({ call: 'unknown' })).leads.map((l) => l.firstName),
+  ], [['Calling'], ['Unreported']]);
+  const notCalled = await listAdminLeads({ call: 'none', pageSize: 200 });
+  check('not called: every lead but the seven', [notCalled.total, withCalls.total], [26, 33]);
+  check('the agent\'s call among them', notCalled.leads.some((l) => l.firstName === 'Called'), true);
 
   console.log(failures === 0 ? '\nall checks passed' : `\n${failures} check(s) FAILED`);
   await pool.end();

@@ -17,16 +17,18 @@ export interface LeadsView {
   since: string;
   /** '' is every source. */
   source: string;
+  /** The Call filter (T23): '' is every lead. */
+  call: string;
   /** The search as sent to the server - trimmed. */
   q: string;
   page: number;
 }
 
-export const DEFAULT_LEADS_VIEW: LeadsView = { status: 'all', since: 'all', source: '', q: '', page: 1 };
+export const DEFAULT_LEADS_VIEW: LeadsView = { status: 'all', since: 'all', source: '', call: '', q: '', page: 1 };
 
 export function readLeadsView(
   params: URLSearchParams,
-  allowed: { statuses: readonly string[]; sinces: readonly string[] }
+  allowed: { statuses: readonly string[]; sinces: readonly string[]; calls: readonly string[] }
 ): LeadsView {
   const pick = (name: string, options: readonly string[], fallback: string): string => {
     const value = params.get(name);
@@ -38,6 +40,7 @@ export function readLeadsView(
     status: pick('status', allowed.statuses, DEFAULT_LEADS_VIEW.status),
     since: pick('since', allowed.sinces, DEFAULT_LEADS_VIEW.since),
     source: params.get('source') ?? '',
+    call: pick('call', allowed.calls, DEFAULT_LEADS_VIEW.call),
     q: (params.get('q') ?? '').trim(),
     // The server refuses a page past 100,000; so does this.
     page: Number.isInteger(page) && page >= 1 && page <= 100_000 ? page : 1,
@@ -49,6 +52,7 @@ export function writeLeadsView(view: LeadsView): URLSearchParams {
   if (view.status !== DEFAULT_LEADS_VIEW.status) params.set('status', view.status);
   if (view.since !== DEFAULT_LEADS_VIEW.since) params.set('since', view.since);
   if (view.source) params.set('source', view.source);
+  if (view.call) params.set('call', view.call);
   if (view.q) params.set('q', view.q);
   if (view.page > 1) params.set('page', String(view.page));
   return params;

@@ -63,10 +63,33 @@ it.each([
   ['status=WORKING', 'invalid_status'],
   ['since=yesterday', 'invalid_since'],
   ['since=90d', 'invalid_since'],
+  // The Call column's filter - T23. Its values only, as written.
+  ['call=voicemail', 'invalid_call'],
+  ['call=VOICEMAIL_LEFT', 'invalid_call'],
+  ['call=all', 'invalid_call'],
 ])('rejects ?%s with 400 %s and never runs the query', async (qs, code) => {
   const { boss } = await setup();
   const res = await boss.get(`/api/admin/leads?${qs}`);
   expect(res.status).toBe(400);
   expect(res.body.error).toBe(code);
   expect(listAdminLeads).not.toHaveBeenCalled();
+});
+
+describe('the Call filter - T23', () => {
+  it('is no filter when absent or empty', async () => {
+    const { boss } = await setup();
+    for (const qs of ['', 'call=']) {
+      expect((await boss.get(`/api/admin/leads?${qs}`)).status).toBe(200);
+    }
+    for (const [opts] of listAdminLeads.mock.calls) {
+      expect(opts.call).toBeUndefined();
+    }
+  });
+
+  it.each(['none', 'calling', 'transferred', 'transfer_missed', 'link_sent', 'not_interested', 'voicemail_left',
+    'no_response', 'hung_up', 'unanswered', 'opted_out', 'unknown'])('passes call=%s through', async (call) => {
+    const { boss } = await setup();
+    expect((await boss.get(`/api/admin/leads?call=${call}&status=working`)).status).toBe(200);
+    expect(listAdminLeads.mock.calls[0][0]).toMatchObject({ call, status: 'working' });
+  });
 });

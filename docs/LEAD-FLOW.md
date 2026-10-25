@@ -93,6 +93,11 @@ highest in this list wins.
 Working outranks the SMS statuses: an expired or needs-review lead that an
 agent is handling reads Working.
 
+The automated call is a second track beside the status: Admin > Leads has a
+**Call** column saying how it went - "Voicemail left", "Not interested", "Said
+yes · nobody took it" - so a lead can be Awaiting reply and Voicemail left at
+once (T23, `ADMIN-LEADS.md`, "Call").
+
 ## What agents see in the queue
 
 The queue's STATUS column shows at most one of six things, in this order when
