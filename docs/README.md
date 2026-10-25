@@ -113,7 +113,7 @@ contact in the group gets a text within a poll interval. `openers` in the
 
 ```bash
 cd backend  && npm test && npm run lint    # 1,045 tests
-cd frontend && npm test && npm run lint    # 397 tests   (counts as of 2026-10-25)
+cd frontend && npm test && npm run lint    # 398 tests   (counts as of 2026-10-25)
 ```
 
 **Unit and route tests** mock the database and cover behaviour in isolation.

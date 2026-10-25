@@ -777,7 +777,7 @@ response or an off-by-one age threshold is not:
 | `lib/format.test.ts`, `lib/lock.test.ts` | Formatting, which row action and lock a lead gets, and who may release a held lead |
 | `lib/leads-view.test.ts` | Admin > Leads' view read from and written to the address: the round trip, defaults left out, anything unrecognised read as the default - the Call filter (T23) included |
 | `lib/call-results.test.ts` | The robot's call in words: the Call column's, the timeline's capitalised, and the Call filter's choices (T23) |
-| `lib/call-settings.test.ts`, `pages/admin/ConfigPage.test.ts` | Admin > Configuration's call settings in words - hours, days, waits - its placeholders, and what picks a line of the call script (T24) |
+| `lib/call-settings.test.ts`, `pages/admin/ConfigPage.test.ts` | Admin > Configuration's call settings in words - hours, days, waits - its placeholders, what picks a line of the call script (T24), and its tab read from the address |
 | `components/Timeline.test.tsx`, `pages/LeadTimelinePage.test.ts` | The timeline's wording, and the summary sidebar |
 | `pages/workspace/Conversation.test.ts` | The answer shown beside a reply: the server's, and nothing when it would repeat the reply |
 | `pages/QueuePage.test.ts` | The queue's Answers cell and its tooltip |
