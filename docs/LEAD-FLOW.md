@@ -13,6 +13,8 @@ that doc wins if the two ever disagree:
 | The statuses and exactly how each is worked out | `ADMIN-LEADS.md`, "Status is derived, never stored" |
 | Who is in the queue, the order, the STATUS column | `QUEUE.md` |
 | Picking, Wrap up, Closed and DNC | `AGENT-WORKSPACE.md` |
+| The automated call: who it rings, when, and what each answer does | `AUTO-CALLS.md` |
+| Calls with a person, both ways, and a missed call | `TWILIO.md` |
 
 ## The main path
 
@@ -79,7 +81,7 @@ highest in this list wins.
 
 | Status | Means | In the queue? |
 |---|---|---|
-| **Opted out** | Texted STOP, an agent pressed DNC, or the lead said stop on the automated call (T13). The number is blocked. (A lead who later texted START still reads Opted out here, though unblocked - "Ways back") | No |
+| **Opted out** | Texted STOP, an agent pressed DNC, the lead said stop on the automated call (T13), or the number was already blocked, or opted out at EZ Texting, when the lead arrived. The number is blocked. (A lead who later texted START still reads Opted out here, though unblocked - "Ways back") | No |
 | **Closed** | An agent pressed Closed | No, until something reopens it - "Ways back", below |
 | **Working** | An agent holds it, or has left a note, a callback, a call they placed or answered, an SMS or an outcome on it. An automated call counts only once a person took it | Yes |
 | **Needs review** | Two replies we could not understand | Yes |
@@ -87,7 +89,7 @@ highest in this list wins.
 | **Offers** | Said No to the first question, then Yes to special offers. Nothing for an agent to do | No, unless they text or ring us |
 | **Not interested** | Said No to the first question, then No thanks to the offers and to a rep | No, unless they text or ring us |
 | **Expired** | Went quiet during the questions | No, unless they text or ring us |
-| **Answering** | Partway through the questions | No, unless an agent holds it, they ring us and nobody answers, they said yes on the automated call and nobody took it (T22), or our text to them did not go out |
+| **Answering** | Partway through the questions | No, unless they ring us and nobody answers, they said yes on the automated call and nobody took it (T22), our text to them did not go out, or they text us after a phone call stopped the questions (`STATE-MACHINE.md` 2d) |
 | **Awaiting reply** | Has not answered question 1 | No, with the same four exceptions |
 
 Working outranks the SMS statuses: an expired or needs-review lead that an

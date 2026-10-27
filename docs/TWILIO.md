@@ -62,7 +62,8 @@ Agent's browser                 Our API                         Twilio          
    - then it inserts the `calls` row and answers with TwiML that dials the
      lead, with `TWILIO_PHONE_NUMBER` as caller ID.
 
-   If a check fails, nothing is recorded and the agent hears one sentence
+   If a check fails, no `calls` row is written - the refusal is kept only as
+   `call.refused` in the activity log - and the agent hears one sentence
    saying why, then the call ends. The screen stops all of these before the
    click; the server checks again because the screen is a courtesy, not the
    lock.
@@ -679,7 +680,7 @@ or dropped.
 
 | State | When | Effect |
 |---|---|---|
-| **off** | No `TWILIO_*` variable is set | The app runs as before. The Call button is off: "Calling is not set up on this server." |
+| **off** | None of the six `TWILIO_*` account variables is set - `PUBLIC_URL` and the two optional ones alone do not count | The app runs as before. The Call button is off: "Calling is not set up on this server." |
 | **on** | All seven are set and well-formed | Calling works |
 | **incomplete** | Some are set, or one is malformed | Locally: calling is off and the API logs `calling.off` naming what is missing. **In production the API refuses to start** (`twilio_incomplete`), because a half-set configuration looks fine and fails every call |
 

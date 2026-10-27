@@ -251,7 +251,7 @@ Two are permanent and must stay: the client's Zapier one and production.
 
 The text sent after a call nobody answered (`TWILIO.md`, "A missed call") is
 an ordinary outbound message, and a reply to it is an ordinary inbound one: it
-takes the steps above and then the state machine. From a lead whose questions
-are finished it is stored and flagged for a person, which is what is wanted.
-From a lead still partway through the questions it is read as an answer to the
-current one. `STATE-MACHINE.md`, "The missed-call text".
+takes the steps above and then the state machine. It is stored and flagged
+for a person, whether or not the lead's questions are finished: the call that
+led to the text stopped the questions (rule 2d). `STATE-MACHINE.md`, "The
+missed-call text".

@@ -154,7 +154,7 @@ complex".** The page and the API now hold only what a superadmin acts on:
 | Part | Shows |
 |---|---|
 | Totals | Leads in · Replied · Completed · Closed - for Today, 7 days or 30 days, chosen on the navy switcher |
-| Agents | Per active agent: **Working now** (leads they hold), **Closed** in the period, **Due today**, **Last active** (their newest note, callback they booked, outcome, call they placed or answered - a transfer they took from an automated call included, never one nobody took (T4) - or SMS that went out) |
+| Agents | Per active user, superadmins included: **Working now** (leads they hold), **Closed** in the period, **Due today**, **Last active** (their newest note, callback they booked, outcome, call they placed or answered - a transfer they took from an automated call included, never one nobody took (T4) - or SMS that went out) |
 | System | Database, EZ Texting sync, the expiry sweep, sending and calling - each OK or Degraded - and incoming replies, which shows its last reply with no verdict. Calling is Degraded when the phone number or the TwiML App no longer points at this server (2026-10-02), and reads "not set up", with no verdict, where calling is off. From the health endpoint |
 
 **Every number counts what happened in the period - Jeel, 2026-09-28, "i want

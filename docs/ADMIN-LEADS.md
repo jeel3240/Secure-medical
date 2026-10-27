@@ -14,8 +14,8 @@ review, an inbound reply, an unreturned missed call, a "yes" on the automated
 call nobody took (T22), a booked callback, or one being worked - because agents should spend
 their time on people who have given them a reason to. *(2026-09-28: a lead
 partway through the questions is no longer in the queue, so this page, under
-Answering, is the only place it appears - unless an agent holds it, it has an
-unread text, or it rang us and was missed: `QUEUE.md`, "Who is in it".)* This page shows everyone, so a superadmin
+Answering, is the only place it appears - unless an agent holds it, a callback
+is booked, it has an unread text, or it rang us and was missed: `QUEUE.md`, "Who is in it".)* This page shows everyone, so a superadmin
 can confirm leads are arriving and see where they drop off, without
 non-responders burying HOT leads in the agents' view. That list is `QUEUE.md`.
 
@@ -132,7 +132,10 @@ Until 2026-09-21 nothing advanced the conversation, so a lead who had replied
 still read as `awaiting_reply` and only the inbound arrow in Last activity
 showed it. That is fixed. It can still happen for a reply the flow does not
 act on - one that arrives with no conversation on the lead - and in that case
-awaiting is the honest answer.
+awaiting is the honest answer. A lead whose questions a phone call stopped
+(`STATE-MACHINE.md` rule 2d) also keeps the status and Step it had - Awaiting
+reply or Answering, at its question - until it expires, unless an agent's
+trace makes it Working. Its card says "Stopped at Q1 by a call".
 
 **A lead who sent STOP and later START still reads Opted out.** The block
 itself is lifted - `dnc_list` has it released, and the lead can be texted and
@@ -229,7 +232,9 @@ With automated calls off, every row reads "-" and the filter finds nothing but
 
 ### Filters
 
-Absent, empty or `all` means no filter. Anything else must be a known value, or
+Absent, empty or `all` means no filter - except `source`, a comma-separated
+list of any values, each matched exactly (`all` included). Anything else must
+be a known value, or
 the request is refused with a 400 and the query never runs: `invalid_status`,
 `invalid_since` for a time window other than `1h`, `24h`, `7d` or `30d`, or
 `invalid_call` (T23 - "Call" above; `call=all` is refused, absent is every
@@ -348,7 +353,7 @@ tab one lead at a time.
   so Back from the list leaves it instead of stepping through every tab that
   was clicked.
 - Anything unrecognised in the address reads as its default and never reaches
-  the server.
+  the server - except the source, which is passed as it is.
 - The Leads link in the side menu still opens the plain page, on All.
 
 The queue, My Callbacks and the DNC list keep their view in memory and still

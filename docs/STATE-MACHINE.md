@@ -151,7 +151,7 @@ Configuration shows each text and its segment count.
 | `core/answers.ts` | `matchChoice()` - a reply against one question's choices |
 | `db/flows.ts` | Reads a flow; starts a conversation in the active one |
 | `api/reply-flow.ts` | Loads the conversation and its flow, runs `step`, saves the answer row, sends |
-| `core/state-machine.test.ts`, `core/answers.test.ts` | 83 tests: every branch of the antibiotics flow, every rule below, and a five-question flow run on the same code |
+| `core/state-machine.test.ts`, `core/answers.test.ts` | 86 tests: every branch of the antibiotics flow, every rule below, and a five-question flow run on the same code |
 | `api/__tests__/webhooks.test.ts` | 53, including the flow advancing through the webhook, flagging a reply for a person, and a reply before our text |
 | `scripts/flows-live-check.ts` | Against a real Postgres: a second flow added as rows only, walked end to end |
 
@@ -388,8 +388,9 @@ nothing else changes, nothing is sent. `api/reply-flow.ts`,
 `repliedBeforeOurText`.
 
 - **Never for an opt-out.** STOP works whatever state anything is in.
-- **Only while the questions are running.** A finished conversation, or one an
-  agent took over, is handled by rules 2 and 2b as before.
+- **Only while the questions are running.** A finished conversation, or one
+  an agent's text or a phone call took over, is handled by rules 2, 2b and 2d
+  as before.
 - **If our text has been unsent for more than two minutes** it is not on its
   way - it failed, or was never tried - and the lead is waiting on something
   that will not come. Their reply is flagged for a person (`has_unread_inbound`,
@@ -429,15 +430,17 @@ nothing is sent. The score so far stands.
   and no choice: the lead has not told us anything, and the questions go on.
   A stop said on the call ends the conversation itself (`suppressed`).
 - **Below rule 1**, like 2b: STOP works whatever happened before.
-- **Below 2b**: an agent's text that came first is the one the screens name.
+- **Below 2b**: once an agent has texted, the header and the badges name the
+  agent's text, whichever came first; the timeline shows the phone call as
+  well when it came before the text.
 - **Shown** on the lead's page while the questions would otherwise be running:
   "Phone call - questions stopped" beside the other badges, "Stopped at Q1 by
   a call" for Questions in the header, and "Phone call - automated questions
   stopped" on the timeline (`phoneStoppedQuestionsAtSql`) - never for a
-  conversation that completed, went to review or was stopped first: none can
-  get there after such a call, since the replies that would take it there are
-  no longer read. The SMS compose box no longer warns that sending will stop
-  the questions.
+  conversation that completed or went to review, which none can do after such
+  a call (the replies that would take it there are no longer read), nor for
+  one that was stopped (`suppressed`), before the call or after. The SMS
+  compose box no longer warns that sending will stop the questions.
 
 Not covered: an agent's own call that the lead answers. It goes to leads who
 have finished, as a rule; an agent who reaches one mid-questions texts, which
@@ -780,7 +783,7 @@ reads as a fresh lead in the queue rather than one received months ago.
 "Seen before" in the queue is computed: the lead has an earlier conversation.
 
 **Depends on:** EZ Texting showing a re-delivered lead to the poller at all.
-POLLER.md, "Returning leads", explains why that is unverified and how to check.
+POLLER.md, "Not done yet", explains why that is unverified and how to check.
 
 ---
 

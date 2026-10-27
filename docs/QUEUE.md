@@ -30,7 +30,7 @@ keep even a closed lead in:
 | Reason | Why a person is needed |
 |---|---|
 | An active agent holds it | Being worked. A lead must never vanish from under the agent working it, whatever its conversation says |
-| `has_unread_inbound` | Texted something the questions cannot handle - after the conversation ended, or to an agent who took it over. `STATE-MACHINE.md`, "Which replies need a person" |
+| `has_unread_inbound` | Texted something the questions cannot handle - after the conversation ended, to an agent who took it over, or after a phone call took it over (rule 2d). `STATE-MACHINE.md`, "Which replies need a person" |
 | An unreturned **missed call** | They rang our number and nobody answered - 2026-10-01. This one needs no reply and no score: a lead who has never texted is in the queue for it. `TWILIO.md`, "A missed call" |
 | An unreturned **missed "yes"** | They said yes on the automated call, nobody took the transfer, and they heard "An agent will call you back shortly" (`script_result = 'transfer_missed'`) - T22, 2026-10-24, `AUTO-CALLS.md`. The robot calls only leads who never replied, so these have no score. Cleared exactly as a missed call is - an agent calls or texts them, answers when they ring, or saves an outcome - so it never meets a closed lead: closing it is one of the things that clears it |
 
@@ -75,8 +75,8 @@ did not read `dispositions` at all, so a finished lead stayed at the top for
 the next agent to call again.
 
 A lead partway through the questions is on Admin > Leads, under *Answering*,
-and nowhere an agent works from - unless an agent holds it, it has an unread
-text, or it rang us and nobody answered. Someone who stops for good expires after the
+and nowhere an agent works from - unless an agent holds it, a callback is
+booked, it has an unread text, or it rang us and nobody answered. Someone who stops for good expires after the
 reply window and never reaches the queue - accepted: they never said how, or
 whether, they wanted to be contacted.
 
@@ -282,7 +282,8 @@ answer arrived, not every five seconds regardless (`usePolling.ts`). On a
 fixed interval a slow server was sent more requests the slower it got.
 
 **What is left grows with the leads.** Each refresh still looks at every lead
-once: about 0.18 s at 50,000, so roughly 0.4 s at 100,000. If that ever
+once, so its time grows with them: 0.18 s at 50,000 on 2026-10-06, 75 ms after
+T22 (below). If that ever
 matters, the fix is to stop working membership out - to store "needs a
 person" on the lead and maintain it - which is a design change, not a tuning
 one.

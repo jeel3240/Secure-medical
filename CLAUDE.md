@@ -196,7 +196,7 @@ you change something the docs describe, update the doc in the same commit.
     scripts/timeline-live-check.ts  proves the merge and the derived events; the robot's call with its result and answers (T21)
     scripts/callbacks-live-check.ts  proves the tab windows against a real clock
     scripts/dispositions-live-check.ts  proves the DNC block and the queue effect
-    scripts/agent-sms-live-check.ts  proves the take-over stops the questions
+    scripts/agent-sms-live-check.ts  proves the take-over stops the questions, and a phone call too (rule 2d)
     scripts/admin-live-check.ts  proves the three admin read models
     scripts/health-live-check.ts  proves the poller staleness signal
     src/core/queue-tags.ts  which tag a queued lead gets
@@ -301,6 +301,7 @@ you change something the docs describe, update the doc in the same commit.
     src/components/RowMenu.tsx       a row's "⋯" actions menu
     src/components/LockIcon.tsx      the padlock on a locked queue row
     src/components/DateTimeField.tsx the date and time picker, in the app's style
+    src/components/          also the shared pieces: Button, TextField, Modal, Drawer, Banner, Badge, Spinner, OneTimeSecret (a temporary password, shown once), AuthLayout and BrandMark (the sign-in pages), useDismiss (Escape to close)
     src/pages/QueuePage.tsx          the priority queue
     src/pages/WorkspacePage.tsx      the agent workspace shell
     src/pages/workspace/             header card, Call button and call bar, answers and score, notes, conversation, SMS compose, Wrap up
@@ -516,8 +517,9 @@ onto them:
 | 1 | Week 1 | Done |
 | 2 | Week 2 | Done, approved 2026-09-23 |
 | 3 | Week 3 **and all of Week 4 except Twilio** | Done 2026-09-28, merged into `main` |
-| 4 | Week 4 items 1-4, Twilio calling | Done 2026-10-01 - `docs/TWILIO.md`. A real call placed and recorded the same day. Incoming calls - ring one agent, text the lead on a missed call, and a callback for the agent it rang - tested by Jeel with real calls and merged into `dev` the same day. Deploying them needs migrations 007 and 008, and `twilio:configure` run on the server |
-| 5 | Not in the original plan | **Flows** - decided by Jeel, 2026-10-05, before launch: the SMS questions and answers stored as rows so a group with different questions is new rows, not new code; the client's eDrugstore antibiotics script as the first flow; a recording notice on calls. Built on `feat/flows`. Reviewed by three independent reads and a 50,000-lead load test on 2026-10-06, then walked with a real phone the same day - eight paths, all as specified - and merged into `dev`. Deploying it needs migrations 012 and 013. Editing a flow from the website, and a flow per EZ Texting group, are later. `docs/FLOWS.md` |
+| 4 | Week 4 items 1-4, Twilio calling | Done 2026-10-01 - `docs/TWILIO.md`. A real call placed and recorded the same day. Incoming calls - ring one agent, text the lead on a missed call, and a callback for the agent it rang - tested by Jeel with real calls and merged into `dev` the same day. Deploying them needs migrations 007 and 008, and `twilio:configure` run on the server. On main and production since 2026-10-05 |
+| 5 | Not in the original plan | **Flows** - decided by Jeel, 2026-10-05, before launch: the SMS questions and answers stored as rows so a group with different questions is new rows, not new code; the client's eDrugstore antibiotics script as the first flow; a recording notice on calls. Built on `feat/flows`. Reviewed by three independent reads and a 50,000-lead load test on 2026-10-06, then walked with a real phone the same day - eight paths, all as specified - and merged into `dev`. Deploying it needs migrations 012 and 013. Editing a flow from the website, and a flow per EZ Texting group, are later. `docs/FLOWS.md`. On main and production since 2026-10-06 |
+| 6 | Not in the original plan | **Automated calls** - the server calls leads who never replied and puts a "yes" through to a person. T0-T25 done 2026-10-25; every path heard on a real phone 2026-10-27 (T26); going live left. Deploying it needs migrations 014 to 020, with `AUTO_CALLS` unset. `docs/AUTO-CALLS.md` |
 
 **Phase 3 is everything that is left except calling.** That means the Week 3
 list below, plus Week 4 items 5-9: error handling and retries, logging, the
@@ -543,8 +545,8 @@ They do not. Admin shows the configuration; it does not change it:
 | Screen | Was | Is |
 |---|---|---|
 | Scoring rules and tiers (6b) | Editable inline, with **Recalculate existing** | A read-only card. No Save, no Recalculate - the feature is dropped |
-| Message copy (6c) | Seven editable fields | Read-only, shown on the same page as the score table |
-| Settings (6f) | Expiry, delivery type, poll interval, caller ID | Not built. Expiry stays 7 days; the rest stay environment variables |
+| Message copy (6c) | Seven editable fields | Read-only, on Configuration's Texts tab; the score table is on its Scoring tab |
+| Settings (6f) | Expiry, delivery type, poll interval, caller ID | Not built as an editor. Expiry and the other flow settings are shown read-only on the Texts tab; the poll interval is a settings row, caller ID an environment variable |
 | DNC list (6e) | Table plus **Add manually** | Read-only. Blocking happens through an agent's DNC disposition, a STOP reply, an EZ Texting opt-out, or a stop said on the automated call (T13) |
 | Agents (6d) | Editable | Unchanged - creating and deactivating accounts is the point of it |
 

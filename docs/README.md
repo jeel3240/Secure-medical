@@ -264,8 +264,9 @@ job queue (CLAUDE.md §2); no code reads or writes it, and since 2026-09-28 the
 `bull` and `redis` packages are gone and `REDIS_URL` is no longer required. The
 worker is a plain loop, not a job queue.
 
-**State and Consent ref have no data behind them.** EZ Texting sends neither, so
-both are shown as "-" or a note rather than left off the screen.
+**State and Consent ref have no data behind them.** EZ Texting sends neither.
+Consent ref is shown as "-" on the Lead Timeline page, so nobody wonders
+whether the page forgot it; State is not shown at all.
 
 ## Architecture
 

@@ -15,7 +15,7 @@ Tested against the client account on 2026-09-10. Use these exact endpoints and f
 ## List contacts (the poller call)
 
 ```
-GET /v1/contacts?filters[groupName][like]=weightloss&filters[source][eq]=API&sort=createdAt,desc&size=10&page=0
+GET /v1/contacts?filters[groupName][like]=weightloss&filters[source][eq]=API&sort=createdAt,desc&size=50&page=0
 ```
 
 - `size` must be one of 10, 20, 50, 100, 200. Anything else returns 400.
@@ -152,11 +152,13 @@ Rules:
 - One poller instance only.
 - Log per tick: fetched, inserted, skipped, duration.
 
-*As implemented, 2026-09-14* - `docs/POLLER.md` describes the real code. It
-differs from the sketch above in three ways: the interval is 60 seconds by
-default (30 since migration 005, 2026-09-29) and read from `settings` each tick; there is no job queue (the
-opener has been sent in the same cycle since 2026-09-15); and the source filter comes from `EZT_SOURCE` rather
-than being fixed to `API`.
+*As implemented* - `docs/POLLER.md` describes the real code, which differs
+from the sketch above: the interval is 30 seconds (migration 005), read from
+`settings` each tick; there is no job queue - the opener is sent in the same
+cycle; the group and source come from `EZT_GROUP` and `EZT_SOURCE`; a phone
+already on `dnc_list` is saved suppressed too; the conversation starts on the
+active flow's first question; and the checkpoint is written on every
+successful poll, unchanged when nothing new arrived.
 
 ## Send message
 ```
@@ -263,7 +265,7 @@ So when the partner delivers a number that is already there, EZ Texting either
 rejects it or updates the existing contact - it never creates a new one. The
 existing contact keeps its original `createdAt` unless an update resets it,
 which has not been checked. This matters to the poller, which finds new leads
-by `createdAt`: see POLLER.md, "Returning leads".
+by `createdAt`: see POLLER.md, "Not done yet".
 
 ## STOP handling
 

@@ -23,7 +23,7 @@ the brief now exists except calling, which is Phase 4. *(Calling was built on
 | `/admin/overview` | Overview | `ADMIN.md`, `DESIGN-PROMPT.md` 6a |
 | `/admin/leads` | Every lead, replied or not | `ADMIN-LEADS.md` |
 | `/admin/agents` | Agent accounts | `AUTH.md` |
-| `/admin/config` | Configuration, read-only | `ADMIN.md`, `DESIGN-PROMPT.md` 6b/6c |
+| `/admin/config` | Configuration, read-only - three tabs, Texts, Scoring and Calls, the tab kept in the address (`?tab=`) | `ADMIN.md`, `DESIGN-PROMPT.md` 6b/6c |
 | `/admin/dnc` | Do-not-call list, read-only | `ADMIN.md`, `DESIGN-PROMPT.md` 6e |
 | every signed-in screen | The incoming-call card, mounted once in the app shell (`layout/AppShell.tsx`) | `TWILIO.md`, "Incoming calls" |
 
@@ -527,8 +527,10 @@ compose warning, since the questions are already stopped.)*
 **The wrap-up, as it is now:** three numbered sections and one button. **1
 Outcome** - two buttons, Closed and DNC, DNC behind a confirm dialog. **2
 Callback** - three quick choices and "Other…", switched off while an outcome is
-chosen. **3 Note**. Then **Save**. The unsaved-changes guard covers closing the
-tab and going back.
+chosen. **3 Note**. Then **Save**. The unsaved-changes guard asks before the
+tab is closed or reloaded. It cannot stop a move inside the app - Back to
+queue, or the browser's Back to the queue - and an unsaved note is lost that
+way.
 
 *(How it got here: the first version grouped eight outcomes as Positive / No
 contact / Negative, with DNC as a separate red link and a "Step N of 3"
@@ -787,7 +789,7 @@ response or an off-by-one age threshold is not:
 | `components/Timeline.test.tsx`, `pages/LeadTimelinePage.test.ts` | The timeline's wording, and the summary sidebar |
 | `pages/workspace/Conversation.test.ts` | The answer shown beside a reply: the server's, and nothing when it would repeat the reply |
 | `pages/QueuePage.test.ts` | The queue's Answers cell and its tooltip |
-| `pages/workspace/Conversation.render.test.tsx` | The sent ticks and the red "!" on a refused message |
+| `pages/workspace/Conversation.render.test.tsx` | The sent ticks and the red "!" on a refused message; a call as one line, the robot's call with its answers folded under it; a label where the day changes |
 | `components/QueueStatus.test.tsx` | The queue's six statuses, their icons, a callback's time, and the tier bars |
 | `components/DateTimeField.test.tsx` | The date and time picker: the month grid, quarter hours, past days off, Clear, Escape |
 | `pages/workspace/LeadHeader.test.ts` | The header's source and Questions wording, a sub-question, "Q1-a", included |
