@@ -118,7 +118,9 @@ adds `call_offers`, empty, an index of calls by agent and end, and one
 `settings` row. Deploy with `AUTO_CALLS` unset: no automated call is placed
 until it is `on` - though W1, W2, Admin > Leads' Call column and the three
 Configuration tabs show at once - and then switch it on as `AUTO-CALLS.md`,
-T26, "Going live", says. `npm run migrate` applies whatever the database has not run,
+T26, "Going live", says. Run `npm run migrate` straight after the `up`: until
+017 has run, the new code cannot read `users` (`taking_calls`), so signing in
+and every page fail. `npm run migrate` applies whatever the database has not run,
 in order.
 
 *(History: 006 to 011 - the activity log, incoming calls, the callback a
