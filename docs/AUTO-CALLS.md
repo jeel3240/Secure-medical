@@ -12,8 +12,8 @@ take, shows each robot call on the lead's timeline with what was said, puts
 a "yes" nobody took first in the agents' queue, shows how each lead's call
 went on Admin > Leads, and shows the script and its settings on Admin >
 Configuration; every doc has been read against the code, and the end-to-end
-script runs three robot calls. Left: every path on a real phone, then live
-(T26).**
+script runs three robot calls; every path has been heard on a real phone
+(T26, 2026-10-27). Left: going live, by Jeel - T26, "Going live".**
 This
 doc is the agreed design and the tracker for building it. Each ticket below updates its row when it is merged,
 and the sections it touches, so the doc always says what is built and what is
@@ -1014,7 +1014,7 @@ ticket's own PR.
 | T24 | Admin > Configuration shows the call script | T6 | Done 2026-10-25 - seen in the browser: every line in order with its keys and words, and the settings, matching the database |
 | | **Finish** | | |
 | T25 | Everything written down and checked end to end | T0-T24 | Done 2026-10-25 - every doc read against the code, the faults fixed; `npm run e2e`, 93 checks, three robot calls |
-| T26 | Real phone, every path, then live | T25 | Not started |
+| T26 | Real phone, every path, then live | T25 | Real phone done 2026-10-27 - nineteen cases, calls 66-85, all as specified; going live left (Jeel) |
 | | **Other tickets - not calling** | | |
 | W1 | Day dividers in the agent's conversation | - | Done 2026-10-18 |
 
@@ -2712,8 +2712,58 @@ switched on.
 - Deploy with `AUTO_CALLS` off; migrations run; then Jeel sets `AUTO_CALLS=on`
   and watches the first calls.
 
+**Going live - Jeel's steps**
+1. Merge `dev` into `main` and deploy as `WORKFLOW.md` says, **with
+   `AUTO_CALLS` unset**; `npm run migrate` runs 014 to 020. Nothing changes
+   for anyone: the switch is hidden, `/auto/*` answers 404, the worker places
+   nothing. Admin > Configuration > Calls reads **Off** and shows the script.
+2. Set `AUTO_CALLS=on` in the server's environment and restart the api and
+   the worker. Nothing else: calling's seven settings are already there, and
+   on the server every number may be rung (`AUTO_CALL_TEST_NUMBERS` is for
+   laptops only).
+3. Check Admin > Configuration > Calls: **On**, the call-back number
+   production's (480) 470-8259, 11:00 AM - 5:00 PM, Monday to Friday.
+4. Agents switch **Taking calls** on. With nobody on, the robot calls nobody.
+5. The first call comes about an hour after the first lead that arrives
+   after the switch-on - leads from before it are never called - inside
+   11-5 Arizona time, Monday to Friday. Watch it on the lead's timeline and
+   Admin > Leads' Call column.
+
+To stop: unset `AUTO_CALLS` and restart both - outside the calling hours, as
+a call still going loses its webhooks (404) the moment the api restarts
+without it.
+
 **Done when**
-- [ ] Every path above heard and saved correctly.
+- [x] Every path above heard and saved correctly - 2026-10-27, on the dev
+      number to Jeel's phone, two browsers (Jeel, karm), calls 66 to 85:
+
+      | Case | Call | Heard / done | Saved |
+      |---|---|---|---|
+      | Yes, taken | 67 | "Yes" 0.70, both rang, karm took it | `transferred`, lead karm's |
+      | Yes, nobody took it | 68 | "Yes" 0.78, both rang out | `transfer_missed`, both switched off, queue Wants a call |
+      | Yes, on hold, then taken | 70 | "Yes" 0.86, karm on a call: hold; the call ended, karm rung from hold | `transferred`, lead karm's |
+      | No, then the link | 71 | "No" 0.73, "Yes" 0.86 | `link_sent`, text received |
+      | No, then no - keys | 72 | 2, then 2 | `not_interested`, no text |
+      | Silence twice | 73 | nothing, twice | `no_response` |
+      | Stop | 74 | "Don't call me." 0.98 | `opted_out`, blocked, conversation ended; the next call refused |
+      | Voicemail | 75 | the beep, the whole message on Jeel's voicemail | `voicemail_left`, `machine` |
+      | Calling back | 76 | both rang (nobody's lead), Jeel took it | `answered`, lead Jeel's |
+      | **The robot by itself** | 77 | one look, as the worker's: a lead texted 61 minutes before, room 2, due 1, called; "No", "No"; the next look found nobody due | `not_interested` |
+      | Not understood, then a key | 78 | "Maybe" 0.75, asked again, 2, then 2 | `not_interested` |
+      | Hung up mid-question | 79 | | `hung_up`, no answer kept |
+      | Declined | 80 | the iPhone sent it to voicemail: the message left | `voicemail_left` (a decline that gives busy is `unanswered` - call 56) |
+      | Yes, nobody taking calls | 81 | "Yes" 0.92, nothing rang | `transfer_missed`, `nobody_free` |
+      | Yes, the lead's own agent first | 82 | "Yes" 0.87, Jeel rung alone, let it ring out, then karm | `transferred` to karm, taken from Jeel; Jeel switched off |
+      | On hold, nobody coming | 84 | karm on a call: hold; karm switched off - the busy line 18 seconds later | `transfer_missed` |
+      | Calling back the lead's agent | 85 | only Jeel rang, not karm; not answered | missed, the missed-call text, a callback for Jeel |
+
+      Found on the way, nothing changed: a browser with no microphone
+      cannot accept (call 66 - karm's window had none; the lead was picked up
+      for karm before the sound failed, and Jeel's window then took the call
+      and the lead) - a headset before the ring, and a reload, as before; a
+      spoken "No" heard at 0.00 confidence is taken as no figure, not doubt
+      (T7), so it counted (call 77); and the "pretend call" that put karm
+      on a call was a `calls` row of karm's, by hand, on the local database.
 - [ ] The first real robot calls on production, seen on the timeline and
       Admin > Leads.
 

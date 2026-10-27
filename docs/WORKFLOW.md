@@ -115,7 +115,8 @@ stops if they are not exactly as 015 left them; 019 adds the two place-on-hold
 lines to the script and `calls.held_at`, empty, with a check and an index; 020
 adds `call_offers`, empty, an index of calls by agent and end, and one
 `settings` row. Deploy with `AUTO_CALLS` unset: nothing changes for anyone
-until it is `on`. `npm run migrate` applies whatever the database has not run,
+until it is `on` - and then switch it on as `AUTO-CALLS.md`, T26, "Going
+live", says. `npm run migrate` applies whatever the database has not run,
 in order.
 
 *(History: 006 to 011 - the activity log, incoming calls, the callback a
