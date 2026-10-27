@@ -51,6 +51,10 @@ let stubId = 0;
 import { sendAgentSms } from '../src/db/agent-sms';
 import { blockNumber, DNC_REASONS } from '../src/db/dnc';
 import { getTimeline } from '../src/db/timeline';
+import { getLeadDetail } from '../src/db/lead-detail';
+import { keepAnswer, startAutomatedCall } from '../src/db/auto-calls';
+import { startIncomingCall } from '../src/db/calls';
+import { startConversation } from '../src/db/flows';
 
 let failures = 0;
 
@@ -239,6 +243,72 @@ async function main(): Promise<void> {
     ]);
     const log = (await pool.query(`SELECT actor_id, detail->>'because' AS because FROM activity_log WHERE lead_id = $1 AND action = 'callback.done'`, [leadId])).rows;
     check('recorded, with who texted', log, [{ actor_id: maya, because: 'texted_back' }]);
+  }
+
+  // Rule 2d - 2026-10-27: a phone call stops the questions too. The lead
+  // answered the robot's call, or rang us; their next text is for a person.
+  console.log('\na phone call stops the questions (rule 2d)');
+  {
+    const q1Step = (await pool.query(`SELECT s.id, s.key FROM call_steps s JOIN call_scripts cs ON cs.id = s.script_id WHERE cs.is_active AND s.key = 'q1'`)).rows[0];
+    /** A lead whose first question went out and who has not answered it - the leads the robot calls. */
+    const waitingOnQ1 = async (phone: string) => {
+      const leadId = (await pool.query(`INSERT INTO leads (phone, first_name, source) VALUES ($1, 'Avery', 'API') RETURNING id`, [phone])).rows[0].id;
+      await startFlow(leadId, []);
+      await pool.query(`UPDATE conversations SET question_sent_at = now() WHERE lead_id = $1`, [leadId]);
+      return leadId as number;
+    };
+    /** The robot's call to the lead, and one answer kept on it, as the webhook keeps it. */
+    const robotHeard = async (leadId: number, record: { result: 'choice' | 'unclear' | 'silence'; choiceKey: string | null; choiceLabel: string | null }) => {
+      const started = await startAutomatedCall({ leadId, mayRing: () => true });
+      if (!started.ok) throw new Error(`the robot's call was refused: ${started.reason}`);
+      await keepAnswer({
+        callId: started.callId, step: q1Step, attempt: 1, spoken: { heard: record.choiceLabel ?? 'hmm', confidence: 0.9, digits: null },
+        record, result: null, blockNumber: false,
+      });
+    };
+    const conversationOf = async (leadId: number) =>
+      (await pool.query(`SELECT status, step, score FROM conversations WHERE lead_id = $1 ORDER BY id DESC LIMIT 1`, [leadId])).rows[0];
+    const NO = { result: 'choice' as const, choiceKey: '2', choiceLabel: 'No' };
+
+    const answered = await waitingOnQ1('+15550000690');
+    await robotHeard(answered, NO);
+    const thanks = await replyAs(answered, 'thanks', { stored: true });
+    check('answered the robot\'s call, then "thanks": for a person, nothing sent, no "Sorry, please reply 1"', [thanks?.result.needsPerson, thanks?.result.send], [true, []]);
+    check('the conversation as it was: on Q1, nothing scored', await conversationOf(answered), { status: 'open', step: 10, score: 0 });
+    const one = await replyAs(answered, '1', { stored: true });
+    check('nor is a "1" taken for an answer then', [one?.result.needsPerson, one?.result.answer, (await conversationOf(answered)).step], [true, null, 10]);
+    const card = await getLeadDetail(answered);
+    check('the card says when the call stopped them; no agent did', [card?.conversation?.phoneTookOverAt !== null, card?.conversation?.agentTookOverAt], [true, null]);
+    check('the timeline says so', ((await getTimeline(answered)) ?? []).filter((e) => e.detail.event === 'phone_took_over').length, 1);
+
+    const unclear = await waitingOnQ1('+15550000691');
+    await robotHeard(unclear, { result: 'unclear', choiceKey: null, choiceLabel: null });
+    const unclearOne = await replyAs(unclear, '1', { stored: true });
+    check('a call where nothing was understood stops nothing: "1" answers Q1', [unclearOne?.result.needsPerson, (await conversationOf(unclear)).step], [false, 20]);
+    check('and the card says no call stopped them', (await getLeadDetail(unclear))?.conversation?.phoneTookOverAt, null);
+
+    const rang = await waitingOnQ1('+15550000692');
+    await startIncomingCall({ callSid: 'CA-2C-RANG', fromPhone: '+15550000692' });
+    const callMe = await replyAs(rang, 'ok call me at 3', { stored: true });
+    check('rang us, then texted "ok call me at 3": for a person, nothing sent', [callMe?.result.needsPerson, callMe?.result.send], [true, []]);
+
+    // A call from before this conversation began does not stop it.
+    const before = await waitingOnQ1('+15550000693');
+    await startIncomingCall({ callSid: 'CA-2C-BEFORE', fromPhone: '+15550000693' });
+    await pool.query(`UPDATE conversations SET status = 'expired' WHERE lead_id = $1`, [before]);
+    await startConversation(pool, before, 'open');
+    await pool.query(`UPDATE conversations SET question_sent_at = now() WHERE lead_id = $1 AND status = 'open'`, [before]);
+    const fresh = await replyAs(before, '1', { stored: true });
+    check('a call to an earlier conversation stops nothing in a new one', [fresh?.result.needsPerson, (await conversationOf(before)).step], [false, 20]);
+
+    // Finished first, then rang: the questions were over before the call.
+    const finished = (await pool.query(`INSERT INTO leads (phone, first_name, source) VALUES ('+15550000694', 'Avery', 'API') RETURNING id`)).rows[0].id;
+    await startFlow(finished, ['1', '1', '2']);
+    await startIncomingCall({ callSid: 'CA-2C-AFTER', fromPhone: '+15550000694' });
+    check('a lead who finished, then rang: no "stopped by a call" on the card or the timeline', [
+      (await getLeadDetail(finished))?.conversation?.phoneTookOverAt,
+      ((await getTimeline(finished)) ?? []).some((e) => e.detail.event === 'phone_took_over'),
+    ], [null, false]);
   }
 
   console.log(failures === 0 ? '\nall checks passed' : `\n${failures} check(s) FAILED`);

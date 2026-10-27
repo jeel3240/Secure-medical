@@ -610,6 +610,14 @@ async function main(): Promise<void> {
   const averyRow = (await listAdminLeads({})).leads.find((l) => l.id === avery);
   check('two tracks at once: still awaiting a text reply, and the link sent', [averyRow?.status, averyRow?.call], ['awaiting_reply', 'link_sent']);
   check('Avery is not in the queue - nothing for an agent to do', (await listQueue({})).leads.some((l) => l.id === avery), false);
+
+  // Avery texts back. Having answered the robot's call, a text is for a
+  // person, not an answer to the first question (STATE-MACHINE.md 2d).
+  const textsBefore = sent.length;
+  check('Avery texts "thanks" - the webhook takes it', await reply(AVERY, 'thanks'), 200);
+  check('nothing is sent back - no "Sorry, please reply 1 for Yes or 2 for No"', sent.length, textsBefore);
+  check('it waits for a person: Inbound reply', (await listQueue({})).leads.find((l) => l.id === avery)?.tag, { kind: 'inbound_reply' });
+  check('the card says a call stopped the questions', (await getLeadDetail(avery))?.conversation?.phoneTookOverAt !== null, true);
   check('Twilio was asked only to place the three calls', twilioAsked.map((r) => r.method), ['POST', 'POST', 'POST']);
 
   // ---------------------------------------------------------- 14. health

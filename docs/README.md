@@ -112,8 +112,8 @@ contact in the group gets a text within a poll interval. `openers` in the
 ## How to test
 
 ```bash
-cd backend  && npm test && npm run lint    # 1,045 tests
-cd frontend && npm test && npm run lint    # 398 tests   (counts as of 2026-10-25)
+cd backend  && npm test && npm run lint    # 1,048 tests
+cd frontend && npm test && npm run lint    # 401 tests   (counts as of 2026-10-27)
 ```
 
 **Unit and route tests** mock the database and cover behaviour in isolation.
@@ -163,7 +163,8 @@ docker compose exec -e DATABASE_URL=postgres://app:app@postgres:5432/e2e api   n
 docker compose exec -e DATABASE_URL=postgres://app:app@postgres:5432/e2e   -e EZT_SEND_GROUP=stub api npm run e2e
 ```
 
-Ninety-three checks (2026-10-25). EZ Texting and Twilio are stubbed at their
+Ninety-seven checks (2026-10-27) - Avery's "thanks" after the link included,
+which goes to a person (`STATE-MACHINE.md` 2d). EZ Texting and Twilio are stubbed at their
 HTTP boundaries - `axios.post`, and the Twilio library's one request method,
 which answers only "place this call" and fails the run on anything else - so it
 proves everything up to the moment a text or a call would leave the building,

@@ -96,7 +96,10 @@ agent is handling reads Working.
 The automated call is a second track beside the status: Admin > Leads has a
 **Call** column saying how it went - "Voicemail left", "Not interested", "Said
 yes · nobody took it" - so a lead can be Awaiting reply and Voicemail left at
-once (T23, `ADMIN-LEADS.md`, "Call").
+once (T23, `ADMIN-LEADS.md`, "Call"). Once a lead has answered that call - yes,
+no, the link - or rung us, the text questions stop: anything they text goes
+to a person as Inbound reply, never an automated "sorry" (`STATE-MACHINE.md`
+2d, 2026-10-27).
 
 ## What agents see in the queue
 

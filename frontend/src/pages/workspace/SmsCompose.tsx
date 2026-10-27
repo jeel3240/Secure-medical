@@ -70,7 +70,8 @@ export function SmsCompose({
   const blocked = lead.flags.dnc;
   const remaining = SMS_LIMIT - body.length;
   const tooLong = remaining < 0;
-  const alreadyTakenOver = Boolean(lead.conversation?.agentTookOverAt);
+  // An agent's text, or a phone call (2d), has already stopped the questions.
+  const alreadyTakenOver = Boolean(lead.conversation?.agentTookOverAt || lead.conversation?.phoneTookOverAt);
 
   const send = async () => {
     setSending(true);

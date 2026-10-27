@@ -295,6 +295,11 @@ export function WorkspacePage() {
         {lead.conversation?.agentTookOverAt && (
           <Badge tone="navy">Agent handling - questions stopped</Badge>
         )}
+        {/* The lead answered the robot's call, or rang us (2d): their texts
+            come to a person, as after an agent's text. */}
+        {lead.conversation?.phoneTookOverAt && !lead.conversation.agentTookOverAt && (
+          <Badge tone="navy">Phone call - questions stopped</Badge>
+        )}
       </div>
 
       <div className="workspace__grid">

@@ -13,6 +13,7 @@
 import type { CallDirection } from '../core/calls';
 import type { ActivityAction } from '../core/activity';
 import { questionShort } from '../core/questions';
+import { phoneStoppedQuestionsAtSql } from './lead-state';
 import { pool } from './pool';
 
 export type TimelineKind =
@@ -171,11 +172,12 @@ async function systemEvents(leadId: number): Promise<TimelineEntry[]> {
        COALESCE(l.ezt_added_at, l.created_at) AS received_at,
        l.source,
        c.status, c.end_outcome, c.score, c.tier, c.expires_at, c.agent_took_over_at, c.completed_at,
+       ${phoneStoppedQuestionsAtSql('c', 'l.id')} AS phone_took_over_at,
        (SELECT max(m.received_at) FROM messages m
         WHERE m.lead_id = l.id AND m.direction = 'inbound') AS last_reply_at
      FROM leads l
      LEFT JOIN LATERAL (
-       SELECT c.status, c.end_outcome, c.score, c.tier, c.expires_at, c.agent_took_over_at, c.completed_at
+       SELECT c.status, c.end_outcome, c.score, c.tier, c.expires_at, c.agent_took_over_at, c.completed_at, c.created_at
        FROM conversations c
        WHERE c.lead_id = l.id
        ORDER BY c.created_at DESC, c.id DESC
@@ -218,6 +220,17 @@ async function systemEvents(leadId: number): Promise<TimelineEntry[]> {
       at: r.agent_took_over_at.toISOString(),
       author: null,
       detail: { event: 'agent_took_over' },
+    });
+  }
+
+  // Rule 2d: a phone call stopped the questions - unless an agent's text
+  // already had, which says so above.
+  if (r.phone_took_over_at && !(r.agent_took_over_at && r.agent_took_over_at <= r.phone_took_over_at)) {
+    events.push({
+      kind: 'system',
+      at: r.phone_took_over_at.toISOString(),
+      author: null,
+      detail: { event: 'phone_took_over' },
     });
   }
 

@@ -49,6 +49,8 @@ export interface LeadDetail {
     expiresAt: string | null;
     /** Set once an agent takes over - STATE-MACHINE.md 2b. */
     agentTookOverAt: string | null;
+    /** When a phone call stopped the questions - the lead answered the robot's call, or rang us (2d). */
+    phoneTookOverAt: string | null;
     /** Which flow the lead is in: 'antibiotics'. FLOWS.md. */
     flow: string | null;
     /** How the flow ended: completed, offers, wants_contact, declined - or null. */

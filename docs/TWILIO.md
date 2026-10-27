@@ -209,14 +209,14 @@ missed call that booked none (it rang nobody, or everyone free) does not make it
 Admin > Overview neither the system's callback nor a call that only rang the
 agent is that agent's activity - only what they did is.
 
-**Not handled: a reply to the text from a lead still answering the
-questions.** The text goes to any lead not on the do-not-call list, whatever
-their conversation's state. A reply is an ordinary inbound text
-(`STATE-MACHINE.md`): from a lead whose questions are finished it is stored
-and flagged Inbound reply, which is right. From a lead still partway through,
-"ok thanks" is taken as an unclear answer to the current question and gets the
-clarification. Rare - a lead mid-questions has not been called by us - and
-left as it is.
+**A reply to the text goes to a person** - since 2026-10-27, for a lead still
+answering the questions too. The text goes to any lead not on the
+do-not-call list, whatever their conversation's state. A reply from a lead
+whose questions are finished is stored and flagged Inbound reply. From a lead
+still partway through, it used to be read as an answer - "ok thanks" got the
+current question's "sorry" - which the robot's calls made common: its leads
+are still on Q1. Now ringing us stops the questions (`STATE-MACHINE.md`, rule
+2d), so the reply is stored and flagged Inbound reply as well.
 
 **Recorded twice over, on purpose.** How a ring to one agent ended is reported
 by Twilio on the agent's leg (`/status`) and again when it asks what to say to

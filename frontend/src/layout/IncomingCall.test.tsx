@@ -39,7 +39,7 @@ vi.mock('../auth/store', () => ({
 
 const LEAD = {
   id: 7,
-  conversation: { status: 'expired', step: 20, question: 'Q2', score: 45, tier: 'WARM', agentTookOverAt: null, flow: 'antibiotics', endOutcome: null },
+  conversation: { status: 'expired', step: 20, question: 'Q2', score: 45, tier: 'WARM', agentTookOverAt: null, phoneTookOverAt: null, flow: 'antibiotics', endOutcome: null },
   chips: [
     { question: 10, key: 'q1', heading: 'Requested info', answer: 'Yes', choice: '1' },
     { question: 20, key: 'q2', heading: 'Used telemedicine', answer: 'No', choice: '2' },

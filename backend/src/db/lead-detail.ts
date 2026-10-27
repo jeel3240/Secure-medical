@@ -8,7 +8,7 @@
 
 import { pool } from './pool';
 import { questionShort } from '../core/questions';
-import { CLOSED_SQL, MISSED_CALL_SQL, MISSED_YES_SQL } from './lead-state';
+import { CLOSED_SQL, MISSED_CALL_SQL, MISSED_YES_SQL, phoneStoppedQuestionsAtSql } from './lead-state';
 import { answerChips, scoreBreakdown, type SavedAnswer } from '../core/score-breakdown';
 import type { AnswerChip, BreakdownLine } from '../core/score-breakdown';
 
@@ -31,6 +31,11 @@ export interface LeadDetail {
     expiresAt: string | null;
     /** Set once an agent takes the conversation over - STATE-MACHINE.md 2b. */
     agentTookOverAt: string | null;
+    /**
+     * When a phone call stopped the questions - the lead answered the robot's
+     * call, or rang us (STATE-MACHINE.md 2d) - while they were still running.
+     */
+    phoneTookOverAt: string | null;
     /**
      * The question the lead is on, or stopped at, as the screens say it: "Q2",
      * "Q1-a" - `core/questions.ts`. Null once the questions are finished.
@@ -89,6 +94,7 @@ const SQL = `
     c.id   AS conversation_id,
     c.status, c.step, c.score, c.tier, c.end_outcome,
     c.expires_at, c.agent_took_over_at,
+    ${phoneStoppedQuestionsAtSql('c', 'l.id')} AS phone_took_over_at,
     f.key AS flow_key, f.responded_points, f.completed_points,
     cq.key AS question_key, cq.heading AS question_heading,
     -- What they answered, as it was saved - docs/FLOWS.md.
@@ -108,7 +114,7 @@ const SQL = `
   FROM leads l
   LEFT JOIN LATERAL (
     SELECT c.id, c.status, c.step, c.flow_id, c.current_question_id, c.end_outcome,
-           c.score, c.tier, c.expires_at, c.agent_took_over_at
+           c.score, c.tier, c.expires_at, c.agent_took_over_at, c.created_at
     FROM conversations c
     WHERE c.lead_id = l.id
     ORDER BY c.created_at DESC, c.id DESC
@@ -182,6 +188,7 @@ export async function getLeadDetail(leadId: number): Promise<LeadDetail | null> 
           tier: r.tier,
           expiresAt: r.expires_at?.toISOString() ?? null,
           agentTookOverAt: r.agent_took_over_at?.toISOString() ?? null,
+          phoneTookOverAt: r.phone_took_over_at?.toISOString() ?? null,
           question: questionLabel(r),
           flow: r.flow_key ?? null,
           endOutcome: r.end_outcome ?? null,
