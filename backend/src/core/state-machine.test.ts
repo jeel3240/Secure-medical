@@ -244,6 +244,22 @@ describe('a text when no question is waiting for it', () => {
     expect(step(c, { text: 'stop', optOut: true }, RULES).blockNumber).toBe(true);
   });
 
+  // Rule 2d - 2026-10-27: the lead answered the robot's call, or rang us.
+  it('a phone call has taken the conversation over: "thanks" is for a person, not an answer to Q1', () => {
+    const c = fresh({ phoneTookOverAt: '2026-10-27T19:20:00Z' });
+    expect(step(c, said('thanks'), RULES)).toEqual({ conversation: c, send: [], blockNumber: false, needsPerson: true, answer: null });
+  });
+
+  it('nor is a "1" scored then: the lead is waiting on a person', () => {
+    const c = fresh({ phoneTookOverAt: '2026-10-27T19:20:00Z', score: 0 });
+    expect(step(c, said('1'), RULES)).toMatchObject({ send: [], needsPerson: true, answer: null, conversation: { score: 0 } });
+  });
+
+  it('STOP still works after a phone call took over', () => {
+    const c = fresh({ phoneTookOverAt: '2026-10-27T19:20:00Z' });
+    expect(step(c, { text: 'stop', optOut: true }, RULES).blockNumber).toBe(true);
+  });
+
   it('an open conversation on a question its flow no longer has goes to a person, not a crash', () => {
     const r = step(fresh({ currentQuestionId: 999 }), said('1'), RULES);
     expect(r).toMatchObject({ needsPerson: true, send: [], answer: null });

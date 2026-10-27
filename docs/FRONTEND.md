@@ -518,6 +518,12 @@ text stays in the box and the red error above it still explains why.
 A first send still adds "Agent took over - automated questions stopped" to the
 thread. `Conversation.render.test.tsx` pins the ticks and the "!".
 
+*(2026-10-27: a phone call stops the automated questions too - the lead
+answered the robot's call, or rang us (`STATE-MACHINE.md` 2d): "Phone call -
+questions stopped" beside the badges, "Stopped at Q1 by a call" for
+Questions, "Phone call - automated questions stopped" on the timeline, and no
+compose warning, since the questions are already stopped.)*
+
 **The wrap-up, as it is now:** three numbered sections and one button. **1
 Outcome** - two buttons, Closed and DNC, DNC behind a confirm dialog. **2
 Callback** - three quick choices and "Other…", switched off while an outcome is
@@ -766,7 +772,7 @@ arrives after a newer one is still dropped.
 
 ## Tests
 
-`npm test` in `frontend/`. Vitest with jsdom, 398 tests in 34 files (2026-10-25).
+`npm test` in `frontend/`. Vitest with jsdom, 401 tests in 34 files (2026-10-27).
 
 Logic first, by agreement - a screen is easy to judge by eye, and a dropped
 response or an off-by-one age threshold is not:

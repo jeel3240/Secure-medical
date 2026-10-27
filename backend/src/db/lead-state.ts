@@ -210,3 +210,38 @@ export const WORKED_SQL = `(
   )
   OR EXISTS (SELECT 1 FROM messages wm WHERE wm.lead_id = l.id AND wm.sent_by IS NOT NULL)
 )`;
+
+/**
+ * When a phone call stopped the text questions of a conversation - 2026-10-27,
+ * Jeel, from the T25 doc check (STATE-MACHINE.md rule 2d): the lead answered
+ * the robot's question - a choice kept, yes, no or the link - or rang our
+ * number, answered or not, after the conversation began. Null when neither.
+ * The earliest such moment. Derived, never stored: the answer
+ * (`call_answers`) and the call (`calls`) are the record.
+ *
+ * `leadId` and `since` are SQL for the lead's id and the conversation's
+ * `created_at`, so a call to an earlier conversation never stops a later one.
+ */
+export function phoneTookOverAtSql(leadId: string, since: string): string {
+  return `(
+    SELECT min(pt.at) FROM (
+      SELECT ca.created_at AS at FROM call_answers ca
+      WHERE ca.lead_id = ${leadId} AND ca.result = 'choice' AND ca.created_at > ${since}
+      UNION ALL
+      SELECT ic.created_at FROM calls ic
+      WHERE ic.lead_id = ${leadId} AND ic.direction = 'inbound' AND ic.created_at > ${since}
+    ) pt
+  )`;
+}
+
+/**
+ * `phoneTookOverAtSql` for the screens: only when the questions were still
+ * running at the time - the conversation (alias `c`) still open, or expired
+ * after the call. A conversation that completed, went to review or was
+ * stopped got there before any such call: none can get there after one, since
+ * the replies that would take it there are no longer read.
+ */
+export function phoneStoppedQuestionsAtSql(c: string, leadId: string): string {
+  const at = phoneTookOverAtSql(leadId, `${c}.created_at`);
+  return `(CASE WHEN ${c}.status = 'open' OR (${c}.status = 'expired' AND ${at} < ${c}.expires_at) THEN ${at} END)`;
+}

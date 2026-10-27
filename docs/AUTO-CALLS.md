@@ -1017,6 +1017,7 @@ ticket's own PR.
 | T26 | Real phone, every path, then live | T25 | Real phone done 2026-10-27 - nineteen cases, calls 66-85, all as specified; going live left (Jeel) |
 | | **Other tickets - not calling** | | |
 | W1 | Day dividers in the agent's conversation | - | Done 2026-10-18 |
+| W2 | A phone call stops the text questions | T25 | Done 2026-10-27 |
 
 ### The tickets
 
@@ -2684,10 +2685,11 @@ call's `started_at`, which stale calls are closed; `AUDIT.md` -
 `POLLER.md`'s `suppressed` counter; `CLAUDE.md`'s calling row, `core/`,
 the root README and `lib/call-settings.ts`; `WORKFLOW.md`'s migrations
 passage rewritten plainly; this doc's "first switched on", which is "last" -
-two code comments said the same. **One behaviour to decide, not changed**
+two code comments said the same. **One behaviour left for a decision**
 (`STATE-MACHINE.md`, "The missed-call text"): the robot calls leads still on
 Q1, so a "thanks" to the link text, or to the missed-call text after calling
-the robot back, gets Q1's "Sorry, please reply 1 for Yes or 2 for No."
+the robot back, got Q1's "Sorry, please reply 1 for Yes or 2 for No." - Jeel,
+2026-10-27: fix it. W2.
 
 **Files:** `backend/scripts/end-to-end.ts`, `backend/src/db/auto-dial.ts` and
 `backend/src/worker/auto-calls.ts` (comments only), docs.
@@ -2813,6 +2815,52 @@ rule for days.
 `frontend/src/pages/workspace/Conversation.tsx` (+ test),
 `frontend/src/components/Timeline.tsx`, `frontend/src/styles/workspace.css`.
 **Doc:** `FRONTEND.md`, `AGENT-WORKSPACE.md`.
+
+#### W2 - A phone call stops the text questions
+
+**Goal:** a lead who has spoken with us by phone is never sent an automated
+question's "sorry" for a text that was not an answer. Found in the T25 doc
+check; Jeel, 2026-10-27: fix it.
+**Needs:** T25. **Production:** a lead who rings us mid-questions - possible
+today - gets no automated reply to their next text; it goes to a person.
+
+**Build**
+- Rule 2d (`STATE-MACHINE.md`): once the lead has answered the robot's
+  call - a choice kept - or rung our number, answered or not, since the
+  conversation began, the questions stop as after an agent's text (2b): a
+  reply is stored and flagged for a person, nothing scored or sent.
+- Worked out from the calls, nothing stored: `phoneTookOverAtSql` in
+  `db/lead-state.ts`, read by the reply path in its locked statement, and by
+  the lead's page and timeline (`phoneStoppedQuestionsAtSql`, only while the
+  questions were still running).
+- On screen: "Phone call - questions stopped", "Stopped at Q1 by a call",
+  "Phone call - automated questions stopped" on the timeline; no compose
+  warning.
+
+**Done when**
+- [x] Unit tests: a "thanks" and a "1" after a call - for a person, nothing
+      sent or scored; STOP still blocks (1,048 backend tests); the header's
+      and the timeline's words (401 frontend tests).
+- [x] A live check through the real reply path: answered the robot, then
+      "thanks" and "1"; nothing understood on the call, then "1" answered;
+      rang us, then a text; a call before a new conversation; finished, then
+      rang (`agent-sms-live-check`, 41).
+- [x] End to end, through the webhook: Avery, after the link, texts "thanks" -
+      nothing sent back, Inbound reply in the queue (97 checks).
+
+As built: `STATE-MACHINE.md`, "2d". Named 2d, since 2c - a reply before our
+text has gone out - was taken. Not covered: an agent's own call that the
+lead answers mid-questions; such an agent texts, which is 2b.
+
+**Files:** `backend/src/core/state-machine.ts` (+ test), `backend/src/api/reply-flow.ts`,
+`backend/src/db/lead-state.ts`, `backend/src/db/lead-detail.ts`, `backend/src/db/timeline.ts`,
+`backend/src/api/__tests__/lead-detail.test.ts`, `backend/scripts/agent-sms-live-check.ts`,
+`backend/scripts/end-to-end.ts`, `frontend/src/api/workspace.ts`,
+`frontend/src/components/Timeline.tsx` (+ test), `frontend/src/pages/WorkspacePage.tsx`,
+`frontend/src/pages/workspace/LeadHeader.tsx` (+ test), `frontend/src/pages/workspace/SmsCompose.tsx`,
+`frontend/src/layout/IncomingCall.test.tsx`.
+**Doc:** `STATE-MACHINE.md`; this one; `AGENT-WORKSPACE.md`, `TWILIO.md`, `FRONTEND.md`,
+`LEAD-FLOW.md`, `README.md`, `CLAUDE.md`.
 
 ## Decided with the client
 

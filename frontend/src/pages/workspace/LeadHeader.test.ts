@@ -11,6 +11,7 @@ const convo = (over: Partial<NonNullable<LeadDetail['conversation']>>): LeadDeta
   tier: null,
   expiresAt: null,
   agentTookOverAt: null,
+  phoneTookOverAt: null,
   flow: 'antibiotics',
   endOutcome: null,
   ...over,
@@ -39,6 +40,8 @@ describe('the header in words', () => {
     ['went quiet', convo({ status: 'expired', step: 20, question: 'Q2' }), 'Stopped at Q2'],
     ['unclear replies', convo({ status: 'review', step: 10, question: 'Q1' }), 'Needs review at Q1'],
     ['an agent took over', convo({ step: 10, question: 'Q1', agentTookOverAt: '2026-09-29T02:39:50Z' }), 'Agent took over at Q1'],
+    ['a phone call stopped them - 2d', convo({ step: 10, question: 'Q1', phoneTookOverAt: '2026-10-27T19:20:00Z' }), 'Stopped at Q1 by a call'],
+    ['an agent texted first: the agent says it', convo({ step: 10, question: 'Q1', agentTookOverAt: '2026-10-27T19:00:00Z', phoneTookOverAt: '2026-10-27T19:20:00Z' }), 'Agent took over at Q1'],
     ['blocked on arrival', convo({ status: 'suppressed' }), 'Not sent - blocked'],
     ['no conversation', null, 'Not started'],
   ])('questions: %s', (_, conversation, label) => {

@@ -173,6 +173,9 @@ export function systemText(detail: Record<string, unknown>): string {
     case 'agent_took_over':
       // Worth spelling out: this is why the automated questions stopped.
       return 'Agent took over - automated questions stopped';
+    case 'phone_took_over':
+      // The lead answered the robot's call, or rang us (STATE-MACHINE.md 2d).
+      return 'Phone call - automated questions stopped';
     case 'conversation_expired':
       return 'Conversation expired';
     default:

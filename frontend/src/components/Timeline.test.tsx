@@ -51,6 +51,11 @@ describe('system events', () => {
     expect(screen.getByText(/automated questions stopped/i)).toBeDefined();
   });
 
+  it('says a phone call stopped them - the lead answered the robot\'s call, or rang us (2d)', () => {
+    render(<Timeline entries={[entry({ kind: 'system', detail: { event: 'phone_took_over' } })]} />);
+    expect(screen.getByText('Phone call - automated questions stopped')).toBeDefined();
+  });
+
   it('does not blank out on an event it has never seen', () => {
     render(<Timeline entries={[entry({ kind: 'system', detail: { event: 'something_new' } })]} />);
     expect(screen.getByText('something_new')).toBeDefined();

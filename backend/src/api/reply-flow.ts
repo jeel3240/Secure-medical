@@ -13,6 +13,7 @@ import type { PoolClient } from 'pg';
 import { loadFlow } from '../db/flows';
 import { renderMessage } from '../core/messages';
 import { step, type Conversation, type GivenAnswer, type Rules, type StepResult } from '../core/state-machine';
+import { phoneTookOverAtSql } from '../db/lead-state';
 import { errText, log } from '../lib/log';
 
 export interface ConversationRow extends Conversation {
@@ -52,6 +53,8 @@ export async function loadNewestConversation(
   const { rows } = await client.query(
     `SELECT id, flow_id, status, step, current_question_id, invalid_count, score, tier,
             end_outcome, agent_took_over_at,
+            -- Rule 2d: a phone call since this conversation began.
+            ${phoneTookOverAtSql('conversations.lead_id', 'conversations.created_at')} AS phone_took_over_at,
             question_sent_at IS NOT NULL AS question_sent,
             -- updated_at is when it was put on this question: nothing saves
             -- the conversation again until the text for it has gone.
@@ -78,6 +81,8 @@ export async function loadNewestConversation(
     endOutcome: r.end_outcome,
     // Rule 2b: once this is set the state machine stops asking questions.
     agentTookOverAt: r.agent_took_over_at,
+    // Rule 2d: nor once a phone call has.
+    phoneTookOverAt: r.phone_took_over_at,
     questionSent: r.question_sent,
     unsentForLong: r.unsent_for_long,
   };
@@ -268,6 +273,7 @@ function repliedBeforeOurText(conversation: ConversationRow, reply: { optOut: bo
     !reply.optOut &&
     conversation.status === 'open' &&
     !conversation.agentTookOverAt &&
+    !conversation.phoneTookOverAt &&
     conversation.currentQuestionId !== null &&
     !conversation.questionSent
   );

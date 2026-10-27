@@ -93,6 +93,12 @@ export interface Conversation {
    * the handoff happened.
    */
   agentTookOverAt?: Date | string | null;
+  /**
+   * When a phone call stopped the questions, or null - rule 2d: the lead
+   * answered the robot's call, or rang us. Worked out by the caller from the
+   * calls (`phoneTookOverAtSql`), never by this module.
+   */
+  phoneTookOverAt?: Date | string | null;
 }
 
 export interface Reply {
@@ -221,6 +227,16 @@ export function step(conversation: Conversation, reply: Reply, rules: Rules): St
   // Below rule 1 deliberately: an opt-out can never depend on whether an agent
   // happened to text first.
   if (conversation.agentTookOverAt) {
+    return nothing(conversation, { needsPerson: true });
+  }
+
+  // 2d. A phone call has taken it over - Jeel, 2026-10-27. The lead answered
+  // the robot's call - yes, no, the link - or rang our number. They have
+  // spoken to us, or tried to: a "thanks" to the link text, or "call me at 3"
+  // to the missed-call text, was read as an answer to Q1 and got "Sorry,
+  // please reply 1 for Yes or 2 for No." As in 2b: stored, flagged for a
+  // person, nothing scored or sent. Below rule 1, like 2b.
+  if (conversation.phoneTookOverAt) {
     return nothing(conversation, { needsPerson: true });
   }
 
