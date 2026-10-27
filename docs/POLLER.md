@@ -344,7 +344,7 @@ Leads that arrived Oct 14, 2026, 12:00 AM to Oct 16, 2026, 9:48 AM, Arizona time
   #1 Priya ··0142  arrived Oct 14, 2026, 4:48 PM  5 failed attempts
   #2 Leo ··0188  arrived Oct 15, 2026, 3:48 AM  1 failed attempt
   #3 - ··0199  arrived Oct 15, 2026, 1:48 PM  5 failed attempts
-Would send 2, one every 30 seconds - about 1 minute.
+Would send 3, one every 30 seconds - about 1 minute.
 Dry run: nothing was sent.
 ```
 

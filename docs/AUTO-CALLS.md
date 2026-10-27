@@ -32,9 +32,14 @@ It is built in two stages, agreed with the client on 2026-10-14:
 | **1** | A scripted call that follows the client's script word for word. The lead answers by voice ("yes", "no") or keypad (1, 2) | Now - this doc |
 | **2** | When the lead says something outside the script, an AI agent takes over **inside the same call** - no second number, no transfer | Later, its own plan |
 
-**Production stays exactly as it is until `AUTO_CALLS=on` is set on the
-server.** Every ticket is merged and deployed with it off: the header switch,
-group rings, the call-back change and the dialler all depend on it.
+**Production places no automated call until `AUTO_CALLS=on` is set on the
+server.** Every calling ticket is merged and deployed with it off: the header
+switch, group rings, the call-back change and the dialler all depend on it.
+With it off, a deploy still shows Admin's new parts - an empty Call column on
+Admin > Leads (T23), and the Calls tab on Admin > Configuration, saying it is
+off (T24). The two tickets that are not calling, W1 and W2, change production
+once deployed - W2: a lead who has rung us gets no automated reply to their
+next text (`STATE-MACHINE.md`, "2d").
 
 Development uses a **second Twilio number** on the same account (added by the
 client on 2026-10-15), never production's (480) 470-8259 - `TWILIO.md`, "What
@@ -42,7 +47,7 @@ it needs on the Twilio account".
 
 ## The script
 
-As it will be said. The client's version (2026-10-13) had an email branch and
+As it is said. The client's version (2026-10-13) had an email branch and
 an email line in the voicemail; **the app only texts, so both are dropped**
 (Jeel, 2026-10-15). A lead who does not want a text is a No.
 
@@ -420,6 +425,13 @@ row: a choice with its key and label as they are now, or what else it was.
   repeating it never texts twice; and after Twilio has its answer, so the
   lead hears "check your SMS" without waiting on EZ Texting. A yes said as
   the lead hung up is still texted: they asked for it.
+- **An answer stops the text questions** (W2, rule 2d, 2026-10-27): once the
+  lead has answered - a yes or a no kept - their next text is not taken as an
+  answer to the SMS question they were on (always Q1: the robot calls only
+  leads who never replied). It is kept for a person, Inbound reply in the
+  queue; nothing is scored or sent. Silence or an unclear answer stops
+  nothing; a stop has already ended the conversation. `STATE-MACHINE.md`,
+  "2d".
 - **The call's end gives an unfinished script its result** (`/auto/status`,
   `settleAutomatedCall`): `unanswered` if it was never picked up, `hung_up` if
   it was and the script never reached its own end. A call Twilio would not
@@ -667,7 +679,8 @@ otherwise the busy line at once, as before. The rules are pure, in
 `core/call-script.ts`: `planNobodyTook`, `holdGoesOn`, `placeLine`,
 `pickOffer`.
 
-1. **On hold** (`/auto/gather` or `/auto/after`): "Please hold." when it came
+1. **On hold** (`/auto/gather` or `/auto/after`): the yes's own reply
+   ("Great, connecting you with a live agent now. Please hold.") when it came
    with the yes, then the script's `hold_body` - "All our agents are on other
    calls. Please stay on the line." - and on to `/auto/hold`. A yes put on
    hold before any ring also hears the recording notice here (T17): whoever
@@ -936,6 +949,9 @@ the call and the lead. How it is rung and ended -
 The card says why they are calling: "Calling back · automated call, 28m ago"
 when the robot is the only one who called them (`lib/caller-context.ts`).
 
+A call from the lead, answered or not, also stops the text questions: their
+next text goes to a person (`STATE-MACHINE.md`, "2d").
+
 ## What is saved
 
 Nothing is overwritten (`AUDIT.md`).
@@ -945,9 +961,9 @@ Nothing is overwritten (`AUDIT.md`).
 | The call | `calls`, with `direction = 'automated'`; `agent_id` empty until someone takes a transfer. `script_result`: `transferred`, `transfer_missed`, `link_sent`, `not_interested`, `opted_out`, `no_response`, `voicemail_left`, `hung_up`, `unanswered`. `held_at`: when it went on hold (019). `outcome` is `voicemail` only when Twilio's verdict took the call over (T18) |
 | What the lead said | `call_answers`, one add-only row per answer: what Twilio heard, how sure, keys pressed, the choice it matched |
 | The script | `call_scripts`, `call_steps`, `call_choices` - rows, changed by migration, like the SMS flow (015). The script's own words - stop, no response, voicemail, busy, hold and the place on hold (019), the link text - are on its `call_scripts` row, so another script brings its own |
-| When it calls | `settings`: `auto_call_hours_start` 11:00, `auto_call_hours_end` 17:00, `auto_call_time_zone` America/Phoenix, `auto_call_days` mon,tue,wed,thu,fri, `auto_call_wait_minutes` 60, `auto_call_ring_seconds` 25, `auto_call_hold_max_minutes` 10, `auto_call_min_confidence` 0.4, `auto_call_offer_ring_seconds` 20 (020) |
+| When it calls | `settings`: `auto_call_hours_start` 11:00, `auto_call_hours_end` 17:00, `auto_call_time_zone` America/Phoenix, `auto_call_days` mon,tue,wed,thu,fri, `auto_call_wait_minutes` 60, `auto_call_ring_seconds` 25, `auto_call_hold_max_minutes` 10, `auto_call_min_confidence` 0.4, `auto_call_offer_ring_seconds` 20 (020); and, written by the worker, `auto_calls_on` and `auto_calls_since` - whether it last started with automated calls on, and when they were last switched on ("When a lead is called") |
 | The link text | `messages`, like every text |
-| Who is free | `users.taking_calls`, `taking_calls_why`, `users.ringable_until` |
+| Who is free | `users.taking_calls`, `taking_calls_at`, `taking_calls_why`, `users.ringable_until` |
 | Each ring from hold | `call_offers` (020): the call, who was rung, when, and how it ended - written once, ended once, never removed |
 | Every action | `activity_log` |
 
@@ -963,10 +979,10 @@ does not answer a missed call - until an agent takes the transfer.
 
 | Screen | What |
 |---|---|
-| Lead timeline and workspace | "Automated call · voicemail left", "· said yes · Maya Chen took it · 2:14", "· said yes · nobody took it", "· link sent", "· not interested", "· opted out", "· no response", "· hung up", "· no answer" - with what the lead said underneath, under **Answers** (T21, `AGENT-WORKSPACE.md` "The timeline") |
+| Lead timeline and workspace | "Automated call · voicemail left", "· said yes · Maya Chen took it · 2:14", "· said yes · nobody took it", "· link sent", "· not interested", "· opted out", "· no response", "· hung up", "· no answer" - with what the lead said underneath, under **Answers** (T21, `AGENT-WORKSPACE.md` "The timeline"); and "Phone call - automated questions stopped" once the lead has answered (W2, `STATE-MACHINE.md` "2d") |
 | Agents' queue | Only a "yes" nobody took: first, the longest waiting on top, "Wants a call" - and a Wants a call badge on the lead's card - until an agent calls or texts them, answers when they ring, or saves an outcome (T22, `QUEUE.md` "Who is in it", "The order", "The tag") |
 | Admin > Leads | A **Call** column with the robot call's result - "Voicemail left", "Said yes · nobody took it", "Calling now" - and a filter on it. No new status or tab - a lead is on two tracks at once ("Awaiting reply" and "Voicemail left") (T23, `ADMIN-LEADS.md` "Call") |
-| Admin > Configuration | On its Calls tab, the call script line by line, with what picks each answer, and the settings the robot reads - on or off, hours, time zone, days, the wait, ring times, the hold stop; the link text with the other texts, on Texts. Read-only (T24, `ADMIN.md` "The automated call") |
+| Admin > Configuration | On its Calls tab, the call script line by line, with what picks each answer, and the settings the robot reads - on or off, hours, time zone, days, the wait, ring times, the hold stop, the confidence a spoken answer needs, the call-back number; the link text with the other texts, on Texts. Read-only (T24, `ADMIN.md` "The automated call") |
 | App bar | The "Taking calls" switch |
 | Incoming-call card | "Transfer · said yes to the offer"; for a lead returning the robot's call, "Calling back · automated call, 28m ago" (T19) |
 
@@ -2353,7 +2369,8 @@ people taking them can handle.
 - A new job in the worker loop, every 30 seconds, only with `AUTO_CALLS` on,
   calling set up, and inside the call hours and days.
 - Who: arrived after `auto_calls_since` (saved the first time it runs
-  switched on), first text sent at least 1 hour ago, no reply, not blocked,
+  switched on - as built, at every switch-on, after the review below), first
+  text sent at least 1 hour ago, no reply, not blocked,
   not held, not Closed, never called by the robot. Oldest first.
 - How many: people free, minus robot calls still going (no end, started
   within 10 minutes). None while anyone is on hold. None when nobody is free.
@@ -2716,24 +2733,34 @@ switched on.
 
 **Going live - Jeel's steps**
 1. Merge `dev` into `main` and deploy as `WORKFLOW.md` says, **with
-   `AUTO_CALLS` unset**; `npm run migrate` runs 014 to 020. Nothing changes
-   for anyone: the switch is hidden, `/auto/*` answers 404, the worker places
+   `AUTO_CALLS` unset**; `npm run migrate` runs 014 to 020. Calling does not
+   change: the switch is hidden, `/auto/*` answers 404, the worker places
    nothing. Admin > Configuration > Calls reads **Off** and shows the script.
-2. Set `AUTO_CALLS=on` in the server's environment and restart the api and
-   the worker. Nothing else: calling's seven settings are already there, and
-   on the server every number may be rung (`AUTO_CALL_TEST_NUMBERS` is for
-   laptops only).
+   What does show at once: day dividers in the conversation (W1), a text from
+   a lead who has rung us going to a person (W2), Admin > Leads' Call column
+   (empty), and Admin > Configuration's three tabs.
+2. Add `AUTO_CALLS=on` to the server's `.env`, then recreate the api and the
+   worker: `docker compose -f docker-compose.yml -f docker-compose.prod.yml
+   up -d api worker`. Not `docker compose restart`: it keeps the old
+   environment, so calls stay off. Nothing else: calling's seven settings are
+   already there, and on the server every number may be rung
+   (`AUTO_CALL_TEST_NUMBERS` is for laptops only).
 3. Check Admin > Configuration > Calls: **On**, the call-back number
-   production's (480) 470-8259, 11:00 AM - 5:00 PM, Monday to Friday.
-4. Agents switch **Taking calls** on. With nobody on, the robot calls nobody.
+   production's (480) 470-8259, 11:00 AM - 5:00 PM, Monday to Friday. That
+   screen shows the api's setting only; for the worker, its `worker.started`
+   log line says `autoCalls` `on` (CloudWatch, stream `worker` -
+   `WORKFLOW.md`).
+4. Agents reload the app, then switch **Taking calls** on - the switch shows
+   only on a page loaded after the switch-on. With nobody on, the robot calls
+   nobody.
 5. The first call comes about an hour after the first lead that arrives
    after the switch-on - leads from before it are never called - inside
    11-5 Arizona time, Monday to Friday. Watch it on the lead's timeline and
    Admin > Leads' Call column.
 
-To stop: unset `AUTO_CALLS` and restart both - outside the calling hours, as
-a call still going loses its webhooks (404) the moment the api restarts
-without it.
+To stop: take `AUTO_CALLS` out of `.env` and run the same `up -d api
+worker`, outside the calling hours - a call still going loses its webhooks
+(404) the moment the api restarts without it.
 
 **Done when**
 - [x] Every path above heard and saved correctly - 2026-10-27, on the dev

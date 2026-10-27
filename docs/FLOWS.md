@@ -101,7 +101,8 @@ three places for the flow to run: the two `CHECK`s in the migration, the
 `Ending` type, and - if agents should not see it - that list. For it to have
 its own status on Admin > Leads and its own words on the lead card and the
 timeline, also: `STATUS_SQL` and `LeadStatus` in `db/leads.ts`, the status
-list in `api/admin/leads.ts`, and on the frontend `components/LeadStatus.tsx`,
+list in `api/admin/leads.ts`, and on the frontend the `LeadStatus` type in
+`api/leads.ts`, `components/LeadStatus.tsx`,
 the tabs in `pages/admin/LeadsPage.tsx`, `components/Timeline.tsx` and
 `pages/workspace/LeadHeader.tsx`. Without the first of those the lead reads
 Ready.

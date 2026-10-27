@@ -7,17 +7,15 @@ now one JSON object, queryable by field.
 Shipping those lines off the instance *is* configured, in
 `docker-compose.prod.yml`, and `WORKFLOW.md` says what that changes about reading
 them - in short, `docker compose logs` works locally and not on the server. So
-the lines below are already leaving the box; what the code still owes is their
-shape.
+the lines below leave the box in the shape described here.
 
 ## Structured logs
 
-One JSON object per line on stdout, so whatever collects the logs can query by
-field instead of matching substrings. Keep the existing lines' information;
-change only the shape.
+One JSON object per line - `info` on stdout, `warn` and `error` on stderr - so
+whatever collects the logs can query by field instead of matching substrings.
 
 ```json
-{"ts":"2026-09-23T10:04:11.204Z","level":"info","event":"poll.tick",
+{"ts":"2026-09-23T10:04:11.204Z","level":"info","event":"poll.tick","svc":"worker",
  "fetched":2,"inserted":1,"skipped":1,"suppressed":0,"openers":1,"ms":336}
 ```
 
@@ -115,8 +113,11 @@ that must never become a shipped JSON log line - and `config.ts` runs before
 anything else exists, to say which env var is missing. The resend after an
 outage prints its list for the person running it; run with `docker compose
 exec`, its output stays in that terminal and is not shipped. The sender it
-shares with the retry still writes its usual `sms.*` lines there, and each text
-it sends is a `messages` row (`POLLER.md`, "Resending after an outage").
+shares with the retry (`worker/opener.ts`, `db/outbound.ts`) writes only
+`sms.name_dropped`, `sms.unconfirmed` and `sms.record_failed` there; `sms.sent`
+and `sms.failed` are the poller's and the retry's own lines, not the resend's.
+Each text it sends is a `messages` row (`POLLER.md`, "Resending after an
+outage").
 
 ## Health endpoint
 

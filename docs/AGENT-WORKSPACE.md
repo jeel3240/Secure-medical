@@ -107,10 +107,13 @@ authority, not this file.
 answered the robot's call (yes, no, the link), or rang us. Nothing is stored
 for it; the card's conversation carries `phoneTookOverAt`, worked out from the
 answer or the call, while the questions would otherwise still run. The page
-shows "Phone call - questions stopped" beside the other badges (unless an
-agent's text came first - "Agent handling - questions stopped"), and
-Questions reads "Stopped at Q1 by a call". The SMS compose box's warning that
-sending stops the questions is not shown then: they are already stopped.
+shows "Phone call - questions stopped" beside the other badges, and Questions
+reads "Stopped at Q1 by a call" while the conversation is open. Once an agent
+has texted the lead as well - before the call or after it - the page shows
+only "Agent handling - questions stopped", and Questions reads "Agent took
+over at Q1"; the timeline keeps the call's line only when the call came
+first. The SMS compose box's warning that sending stops the questions is not
+shown then: they are already stopped.
 
 **A text EZ Texting refuses stays in the thread, marked "not sent"** - Jeel,
 2026-09-28. The API still answers 502 `send_failed`, but the message is kept

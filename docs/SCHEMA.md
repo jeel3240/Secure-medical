@@ -152,11 +152,12 @@ EZTEXTING-API.md has the evidence.
 
 **`leads.has_unread_inbound` means a person has to read a reply** - since
 2026-09-28. The webhook sets it only when the questions cannot handle a message:
-after the conversation ended, or to an agent who took it over - and, since
-2026-10-06, when the text we owed the lead did not go out: a reply whose
-answer text failed to send, or a reply to a question unsent for over two
-minutes (`api/reply-flow.ts`; `STATE-MACHINE.md`, "Which replies need a
-person"). Picking the lead clears it.
+after the conversation ended, to an agent who took it over, or after a phone
+call took it over (rule 2d, 2026-10-27) - and, since 2026-10-06, when the text
+we owed the lead did not go out: a reply whose answer text failed to send, or
+a reply to a question unsent for over two minutes (`api/reply-flow.ts`;
+`STATE-MACHINE.md`, "Which replies need a person"). Picking the lead clears
+it, and so does saving an outcome.
 It decides who is in the queue, as *Inbound reply*.
 
 It used to be set on every inbound message, answers included. Migration 003
@@ -167,7 +168,8 @@ question failed to send is kept on purpose: the flow never answered it. Checked
 on seeded old-style flags before it shipped.
 
 **Leads are claimed and released explicitly.** An agent claims a lead, which
-sets `assigned_to` and `assigned_at`. Everyone else sees it as in progress. The
+sets `assigned_to` and `assigned_at`. Everyone else sees it as Working – name
+in the queue. The
 agent releases it by clearing both, and it returns to the queue. A superadmin
 can clear anyone's claim.
 
@@ -222,6 +224,9 @@ one it had, so the queue tabs, Admin > Leads and expiry are all unaffected.
 Opt-out is checked before it and is unaffected either way. Added in `003`; set by
 `db/agent-sms.ts` on an agent's first text to a lead whose conversation is
 still open, and read by the reply flow and the lead card.
+
+Rule 2d, a phone call taking the questions over, has no column: it is worked
+out from `call_answers` and `calls` (`phoneTookOverAtSql`, `db/lead-state.ts`).
 
 **`conversations.completed_at`** - migration `004`, 2026-09-28 - is when the
 lead finished the questions, whichever way their flow ended (until 012: when
