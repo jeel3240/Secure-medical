@@ -241,7 +241,10 @@ export function Timeline({
         const newDay = !lastDay || !isSameDay(lastDay, at);
         lastDay = at;
 
-        const failed = entry.kind === 'sms' && entry.detail.deliveryStatus === 'failed';
+        // Ours or an agent's own: a text EZ Texting refused is kept, marked
+        // failed (db/failed-sends.ts), and must not read as sent.
+        const failed =
+          (entry.kind === 'sms' || entry.kind === 'agent_sms') && entry.detail.deliveryStatus === 'failed';
         // The robot's call names who took it in its own line (T21).
         const robotCall = entry.kind === 'call' && entry.detail.direction === 'automated';
         const byline = robotCall ? null : entry.author;

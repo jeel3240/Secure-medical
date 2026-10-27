@@ -51,6 +51,17 @@ const TEMPLATES: { label: string; body: (lead: LeadDetail) => string }[] = [
   },
 ];
 
+/**
+ * Whether an agent's text would stop the automated questions now (rule 2b) -
+ * only while they are still running: an open conversation nobody has taken
+ * over. A completed, expired, review or stopped one has none left to stop
+ * (`db/agent-sms.ts` takes over an open one only), and an agent's text or a
+ * phone call (2d) may have stopped them already.
+ */
+export function sendingStopsQuestions(conversation: LeadDetail['conversation']): boolean {
+  return conversation?.status === 'open' && !conversation.agentTookOverAt && !conversation.phoneTookOverAt;
+}
+
 export function SmsCompose({
   lead,
   refresh,
@@ -70,8 +81,7 @@ export function SmsCompose({
   const blocked = lead.flags.dnc;
   const remaining = SMS_LIMIT - body.length;
   const tooLong = remaining < 0;
-  // An agent's text, or a phone call (2d), has already stopped the questions.
-  const alreadyTakenOver = Boolean(lead.conversation?.agentTookOverAt || lead.conversation?.phoneTookOverAt);
+  const stopsQuestions = sendingStopsQuestions(lead.conversation);
 
   const send = async () => {
     setSending(true);
@@ -115,7 +125,7 @@ export function SmsCompose({
 
         {/* Shown once there is something to send, and only before the first
             send: it cannot be undone. */}
-        {!alreadyTakenOver && body.trim() !== '' && (
+        {stopsQuestions && body.trim() !== '' && (
           <p className="composer__warning">
             Sending stops the automated questions for this lead. You will be handling the
             conversation from here.

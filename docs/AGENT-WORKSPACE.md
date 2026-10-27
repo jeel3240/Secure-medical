@@ -119,7 +119,9 @@ shown then: they are already stopped.
 2026-09-28. The API still answers 502 `send_failed`, but the message is kept
 with `delivery_status = 'failed'` and shown with a red "!"; it does not take the
 conversation over, because nothing reached the lead. Before that nothing was
-kept and the agent retyped the text. `db/failed-sends.ts`; `FRONTEND.md`.
+kept and the agent retyped the text. The Lead Timeline page marks it "Delivery
+failed", as it does a refused automated text. `db/failed-sends.ts`;
+`FRONTEND.md`.
 
 **The DNC disposition blocks the number** for SMS and calls: it writes
 `dnc_list` with reason `agent_disposition` and suppresses any open conversation

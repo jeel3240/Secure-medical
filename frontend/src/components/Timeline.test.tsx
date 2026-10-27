@@ -97,6 +97,26 @@ describe('messages', () => {
     );
     expect(screen.queryByText('Delivery failed')).toBeNull();
   });
+
+  it("flags an agent's own text that EZ Texting refused, not only ours", () => {
+    render(
+      <Timeline
+        entries={[
+          entry({ kind: 'agent_sms', author: 'Rae Whitfield', detail: { body: 'Call me back?', deliveryStatus: 'failed' } }),
+        ]}
+      />
+    );
+    expect(screen.getByText('Delivery failed')).toBeDefined();
+  });
+
+  it("says nothing about an agent's text that went out", () => {
+    render(
+      <Timeline
+        entries={[entry({ kind: 'agent_sms', author: 'Rae Whitfield', detail: { body: 'Call me back?', deliveryStatus: 'sent' } })]}
+      />
+    );
+    expect(screen.queryByText('Delivery failed')).toBeNull();
+  });
 });
 
 describe('calls', () => {

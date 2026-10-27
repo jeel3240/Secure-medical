@@ -516,7 +516,9 @@ message. When nothing is kept - a blocked number, a lead no longer yours - the
 text stays in the box and the red error above it still explains why.
 
 A first send still adds "Agent took over - automated questions stopped" to the
-thread. `Conversation.render.test.tsx` pins the ticks and the "!".
+thread. `Conversation.render.test.tsx` pins the ticks and the "!". On the Lead
+Timeline page a refused text reads "Delivery failed" - an agent's own as well
+as ours since 2026-10-27; before, an agent's read as sent there.
 
 *(2026-10-27: a phone call stops the automated questions too - the lead
 answered the robot's call, or rang us (`STATE-MACHINE.md` 2d): "Phone call -
@@ -734,8 +736,10 @@ texting START. The API refuses the value without `confirmDnc: true` regardless.
 
 **The SMS warning is shown before the first send,** because sending stops the
 automated questions for good (`STATE-MACHINE.md` rule 2b) and cannot be undone.
-Once the conversation has already been taken over the warning goes away. On a
-DNC lead there is no compose box at all.
+Once the conversation has already been taken over the warning goes away - and
+it is shown only while the questions are running: a completed, expired or
+review conversation has none left to stop (`sendingStopsQuestions`, 2026-10-27;
+before, it warned on those too). On a DNC lead there is no compose box at all.
 
 **The SMS templates are hardcoded,** unlike the automated copy in `settings`.
 They are an agent's own words mid-conversation, so a mistyped one costs a single
@@ -774,7 +778,7 @@ arrives after a newer one is still dropped.
 
 ## Tests
 
-`npm test` in `frontend/`. Vitest with jsdom, 401 tests in 34 files (2026-10-27).
+`npm test` in `frontend/`. Vitest with jsdom, 407 tests in 35 files (2026-10-27).
 
 Logic first, by agreement - a screen is easy to judge by eye, and a dropped
 response or an off-by-one age threshold is not:
@@ -786,7 +790,8 @@ response or an off-by-one age threshold is not:
 | `lib/leads-view.test.ts` | Admin > Leads' view read from and written to the address: the round trip, defaults left out, anything unrecognised read as the default - the Call filter (T23) included |
 | `lib/call-results.test.ts` | The robot's call in words: the Call column's, the timeline's capitalised, and the Call filter's choices (T23) |
 | `lib/call-settings.test.ts`, `pages/admin/ConfigPage.test.ts` | Admin > Configuration's call settings in words - hours, days, waits - its placeholders, what picks a line of the call script (T24), and its tab read from the address |
-| `components/Timeline.test.tsx`, `pages/LeadTimelinePage.test.ts` | The timeline's wording, and the summary sidebar |
+| `components/Timeline.test.tsx`, `pages/LeadTimelinePage.test.ts` | The timeline's wording - "Delivery failed" on a refused text, ours or an agent's - and the summary sidebar |
+| `pages/workspace/SmsCompose.test.ts` | When the composer warns that sending stops the questions: only while they are running and nobody has taken them over |
 | `pages/workspace/Conversation.test.ts` | The answer shown beside a reply: the server's, and nothing when it would repeat the reply |
 | `pages/QueuePage.test.ts` | The queue's Answers cell and its tooltip |
 | `pages/workspace/Conversation.render.test.tsx` | The sent ticks and the red "!" on a refused message; a call as one line, the robot's call with its answers folded under it; a label where the day changes |
