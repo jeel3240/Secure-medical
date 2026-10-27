@@ -2733,8 +2733,9 @@ switched on.
 
 **Going live - Jeel's steps**
 1. Merge `dev` into `main` and deploy as `WORKFLOW.md` says, **with
-   `AUTO_CALLS` unset**; `npm run migrate` runs 014 to 020. Calling does not
-   change: the switch is hidden, `/auto/*` answers 404, the worker places
+   `AUTO_CALLS` unset**; `npm run migrate` runs 014 to 020 - run it straight
+   after the `up`: until 017 has run, the new code cannot read the `users`
+   table, so signing in and every page fail. Calling does not change: the switch is hidden, `/auto/*` answers 404, the worker places
    nothing. Admin > Configuration > Calls reads **Off** and shows the script.
    What does show at once: day dividers in the conversation (W1), a text from
    a lead who has rung us going to a person (W2), Admin > Leads' Call column
