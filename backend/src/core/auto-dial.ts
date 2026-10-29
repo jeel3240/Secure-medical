@@ -79,6 +79,12 @@ export interface DialRoom {
   silent: number;
   /** A call script is active - with none, a call has nothing to say. */
   scripted: boolean;
+  /**
+   * Twilio refused one of its calls for our account's reasons, or never
+   * confirmed placing it, a short while ago (`not_placed`): every call now
+   * would go the same way.
+   */
+  refused: boolean;
 }
 
 /**
@@ -86,9 +92,26 @@ export interface DialRoom {
  * there are people free to take a "yes", none while a lead waits on hold, and
  * none when nobody is free. None either while Twilio's reports are not
  * reaching us - each call would reach a lead as Twilio's error, and use up the
- * one call they get - nor with no script to say.
+ * one call they get - nor a while after Twilio refused one for our account's
+ * reasons, nor with no script to say.
  */
 export function callsToPlace(room: DialRoom): number {
-  if (room.onHold || room.silent > 0 || !room.scripted) return 0;
+  if (room.onHold || room.silent > 0 || room.refused || !room.scripted) return 0;
   return Math.max(0, room.free - room.underway);
+}
+
+/**
+ * Twilio's error codes, when it refuses to place a call, that are about the
+ * lead's own number: not a valid number (13223, 13224, 21211, 21217), not
+ * reachable (21214), or one Twilio will not call (21216). Such a refusal is
+ * the lead's - their one call, used; trying again would only be refused
+ * again. Any other refusal - the key, the account, too many requests, a
+ * setting - is ours, and must not use up the call of every lead tried while
+ * it lasts (`not_placed`).
+ */
+const NUMBER_REFUSALS: ReadonlySet<number> = new Set([13223, 13224, 21211, 21214, 21216, 21217]);
+
+/** Whether a refusal by Twilio, with this error code, is about the lead's number. */
+export function refusedForTheNumber(code: number | null): boolean {
+  return code !== null && NUMBER_REFUSALS.has(code);
 }

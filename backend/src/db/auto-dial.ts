@@ -7,7 +7,7 @@
 
 import type { DialRoom } from '../core/auto-dial';
 import { activityInsertSql, recordActivity } from './activity';
-import { ON_HOLD_SQL } from './auto-calls';
+import { automatedCallUsedSql, ON_HOLD_SQL } from './auto-calls';
 import { readHoldMaxSeconds } from './call-script';
 import { WORKED_SQL } from './lead-state';
 import { pool } from './pool';
@@ -90,6 +90,14 @@ export const SILENT_AFTER_MINUTES = 3;
 export const SILENT_FOR_MINUTES = 60;
 
 /**
+ * How long the robot pauses after Twilio refused one of its calls for our
+ * account's reasons, or never confirmed placing it (`not_placed`) - long
+ * enough not to try lead after lead into the same refusal, short enough that
+ * a brief limit costs little. Then it tries again, one call first.
+ */
+export const REFUSED_PAUSE_MINUTES = 15;
+
+/**
  * Who can take a "yes" now, against the robot's calls still going -
  * `callsToPlace` - and what stops it altogether.
  *
@@ -103,10 +111,20 @@ export const SILENT_FOR_MINUTES = 60;
  *   ringing out included. Twilio's reports are not reaching us - `PUBLIC_URL`
  *   wrong, the api down, or it was switched off without the worker.
  * - **Scripted**: a call script is active.
+ * - **Refused**: a call of its ended `not_placed` in the last
+ *   `REFUSED_PAUSE_MINUTES` - Twilio refused it for our account's reasons
+ *   (`failAutomatedCall`), or never confirmed it (`closeUnplacedCalls`).
  */
 export async function dialRoom(): Promise<DialRoom> {
   const holdMaxSeconds = await readHoldMaxSeconds(pool);
-  const { rows } = await pool.query<{ free: number; underway: number; on_hold: boolean; silent: number; scripted: boolean }>(
+  const { rows } = await pool.query<{
+    free: number;
+    underway: number;
+    on_hold: boolean;
+    silent: number;
+    scripted: boolean;
+    refused: boolean;
+  }>(
     `SELECT (SELECT count(*)::int FROM users u WHERE ${FREE_SQL}) AS free,
             (SELECT count(*)::int FROM calls c
              WHERE c.direction = 'automated' AND c.outcome IS NULL AND c.agent_id IS NULL
@@ -117,11 +135,14 @@ export async function dialRoom(): Promise<DialRoom> {
                AND c.outcome IS NULL AND c.answered_by IS NULL
                AND c.started_at < now() - interval '${SILENT_AFTER_MINUTES} minutes'
                AND c.started_at > now() - interval '${SILENT_FOR_MINUTES} minutes') AS silent,
-            EXISTS (SELECT 1 FROM call_scripts s WHERE s.is_active) AS scripted`,
+            EXISTS (SELECT 1 FROM call_scripts s WHERE s.is_active) AS scripted,
+            EXISTS (SELECT 1 FROM calls c
+                    WHERE c.direction = 'automated' AND c.script_result = 'not_placed'
+                      AND c.ended_at > now() - interval '${REFUSED_PAUSE_MINUTES} minutes') AS refused`,
     [holdMaxSeconds + 120]
   );
   const r = rows[0];
-  return { free: r.free, underway: r.underway, onHold: r.on_hold, silent: r.silent, scripted: r.scripted };
+  return { free: r.free, underway: r.underway, onHold: r.on_hold, silent: r.silent, scripted: r.scripted, refused: r.refused };
 }
 
 /**
@@ -135,16 +156,20 @@ export async function dialRoom(): Promise<DialRoom> {
  *   is a lead reaching us, and a person's to deal with;
  * - nobody holds it, and nobody has worked it (`WORKED_SQL`: a note, a
  *   callback, an outcome - Closed among them - an agent's call or text);
- * - its number is not blocked, and the robot has never called it.
+ * - its number is not blocked, and it has not had its robot call - a call
+ *   Twilio never placed (`not_placed`) is not one, up to `NOT_PLACED_LIMIT`
+ *   (`automatedCallUsedSql`).
  *
  * Every such lead is called, whenever it arrived - the leads already waiting
  * when automated calls were switched on too (Jeel, 2026-10-29). New leads
  * first - those that arrived after `since`, when they were last switched on
  * (`recordAutoCallsSwitch`) - so a new lead's call an hour after its text is
  * not held up by the waiting ones, which fill the room left. Within each,
- * oldest first, by when the first text went out: a lead whose hour ended
- * outside the calling hours is called at their start, before newer ones; and
- * the waiting lead nearest expiring goes first.
+ * fewest calls Twilio never placed first - so after a pause the robot tries a
+ * lead it has not, rather than the same one again - then oldest first, by when
+ * the first text went out: a lead whose hour ended outside the calling hours
+ * is called at their start, before newer ones; and the waiting lead nearest
+ * expiring goes first.
  * `only`, outside production, is the test numbers - the only ones looked at,
  * so a laptop's fake leads are never even tried. `leadId` asks about that one
  * lead alone - again, just before its call (`stillDue`). `now` is a parameter
@@ -176,10 +201,13 @@ export async function leadsToCall(opts: {
        AND NOT ${WORKED_SQL}
        AND NOT EXISTS (SELECT 1 FROM messages m WHERE m.lead_id = l.id AND m.direction = 'inbound')
        AND NOT EXISTS (SELECT 1 FROM calls ic WHERE ic.lead_id = l.id AND ic.direction = 'inbound')
-       AND NOT EXISTS (SELECT 1 FROM calls ac WHERE ac.lead_id = l.id AND ac.direction = 'automated')
+       AND NOT ${automatedCallUsedSql('l.id')}
        AND NOT EXISTS (SELECT 1 FROM dnc_list d WHERE d.phone = l.phone AND d.released_at IS NULL)
        AND ($4::text[] IS NULL OR l.phone = ANY($4::text[]))
-     ORDER BY l.created_at > $2 DESC, c.question_sent_at, l.id
+     ORDER BY l.created_at > $2 DESC,
+              (SELECT count(*) FROM calls nc WHERE nc.lead_id = l.id AND nc.direction = 'automated'
+                 AND nc.script_result = 'not_placed'),
+              c.question_sent_at, l.id
      LIMIT $5`,
     [opts.now, opts.since, String(opts.waitMinutes), opts.only, opts.limit, opts.leadId ?? null]
   );
@@ -210,15 +238,16 @@ export async function stillDue(opts: {
  * row when Twilio's answer did not come, in case the call went out anyway -
  * once no webhook has named it in `UNDER_WAY_MINUTES`. Most likely it never
  * went out; if it did, our webhooks were not being heard either, so its
- * record says only that: `no_webhook`. Ended as `failed`, `unanswered`, with
- * its `call.ended` record, so it is not "under way" for ever; and a webhook
- * that names it after this is not taken for it (`linkAutomatedCall`). Returns
- * how many.
+ * record says only that: `no_webhook`. Ended as `failed`, `not_placed` - not
+ * the lead's call, which comes when Twilio answers again, and the robot
+ * pauses meanwhile (`dialRoom`) - with its `call.ended` record, so it is not
+ * "under way" for ever; and a webhook that names it after this is not taken
+ * for it (`linkAutomatedCall`). Returns how many.
  */
 export async function closeUnplacedCalls(): Promise<number> {
   const { rowCount } = await pool.query(
     `WITH closed AS (
-       UPDATE calls SET outcome = 'failed', duration_sec = 0, ended_at = now(), script_result = 'unanswered'
+       UPDATE calls SET outcome = 'failed', duration_sec = 0, ended_at = now(), script_result = 'not_placed'
        WHERE direction = 'automated' AND twilio_call_sid IS NULL AND ended_at IS NULL
          AND started_at < now() - interval '${UNDER_WAY_MINUTES} minutes'
        RETURNING id, lead_id

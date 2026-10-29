@@ -239,12 +239,12 @@ async function main(): Promise<void> {
     check('but never acted on then: still answered (T18)', (await callRow(callId)).outcome, 'answered');
   }
 
-  console.log('\nTwilio refused it');
+  console.log('\nTwilio refused the lead\'s number');
   {
     const lee = await makeLead('+15550000506');
     const started = await startAutomatedCall({ leadId: lee, mayRing: ANY });
     const refusedId = started.ok ? started.callId : 0;
-    await failAutomatedCall(refusedId, { status: 400, code: 21211 });
+    await failAutomatedCall(refusedId, { status: 400, code: 21211, forTheNumber: true });
     const row = await callRow(refusedId);
     check('ended as failed, no talk time', [row.outcome, row.duration, row.ended], ['failed', 0, true]);
     check('and never answered', await scriptResult(refusedId), 'unanswered');
@@ -260,13 +260,49 @@ async function main(): Promise<void> {
         twilioCode: 21211,
       }),
     ]);
-    await failAutomatedCall(refusedId, { status: 400, code: 21211 });
+    await failAutomatedCall(refusedId, { status: 400, code: 21211, forTheNumber: true });
     const { rows } = await pool.query(
       `SELECT count(*)::int AS n FROM activity_log WHERE lead_id = $1 AND action = 'call.ended'`,
       [lee]
     );
     check('only once - a second failure changes nothing and records nothing', rows[0].n, 1);
     check('and the lead is never called again', (await startAutomatedCall({ leadId: lee, mayRing: ANY })).ok, false);
+  }
+
+  console.log('\nTwilio refused it for our account - not the lead\'s call');
+  {
+    const kim = await makeLead('+15550000599');
+    const first = await startAutomatedCall({ leadId: kim, mayRing: ANY });
+    const firstId = first.ok ? first.callId : 0;
+    await failAutomatedCall(firstId, { status: 401, code: 20003, forTheNumber: false });
+    const row = await callRow(firstId);
+    check('ended as failed, no talk time', [row.outcome, row.duration, row.ended], ['failed', 0, true]);
+    check('not placed', await scriptResult(firstId), 'not_placed');
+    const record = await lastRecord(kim);
+    check('recorded as not placed, with Twilio\'s status and code', [record.action, record.detail.reason, record.detail.twilioCode], [
+      'call.ended',
+      'not_placed',
+      20003,
+    ]);
+    const again = await startAutomatedCall({ leadId: kim, mayRing: ANY });
+    check('the lead can be called again - the database allows a second row', again.ok, true);
+    const againId = again.ok ? again.callId : 0;
+    let second = 'accepted';
+    try {
+      await pool.query(`INSERT INTO calls (lead_id, direction, started_at) VALUES ($1, 'automated', now())`, [kim]);
+    } catch (err) {
+      second = (err as { constraint?: string }).constraint ?? 'refused';
+    }
+    check('but while that one is being placed, the database refuses a third', second, 'calls_one_automated_per_lead');
+    await failAutomatedCall(againId, { status: 429, code: 20429, forTheNumber: false });
+    const third = await startAutomatedCall({ leadId: kim, mayRing: ANY });
+    const thirdId = third.ok ? third.callId : 0;
+    await failAutomatedCall(thirdId, { status: 403, code: null, forTheNumber: false });
+    check('after three not placed: the lead\'s call counts as used', await startAutomatedCall({ leadId: kim, mayRing: ANY }), {
+      ok: false,
+      reason: 'already_called',
+    });
+    check('three rows, all kept', await automatedCalls(kim), 3);
   }
 
   console.log('\ntwo placements racing for one lead');

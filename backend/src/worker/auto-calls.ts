@@ -13,7 +13,9 @@
  *    those already waiting at the switch-on, oldest first - each asked again
  *    just before its call (`stillDue`) - the calls go out one after another,
  *    and meanwhile a lead may reply or be picked up - and placed as from T12
- *    (`placeAutoCall`).
+ *    (`placeAutoCall`). Twilio refusing one for our account's reasons, or not
+ *    answering, ends the look there: the next call would go the same way
+ *    (and the robot then pauses - `dialRoom`, `refused`).
  *
  * Steps 3 and 4 hold the dial lock (`withDialLock`): a second worker looks
  * nothing up while one is dialling.
@@ -41,8 +43,11 @@ export interface DialLook {
   inside: boolean;
   /** How many calls there was room for. */
   room: number;
-  /** Why there was none, when it was not only nobody free: a lead on hold, Twilio silent, no script. */
-  stopped: 'on_hold' | 'silent' | 'no_script' | null;
+  /**
+   * Why there was none, when it was not only nobody free: a lead on hold,
+   * Twilio silent, Twilio refusing our calls a short while ago, no script.
+   */
+  stopped: 'on_hold' | 'silent' | 'refused' | 'no_script' | null;
   /** The robot's calls Twilio has said nothing about since they were placed (`dialRoom`). */
   silent: number;
   /** Leads due, up to the room. */
@@ -52,6 +57,8 @@ export interface DialLook {
   placed: number;
   refused: number;
   failed: number;
+  /** Twilio refused it for our account's reasons - not the lead's call. */
+  notPlaced: number;
   unconfirmed: number;
   /** Another worker was dialling. */
   locked: boolean;
@@ -69,6 +76,7 @@ export async function dialDueLeads(deps: DialDeps, now = new Date()): Promise<Di
     placed: 0,
     refused: 0,
     failed: 0,
+    notPlaced: 0,
     unconfirmed: 0,
     locked: false,
   };
@@ -84,7 +92,15 @@ export async function dialDueLeads(deps: DialDeps, now = new Date()): Promise<Di
   const dialled = await deps.withDialLock(async () => {
     const room = await deps.dialRoom();
     look.silent = room.silent;
-    look.stopped = room.onHold ? 'on_hold' : room.silent > 0 ? 'silent' : !room.scripted ? 'no_script' : null;
+    look.stopped = room.onHold
+      ? 'on_hold'
+      : room.silent > 0
+        ? 'silent'
+        : room.refused
+          ? 'refused'
+          : !room.scripted
+            ? 'no_script'
+            : null;
     look.room = callsToPlace(room);
     if (look.room === 0) return;
     const leads = await deps.leadsToCall({ now, since, waitMinutes: hours.waitMinutes, limit: look.room });
@@ -96,6 +112,7 @@ export async function dialDueLeads(deps: DialDeps, now = new Date()): Promise<Di
       }
       const result = await deps.placeAutoCall(leadId);
       look[result.kind] += 1;
+      if (result.kind === 'notPlaced' || result.kind === 'unconfirmed') break;
     }
   });
   if (dialled === null) look.locked = true;

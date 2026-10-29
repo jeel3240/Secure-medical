@@ -155,7 +155,9 @@ function describe(result: PlaceAutoCallResult): string {
     case 'refused':
       return `not placed: ${result.reason}.${result.reason === 'already_called' ? ' Add --again to call a fresh test lead.' : result.reason === 'blocked' ? ' Add --unblock to lift a test block.' : ''}`;
     case 'failed':
-      return `Twilio refused call ${result.callId}; it is saved as failed.`;
+      return `Twilio refused the number for call ${result.callId}; it is saved as failed.`;
+    case 'notPlaced':
+      return `Twilio refused call ${result.callId} for the account's reasons; saved as failed, not the lead's call.`;
     case 'unconfirmed':
       return `Twilio did not answer in time: call ${result.callId} may or may not have gone out.`;
   }

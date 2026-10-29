@@ -9,8 +9,10 @@
  *    transaction. A refusal stops here, and nothing rings.
  * 2. **Then Twilio, once** (`placeAutomatedCall`).
  * 3. **Its answer.** Placed: Twilio's id is kept on the row. Refused: the row
- *    is ended as failed. No answer: the row is left as it is - the call may
- *    have gone out, and if it did, its first webhook fills in the id.
+ *    is ended as failed - the lead's one call if Twilio refused their number,
+ *    otherwise not (`not_placed`: our account's problem, and the robot
+ *    pauses). No answer: the row is left as it is - the call may have gone
+ *    out, and if it did, its first webhook fills in the id.
  */
 
 import { mayRing, type AutoCallNumbers } from '../auto-calls-settings';
@@ -20,6 +22,7 @@ import {
   startAutomatedCall,
   type AutoCallRefusal,
 } from '../db/auto-calls';
+import { refusedForTheNumber } from '../core/auto-dial';
 import { placeAutomatedCall } from '../integrations/twilio-calls';
 import { errText, log } from '../lib/log';
 import type { TwilioSettings } from '../twilio-settings';
@@ -27,8 +30,10 @@ import type { TwilioSettings } from '../twilio-settings';
 export type PlaceAutoCallResult =
   | { kind: 'placed'; callId: number }
   | { kind: 'refused'; reason: AutoCallRefusal }
-  /** Twilio refused it: the row is ended as failed. */
+  /** Twilio refused the lead's number: the row is ended as failed, the lead's call used. */
   | { kind: 'failed'; callId: number }
+  /** Twilio refused it for our account's reasons: ended as failed, `not_placed` - not the lead's call. */
+  | { kind: 'notPlaced'; callId: number }
   /** Twilio did not answer: the call may have gone out. */
   | { kind: 'unconfirmed'; callId: number };
 
@@ -57,10 +62,17 @@ export async function placeAutoCall(opts: {
       log.info('auto_call.placed', { leadId, callId, callSid: placed.callSid });
       return { kind: 'placed', callId };
 
-    case 'refused':
-      await failAutomatedCall(callId, { status: placed.status, code: placed.code });
-      log.error('auto_call.failed', { leadId, callId, twilioStatus: placed.status, twilioCode: placed.code });
-      return { kind: 'failed', callId };
+    case 'refused': {
+      const forTheNumber = refusedForTheNumber(placed.code);
+      await failAutomatedCall(callId, { status: placed.status, code: placed.code, forTheNumber });
+      const fields = { leadId, callId, twilioStatus: placed.status, twilioCode: placed.code };
+      if (forTheNumber) {
+        log.error('auto_call.failed', fields);
+        return { kind: 'failed', callId };
+      }
+      log.error('auto_call.not_placed', fields);
+      return { kind: 'notPlaced', callId };
+    }
 
     case 'unknown':
       log.warn('auto_call.unconfirmed', { leadId, callId, error: placed.error });
