@@ -100,7 +100,6 @@ import {
   leadsToCall,
   recordAutoCallsSwitch,
   stillDue,
-  waitingIncluded,
   withDialLock,
 } from '../src/db/auto-dial';
 import { dialDueLeads, type DialDeps } from '../src/worker/auto-calls';
@@ -448,7 +447,7 @@ async function main(): Promise<void> {
   // ------------------------------------------------- 10. the robot is on
   step('10. Automated calls on: the robot calls a lead who never replied');
 
-  // Switched on three hours ago - only leads after it are called - and, for
+  // Switched on three hours ago - leads after it are called first - and, for
   // this scratch database, calling at any hour on any day.
   await recordAutoCallsSwitch(true);
   // Written as the robot writes it: UTC, with a Z (`NOW_TEXT`, db/auto-dial.ts).
@@ -487,7 +486,6 @@ async function main(): Promise<void> {
   const dialler: DialDeps = {
     closeUnplacedCalls,
     autoCallsSince,
-    waitingIncluded,
     readCallHours: () => readCallHours(pool),
     dialRoom,
     leadsToCall: (opts) => leadsToCall({ ...opts, only }),
