@@ -20,7 +20,7 @@ import { claimLead, releaseLead } from '../src/db/claims';
 import { addNote } from '../src/db/notes';
 import { getTimeline } from '../src/db/timeline';
 import { startConversation } from '../src/db/flows';
-import { keepAnswer, linkAutomatedCall, startAutomatedCall, takeTransfer } from '../src/db/auto-calls';
+import { failAutomatedCall, keepAnswer, linkAutomatedCall, startAutomatedCall, takeTransfer } from '../src/db/auto-calls';
 import { replyAs } from './live-flow';
 
 let failures = 0;
@@ -340,6 +340,14 @@ async function main(): Promise<void> {
 
   console.log('\na lead that does not exist');
   check('is null, not an empty list', await getTimeline(999999), null);
+
+  console.log('\na robot call Twilio never placed - not on the timeline');
+  {
+    const lead = await makeLead('+15550000398', '30 minutes');
+    const started = await startAutomatedCall({ leadId: lead, mayRing: () => true });
+    await failAutomatedCall(started.ok ? started.callId : 0, { status: 401, code: 20003, forTheNumber: false });
+    check('it never reached the lead: no call on its timeline', (await getTimeline(lead))!.filter((e) => e.kind === 'call').length, 0);
+  }
 
   console.log(failures === 0 ? '\nall checks passed' : `\n${failures} check(s) FAILED`);
   await pool.end();

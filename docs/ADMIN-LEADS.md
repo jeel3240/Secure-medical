@@ -196,7 +196,7 @@ both are true.
 | Voicemail left | A machine answered; the message was left after its beep |
 | No response | Not understood twice, or silence |
 | Hung up | Picked up, and hung up before the script ended |
-| No answer | No person picked up - no answer, busy, a fax, or the call was never placed (Twilio refused it, or never heard of it) |
+| No answer | No person picked up - no answer, busy, a fax, or Twilio refused the lead's number |
 | Opted out | Said stop, or pressed 9 - the number is blocked, so the status reads Opted out too |
 | No result | No result an hour after the call was placed: its end never reached us (below) |
 
@@ -209,7 +209,10 @@ timeline names who took it and how long they talked.
 (`calls_one_automated_per_lead`), the newest should a second try ever be
 allowed - and gives `calls.script_result`. Every call that ends has one: set
 when the script ends, by `settleAutomatedCall` at the call's end if it never
-did, or `unanswered` when Twilio refused the call or it never reached Twilio.
+did, or `unanswered` when Twilio refused the lead's number. A call Twilio
+never placed for our own account's reasons, or never confirmed (`not_placed`,
+`AUTO-CALLS.md` "When Twilio refuses"), is not the lead's call and is left
+out: with only those, the lead reads Not called.
 One with none is still going, unless its end never reached us; no robot call
 lasts long - the hold line's own safety stop is 10 minutes - so an hour on it
 reads **No result**, never "Calling now" for ever. An agent's own call is

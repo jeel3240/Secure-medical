@@ -2,7 +2,7 @@
  * When the robot calls, and how many at once - T20, AUTO-CALLS.md "When a lead
  * is called" and "Traffic".
  */
-import { callsToPlace, DEFAULT_CALL_HOURS, insideCallHours, parseClock, parseDays } from './auto-dial';
+import { callsToPlace, DEFAULT_CALL_HOURS, insideCallHours, parseClock, parseDays, refusedForTheNumber } from './auto-dial';
 
 // Arizona is UTC-7 all year - no daylight saving - so 18:00Z is 11:00 there.
 // 2026-10-26 is a Monday; 2026-10-24 a Saturday.
@@ -43,7 +43,7 @@ describe('the calling hours - 11am to 5pm, Arizona time, Monday to Friday', () =
 });
 
 describe('how many calls at once - Traffic', () => {
-  const room = { free: 3, underway: 0, onHold: false, silent: 0, scripted: true };
+  const room = { free: 3, underway: 0, onHold: false, silent: 0, scripted: true, refused: false };
 
   it('as many as there are people free, less the robot\'s calls still going with nobody on them', () => {
     expect(callsToPlace(room)).toBe(3);
@@ -65,5 +65,20 @@ describe('how many calls at once - Traffic', () => {
 
   it('no call script: none - nothing to say', () => {
     expect(callsToPlace({ ...room, scripted: false })).toBe(0);
+  });
+
+  it('Twilio refused one for our account a short while ago: none - every call now would go the same way', () => {
+    expect(callsToPlace({ ...room, refused: true })).toBe(0);
+  });
+});
+
+describe('whose refusal it is - When Twilio refuses', () => {
+  it('a bad or unreachable number, or one Twilio will not call: the lead\'s - their call used', () => {
+    for (const code of [21211, 21214, 21216, 21217, 13223, 13224]) expect(refusedForTheNumber(code)).toBe(true);
+  });
+
+  it('anything else is ours - the key, the account, too many requests, a setting, no code at all', () => {
+    for (const code of [20003, 20005, 20429, 21210, 21212, 21215, 21219, 20404]) expect(refusedForTheNumber(code)).toBe(false);
+    expect(refusedForTheNumber(null)).toBe(false);
   });
 });

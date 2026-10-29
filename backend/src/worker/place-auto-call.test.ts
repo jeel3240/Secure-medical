@@ -52,11 +52,24 @@ it('refused before Twilio - blocked, already called, not one of ours: nothing ri
   expect(placeAutomatedCall).not.toHaveBeenCalled();
 });
 
-it('Twilio refuses: the row is ended as failed, with Twilio\'s status and code', async () => {
+it('Twilio refuses the lead\'s number: the row is ended as failed, the lead\'s call - with Twilio\'s status and code', async () => {
   placeAutomatedCall.mockResolvedValue({ kind: 'refused', status: 400, code: 21211 });
   expect(await place()).toEqual({ kind: 'failed', callId: 42 });
-  expect(failAutomatedCall).toHaveBeenCalledWith(42, { status: 400, code: 21211 });
+  expect(failAutomatedCall).toHaveBeenCalledWith(42, { status: 400, code: 21211, forTheNumber: true });
   expect(linkAutomatedCall).not.toHaveBeenCalled();
+});
+
+it('Twilio refuses for our account - the key, a limit: ended as failed, not placed - not the lead\'s call', async () => {
+  for (const [status, code] of [
+    [401, 20003],
+    [429, 20429],
+    [403, null],
+  ] as const) {
+    failAutomatedCall.mockClear();
+    placeAutomatedCall.mockResolvedValue({ kind: 'refused', status, code });
+    expect(await place()).toEqual({ kind: 'notPlaced', callId: 42 });
+    expect(failAutomatedCall).toHaveBeenCalledWith(42, { status, code, forTheNumber: false });
+  }
 });
 
 it('no answer from Twilio: the row is left for the webhooks - the call may have gone out', async () => {

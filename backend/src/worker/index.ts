@@ -58,7 +58,8 @@ const dialler = autoDialler();
 
 /**
  * Why the robot stopped - a lead waited on hold too long to be real, Twilio
- * went silent, no script - logged once when it starts and once when it ends,
+ * went silent, Twilio refused our calls, no script - logged once when it
+ * starts and once when it ends,
  * not every half minute (T20 review). Waiting on hold is the robot working as
  * it should, so it is not an alarm.
  */
@@ -67,6 +68,7 @@ function noteStop(look: DialLook): void {
   const now = look.stopped === 'on_hold' ? null : look.stopped;
   if (now === stoppedFor) return;
   if (now === 'silent') log.error('auto_call.webhooks_silent', { calls: look.silent });
+  else if (now === 'refused') log.error('auto_call.twilio_refusing', {});
   else if (now === 'no_script') log.error('auto_call.no_script', {});
   else log.info('auto_call.dialling_again', { after: stoppedFor });
   stoppedFor = now;

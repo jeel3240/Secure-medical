@@ -260,6 +260,7 @@ async function main(): Promise<void> {
   await robotCall('YesTaken', { result: 'transferred', agent: maya });
   await robotCall('Calling', { result: null, minutesAgo: 2 });
   await robotCall('Unreported', { result: null, minutesAgo: 90 });
+  await robotCall('NotPlaced', { result: 'not_placed' });
 
   const withCalls = await listAdminLeads({ pageSize: 200 });
   const row = (name: string) => withCalls.leads.find((l) => l.firstName === name);
@@ -271,6 +272,7 @@ async function main(): Promise<void> {
   check('none an hour and a half on: its end never reached us - unknown, not calling', row('Unreported')?.call, 'unknown');
   check('a lead the robot never called: nothing', row('Waiting')?.call, null);
   check('nor is an agent\'s call the robot\'s', row('Called')?.call, null);
+  check('nor a call Twilio never placed - our account\'s problem, not the lead\'s call', row('NotPlaced')?.call, null);
 
   const voicemails = await listAdminLeads({ call: 'voicemail_left', pageSize: 200 });
   check('the filter keeps exactly those leads', voicemails.leads.map((l) => l.firstName), ['Voicemail']);
@@ -282,8 +284,9 @@ async function main(): Promise<void> {
     (await listAdminLeads({ call: 'unknown' })).leads.map((l) => l.firstName),
   ], [['Calling'], ['Unreported']]);
   const notCalled = await listAdminLeads({ call: 'none', pageSize: 200 });
-  check('not called: every lead but the seven', [notCalled.total, withCalls.total], [26, 33]);
+  check('not called: every lead but the seven', [notCalled.total, withCalls.total], [27, 34]);
   check('the agent\'s call among them', notCalled.leads.some((l) => l.firstName === 'Called'), true);
+  check('and the call Twilio never placed', notCalled.leads.some((l) => l.firstName === 'NotPlaced'), true);
 
   console.log(failures === 0 ? '\nall checks passed' : `\n${failures} check(s) FAILED`);
   await pool.end();

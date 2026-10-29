@@ -17,7 +17,7 @@
  * Run it with the others: scripts/live-checks.sh auto-dial
  */
 import { DEFAULT_CALL_HOURS } from '../src/core/auto-dial';
-import { startAutomatedCall, holdCall, linkAutomatedCall } from '../src/db/auto-calls';
+import { failAutomatedCall, startAutomatedCall, holdCall, linkAutomatedCall } from '../src/db/auto-calls';
 import {
   autoCallsSince,
   closeUnplacedCalls,
@@ -198,6 +198,25 @@ async function main(): Promise<void> {
     check('the same rules as any lead: one who replied, one picked up - never', await due({ only }), [newer, oldest]);
   }
 
+  console.log('\na call Twilio never placed - not the lead\'s call');
+  {
+    const only = ['+15550009301', '+15550009302'];
+    const tried = await lead({ sent: new Date(NOW.getTime() - minutes(200)), phone: only[0] });
+    const fresh = await lead({ sent: new Date(NOW.getTime() - minutes(100)), phone: only[1] });
+    const notPlaced = async () => {
+      const s = await startAutomatedCall({ leadId: tried, mayRing: () => true });
+      await failAutomatedCall(s.ok ? s.callId : 0, { status: 429, code: 20429, forTheNumber: false });
+    };
+    await notPlaced();
+    check('refused for our account: still called - after a lead not tried, though older', await due({ only }), [fresh, tried]);
+    check('asked again just before its call: still due', await stillDue({ now: NOW, since: SINCE, waitMinutes: 60, only, leadId: tried }), true);
+    await notPlaced();
+    await notPlaced();
+    check('three times: its call counts as used', await due({ only }), [fresh]);
+    // Long enough ago not to pause the robot for the sections below.
+    await pool.query(`UPDATE calls SET ended_at = now() - interval '1 hour' WHERE lead_id = $1`, [tried]);
+  }
+
   console.log('\nwhen - the first look after the hour is up, and overnight');
   {
     // Fresh leads for this section, looked at by their own numbers alone.
@@ -221,6 +240,7 @@ async function main(): Promise<void> {
       onHold: false,
       silent: 0,
       scripted: true,
+      refused: false,
     });
     await person('ann@example.com', true);
     await person('ben@example.com', true);
@@ -237,7 +257,14 @@ async function main(): Promise<void> {
     await pool.query(`UPDATE calls SET held_at = now() - interval '13 minutes' WHERE id = $1`, [callId]);
     check('on hold longer than the safety stop and two minutes: a call whose end never came - not counted', (await dialRoom()).onHold, false);
     await pool.query(`UPDATE calls SET outcome = 'answered', ended_at = now(), script_result = 'transfer_missed' WHERE id = $1`, [callId]);
-    check('ended: neither going nor on hold', await dialRoom(), { free: 2, underway: 1, onHold: false, silent: 0, scripted: true });
+    check('ended: neither going nor on hold', await dialRoom(), {
+      free: 2,
+      underway: 1,
+      onHold: false,
+      silent: 0,
+      scripted: true,
+      refused: false,
+    });
 
     // Twilio's reports not reaching us: a call placed a while ago, never heard of.
     const quiet = await lead({ sent: new Date(NOW.getTime() - minutes(90)) });
@@ -255,6 +282,19 @@ async function main(): Promise<void> {
     await pool.query(`UPDATE call_scripts SET is_active = false`);
     check('no call script active', (await dialRoom()).scripted, false);
     await pool.query(`UPDATE call_scripts SET is_active = true`);
+
+    // Twilio refusing our calls: one not placed, just now.
+    const refusedLead = await lead({ sent: new Date(NOW.getTime() - minutes(90)) });
+    const r = await startAutomatedCall({ leadId: refusedLead, mayRing: () => true });
+    const refusedId = r.ok ? r.callId : 0;
+    await failAutomatedCall(refusedId, { status: 401, code: 20003, forTheNumber: false });
+    check('Twilio refused one for our account just now: paused', (await dialRoom()).refused, true);
+    await pool.query(`UPDATE calls SET ended_at = now() - interval '16 minutes' WHERE id = $1`, [refusedId]);
+    check('fifteen minutes on: no longer', (await dialRoom()).refused, false);
+    const n = await lead({ sent: new Date(NOW.getTime() - minutes(90)) });
+    const nr = await startAutomatedCall({ leadId: n, mayRing: () => true });
+    await failAutomatedCall(nr.ok ? nr.callId : 0, { status: 400, code: 21211, forTheNumber: true });
+    check('Twilio refusing a lead\'s number does not pause it', (await dialRoom()).refused, false);
   }
 
   console.log('\na look, end to end - never more calls than people free');
@@ -310,8 +350,8 @@ async function main(): Promise<void> {
       `SELECT id, outcome, script_result, ended_at IS NOT NULL AS ended FROM calls WHERE id = ANY($1) ORDER BY id`,
       [[staleId, freshId]]
     );
-    check('ten minutes with no webhook naming it: closed, failed, unanswered', rows, [
-      { id: staleId, outcome: 'failed', script_result: 'unanswered', ended: true },
+    check('ten minutes with no webhook naming it: closed, failed, not placed', rows, [
+      { id: staleId, outcome: 'failed', script_result: 'not_placed', ended: true },
       { id: freshId, outcome: null, script_result: null, ended: false },
     ]);
     check('the others left alone - one closed (the calls above reached Twilio, or are newer)', before >= 1, true);

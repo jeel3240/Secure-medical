@@ -151,11 +151,13 @@ const STATUS_SQL = `
 /**
  * The Call column for the lead whose id is `leadId` - one look-up, by the
  * index that keeps one automated call per lead (`calls_one_automated_per_lead`,
- * migration 014). The newest, should a second try ever be allowed.
+ * migration 014). The newest, should a second try ever be allowed. A call
+ * Twilio never placed (`not_placed` - our account's problem) is not the
+ * lead's: with only those, the lead reads Not called.
  *
  * A call ends with a result: settled at its end if the script never reached
- * one (`settleAutomatedCall`), or `unanswered` when Twilio refused it or it
- * never reached Twilio. One without is still going - ringing, asking, putting
+ * one (`settleAutomatedCall`), or `unanswered` when Twilio refused the lead's
+ * number. One without is still going - ringing, asking, putting
  * a "yes" through, on hold - never for long: the hold line's own safety stop
  * is 10 minutes. An hour on, its end never reached us.
  */
@@ -167,7 +169,7 @@ function robotCallSql(leadId: string): string {
              ELSE 'unknown'
            END
     FROM calls ac
-    WHERE ac.lead_id = ${leadId} AND ac.direction = 'automated'
+    WHERE ac.lead_id = ${leadId} AND ac.direction = 'automated' AND ac.script_result IS DISTINCT FROM 'not_placed'
     ORDER BY ac.id DESC
     LIMIT 1
   )`;

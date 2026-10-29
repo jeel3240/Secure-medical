@@ -99,7 +99,9 @@ const QUERIES: { kind: TimelineKind; sql: string }[] = [
         LEFT JOIN call_steps s ON s.id = a.step_id
         WHERE a.call_id = c.id
       ) ans ON true
-      WHERE c.lead_id = $1
+      -- Not a robot call Twilio never placed (not_placed): it never reached
+      -- the lead - AUTO-CALLS.md, "When Twilio refuses".
+      WHERE c.lead_id = $1 AND c.script_result IS DISTINCT FROM 'not_placed'
     `,
   },
   {

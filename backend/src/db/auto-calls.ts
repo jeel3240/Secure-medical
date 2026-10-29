@@ -30,7 +30,9 @@ import { pool } from './pool';
  * - `not_found` - no such lead;
  * - `blocked` - the number is on the do-not-call list;
  * - `already_called` - one automated call per lead (decided 2026-10-17; the
- *   database refuses a second, `calls_one_automated_per_lead`);
+ *   database refuses a second, `calls_one_automated_per_lead`) - one Twilio
+ *   placed, or refused for the lead's number, or `NOT_PLACED_LIMIT` it would
+ *   not place (`automatedCallUsedSql`);
  * - `no_script` - no call script is active, so there is nothing to say;
  * - `not_test_number` - outside production, the number is not one of ours
  *   (`AUTO_CALL_TEST_NUMBERS`).
@@ -38,6 +40,26 @@ import { pool } from './pool';
 export type AutoCallRefusal = 'not_found' | 'blocked' | 'already_called' | 'no_script' | 'not_test_number';
 
 export type StartAutoCallResult = { ok: true; callId: number; phone: string } | { ok: false; reason: AutoCallRefusal };
+
+/**
+ * How many times Twilio may refuse a lead's call for our account's reasons, or
+ * never confirm it (`not_placed`), before the lead's call counts as used all
+ * the same - so a refusal of the lead's own that we take for ours cannot hold
+ * the robot on that lead for ever.
+ */
+export const NOT_PLACED_LIMIT = 3;
+
+/**
+ * Whether the lead `lead` (an SQL expression) has had its one automated call:
+ * any but those Twilio never placed (`not_placed`), or `NOT_PLACED_LIMIT` of
+ * those. The first part is what `calls_one_automated_per_lead` keeps.
+ */
+export function automatedCallUsedSql(lead: string): string {
+  return `(EXISTS (SELECT 1 FROM calls uc WHERE uc.lead_id = ${lead} AND uc.direction = 'automated'
+                AND uc.script_result IS DISTINCT FROM 'not_placed')
+        OR (SELECT count(*) FROM calls uc WHERE uc.lead_id = ${lead} AND uc.direction = 'automated'
+                AND uc.script_result = 'not_placed') >= ${NOT_PLACED_LIMIT})`;
+}
 
 /**
  * Checks the lead may be called and writes the call's row, in one
@@ -59,7 +81,7 @@ export async function startAutomatedCall(opts: {
     const { rows } = await client.query<{ phone: string; blocked: boolean; called: boolean; scripted: boolean }>(
       `SELECT l.phone,
               EXISTS (SELECT 1 FROM dnc_list d WHERE d.phone = l.phone AND d.released_at IS NULL) AS blocked,
-              EXISTS (SELECT 1 FROM calls c WHERE c.lead_id = l.id AND c.direction = 'automated') AS called,
+              ${automatedCallUsedSql('l.id')} AS called,
               EXISTS (SELECT 1 FROM call_scripts s WHERE s.is_active) AS scripted
        FROM leads l
        WHERE l.id = $1
@@ -136,26 +158,34 @@ export async function linkAutomatedCall(callId: number, callSid: string): Promis
 
 /**
  * Twilio refused to place the call, so it never rang: the row is ended as
- * `failed` and `unanswered`, with Twilio's status and error code, and its
- * `call.ended` record written in the same statement. Only once - an ended row
- * is left alone.
+ * `failed`, with Twilio's status and error code, and its `call.ended` record
+ * written in the same statement. Only once - an ended row is left alone.
+ *
+ * Refused for the lead's number (`forTheNumber`, `refusedForTheNumber`), it is
+ * `unanswered` - the lead's one call, used. Refused for any other reason -
+ * our account, its key, too many requests - it is `not_placed`: not the lead's
+ * call, so the lead is called once Twilio takes calls again, and the robot
+ * pauses meanwhile (`dialRoom`). Its record's `reason` says which:
+ * `twilio_refused` or `not_placed`.
  */
 export async function failAutomatedCall(
   callId: number,
-  twilio: { status: number; code: number | null }
+  twilio: { status: number; code: number | null; forTheNumber: boolean }
 ): Promise<void> {
   await pool.query(
     `WITH failed AS (
-       UPDATE calls SET outcome = 'failed', duration_sec = 0, ended_at = now(), script_result = 'unanswered'
+       UPDATE calls SET outcome = 'failed', duration_sec = 0, ended_at = now(),
+                        script_result = CASE WHEN $4 THEN 'unanswered' ELSE 'not_placed' END
        WHERE id = $1 AND direction = 'automated' AND ended_at IS NULL
        RETURNING id, lead_id
      )
      ${activityInsertSql}
      SELECT NULL::int, 'call.ended', lead_id, NULL::int,
             jsonb_build_object('callId', id, 'direction', 'automated', 'outcome', 'failed',
-                               'reason', 'twilio_refused', 'twilioStatus', $2::int, 'twilioCode', $3::int)
+                               'reason', CASE WHEN $4 THEN 'twilio_refused' ELSE 'not_placed' END,
+                               'twilioStatus', $2::int, 'twilioCode', $3::int)
      FROM failed`,
-    [callId, twilio.status, twilio.code]
+    [callId, twilio.status, twilio.code, twilio.forTheNumber]
   );
 }
 

@@ -162,8 +162,9 @@ A lead is called (`leadsToCall`, `db/auto-dial.ts`) when:
   lead reaching us by phone is a person's to deal with;
 - nobody holds it, and nobody has worked it (`WORKED_SQL`: a note, a
   callback, an outcome - Closed among them - an agent's call or text);
-- its number is not blocked (a block lifted by START is not), and the robot
-  has never called it.
+- its number is not blocked (a block lifted by START is not), and it has
+  not had its robot call - a call Twilio never placed is not one, up to three
+  ("When Twilio refuses").
 
 New leads first - those that arrived after `auto_calls_since`, when
 automated calls were last switched on (below) - then the ones already
@@ -493,7 +494,10 @@ longer free. Nothing at all is placed while:
   and use up the one call they get. Logged once, as an error,
   `auto_call.webhooks_silent` - `PUBLIC_URL` wrong, the api down, or switched
   off without the worker;
-- **no call script is active** - logged once, `auto_call.no_script`.
+- **no call script is active** - logged once, `auto_call.no_script`;
+- **Twilio refused one of its calls for our account's reasons, or never
+  confirmed placing it, in the last 15 minutes** - logged once, as an error,
+  `auto_call.twilio_refusing` ("When Twilio refuses", below).
 
 One look at a time: the room and the leads are read holding an advisory lock
 (`withDialLock`), so two workers never dial together - and a connection whose
@@ -502,9 +506,49 @@ same lead is never called twice regardless (`startAutomatedCall`,
 `calls_one_automated_per_lead`). A call of the robot's whose placing Twilio
 never confirmed - T12 left its row when Twilio's answer did not come, in case
 it went out - is closed after those 10 minutes with no webhook naming it:
-`failed`, `unanswered`, its `call.ended` saying `no_webhook` - all that is
-known (`closeUnplacedCalls`); a webhook naming it after that is not taken for
-it (`linkAutomatedCall`).
+`failed`, `not_placed` - not the lead's call ("When Twilio refuses") - its
+`call.ended` saying `no_webhook`, all that is known (`closeUnplacedCalls`); a
+webhook naming it after that is not taken for it (`linkAutomatedCall`).
+
+### When Twilio refuses
+
+Each lead gets one robot call. Before T28 (2026-10-29, before release) a call
+Twilio refused to place counted as that call whatever the reason - so a
+problem with our own Twilio account (a wrong key, the account suspended, too
+many requests) would have used up the call of every lead the robot tried
+while it lasted: with 5 people free, 5 leads every half minute, each refused,
+none ever called. Now:
+
+- **Refused for the lead's own number** - not a valid number, not reachable,
+  or one Twilio will not call (Twilio's codes 13223, 13224, 21211, 21214,
+  21216, 21217; `refusedForTheNumber`, `core/auto-dial.ts`): the lead's call,
+  used, as before - `failed`, `unanswered`, `auto_call.failed`. Trying again
+  would only be refused again.
+- **Refused for any other reason** - the key, the account, a limit, a
+  setting, or no code at all: **not the lead's call**. The row is kept,
+  ended `failed` with `script_result` `not_placed`, its `call.ended` saying
+  `reason: not_placed` with Twilio's status and code; `auto_call.not_placed`
+  (error). The lead stays due.
+- **Never confirmed** - Twilio did not answer, and no webhook named the call
+  within 10 minutes (`closeUnplacedCalls`): `not_placed` too.
+- **The robot stops for the rest of that look** at such a refusal, or at a
+  request Twilio did not answer - the next would go the same way - **and
+  pauses for 15 minutes** after a `not_placed` (`REFUSED_PAUSE_MINUTES`,
+  `dialRoom`'s `refused`). Then it tries again: one call first, to a lead it
+  has not tried - leads with fewer `not_placed` go first within new and
+  waiting - and carries on if Twilio takes it. A long outage costs one try
+  every 15 minutes, never a lead.
+- **Three `not_placed` and the lead's call counts as used**
+  (`NOT_PLACED_LIMIT`, `automatedCallUsedSql`, `db/auto-calls.ts`) - so a
+  refusal of the lead's own that we take for ours cannot hold the robot on
+  that lead for ever.
+
+A `not_placed` call never reached the lead, so no screen shows it: not the
+timeline, not the incoming-call card, and Admin > Leads reads Not called.
+The database keeps the rule: `calls_one_automated_per_lead` (014, changed in
+place before release) covers every automated call but `not_placed` ones - so
+a lead can have a fresh row after one, and two placements still cannot race,
+since a row being placed has no result yet.
 
 ## How a call is placed
 
@@ -523,10 +567,11 @@ command and the dialler (T20):
    it may have gone out and a second could ring the lead twice.
 3. **Twilio's answer.** Placed: its id is kept on the row. Refused (a 4xx):
    the row is ended as `failed`, recorded with Twilio's status and error code -
-   never its message, which can quote the number. No answer, or a 5xx: the
-   row is left as it is; if the call did go out, its first webhook fills in
-   the id. A row whose call never went out stays without an outcome, and the
-   lead is not called again - closed after 10 minutes with no webhook (T20,
+   never its message, which can quote the number - as the lead's call if
+   Twilio refused their number, otherwise `not_placed` ("When Twilio
+   refuses", T28). No answer, or a 5xx: the row is left as it is; if the call
+   did go out, its first webhook fills in the id. A row whose call never went
+   out is closed after 10 minutes with no webhook, `not_placed` (T20,
    "Traffic").
 
 **Outside production, only our own phones are rung** - `AUTO_CALL_TEST_NUMBERS`
@@ -989,7 +1034,7 @@ Nothing is overwritten (`AUDIT.md`).
 
 | What | Where |
 |---|---|
-| The call | `calls`, with `direction = 'automated'`; `agent_id` empty until someone takes a transfer. `script_result`: `transferred`, `transfer_missed`, `link_sent`, `not_interested`, `opted_out`, `no_response`, `voicemail_left`, `hung_up`, `unanswered`. `held_at`: when it went on hold (019). `outcome` is `voicemail` only when Twilio's verdict took the call over (T18) |
+| The call | `calls`, with `direction = 'automated'`; `agent_id` empty until someone takes a transfer. `script_result`: `transferred`, `transfer_missed`, `link_sent`, `not_interested`, `opted_out`, `no_response`, `voicemail_left`, `hung_up`, `unanswered`; and `not_placed`, a call Twilio never placed, for our account's reasons - not the lead's call ("When Twilio refuses"). `held_at`: when it went on hold (019). `outcome` is `voicemail` only when Twilio's verdict took the call over (T18) |
 | What the lead said | `call_answers`, one add-only row per answer: what Twilio heard, how sure, keys pressed, the choice it matched |
 | The script | `call_scripts`, `call_steps`, `call_choices` - rows, changed by migration, like the SMS flow (015). The script's own words - stop, no response, voicemail, busy, hold and the place on hold (019), the link text - are on its `call_scripts` row, so another script brings its own |
 | When it calls | `settings`: `auto_call_hours_start` 11:00, `auto_call_hours_end` 17:00, `auto_call_time_zone` America/Phoenix, `auto_call_days` mon,tue,wed,thu,fri, `auto_call_wait_minutes` 60, `auto_call_ring_seconds` 25, `auto_call_hold_max_minutes` 10, `auto_call_min_confidence` 0.4, `auto_call_offer_ring_seconds` 20 (020); and, written by the worker, `auto_calls_on` and `auto_calls_since` - whether it last started with automated calls on, and when they were last switched on ("When a lead is called") |
@@ -1063,6 +1108,7 @@ ticket's own PR.
 | T25 | Everything written down and checked end to end | T0-T24 | Done 2026-10-25 - every doc read against the code, the faults fixed; `npm run e2e`, 93 checks, three robot calls |
 | T26 | Real phone, every path, then live | T25 | Real phone done 2026-10-27 - nineteen cases, calls 66-85, all as specified; going live left (Jeel) |
 | T27 | The leads already waiting at the switch-on | T20 | Done 2026-10-29 - called too, after new leads, nothing by hand |
+| T28 | A Twilio account problem never uses up a lead's call | T20 | Done 2026-10-29 - refused for our account: not the lead's call, and a 15-minute pause |
 | | **Other tickets - not calling** | | |
 | W1 | Day dividers in the agent's conversation | - | Done 2026-10-18 |
 | W2 | A phone call stops the text questions | T25 | Done 2026-10-27 |
@@ -2866,6 +2912,52 @@ its setting and its two activity actions removed.
 (a comment).
 **Doc:** this one, "When a lead is called", "Leads already waiting" and
 "Going live"; `AUDIT.md`, `SCHEMA.md`, `README.md`, `WORKFLOW.md`, `CLAUDE.md`.
+
+#### T28 - A Twilio account problem never uses up a lead's call
+
+**Goal:** a problem with our own Twilio account - a wrong key, the account
+suspended, too many requests - costs no lead its one robot call. Found in a
+review, 2026-10-29; Jeel: fix it before the deploy.
+**Needs:** T20. **Production:** none until a refusal happens.
+
+**Build** (as built: "When Twilio refuses")
+- A refusal for the lead's own number stays the lead's call; any other is
+  `not_placed`, the lead still due - and so is a call Twilio never confirmed.
+- The robot stops that look at once, and pauses 15 minutes after a
+  `not_placed`, logged once.
+- Three `not_placed` and the lead's call counts as used.
+- `calls_one_automated_per_lead` leaves `not_placed` rows out; migration 014
+  changed in place, since production has not run it.
+- No screen shows a `not_placed` call.
+
+**Done when**
+- [x] Tests: whose refusal it is, by Twilio's code; no calls while refused;
+      the look ends at a `not_placed` or an unanswered request; placing a
+      call refused for our account (401, 429, 403 with no code) (1,053
+      backend tests).
+- [x] A live check: refused for the number - the lead's call, never again;
+      refused for our account - `not_placed`, recorded, the lead called
+      again, the database refusing a second row while one is placed, used
+      after three (`auto-calls-live-check`, 124); a `not_placed` lead still
+      due, after one not tried, until three; the pause for 15 minutes, not
+      for a refused number; a call never confirmed closed `not_placed`
+      (`auto-dial-live-check`, 67); Admin > Leads Not called
+      (`admin-leads-live-check`, 53); not on the timeline
+      (`timeline-live-check`, 31).
+- [x] Migration 014 as changed, on a fresh database and on the local one;
+      `npm run speed` - Admin > Leads unchanged, filtering one call result 39
+      ms at 50,000 leads.
+
+**Files:** `backend/src/db/migrations/014_automated_calls.sql`,
+`backend/src/core/auto-dial.ts` (+ test), `backend/src/db/auto-calls.ts`,
+`backend/src/db/auto-dial.ts`, `backend/src/worker/place-auto-call.ts`
+(+ test), `backend/src/worker/auto-calls.ts` (+ test),
+`backend/src/worker/index.ts`, `backend/src/db/leads.ts`,
+`backend/src/db/timeline.ts`, `backend/scripts/dev-auto-call.ts`, and the
+live checks above.
+**Doc:** this one ("When Twilio refuses", "Traffic", "How a call is
+placed"); `SCHEMA.md`, `TWILIO.md`, `AUDIT.md`, `LOGGING.md`,
+`ADMIN-LEADS.md`, `README.md`, `CLAUDE.md`.
 
 ### Other tickets - not calling
 

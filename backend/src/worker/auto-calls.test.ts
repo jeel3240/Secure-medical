@@ -28,7 +28,7 @@ function deps(over: Partial<DialDeps> = {}) {
     readCallHours: async () => DEFAULT_CALL_HOURS,
     dialRoom: async () => {
       order.push('room');
-      return { free: 2, underway: 0, onHold: false, silent: 0, scripted: true };
+      return { free: 2, underway: 0, onHold: false, silent: 0, scripted: true, refused: false };
     },
     leadsToCall,
     stillDue: async () => true,
@@ -64,12 +64,13 @@ describe('one look', () => {
   });
 
   it('no room - nobody free, or a lead on hold: no lead is even looked up', async () => {
-    const open = { free: 3, underway: 0, onHold: false, silent: 0, scripted: true };
+    const open = { free: 3, underway: 0, onHold: false, silent: 0, scripted: true, refused: false };
     for (const [room, stopped] of [
       [{ ...open, free: 0 }, null],
       [{ ...open, underway: 3 }, null],
       [{ ...open, onHold: true }, 'on_hold'],
       [{ ...open, silent: 2 }, 'silent'],
+      [{ ...open, refused: true }, 'refused'],
       [{ ...open, scripted: false }, 'no_script'],
     ] as const) {
       const { deps: d, leadsToCall } = deps({ dialRoom: async () => room });
@@ -86,11 +87,26 @@ describe('one look', () => {
       { kind: 'failed', callId: 3 },
     ];
     const { deps: d } = deps({
-      dialRoom: async () => ({ free: 5, underway: 0, onHold: false, silent: 0, scripted: true }),
+      dialRoom: async () => ({ free: 5, underway: 0, onHold: false, silent: 0, scripted: true, refused: false }),
       placeAutoCall: async () => results.shift() ?? { kind: 'unconfirmed', callId: 4 },
       leadsToCall: async () => [1, 2, 3, 4],
     });
     expect(await dialDueLeads(d, NOON)).toMatchObject({ due: 4, placed: 1, refused: 1, failed: 1, unconfirmed: 1 });
+  });
+
+  it('Twilio refusing one for our account, or not answering: the look ends there - the next would go the same way', async () => {
+    for (const stop of [{ kind: 'notPlaced', callId: 1 }, { kind: 'unconfirmed', callId: 1 }] as const) {
+      const results: PlaceAutoCallResult[] = [{ kind: 'placed', callId: 9 }, stop];
+      const placeAutoCall = jest.fn(async (): Promise<PlaceAutoCallResult> => results.shift() ?? { kind: 'placed', callId: 2 });
+      const { deps: d } = deps({
+        dialRoom: async () => ({ free: 5, underway: 0, onHold: false, silent: 0, scripted: true, refused: false }),
+        leadsToCall: async () => [1, 2, 3, 4],
+        placeAutoCall,
+      });
+      const look = await dialDueLeads(d, NOON);
+      expect(placeAutoCall).toHaveBeenCalledTimes(2);
+      expect(look).toMatchObject({ due: 4, placed: 1, [stop.kind]: 1 });
+    }
   });
 
   it('each lead asked again just before its call - one that replied or was picked up meanwhile is skipped', async () => {
@@ -120,6 +136,7 @@ describe('one look', () => {
       placed: 0,
       refused: 0,
       failed: 0,
+      notPlaced: 0,
       unconfirmed: 0,
       locked: false,
     };
