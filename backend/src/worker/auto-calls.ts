@@ -9,29 +9,27 @@
  * 3. The room: people free to take a "yes", less the robot's calls still
  *    going with nobody on them; none while a lead waits on hold
  *    (`callsToPlace`).
- * 4. The leads due, oldest first, up to the room (`leadsToCall`) - new leads
- *    before those already waiting at the switch-on, which are called only
- *    once they have been included (`waitingIncluded`) - each asked again just
- *    before its call (`stillDue`) - the calls go out one after another, and
- *    meanwhile a lead may reply or be picked up - and placed as from T12
+ * 4. The leads due, up to the room (`leadsToCall`) - new leads first, then
+ *    those already waiting at the switch-on, oldest first - each asked again
+ *    just before its call (`stillDue`) - the calls go out one after another,
+ *    and meanwhile a lead may reply or be picked up - and placed as from T12
  *    (`placeAutoCall`).
  *
  * Steps 3 and 4 hold the dial lock (`withDialLock`): a second worker looks
  * nothing up while one is dialling.
  */
 
-import { callsToPlace, insideCallHours, type CallHours, type DialRoom, type Waiting } from '../core/auto-dial';
+import { callsToPlace, insideCallHours, type CallHours, type DialRoom } from '../core/auto-dial';
 import type { PlaceAutoCallResult } from './place-auto-call';
 
 /** What one look reads and does - the database and Twilio, replaced in tests. */
 export interface DialDeps {
   closeUnplacedCalls: () => Promise<number>;
   autoCallsSince: () => Promise<Date>;
-  waitingIncluded: () => Promise<boolean>;
   readCallHours: () => Promise<CallHours>;
   dialRoom: () => Promise<DialRoom>;
-  leadsToCall: (opts: { now: Date; since: Date; waitMinutes: number; limit: number; waiting: Waiting }) => Promise<number[]>;
-  stillDue: (opts: { leadId: number; now: Date; since: Date; waitMinutes: number; waiting: Waiting }) => Promise<boolean>;
+  leadsToCall: (opts: { now: Date; since: Date; waitMinutes: number; limit: number }) => Promise<number[]>;
+  stillDue: (opts: { leadId: number; now: Date; since: Date; waitMinutes: number }) => Promise<boolean>;
   placeAutoCall: (leadId: number) => Promise<PlaceAutoCallResult>;
   withDialLock: <T>(look: () => Promise<T>) => Promise<T | null>;
 }
@@ -77,10 +75,8 @@ export async function dialDueLeads(deps: DialDeps, now = new Date()): Promise<Di
   look.closed = await deps.closeUnplacedCalls();
   // When automated calls were last switched on - written by the worker at
   // each switch-on (`recordAutoCallsSwitch`), and here if it is missing - so
-  // leads that arrived before it are never called - unless those already
-  // waiting then have been included, after the new ones (`waitingIncluded`).
+  // leads that arrived after it are called before those already waiting then.
   const since = await deps.autoCallsSince();
-  const waiting: Waiting = (await deps.waitingIncluded()) ? 'also' : 'no';
   const hours = await deps.readCallHours();
   look.inside = insideCallHours(now, hours);
   if (!look.inside) return look;
@@ -91,10 +87,10 @@ export async function dialDueLeads(deps: DialDeps, now = new Date()): Promise<Di
     look.stopped = room.onHold ? 'on_hold' : room.silent > 0 ? 'silent' : !room.scripted ? 'no_script' : null;
     look.room = callsToPlace(room);
     if (look.room === 0) return;
-    const leads = await deps.leadsToCall({ now, since, waitMinutes: hours.waitMinutes, limit: look.room, waiting });
+    const leads = await deps.leadsToCall({ now, since, waitMinutes: hours.waitMinutes, limit: look.room });
     look.due = leads.length;
     for (const leadId of leads) {
-      if (!(await deps.stillDue({ leadId, now, since, waitMinutes: hours.waitMinutes, waiting }))) {
+      if (!(await deps.stillDue({ leadId, now, since, waitMinutes: hours.waitMinutes }))) {
         look.skipped += 1;
         continue;
       }

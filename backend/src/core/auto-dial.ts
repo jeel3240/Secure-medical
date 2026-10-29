@@ -64,15 +64,6 @@ export function insideCallHours(now: Date, hours: CallHours): boolean {
   return hours.days.has(day) && minute >= hours.startMinute && minute < hours.endMinute;
 }
 
-/**
- * Whether leads that were already waiting when automated calls were switched
- * on - arrived before `auto_calls_since` - are called too ("Leads already
- * waiting"): `no`, the default; `also`, once `auto-calls:include-waiting`
- * has been run - new leads first, the waiting ones in the room left; `only`
- * the waiting ones, for that command to count them.
- */
-export type Waiting = 'no' | 'also' | 'only';
-
 /** How many calls the robot may place now, from who can take a "yes" - `callsToPlace`. */
 export interface DialRoom {
   /** People free to take a transfer (`FREE_SQL`). */

@@ -4,32 +4,27 @@
  * look (`worker/auto-calls.ts`) run on it.
  *
  * What a mock cannot show: which leads the SQL picks - the hour's wait, a
- * reply, a call from them, held, worked, Closed, blocked, already called,
- * arrived before automated calls were switched on, the test numbers - and in
- * what order; that a lead whose hour ended overnight is first at 11am; that
+ * reply, a call from them, held, worked, Closed, blocked, already called, the
+ * test numbers - and in what order: new leads before those already waiting
+ * at the switch-on; that a lead whose hour ended overnight is first at 11am; that
  * the room counts the people free and the robot's calls still going, and is
  * nothing while a lead waits on hold; that two workers never dial at once;
- * and that a call that never reached Twilio is closed. And the leads already
- * waiting at the switch-on: called only once included, after the new leads,
- * and only for that switch-on. Getting those wrong calls a lead who already
- * replied, calls the backlog unasked, or rings more leads than anyone can
- * take.
+ * and that a call that never reached Twilio is closed. Getting those wrong
+ * calls a lead who already replied, holds a new lead up behind the backlog,
+ * or rings more leads than anyone can take.
  *
  * It writes rows, so it refuses to run against a database that holds leads.
  * Run it with the others: scripts/live-checks.sh auto-dial
  */
-import { DEFAULT_CALL_HOURS, type Waiting } from '../src/core/auto-dial';
+import { DEFAULT_CALL_HOURS } from '../src/core/auto-dial';
 import { startAutomatedCall, holdCall, linkAutomatedCall } from '../src/db/auto-calls';
 import {
   autoCallsSince,
-  autoCallsState,
   closeUnplacedCalls,
   dialRoom,
   leadsToCall,
   recordAutoCallsSwitch,
-  setWaitingIncluded,
   stillDue,
-  waitingIncluded,
   withDialLock,
 } from '../src/db/auto-dial';
 import { startConversation } from '../src/db/flows';
@@ -91,7 +86,7 @@ async function person(email: string, free: boolean): Promise<number> {
   return rows[0].id;
 }
 
-const due = (opts: Partial<{ now: Date; since: Date; only: string[] | null; limit: number; waiting: Waiting }> = {}) =>
+const due = (opts: Partial<{ now: Date; since: Date; only: string[] | null; limit: number }> = {}) =>
   leadsToCall({ now: NOW, since: SINCE, waitMinutes: 60, only: null, limit: 100, ...opts });
 
 async function main(): Promise<void> {
@@ -125,7 +120,7 @@ async function main(): Promise<void> {
     await pause();
     await recordAutoCallsSwitch(true);
     const again = await autoCallsSince();
-    check('on again: afresh - leads that came while off are never called', again.getTime() > on.getTime(), true);
+    check('on again: a new start - leads from before it are called after the new ones', again.getTime() > on.getTime(), true);
     check('each switch-on recorded', (await switches()).length, 2);
 
     await pool.query(`UPDATE settings SET value = 'yesterday' WHERE key = 'auto_calls_since'`);
@@ -175,19 +170,18 @@ async function main(): Promise<void> {
     const stopped = await lead({ sent, status: 'suppressed' });
 
     const picked = await due();
-    const excluded = { notYet, neverTexted, before, texted, rang, held, noted, closed, blocked, called, finished, expired, stopped };
+    const excluded = { notYet, neverTexted, texted, rang, held, noted, closed, blocked, called, finished, expired, stopped };
     for (const [why, id] of Object.entries(excluded)) {
       check(`not picked: ${why}`, picked.includes(id), false);
     }
     check('a block lifted by START: picked', picked.includes(released), true);
-    check('oldest first text first', picked, [released, ready]);
+    check('oldest first text first - and one from before the switch-on after them', picked, [released, ready, before]);
 
     check('only the test numbers, outside production', await due({ only: ['+15550001001'] }), [ready]);
     check('up to the room', await due({ limit: 1 }), [released]);
-    check('arrived before automated calls were switched on: never', (await due({ since: new Date('2026-10-26T16:00:00Z') })).length, 0);
   }
 
-  console.log('\nthe leads already waiting at the switch-on');
+  console.log('\nthe leads already waiting at the switch-on - called too, after the new ones');
   {
     // Two that arrived before the switch-on and never replied; two new ones.
     const only = ['+15550009201', '+15550009202', '+15550009203', '+15550009204'];
@@ -195,68 +189,13 @@ async function main(): Promise<void> {
     const older = await lead({ sent: new Date('2026-10-19T21:00:00Z'), arrived: new Date('2026-10-19T21:00:00Z'), phone: only[1] });
     const newer = await lead({ sent: new Date(NOW.getTime() - minutes(120)), phone: only[2] });
     const newest = await lead({ sent: new Date(NOW.getTime() - minutes(90)), phone: only[3] });
-    check('not included: the new leads only', await due({ only }), [newer, newest]);
-    check('included: the new leads first, then the waiting ones, oldest first', await due({ only, waiting: 'also' }), [
-      newer,
-      newest,
-      oldest,
-      older,
-    ]);
-    check('the room goes to the new leads first', await due({ only, waiting: 'also', limit: 2 }), [newer, newest]);
-    check('and what is left to the waiting ones', await due({ only, waiting: 'also', limit: 3 }), [newer, newest, oldest]);
-    check('the waiting ones alone, for the command', await due({ only, waiting: 'only' }), [oldest, older]);
-    const asked = { now: NOW, since: SINCE, waitMinutes: 60, only, leadId: oldest };
-    check('asked again before its call: due only while included', [await stillDue(asked), await stillDue({ ...asked, waiting: 'also' })], [
-      false,
-      true,
-    ]);
+    check('the new leads first, then the waiting ones, oldest first', await due({ only }), [newer, newest, oldest, older]);
+    check('the room goes to the new leads first', await due({ only, limit: 2 }), [newer, newest]);
+    check('and what is left to the waiting ones', await due({ only, limit: 3 }), [newer, newest, oldest]);
+    check('asked again just before its call: still due', await stillDue({ now: NOW, since: SINCE, waitMinutes: 60, only, leadId: oldest }), true);
     await pool.query(`INSERT INTO messages (lead_id, direction, body) VALUES ($1, 'inbound', 'stop texting')`, [older]);
-    const picked = await pool.query(`UPDATE leads SET assigned_to = $2, assigned_at = now() WHERE id = $1`, [newest, maya]);
-    check('the same rules as any lead: one who replied, one picked up - never', [picked.rowCount, await due({ only, waiting: 'also' })], [
-      1,
-      [newer, oldest],
-    ]);
-  }
-
-  console.log('\nincluding them - auto-calls:include-waiting');
-  {
-    const pause = () => new Promise((resolve) => setTimeout(resolve, 20));
-    const records = async () =>
-      (await pool.query(`SELECT action, detail FROM activity_log WHERE action LIKE 'auto_calls.waiting_%' ORDER BY id`)).rows;
-    const state = await autoCallsState();
-    const since = state.since?.toISOString() ?? '';
-    check('automated calls on, since the last switch-on; the waiting leads not called', [state.on, state.waitingIncluded, await waitingIncluded()], [
-      true,
-      false,
-      false,
-    ]);
-    check('included', await setWaitingIncluded(true, 7), { kind: 'changed', since });
-    check('read on every look: included', [await waitingIncluded(), (await autoCallsState()).waitingIncluded], [true, true]);
-    check('recorded, with the switch-on and how many were due', await records(), [
-      { action: 'auto_calls.waiting_included', detail: { since, waiting: 7 } },
-    ]);
-    check('asked again: nothing written, nothing recorded', [await setWaitingIncluded(true, 7), (await records()).length], [
-      { kind: 'unchanged', since },
-      1,
-    ]);
-    check('stopped', await setWaitingIncluded(false, 0), { kind: 'changed', since });
-    check('no longer called', await waitingIncluded(), false);
-    check('the stop recorded', (await records()).map((r) => [r.action, r.detail]), [
-      ['auto_calls.waiting_included', { since, waiting: 7 }],
-      ['auto_calls.waiting_stopped', { since }],
-    ]);
-    check('stopped again: nothing changes', [await setWaitingIncluded(false, 0), (await records()).length], [{ kind: 'unchanged', since }, 2]);
-
-    await setWaitingIncluded(true, 3);
-    await pause();
-    await recordAutoCallsSwitch(true);
-    check('the worker restarted while on: still included', await waitingIncluded(), true);
-    await recordAutoCallsSwitch(false);
-    check('switched off: refused - there is nothing to add them to', await setWaitingIncluded(true, 3), { kind: 'off' });
-    await pause();
-    await recordAutoCallsSwitch(true);
-    check('switched on again: afresh - the leads waiting then are not called', await waitingIncluded(), false);
-    check('the earlier switch-on\'s choice kept on record, nothing removed', (await records()).length, 3);
+    await pool.query(`UPDATE leads SET assigned_to = $2, assigned_at = now() WHERE id = $1`, [newest, maya]);
+    check('the same rules as any lead: one who replied, one picked up - never', await due({ only }), [newer, oldest]);
   }
 
   console.log('\nwhen - the first look after the hour is up, and overnight');
@@ -327,7 +266,6 @@ async function main(): Promise<void> {
     const look: DialDeps = {
       closeUnplacedCalls: async () => 0,
       autoCallsSince: async () => SINCE,
-      waitingIncluded: async () => false,
       readCallHours: async () => DEFAULT_CALL_HOURS,
       dialRoom,
       leadsToCall: (opts) => leadsToCall({ ...opts, only }),
