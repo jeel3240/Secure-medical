@@ -25,6 +25,7 @@ function deps(over: Partial<DialDeps> = {}) {
       order.push('since');
       return SINCE;
     },
+    waitingIncluded: async () => false,
     readCallHours: async () => DEFAULT_CALL_HOURS,
     dialRoom: async () => {
       order.push('room');
@@ -58,9 +59,22 @@ describe('one look', () => {
   it('never more calls than there is room for - the leads asked for up to the room, oldest first', async () => {
     const { deps: d, leadsToCall, placeAutoCall } = deps();
     const look = await dialDueLeads(d, NOON);
-    expect(leadsToCall).toHaveBeenCalledWith({ now: NOON, since: SINCE, waitMinutes: 60, limit: 2 });
+    expect(leadsToCall).toHaveBeenCalledWith({ now: NOON, since: SINCE, waitMinutes: 60, limit: 2, waiting: 'no' });
     expect(placeAutoCall.mock.calls.map(([id]) => id)).toEqual([101, 102]);
     expect(look).toMatchObject({ inside: true, room: 2, due: 2, placed: 2 });
+  });
+
+  it('the leads already waiting at the switch-on: asked for, and asked again, only once they have been included', async () => {
+    const stillDue = jest.fn(async () => true);
+    for (const [included, waiting] of [
+      [false, 'no'],
+      [true, 'also'],
+    ] as const) {
+      const { deps: d, leadsToCall } = deps({ waitingIncluded: async () => included, stillDue });
+      await dialDueLeads(d, NOON);
+      expect(leadsToCall).toHaveBeenCalledWith(expect.objectContaining({ waiting }));
+      expect(stillDue).toHaveBeenLastCalledWith(expect.objectContaining({ leadId: 102, waiting }));
+    }
   });
 
   it('no room - nobody free, or a lead on hold: no lead is even looked up', async () => {

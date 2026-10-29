@@ -65,6 +65,7 @@ it.
 | `user.created`, `user.updated`, `user.password_reset` | A superadmin changes an agent's account | `created`: `email`, `name`, `role`. `updated`: `changes`, each field as `{ from, to }`. `password_reset`: nothing more. Never a password |
 | `calls.availability_changed` | The "Taking calls" switch went on or off (T10, `AUTO-CALLS.md` "Who is free") - by the person, or because they signed in or out; or off by the system because they let a transfer ring out (T15c) - then no actor, the person its subject. Only when it really changed | `on`, and `why`: `by_hand`, `sign_in`, `missed_transfer` (with the `callId`) or `sign_out` |
 | `auto_calls.switched_on` | The worker started placing automated calls after they were off, or for the first time - each switch-on starts afresh, so leads that arrived while they were off are never called (T20, `AUTO-CALLS.md` "When a lead is called"). The system's doing - someone set `AUTO_CALLS=on`. It overwrites `settings.auto_calls_since`, so the time it replaced is kept here | `since`, `previousSince` |
+| `auto_calls.waiting_included`, `auto_calls.waiting_stopped` | The robot calls the leads already waiting at that switch-on too, or no longer (T27, `AUTO-CALLS.md` "Leads already waiting"). Someone ran `auto-calls:include-waiting` on the server, so no actor. Only when it really changed. Each overwrites `settings.auto_calls_waiting_for`, so the choice for every switch-on is kept here | `since`, the switch-on it applies to; for `waiting_included`, `waiting` - how many were due when it was run |
 
 The list is `ACTIVITY_ACTIONS` in `core/activity.ts`. A new action is added
 there first, so the vocabulary stays in one place.
@@ -80,7 +81,9 @@ too, with what Twilio heard, since migration 015), and each time a lead on
 hold rang someone who came free (`call_offers`, since 020 - who, when, and how
 it ended). When automated calls were last switched on (`auto_calls_since` in
 `settings`, T20) is overwritten at each switch-on, so each switch-on is
-recorded with the time it replaced - `auto_calls.switched_on`. Each robot call
+recorded with the time it replaced - `auto_calls.switched_on`. Whether the
+leads waiting at a switch-on are called (`auto_calls_waiting_for`, T27) is
+overwritten the same way, and recorded the same way. Each robot call
 the worker places is its `call.started`, as one placed by hand. A reply that was not counted because it
 arrived before our text had gone out is kept in `messages` like any other,
 and written to the application log as `reply.before_our_text` (`LOGGING.md`) -

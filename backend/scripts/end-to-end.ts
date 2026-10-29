@@ -100,6 +100,7 @@ import {
   leadsToCall,
   recordAutoCallsSwitch,
   stillDue,
+  waitingIncluded,
   withDialLock,
 } from '../src/db/auto-dial';
 import { dialDueLeads, type DialDeps } from '../src/worker/auto-calls';
@@ -486,6 +487,7 @@ async function main(): Promise<void> {
   const dialler: DialDeps = {
     closeUnplacedCalls,
     autoCallsSince,
+    waitingIncluded,
     readCallHours: () => readCallHours(pool),
     dialRoom,
     leadsToCall: (opts) => leadsToCall({ ...opts, only }),
