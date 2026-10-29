@@ -5,7 +5,7 @@
  * each call is placed by `worker/place-auto-call.ts`, as from T12.
  */
 
-import type { DialRoom } from '../core/auto-dial';
+import type { DialRoom, Waiting } from '../core/auto-dial';
 import { activityInsertSql, recordActivity } from './activity';
 import { ON_HOLD_SQL } from './auto-calls';
 import { readHoldMaxSeconds } from './call-script';
@@ -84,6 +84,98 @@ export async function autoCallsSince(): Promise<Date> {
 }
 
 /**
+ * "Leads already waiting": `settings.auto_calls_waiting_for` holds the
+ * `auto_calls_since` whose waiting leads are called too, copied as it was. It
+ * applies to that switch-on alone - the next one writes a new start, which it
+ * no longer matches - so "each switch-on starts afresh" still holds, with
+ * nothing to clear.
+ */
+const WAITING_INCLUDED_SQL = `EXISTS (
+  SELECT 1 FROM settings w JOIN settings s ON s.key = 'auto_calls_since'
+  WHERE w.key = 'auto_calls_waiting_for' AND w.value = s.value)`;
+
+/** Whether the leads already waiting at the last switch-on are called too - read on every look. */
+export async function waitingIncluded(): Promise<boolean> {
+  const { rows } = await pool.query<{ included: boolean }>(`SELECT ${WAITING_INCLUDED_SQL} AS included`);
+  return rows[0].included;
+}
+
+/** Automated calls as the worker last recorded them, read only - for `auto-calls:include-waiting`. */
+export interface AutoCallsState {
+  /** The worker last started with automated calls on. */
+  on: boolean;
+  /** When they were last switched on; null if never. */
+  since: Date | null;
+  waitingIncluded: boolean;
+}
+
+export async function autoCallsState(): Promise<AutoCallsState> {
+  const { rows } = await pool.query<{ on: string | null; since: string | null; included: boolean }>(
+    `SELECT (SELECT value FROM settings WHERE key = 'auto_calls_on') AS on,
+            (SELECT value FROM settings WHERE key = 'auto_calls_since') AS since,
+            ${WAITING_INCLUDED_SQL} AS included`
+  );
+  const r = rows[0];
+  const since = r.since === null ? null : new Date(r.since);
+  if (since !== null && Number.isNaN(since.getTime())) throw new Error(`settings.auto_calls_since is not a time: ${r.since}`);
+  return { on: r.on === 'true', since, waitingIncluded: r.included };
+}
+
+export type WaitingChange =
+  /** Automated calls are not on: nothing to add the waiting leads to. */
+  | { kind: 'off' }
+  /** Already as asked - nothing written, nothing recorded. */
+  | { kind: 'unchanged'; since: string }
+  | { kind: 'changed'; since: string };
+
+/**
+ * Has the robot call the leads already waiting at the last switch-on too, or
+ * stop calling them (`include` false) - `auto-calls:include-waiting`. Only
+ * while automated calls are on, since a switch-on writes the start this
+ * applies to. Under the switch's own lock, so it never crosses a switch-on;
+ * each change recorded in the same transaction - `auto_calls.waiting_included`
+ * with how many were due then (`waiting`), or `auto_calls.waiting_stopped`.
+ */
+export async function setWaitingIncluded(include: boolean, waiting: number): Promise<WaitingChange> {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    await client.query(`SELECT pg_advisory_xact_lock(hashtext('auto_calls_switch'))`);
+    const { rows } = await client.query<{ on: string | null; since: string | null; included: boolean }>(
+      `SELECT (SELECT value FROM settings WHERE key = 'auto_calls_on') AS on,
+              (SELECT value FROM settings WHERE key = 'auto_calls_since') AS since,
+              ${WAITING_INCLUDED_SQL} AS included`
+    );
+    const { on, since, included } = rows[0];
+    let change: WaitingChange;
+    if (on !== 'true' || since === null) {
+      change = { kind: 'off' };
+    } else if (included === include) {
+      change = { kind: 'unchanged', since };
+    } else {
+      await client.query(
+        `INSERT INTO settings (key, value) VALUES ('auto_calls_waiting_for', $1)
+         ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value`,
+        [include ? since : '']
+      );
+      await recordActivity(client, {
+        action: include ? 'auto_calls.waiting_included' : 'auto_calls.waiting_stopped',
+        actorId: null,
+        detail: include ? { since, waiting } : { since },
+      });
+      change = { kind: 'changed', since };
+    }
+    await client.query('COMMIT');
+    return change;
+  } catch (err) {
+    await client.query('ROLLBACK');
+    throw err;
+  } finally {
+    client.release();
+  }
+}
+
+/**
  * How long after it was placed a call of the robot's must have been heard of -
  * an end or a verdict - before its silence means Twilio's reports are not
  * reaching us; and how long that silence stops the robot.
@@ -131,7 +223,9 @@ export async function dialRoom(): Promise<DialRoom> {
  * called when:
  *
  * - it arrived after `since`, when automated calls were last switched on
- *   (`recordAutoCallsSwitch`);
+ *   (`recordAutoCallsSwitch`) - or before it as well, with `waiting` `also`:
+ *   the leads already waiting then, once they have been included
+ *   (`setWaitingIncluded`); `only` is those alone;
  * - its first text went out at least `waitMinutes` ago (`question_sent_at` of
  *   its conversation), and that conversation is still open - not answered,
  *   expired or stopped;
@@ -141,8 +235,11 @@ export async function dialRoom(): Promise<DialRoom> {
  *   callback, an outcome - Closed among them - an agent's call or text);
  * - its number is not blocked, and the robot has never called it.
  *
- * Oldest first, by when the first text went out: a lead whose hour ended
- * outside the calling hours is called at their start, before newer ones.
+ * New leads first, then the waiting ones - a new lead's call an hour after its
+ * text is not held up by them, and they fill the room left. Within each,
+ * oldest first, by when the first text went out: a lead whose hour ended
+ * outside the calling hours is called at their start, before newer ones; and
+ * the waiting lead nearest expiring goes first.
  * `only`, outside production, is the test numbers - the only ones looked at,
  * so a laptop's fake leads are never even tried. `leadId` asks about that one
  * lead alone - again, just before its call (`stillDue`). `now` is a parameter
@@ -157,6 +254,7 @@ export async function leadsToCall(opts: {
   only: readonly string[] | null;
   limit: number;
   leadId?: number;
+  waiting?: Waiting;
 }): Promise<number[]> {
   if (opts.limit <= 0) return [];
   const { rows } = await pool.query<{ id: number }>(
@@ -166,7 +264,7 @@ export async function leadsToCall(opts: {
        SELECT c.status, c.question_sent_at FROM conversations c
        WHERE c.lead_id = l.id ORDER BY c.created_at DESC, c.id DESC LIMIT 1
      ) c ON true
-     WHERE l.created_at > $2
+     WHERE CASE $7::text WHEN 'also' THEN true WHEN 'only' THEN l.created_at <= $2 ELSE l.created_at > $2 END
        AND l.created_at > $1::timestamptz - interval '${LOOK_BACK_DAYS} days'
        AND ($6::int IS NULL OR l.id = $6)
        AND c.status = 'open'
@@ -178,9 +276,9 @@ export async function leadsToCall(opts: {
        AND NOT EXISTS (SELECT 1 FROM calls ac WHERE ac.lead_id = l.id AND ac.direction = 'automated')
        AND NOT EXISTS (SELECT 1 FROM dnc_list d WHERE d.phone = l.phone AND d.released_at IS NULL)
        AND ($4::text[] IS NULL OR l.phone = ANY($4::text[]))
-     ORDER BY c.question_sent_at, l.id
+     ORDER BY l.created_at > $2 DESC, c.question_sent_at, l.id
      LIMIT $5`,
-    [opts.now, opts.since, String(opts.waitMinutes), opts.only, opts.limit, opts.leadId ?? null]
+    [opts.now, opts.since, String(opts.waitMinutes), opts.only, opts.limit, opts.leadId ?? null, opts.waiting ?? 'no']
   );
   return rows.map((r) => r.id);
 }
@@ -200,6 +298,7 @@ export async function stillDue(opts: {
   since: Date;
   waitMinutes: number;
   only: readonly string[] | null;
+  waiting?: Waiting;
 }): Promise<boolean> {
   return (await leadsToCall({ ...opts, limit: 1 })).length === 1;
 }

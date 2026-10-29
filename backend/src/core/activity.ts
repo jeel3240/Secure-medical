@@ -69,6 +69,14 @@ export const ACTIVITY_ACTIONS = [
    * system's doing - someone set `AUTO_CALLS=on`.
    */
   'auto_calls.switched_on',
+  /**
+   * The robot calls the leads already waiting at that switch-on too, or no
+   * longer - `detail.since`, the switch-on it applies to, and for the first
+   * `waiting`, how many were due when it was asked (AUTO-CALLS.md, "Leads
+   * already waiting"). Someone ran `auto-calls:include-waiting` on the server.
+   */
+  'auto_calls.waiting_included',
+  'auto_calls.waiting_stopped',
   // Sign-in.
   'auth.signed_in',
   'auth.sign_in_failed',

@@ -17,6 +17,8 @@
     "dev:twilio:configure": "ts-node src/cli/twilio-configure.ts",
     "openers:send-waiting": "node dist/cli/send-waiting-openers.js",
     "dev:openers:send-waiting": "ts-node src/cli/send-waiting-openers.ts",
+    "auto-calls:include-waiting": "node dist/cli/include-waiting-leads.js",
+    "dev:auto-calls:include-waiting": "ts-node src/cli/include-waiting-leads.ts",
     "test": "jest",
     "e2e": "ts-node --transpile-only scripts/end-to-end.ts",
     "dev:ask-again": "ts-node --transpile-only scripts/dev-ask-again.ts",

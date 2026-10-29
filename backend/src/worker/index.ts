@@ -7,6 +7,7 @@ import {
   leadsToCall,
   recordAutoCallsSwitch,
   stillDue,
+  waitingIncluded,
   withDialLock,
 } from '../db/auto-dial';
 import { readCallHours } from '../db/call-script';
@@ -45,6 +46,7 @@ function autoDialler(): DialDeps | null {
   return {
     closeUnplacedCalls,
     autoCallsSince,
+    waitingIncluded,
     readCallHours: () => readCallHours(pool),
     dialRoom,
     leadsToCall: (opts) => leadsToCall({ ...opts, only }),

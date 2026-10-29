@@ -147,14 +147,17 @@ LEAD CALLS (480) 470-8259 BACK
   says.
 - Only leads that arrive after `AUTO_CALLS` was last switched on - never the
   backlog, including leads that arrived while it was off (`recordAutoCallsSwitch`,
-  below).
+  below) - **unless the leads already waiting then are asked for** (Jeel,
+  2026-10-29): one command on the server, "Leads already waiting" below. New
+  leads still come first.
 
 **As built** (T20, 2026-10-24): the worker's last job on each tick, every 30
 seconds, with automated calls on and calling set up (`worker/auto-calls.ts`).
 A lead is called (`leadsToCall`, `db/auto-dial.ts`) when:
 
 - it arrived after `auto_calls_since` - when automated calls were last
-  switched on (below);
+  switched on (below) - or before it, once the leads already waiting then
+  have been included ("Leads already waiting");
 - its first text went out at least `auto_call_wait_minutes` (60) ago - the
   conversation's `question_sent_at` - and that conversation is still open:
   not answered, expired or stopped;
@@ -165,8 +168,9 @@ A lead is called (`leadsToCall`, `db/auto-dial.ts`) when:
 - its number is not blocked (a block lifted by START is not), and the robot
   has never called it.
 
-Oldest first, by when the first text went out, from the last 30 days (no
-conversation stays open that long). The hours are
+New leads first, then any waiting ones included; within each, oldest first,
+by when the first text went out, from the last 30 days (no conversation stays
+open that long). The hours are
 `auto_call_hours_start`/`_end` in `auto_call_time_zone` on `auto_call_days`
 (`readCallHours`) - the start and end fall back together to migration 015's
 when either is malformed or the end is not after the start, and the zone, the
@@ -187,6 +191,54 @@ nothing. Each switch-on is recorded, with the start it replaced
 (`auto_calls.switched_on`). Turning them off is setting `AUTO_CALLS` and
 recreating **both** the api and the worker - `docker compose up -d` does - or
 the worker goes on calling while the api answers its webhooks 404.
+
+### Leads already waiting
+
+When automated calls are switched on, the leads already waiting for a reply -
+hundreds on production - are not called: switching on calls new leads only.
+**They can be added with one command on the server** (Jeel, 2026-10-29: "I
+want to cover that"), run once the first new leads' calls have been watched:
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.prod.yml exec worker npm run auto-calls:include-waiting -- --dry-run
+docker compose -f docker-compose.yml -f docker-compose.prod.yml exec worker npm run auto-calls:include-waiting
+```
+
+- `--dry-run` lists them, in the order they would be called, and changes
+  nothing; without it, the same list, then they are included. `--stop` stops
+  calling them - new leads go on as before. Locally, without a build:
+  `npm run dev:auto-calls:include-waiting -- ...`.
+- **Which:** every lead that arrived before the switch-on and that the robot
+  would call if it had arrived after - first text an hour ago, conversation
+  still open, no reply, not rung us, nobody holds or has worked it, not
+  blocked, never called by the robot ("When a lead is called"). A lead stops
+  being one the moment any of that changes, and one whose conversation
+  expires at 7 days is not called - so the list shrinks every day it waits.
+  Outside production, the test numbers only.
+- **When:** after new leads. A new lead keeps its call an hour after its text;
+  the waiting ones fill the room left - the people free, less the calls going
+  ("Traffic") - oldest first, so the lead nearest expiring goes first. Inside
+  the calling hours only, as every call.
+- **Once, as every lead.** A waiting lead the robot calls is called once,
+  ever - which is why it is a step taken after watching the first calls, not
+  part of switching on.
+- **For that switch-on alone.** The next switch-on starts afresh: the leads
+  waiting then are not called until the command is run again. A restart of
+  the worker while on changes nothing.
+- Only while automated calls are on - it is refused otherwise, since there is
+  no switch-on to add them to.
+
+**As built** (2026-10-29): `settings.auto_calls_waiting_for` holds the
+`auto_calls_since` whose waiting leads are called, copied as it was - so it
+stops applying the moment a switch-on writes a new start, with nothing to
+clear (`waitingIncluded`, `db/auto-dial.ts`). Each look reads it and asks
+`leadsToCall` for the waiting leads too (`waiting: 'also'`), ordered new leads
+first; `stillDue` asks the same. The command (`cli/include-waiting-leads.ts`)
+counts them with `waiting: 'only'` and writes the setting under the switch's
+own lock, with its record in the same transaction -
+`auto_calls.waiting_included`, with how many were due, or
+`auto_calls.waiting_stopped`; asked again, nothing is written or recorded
+(`setWaitingIncluded`). It prints to the terminal only, as the resend does.
 
 ### Who is free - the "Taking calls" switch
 
@@ -961,7 +1013,7 @@ Nothing is overwritten (`AUDIT.md`).
 | The call | `calls`, with `direction = 'automated'`; `agent_id` empty until someone takes a transfer. `script_result`: `transferred`, `transfer_missed`, `link_sent`, `not_interested`, `opted_out`, `no_response`, `voicemail_left`, `hung_up`, `unanswered`. `held_at`: when it went on hold (019). `outcome` is `voicemail` only when Twilio's verdict took the call over (T18) |
 | What the lead said | `call_answers`, one add-only row per answer: what Twilio heard, how sure, keys pressed, the choice it matched |
 | The script | `call_scripts`, `call_steps`, `call_choices` - rows, changed by migration, like the SMS flow (015). The script's own words - stop, no response, voicemail, busy, hold and the place on hold (019), the link text - are on its `call_scripts` row, so another script brings its own |
-| When it calls | `settings`: `auto_call_hours_start` 11:00, `auto_call_hours_end` 17:00, `auto_call_time_zone` America/Phoenix, `auto_call_days` mon,tue,wed,thu,fri, `auto_call_wait_minutes` 60, `auto_call_ring_seconds` 25, `auto_call_hold_max_minutes` 10, `auto_call_min_confidence` 0.4, `auto_call_offer_ring_seconds` 20 (020); and, written by the worker, `auto_calls_on` and `auto_calls_since` - whether it last started with automated calls on, and when they were last switched on ("When a lead is called") |
+| When it calls | `settings`: `auto_call_hours_start` 11:00, `auto_call_hours_end` 17:00, `auto_call_time_zone` America/Phoenix, `auto_call_days` mon,tue,wed,thu,fri, `auto_call_wait_minutes` 60, `auto_call_ring_seconds` 25, `auto_call_hold_max_minutes` 10, `auto_call_min_confidence` 0.4, `auto_call_offer_ring_seconds` 20 (020); and, written by the worker, `auto_calls_on` and `auto_calls_since` - whether it last started with automated calls on, and when they were last switched on ("When a lead is called"); and, written by `auto-calls:include-waiting`, `auto_calls_waiting_for` - the switch-on whose waiting leads are called too ("Leads already waiting") |
 | The link text | `messages`, like every text |
 | Who is free | `users.taking_calls`, `taking_calls_at`, `taking_calls_why`, `users.ringable_until` |
 | Each ring from hold | `call_offers` (020): the call, who was rung, when, and how it ended - written once, ended once, never removed |
@@ -1031,6 +1083,7 @@ ticket's own PR.
 | | **Finish** | | |
 | T25 | Everything written down and checked end to end | T0-T24 | Done 2026-10-25 - every doc read against the code, the faults fixed; `npm run e2e`, 93 checks, three robot calls |
 | T26 | Real phone, every path, then live | T25 | Real phone done 2026-10-27 - nineteen cases, calls 66-85, all as specified; going live left (Jeel) |
+| T27 | The leads already waiting at the switch-on | T20 | Done 2026-10-29 - a command adds them, after new leads |
 | | **Other tickets - not calling** | | |
 | W1 | Day dividers in the agent's conversation | - | Done 2026-10-18 |
 | W2 | A phone call stops the text questions | T25 | Done 2026-10-27 |
@@ -2755,9 +2808,14 @@ switched on.
    only on a page loaded after the switch-on. With nobody on, the robot calls
    nobody.
 5. The first call comes about an hour after the first lead that arrives
-   after the switch-on - leads from before it are never called - inside
-   11-5 Arizona time, Monday to Friday. Watch it on the lead's timeline and
-   Admin > Leads' Call column.
+   after the switch-on - leads from before it are not called until step 6 -
+   inside 11-5 Arizona time, Monday to Friday. Watch it on the lead's
+   timeline and Admin > Leads' Call column.
+6. Once the first calls look right, add the leads that were already waiting
+   (T27, "Leads already waiting"): `docker compose -f docker-compose.yml -f
+   docker-compose.prod.yml exec worker npm run auto-calls:include-waiting --
+   --dry-run` to see them, then the same without `--dry-run`. They are called
+   after new leads, in the room left; `--stop` stops it.
 
 To stop: take `AUTO_CALLS` out of `.env` and run the same `up -d api
 worker`, outside the calling hours - a call still going loses its webhooks
@@ -2796,6 +2854,58 @@ worker`, outside the calling hours - a call still going loses its webhooks
       on a call was a `calls` row of karm's, by hand, on the local database.
 - [ ] The first real robot calls on production, seen on the timeline and
       Admin > Leads.
+
+---
+
+#### T27 - The leads already waiting at the switch-on
+
+**Goal:** the leads already waiting for a reply when automated calls are
+switched on can be called too, without holding up new leads. Jeel,
+2026-10-29: about 562 leads were awaiting a reply on production - "I want to
+cover that".
+**Needs:** T20. **Production:** nothing until the command is run, with
+automated calls on.
+
+**Build**
+- A command, `npm run auto-calls:include-waiting`, compiled into the image:
+  `--dry-run` lists the leads and changes nothing; without it they are
+  included; `--stop` stops calling them. Refused while automated calls are
+  off.
+- Included for the current switch-on only: a later switch-on starts afresh,
+  as before.
+- New leads first; the waiting ones fill the room left, oldest first.
+- Every change recorded in the activity log, in the same transaction.
+
+**Done when**
+- [x] A live check: not included, the new leads only; included, new leads
+      first, then the waiting ones oldest first; the room to new leads
+      first; the waiting ones alone for the command; asked again before the
+      call only while included; one who replied or was picked up never
+      called; included, recorded with how many, asked again nothing
+      written; stopped, recorded; a restart while on still included;
+      refused while off; switched on again, afresh, nothing removed
+      (`auto-dial-live-check`, 78 checks, 20 new).
+- [x] Tests: the look asks for the waiting leads, and asks again, only once
+      included (1,049 backend tests).
+- [x] The command run on a scratch database with fake leads: switched on two
+      hours before; the dry run listed the three from before it, oldest
+      first - not the new one, not the one who replied; included; asked
+      again, nothing changed; stopped; an unknown argument and automated
+      calls off both refused; the two records in the activity log.
+- [ ] Run on production after the first calls - Jeel.
+
+As built: "Leads already waiting". The setting holds the switch-on it
+applies to rather than a yes or no, so a switch-on ends it with nothing to
+clear. Not built: a screen for it - the command prints what it does, and
+Admin > Leads' Call column shows each call as it is made.
+
+**Files:** `backend/src/cli/include-waiting-leads.ts`, `backend/src/db/auto-dial.ts`,
+`backend/src/core/auto-dial.ts`, `backend/src/core/activity.ts`,
+`backend/src/worker/auto-calls.ts` (+ test), `backend/src/worker/index.ts`,
+`backend/package.json`, `backend/scripts/auto-dial-live-check.ts`,
+`backend/scripts/end-to-end.ts`.
+**Doc:** this one, "Leads already waiting" and "Going live"; `AUDIT.md`,
+`SCHEMA.md`, `README.md`, `WORKFLOW.md`, `CLAUDE.md`.
 
 ### Other tickets - not calling
 
