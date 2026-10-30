@@ -7,14 +7,29 @@
  * documentation of what we intended, but a window on the values the state
  * machine is actually using. ADMIN.md, "Configuration".
  *
+ * And since T24 the automated call's: its script (`call_scripts`, `call_steps`,
+ * `call_choices` - AUTO-CALLS.md, "The script") and the settings a call reads,
+ * each through the reader the robot itself uses (`db/call-script.ts`), so a
+ * missing or malformed value shows as the value the robot falls back to.
+ *
  * Read-only: Jeel's decision, 2026-09-23. Changes go through a numbered
  * migration and a PR. There is no writer here and there should not be one.
  */
 
 import { loadFlow } from './flows';
+import { RECORDING_NOTICE } from '../core/calls';
+import type { CallScript } from '../core/call-script';
 import { questionShort } from '../core/questions';
 import { pool } from './pool';
 import { NAME_FALLBACK, SEGMENT_LIMIT } from '../core/messages';
+import {
+  loadActiveCallScript,
+  readCallHours,
+  readHoldMaxSeconds,
+  readMinConfidence,
+  readOfferRingSeconds,
+  readRingSeconds,
+} from './call-script';
 
 export interface ConfiguredMessage {
   /** Stable for the page's list: `q1`, `q1_1`, `clarify_q1`, `review`, `missed_call`. */
@@ -43,6 +58,61 @@ export interface ConfiguredMessage {
   /** Whether the copy contains {first_name} at all. */
   personalised: boolean;
 }
+
+/** One thing the robot says - T24. Listed in the order a lead can hear them. */
+export interface CallLine {
+  /** Stable for the page's list: `q1`, `q1_1`, `repeat_q1`, `stop`, `voicemail`. */
+  key: string;
+  /** What the page calls it: "Q1 · Offer", "After Q1 · Yes", "Busy". */
+  name: string;
+  /** When it is said: "When the lead picks up", "Then Q2". */
+  when: string;
+  /** As written: `{callback_number}` and `{place}` are filled in on the call. */
+  body: string;
+  /** The key that picks it - a choice, and stop. Null for a line nobody picks. */
+  press: string | null;
+  /** What may be said for it, found as whole words in the sentence (`matchSpokenChoice`). */
+  words: string[];
+}
+
+/**
+ * The settings an automated call reads - T24, through the robot's own readers,
+ * so these are the values it uses, fallbacks included.
+ */
+export interface CallSettings {
+  /** `AUTO_CALLS=on` and calling set up: the robot is calling. */
+  on: boolean;
+  /** Minutes after midnight, in `timeZone`: from, and up to but not including. */
+  startMinute: number;
+  endMinute: number;
+  timeZone: string;
+  /** 'mon'..'sun', in the week's order. */
+  days: string[];
+  /** After the first text, for a lead who has not replied. */
+  waitMinutes: number;
+  /** How long a "yes" rings people. */
+  ringSeconds: number;
+  /** How long a lead on hold rings the person who came free. */
+  offerRingSeconds: number;
+  /** The hold line's safety stop. */
+  holdMaxMinutes: number;
+  /** A spoken answer heard less surely than this is asked again. */
+  minConfidence: number;
+  /** The number the voicemail asks them to call back - the calling number. Null with calling not set up. */
+  callbackNumber: string | null;
+}
+
+/** What the page cannot read from the database: the api's own settings - `api/admin/config.ts`. */
+export interface CallingContext {
+  autoCalls: boolean;
+  callbackNumber: string | null;
+  /** Calls are recorded, so the recording notice is said before a person joins. */
+  recorded: boolean;
+}
+
+const NO_CALLING: CallingContext = { autoCalls: false, callbackNumber: null, recorded: false };
+
+const WEEK = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'];
 
 export interface AdminConfig {
   messages: ConfiguredMessage[];
@@ -75,6 +145,9 @@ export interface AdminConfig {
    * note differently then, rather than showing "there" as if it were a name.
    */
   longestNameIsFallback: boolean;
+  /** The automated call's active script, every line in order - null when none is active (T24). */
+  callScript: { key: string; name: string; voice: string; lines: CallLine[] } | null;
+  callSettings: CallSettings;
 }
 
 const segmentsFor = (length: number): number => Math.max(1, Math.ceil(length / SEGMENT_LIMIT));
@@ -99,12 +172,102 @@ async function longestFirstName(): Promise<string> {
   return longest.length > NAME_FALLBACK.length ? longest : NAME_FALLBACK;
 }
 
-export async function getAdminConfig(): Promise<AdminConfig> {
-  const [settingsRows, activeFlow, tierRows, name] = await Promise.all([
+/**
+ * Every line of the call script, in the order a lead can hear them: each
+ * question, then each answer's reply and where it leads, then the question's
+ * repeat line; then the lines every question shares, as the call goes on - no
+ * response, stop, the recording notice, the hold line, the busy line - and the
+ * voicemail, left instead of all of it.
+ */
+function callLines(script: CallScript, recorded: boolean): CallLine[] {
+  const steps = [...script.steps].sort((a, b) => a.position - b.position);
+  const short = questionShort;
+  const line = (key: string, name: string, when: string, body: string, press: string | null = null, words: readonly string[] = []): CallLine => ({
+    key,
+    name,
+    when,
+    body,
+    press,
+    words: [...words],
+  });
+  const ENDING: Record<string, string> = {
+    transfer: 'Then puts them through to a person',
+    send_link: 'Then texts the link, and ends',
+    declined: 'Then ends the call',
+  };
+
+  const lines: CallLine[] = [];
+  for (const step of steps) {
+    // Reached by the choice that leads to it; the first is asked on pick-up.
+    const from = steps.flatMap((s) => s.choices.map((c) => ({ step: s, choice: c }))).find((x) => x.choice.nextStepId === step.id);
+    const when =
+      step === steps[0] ? 'When the lead picks up' : from ? `After ${short(from.step)} · ${from.choice.label}` : 'No answer leads here';
+    lines.push(line(step.key, `${short(step)} · ${step.heading}`, when, step.body));
+    for (const choice of step.choices) {
+      const next = steps.find((s) => s.id === choice.nextStepId);
+      lines.push(
+        line(
+          `${step.key}_${choice.key}`,
+          `After ${short(step)} · ${choice.label}`,
+          next ? `Then ${short(next)}` : (ENDING[choice.ending ?? ''] ?? 'Then ends the call'),
+          choice.reply,
+          choice.key,
+          choice.words
+        )
+      );
+    }
+    lines.push(line(`repeat_${step.key}`, `Unclear · ${short(step)}`, 'Not understood, the first time', step.repeatBody));
+  }
+
+  lines.push(line('no_response', 'No response', 'Not understood twice - the call ends', script.noResponseBody));
+  lines.push(line('stop', 'Stop', 'On any question - the number is blocked', script.optOutBody, '9', script.optOutWords));
+  // Said before anyone joins - a ring, or the hold line - when calls are recorded (T15a).
+  if (recorded) lines.push(line('notice', 'Recording notice', 'After a yes, before a person joins', RECORDING_NOTICE));
+  lines.push(line('hold', 'Hold', 'A yes nobody took yet, while someone is on a call', script.holdBody));
+  lines.push(line('hold_next', 'Next in line', 'On hold, first in line', script.holdNextBody));
+  lines.push(line('hold_place', 'Place in line', 'On hold, further back', script.holdPlaceBody));
+  lines.push(line('busy', 'Busy', 'A yes nobody took, and nobody coming - the call ends', script.busyBody));
+  lines.push(line('voicemail', 'Voicemail', "A machine answered - left after its beep", script.voicemailBody));
+  return lines;
+}
+
+/** The settings an automated call reads, as the robot reads them - fallbacks included. */
+async function callSettings(calling: CallingContext): Promise<CallSettings> {
+  const [hours, ringSeconds, offerRingSeconds, holdMaxSeconds, minConfidence] = await Promise.all([
+    readCallHours(pool),
+    readRingSeconds(pool),
+    readOfferRingSeconds(pool),
+    readHoldMaxSeconds(pool),
+    readMinConfidence(pool),
+  ]);
+  return {
+    on: calling.autoCalls,
+    startMinute: hours.startMinute,
+    endMinute: hours.endMinute,
+    timeZone: hours.timeZone,
+    days: WEEK.filter((d) => (hours.days as ReadonlySet<string>).has(d)),
+    waitMinutes: hours.waitMinutes,
+    ringSeconds,
+    offerRingSeconds,
+    holdMaxMinutes: holdMaxSeconds / 60,
+    minConfidence,
+    callbackNumber: calling.callbackNumber,
+  };
+}
+
+/**
+ * `calling` is what only the api knows - whether automated calls are on, the
+ * calling number, whether calls are recorded. Without it: off, no number, not
+ * recorded.
+ */
+export async function getAdminConfig(calling: CallingContext = NO_CALLING): Promise<AdminConfig> {
+  const [settingsRows, activeFlow, tierRows, name, script, call] = await Promise.all([
     pool.query(`SELECT key, value FROM settings`),
     pool.query(`SELECT id, key, name FROM flows WHERE is_active`),
     pool.query(`SELECT name, min_score, max_score FROM tiers ORDER BY sort_order`),
     longestFirstName(),
+    loadActiveCallScript(pool),
+    callSettings(calling),
   ]);
 
   const settings = new Map<string, string>(settingsRows.rows.map((r) => [r.key, r.value]));
@@ -167,6 +330,10 @@ export async function getAdminConfig(): Promise<AdminConfig> {
   if (missedCall) {
     messages.push(message('missed_call', 'Missed call', 'A call to us nobody answered', missedCall));
   }
+  // A text too, so it is counted here with the others - T24, T14.
+  if (script) {
+    messages.push(message('call_link', 'Call · link', 'A yes to the link, on the automated call', script.linkText));
+  }
 
   const awards = flow
     ? [
@@ -218,5 +385,9 @@ export async function getAdminConfig(): Promise<AdminConfig> {
     },
     longestFirstName: name,
     longestNameIsFallback: name === NAME_FALLBACK,
+    callScript: script
+      ? { key: script.key, name: script.name, voice: script.voice, lines: callLines(script, calling.recorded) }
+      : null,
+    callSettings: call,
   };
 }

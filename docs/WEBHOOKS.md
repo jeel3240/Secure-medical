@@ -8,9 +8,10 @@ EZ Texting has no session.
 
 Code: `backend/src/api/webhooks.ts`. Payload shape: `docs/EZTEXTING-API.md`.
 
-**This doc is EZ Texting's webhook only.** Twilio's seven - a call being
-placed, a lead calling in, how each ended, who picked up, the recording notice
-and the recording - are in `TWILIO.md`. They differ in one
+**This doc is EZ Texting's webhook only.** Twilio's sixteen are documented
+elsewhere: agents' calls, a lead calling in, how each ended, who picked up,
+the recording notice and the recording in `TWILIO.md`; the automated call's
+`/auto/*` in `AUTO-CALLS.md`. They differ in one
 way that matters: Twilio signs every request, so those are checked by
 signature rather than by a secret in the path. Both kinds are kept as received
 in `webhook_events` (`AUDIT.md`).
@@ -83,8 +84,10 @@ partner lead, the poller's `dnc_list` check stops us texting someone who has
 already opted out of this client's messages.
 
 Opt-out is `optOut` on the payload, or the message being one of the CTIA
-keywords: STOP, STOPALL, UNSUBSCRIBE, CANCEL, END, QUIT, REVOKE, OPTOUT. Case
-and trailing punctuation are ignored, and the whole message must be the keyword -
+keywords: STOP, STOPALL, UNSUBSCRIBE, CANCEL, END, QUIT, REVOKE, OPTOUT. Case,
+surrounding spaces and a trailing `.`, `!` or `,` are ignored ("STOP?" is not
+the keyword, though EZ Texting's own `optOut` may still say so), and the whole
+message must be the keyword -
 "stop by tomorrow" is not an opt-out.
 
 ## The path token
@@ -184,7 +187,8 @@ They were locals here until task 8 gave them a second caller - an agent's DNC
 disposition, `AGENT-WORKSPACE.md`. Moved rather than copied: a compliance table
 with two insert statements is a table that eventually holds two shapes of row.
 Every path that blocks a number - a STOP reply, the poller finding a contact
-already opted out, an agent's disposition - writes the same upsert, and only a
+already opted out, an agent's disposition, a stop said on the automated call
+(`call_opt_out`, `AUTO-CALLS.md`) - writes the same upsert, and only a
 row with `released_at IS NULL` blocks anything. (The poller joined them on
 2026-10-01; it had its own insert until then - `POLLER.md`.) The keyword lists and the
 decision of what counts as an opt-out stay here.
@@ -247,7 +251,7 @@ Two are permanent and must stay: the client's Zapier one and production.
 
 The text sent after a call nobody answered (`TWILIO.md`, "A missed call") is
 an ordinary outbound message, and a reply to it is an ordinary inbound one: it
-takes the steps above and then the state machine. From a lead whose questions
-are finished it is stored and flagged for a person, which is what is wanted.
-From a lead still partway through the questions it is read as an answer to the
-current one. `STATE-MACHINE.md`, "The missed-call text".
+takes the steps above and then the state machine. It is stored and flagged
+for a person, whether or not the lead's questions are finished: the call that
+led to the text stopped the questions (rule 2d). `STATE-MACHINE.md`, "The
+missed-call text".

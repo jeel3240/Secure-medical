@@ -12,23 +12,29 @@
  *   docker compose exec api npm run dev:twilio:configure
  *   (production: npm run twilio:configure)
  *
- * It changes those two settings and nothing else on the account. A number
- * whose calls already go somewhere that is not this app is left alone unless
- * `--take-over` is passed. Reads only the Twilio variables, so it runs without
- * a database.
+ * It changes those two settings and nothing else on the account. Reads only
+ * the Twilio variables, so it runs without a database.
+ *
+ * **It refuses to move what another server relies on** - core/twilio-pointing.ts
+ * decides, for the app and the number alike: this app on another real server
+ * (production, run from a laptop), an address that is not this app, or a
+ * number answered by another TwiML App. Both are decided before either is
+ * changed, so a refusal never leaves them half-moved. `--take-over` overrides.
+ *
+ * `--dry-run` says what it would change, and changes nothing.
  *
  * `--transcription` also makes the transcription service that call transcripts
  * go through, if there is none yet, and prints its id for `.env`.
  *
  * **Never run this locally with production's number or TwiML App** - Jeel,
- * 2026-10-05. Local testing uses its own. The guard below does not help: a
- * laptop and production share the webhook path, so it sees "ours".
+ * 2026-10-05. Local testing has its own, (480) 530-8582 (TWILIO.md). Until
+ * 2026-10-16 nothing here stopped it - a laptop and production share the
+ * webhook paths - and the refusal above is a second line, not a reason to try.
  *
- * **One number, one deployment.** The number can ring only one address. Run
- * locally against the number production uses and production stops receiving
- * calls until this is run there again.
+ * **One number, one deployment.** The number can ring only one address.
  */
 import twilio from 'twilio';
+import { decidePointing, type Pointing } from '../core/twilio-pointing';
 import { INCOMING_PATH, VOICE_PATH } from '../integrations/twilio';
 import { readTwilioSettings } from '../twilio-settings';
 
@@ -44,12 +50,92 @@ async function main(): Promise<number> {
   }
 
   const { accountSid, authToken, twimlAppSid, callerId, publicUrl } = result.settings;
+  const takeOver = process.argv.includes('--take-over');
+  const dryRun = process.argv.includes('--dry-run');
   const client = twilio(accountSid, authToken);
 
-  await pointTwimlApp(client, twimlAppSid, publicUrl + VOICE_PATH);
-  const numberResult = await pointNumber(client, callerId, publicUrl + INCOMING_PATH, process.argv.includes('--take-over'));
-  if (process.argv.includes('--transcription')) await ensureTranscriptionService(client, result.settings.transcriptionServiceSid ?? null);
-  return numberResult;
+  // Everything is looked at and decided first; nothing is changed unless both
+  // may be.
+  const app = await client.applications(twimlAppSid).fetch();
+  const [number] = await client.incomingPhoneNumbers.list({ phoneNumber: callerId, limit: 1 });
+  if (!number) {
+    console.error(`${callerId} is not a number on this Twilio account. Check TWILIO_PHONE_NUMBER.`);
+    return 1;
+  }
+
+  const appUrl = publicUrl + VOICE_PATH;
+  const numberUrl = publicUrl + INCOMING_PATH;
+  const plans: Plan[] = [
+    {
+      what: `TwiML App "${app.friendlyName}"`,
+      was: app.voiceUrl,
+      target: appUrl,
+      decision: decidePointing({ voiceUrl: app.voiceUrl, voiceMethod: app.voiceMethod }, appUrl, takeOver),
+      apply: () => client.applications(twimlAppSid).update({ voiceUrl: appUrl, voiceMethod: 'POST' }),
+    },
+    {
+      what: `Number ${callerId}`,
+      was: number.voiceUrl,
+      target: numberUrl,
+      decision: decidePointing(
+        { voiceUrl: number.voiceUrl, voiceMethod: number.voiceMethod, applicationSid: number.voiceApplicationSid },
+        numberUrl,
+        takeOver
+      ),
+      // An application on the number wins over its Voice URL, so it is cleared.
+      apply: () =>
+        client.incomingPhoneNumbers(number.sid).update({ voiceUrl: numberUrl, voiceMethod: 'POST', voiceApplicationSid: '' }),
+    },
+  ];
+
+  const refusals = plans.flatMap((plan) => (plan.decision.action === 'refuse' ? [refusal(plan.what, plan.decision)] : []));
+  if (refusals.length > 0) {
+    for (const message of refusals) console.error(message);
+    console.error('Nothing was changed.');
+    return 1;
+  }
+
+  for (const plan of plans) {
+    if (plan.decision.action === 'unchanged') {
+      console.log(`${plan.what} already points at ${plan.target}. Nothing to change.`);
+      continue;
+    }
+    if (!dryRun) await plan.apply();
+    console.log(`${plan.what}: Voice URL${dryRun ? ' would change' : ''}`);
+    console.log(`  was ${show(plan.was)}`);
+    console.log(`  now ${plan.target}`);
+  }
+  if (dryRun) console.log('Dry run: nothing was changed.');
+
+  if (process.argv.includes('--transcription')) {
+    await ensureTranscriptionService(client, result.settings.transcriptionServiceSid ?? null, dryRun);
+  }
+  return 0;
+}
+
+interface Plan {
+  what: string;
+  was: string | null | undefined;
+  target: string;
+  decision: Pointing;
+  apply: () => Promise<unknown>;
+}
+
+type Refusal = Extract<Pointing, { action: 'refuse' }>;
+
+function refusal(what: string, decision: Refusal): string {
+  switch (decision.why) {
+    case 'other_server':
+      return (
+        `${what} points at this app on another server:\n  ${decision.current}\n` +
+        `Moving it here would take that server's calls - production's, most likely. ` +
+        `If that is really what you want, run again with --take-over.`
+      );
+    case 'other_app':
+      return `${what} sends its calls to ${decision.current}. To point it at this app instead, run again with --take-over.`;
+    case 'elsewhere':
+      return `${what} sends its calls somewhere else:\n  ${decision.current}\nTo point it at this app instead, run again with --take-over.`;
+  }
 }
 
 /** One per account, found again by this name rather than made twice. */
@@ -62,12 +148,16 @@ const SERVICE_NAME = 'secure-medical-call-transcripts';
  * logging" - using our calls to train its models - is left off; it cannot be
  * switched on through the API anyway.
  */
-async function ensureTranscriptionService(client: Client, configured: string | null): Promise<void> {
+async function ensureTranscriptionService(client: Client, configured: string | null, dryRun: boolean): Promise<void> {
   if (configured) {
     console.log(`Transcription service ${configured} is set. Nothing changed.`);
     return;
   }
   const existing = (await client.intelligence.v2.services.list({ limit: 50 })).find((s) => s.uniqueName === SERVICE_NAME);
+  if (dryRun && !existing) {
+    console.log(`Transcription service "${SERVICE_NAME}" would be created.`);
+    return;
+  }
   const service =
     existing ??
     (await client.intelligence.v2.services.create({
@@ -85,48 +175,6 @@ async function ensureTranscriptionService(client: Client, configured: string | n
 type Client = ReturnType<typeof twilio>;
 
 const show = (url: string | null | undefined): string => url || '(empty)';
-
-async function pointTwimlApp(client: Client, twimlAppSid: string, voiceUrl: string): Promise<void> {
-  const app = client.applications(twimlAppSid);
-  const before = await app.fetch();
-  if (before.voiceUrl === voiceUrl && before.voiceMethod === 'POST') {
-    console.log(`TwiML App "${before.friendlyName}" already points at ${voiceUrl}. Nothing changed.`);
-    return;
-  }
-  await app.update({ voiceUrl, voiceMethod: 'POST' });
-  console.log(`TwiML App "${before.friendlyName}": Voice URL`);
-  console.log(`  was ${show(before.voiceUrl)}`);
-  console.log(`  now ${voiceUrl}`);
-}
-
-async function pointNumber(client: Client, phoneNumber: string, voiceUrl: string, takeOver: boolean): Promise<number> {
-  const [number] = await client.incomingPhoneNumbers.list({ phoneNumber, limit: 1 });
-  if (!number) {
-    console.error(`${phoneNumber} is not a number on this Twilio account. Check TWILIO_PHONE_NUMBER.`);
-    return 1;
-  }
-  if (number.voiceUrl === voiceUrl && number.voiceMethod === 'POST' && !number.voiceApplicationSid) {
-    console.log(`Number ${phoneNumber} already points at ${voiceUrl}. Nothing changed.`);
-    return 0;
-  }
-
-  // Ours is an address ending in our own path - an earlier deployment or
-  // tunnel. Anything else is somebody's working phone line.
-  const elsewhere = number.voiceApplicationSid || (number.voiceUrl && !number.voiceUrl.endsWith(INCOMING_PATH));
-  if (elsewhere && !takeOver) {
-    console.error(`Number ${phoneNumber} already sends its calls somewhere else:`);
-    console.error(`  ${number.voiceApplicationSid ? `TwiML App ${number.voiceApplicationSid}` : number.voiceUrl}`);
-    console.error('Left alone. To point it at this app instead, run again with --take-over.');
-    return 1;
-  }
-
-  // An application on the number wins over its Voice URL, so it is cleared.
-  await client.incomingPhoneNumbers(number.sid).update({ voiceUrl, voiceMethod: 'POST', voiceApplicationSid: '' });
-  console.log(`Number ${phoneNumber}: Voice URL`);
-  console.log(`  was ${show(number.voiceUrl)}`);
-  console.log(`  now ${voiceUrl}`);
-  return 0;
-}
 
 main()
   .then((code) => process.exit(code))

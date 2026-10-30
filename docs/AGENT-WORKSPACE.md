@@ -103,11 +103,25 @@ scored. STOP and START still work. The rule and the reason are in
 `STATE-MACHINE.md`, "An agent has taken the conversation over" - that is the
 authority, not this file.
 
+**So does a phone call** - 2026-10-27, `STATE-MACHINE.md` rule 2d: the lead
+answered the robot's call (yes, no, the link), or rang us. Nothing is stored
+for it; the card's conversation carries `phoneTookOverAt`, worked out from the
+answer or the call, while the questions would otherwise still run. The page
+shows "Phone call - questions stopped" beside the other badges, and Questions
+reads "Stopped at Q1 by a call" while the conversation is open. Once an agent
+has texted the lead as well - before the call or after it - the page shows
+only "Agent handling - questions stopped", and Questions reads "Agent took
+over at Q1"; the timeline keeps the call's line only when the call came
+first. The SMS compose box's warning that sending stops the questions is not
+shown then: they are already stopped.
+
 **A text EZ Texting refuses stays in the thread, marked "not sent"** - Jeel,
 2026-09-28. The API still answers 502 `send_failed`, but the message is kept
 with `delivery_status = 'failed'` and shown with a red "!"; it does not take the
 conversation over, because nothing reached the lead. Before that nothing was
-kept and the agent retyped the text. `db/failed-sends.ts`; `FRONTEND.md`.
+kept and the agent retyped the text. The Lead Timeline page marks it "Delivery
+failed", as it does a refused automated text. `db/failed-sends.ts`;
+`FRONTEND.md`.
 
 **The DNC disposition blocks the number** for SMS and calls: it writes
 `dnc_list` with reason `agent_disposition` and suppresses any open conversation
@@ -125,7 +139,7 @@ the agent SMS box is disabled on a DNC lead rather than failing at send time.
 
 | Method | Path | Does |
 |---|---|---|
-| `GET` | `/api/leads/:id` | Lead card: name, phone, source, age, score, tier, the conversation, answer chips, score breakdown, the holder (`claimedBy`), `closed` (who closed it and when, while it is closed), flags (DNC, needs review, unread, expired, missed call). Read-only - see below. |
+| `GET` | `/api/leads/:id` | Lead card: name, phone, source, age, score, tier, the conversation, answer chips, score breakdown, the holder (`claimedBy`), `closed` (who closed it and when, while it is closed), flags (DNC, needs review, unread, expired, missed call, and `missedYes` - a "yes" on the automated call nobody took and nobody has got back to, T22, `QUEUE.md`). Read-only - see below. |
 | `GET` | `/api/leads/:id/timeline` | Every event for the lead, oldest first: system, outbound SMS, inbound reply, agent SMS, call, note, callback, disposition, and `activity` - the log entries with no row of their own (`AUDIT.md`). |
 | `POST` | `/api/leads/:id/read` | Clears `has_unread_inbound`. 204, idempotent. |
 | `POST` | `/api/leads/:id/claim` | Claims it. 409 `already_claimed` with the holder's name when someone else has it. |
@@ -274,8 +288,8 @@ recorded as do-not-call whom we would still text, which is the failure that
 actually matters.
 
 **It is the same `dnc_list` row a STOP reply writes.** `db/dnc.ts` holds the one
-upsert all three blocking paths use - a STOP reply, the poller finding a contact
-already opted out, and this. So a number blocked by an agent behaves exactly
+upsert every blocking path uses - a STOP reply, the poller finding a contact
+already opted out, a stop said on the automated call (T13), and this. So a number blocked by an agent behaves exactly
 like one blocked by a STOP: it leaves the queue, `sendMessage` refuses it with
 `BlockedNumberError`, the lead card raises the DNC flag, and a later START
 releases it (Jeel, 2026-09-22 - START releases an agent's block too). The reason
@@ -424,6 +438,9 @@ flow made worded answers the ordinary case. Two walks on one lead mislabelled
 the first with the second's answers. Found in review; proved in
 `scripts/timeline-live-check.ts`.
 
+**The conversation marks each day** - Today, Yesterday, Wed, Oct 14 - where it
+changes (W1, 2026-10-18). `FRONTEND.md`, "A label wherever the day changes".
+
 **The card says which question the lead is on, or stopped at** -
 `conversation.question`, "Q2" or "Q1-a" (`core/questions.ts`; `FLOWS.md`,
 "Naming a question"). The header's "On Q2", "Stopped at Q1-a" and the
@@ -517,7 +534,7 @@ conversation rather than logged rows, so the timeline synthesises them.
 
 **Built 2026-09-26**, `db/timeline.ts`. The list is assembled from `messages`,
 `calls`, `notes`, `callbacks`, `dispositions` and - since 2026-10-01 - six
-actions from `activity_log` that have no row of their own. Four system events, each standing on a
+actions from `activity_log` that have no row of their own. Five system events, each standing on a
 timestamp that actually exists:
 
 | Event | Placed at | Why there |
@@ -525,6 +542,7 @@ timestamp that actually exists:
 | `lead_received` | `ezt_added_at` | Its own timestamp. Carries the source. |
 | `scored` | `completed_at` once the flow has finished; before that, the last inbound reply | `updated_at` moves on every change, so it cannot be used. Until 2026-09-29 it was always the last reply, so a lead texting "Hi" after finishing moved "Scored · completed" down under the "Hi" - found testing with a real lead. `completed_at` (migration 004) is when the flow actually finished |
 | `agent_took_over` | `agent_took_over_at` | Migration 003. |
+| `phone_took_over` | The lead's first answer on the robot's call, or call to us, since the conversation began - only while it was still open, and not when an agent's text came first | Rule 2d, 2026-10-27. "Phone call - automated questions stopped" |
 | `conversation_expired` | `expires_at`, only when the status is `expired` | `expires_at` is set on every send, so a live conversation always has a future one that has not happened. |
 
 An event with no timestamp to stand on is left out rather than guessed at.
@@ -539,7 +557,32 @@ entries → other system events, so the story reads in the sequence it happened.
 callback: `scheduledAt`, `doneAt` and `reason`. `components/Timeline.tsx` words
 them - "Outbound call · answered · 2:14", "Incoming call · answered · 1:15",
 "Missed call · told we will call back"; a callback the system booked for a
-missed call reads "Callback added · missed call", then "Missed call returned".
+missed call reads "Callback added · missed call", then "Missed call
+returned". The Lead Timeline's "Attempts" counts an automated call as one of
+ours, like an agent's.
+
+**The robot's call** (T21, 2026-10-24) also carries `scriptResult` - how its
+script ended, null while it is going - and `answers`, what the lead said: each
+with its question named as every screen names one (`questionShort`, "Q1"),
+which asking it was, what was heard and any key pressed, and what it was taken
+to mean. So an agent opening the lead sees what already happened before they
+call:
+
+| `scriptResult` | The line |
+|---|---|
+| `transferred` | Automated call · said yes · Maya Chen took it · 2:14 - the name in the line, so not again beside it |
+| `transfer_missed` | Automated call · said yes · nobody took it - not "nobody free": people may have let it ring, or the lead hung up waiting |
+| `voicemail_left`, `link_sent`, `not_interested`, `opted_out`, `no_response`, `hung_up` | Automated call · voicemail left, · link sent, · not interested, · opted out, · no response, · hung up |
+| `unanswered` | Automated call · no answer - or busy, or failed: Twilio's word for why |
+| none yet | As T5 had it: Automated call · in progress (T5, 2026-10-18 - worded as its own, never as an agent's) |
+
+Under the line, closed until opened like the transcript beside it, **Answers**:
+`Q1 · "yeah sure" → Yes`, `Q2, asked again · pressed 2 → No`, `Q1 · "what is
+this" → not understood`, `Q1 · nothing said`, `Q1 · pressed 9 → stop`
+(`components/CallAnswers.tsx`). The same line and the same fold in the
+workspace conversation and on the Lead Timeline - one `callText` for both.
+Not shown on the lead card's "What … told us", which is the text questions'
+answers.
 
 **Three kinds come out of `messages`.** An inbound row is a reply; an outbound
 row with `sent_by` null is one of ours; an outbound row with an agent is their

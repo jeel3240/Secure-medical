@@ -2,6 +2,7 @@ import { NavLink, Outlet } from 'react-router-dom';
 import { useAuth } from '../auth/store';
 import { BrandMark } from '../components/BrandMark';
 import { IncomingCall } from './IncomingCall';
+import { TakingCalls } from './TakingCalls';
 import { UserMenu } from './UserMenu';
 
 export function AppShell() {
@@ -31,6 +32,7 @@ export function AppShell() {
           </nav>
 
           <div className="appbar__right">
+            <TakingCalls />
             <UserMenu user={user} />
           </div>
         </div>

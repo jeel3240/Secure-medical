@@ -4,7 +4,7 @@
  * lead's own messages. Conversation.tsx says what the ticks mean.
  */
 import { render, screen } from '@testing-library/react';
-import { describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { TimelineEntry } from '../../api/workspace';
 import { Conversation } from './Conversation';
 
@@ -60,5 +60,68 @@ describe('a call in the thread - Phase 4', () => {
     expect(line?.textContent).toMatch(/^Outbound call · no answer · Maya Chen · /);
     expect(screen.getAllByRole('img', { name: 'Sent' })).toHaveLength(1);
   });
+
+  it('the robot\'s call says how it ended, names who took it once, and keeps what the lead said folded under it (T21)', () => {
+    const robot = {
+      kind: 'call',
+      at: '2026-09-28T10:00:00Z',
+      author: 'Maya Chen',
+      detail: {
+        direction: 'automated',
+        outcome: 'answered',
+        durationSec: 134,
+        scriptResult: 'transferred',
+        answers: [{ question: 'Q1', attempt: 1, heard: 'yeah sure', keys: null, result: 'choice', choice: 'Yes' }],
+      },
+    } as TimelineEntry;
+    const { container } = renderThread([robot]);
+    expect(container.querySelector('.convo__system')?.textContent).toMatch(/^Automated call · said yes · Maya Chen took it · 2:14 · \d/);
+    expect(container.querySelector('details summary')?.textContent).toBe('Answers');
+    expect(screen.getByText('Q1 · "yeah sure" → Yes')).toBeDefined();
+  });
 });
 
+
+describe('a label wherever the day changes - W1', () => {
+  // 18 Oct 2026, a Sunday, 3 PM local time. Local dates, so the test holds in
+  // any time zone.
+  const local = (month: number, day: number, hour: number, minute = 0) =>
+    new Date(2026, month - 1, day, hour, minute).toISOString();
+  const at = (kind: TimelineEntry['kind'], when: string, body = 'hi'): TimelineEntry =>
+    ({ kind, at: when, author: 'Chris', detail: { body, outcome: 'voicemail', durationSec: 0 } }) as TimelineEntry;
+
+  beforeEach(() => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date(2026, 9, 18, 15, 0));
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  /** The thread's children in order: the day labels by their words, everything else as "item". */
+  const order = (container: HTMLElement) =>
+    [...(container.querySelector('.convo')?.children ?? [])]
+      .filter((el) => el.tagName !== 'DIV' || el.className !== '')
+      .map((el) => (el.classList.contains('convo__day') ? el.textContent : 'item'));
+
+  it('puts one label before the first item of each day, and none between items of the same day', () => {
+    const { container } = renderThread([
+      at('inbound', local(10, 14, 12, 48), '1'),
+      at('sms', local(10, 14, 12, 48), 'Great. Start your online consultation'),
+      at('call', local(10, 17, 14, 40)),
+      at('call', local(10, 18, 14, 41)),
+      at('agent_sms', local(10, 18, 14, 43), 'Hi David'),
+    ]);
+    expect(order(container)).toEqual(['Wed, Oct 14', 'item', 'item', 'Yesterday', 'item', 'Today', 'item', 'item']);
+  });
+
+  it('shows a single label for a thread of one day', () => {
+    const { container } = renderThread([at('sms', local(10, 18, 9)), at('inbound', local(10, 18, 9, 5))]);
+    expect([...container.querySelectorAll('.convo__day')].map((el) => el.textContent)).toEqual(['Today']);
+  });
+
+  it('keeps each item’s own time', () => {
+    const { container } = renderThread([at('agent_sms', local(10, 18, 14, 43), 'Hi David')]);
+    expect(container.querySelector('.convo__meta')?.textContent).toMatch(/^Chris · 2:43\sPM$/);
+  });
+});

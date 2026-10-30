@@ -43,6 +43,12 @@ describe('attempts', () => {
     expect(summary.lastContact).toMatchObject({ inbound: true });
   });
 
+  it('the server\'s automated call is one of our attempts, and not contact from the lead (T5)', () => {
+    const summary = summarise([entry('call', '09:20', { outcome: 'answered', durationSec: 40, direction: 'automated' })]);
+    expect(summary.calls).toBe(1);
+    expect(summary.lastContact).toMatchObject({ inbound: false });
+  });
+
   it('is all zeros for a lead nothing has happened to', () => {
     const summary = summarise([entry('system', '09:00', { event: 'lead_received' })]);
     expect(summary).toMatchObject({ calls: 0, smsOut: 0, smsIn: 0, lastContact: null });

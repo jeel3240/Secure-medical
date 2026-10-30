@@ -1,5 +1,13 @@
 import { describe, expect, it } from 'vitest';
-import { incomingReducer, isBusy, NO_CALL, type IncomingEvent, type IncomingState } from './incoming-state';
+import {
+  ALONE,
+  incomingOccupiesAgent,
+  incomingReducer,
+  isBusy,
+  NO_CALL,
+  type IncomingEvent,
+  type IncomingState,
+} from './incoming-state';
 
 const PRIYA = { id: 7, name: 'Priya Sharma', phone: '+15550100016' };
 const SAM = { id: 8, name: 'Sam Lee', phone: '+15550100017' };
@@ -12,7 +20,7 @@ const ended: IncomingEvent = { type: 'call', event: { type: 'ended', at: 43_000,
 
 describe('a lead calling in', () => {
   it('rings, saying who it is', () => {
-    expect(run([ring])).toEqual({ phase: 'ringing', caller: PRIYA, since: 0 });
+    expect(run([ring])).toEqual({ phase: 'ringing', caller: PRIYA, since: 0, kind: ALONE });
   });
 
   it('not picked up: a missed call, which stays until it is dismissed', () => {
@@ -52,8 +60,8 @@ describe('one call at a time', () => {
 
   it('but takes the place of a missed call, or a finished call’s note box', () => {
     const second: IncomingEvent = { type: 'ring', caller: SAM, at: 5 };
-    expect(run([ring, rangOut, second])).toEqual({ phase: 'ringing', caller: SAM, since: 5 });
-    expect(run([ring, { type: 'answer' }, answered, ended, second])).toEqual({ phase: 'ringing', caller: SAM, since: 5 });
+    expect(run([ring, rangOut, second])).toEqual({ phase: 'ringing', caller: SAM, since: 5, kind: ALONE });
+    expect(run([ring, { type: 'answer' }, answered, ended, second])).toEqual({ phase: 'ringing', caller: SAM, since: 5, kind: ALONE });
   });
 
   it('busy means ringing or talking - not missed, not the note box', () => {
@@ -62,6 +70,53 @@ describe('one call at a time', () => {
     expect(isBusy(run([ring, { type: 'answer' }, answered]))).toBe(true);
     expect(isBusy(run([ring, rangOut]))).toBe(false);
     expect(isBusy(run([ring, { type: 'answer' }, answered, ended]))).toBe(false);
+  });
+});
+
+describe('a ring that went to several people (T11)', () => {
+  const group: IncomingEvent = { type: 'ring', caller: PRIYA, at: 0, kind: { group: true, transfer: null } };
+  const transfer: IncomingEvent = {
+    type: 'ring',
+    caller: PRIYA,
+    at: 0,
+    kind: { group: true, transfer: { step: 'Offer' } },
+  };
+
+  it('rings, knowing it is a group, and a transfer when it is one', () => {
+    expect(run([group])).toEqual({ phase: 'ringing', caller: PRIYA, since: 0, kind: { group: true, transfer: null } });
+    expect(run([transfer])).toMatchObject({ kind: { group: true, transfer: { step: 'Offer' } } });
+  });
+
+  it('over without this person answering: gone quietly - never a missed call', () => {
+    expect(run([group, rangOut])).toBe(NO_CALL);
+    expect(run([transfer, rangOut])).toBe(NO_CALL);
+  });
+
+  it('answered: an ordinary call, like any other', () => {
+    expect(run([group, { type: 'answer' }, answered])).toMatchObject({ phase: 'call', call: { phase: 'live' } });
+  });
+
+  it('a ring to this person alone is a missed call when it rings out, as it always was', () => {
+    expect(run([ring, rangOut])).toMatchObject({ phase: 'missed' });
+  });
+});
+
+describe('whether the agent can take another call meanwhile', () => {
+  it('not while it rings, while they talk, or while the note box after is open', () => {
+    expect(incomingOccupiesAgent(run([ring]))).toBe(true);
+    expect(incomingOccupiesAgent(run([ring, { type: 'answer' }]))).toBe(true);
+    expect(incomingOccupiesAgent(run([ring, { type: 'answer' }, answered]))).toBe(true);
+    expect(incomingOccupiesAgent(run([ring, { type: 'answer' }, answered, ended]))).toBe(true);
+  });
+
+  it('yes with no call, after a missed call - only a notice - and once the note is done', () => {
+    expect(incomingOccupiesAgent(NO_CALL)).toBe(false);
+    expect(incomingOccupiesAgent(run([ring, rangOut]))).toBe(false);
+    expect(incomingOccupiesAgent(run([ring, { type: 'declined' }]))).toBe(false);
+    const done: IncomingEvent = { type: 'call', event: { type: 'reset' } };
+    expect(incomingOccupiesAgent(run([ring, { type: 'answer' }, answered, ended, done]))).toBe(false);
+    const broke: IncomingEvent = { type: 'call', event: { type: 'failed', message: 'x' } };
+    expect(incomingOccupiesAgent(run([ring, { type: 'answer' }, broke]))).toBe(false);
   });
 });
 

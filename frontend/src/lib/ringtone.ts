@@ -92,9 +92,20 @@ let unlocking = false;
 function player(): HTMLAudioElement | null {
   if (typeof Audio === 'undefined' || typeof URL.createObjectURL !== 'function') return null;
   if (!element) {
-    element = new Audio(URL.createObjectURL(new Blob([wavFile(melodySamples())], { type: 'audio/wav' })));
-    element.loop = true;
-    element.preload = 'auto';
+    const audio = new Audio(URL.createObjectURL(new Blob([wavFile(melodySamples())], { type: 'audio/wav' })));
+    audio.loop = true;
+    audio.preload = 'auto';
+    // Safari started it again by itself, a few seconds after a ring ended and
+    // it was paused - no play() of ours, the tune looping on with nothing
+    // ringing until the page was reloaded (2026-10-20, every time, in Safari
+    // only). Whatever starts it, it is stopped again at once unless a ring, or
+    // the silent first play, wants it.
+    const hush = () => {
+      if (!ringing && !unlocking && !audio.paused) audio.pause();
+    };
+    audio.addEventListener('playing', hush);
+    audio.addEventListener('timeupdate', hush);
+    element = audio;
   }
   return element;
 }
@@ -144,7 +155,6 @@ export function armRingtone(): () => void {
           return;
         }
         audio.pause();
-        audio.currentTime = 0;
       })
       .catch(() => {
         unlocking = false;
@@ -166,9 +176,10 @@ export function startRinging(): () => void {
   ringing = true;
   // Not while the silent first play is finishing: it hands over to the ring itself.
   if (!unlocking) play(audio);
+  // Only paused: a ring starts it from the top (`play`). Moving a paused
+  // looping element back to the start is a seek Safari does not need.
   return () => {
     ringing = false;
     audio.pause();
-    audio.currentTime = 0;
   };
 }

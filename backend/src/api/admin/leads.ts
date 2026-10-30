@@ -3,7 +3,7 @@ import { requireAuth, requirePasswordChanged, requireRole } from '../auth/middle
 import type { AppDeps } from '../deps';
 import { asyncHandler, HttpError } from '../http';
 import { parseList, parseSince } from '../filters';
-import type { LeadStatus } from '../../db/leads';
+import type { LeadCallFilter, LeadStatus } from '../../db/leads';
 
 const STATUSES: LeadStatus[] = [
   'awaiting_reply',
@@ -18,7 +18,22 @@ const STATUSES: LeadStatus[] = [
   'expired',
 ];
 
-/** Absent or `all` is every status; anything else must be one of them - a 400 otherwise, like every other filter. */
+/** The Call column's values, and `none` for a lead the robot has not called - T23. */
+const CALLS: LeadCallFilter[] = [
+  'none',
+  'calling',
+  'transferred',
+  'transfer_missed',
+  'link_sent',
+  'not_interested',
+  'voicemail_left',
+  'no_response',
+  'hung_up',
+  'unanswered',
+  'opted_out',
+  'unknown',
+];
+
 /**
  * `?page=`: a whole number from 1, in a range no table will reach. Absent is
  * the first page. It goes into the statement as an offset, so anything else -
@@ -35,6 +50,16 @@ function parsePage(raw: unknown): number {
   return page;
 }
 
+/** `?call=`: absent or empty is every lead; anything else one of `CALLS`, or a 400 like every other filter. */
+function parseCall(raw: unknown): LeadCallFilter | undefined {
+  if (raw === undefined || raw === '') return undefined;
+  if (typeof raw !== 'string' || !CALLS.includes(raw as LeadCallFilter)) {
+    throw new HttpError(400, 'invalid_call', `call must be one of: ${CALLS.join(', ')}.`);
+  }
+  return raw as LeadCallFilter;
+}
+
+/** Absent or `all` is every status; anything else must be one of them - a 400 otherwise, like every other filter. */
 function parseStatus(raw: unknown): LeadStatus | 'all' {
   if (raw === undefined || raw === '' || raw === 'all') return 'all';
   if (typeof raw !== 'string' || !STATUSES.includes(raw as LeadStatus)) {
@@ -66,6 +91,7 @@ export function adminLeadsRouter(deps: AppDeps): Router {
         status: parseStatus(req.query.status),
         source: parseList(req.query.source),
         since: parseSince(req.query.since),
+        call: parseCall(req.query.call),
         q: typeof req.query.q === 'string' && req.query.q.trim() ? req.query.q.trim() : undefined,
         page: parsePage(req.query.page),
       });

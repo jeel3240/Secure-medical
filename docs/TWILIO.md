@@ -15,7 +15,7 @@ routes), `twilio-settings.ts` (the settings). Screen: `frontend/src/lib/call-sta
 `lib/calling.ts`, `pages/workspace/useLeadCall.ts`, `pages/workspace/CallControl.tsx`,
 `CallBar.tsx`. Setup: `backend/src/cli/twilio-configure.ts`.
 
-For incoming calls, backend: `db/missed-call-text.ts` (the text),
+For incoming calls, backend: `db/lead-texts.ts` (the text - `sendMissedCallText`),
 `db/callbacks.ts` (`finishMissedCallCallbacks`), `db/lead-state.ts`
 (`MISSED_CALL_SQL`). Screen: `frontend/src/lib/incoming-state.ts`,
 `lib/incoming-call.ts`, `lib/ringtone.ts` (armed from `main.tsx`),
@@ -62,7 +62,8 @@ Agent's browser                 Our API                         Twilio          
    - then it inserts the `calls` row and answers with TwiML that dials the
      lead, with `TWILIO_PHONE_NUMBER` as caller ID.
 
-   If a check fails, nothing is recorded and the agent hears one sentence
+   If a check fails, no `calls` row is written - the refusal is kept only as
+   `call.refused` in the activity log - and the agent hears one sentence
    saying why, then the call ends. The screen stops all of these before the
    click; the server checks again because the screen is a courtesy, not the
    lock.
@@ -78,7 +79,8 @@ Audio goes browser ↔ Twilio ↔ phone. It never passes through our server
 Built 2026-10-01, the simple version Jeel asked for: when a lead calls our
 number, show it to their agent; if the agent does not pick up, text the lead
 that we will call back and show on screen that the call was missed. There is no
-call queue and no ringing several agents - that is a later phase.
+call queue. Since T19 (2026-10-24), with automated calls on, a lead nobody
+holds or has called rings everyone free - "Who rings".
 
 ```
 lead dials (480) 470-8259
@@ -89,18 +91,60 @@ Twilio ── POST /api/webhooks/twilio/incoming ──► who is this, and whos
    ├─ an agent to ring ──► that agent's browser rings for 20 seconds
    │        ├─ Answer ──► they talk; saved as answered, with its length
    │        └─ no answer, Decline, or the lead hangs up ──► missed
+   ├─ nobody's, automated calls on (T19) ──► everyone free rings, 20 seconds
+   │        ├─ one accepts ──► theirs (/incoming/claim); saved as answered
+   │        └─ nobody accepts, or the lead hangs up ──► missed
    └─ nobody to ring, or a number we hold no lead for ──► missed at once
 ```
 
 ### Who rings
 
-One agent, never several:
-
 1. **The agent holding the lead** - they are working it right now.
 2. Otherwise **the agent who last called that lead** - the lead is most likely
-   returning that call.
-3. Otherwise nobody. A lead no agent has ever held or called has nobody whose
-   call it is; it goes straight to missed and into the queue.
+   returning that call. An automated call counts once a person took its
+   transfer (T4); one nobody took has no agent and is skipped.
+3. Otherwise, **with automated calls on, everyone free together** (T19,
+   2026-10-24) - `FREE_SQL`: the "Taking calls" switch on, a browser open
+   and not busy, no call going; at most ten. A lead the robot's voicemail
+   asked to call back has no agent of its own. The first to accept takes it.
+   "At most ten" is the first ten by account, lowest id first.
+4. Otherwise nobody. A lead no agent has ever held or called has nobody whose
+   call it is; it goes straight to missed and into the queue. With automated
+   calls off, step 3 is skipped and this is as before.
+
+The first two are rung switch or not, and alone, as before: it is their lead,
+or their call being returned. A ring they miss is a missed call - their
+callback - not passed on to everyone free.
+
+**A ring to everyone** (`ringEveryoneTwiml`): each browser is marked
+`ring=group`, so a ring someone else took clears with no "Missed call", and a
+busy browser turns it down (T11). The call's row has no `agent_id` while it
+rings. Whoever accepts runs `POST /api/webhooks/twilio/incoming/claim` on their
+leg, before they are connected: the call becomes theirs (`takeIncomingCall`,
+`call.taken`) and so does the lead, taken over from anyone who held it
+(`lead.picked_up`, `via: 'call_back'`) - first come, once; a second accept, or
+a deactivated account, is hung up. Their browser picks the lead up too as it
+accepts, and that can arrive first (call 63: 2.4 seconds before); but in two
+accepts at once it could be the other person's - the lead follows the call.
+**How it ended comes from the whole ring** - `/incoming/after?ring=group` - and
+nothing else: no browser reports its own end, as for a transfer (T15a).
+Twilio reports a ring cut short by someone else's answer as `no-answer`,
+exactly like one let run out (T15c), and a second accept it refused and hung
+up as `completed`, like the call itself; acting on either would end a call
+someone is on. Twilio asks `/incoming/after` however it ends - taken and over,
+run out, or the lead hanging up while it rang. Letting a call-back ring run
+out turns nobody's switch off - only a transfer does (T15c). Only with
+automated calls on; `/incoming/claim` answers 404 otherwise.
+
+**Twilio asking again** about the same call keeps the first decision: a call
+that is over stays over (nobody rung, not texted again), one agent's ring
+rings them again, and a ring to everyone rings whoever is free now - nobody
+free now, it is missed at once and texted, never left open with nothing
+ringing.
+
+**Taking a call back is not calling the lead.** Step 2 counts calls we placed;
+whoever took a call back holds the lead instead (step 1). Once they release
+it, the next call back rings everyone free again - call 64.
 
 A deactivated agent is never rung. The caller is matched to a lead by phone
 number; **a number we hold no lead for** hears the same message, is not
@@ -112,6 +156,16 @@ Twilio as soon as someone signs in (`lib/calling.ts`, `listenForCalls`) and
 checks every 30 seconds that it still is. A closed laptop is a missed call.
 There is no ringing of a mobile phone.
 
+Each check also tells the server whether this browser can take a call now -
+registered, and no call, ring or after-call note open - with
+`POST /api/calls/ringable` (T9, 2026-10-18). It is said at once when that
+changes - a call or a ring starts, or the note box after one is saved or
+skipped - and holds two minutes on the server (`users.ringable_until`).
+It is for the automated call's transfer, which rings only people who are free,
+and for a lead calling back whom nobody owns (step 3 above, T19); a lead's own
+agent, and the last agent who called them, are rung either way. "Who is free"
+in `AUTO-CALLS.md`.
+
 ### A missed call
 
 The lead hears: "Thank you for calling eDrugstore. Our team member is not
@@ -120,10 +174,10 @@ Medical" until 2026-10-05.) Then:
 
 | | |
 |---|---|
-| **The call is saved** | `calls` row with `direction = 'inbound'`, `outcome = 'missed'`, whatever Twilio called it (no-answer, busy, canceled). `agent_id` is the agent it rang, or null when it rang nobody |
+| **The call is saved** | `calls` row with `direction = 'inbound'`, `outcome = 'missed'`, whatever Twilio called it (no-answer, busy, canceled). `agent_id` is the agent it rang, or null when it rang nobody or everyone free (T19) |
 | **The lead is texted** | `message_missed_call` from `settings`, sent through EZ Texting like every other text and saved in `messages`: "eDrugstore: Sorry we missed your call. A team member will call you back shortly." (reworded by migration 012; 007 seeded the first wording, signed Secure Medical). Once per call. Not sent to a blocked number - the do-not-call check is inside the sender |
 | **The lead goes to the queue** | Tagged **Missed call**, in bold, above an unread reply - unless an agent holds the lead, when the queue still says Working – name and the lead's page and the callback carry it. A closed lead is reopened by it. A lead with no score is in the queue for it too, at the bottom. `QUEUE.md`, "The tag" |
-| **The agent gets a callback** | One row on their My Callbacks, under Today, first in the list and marked **Missed call** (Overdue only from the next day) - `callbacks.reason = 'missed_call'`, migration 008. The queue tag says a lead needs calling; this says whose job it is. One per lead however many times they ring. Not booked when the call rang nobody (the lead waits in the queue for anyone), for a deactivated agent, or for a number on the do-not-call list. An agent who pressed Decline gets it too: the lead was still told we would call back |
+| **The agent gets a callback** | One row on their My Callbacks, under Today, first in the list and marked **Missed call** (Overdue only from the next day) - `callbacks.reason = 'missed_call'`, migration 008. The queue tag says a lead needs calling; this says whose job it is. One per lead however many times they ring. Not booked when the call rang nobody, or everyone free (T19) - the lead waits in the queue for anyone - for a deactivated agent, or for a number on the do-not-call list. An agent who pressed Decline gets it too: the lead was still told we would call back |
 | **The agent is told** | The card on their screen becomes a notice: "Missed call · Leo M. · Rang for 20s", with **Call back**. It stays until dismissed, or until another call rings |
 | **The lead's page says so** | A **Missed call** badge beside the lead's other states, in the queue's words, and a line on the timeline: "Missed call · told we will call back". It was a sentence in a yellow banner for a day; Jeel, 2026-10-01: a state of the lead is a badge, like Closed and Needs review |
 
@@ -135,6 +189,7 @@ Medical" until 2026-10-05.) Then:
 | An agent texts the lead | Their own text. One EZ Texting refused does not count - it never arrived. Nor does the automated "we will call you back" text: that is the promise, not the call back |
 | The lead rings again and is answered | |
 | A call with them is under way | No outcome yet, started within the last 2 hours - so an agent talking to the lead is not shown Missed call (found on the first real answered call), and a row Twilio never closed cannot hide one for good. If an incoming call under way ends unanswered, that is a new missed call |
+| An automated call - only once a person is on it | The server's scripted call (T4) is not a person getting back to them: answered by the lead or under way, it settles nothing until someone takes its transfer. Then it counts like any call with a person on it |
 | An agent saves an outcome | Closed or DNC, after the call. They have decided what happens to the lead (2026-10-01, from the doc review: until then a lead closed without a call back stayed in the queue as Missed call) |
 
 Until then the tag and the badge stay. Reading the lead's page does not clear
@@ -151,25 +206,26 @@ missed call un-closes a lead - and has no missed-call status of its own.
 
 **What a missed call does to the lead's other states.** Its callback counts as
 a callback like any other, so the lead reads Working on Admin > Leads; a
-missed call that booked none (it rang nobody) does not make it Working. On
+missed call that booked none (it rang nobody, or everyone free) does not make it Working. On
 Admin > Overview neither the system's callback nor a call that only rang the
 agent is that agent's activity - only what they did is.
 
-**Not handled: a reply to the text from a lead still answering the
-questions.** The text goes to any lead not on the do-not-call list, whatever
-their conversation's state. A reply is an ordinary inbound text
-(`STATE-MACHINE.md`): from a lead whose questions are finished it is stored
-and flagged Inbound reply, which is right. From a lead still partway through,
-"ok thanks" is taken as an unclear answer to the current question and gets the
-clarification. Rare - a lead mid-questions has not been called by us - and
-left as it is.
+**A reply to the text goes to a person** - since 2026-10-27, for a lead still
+answering the questions too. The text goes to any lead not on the
+do-not-call list, whatever their conversation's state. A reply from a lead
+whose questions are finished is stored and flagged Inbound reply. From a lead
+still partway through, it used to be read as an answer - "ok thanks" got the
+current question's "sorry" - which the robot's calls made common: its leads
+are still on Q1. Now ringing us stops the questions (`STATE-MACHINE.md`, rule
+2d), so the reply is stored and flagged Inbound reply as well.
 
-**Recorded twice over, on purpose.** How the ring ended is reported by Twilio
-on the agent's leg (`/status`) and again when it asks what to say to the lead
-(`/incoming/after`). An agent with no browser open may have no leg to report
-on, and a lead who hangs up never reaches the second. Whichever arrives first
-records the missed call and sends the text; the other finds it done and does
-nothing.
+**Recorded twice over, on purpose.** How a ring to one agent ended is reported
+by Twilio on the agent's leg (`/status`) and again when it asks what to say to
+the lead (`/incoming/after`) - asked even when the lead hung up while it rang
+(2026-10-17). An agent with no browser open may have no leg to report on.
+Whichever arrives first records the missed call and sends the text; the other
+finds it done and does nothing. A ring to everyone free (T19) has only the
+second: no browser reports its own end.
 
 ### On the screen
 
@@ -196,7 +252,7 @@ Accepting opens Leo's workspace and assigns the lead to you.
 | Name, number | Sent with the call, so they show the instant it rings |
 | How long it has rung | Counted in the browser |
 | Tier, score, the lead's last answer (under that question's heading), flow | The lead card, `GET /api/leads/:id`, fetched as it starts to ring. The same words as the lead's page |
-| "Calling back · you tried 2× today" | The lead's timeline: calls we placed today, by this agent or - named - by another; otherwise when we last called. Nothing when we never have. `lib/caller-context.ts` |
+| "Calling back · you tried 2× today" | The lead's timeline: calls agents placed today, by this agent or - named - by another; otherwise when one last called. The server's automated call is not counted among them - "you tried" is about people (T5, 2026-10-18). With no agent's call, the automated call is what they are returning - its voicemail asks them to: "Calling back · automated call, 28m ago" (T19). Nothing when we never called them. A transfer shows "Transfer · said yes to the offer" instead (T11). `lib/caller-context.ts` |
 | The last line | Drops "and assigns the lead to you" when the agent already holds it |
 
 The card is up at once and the details fill in a moment later; if they cannot
@@ -225,6 +281,37 @@ be loaded it still rings and can still be accepted.
   refusing it. The lead's own Call button is off while an incoming call is
   ringing or live.
 
+**A ring that goes to several people** (T11, 2026-10-18 - for the automated
+call's transfer, sent since T15a, and a lead calling back whom no agent owns,
+T19). The server marks it with `<Parameter>`s on each
+`<Client>`, beside `leadId`, `leadName` and `leadPhone`:
+
+| Parameter | Means |
+|---|---|
+| `ring=group` | The ring goes on without this person if they do not take it: several people rung at once, the first to accept taking it - or the lead's own agent rung alone first, the others next (T15b) - or a lead waiting on hold rung to one person who came free (T17) - or a lead calling back whom nobody owns, everyone free rung (T19) |
+| `reason=transfer` | A lead who said yes on the automated call, being put through |
+| `step` | With a transfer: the heading of the question they said yes to - "Offer" |
+
+`lib/calling.ts` (`ringKind`) reads them; nothing attached is a ring to one
+person, exactly as before. On the screen:
+
+- **Over without this person answering, it clears quietly** - no "Missed
+  call" notice. The browser cannot tell whether someone else took it or it
+  went on to the hold or busy line, and either way it was never this
+  person's missed call.
+- **Arriving while anything keeps them busy** - a call, a ring, a note box
+  open after a call, on any page (`lib/presence.ts`) - it is declined at once
+  and never shown, so a note being written is never lost to it. Twilio keeps
+  ringing the others: one browser declining is busy for that one only, and
+  the whole ring is busy only when every browser was ("Busy Everywhere",
+  error 31600). Confirmed on the first real group ring (T15a, 2026-10-20):
+  one browser declined, the other kept ringing and took it.
+- **Decline** declines it for this person; the others keep ringing.
+- **A transfer says so** in place of "Calling back": "Transfer · said yes to
+  the offer", from `step` (`lib/caller-context.ts`, `transferContext`).
+- A ring to one person is unchanged - including that it takes the place of an
+  open note box, since it is that agent's own lead calling.
+
 **It rings.** `lib/ringtone.ts` plays the app's own ringtone - a short melody
 of eight soft, mallet-like notes, a pause, and again - for as long as the card
 is up. (The first version played a phone line's two-tone ring, which to the
@@ -246,6 +333,15 @@ plays it muted and at zero volume for an instant - Safari let the first notes
 through with muted alone - which is what lets it play aloud later with nobody
 clicking. Checked in Chrome: it decodes, rings, loops and stops. Confirmed by ear in Safari by
 Jeel, the same day.
+
+**Safari starts it again by itself - stopped at once** (2026-10-20). After a
+ring ended and the tune was paused, Safari started the same element playing
+again a few seconds later - every time, in Safari only, with no `play()` from
+our code or Twilio's (watched in Safari's console) - and it looped until the
+page was reloaded, with no card on screen. So the element watches itself:
+playing while nothing is ringing, and not the silent first play, it is paused
+at once, whatever started it (`hush` in `lib/ringtone.ts`); seen catching it
+seven seconds after a ring. Stopping only pauses; a ring starts it from the top.
 
 **A browser will not play sound on a page nobody has clicked on.** Signing in
 counts as a click; a reload does not. So after a reload the corner shows
@@ -269,9 +365,14 @@ leads come from EZ Texting. Both are decisions, not styling.
 ### What it needs on the Twilio account
 
 The phone number's Voice URL must be `PUBLIC_URL/api/webhooks/twilio/incoming`.
-`npm run twilio:configure` sets it, along with the TwiML App. A number that
-already sends its calls somewhere else is left alone unless `--take-over` is
-passed.
+`npm run twilio:configure` sets it, along with the TwiML App. Since 2026-10-16
+(`core/twilio-pointing.ts`) it refuses, for the number and the app alike,
+anything another server relies on: this app on another real server, an address
+that is not this app, or a number answered by another TwiML App. Both are
+decided before either is changed, so a refusal never leaves them half-moved.
+`--take-over` overrides; `--dry-run` says what it would change and changes
+nothing. Pointing nowhere, or at a tunnel (an earlier laptop session), is not
+a refusal.
 
 **One number rings one deployment**, and so does one TwiML App.
 
@@ -282,21 +383,35 @@ says, so run from a laptop it moves them to that laptop's tunnel: leads who
 call the number ring nobody in production, and calls agents place fail, until
 it is run on the server again. Nothing errors while that happens.
 
-- **The command's own guard does not stop this.** It leaves alone a number
-  that rings *another app*; a laptop and production are the same app, with the
-  same webhook path, so it goes straight through. `--take-over` is not needed
-  for the damage.
-- **Calling is not tested locally at all - Jeel, 2026-10-05.** Keep the
-  `TWILIO_*` lines in the local `.env` empty, so calling is off there. It is
-  not only the command: a local app signed in to the same Twilio account
-  registers its browser under the same agent identity as production's, so a
-  lead's call can ring the laptop, and a call placed locally is answered by
-  production's server. Calling changes are proved by tests and then on the
-  server.
-- **If local calling is ever needed again, use a different Twilio number and a different
-  TwiML App**, and put those in the local `.env` as `TWILIO_PHONE_NUMBER` and
-  `TWILIO_TWIML_APP_SID`. A local `.env` must never hold production's two
-  values. The account SID, auth token and API key can be shared.
+- **Until 2026-10-16 the command's own guard did not stop this.** It left
+  alone only a number that rang *another app*; a laptop and production are the
+  same app, with the same webhook path, so it went straight through - and the
+  TwiML App was changed without any check. It now refuses (above): run from a
+  laptop against production's real settings, both the number and the app come
+  back "points at this app on another server", and nothing is changed. That
+  refusal is a second line, not a reason to try - the rule stands.
+- **From 2026-10-05 to 2026-10-16 calling was not tested locally at all**
+  (Jeel): the local `.env` kept its `TWILIO_*` lines empty. It was not only
+  the command - see the next point.
+- **A different number is not enough; the browser's name must differ too.**
+  Twilio rings a browser by the name in its token - `agent-21` for user 21 -
+  and rings *every* browser on the account with that name, whichever number
+  the call came in on. A laptop on the same Twilio account names its user 21
+  `agent-21` as well, so production's calls would ring the laptop, and the
+  laptop's test calls a real agent. **`TWILIO_IDENTITY_PREFIX`** (2026-10-16,
+  `core/calls.ts`) puts a prefix in front of every name: empty in production,
+  so its names are unchanged; `dev-` locally, so the laptop's user 21 is
+  `dev-agent-21`. Each server reads only its own names back - production does
+  not take `dev-agent-21` for user 21, nor a laptop `agent-21`.
+- **Local calling uses its own number, TwiML App and prefix** (2026-10-16).
+  The client added **(480) 530-8582** to the account for development, and a
+  TwiML App `secure-medical-calling-dev` was made for it. The local `.env`
+  holds `TWILIO_PHONE_NUMBER=+14805308582`, that app's id as
+  `TWILIO_TWIML_APP_SID`, and `TWILIO_IDENTITY_PREFIX=dev-`; the account SID,
+  auth token and API key are shared with production. A local `.env` must
+  never hold production's number or TwiML App. `PUBLIC_URL` stays empty - so
+  calling is off on the laptop - until a tunnel is set up for a test
+  (`AUTO-CALLS.md`, ticket T3).
 - **If it happens anyway:** Admin > Overview shows **Calling** as Degraded
   within a minute. Fix it by running `npm run twilio:configure` on the server.
 - Up to 2026-10-02, before production took calls, local testing did use this
@@ -308,9 +423,10 @@ it is run on the server again. Nothing errors while that happens.
 
 - **Voicemail.** A missed caller hears the message and the call ends. Nothing
   is recorded.
-- **Nobody is rung for a lead no agent has touched.** It becomes a missed call
-  and waits in the queue. Ringing whoever is free needs agent presence, which
-  is the later queue work.
+- **Nobody is rung for a lead no agent has touched - with automated calls
+  off.** It becomes a missed call and waits in the queue. With them on, it
+  rings everyone free (T19, "Who rings"); with nobody free, the same missed
+  call.
 - **A second device.** An agent signed in on two browsers rings on both;
   the first to answer takes it.
 - **A stale ring.** If neither of Twilio's two reports arrives, the row keeps
@@ -346,8 +462,8 @@ and Twilio posts its verdict to `POST /api/webhooks/twilio/answered-by`.
   no pause, both sides heard each other at once.
 - **The verdict and the end of the call arrive in either order.** Detection
   takes a few seconds, and a short call can be over first. `finishCall` reads
-  a verdict that is already there; `recordAnsweredBy` corrects an `answered`
-  call that has already ended. Only the first verdict counts.
+  a verdict that is already there; `recordAnsweredBy` corrects an agent's
+  `answered` call that has already ended. Only the first verdict counts.
 - **Which call it is about is in the URL.** The report is made on the lead's
   leg and our row is keyed by the browser's, so the browser leg's id is put in
   the callback address (`?call=`). The address is part of what Twilio signs,
@@ -377,8 +493,13 @@ The second is worth knowing: a real person was not reported as `human` but as
 `unknown`. That is why `unknown` stays `answered` - treating it as a machine
 would have filed a real conversation as voicemail.
 
-Not covered: leaving a recorded message automatically (voicemail drop), and
-anything for calls a lead places to us.
+Not covered: leaving a recorded message automatically (voicemail drop) on an
+agent's call, and anything for calls a lead places to us. The automated call
+does leave one - when Twilio hears the beep, or reports a machine before the
+lead has answered anything - and is saved as `voicemail` only when Twilio's
+verdict took the call over: the message left, or a fax hung up on. Its rules,
+and why a "machine" verdict is not always believed, are in `AUTO-CALLS.md`,
+"Voicemail" (T18).
 
 ## Recordings and transcripts
 
@@ -414,8 +535,9 @@ and prints the id for `.env`.
    transcription service for any `pending` one, then asks after it until it
    is done - in testing, under a minute for a 47-second call. The sentences are
    stored with their speaker, worked out from the channel and who called whom
-   (`core/transcripts.ts`): a call we placed has the agent on channel 1, a call
-   the lead placed has the lead there.
+   (`core/transcripts.ts`): a call an agent placed has the agent on channel 1;
+   a call the lead placed, and the automated call's transfer, have the lead
+   there - the transfer's checked on a real one (T15a, 2026-10-20).
 4. If Twilio will not start one, it is tried again on each tick, five times,
    then marked failed. One Twilio is still working on after six hours is given
    up. The screen then says "Transcript not available".
@@ -438,10 +560,9 @@ Some US states require everyone on a call to agree to being recorded.
   rings.
 - **Only on a recorded call** - when the transcription service is set.
 - Until 2026-10-05 no notice was played, by Jeel's decision of 2026-10-02.
-- **Not yet heard on a real call.** Calling is no longer tested locally (the
-  phone number is production's), so this is covered by tests of the
-  instructions sent to Twilio and is to be checked with one call on the live
-  server.
+- **Heard on real calls** on the dev number since 2026-10-17 - the automated
+  call's transfers (`AUTO-CALLS.md`, T15a), where it was timed and once cut
+  short by a voicemail's beep (T18).
 
 **Cost**, Twilio's US prices on 2026-10-02: recording $0.0025 a minute,
 storage $0.0005 a minute a month, transcription $0.024 a minute - about three
@@ -468,17 +589,18 @@ made `agent_id` optional for them (migration 007).
 | Column | Value |
 |---|---|
 | `twilio_call_sid` | Twilio's id for the call's **first** leg: the browser's for a call we placed, the lead's for one we received. Unique, which is what makes a retried webhook safe |
-| `direction` | `outbound` - an agent called the lead - or `inbound`, the lead called us |
-| `agent_id`, `lead_id` | Who called whom. For an incoming call, the agent it rang - null when it rang nobody. An outgoing call always has an agent; the database refuses one without |
-| `started_at` | When Twilio asked us how to connect it |
-| `ended_at` | When Twilio reported the far leg ended - the lead's for a call we placed, the agent's for one we received - or at once for an incoming call that rang nobody. Null while the call is in progress |
-| `outcome` | `answered`, `no_answer`, `busy`, `failed` or `canceled` - `core/calls.ts` - `voicemail` for a call we placed that a machine picked up, and `missed` for an incoming call nobody answered. Null while in progress |
+| `direction` | `outbound` - an agent called the lead - or `inbound`, the lead called us - or, since migration 014 (T4, 2026-10-18), `automated`: the server called the lead (`AUTO-CALLS.md`) |
+| `agent_id`, `lead_id` | Who called whom. For an incoming call, the agent it rang - null when it rang nobody, and while it rings everyone free, until one of them takes it (T19). An agent's outgoing call always has an agent; the database refuses one without (`calls_outbound_has_agent`). An automated call has none until a person takes its transfer, then theirs |
+| `script_result` | Automated calls only (014): how the script ended - `transferred`, `transfer_missed`, `link_sent`, `not_interested`, `opted_out`, `no_response`, `voicemail_left`, `hung_up`, `unanswered`; and `not_placed`, a call Twilio never placed for our account's reasons, which is not the lead's call (T28). `outcome` keeps Twilio's view beside it. One automated call per lead, ever: a unique index (`calls_one_automated_per_lead`), `not_placed` ones left out |
+| `started_at` | When Twilio asked us how to connect it; for an automated call, when its row was written, just before Twilio was asked (T12) |
+| `ended_at` | When Twilio reported the far leg ended - the lead's for a call we placed, the agent's for one we received - or at once for an incoming call that rang nobody; for one that rang everyone free (T19), when the whole ring's end was reported (`/incoming/after`). Null while the call is in progress |
+| `outcome` | `answered`, `no_answer`, `busy`, `failed` or `canceled` - `core/calls.ts` - `voicemail` for a call we placed that a machine picked up - an automated one only when Twilio's verdict took it over, the message left or a fax hung up on (T18, `AUTO-CALLS.md` "Voicemail") - and `missed` for an incoming call nobody answered. Null while in progress |
 | `answered_by` | Who picked up a call we placed: `human`, `machine`, `fax` or `unknown` - "Voicemail", above. Null for an incoming call, one nobody picked up, or one from before migration 010 |
 | `duration_sec` | Seconds of conversation. 0 unless answered |
 
 | Twilio says | We record |
 |---|---|
-| `completed` | `answered` - or `voicemail`, when detection says a machine picked up |
+| `completed` | `answered` - or `voicemail`, when detection says a machine picked up (an automated call only when the verdict took it over, T18) |
 | `no-answer` | `no_answer` |
 | `busy` | `busy` |
 | `failed` | `failed` |
@@ -492,7 +614,9 @@ finds `ended_at` already set and changes nothing - the first outcome stands.
 **A call an agent placed or answered makes its lead Working** on Admin > Leads,
 and counts as the agent's latest activity on Overview (`db/lead-state.ts`,
 `db/admin-overview.ts`). A missed incoming call is the lead's doing, not an
-agent's work, so it does neither by itself - "What a missed call does to the
+agent's work, so it does neither by itself. Nor does an automated call nobody
+took (T4): the lead may have answered it, but no person was on it - it counts
+once a person takes its transfer and the call carries their `agent_id` - "What a missed call does to the
 lead's other states", above. Overview shows no call totals - they were removed
 on 2026-09-28 at Jeel's request and are not back.
 
@@ -515,6 +639,22 @@ trusted without a session.
 
 With calling not set up, every Twilio webhook route answers 404.
 
+**The automated call's webhooks** (`/auto/answer`, `/auto/gather`,
+`/auto/status`, `/auto/amd` - T12; `/auto/claim`, `/auto/after` - the
+transfer, T15a; `/auto/hold` - the hold line, T16; `/auto/offer` - a lead on
+hold ringing the person who came free, T17) are checked the same way, and name their call's row in the
+address (`?call=<id>`), which is part of what Twilio signs: the row cannot be
+swapped. `/auto/claim` takes the person from `To`, our own signed browser
+name, as the voice webhook does. They answer 404 while automated calls are
+off. What each does: `AUTO-CALLS.md`, "How a call is placed" and "The
+transfer".
+
+**`/incoming/claim`** (T19, a person accepting a call back that rang everyone
+free) is checked the same way and answers 404 while automated calls are off
+too. It names no row in its address: it takes the lead's call from
+`ParentCallSid` and the person from `To` - both in what Twilio signs - and
+acts only on an incoming call still ringing with nobody on it yet.
+
 ## Settings
 
 Seven variables. `.env.example` says where each comes from in the Twilio
@@ -529,11 +669,18 @@ Console.
 | `TWILIO_PHONE_NUMBER` | The caller ID, E.164. Must be a number on the same account |
 | `PUBLIC_URL` | This app's public https address, no trailing slash |
 
+Two more are optional and apart from the seven: `TWILIO_TRANSCRIPTION_SERVICE_SID`
+("Recordings and transcripts", below), and **`TWILIO_IDENTITY_PREFIX`** -
+empty in production, `dev-` on a laptop sharing the Twilio account ("What it
+needs on the Twilio account", above). Lower-case letters and digits ending in
+a hyphen; a malformed one makes the settings incomplete rather than being used
+or dropped.
+
 `twilio-settings.ts` reads them into one of three states:
 
 | State | When | Effect |
 |---|---|---|
-| **off** | No `TWILIO_*` variable is set | The app runs as before. The Call button is off: "Calling is not set up on this server." |
+| **off** | None of the six `TWILIO_*` account variables is set - `PUBLIC_URL` and the two optional ones alone do not count | The app runs as before. The Call button is off: "Calling is not set up on this server." |
 | **on** | All seven are set and well-formed | Calling works |
 | **incomplete** | Some are set, or one is malformed | Locally: calling is off and the API logs `calling.off` naming what is missing. **In production the API refuses to start** (`twilio_incomplete`), because a half-set configuration looks fine and fails every call |
 
@@ -541,14 +688,16 @@ Console.
 changes:
 
 ```bash
-docker compose exec api npm run dev:twilio:configure   # local
+docker compose exec api npm run dev:twilio:configure   # local - the dev number only
 docker compose exec api npm run twilio:configure       # production
+# add -- --dry-run to see what it would change, without changing it
 ```
 
 It sets the TwiML App's Voice URL to `PUBLIC_URL/api/webhooks/twilio/voice`
 and the phone number's to `PUBLIC_URL/api/webhooks/twilio/incoming`, and
-changes nothing else on the account. "Incoming calls" above has the one thing
-to watch: a number rings only one deployment.
+changes nothing else on the account. "What it needs on the Twilio account"
+above has what it refuses, and the one thing to watch: a number rings only one
+deployment.
 
 ## The screen
 
@@ -611,8 +760,9 @@ microphone. `lib/calling.ts` is the only file that touches the SDK.
 
 | What | Where |
 |---|---|
-| Settings: off, on, incomplete, malformed values | `src/twilio-settings.test.ts` |
-| Identity, outcomes, talk time | `src/core/calls.test.ts` |
+| Settings: off, on, incomplete, malformed values, the identity prefix | `src/twilio-settings.test.ts` |
+| Identity (with and without a prefix), outcomes, talk time | `src/core/calls.test.ts` |
+| What `twilio:configure` may point and what it refuses - production from a laptop, an old tunnel, someone else's line, another TwiML App | `src/core/twilio-pointing.test.ts` |
 | The token's claims, the TwiML, the signature check | `src/integrations/twilio.test.ts` |
 | Every route, refusals, a database failure, the missed-call text sent once | `src/api/__tests__/calls.test.ts` |
 | The SQL: who may call, DNC, retries, the timeline; who an incoming call rings, a missed call, its effect on the queue and Admin > Leads, what settles it and what does not, and its callback - booked once, under Today, finished by a call or an answer | `scripts/calls-live-check.ts` - against a real Postgres |
@@ -623,19 +773,25 @@ microphone. `lib/calling.ts` is the only file that touches the SDK.
 | Incoming: ringing, answered, missed, declined, one call at a time; what the card shows; Call back | `frontend/src/lib/incoming-state.test.ts`, `lib/caller-context.test.ts`, `layout/IncomingCall.test.tsx` |
 
 **Locally a real call needs a public address**, because Twilio must reach the
-voice webhook - **and its own Twilio number and TwiML App, never
-production's** ("What it needs on the Twilio account", above). With those in
+voice webhook - **and its own Twilio number, TwiML App and identity prefix,
+never production's** ("What it needs on the Twilio account", above): the dev
+number (480) 530-8582, `secure-medical-calling-dev` and `dev-`. With those in
 the local `.env`:
 
 ```bash
 cloudflared tunnel --url http://localhost:3000     # prints an https address
 # put it in .env as PUBLIC_URL, then:
 docker compose up -d api
+docker compose exec api npm run dev:twilio:configure -- --dry-run   # what it would change
 docker compose exec api npm run dev:twilio:configure
 ```
 
 A quick tunnel's address changes every time it starts, so repeat the last
-three lines each time. Verified this way on 2026-10-01: a request signed the
+three lines each time. Forgetting is easy to miss: an automated call and its
+transfers still work, because each call carries its own addresses, but the
+Call button fails at once - "The call did not connect" - and nothing reaches
+the server, because the TwiML App still points at the old tunnel (seen
+2026-10-22). Verified this way on 2026-10-01: a request signed the
 way Twilio signs, sent through the tunnel, was refused unsigned (403),
 connected for the agent holding the lead, refused for another agent, and its
 end-of-call report saved as answered, 42 seconds.
@@ -643,6 +799,29 @@ end-of-call report saved as answered, 42 seconds.
 **A real call, 2026-10-01:** Jeel picked up a lead that was his own phone and
 pressed Call. The phone rang showing the client's number, was answered, and the
 call was saved as `answered`, 15 seconds, with its start and end times.
+
+**Three real calls on the dev number, 2026-10-17** - the first local calls
+since 2026-10-05, after the identity prefix and the configure guard. The api
+ran alone, without the worker, so nothing polled EZ Texting or asked the SMS
+questions; the test lead, with Jeel's phone, was in the local database only.
+
+| Call | What happened | Saved |
+|---|---|---|
+| The local app called Jeel's phone | It rang showing (480) 530-8582; not picked up | `outbound`, `no_answer`, 0 s - right |
+| Jeel called (480) 530-8582 | Only the local browser rang, as `dev-agent-16`; answered | `inbound`, `answered`, 6 s, recording saved |
+| Jeel called it again | The local browser rang; not answered | `inbound`, `missed`; a missed-call callback for him; **the missed-call text sent to his phone** |
+
+**Without the worker, a local session can still text.** The worker polls and
+asks the questions, but the api sends the missed-call text itself, through EZ
+Texting, when a call to the number goes unanswered - so the third call above
+texted Jeel's phone "Sorry we missed your call", exactly as production would.
+The notes of the day first said nothing could text anyone; that was wrong,
+found the next day. Test with a lead whose phone is your own.
+
+Production's number and TwiML App were read back on Twilio before and after:
+both still pointed at dailyleadhub.com. Nothing needs undoing after a session -
+when the tunnel stops, only the dev number points at a dead address; the next
+session starts a tunnel and runs `dev:twilio:configure` again.
 
 **Every call on a paid account is a real call that costs money.** Test to your
 own phone.
@@ -678,12 +857,18 @@ own phone.
   as a conference on the server, which Phase 4 did not build, and a button
   that only muted would mislead.
 - **Voicemail drop, transfer, playing a recording in the app.** Not in the
-  plan. (Recording, transcripts and voicemail *detection* are built - above. The lead
+  plan for agents' calls. (Recording, transcripts and voicemail *detection* are built - above. The lead
   is told a call is recorded before it connects - "Recordings and
-  transcripts".)
-- **A call queue for incoming calls.** One agent is rung, or nobody -
-  "Incoming calls", above.
-- **A stale call is not closed.** If Twilio's end-of-call report never arrives,
-  the row keeps `ended_at` null and the timeline says "in progress". Not seen
-  in testing; Twilio retries its callbacks.
+  transcripts".) The automated call has its own: a transfer to a person
+  (built, T15a) and a voicemail message (built, T18) - `AUTO-CALLS.md`.
+- **A call queue for incoming calls.** One agent is rung; or, with automated
+  calls on, everyone free at once for a lead nobody holds or has called (T19,
+  "Who rings"); or nobody. The automated call's hold line (built, T16) is only
+  for its own transfers.
+- **An agent's stale call is not closed.** If Twilio's end-of-call report never
+  arrives, the row keeps `ended_at` null and the timeline says "in progress".
+  Not seen in testing; Twilio retries its callbacks. The automated call's are:
+  one that never reached Twilio after 10 minutes (`closeUnplacedCalls`), and
+  one on hold whose end Twilio did not report (the hold watcher) -
+  `AUTO-CALLS.md`, T20.
 - **Call totals on Admin > Overview.** Removed 2026-09-28, deliberately.

@@ -1,3 +1,4 @@
+import type { CallResult } from '../core/call-script';
 import { questionShort } from '../core/questions';
 import { CLOSED_SQL, WORKED_SQL } from './lead-state';
 import { likeLiteral } from './sql';
@@ -33,6 +34,18 @@ export type LeadStatus =
   | 'opted_out'
   | 'expired';
 
+/**
+ * The Call column - T23, `AUTO-CALLS.md`: where the robot's call to the lead
+ * stands. How its script ended (`calls.script_result`); `calling` while it has
+ * no result yet; `unknown` for one with no result an hour on - its end never
+ * reached us, as no robot call lasts that long. Null for a lead the robot has
+ * not called.
+ */
+export type LeadCall = CallResult | 'calling' | 'unknown';
+
+/** What `?call=` may ask for: a value of the column, or `none` - not called. */
+export type LeadCallFilter = LeadCall | 'none';
+
 export interface AdminLeadRow {
   id: number;
   phone: string;
@@ -52,11 +65,15 @@ export interface AdminLeadRow {
   tier: string | null;
   lastActivityAt: string | null;
   lastActivityDirection: 'inbound' | 'outbound' | null;
+  /** The robot's call, or null when it has not called the lead. */
+  call: LeadCall | null;
 }
 
 export interface AdminLeadQuery {
   status?: LeadStatus | 'all';
   source?: string[];
+  /** Absent: every lead, called or not. */
+  call?: LeadCallFilter;
   since?: Date;
   q?: string;
   page?: number;
@@ -131,6 +148,33 @@ const STATUS_SQL = `
   END
 `;
 
+/**
+ * The Call column for the lead whose id is `leadId` - one look-up, by the
+ * index that keeps one automated call per lead (`calls_one_automated_per_lead`,
+ * migration 014). The newest, should a second try ever be allowed. A call
+ * Twilio never placed (`not_placed` - our account's problem) is not the
+ * lead's: with only those, the lead reads Not called.
+ *
+ * A call ends with a result: settled at its end if the script never reached
+ * one (`settleAutomatedCall`), or `unanswered` when Twilio refused the lead's
+ * number. One without is still going - ringing, asking, putting
+ * a "yes" through, on hold - never for long: the hold line's own safety stop
+ * is 10 minutes. An hour on, its end never reached us.
+ */
+function robotCallSql(leadId: string): string {
+  return `(
+    SELECT CASE
+             WHEN ac.script_result IS NOT NULL THEN ac.script_result
+             WHEN ac.created_at > now() - interval '1 hour' THEN 'calling'
+             ELSE 'unknown'
+           END
+    FROM calls ac
+    WHERE ac.lead_id = ${leadId} AND ac.direction = 'automated' AND ac.script_result IS DISTINCT FROM 'not_placed'
+    ORDER BY ac.id DESC
+    LIMIT 1
+  )`;
+}
+
 function buildFilters(query: AdminLeadQuery): { sql: string; values: unknown[] } {
   const clauses: string[] = [];
   const values: unknown[] = [];
@@ -148,6 +192,11 @@ function buildFilters(query: AdminLeadQuery): { sql: string; values: unknown[] }
   if (query.since) {
     values.push(query.since);
     clauses.push(`${RECEIVED} >= $${values.length}`);
+  }
+
+  if (query.call) {
+    values.push(query.call);
+    clauses.push(`COALESCE(${robotCallSql('l.id')}, 'none') = $${values.length}`);
   }
 
   if (query.q) {
@@ -178,9 +227,9 @@ function buildFilters(query: AdminLeadQuery): { sql: string; values: unknown[] }
  * - The total was a third pass that always came to a number the counts already
  *   held - the chosen tab's, or all of them. It is read from them now.
  * - The page picks its rows first - filter, order, limit - and only then joins
- *   each row's last message and the question it is on: fifty look-ups, not one
- *   per lead in the table. With no status filter and the index from migration
- *   013 it reads just those fifty leads.
+ *   each row's last message, the question it is on and the robot's call (T23):
+ *   fifty look-ups, not one per lead in the table. With no status filter and
+ *   the index from migration 013 it reads just those fifty leads.
  *
  * Timed against 50,000 leads: docs/ADMIN-LEADS.md, "How fast it is".
  */
@@ -210,7 +259,8 @@ export async function listAdminLeads(query: AdminLeadQuery): Promise<AdminLeadPa
     `SELECT p.*,
             COALESCE(m.received_at, m.created_at) AS last_activity_at,
             m.direction AS last_activity_direction,
-            fq.key AS question_key, fq.heading AS question_heading
+            fq.key AS question_key, fq.heading AS question_heading,
+            ${robotCallSql('p.id')} AS robot_call
      FROM (
        SELECT l.id, l.phone, l.first_name, l.last_name, l.source,
               ${RECEIVED} AS received_at,
@@ -258,6 +308,7 @@ export async function listAdminLeads(query: AdminLeadQuery): Promise<AdminLeadPa
       tier: r.score > 0 ? r.tier : null,
       lastActivityAt: r.last_activity_at?.toISOString() ?? null,
       lastActivityDirection: r.last_activity_direction,
+      call: r.robot_call ?? null,
     })),
     total,
     counts,

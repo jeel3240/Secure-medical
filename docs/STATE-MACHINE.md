@@ -151,7 +151,7 @@ Configuration shows each text and its segment count.
 | `core/answers.ts` | `matchChoice()` - a reply against one question's choices |
 | `db/flows.ts` | Reads a flow; starts a conversation in the active one |
 | `api/reply-flow.ts` | Loads the conversation and its flow, runs `step`, saves the answer row, sends |
-| `core/state-machine.test.ts`, `core/answers.test.ts` | 83 tests: every branch of the antibiotics flow, every rule below, and a five-question flow run on the same code |
+| `core/state-machine.test.ts`, `core/answers.test.ts` | 86 tests: every branch of the antibiotics flow, every rule below, and a five-question flow run on the same code |
 | `api/__tests__/webhooks.test.ts` | 53, including the flow advancing through the webhook, flagging a reply for a person, and a reply before our text |
 | `scripts/flows-live-check.ts` | Against a real Postgres: a second flow added as rows only, walked end to end |
 
@@ -243,8 +243,9 @@ Checked in this order. The first match wins.
 ### 1. Opt-out - any status
 
 The reply is an opt-out if the payload's `optOut` is true, or the whole message
-is one of STOP, STOPALL, UNSUBSCRIBE, CANCEL, END, QUIT, REVOKE, OPTOUT (case and
-trailing punctuation ignored). This is already implemented in the webhook.
+is one of STOP, STOPALL, UNSUBSCRIBE, CANCEL, END, QUIT, REVOKE, OPTOUT (case,
+surrounding spaces and a trailing `.`, `!` or `,` ignored). This is already
+implemented in the webhook.
 
 - Add the phone to `dnc_list`, reason `sms_stop`.
 - If the conversation is `open`, set it `suppressed`. Other statuses keep their
@@ -272,6 +273,10 @@ trailing punctuation ignored). This is already implemented in the webhook.
 | Our app | Stores the STOP message on the lead, so the history shows it |
 | Our app | Sends nothing |
 
+The same end state - the number blocked, an `open` conversation `suppressed`
+- comes from an agent's DNC outcome (`AGENT-WORKSPACE.md`) and from a lead
+saying stop on the automated call (`AUTO-CALLS.md`, since 2026-10-19).
+
 The lead row stays. What is blocked is the **phone number**: `dnc_list` is keyed
 on phone, so the block holds whatever lead or conversation the number later
 belongs to. From then on:
@@ -296,8 +301,9 @@ implemented.
 ### Which replies need a person - Decided by Jeel, 2026-09-28
 
 `leads.has_unread_inbound` means *a person has to read this*, and it is set only
-when the questions cannot handle a reply: rule 2 above, and rule 2b below - a
-message to an agent who took the conversation over. `step()` returns this as
+when the questions cannot handle a reply: rule 2 above, rule 2b below - a
+message to an agent who took the conversation over - and rule 2d, a message
+after a phone call took it over (2026-10-27). `step()` returns this as
 `needsPerson`, so the rule lives beside the others; a lead with no conversation
 at all is flagged too, since nothing handles their message either - and so is
 one whose conversation is on a question its flow does not have.
@@ -382,8 +388,9 @@ nothing else changes, nothing is sent. `api/reply-flow.ts`,
 `repliedBeforeOurText`.
 
 - **Never for an opt-out.** STOP works whatever state anything is in.
-- **Only while the questions are running.** A finished conversation, or one an
-  agent took over, is handled by rules 2 and 2b as before.
+- **Only while the questions are running.** A finished conversation, or one
+  an agent's text or a phone call took over, is handled by rules 2, 2b and 2d
+  as before.
 - **If our text has been unsent for more than two minutes** it is not on its
   way - it failed, or was never tried - and the lead is waiting on something
   that will not come. Their reply is flagged for a person (`has_unread_inbound`,
@@ -395,6 +402,55 @@ nothing else changes, nothing is sent. `api/reply-flow.ts`,
 **What it cannot catch:** a reply sent a few seconds after our text left,
 while that text was still on its way to the phone. Nothing on our side can
 tell that from a fast answer.
+
+### 2d. A phone call has taken the conversation over - Decided by Jeel, 2026-10-27
+
+Found in the T25 doc check (`AUTO-CALLS.md`): the robot calls only leads who
+never replied, so their conversation is still `open` on Q1 - and a "yes" on
+the call, the link it texts, or a call back that nobody answers changed
+nothing in it. So a "thanks" to the link text, or "ok call me at 3" to the
+missed-call text, was read as an answer to Q1 and got "Sorry, please reply 1
+for Yes or 2 for No." back - and a second one sent the lead to Needs review.
+
+**The rule:** once the lead has **answered the robot's call** - a choice kept:
+yes, no, or yes to the link - or **rung our number**, answered or not, the
+questions stop, as after an agent's text (2b): a reply is stored, flagged for a
+person (`has_unread_inbound`, the queue's Inbound reply), nothing is scored and
+nothing is sent. The score so far stands.
+
+- **Worked out, never stored** - `phoneTookOverAtSql` in `db/lead-state.ts`:
+  the first such answer (`call_answers`, `result = 'choice'`) or call
+  (`calls`, `direction = 'inbound'`) since the conversation began. Those rows
+  are the record; nothing new is written. `api/reply-flow.ts` reads it in the
+  same locked statement as the conversation, and `step()` takes it as
+  `phoneTookOverAt`.
+- **Only a call since this conversation began.** A call to an earlier one stops
+  nothing in a new one.
+- **Not a call where nothing was understood** - silence, or an unclear answer
+  and no choice: the lead has not told us anything, and the questions go on.
+  A stop said on the call ends the conversation itself (`suppressed`).
+- **Below rule 1**, like 2b: STOP works whatever happened before.
+- **Below 2b**: once an agent has texted, the header and the badges name the
+  agent's text, whichever came first; the timeline shows the phone call as
+  well when it came before the text.
+- **Shown** on the lead's page while the questions would otherwise be running:
+  "Phone call - questions stopped" beside the other badges, "Stopped at Q1 by
+  a call" for Questions in the header, and "Phone call - automated questions
+  stopped" on the timeline (`phoneStoppedQuestionsAtSql`) - never for a
+  conversation that completed or went to review, which none can do after such
+  a call (the replies that would take it there are no longer read), nor for
+  one that was stopped (`suppressed`), before the call or after. The SMS
+  compose box no longer warns that sending will stop the questions.
+
+Not covered: an agent's own call that the lead answers. It goes to leads who
+have finished, as a rule; an agent who reaches one mid-questions texts, which
+is 2b.
+
+`core/state-machine.test.ts`; `scripts/agent-sms-live-check.ts` proves it
+through the real reply path - answered the robot, then "thanks" and "1";
+nothing understood on the call, then "1" answered; rang us, then a text; a
+call before a new conversation; a lead who finished, then rang - and the
+end-to-end script, through the webhook, with the link text (T25).
 
 ### 3. A valid answer to the current question
 
@@ -658,12 +714,14 @@ failed opener".
 
 ## The missed-call text
 
-Added 2026-10-01 with incoming calls - `TWILIO.md`, "A missed call". It is the
-one automated text that is not part of this flow, so its rules are stated here
-once:
+Added 2026-10-01 with incoming calls - `TWILIO.md`, "A missed call". One of
+two automated texts outside this flow; the other is the link a lead said yes
+to on the automated call (T14, `AUTO-CALLS.md`), which follows the same rules
+below except **when** (that yes) and its words (the script's `link_text`). So
+they are stated here once:
 
 - **When.** A lead rings our number and nobody answers. `message_missed_call`
-  from `settings` is sent, once per call (`db/missed-call-text.ts`).
+  from `settings` is sent, once per call (`db/lead-texts.ts`).
 - **To whom.** Any lead, whatever their conversation's status - `open`,
   `completed`, `review`, `expired`, or `suppressed` with the block since
   released. Only a live `dnc_list` row stops it, through the same check every
@@ -675,12 +733,11 @@ once:
   - conversation ended - stored and flagged for a person (rule 2). This is the
     usual case and the right outcome: "ok, call me after 5" reaches an agent;
   - conversation taken over by an agent - stored and flagged (rule 2b);
-  - conversation still `open` - **read as an answer to the current question.**
-    "ok thanks" gets the clarification, and a second such reply sends the
-    conversation to review; a bare "1" is scored. Not handled specially. It
-    needs a lead who is mid-questions *and* was rung by an agent *and* rang
-    back - unusual, since agents call leads who have finished - and the
-    result, at worst, is a lead in Needs review, which a person reads.
+  - conversation still `open` - **stored and flagged for a person, since
+    2026-10-27 (rule 2d)**: a missed-call text follows a call from the lead,
+    and the link text a "yes" on the robot's call, and either stops the
+    questions. Until then it was read as an answer to the current question -
+    "ok thanks" got Q1's "Sorry, please reply 1 for Yes or 2 for No." back.
 
 ---
 
@@ -726,7 +783,7 @@ reads as a fresh lead in the queue rather than one received months ago.
 "Seen before" in the queue is computed: the lead has an earlier conversation.
 
 **Depends on:** EZ Texting showing a re-delivered lead to the poller at all.
-POLLER.md, "Returning leads", explains why that is unverified and how to check.
+POLLER.md, "Not done yet", explains why that is unverified and how to check.
 
 ---
 
@@ -779,6 +836,8 @@ All against the pure function, no database:
 - STOP after `completed` → number blocked, status stays `completed`.
 - Any reply after `completed`, `review`, `expired` or `suppressed` → nothing
   sent, conversation unchanged, flagged for a person.
+- Any reply after an agent's text (2b) or a phone call (2d) → the same; STOP
+  still blocks the number.
 - `responded` is awarded once only, however many replies arrive.
 - A flow with five questions, defined in the test, runs on the same code.
 

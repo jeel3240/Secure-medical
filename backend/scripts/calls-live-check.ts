@@ -17,7 +17,7 @@
  * Re-running needs a fresh database: DROP and re-migrate.
  */
 import { pool } from '../src/db/pool';
-import { finishCall, recordAnsweredBy, startCall, startIncomingCall } from '../src/db/calls';
+import { finishCall, recordAnsweredBy, startCall, startIncomingCall, takeIncomingCall } from '../src/db/calls';
 import { saveRecording } from '../src/db/transcripts';
 import * as transcriptClient from '../src/integrations/twilio-transcripts';
 import { advanceTranscripts } from '../src/worker/transcripts';
@@ -528,6 +528,237 @@ async function main(): Promise<void> {
     const nobody = await makeLead('+15550000619', 'RangNobody', null);
     await startIncomingCall({ callSid: 'IN-25', fromPhone: '+15550000619' });
     check('nor when the call rang nobody: it waits in the queue', (await pool.query(`SELECT 1 FROM callbacks WHERE lead_id = $1`, [nobody])).rowCount, 0);
+  }
+
+  console.log('\nautomated calls (T4): the table holds them, and nothing takes them for an agent\'s work');
+  {
+    // Placed the way the server will place one: no agent until a person takes it.
+    const automated = (leadId: number, sid: string, agentId: number | null = null) =>
+      pool.query(
+        `INSERT INTO calls (lead_id, agent_id, twilio_call_sid, started_at, direction) VALUES ($1, $2, $3, now(), 'automated')`,
+        [leadId, agentId, sid]
+      );
+    /** The constraint a statement broke, or 'accepted'. */
+    const refusedBy = async (sql: string, params: unknown[]) => {
+      try {
+        await pool.query(sql, params);
+        return 'accepted';
+      } catch (err) {
+        return (err as { constraint?: string }).constraint ?? (err as Error).message;
+      }
+    };
+    const status = async (id: number) => (await listAdminLeads({ pageSize: 200 })).leads.find((l) => l.id === id)?.status;
+    const missed = async (id: number) => (await getLeadDetail(id))?.flags.missedCall;
+
+    const robotOnly = await makeLead('+15550000701', 'RobotOnly', null);
+    await automated(robotOnly, 'AUTO-1');
+    check('an automated call with no agent is accepted', (await callRows(robotOnly)).length, 1);
+    check(
+      "an agent's call with no agent is still refused",
+      await refusedBy(`INSERT INTO calls (lead_id, twilio_call_sid, direction) VALUES ($1, 'CA-NOAGENT', 'outbound')`, [robotOnly]),
+      'calls_outbound_has_agent'
+    );
+    check(
+      'a second automated call to the same lead is refused - one per lead',
+      await refusedBy(`INSERT INTO calls (lead_id, twilio_call_sid, direction) VALUES ($1, 'AUTO-1B', 'automated')`, [robotOnly]),
+      'calls_one_automated_per_lead'
+    );
+    check(
+      'a script result only on an automated call',
+      await refusedBy(`UPDATE calls SET script_result = 'link_sent' WHERE twilio_call_sid = 'CA-1'`, []),
+      'calls_script_result_automated'
+    );
+    check(
+      'and only one of the results the script can end in',
+      await refusedBy(`UPDATE calls SET script_result = 'maybe' WHERE twilio_call_sid = 'AUTO-1'`, []),
+      'calls_script_result_check'
+    );
+
+    const finished = await finishCall({ callSid: 'AUTO-1', outcome: 'answered', durationSec: 40 });
+    check('its end is recorded like any call', [finished.recorded, (await callRows(robotOnly))[0].outcome], [true, 'answered']);
+    check('answered by the lead, but no person on it: the lead is not Working', await status(robotOnly), 'ready');
+    const entry = (await getTimeline(robotOnly))!.find((e) => e.kind === 'call');
+    check('it is on the timeline, as automated, with no agent', [entry?.detail.direction, entry?.author], ['automated', null]);
+
+    const taken = await makeLead('+15550000702', 'TakenBySam', null);
+    await automated(taken, 'AUTO-2', sam);
+    await finishCall({ callSid: 'AUTO-2', outcome: 'answered', durationSec: 95 });
+    check('once a person took it, it is their work: Working', await status(taken), 'working');
+    const back = await startIncomingCall({ callSid: 'IN-AUTO-2', fromPhone: '+15550000702' });
+    check('and when the lead calls back, the agent who took it rings', back.kind === 'ring' && back.agentId, sam);
+
+    const nobodyTook = await makeLead('+15550000703', 'NobodyTook', null);
+    await automated(nobodyTook, 'AUTO-3');
+    await finishCall({ callSid: 'AUTO-3', outcome: 'answered', durationSec: 30 });
+    const notRung = await startIncomingCall({ callSid: 'IN-AUTO-3', fromPhone: '+15550000703' });
+    check('a robot call nobody took is not "the last agent who called": nobody to ring', notRung.kind, 'missed');
+
+    // A lead who rang us and was missed, then got the robot's call.
+    const owed = await makeLead('+15550000704', 'OwedACallRobot', null);
+    await startIncomingCall({ callSid: 'IN-AUTO-4', fromPhone: '+15550000704' });
+    check('their missed call is open', await missed(owed), true);
+    await automated(owed, 'AUTO-4');
+    check('a robot call under way does not hide it', await missed(owed), true);
+    await finishCall({ callSid: 'AUTO-4', outcome: 'answered', durationSec: 20 });
+    check('nor does one the lead answered with nobody taking it: still owed', await missed(owed), true);
+
+    const returned = await makeLead('+15550000705', 'ReturnedByRobot', null);
+    await startIncomingCall({ callSid: 'IN-AUTO-5', fromPhone: '+15550000705' });
+    await automated(returned, 'AUTO-5', maya);
+    check('a transfer a person is on, under way, counts as getting back to them', await missed(returned), false);
+    await finishCall({ callSid: 'AUTO-5', outcome: 'answered', durationSec: 60 });
+    check('and settles it once it ends', await missed(returned), false);
+
+    const machine = await makeLead('+15550000706', 'Voicemail', null);
+    await automated(machine, 'AUTO-6');
+    await finishCall({ callSid: 'AUTO-6', outcome: 'answered', durationSec: 25 });
+    check("the voicemail verdict is kept for an automated call", await recordAnsweredBy({ callSid: 'AUTO-6', answeredBy: 'machine' }), true);
+    const { rows: vm } = await pool.query(`SELECT outcome, answered_by FROM calls WHERE twilio_call_sid = 'AUTO-6'`);
+    check('but a verdict after it ended was never acted on: still answered (T18)', vm, [{ outcome: 'answered', answered_by: 'machine' }]);
+
+    // T18: an automated call is voicemail only when the verdict took it over.
+    const left = await makeLead('+15550000707', 'MessageLeft', null);
+    await automated(left, 'AUTO-7');
+    await recordAnsweredBy({ callSid: 'AUTO-7', answeredBy: 'machine' });
+    await pool.query(`UPDATE calls SET script_result = 'voicemail_left' WHERE twilio_call_sid = 'AUTO-7'`);
+    await finishCall({ callSid: 'AUTO-7', outcome: 'answered', durationSec: 25 });
+    const ignored = await makeLead('+15550000708', 'WronglyAMachine', null);
+    await automated(ignored, 'AUTO-8');
+    await recordAnsweredBy({ callSid: 'AUTO-8', answeredBy: 'machine' });
+    await finishCall({ callSid: 'AUTO-8', outcome: 'answered', durationSec: 40 });
+    const faxed = await makeLead('+15550000709', 'Fax', null);
+    await automated(faxed, 'AUTO-9');
+    await recordAnsweredBy({ callSid: 'AUTO-9', answeredBy: 'fax' });
+    await pool.query(`UPDATE calls SET script_result = 'unanswered' WHERE twilio_call_sid = 'AUTO-9'`);
+    await finishCall({ callSid: 'AUTO-9', outcome: 'answered', durationSec: 3 });
+    const { rows: ends } = await pool.query(
+      `SELECT twilio_call_sid AS sid, outcome FROM calls WHERE twilio_call_sid IN ('AUTO-7', 'AUTO-8', 'AUTO-9') ORDER BY twilio_call_sid`
+    );
+    check('the message left: voicemail; a machine verdict the call ignored - a person: answered; a fax hung up on: voicemail', ends, [
+      { sid: 'AUTO-7', outcome: 'voicemail' },
+      { sid: 'AUTO-8', outcome: 'answered' },
+      { sid: 'AUTO-9', outcome: 'voicemail' },
+    ]);
+  }
+
+  console.log('\na lead calling back that nobody holds or has called: everyone free rings (T19)');
+  {
+    const ann = await makeUser('Ann');
+    const ben = await makeUser('Ben');
+    const cal = await makeUser('Cal');
+    const dee = await makeUser('Dee');
+    const open = `ringable_until = now() + interval '2 minutes'`;
+    await pool.query(`UPDATE users SET taking_calls = true, ${open} WHERE id = ANY($1)`, [[ann, ben, cal]]);
+    await pool.query(`UPDATE users SET ${open} WHERE id = $1`, [dee]);
+    const other = await makeLead('+15550000901', 'SomeoneElse', null);
+    await pool.query(
+      `INSERT INTO calls (lead_id, agent_id, twilio_call_sid, direction, started_at) VALUES ($1, $2, 'CA-T19-BUSY', 'outbound', now())`,
+      [other, cal]
+    );
+
+    const lead = await makeLead('+15550000902', 'Returning', null);
+    check(
+      'automated calls off: missed at once, as before',
+      (await startIncomingCall({ callSid: 'IN-T19-0', fromPhone: '+15550000902' })).kind,
+      'missed'
+    );
+    const rung = await startIncomingCall({ callSid: 'IN-T19-1', fromPhone: '+15550000902', ringFree: true });
+    check('on: everyone free rings - not the switch off, not someone on a call', rung, {
+      kind: 'group',
+      agentIds: [ann, ben],
+      lead: { id: lead, name: 'Returning', phone: '+15550000902' },
+    });
+    const callOf = async (sid: string) =>
+      (
+        await pool.query(
+          `SELECT agent_id, outcome, ended_at IS NOT NULL AS ended FROM calls WHERE twilio_call_sid = $1 AND direction = 'inbound'`,
+          [sid]
+        )
+      ).rows;
+    check('the call is nobody\'s while it rings', await callOf('IN-T19-1'), [{ agent_id: null, outcome: null, ended: false }]);
+    const incoming = await pool.query(
+      `SELECT detail->>'ring' AS ring, (detail->>'rung')::int AS rung FROM activity_log WHERE action = 'call.incoming' AND detail->>'callSid' = 'IN-T19-1'`
+    );
+    check('recorded as a ring to everyone free', incoming.rows, [{ ring: 'group', rung: 2 }]);
+    const again = await startIncomingCall({ callSid: 'IN-T19-1', fromPhone: '+15550000902', ringFree: true });
+    check('a retried webhook rings them again, one call', [again.kind, (await callOf('IN-T19-1')).length], ['group', 1]);
+
+    // Two accepts at once: Ann's browser picked the lead up first, Ben's leg
+    // reached /incoming/claim first - the lead follows the call.
+    await pool.query(`UPDATE leads SET assigned_to = $2, assigned_at = now() WHERE id = $1`, [lead, ann]);
+    check('Ben accepts first: his, the lead taken over from Ann', await takeIncomingCall('IN-T19-1', ben), {
+      ok: true,
+      leadId: lead,
+      tookOverFrom: ann,
+    });
+    check('the call is his - he is on a call now', (await callOf('IN-T19-1'))[0].agent_id, ben);
+    check('and so is the lead', (await pool.query(`SELECT assigned_to FROM leads WHERE id = $1`, [lead])).rows[0].assigned_to, ben);
+    const picked = await pool.query(
+      `SELECT actor_id, detail->>'via' AS via, (detail->>'tookOverFrom')::int AS from_id FROM activity_log WHERE action = 'lead.picked_up' AND lead_id = $1`,
+      [lead]
+    );
+    check('picked up through the call back, from Ann', picked.rows, [{ actor_id: ben, via: 'call_back', from_id: ann }]);
+    const asked = await startIncomingCall({ callSid: 'IN-T19-1', fromPhone: '+15550000902', ringFree: true });
+    check('Twilio asking again once he has it: him, alone', [asked.kind, asked.kind === 'ring' && asked.agentId], ['ring', ben]);
+    const taken = await pool.query(
+      `SELECT actor_id, (detail->>'callSid') AS sid FROM activity_log WHERE action = 'call.taken' AND lead_id = $1`,
+      [lead]
+    );
+    check('recorded as taken, his doing', taken.rows, [{ actor_id: ben, sid: 'IN-T19-1' }]);
+    check('the same again changes nothing', await takeIncomingCall('IN-T19-1', ben), { ok: true, leadId: lead, tookOverFrom: null });
+    check('one record still', (await pool.query(`SELECT count(*)::int AS n FROM activity_log WHERE action = 'call.taken' AND lead_id = $1`, [lead])).rows[0].n, 1);
+    check('Ann, after him: refused', await takeIncomingCall('IN-T19-1', ann), { ok: false, reason: 'taken' });
+    check('they talked: answered, his', await finishCall({ callSid: 'IN-T19-1', outcome: 'answered', durationSec: 42 }), {
+      recorded: true,
+      missedLeadId: null,
+    });
+    check('the call ended, his', await callOf('IN-T19-1'), [{ agent_id: ben, outcome: 'answered', ended: true }]);
+    check('a call already over cannot be taken', await takeIncomingCall('IN-T19-1', ann), { ok: false, reason: 'not_found' });
+    check('Twilio asking again about a call that is over: nobody rung, not texted again', await startIncomingCall({ callSid: 'IN-T19-1', fromPhone: '+15550000902', ringFree: true }), {
+      kind: 'missed',
+      leadId: lead,
+      firstReport: false,
+    });
+    await pool.query(`UPDATE leads SET assigned_to = NULL, assigned_at = NULL WHERE id = $1`, [lead]);
+    check('nor one that is not a lead\'s call to us', await takeIncomingCall('CA-T19-BUSY', ann), { ok: false, reason: 'not_found' });
+
+    await startIncomingCall({ callSid: 'IN-T19-2', fromPhone: '+15550000902', ringFree: true });
+    check('a deactivated account cannot take it', await takeIncomingCall('IN-T19-2', gone), { ok: false, reason: 'inactive' });
+    check('nobody took it: missed, and the lead is to be texted', await finishCall({ callSid: 'IN-T19-2', outcome: 'no_answer', durationSec: 0 }), {
+      recorded: true,
+      missedLeadId: lead,
+    });
+    check('missed, nobody\'s', await callOf('IN-T19-2'), [{ agent_id: null, outcome: 'missed', ended: true }]);
+    check(
+      'no callback booked - nobody was its agent; the queue shows the missed call',
+      (await pool.query(`SELECT count(*)::int AS n FROM callbacks WHERE lead_id = $1`, [lead])).rows[0].n,
+      0
+    );
+
+    const deesLead = await makeLead('+15550000903', 'HeldByDee', dee);
+    const own = await startIncomingCall({ callSid: 'IN-T19-3', fromPhone: '+15550000903', ringFree: true });
+    check('a lead someone holds still rings them alone, switch or not', [own.kind, own.kind === 'ring' && own.agentId], ['ring', dee]);
+    void deesLead;
+
+    // Rang everyone, then Twilio asks again with nobody free any more: the
+    // call must not stay open with nothing ringing - missed now, and texted.
+    await startIncomingCall({ callSid: 'IN-T19-5', fromPhone: '+15550000902', ringFree: true });
+    await pool.query(`UPDATE users SET ringable_until = NULL WHERE id = ANY($1)`, [[ann, ben]]);
+    check('rang everyone, asked again with nobody free: missed now, and texted', await startIncomingCall({ callSid: 'IN-T19-5', fromPhone: '+15550000902', ringFree: true }), {
+      kind: 'missed',
+      leadId: lead,
+      firstReport: true,
+    });
+    check('the call ended missed, nobody\'s', await callOf('IN-T19-5'), [{ agent_id: null, outcome: 'missed', ended: true }]);
+    check(
+      'recorded as missed, with nobody to ring',
+      (await pool.query(`SELECT detail->>'because' AS because FROM activity_log WHERE action = 'call.missed' AND detail->>'callSid' = 'IN-T19-5'`)).rows,
+      [{ because: 'no_agent' }]
+    );
+
+    const nobodyFree = await makeLead('+15550000904', 'NobodyFree', null);
+    const missed = await startIncomingCall({ callSid: 'IN-T19-4', fromPhone: '+15550000904', ringFree: true });
+    check('nobody free: missed at once, as before', missed, { kind: 'missed', leadId: nobodyFree, firstReport: true });
   }
 
   console.log(failures === 0 ? '\nall checks passed' : `\n${failures} check(s) FAILED`);

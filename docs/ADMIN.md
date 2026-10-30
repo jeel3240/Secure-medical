@@ -28,6 +28,8 @@ here is what we ask, here is what each answer is worth.
   each question, with the maximum possible.
 - The tier bands.
 - Conversation expiry, read from `settings.expiry_days` - 7.
+- The automated call's script and settings (T24) - "The automated call",
+  below.
 
 `GET /api/admin/config` returns all of it from the flow new leads get
 (`flows`, `flow_questions`, `flow_choices` - `FLOWS.md`), `settings` and
@@ -47,7 +49,8 @@ showing "there" as a name (2026-09-29).
 question; then, for every choice, its reply joined to the question that
 follows - one text, which is how it is sent; then each question's "sorry"
 text, the review text, and the text after a missed call. Seventeen for the
-antibiotics flow. Each carries a `name` ("After Q1 · Yes") and `when` ("Then
+antibiotics flow - eighteen since T24, with the automated call's link text
+last ("The automated call", below). Each carries a `name` ("After Q1 · Yes") and `when` ("Then
 Q2", "Ends the questions"), built by the server, since the list depends on the
 flow. A question is named by its key: "Q2", and "Q1-a" for a sub-question -
 "Then Q1-a", "Unclear · Q1-a" (`FLOWS.md`, "Naming a question"). The scoring
@@ -85,10 +88,56 @@ subtitle), the copy in a code font on grey, the upper-case row labels, the
 coloured tier pills, and three paragraphs of notes - each card's one caveat is
 a quiet line at its foot. The header has "Live · updated just now".
 
+**Three tabs - Jeel, 2026-10-25.** With the call script added the page was
+too long to read, so it is split, on the navy switcher the other pages use:
+
+| Tab | Cards |
+|---|---|
+| Texts | Messages, and the Settings beside it |
+| Scoring | Scoring, and the Tiers beside it |
+| Calls | Call script, and Calls beside it - "The automated call", below |
+
+Each tab keeps the page's two columns, the long list on the left. The tab is
+in the address - `/admin/config?tab=calls` - so a reload or a link keeps it;
+Texts is the plain address, and anything else reads as Texts. Only the screen
+changed: `GET /api/admin/config` still returns everything at once.
+
 **"Clarifications before review", not "Unclear replies before review".** The
 setting is 1, and it counts clarifications: the first unclear reply is
 clarified, the second goes to review. The old label read as one unclear reply
 being enough.
+
+### The automated call - T24, 2026-10-25
+
+The same page shows the robot's call (`AUTO-CALLS.md`): what it says, and the
+settings it reads. Two more cards - on the Calls tab since the page was split,
+the same day - and one more text under Messages, on Texts.
+
+| Card | Shows |
+|---|---|
+| Call script | Every line the robot says, in the order a lead can hear them, in the Messages card's own rows: each question ("Q1 · Offer", and when it is asked - "When the lead picks up", "After Q1 · No"); each answer's reply and what follows ("After Q1 · Yes" - "Then puts them through to a person"), with what picks it under it - "Key 1, or: yes, yeah, yep, …"; each question's repeat line ("Unclear · Q1"); then the lines every question shares, as the call goes on - No response, Stop (key 9 and its words), the recording notice when calls are recorded, Hold, Next in line, Place in line, Busy - and the Voicemail. The header names the script; the foot names the voice |
+| Calls | Automated calls On or Off; the hours and time zone ("11:00 AM - 5:00 PM", America/Phoenix); the days ("Monday to Friday"); the first call ("1 hour after the first text"); how long a "yes" rings people (25 seconds), and a lead on hold the person who came free (20); the hold line's safety stop (10 minutes); the confidence a spoken answer needs (0.4); and the call-back number the voicemail gives |
+| Messages | One more row, last: **Call · link**, the text a "yes" to the link sends - counted for length and segments like every other text |
+
+**The robot's own readers, not the rows** - `db/call-script.ts`:
+`loadActiveCallScript`, `readCallHours`, `readRingSeconds`,
+`readOfferRingSeconds`, `readHoldMaxSeconds`, `readMinConfidence`. A setting
+the robot cannot read shows what it uses instead - `25:00` as a start shows
+11:00 AM, as the robot calls at 11 - so the page never shows a value no call
+will use. Same reason as the rest of the page: a window on live values, not
+on what was meant.
+
+**What only the api knows** comes from `api/admin/config.ts`: whether
+automated calls are on (`AUTO_CALLS=on` and calling set up - an environment
+variable, so the card says what turns it on rather than offering to), the
+calling number (`TWILIO_PHONE_NUMBER`, which the voicemail reads out digit by
+digit - shown in place of `{callback_number}`), and whether calls are
+recorded, which is when the recording notice is said. `{place}` in the hold
+line shows as "2, 3…".
+
+No script active: the card says so, and the link text is not listed. Read-only
+like the rest: the script and its settings change by migration (015, 018-020
+so far).
 
 ## Overview (6a)
 
@@ -105,7 +154,7 @@ complex".** The page and the API now hold only what a superadmin acts on:
 | Part | Shows |
 |---|---|
 | Totals | Leads in · Replied · Completed · Closed - for Today, 7 days or 30 days, chosen on the navy switcher |
-| Agents | Per active agent: **Working now** (leads they hold), **Closed** in the period, **Due today**, **Last active** (their newest note, callback they booked, outcome, call they placed or answered, or SMS that went out) |
+| Agents | Per active user, superadmins included: **Working now** (leads they hold), **Closed** in the period, **Due today**, **Last active** (their newest note, callback they booked, outcome, call they placed or answered - a transfer they took from an automated call included, never one nobody took (T4) - or SMS that went out) |
 | System | Database, EZ Texting sync, the expiry sweep, sending and calling - each OK or Degraded - and incoming replies, which shows its last reply with no verdict. Calling is Degraded when the phone number or the TwiML App no longer points at this server (2026-10-02), and reads "not set up", with no verdict, where calling is off. From the health endpoint |
 
 **Every number counts what happened in the period - Jeel, 2026-09-28, "i want
@@ -186,9 +235,9 @@ added it": `dnc_list` has no such column; the agent behind a DNC outcome is in
 the activity log (`AUDIT.md`).
 
 Read-only, and there is no manual add (Jeel, 2026-09-23): a number reaches the
-list through an agent's DNC disposition, an SMS STOP, or an EZ Texting opt-out
-found by the poller. `AGENT-WORKSPACE.md` has the disposition path,
-`STATE-MACHINE.md` the SMS ones.
+list through an agent's DNC disposition, an SMS STOP, an EZ Texting opt-out
+found by the poller, or a stop said on the automated call (T13). `AGENT-WORKSPACE.md` has the disposition path,
+`STATE-MACHINE.md` the SMS ones, `AUTO-CALLS.md` the call's.
 
 No delete, by design - the design brief calls it a compliance record. A number
 can still be released by the lead texting START, which keeps the row and stamps
@@ -198,7 +247,9 @@ who is actually blocked.
 
 **The page matches Admin > Leads - Jeel, 2026-09-28.** One card: the queue's
 navy switcher for All / Blocked / Released beside the search, then the table -
-the lead's name with the number under it, the reason, when it was added, and
+the lead's name with the number under it, the reason in words - Texted STOP,
+Opted out on EZ Texting, Agent set DNC, and since T13 Said stop on automated
+call - when it was added, and
 the state as an icon and words: **Blocked** in red with a barred circle,
 **Released** muted with a tick and "Texted START · date" under it. A number
 with no lead reads "No lead". A row with a lead opens its timeline. The blue
@@ -232,4 +283,11 @@ add without Jeel saying so. Not built.
 database: the config against the antibiotics flow seeded by `012_flows.sql` (tiers
 and expiry from `001_init.sql`) and against an edited choice, the overview's period windows, totals, per-agent aggregates and
 activity feed,
-and the DNC list's states, search escaping and lead-less rows.
+and the DNC list's states, search escaping and lead-less rows. Since T24 also
+the call script and its settings: every line in order and word for word
+against the script the robot uses (`core/call-script-fixtures.ts`, itself held
+to the database by `call-script-live-check`), each question's and answer's
+name and when, keys and words, the link text under Messages, the settings
+off and on, the recording notice only on recorded calls, a setting changed
+by migration, one the robot cannot read, and no script active - 77 checks as
+of 2026-10-25.

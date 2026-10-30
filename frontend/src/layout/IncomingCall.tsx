@@ -5,11 +5,11 @@ import { getLead, getTimeline, type LeadDetail, type TimelineEntry } from '../ap
 import { useAuth } from '../auth/store';
 import { callClock } from '../lib/call-state';
 import { askToNotify, notifyIncomingCall } from '../lib/call-notification';
-import { callerContext } from '../lib/caller-context';
+import { callerContext, transferContext } from '../lib/caller-context';
 import { formatPhone, shortName } from '../lib/format';
 import { useIncomingCall } from '../lib/incoming-call';
 import { canRing, startRinging } from '../lib/ringtone';
-import type { Caller } from '../lib/incoming-state';
+import type { Caller, RingKind } from '../lib/incoming-state';
 import { useSecond } from '../lib/useSecond';
 import { CallBar, initials } from '../pages/workspace/CallBar';
 import { questionsLabel } from '../pages/workspace/LeadHeader';
@@ -36,7 +36,11 @@ import { questionsLabel } from '../pages/workspace/LeadHeader';
  *   missed    a small notice in the same corner: "Missed call · Leo M. ·
  *             Rang for 20s", with Call back. It does not say the lead was
  *             texted: a blocked number, or EZ Texting refusing, means they
- *             were not
+ *             were not. Never for a ring several people got (T11): it clears
+ *             quietly, since someone else took it or it went on elsewhere
+ *
+ * A transfer from the automated call (T11) says so in place of "Calling
+ * back": "Transfer · said yes to the offer".
  *
  * Mounted once, in the app shell, and it is also what makes this browser
  * ringable: it starts listening when someone is signed in and stops when they
@@ -110,6 +114,7 @@ export function IncomingCall() {
       <RingingCard
         caller={caller}
         since={state.since}
+        kind={state.kind}
         onDecline={decline}
         // Opened once the lead is theirs, so the page arrives with its actions
         // on rather than asking them to pick it up mid-call.
@@ -181,11 +186,13 @@ function useCallerFacts(leadId: number): { lead: LeadDetail | null; entries: Tim
 function RingingCard({
   caller,
   since,
+  kind,
   onAccept,
   onDecline,
 }: {
   caller: Caller;
   since: number;
+  kind: RingKind;
   onAccept: () => void;
   onDecline: () => void;
 }) {
@@ -196,7 +203,12 @@ function RingingCard({
   const name = shownName(caller);
   const firstName = caller.name.trim().split(/\s+/)[0] || 'the lead';
   const tier = lead?.conversation?.tier ?? null;
-  const context = entries && me ? callerContext(entries, me.name, now) : null;
+  // A transfer is a lead who just said yes, not one returning a call.
+  const context = kind.transfer
+    ? transferContext(kind.transfer.step)
+    : entries && me
+      ? callerContext(entries, me.name, now)
+      : null;
   const lastAnswer = lead?.chips[lead.chips.length - 1];
   const mine = Boolean(lead?.claimedBy && me && lead.claimedBy.id === me.id);
 

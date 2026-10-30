@@ -1,9 +1,9 @@
-import type { CreateUserInput, Role, UpdateUserInput, UserRow, UserStore } from '../api/users/types';
+import type { CreateUserInput, Role, TakingCallsWhy, UpdateUserInput, UserRow, UserStore } from '../api/users/types';
 import { EmailTakenError } from '../api/users/types';
 import { pool } from './pool';
 
 const COLUMNS = `id, email, name, role, password_hash, is_active, must_change_password,
-  session_version, last_login_at, created_at`;
+  session_version, last_login_at, created_at, taking_calls, taking_calls_why`;
 
 const UNIQUE_VIOLATION = '23505';
 
@@ -18,6 +18,8 @@ interface DbUser {
   session_version: number;
   last_login_at: Date | null;
   created_at: Date;
+  taking_calls: boolean;
+  taking_calls_why: TakingCallsWhy | null;
 }
 
 function toUserRow(row: DbUser): UserRow {
@@ -32,6 +34,8 @@ function toUserRow(row: DbUser): UserRow {
     sessionVersion: row.session_version,
     lastLoginAt: row.last_login_at,
     createdAt: row.created_at,
+    takingCalls: row.taking_calls,
+    takingCallsWhy: row.taking_calls_why,
   };
 }
 
@@ -81,7 +85,16 @@ export const pgUserStore: UserStore = {
     if (patch.isActive !== undefined) add('is_active', patch.isActive);
     if (patch.passwordHash !== undefined) add('password_hash', patch.passwordHash);
     if (patch.mustChangePassword !== undefined) add('must_change_password', patch.mustChangePassword);
-    if (patch.bumpSession) sets.push('session_version = session_version + 1');
+    // Ending every session also ends being ringable (T9, db/presence.ts): a
+    // signed-out or deactivated browser must not be rung for a transfer.
+    if (patch.bumpSession) sets.push('session_version = session_version + 1', 'ringable_until = NULL');
+    if (patch.takingCalls !== undefined) {
+      values.push(patch.takingCalls.on);
+      const on = `$${values.length}`;
+      // In SET, `taking_calls` still reads the old value: the time moves only on a change.
+      sets.push(`taking_calls_at = CASE WHEN taking_calls <> ${on} THEN now() ELSE taking_calls_at END`, `taking_calls = ${on}`);
+      add('taking_calls_why', patch.takingCalls.why);
+    }
 
     values.push(id);
     const { rows } = await pool.query<DbUser>(

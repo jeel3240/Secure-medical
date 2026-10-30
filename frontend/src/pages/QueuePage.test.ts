@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { answersText, answersTitle } from './QueuePage';
+import { answersText, answersTitle, orderText } from './QueuePage';
 
 const answers = [
   { key: 'q1', heading: 'Requested info', label: 'Yes' },
@@ -20,5 +20,15 @@ describe('a lead\'s answers in the queue', () => {
   it('are a hyphen when nothing has been answered', () => {
     expect(answersText([])).toBe('-');
     expect(answersTitle([])).toBeUndefined();
+  });
+});
+
+describe('the order, as the page states it', () => {
+  it('a "yes" nobody took first, while automated calls are on - T22', () => {
+    expect(orderText(true)).toBe('Missed transfers first, then highest score, then newest.');
+  });
+
+  it('otherwise as before: there are no transfers to miss', () => {
+    expect(orderText(false)).toBe('Highest score first, then newest.');
   });
 });

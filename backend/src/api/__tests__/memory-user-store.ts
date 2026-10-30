@@ -35,6 +35,8 @@ export class MemoryUserStore implements UserStore {
       sessionVersion: 0,
       lastLoginAt: null,
       createdAt: new Date(),
+      takingCalls: false,
+      takingCallsWhy: null,
     };
     this.rows.push(row);
     return { ...row };
@@ -49,6 +51,10 @@ export class MemoryUserStore implements UserStore {
     if (patch.passwordHash !== undefined) row.passwordHash = patch.passwordHash;
     if (patch.mustChangePassword !== undefined) row.mustChangePassword = patch.mustChangePassword;
     if (patch.bumpSession) row.sessionVersion += 1;
+    if (patch.takingCalls !== undefined) {
+      row.takingCalls = patch.takingCalls.on;
+      row.takingCallsWhy = patch.takingCalls.why;
+    }
     return { ...row };
   }
 

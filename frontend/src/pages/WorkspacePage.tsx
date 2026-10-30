@@ -287,10 +287,18 @@ export function WorkspacePage() {
         {/* The queue's own words for it. A badge, like every other state of
             the lead - not a sentence across the page. */}
         {lead.flags.missedCall && <Badge tone="warning">Missed call</Badge>}
+        {/* A "yes" on the robot's call nobody took (T22): the queue's words,
+            kept here once the lead is picked up and the queue says Working. */}
+        {lead.flags.missedYes && <Badge tone="warning">Wants a call</Badge>}
         {lead.flags.needsReview && <Badge tone="warning">Needs review</Badge>}
         {lead.flags.expired && <Badge tone="muted">Expired</Badge>}
         {lead.conversation?.agentTookOverAt && (
           <Badge tone="navy">Agent handling - questions stopped</Badge>
+        )}
+        {/* The lead answered the robot's call, or rang us (2d): their texts
+            come to a person, as after an agent's text. */}
+        {lead.conversation?.phoneTookOverAt && !lead.conversation.agentTookOverAt && (
+          <Badge tone="navy">Phone call - questions stopped</Badge>
         )}
       </div>
 

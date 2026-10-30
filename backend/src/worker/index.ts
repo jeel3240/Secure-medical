@@ -1,6 +1,19 @@
-import '../config';
+import { config } from '../config';
+import { readAutoCalls, readAutoCallTestNumbers } from '../auto-calls-settings';
+import {
+  autoCallsSince,
+  closeUnplacedCalls,
+  dialRoom,
+  leadsToCall,
+  recordAutoCallsSwitch,
+  stillDue,
+  withDialLock,
+} from '../db/auto-dial';
+import { readCallHours } from '../db/call-script';
 import { pool } from '../db/pool';
+import { dialDueLeads, worthLogging, type DialDeps, type DialLook } from './auto-calls';
 import { expireStaleConversations } from './expiry';
+import { placeAutoCall } from './place-auto-call';
 import { pollOnce } from './poller';
 import { errText, log } from '../lib/log';
 import { retryFailedOpeners } from './retry-openers';
@@ -17,6 +30,48 @@ async function pollIntervalMs(): Promise<number> {
   ]);
   const seconds = rows.length > 0 ? Number(rows[0].value) : DEFAULT_POLL_INTERVAL_SECONDS;
   return (Number.isFinite(seconds) && seconds > 0 ? seconds : DEFAULT_POLL_INTERVAL_SECONDS) * 1000;
+}
+
+/**
+ * The robot placing its calls (T20, `worker/auto-calls.ts`) - only with
+ * `AUTO_CALLS` on and calling set up; null otherwise. Outside production, only
+ * the test numbers are ever looked at (`AUTO_CALL_TEST_NUMBERS`).
+ */
+function autoDialler(): DialDeps | null {
+  if (!readAutoCalls(process.env).on || config.twilio.status !== 'on') return null;
+  const settings = config.twilio.settings;
+  const numbers = readAutoCallTestNumbers(process.env, process.env.NODE_ENV === 'production');
+  const only = numbers.only === null ? null : [...numbers.only];
+  return {
+    closeUnplacedCalls,
+    autoCallsSince,
+    readCallHours: () => readCallHours(pool),
+    dialRoom,
+    leadsToCall: (opts) => leadsToCall({ ...opts, only }),
+    stillDue: (opts) => stillDue({ ...opts, only }),
+    placeAutoCall: (leadId) => placeAutoCall({ leadId, settings, numbers }),
+    withDialLock,
+  };
+}
+
+const dialler = autoDialler();
+
+/**
+ * Why the robot stopped - a lead waited on hold too long to be real, Twilio
+ * went silent, Twilio refused our calls, no script - logged once when it
+ * starts and once when it ends,
+ * not every half minute (T20 review). Waiting on hold is the robot working as
+ * it should, so it is not an alarm.
+ */
+let stoppedFor: DialLook['stopped'] = null;
+function noteStop(look: DialLook): void {
+  const now = look.stopped === 'on_hold' ? null : look.stopped;
+  if (now === stoppedFor) return;
+  if (now === 'silent') log.error('auto_call.webhooks_silent', { calls: look.silent });
+  else if (now === 'refused') log.error('auto_call.twilio_refusing', {});
+  else if (now === 'no_script') log.error('auto_call.no_script', {});
+  else log.info('auto_call.dialling_again', { after: stoppedFor });
+  stoppedFor = now;
 }
 
 // Serialised on purpose: one poller instance, one cycle at a time, so the
@@ -83,6 +138,19 @@ async function loop(): Promise<void> {
       log.error('transcript.tick_failed', { err: errText(err) });
     }
 
+    // The robot's calls - AUTO-CALLS.md "When a lead is called". Apart from
+    // the rest, and last: a failure here never stops the poll, nor the poll's
+    // the calls - though a slow poll delays them, in the same tick.
+    if (dialler) {
+      try {
+        const look = await dialDueLeads(dialler);
+        if (worthLogging(look)) log.info('auto_call.dial', { ...look });
+        if (look.inside && !look.locked) noteStop(look);
+      } catch (err) {
+        log.error('auto_call.dial_failed', { err: errText(err) });
+      }
+    }
+
     let waitMs = DEFAULT_POLL_INTERVAL_SECONDS * 1000;
     try {
       waitMs = await pollIntervalMs();
@@ -94,5 +162,9 @@ async function loop(): Promise<void> {
   }
 }
 
-log.info('worker.started');
-loop();
+log.info('worker.started', { autoCalls: dialler ? 'on' : 'off' });
+// Each switch-on starts afresh: leads that arrived while automated calls were
+// off are never called (`recordAutoCallsSwitch`). Before the first look.
+recordAutoCallsSwitch(dialler !== null)
+  .catch((err) => log.error('auto_calls.switch_not_recorded', { err: errText(err) }))
+  .finally(() => loop());

@@ -23,7 +23,7 @@ the brief now exists except calling, which is Phase 4. *(Calling was built on
 | `/admin/overview` | Overview | `ADMIN.md`, `DESIGN-PROMPT.md` 6a |
 | `/admin/leads` | Every lead, replied or not | `ADMIN-LEADS.md` |
 | `/admin/agents` | Agent accounts | `AUTH.md` |
-| `/admin/config` | Configuration, read-only | `ADMIN.md`, `DESIGN-PROMPT.md` 6b/6c |
+| `/admin/config` | Configuration, read-only - three tabs, Texts, Scoring and Calls, the tab kept in the address (`?tab=`) | `ADMIN.md`, `DESIGN-PROMPT.md` 6b/6c |
 | `/admin/dnc` | Do-not-call list, read-only | `ADMIN.md`, `DESIGN-PROMPT.md` 6e |
 | every signed-in screen | The incoming-call card, mounted once in the app shell (`layout/AppShell.tsx`) | `TWILIO.md`, "Incoming calls" |
 
@@ -133,7 +133,7 @@ Rebuilt to a mockup Jeel supplied. What changed and why:
 | Tier filter | Three pills, several at once | One segmented switcher - All, Hot, Warm, Low with counts - one at a time |
 | Tier column | Coloured badge | Signal bars and the word, `components/TierSignal.tsx` |
 | Age column | "AGE", amber and red | "WAITING", monospace, one weight and colour for every lead |
-| Status column | Coloured pills, six statuses | An icon and the words, six statuses (Callback came back 2026-09-29, Missed call added 2026-10-01, Wants a call 2026-10-05), a hyphen otherwise - `components/QueueStatus.tsx` |
+| Status column | Coloured pills, six statuses | An icon and the words, six statuses (Callback came back 2026-09-29, Missed call added 2026-10-01, Wants a call 2026-10-05 - and since T22 also a "yes" on the automated call nobody took, those rows first), a hyphen otherwise - `components/QueueStatus.tsx` |
 | Button | Pick | **Pick up** - on every screen that picks, so the action has one name |
 | Someone else's lead | "Locked" | A padlock and "Locked", `components/LockIcon.tsx` |
 | Action column | Right-aligned | Centred - buttons and Locked on one axis |
@@ -164,7 +164,7 @@ to say. Which status wins, and why New went too, is in `QUEUE.md`, "The tag".
 | Needs review | Warning triangle | A person has to look at the replies |
 | Callback – name · time | Clock | Someone has a call booked on it |
 | Missed call | Handset with an arrow turned away | The lead rang and nobody answered. Bold, like Inbound reply |
-| Wants a call | Handset | The lead said No, then asked to hear from a rep (2026-10-05). The same handset as Missed call, without the arrow |
+| Wants a call | Handset | The lead said No, then asked to hear from a rep (2026-10-05); or, since T22, said yes on the automated call and nobody took it - the server ranks that one just below Missed call and sorts it first. The same handset as Missed call, without the arrow; not bold, so the two reasons look alike |
 
 Admin > Leads has two more of its own: **Offers**, a price tag, muted - a
 lead who asked for special offers and nothing else - and **Not interested**,
@@ -231,6 +231,11 @@ them:
 
 `QueueStatus.tsx` now draws its icons from `StatusIcon`; the queue looks the
 same.
+
+*(T23, 2026-10-25: a **Call** column and a Call filter - how the automated
+call went, in the words of `lib/call-results.ts`, which the timeline's robot
+call lines now read too, so the two screens say a result the same way.
+`ADMIN-LEADS.md`, "Call".)*
 
 **Fixed while building it:** a right-aligned column's heading stayed on the
 left - `.table th` outranked `.right` - so SCORE and WAITING on the queue sat
@@ -394,20 +399,57 @@ needs to know:
 | Piece | File |
 |---|---|
 | The card: who, how long it has rung, tier, score, the last thing they answered (under that question's own heading), how far the questions got, how often we tried them today; **Accept** (takes the lead, opens its workspace) and **Decline** | `layout/IncomingCall.tsx`, `styles/incoming-call.css` |
-| "Calling back · you tried 2× today" | `lib/caller-context.ts`, pure |
-| The states - none, ringing, call, missed - and one call at a time | `lib/incoming-state.ts`, pure |
+| "Calling back · you tried 2× today" - agents' calls first, never the server's automated one among them (T5); with none, "Calling back · automated call, 28m ago" - what its voicemail asked them to return (T19); for a transfer, "Transfer · said yes to the offer" instead (T11, `transferContext`) | `lib/caller-context.ts`, pure |
+| The states - none, ringing, call, missed - and one call at a time. Each ring carries its `RingKind` (T11): alone, or shared (`group`) - one of several, or the lead's own agent rung first with the others next (T15b) - and whether it is a transfer; a shared ring that ends unanswered is gone, never "missed" | `lib/incoming-state.ts`, pure |
+| Reading the kind from the call's parameters - `ring=group`, `reason=transfer`, `step` - is `ringKind` in `lib/calling.ts`. A group ring arriving while anything keeps the browser busy (`lib/presence.ts`) is declined there and then by the store, so an open note box is never replaced by it; a ring to one person still is | `lib/incoming-call.ts` |
 | The store joining them to Twilio. A store, not page state, because a call arrives on any screen and the lead's Call button must know one is under way | `lib/incoming-call.ts` (zustand) |
-| The ringtone: a WAV made in memory, looped by an `<audio>` element, armed from `main.tsx` so the first click - sign-in included - lets it play. "Call sound off · click to turn on" shows until then | `lib/ringtone.ts` |
+| The ringtone: a WAV made in memory, looped by an `<audio>` element, armed from `main.tsx` so the first click - sign-in included - lets it play. "Call sound off · click to turn on" shows until then. It pauses itself if it ever plays with nothing ringing - Safari restarted it by itself after a ring (2026-10-20, `TWILIO.md`) | `lib/ringtone.ts` |
 | The desktop notification, and the tab title "Incoming call" | `lib/call-notification.ts` |
 | Once accepted: the same call bar, which is why `CallBar` takes `who: { leadId, name, phone }` rather than a lead. It lives in the shell, so it survives moving between pages | `CallBar.tsx` |
 | A call's transcript, closed under the call in the conversation and on the timeline; one speaker's sentences joined into one line | `components/CallTranscript.tsx` |
+| What the lead said on the robot's call, under it and above the transcript, closed the same way: `Q1 · "yeah sure" → Yes` (T21) | `components/CallAnswers.tsx` |
 | Missed: a notice with **Call back**, which takes the lead and opens it with router state `callBack`; the workspace dials once and clears the state, so a reload does not ring them again | `IncomingCall.tsx`, `WorkspacePage.tsx` |
-| The lead's page: a **Missed call** badge beside Closed and Needs review, from `flags.missedCall` | `WorkspacePage.tsx` |
+| The lead's page: a **Missed call** badge beside Closed and Needs review, from `flags.missedCall`; and a **Wants a call** badge for a "yes" on the automated call nobody took, from `flags.missedYes` (T22) - the queue says only Working once the lead is picked up | `WorkspacePage.tsx` |
 
 Twilio's SDK is its own chunk, loaded once someone is signed in and calling is
 set up - a browser that can be rung has to hold a registered device - and
 re-checked every 30 seconds. Signing out destroys it. `lib/calling.ts` is the
 only file that touches the SDK.
+
+**Telling the server it can take a call** (T9, 2026-10-18 - "Who is free" in
+`AUTO-CALLS.md`). Each 30-second check also says whether the browser can take
+a call now: registered, and not busy. Busy is `lib/presence.ts`, a small
+register that knows nothing about calls: the lead's call (`useLeadCall`, by
+`useBusyWhile`) and the incoming call (`lib/incoming-call.ts`, by a store
+subscription) each mark it under their own name, and clear it when they end -
+or when the page goes. What counts as busy is pure: `occupiesAgent` in
+`lib/call-state.ts` (placed, live, or ended with the note box open - a failure
+is only a message) and `incomingOccupiesAgent` in `lib/incoming-state.ts`
+(ringing too; a missed call is only a notice). A change of busy is reported at
+once. Reports go one after another, each with a ten-second limit, so an older
+"available" never lands after a newer "busy" and one stuck request cannot hold
+back the rest. Nothing is said when listening stops: the sign-out has already
+cleared it on the server.
+
+**The "Taking calls" switch** (T10, 2026-10-18 - "Who is free" in
+`AUTO-CALLS.md`). `layout/TakingCalls.tsx`, in the app bar before the user
+menu: a small switch, `role="switch"`, muted when off and the green of a live
+call when on, in `styles/shell.css`. Shown only when `GET /api/calls/config`
+says calling is set up and `autoCalls` is on - unknown is hidden. Its state is
+the signed-in user's `takingCalls`, from the sign-in store, so it needs no
+fetch of its own and a reload shows what the server holds. A click saves
+first and flips after, disabled meanwhile; a failure leaves it as it was and
+says so on hover. Signing in starts it off.
+
+**Turned off by the server** (T15c, 2026-10-20): a person who lets a transfer
+ring out has the switch turned off. The browser learns it from the answer to
+its 30-second report (`lib/calling.ts`), which carries the switch and why
+(`takingCallsWhy`); `lib/taking-calls.ts` takes it into the signed-in user -
+unless a switch made in this browser crossed that report, whose own answer is
+newer. Off because of a missed transfer, the app bar shows "Missed a transfer
+· Taking calls off" beside the switch, amber on the navy bar
+(`.taking-calls__notice`, `role="status"`), until it is switched on again -
+after a reload too.
 
 **The centre column is a conversation, not a log.** `workspace/Conversation.tsx`
 shows the SMS thread, each call as one quiet line (since Phase 4) and the
@@ -417,9 +459,22 @@ name, so the rule 2b handoff is visible in the thread itself.
 
 That is a real change and worth knowing: **notes, callbacks and dispositions
 are no longer in the workspace centre.** They are on the Lead Timeline,
-which the conversation header links to, and which still uses `Timeline.tsx`
-unchanged. An agent on a call wants what the lead said; the full audit trail is
-one click away.
+which the conversation header links to, and which still uses `Timeline.tsx`.
+An agent on a call wants what the lead said; the full audit trail is one click
+away.
+
+**A label wherever the day changes - W1, 2026-10-18, asked for by Jeel.** Each
+item in the conversation shows only its time, so a lead worked over several
+days read as one afternoon. A small label now sits between the days, as a
+phone's messages app shows it: **Today**, **Yesterday**, **Wed, Oct 14** - the
+year only for another year - centred between two hairlines in the label style
+(`.convo__day`), so it reads as a heading over the messages rather than one
+more message. Any item can start a day: a text, a call or a system line. The
+Lead Timeline already had day separators ("WED, OCT 14"); both screens now name
+the day through one rule, `dayLabel` in `lib/format.ts`, so the timeline says
+Today and Yesterday too. It is the viewer's own day, from the browser's time
+zone, like every date on screen; "Yesterday" is the calendar day before, not
+24 hours back. `lib/format.test.ts`, `Conversation.render.test.tsx`.
 
 **A reply is labelled with the answer the server recorded for it.** `1`
 becomes "1 | Yes" because the timeline entry for that text carries
@@ -461,13 +516,23 @@ message. When nothing is kept - a blocked number, a lead no longer yours - the
 text stays in the box and the red error above it still explains why.
 
 A first send still adds "Agent took over - automated questions stopped" to the
-thread. `Conversation.render.test.tsx` pins the ticks and the "!".
+thread. `Conversation.render.test.tsx` pins the ticks and the "!". On the Lead
+Timeline page a refused text reads "Delivery failed" - an agent's own as well
+as ours since 2026-10-27; before, an agent's read as sent there.
+
+*(2026-10-27: a phone call stops the automated questions too - the lead
+answered the robot's call, or rang us (`STATE-MACHINE.md` 2d): "Phone call -
+questions stopped" beside the badges, "Stopped at Q1 by a call" for
+Questions, "Phone call - automated questions stopped" on the timeline, and no
+compose warning, since the questions are already stopped.)*
 
 **The wrap-up, as it is now:** three numbered sections and one button. **1
 Outcome** - two buttons, Closed and DNC, DNC behind a confirm dialog. **2
 Callback** - three quick choices and "Other…", switched off while an outcome is
-chosen. **3 Note**. Then **Save**. The unsaved-changes guard covers closing the
-tab and going back.
+chosen. **3 Note**. Then **Save**. The unsaved-changes guard asks before the
+tab is closed or reloaded. It cannot stop a move inside the app - Back to
+queue, or the browser's Back to the queue - and an unsaved note is lost that
+way.
 
 *(How it got here: the first version grouped eight outcomes as Positive / No
 contact / Negative, with DNC as a separate red link and a "Step N of 3"
@@ -671,8 +736,10 @@ texting START. The API refuses the value without `confirmDnc: true` regardless.
 
 **The SMS warning is shown before the first send,** because sending stops the
 automated questions for good (`STATE-MACHINE.md` rule 2b) and cannot be undone.
-Once the conversation has already been taken over the warning goes away. On a
-DNC lead there is no compose box at all.
+Once the conversation has already been taken over the warning goes away - and
+it is shown only while the questions are running: a completed, expired or
+review conversation has none left to stop (`sendingStopsQuestions`, 2026-10-27;
+before, it warned on those too). On a DNC lead there is no compose box at all.
 
 **The SMS templates are hardcoded,** unlike the automated copy in `settings`.
 They are an agent's own words mid-conversation, so a mistyped one costs a single
@@ -711,7 +778,7 @@ arrives after a newer one is still dropped.
 
 ## Tests
 
-`npm test` in `frontend/`. Vitest with jsdom, 282 tests in 27 files (2026-10-11).
+`npm test` in `frontend/`. Vitest with jsdom, 407 tests in 35 files (2026-10-27).
 
 Logic first, by agreement - a screen is easy to judge by eye, and a dropped
 response or an off-by-one age threshold is not:
@@ -720,24 +787,30 @@ response or an off-by-one age threshold is not:
 |---|---|
 | `api/usePolling.test.ts` | The polling hook's guarantees, the race guard included, and that a slow answer is waited for rather than asked for again |
 | `lib/format.test.ts`, `lib/lock.test.ts` | Formatting, which row action and lock a lead gets, and who may release a held lead |
-| `lib/leads-view.test.ts` | Admin > Leads' view read from and written to the address: the round trip, defaults left out, anything unrecognised read as the default |
-| `components/Timeline.test.tsx`, `pages/LeadTimelinePage.test.ts` | The timeline's wording, and the summary sidebar |
+| `lib/leads-view.test.ts` | Admin > Leads' view read from and written to the address: the round trip, defaults left out, anything unrecognised read as the default - the Call filter (T23) included |
+| `lib/call-results.test.ts` | The robot's call in words: the Call column's, the timeline's capitalised, and the Call filter's choices (T23) |
+| `lib/call-settings.test.ts`, `pages/admin/ConfigPage.test.ts` | Admin > Configuration's call settings in words - hours, days, waits - its placeholders, what picks a line of the call script (T24), and its tab read from the address |
+| `components/Timeline.test.tsx`, `pages/LeadTimelinePage.test.ts` | The timeline's wording - "Delivery failed" on a refused text, ours or an agent's - and the summary sidebar |
+| `pages/workspace/SmsCompose.test.ts` | When the composer warns that sending stops the questions: only while they are running and nobody has taken them over |
 | `pages/workspace/Conversation.test.ts` | The answer shown beside a reply: the server's, and nothing when it would repeat the reply |
 | `pages/QueuePage.test.ts` | The queue's Answers cell and its tooltip |
-| `pages/workspace/Conversation.render.test.tsx` | The sent ticks and the red "!" on a refused message |
+| `pages/workspace/Conversation.render.test.tsx` | The sent ticks and the red "!" on a refused message; a call as one line, the robot's call with its answers folded under it; a label where the day changes |
 | `components/QueueStatus.test.tsx` | The queue's six statuses, their icons, a callback's time, and the tier bars |
 | `components/DateTimeField.test.tsx` | The date and time picker: the month grid, quarter hours, past days off, Clear, Escape |
 | `pages/workspace/LeadHeader.test.ts` | The header's source and Questions wording, a sub-question, "Q1-a", included |
 | `pages/workspace/LeadNotes.test.tsx` | The Notes card: newest first, three then Show all, the author, the empty state |
 | `components/CallTranscript.test.tsx` | A call's transcript: closed until asked for, speakers joined, nothing for an unrecorded call |
+| `components/CallAnswers.test.tsx` | The robot call's answers in words - said, pressed, asked again, not understood, stop, nothing said - and the fold (T21) |
 | `pages/workspace/LeadAnswers.test.ts` | The score breakdown's light-blue-to-navy shades, and each line's words |
 | `components/SyncStatus.test.tsx` | The EZ Texting sync line, quiet and amber |
 | `components/Segmented.test.tsx` | The sliding switcher |
 | `lib/call-state.test.ts`, `lib/calling.test.ts` | A call's states and wording; error sentences; who is calling |
-| `lib/calling.device.test.ts` | The join to Twilio's SDK, against a stand-in: placing a call, being rung, accept, decline, sign-out |
+| `lib/calling.device.test.ts` | The join to Twilio's SDK, against a stand-in: placing a call, being rung, accept, decline, sign-out; telling the server whether it can take a call - registered or not, busy at once, every 30 seconds, in order |
+| `lib/presence.test.ts` | What keeps the browser busy: several reasons at once, listeners told only of a change, `useBusyWhile` following its component |
+| `layout/TakingCalls.test.tsx`, `lib/taking-calls.test.ts` | The "Taking calls" switch: shown only with automated calls on, flips once saved, one save at a time, a failure leaves it as it was; the server's word taken from the report unless a switch here crossed it; "Missed a transfer" shown for that reason only, gone once switched on |
 | `pages/workspace/CallBar.test.tsx` | The call bar in every state, and its note box |
-| `lib/incoming-state.test.ts`, `layout/IncomingCall.test.tsx` | A lead calling in: ringing, answered, missed, declined, one call at a time; what the card shows; Call back |
-| `lib/ringtone.test.ts`, `lib/call-notification.test.ts`, `lib/caller-context.test.ts` | The ring and its first-click unlock; the desktop notification; the "Calling back" line |
+| `lib/incoming-state.test.ts`, `layout/IncomingCall.test.tsx` | A lead calling in: ringing, answered, missed, declined, one call at a time; what the card shows; Call back; keeping the browser busy until the note box is done; a ring several people got - cleared quietly, declined while busy with the note kept as typed, a transfer's card |
+| `lib/ringtone.test.ts`, `lib/call-notification.test.ts`, `lib/caller-context.test.ts` | The ring and its first-click unlock; the desktop notification; the "Calling back" line, and a transfer's line |
 | `styles/type-system.test.ts` | The type scale, duplicate selectors, undefined tokens - "Type system" above |
 
 ```bash
@@ -764,9 +837,11 @@ every route lives under `/api`.
 ## Not built
 
 - ~~**Calling.**~~ Built 2026-10-01, Phase 4 - `TWILIO.md`. Outgoing, and
-  incoming to one agent's browser; no call queue, voicemail box, transfer
-  or hold, and no card for a caller we hold no lead for. Recordings and
-  transcripts were added on 2026-10-02 (`TWILIO.md`).
+  incoming to the lead's agent - or, with automated calls on, to everyone
+  free when nobody owns the lead (T19). Recordings and transcripts were added
+  on 2026-10-02 (`TWILIO.md`). The automated call's transfer and hold line
+  are built (T15a-T17, `AUTO-CALLS.md`). Still no voicemail box for callers,
+  and no card for a caller we hold no lead for.
 - **Live push.** Polling stands in for it, deliberately - see above.
 - **Export CSV** on the DNC list. In the brief, and it hands a file of phone
   numbers to a browser, so it needs Jeel to ask for it.

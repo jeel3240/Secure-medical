@@ -13,6 +13,8 @@ that doc wins if the two ever disagree:
 | The statuses and exactly how each is worked out | `ADMIN-LEADS.md`, "Status is derived, never stored" |
 | Who is in the queue, the order, the STATUS column | `QUEUE.md` |
 | Picking, Wrap up, Closed and DNC | `AGENT-WORKSPACE.md` |
+| The automated call: who it rings, when, and what each answer does | `AUTO-CALLS.md` |
+| Calls with a person, both ways, and a missed call | `TWILIO.md` |
 
 ## The main path
 
@@ -79,32 +81,42 @@ highest in this list wins.
 
 | Status | Means | In the queue? |
 |---|---|---|
-| **Opted out** | Texted STOP, or an agent pressed DNC. The number is blocked. (A lead who later texted START still reads Opted out here, though unblocked - "Ways back") | No |
+| **Opted out** | Texted STOP, an agent pressed DNC, the lead said stop on the automated call (T13), or the number was already blocked, or opted out at EZ Texting, when the lead arrived. The number is blocked. (A lead who later texted START still reads Opted out here, though unblocked - "Ways back") | No |
 | **Closed** | An agent pressed Closed | No, until something reopens it - "Ways back", below |
-| **Working** | An agent holds it, or has left a note, a callback, a call they placed or answered, an SMS or an outcome on it | Yes |
+| **Working** | An agent holds it, or has left a note, a callback, a call they placed or answered, an SMS or an outcome on it. An automated call counts only once a person took it | Yes |
 | **Needs review** | Two replies we could not understand | Yes |
 | **Ready** | Finished the questions, or asked to hear from a rep; nobody has touched it | Yes |
 | **Offers** | Said No to the first question, then Yes to special offers. Nothing for an agent to do | No, unless they text or ring us |
 | **Not interested** | Said No to the first question, then No thanks to the offers and to a rep | No, unless they text or ring us |
 | **Expired** | Went quiet during the questions | No, unless they text or ring us |
-| **Answering** | Partway through the questions | No, unless an agent holds it, they ring us and nobody answers, or our text to them did not go out |
-| **Awaiting reply** | Has not answered question 1 | No, with the same three exceptions |
+| **Answering** | Partway through the questions | No, unless they ring us and nobody answers, they said yes on the automated call and nobody took it (T22), our text to them did not go out, or they text us after a phone call stopped the questions (`STATE-MACHINE.md` 2d) |
+| **Awaiting reply** | Has not answered question 1 | No, with the same four exceptions |
 
 Working outranks the SMS statuses: an expired or needs-review lead that an
 agent is handling reads Working.
 
+The automated call is a second track beside the status: Admin > Leads has a
+**Call** column saying how it went - "Voicemail left", "Not interested", "Said
+yes · nobody took it" - so a lead can be Awaiting reply and Voicemail left at
+once (T23, `ADMIN-LEADS.md`, "Call"). Once a lead has answered that call - yes,
+no, the link - or rung us, the text questions stop: anything they text goes
+to a person as Inbound reply, never an automated "sorry" (`STATE-MACHINE.md`
+2d, 2026-10-27).
+
 ## What agents see in the queue
 
 The queue's STATUS column shows at most one of six things, in this order when
-more than one applies. Most rows show none.
+more than one applies - Wants a call has two places, one for each reason. Most
+rows show none.
 
 | STATUS | Means |
 |---|---|
 | **Working – karm** | karm is holding the lead right now. Others see it locked |
 | **Missed call** | The lead rang our number and nobody answered. They were told, and texted, that we will call back |
+| **Wants a call** | Said yes on the automated call and nobody took it; they were told an agent will call back. These leads are first in the queue, the longest waiting on top, until an agent calls or texts them or saves an outcome (T22, `QUEUE.md`) |
 | **Inbound reply** | The lead texted us and nobody has read it - or they answered and our text back failed to send |
 | **Callback – karm · 3:00 PM** | karm has a callback booked on it. Not locked, but it is karm's call to make |
-| **Wants a call** | Said No to the first question, then asked to hear from a rep |
+| **Wants a call** | Said No to the first question, then asked to hear from a rep - the same words, lower down |
 | **Needs review** | We could not understand their replies |
 | **-** | Waiting for someone to pick it up |
 
@@ -168,7 +180,7 @@ Calling was built, both ways - `TWILIO.md`:
 |---|---|
 | The Call button was a placeholder | Agents call a lead they hold from the browser; every call is on the timeline |
 | A lead who rang our number reached nothing | They ring the browser of the agent holding them, or who last called them |
-| - | A call nobody answers: the lead hears a message and is texted, the queue says **Missed call**, and the agent it rang gets a callback |
+| - | A call nobody answers: the lead hears a message and is texted, the queue says **Missed call**, and the agent it rang gets a callback - none when it rang everyone free (T19), and the lead waits in the queue for anyone |
 | Four queue statuses | Five: Missed call ranks second, after Working |
 | A callback was only ever booked by a person | The system books one for a missed call, and finishes it when the lead is got back to |
 

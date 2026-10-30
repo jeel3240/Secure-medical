@@ -20,6 +20,7 @@ import { claimLead, releaseLead } from '../src/db/claims';
 import { addNote } from '../src/db/notes';
 import { getTimeline } from '../src/db/timeline';
 import { startConversation } from '../src/db/flows';
+import { failAutomatedCall, keepAnswer, linkAutomatedCall, startAutomatedCall, takeTransfer } from '../src/db/auto-calls';
 import { replyAs } from './live-flow';
 
 let failures = 0;
@@ -289,6 +290,46 @@ async function main(): Promise<void> {
     check('the scored line says how the questions ended, or that they have not', scored?.detail.endOutcome, null);
   }
 
+  console.log('\nthe robot\'s call: how its script ended, and what the lead said (T21)');
+  {
+    const lead = await makeLead('+15550000307', '30 minutes');
+    const started = await startAutomatedCall({ leadId: lead, mayRing: () => true });
+    const callId = started.ok ? started.callId : 0;
+    await linkAutomatedCall(callId, 'CA-T21-1');
+    const going = (await getTimeline(lead))!.find((e) => e.kind === 'call')!;
+    check('going: no result yet, nothing said', [going.detail.scriptResult, going.detail.answers], [null, []]);
+
+    const { rows: steps } = await pool.query(`SELECT id, key FROM call_steps ORDER BY position`);
+    const q1 = { id: steps[0].id, key: steps[0].key };
+    const answer = (attempt: 1 | 2, spoken: { heard?: string; digits?: string }, record: { result: 'choice' | 'unclear'; choiceKey: string | null; choiceLabel: string | null }) =>
+      keepAnswer({ callId, step: q1, attempt, spoken: { confidence: 0.9, ...spoken }, record, result: null, blockNumber: false });
+    await answer(1, { heard: 'what is this' }, { result: 'unclear', choiceKey: null, choiceLabel: null });
+    await answer(2, { digits: '1' }, { result: 'choice', choiceKey: '1', choiceLabel: 'Yes' });
+    await takeTransfer(callId, maya);
+    await pool.query(`UPDATE calls SET outcome = 'answered', duration_sec = 134, ended_at = now() WHERE id = $1`, [callId]);
+
+    const call = (await getTimeline(lead))!.find((e) => e.kind === 'call')!;
+    check('who took it, and how it ended', [call.author, call.detail.direction, call.detail.scriptResult, call.detail.durationSec], [
+      'Maya',
+      'automated',
+      'transferred',
+      134,
+    ]);
+    check('each answer, in order: its question named as every screen names it, what was heard or pressed, what it meant', call.detail.answers, [
+      { question: 'Q1', attempt: 1, heard: 'what is this', keys: null, result: 'unclear', choice: null },
+      { question: 'Q1', attempt: 2, heard: null, keys: '1', result: 'choice', choice: 'Yes' },
+    ]);
+
+    // The agent's call from "ordering across every table", above.
+    const withAgentsCall = (await pool.query(`SELECT lead_id FROM calls WHERE direction = 'outbound' LIMIT 1`)).rows[0].lead_id;
+    const agentsCalls = (await getTimeline(withAgentsCall))!.filter((e) => e.kind === 'call');
+    check(
+      'an agent\'s call carries neither',
+      [agentsCalls.length > 0, agentsCalls.every((e) => !('scriptResult' in e.detail) && !('answers' in e.detail))],
+      [true, true]
+    );
+  }
+
   console.log('\na lead with no history');
   {
     const lead = await makeLead('+15550000306', '5 minutes');
@@ -299,6 +340,14 @@ async function main(): Promise<void> {
 
   console.log('\na lead that does not exist');
   check('is null, not an empty list', await getTimeline(999999), null);
+
+  console.log('\na robot call Twilio never placed - not on the timeline');
+  {
+    const lead = await makeLead('+15550000398', '30 minutes');
+    const started = await startAutomatedCall({ leadId: lead, mayRing: () => true });
+    await failAutomatedCall(started.ok ? started.callId : 0, { status: 401, code: 20003, forTheNumber: false });
+    check('it never reached the lead: no call on its timeline', (await getTimeline(lead))!.filter((e) => e.kind === 'call').length, 0);
+  }
 
   console.log(failures === 0 ? '\nall checks passed' : `\n${failures} check(s) FAILED`);
   await pool.end();

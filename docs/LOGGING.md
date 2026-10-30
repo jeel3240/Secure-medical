@@ -7,17 +7,15 @@ now one JSON object, queryable by field.
 Shipping those lines off the instance *is* configured, in
 `docker-compose.prod.yml`, and `WORKFLOW.md` says what that changes about reading
 them - in short, `docker compose logs` works locally and not on the server. So
-the lines below are already leaving the box; what the code still owes is their
-shape.
+the lines below leave the box in the shape described here.
 
 ## Structured logs
 
-One JSON object per line on stdout, so whatever collects the logs can query by
-field instead of matching substrings. Keep the existing lines' information;
-change only the shape.
+One JSON object per line - `info` on stdout, `warn` and `error` on stderr - so
+whatever collects the logs can query by field instead of matching substrings.
 
 ```json
-{"ts":"2026-09-23T10:04:11.204Z","level":"info","event":"poll.tick",
+{"ts":"2026-09-23T10:04:11.204Z","level":"info","event":"poll.tick","svc":"worker",
  "fetched":2,"inserted":1,"skipped":1,"suppressed":0,"openers":1,"ms":336}
 ```
 
@@ -79,13 +77,14 @@ firing a real webhook: the number appears nowhere in the output.
 
 | Event | Where |
 |---|---|
-| `api.started`, `api.refused_start` | `api/index.ts`. `refused_start` carries `reason`: `weak_jwt_secret`, `no_webhook_token` or `twilio_incomplete` - the last with `missing`, the settings not set (`api/startup-checks.ts`) |
-| `worker.started`, `poll.tick`, `poll.failed` | `worker/index.ts` |
+| `api.started`, `api.refused_start` | `api/index.ts`. `started` carries `calling` (`on`, `off` or `incomplete`) and `autoCalls` (`on` or `off`). `refused_start` carries `reason`: `weak_jwt_secret`, `no_webhook_token` or `twilio_incomplete` - the last with `missing`, the settings not set (`api/startup-checks.ts`) |
+| `worker.started`, `poll.tick`, `poll.failed` | `worker/index.ts`. `worker.started` says whether the worker places automated calls (`autoCalls`: `on` or `off`, T20) |
 | `conversation.expired`, `expiry.failed` | `worker/index.ts` |
-| `call.token_issued`, `call.started`, `call.refused`, `call.failed_to_start`, `call.finished`, `call.answered_by`, `call.recorded`, `call.incoming`, `call.incoming_failed`, `call.missed_not_recorded`, `twilio.webhook_rejected`, `twilio.archive_failed`, `calling.off` | `api/calls.ts`, `api/twilio-webhooks.ts`, `api/index.ts` - browser calling, `TWILIO.md`. `call.refused` carries `reason`; `twilio.webhook_rejected` usually means `PUBLIC_URL` is not the address Twilio calls |
+| `call.token_issued`, `call.started`, `call.refused`, `call.failed_to_start`, `call.finished`, `call.answered_by`, `call.recorded`, `call.incoming`, `call.incoming_failed`, `call.missed_not_recorded`, `call.taken`, `call.take_refused`, `call.unknown_take`, `call.take_failed`, `call.end_not_recorded`, `twilio.webhook_rejected`, `twilio.archive_failed`, `calling.off`, `auto_calls.off` | `api/calls.ts`, `api/twilio-webhooks.ts`, `api/index.ts` - browser calling, `TWILIO.md`. `call.refused` carries `reason`; `twilio.webhook_rejected` usually means `PUBLIC_URL` is not the address Twilio calls. `auto_calls.off` (warn, at start-up): `AUTO_CALLS` said something other than `on` or `off` (`reason: unknown_value`, with the `value`), or `on` without calling set up (`reason: calling_off`). T19, a lead calling back whom nobody owns: `call.incoming` with `ring: 'group'` and how many were rung (`rung`); `call.taken` - who accepted (`agentId`, `leadId`, and `tookOverFrom` when the lead was someone else's); `call.take_refused` (warn) - a second accept, or an account deactivated (`reason`: `taken`, `inactive`, `not_found`); `call.unknown_take` (warn) - no lead's call, or another server's browser name; `call.take_failed` (error) - the database failing as they accepted (they are connected anyway); `call.end_not_recorded` (error) - a ring taken whose end could not be saved |
+| `auto_call.placed`, `auto_call.refused`, `auto_call.failed`, `auto_call.unconfirmed`, `auto_call.link_failed`, `auto_call.answered`, `auto_call.unknown_call`, `auto_call.no_script`, `auto_call.broken_script`, `auto_call.answer_failed`, `auto_call.gather_failed`, `auto_call.answer`, `auto_call.transfer`, `auto_call.holder_not_taken`, `auto_call.transfer_missed`, `auto_call.ring_missed`, `auto_call.rings_unread`, `auto_call.switch_off_failed`, `auto_call.hold`, `auto_call.hold_ended`, `auto_call.hold_recheck`, `auto_call.hold_failed`, `auto_call.hold_watch_failed`, `auto_call.offer`, `auto_call.offer_ringing`, `auto_call.offer_not_taken`, `auto_call.offer_failed`, `auto_call.verdict`, `auto_call.verdict_failed`, `auto_call.after_takeover`, `auto_call.dial`, `auto_call.dial_failed`, `auto_call.webhooks_silent`, `auto_call.twilio_refusing`, `auto_call.not_placed`, `auto_call.dialling_again`, `auto_call.hold_closed`, `auto_calls.switch_not_recorded`, `auto_call.transferred`, `auto_call.transfer_refused`, `auto_call.claim_failed`, `auto_call.after_failed` | `worker/place-auto-call.ts`, `api/twilio-webhooks.ts`, and from T16 `api/hold-watch.ts` - the automated call, T12, `AUTO-CALLS.md`. With `leadId`, `callId` and `callSid`, never a number. `refused` carries `reason`; `failed` (Twilio refused the lead's number - their call, used) `twilioStatus` and `twilioCode`; `not_placed` (error) the same, when Twilio refused for any other reason - our account, a limit - and the lead's call was not used (T28, `AUTO-CALLS.md` "When Twilio refuses"); `unconfirmed` (Twilio did not answer - it may have gone out) `error`. `unknown_call`: a webhook naming no row of ours, or another call's - or, accepting a transfer, no browser of ours. `answer` (T13): one per answer - `step`, `attempt`, what it was taken to mean (`Yes`, `No`, `silence`, `unclear`, `opt_out`), `confidence`, `hungUp`, `result`, and `kept` (false for a repeated request). Never what was heard: that is in `call_answers`. The transfer (T15a, T15b): `transfer` - people rung, with how many (`rung`) and `holderFirst` (the lead's own agent, alone); `holder_not_taken` - that agent let it ring out or declined (`agentId`, `dialStatus`), and the others are rung next; `transfer_missed` - nobody took it, with `reason`: `nobody_free`, `not_taken` or `hung_up` (the lead hung up while it rang - these two with Twilio's `dialStatus`); `machine` until T18; `transferred` - who took it (`agentId`, `leadId`, `tookOverFrom`); `transfer_refused` (warn) - a person's accept refused, with `reason`: `taken`, `inactive` or `not_found`; `claim_failed` and `after_failed` (error) - the database failing as a person accepted (they are connected anyway) or as the ringing ended. T15c: `ring_missed` - a person let it ring out (`agentId`, and `switchedOff`: false when it was already off, or they were on a call by then); `rings_unread` (warn) - Twilio could not be asked how each ring ended, so nobody was switched off; `switch_off_failed` (error). T16: `hold` - a "yes" put on hold; `hold_ended` - the lead leaves hold for the busy line, with `reason` (`nobody_coming`, `waited_too_long`, `not_on_hold`), `waitedSeconds`, and `via` - `watcher` when the hold watcher cut the music, `music` when a track ended; `hold_recheck` - the watcher sending a lead back, with `reason` (`nobody_coming`, `waited_too_long`) and whether Twilio took it (`sent`); `hold_failed` (error) from `/auto/hold`; `hold_watch_failed` (error), a look of the watcher failing. `hold_recheck`, `hold_watch_failed` and `offer` come from `api/hold-watch.ts`. T17, a lead on hold rung to whoever came free: `offer` - an offer made (`callId`, `offerId`, `agentId`), and `sent`: false when Twilio would not take the redirect; `offer_ringing` - the call reached `/auto/offer` and rings that person; `offer_not_taken` - with `outcome` (`declined`, `missed`, `failed`, `hung_up`) and Twilio's `dialStatus`; `offer_failed` (error) - from `/auto/offer` with `callId`, or from `api/calls.ts` with `userId` when offering to someone who had just come free failed (their browser's answer is not affected). T18, voicemail: `verdict` - Twilio's verdict on a live call acted on (`callId`, `verdict`: `beep`, `machine` or `fax`, `action`: `voicemail`, `hang_up` or `carry_on`, and `tookOver`: false on `carry_on`, or when Twilio refused the takeover); `verdict_failed` (error) - after Twilio had its answer; `after_takeover` - a request about a call the voicemail message had taken over, ignored and logged as nothing else - not as an answer or a transfer (`callId`, `path`, and `dialStatus` for a ring's end). T20, the worker placing calls by itself (`worker/index.ts`): `dial` - one look, logged only when something happened - calls closed that never reached Twilio (`closed`), leads due (`due`), or another worker dialling (`locked`) - with `inside` (the calling hours), `room`, `stopped` (`on_hold`, `silent`, `refused`, `no_script`, or null), `silent`, `skipped` (no longer due when their turn came), and how each call went: `placed`, `refused`, `failed`, `notPlaced`, `unconfirmed` - a `notPlaced` or an `unconfirmed` ends the look; each call's own `placed`/`refused`/... line as from T12; `dial_failed` (error) - a look failing, the next tick tries again. Logged once when it starts and once when it ends, not every half minute: `webhooks_silent` (error) - Twilio's reports are not reaching us (`calls`, how many unheard of), so nothing is placed; `no_script` (error, from the worker too) - no call script active; `twilio_refusing` (error) - Twilio refused a call for our account's reasons, or never confirmed one, in the last 15 minutes, so nothing is placed until then (T28); `dialling_again` - placing calls again (`after`: what stopped it). `hold_closed` (warn) - the hold watcher ended a held call whose end report never came, from Twilio's record. `auto_calls.switch_not_recorded` (error) - the worker could not record whether it starts with automated calls on; it carries on. |
 | `sms.sent`, `sms.failed`, `sms.unconfirmed`, `sms.no_template`, `sms.name_dropped`, `sms.record_failed` | `worker/poller.ts`, `worker/retry-openers.ts`, `worker/opener.ts` (`sms.name_dropped`), `api/reply-flow.ts`, `db/agent-sms.ts`, `db/outbound.ts` and `db/failed-sends.ts` (`sms.record_failed`) |
 | | **Which text it was** (2026-10-05): the first question logs `key: question_1` - the opener's name in the logs, kept though the wording now comes from the lead's flow; a text sent after a reply logs `flow: antibiotics`, the flow's key, since one text can carry a reply and the next question |
-| | The text after a missed call logs the same events with `key: message_missed_call` (`db/missed-call-text.ts`). Its `sms.failed` is at `warn`, a real refusal by EZ Texting included, so an alarm on `level=error` alone does not catch it |
+| | The text after a missed call logs the same events with `key: message_missed_call`, and the link a lead said yes to on the automated call with `key: call_link_text` (T14) - both `db/lead-texts.ts`. Its `sms.failed` is at `warn`, a real refusal by EZ Texting included, so an alarm on `level=error` alone does not catch it |
 | `transcript.tick`, `transcript.tick_failed`, `transcript.request_failed`, `transcript.read_failed` | `worker/index.ts` (`tick`, `tick_failed`), `worker/transcripts.ts` (`request_failed`, `read_failed`) - a call's transcript, `TWILIO.md`, "Recordings and transcripts". `tick` only when something moved |
 | `webhook.rejected`, `webhook.ignored`, `webhook.failed` | `api/webhooks.ts` |
 | | `sms.unconfirmed` (warn, `db/outbound.ts`): a send to EZ Texting timed out, so the text may or may not have gone. It is not retried |
@@ -100,6 +99,11 @@ firing a real webhook: the number appears nowhere in the output.
 A new event belongs in this table as well as in the code, or whoever is querying
 the logs will never know to look for it.
 
+**Deliberately not logged:** `POST /api/calls/ringable` (T9), each browser
+saying whether it can take a call. It comes every 30 seconds from every open
+browser - two lines a minute per agent, saying nothing new. Its state is
+`users.ringable_until`; a failure still reaches `http.unhandled`.
+
 ### What is deliberately not structured
 
 `src/cli/create-superadmin.ts`, `src/cli/twilio-configure.ts`,
@@ -109,8 +113,11 @@ that must never become a shipped JSON log line - and `config.ts` runs before
 anything else exists, to say which env var is missing. The resend after an
 outage prints its list for the person running it; run with `docker compose
 exec`, its output stays in that terminal and is not shipped. The sender it
-shares with the retry still writes its usual `sms.*` lines there, and each text
-it sends is a `messages` row (`POLLER.md`, "Resending after an outage").
+shares with the retry (`worker/opener.ts`, `db/outbound.ts`) writes only
+`sms.name_dropped`, `sms.unconfirmed` and `sms.record_failed` there; `sms.sent`
+and `sms.failed` are the poller's and the retry's own lines, not the resend's.
+Each text it sends is a `messages` row (`POLLER.md`, "Resending after an
+outage").
 
 ## Health endpoint
 
@@ -180,8 +187,10 @@ Calling fails silently in one way: Twilio asks two addresses how to handle a
 call - the TwiML App's Voice URL for a call a browser places, the phone
 number's for a lead calling in - and if either points somewhere else, calls
 simply stop arriving. Nothing crashes and nothing is logged, because the
-request never reaches us. The usual cause is `twilio:configure` run from a
-laptop against the number production uses. So the check asks Twilio where both
+request never reaches us. The usual cause was `twilio:configure` run from a
+laptop against the number production uses; since 2026-10-16 the command refuses
+that (`TWILIO.md`, "What it needs on the Twilio account"), which leaves a change
+made by hand in the Twilio Console. So the check asks Twilio where both
 point and compares them with `PUBLIC_URL`; the message says which is wrong and
 to run `npm run twilio:configure` on this server.
 

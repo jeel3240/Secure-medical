@@ -24,14 +24,15 @@ from it.
 |---|---|
 | No live `dnc_list` row for the phone | An opt-out is absolute. A row released by START (`released_at` set) does not count - `STATE-MACHINE.md`, "Opting back in". |
 
-**Three reasons stand on their own** - no score needed, and they keep even a
-closed lead in:
+**Four reasons stand on their own** - no score needed, and the first three
+keep even a closed lead in:
 
 | Reason | Why a person is needed |
 |---|---|
 | An active agent holds it | Being worked. A lead must never vanish from under the agent working it, whatever its conversation says |
-| `has_unread_inbound` | Texted something the questions cannot handle - after the conversation ended, or to an agent who took it over. `STATE-MACHINE.md`, "Which replies need a person" |
+| `has_unread_inbound` | Texted something the questions cannot handle - after the conversation ended, to an agent who took it over, or after a phone call took it over (rule 2d). `STATE-MACHINE.md`, "Which replies need a person" |
 | An unreturned **missed call** | They rang our number and nobody answered - 2026-10-01. This one needs no reply and no score: a lead who has never texted is in the queue for it. `TWILIO.md`, "A missed call" |
+| An unreturned **missed "yes"** | They said yes on the automated call, nobody took the transfer, and they heard "An agent will call you back shortly" (`script_result = 'transfer_missed'`) - T22, 2026-10-24, `AUTO-CALLS.md`. The robot calls only leads who never replied, so these have no score. Cleared exactly as a missed call is - an agent calls or texts them, answers when they ring, or saves an outcome - so it never meets a closed lead: closing it is one of the things that clears it |
 
 **Three more need a score above 0 and a lead that is not closed.** Scoring
 starts at the first reply, so a score is the mark of a responder:
@@ -74,8 +75,8 @@ did not read `dispositions` at all, so a finished lead stayed at the top for
 the next agent to call again.
 
 A lead partway through the questions is on Admin > Leads, under *Answering*,
-and nowhere an agent works from - unless an agent holds it, it has an unread
-text, or it rang us and nobody answered. Someone who stops for good expires after the
+and nowhere an agent works from - unless an agent holds it, a callback is
+booked, it has an unread text, or it rang us and nobody answered. Someone who stops for good expires after the
 reply window and never reaches the queue - accepted: they never said how, or
 whether, they wanted to be contacted.
 
@@ -85,12 +86,32 @@ the first one having expired.
 
 ## The order
 
-`score DESC`, then the most recently received, then id.
+A missed "yes" first, the longest waiting on top; then `score DESC`, then the
+most recently received, then id.
 
 Score first is the point of the screen. Freshest next, because speed to contact
 is what the score is for - `DESIGN-PROMPT.md` section 2, "sorted by score then
 freshness". Id last so the order never wobbles between two identical rows.
 The page says so: "Highest score first, then newest."
+
+**A missed "yes" comes before all of it - T22, 2026-10-24.** The lead said yes
+to talking to a person, and was told an agent would call them back shortly.
+Nothing in the queue is warmer, and with no score it would otherwise sink to
+the bottom. Several are ordered by when their call was made, oldest first - as
+the hold line takes the longest waiting first (`AUTO-CALLS.md`, "The hold
+line"). `MISSED_YES_AT_SQL` in `db/lead-state.ts` is the value sorted on; null
+for every other lead, which keeps today's order beneath them. Once someone
+gets back to the lead it drops to its own place - usually out of the queue, as
+it never replied.
+
+While automated calls are on, the page says "Missed transfers first, then
+highest score, then newest." - "Missed a transfer" is already what the app bar
+says to the person who let one ring out (`AUTO-CALLS.md`, T15c). Off, it keeps
+the old words: no transfers are made. (One nobody got back to before automated
+calls were switched off still sorts first, under the old words.)
+
+**Only under All.** A missed "yes" has no tier, so picking Hot, Warm or Low
+hides it, like any lead with no score. The switcher starts on All.
 
 A lead with no score - held before it answered, or one who rang us and was
 missed - sorts to the bottom. The list stops at 100 rows, so in a queue that
@@ -118,11 +139,20 @@ why is it here? When several apply, the first wins:
 |---|---|---|---|
 | 1 | `working` | An **active** agent holds the lead | `agentId`, `agentName` |
 | 2 | `missed_call` | The lead rang us, nobody answered, and nobody has got back to them since - `MISSED_CALL_SQL`, `TWILIO.md`. Bold. A held lead still reads Working | |
-| 3 | `inbound_reply` | The lead has texted and nobody has read it | |
-| 4 | `callback` | A callback is booked and not done - the soonest one. "Callback – Maya Chen · 8:13 PM", with the date when not today. Does not lock the row | `agentId`, `agentName`, `at` |
-| 5 | `wants_call` | The lead said No to the first question, then asked to hear from a rep - the flow ended `wants_contact` (2026-10-05). Says why a lead with 10 points is in the queue | |
-| 6 | `needs_review` | Conversation `review`: replies we could not read | |
+| 3 | `wants_call` | A missed "yes": the lead said yes on the automated call, nobody took it, and nobody has got back to them since - `MISSED_YES_SQL` (T22, 2026-10-24). These rows are first in the queue. A held lead still reads Working | |
+| 4 | `inbound_reply` | The lead has texted and nobody has read it | |
+| 5 | `callback` | A callback is booked and not done - the soonest one. "Callback – Maya Chen · 8:13 PM", with the date when not today. Does not lock the row | `agentId`, `agentName`, `at` |
+| 6 | `wants_call` | The lead said No to the first question, then asked to hear from a rep - the flow ended `wants_contact` (2026-10-05). Says why a lead with 10 points is in the queue | |
+| 7 | `needs_review` | Conversation `review`: replies we could not read | |
 | - | `null` | None of those: the lead is waiting to be picked up. The screen shows a hyphen | |
+
+**One status for two reasons - T22.** A missed "yes" reads **Wants a call**,
+the words of row 6: both leads asked to talk to a person. It ranks with the
+missed call, though, not with row 6 - the lead was promised a call back a few
+minutes ago and wants to talk now, which outranks a text waiting to be read.
+The lead's card keeps saying it once the lead is picked up and the queue says
+Working - a **Wants a call** badge beside Missed call (`flags.missedYes`,
+`AGENT-WORKSPACE.md`), until someone gets back to them.
 
 **Callback came back - Jeel, 2026-09-29.** Testing showed the cost of
 dropping it: a lead waiting on Maya's callback said nothing, so another agent
@@ -252,10 +282,37 @@ answer arrived, not every five seconds regardless (`usePolling.ts`). On a
 fixed interval a slow server was sent more requests the slower it got.
 
 **What is left grows with the leads.** Each refresh still looks at every lead
-once: about 0.18 s at 50,000, so roughly 0.4 s at 100,000. If that ever
+once, so its time grows with them: 0.18 s at 50,000 on 2026-10-06, 75 ms after
+T22 (below). If that ever
 matters, the fix is to stop working membership out - to store "needs a
 person" on the lead and maintain it - which is a design change, not a tuning
 one.
+
+**Timed again for T22, 2026-10-24.** The speed check's leads now include the
+robot's calls - one to every lead who never answered, ending as such calls do,
+and the "yes" nobody took called back by an agent an hour later except in the
+last day. Same data, same laptop, the code before and after:
+
+| | Before T22 | After |
+|---|---|---|
+| The queue as it opens | 96 ms | 75 ms |
+| One tier | 96 ms | 79 ms |
+| The last 7 days | 4 ms | 11 ms |
+| A name search | 9 ms | 10 ms |
+| Admin > Leads, one status | 175 ms | 156 ms |
+| The lead card | 1.0 ms | 1.4 ms |
+
+Faster, though the queue asks one more thing of every lead. The first
+version asked it as the missed call is asked - "does this lead have such a
+call?" once per lead - and the queue took 122 ms. Postgres can instead work out
+every such call once per statement and look each lead up in that set, but only
+when the question's sole tie to the lead is the call's own `lead_id`. The
+missed call's rule tied its three "since" checks to the lead directly, which
+ruled that out. Both now share one rule, `nobodyGotBackSince` in
+`db/lead-state.ts`, written against the call's lead, so the missed call and
+the missed "yes" are each worked out once - and so is the missed call inside
+"Closed", which is why Admin > Leads gained too. The last 7 days loses a few
+milliseconds: the sets cover every call, however few leads the date leaves.
 
 ## What this does not cover
 
@@ -277,9 +334,10 @@ one.
 - **`has_unread_inbound` is cleared by `POST /api/leads/:id/read`** - Phase 3
   task 3. Until it existed nothing unset the flag, so an expired lead who texted
   back stayed in the queue however often an agent read the message. Proved
-  against a real database: such a lead leaves the queue once read, while a lead
-  whose conversation is still open stays, because the flag was never what was
-  keeping it there. `STATE-MACHINE.md`, "Expiry".
+  against a real database: such a lead leaves the queue once read - so does a
+  lead an agent took over mid-questions - while a completed lead stays,
+  because the flag was never what was keeping it there
+  (`read-flag-live-check`). `STATE-MACHINE.md`, "Expiry".
 - **No paging.** `limit` truncates and `total` says by how much; at 50-100 leads
   a day the default of 100 holds several days of queue. Page when it does not.
 
@@ -290,12 +348,23 @@ The tag rules and the route have unit tests (`queue-tags.test.ts`,
 where most of the rules above actually live, so
 `backend/scripts/queue-live-check.ts` seeds one lead per case in a scratch
 database and asserts what comes back - inclusion, exclusion, order, every tag,
-each filter, the counts. The header of that file says how to run it. 55 checks
-as of 2026-10-06, all passing - including a partway lead kept out, and partway
+each filter, the counts. The header of that file says how to run it. 70 checks
+as of 2026-10-24, all passing - including a partway lead kept out, and partway
 leads kept in because they are held, booked, or taken over and replied to; a
 booked callback shows Callback, and call attempts show no tag. The missed call
 - in the queue with no score, reopening a closed lead, its tag, and what
 settles it - is proved in `scripts/calls-live-check.ts`.
+
+The missed "yes" (T22) is proved in `scripts/queue-live-check.ts`, through the real writes - the
+robot's call (`startAutomatedCall`), nobody taking it (`missTransfer`), an
+agent's call (`startCall`), an outcome (`setDisposition`): first in the queue,
+before a 90-point lead, the longest waiting on top; tagged Wants a call with no
+score; flagged on the lead card; counted in the total under no tier; a robot
+call that ended any other way puts nobody in. Neither the link text, the
+automated text, nor an agent's text EZ Texting refused clears it; picking the
+lead up shows Working and keeps it first. An agent's call, an agent's text and
+an outcome each clear it, and the queue is as it was before the robot's
+calls.
 
 ## The polling hook
 

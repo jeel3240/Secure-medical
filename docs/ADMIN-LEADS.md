@@ -4,16 +4,18 @@ Every lead the poller has pulled in, whether or not they replied. Superadmin
 only, read-only.
 
 Spec: `DESIGN-PROMPT.md` section 6g. Code: `frontend/src/pages/admin/LeadsPage.tsx`,
-`backend/src/api/admin/leads.ts`, `backend/src/db/leads.ts`.
+`backend/src/api/admin/leads.ts`, `backend/src/db/leads.ts`; the Call column's
+words, `frontend/src/lib/call-results.ts`.
 
 ## Why it is separate from the queue
 
 The Priority Queue shows only leads who need a person - completed, needs
-review, an inbound reply, an unreturned missed call, or one being worked - because agents should spend
+review, an inbound reply, an unreturned missed call, a "yes" on the automated
+call nobody took (T22), a booked callback, or one being worked - because agents should spend
 their time on people who have given them a reason to. *(2026-09-28: a lead
 partway through the questions is no longer in the queue, so this page, under
-Answering, is the only place it appears - unless an agent holds it, it has an
-unread text, or it rang us and was missed: `QUEUE.md`, "Who is in it".)* This page shows everyone, so a superadmin
+Answering, is the only place it appears - unless an agent holds it, a callback
+is booked, it has an unread text, or it rang us and was missed: `QUEUE.md`, "Who is in it".)* This page shows everyone, so a superadmin
 can confirm leads are arriving and see where they drop off, without
 non-responders burying HOT leads in the agents' view. That list is `QUEUE.md`.
 
@@ -36,7 +38,7 @@ ways the SMS part can end.
 |---|---|---|
 | `opted_out` | Opted out | On `dnc_list`, or newest conversation `suppressed` |
 | `closed` | Closed | An agent pressed Closed, and nothing has reopened it since: no unread text from the lead, no callback booked after it, no missed call from them that nobody has got back to (2026-10-01), and no agent holding it (2026-09-29) |
-| `working` | Working | An agent holds it, or has left any trace on it: a note, a callback, a disposition, a call they placed or answered, or an SMS of their own. A missed incoming call is the lead's doing, not a trace - though the callback it books for an agent is one |
+| `working` | Working | An agent holds it, or has left any trace on it: a note, a callback, a disposition, a call they placed or answered, or an SMS of their own. A missed incoming call is the lead's doing, not a trace - though the callback it books for an agent is one; nor is an automated call nobody took (T4, `AUTO-CALLS.md`) |
 | `needs_review` | Needs review | Conversation `review` |
 | `offers` | Offers | The flow ended with the lead asking for special offers only (`end_outcome = 'offers'`, 2026-10-05). Not Ready: there is no call to make. An agent's trace on it still reads Working |
 | `declined` | Not interested | The lead said No to the first question, then No thanks to the offers and to a rep (`end_outcome = 'declined'`, 2026-10-06). Nothing to do; out of the queue. They have not opted out |
@@ -77,8 +79,9 @@ Two renames came with it, so each word means one thing:
 
 The API values changed with the labels. `?status=in_progress` or
 `?status=completed` is now refused with a 400, as any unknown status is - see
-"Filters" below. The screen keeps its filters in memory, not the address, so no
-saved link carries the old values.
+"Filters" below. The screen's view has been in the address since 2026-10-11
+("The view is in the address", below); an old value there reads as All and
+never reaches the server.
 
 ### Closed
 
@@ -129,7 +132,10 @@ Until 2026-09-21 nothing advanced the conversation, so a lead who had replied
 still read as `awaiting_reply` and only the inbound arrow in Last activity
 showed it. That is fixed. It can still happen for a reply the flow does not
 act on - one that arrives with no conversation on the lead - and in that case
-awaiting is the honest answer.
+awaiting is the honest answer. A lead whose questions a phone call stopped
+(`STATE-MACHINE.md` rule 2d) also keeps the status and Step it had - Awaiting
+reply or Answering, at its question - until it expires, unless an agent's
+trace makes it Working. Its card says "Stopped at Q1 by a call".
 
 **A lead who sent STOP and later START still reads Opted out.** The block
 itself is lifted - `dnc_list` has it released, and the lead can be texted and
@@ -144,7 +150,8 @@ decision that day. If it is ever changed, it is the first line of
 **The question the lead is on now - Jeel, 2026-09-29.** The question the
 conversation is on, which the state machine moves on after each valid answer;
 **Done** once the questions are finished; a hyphen for an opted-out
-conversation - blocked on arrival, or ended by STOP or a DNC outcome.
+conversation - blocked on arrival, or ended by STOP, a DNC outcome, or a stop
+said on the automated call.
 
 | Lead | Status · Step |
 |---|---|
@@ -170,15 +177,71 @@ The API field changed with it: `stepReached` (a number) became `step`
 (then `1`-`3`, `'done'` or null; text since 2026-10-06). No database change: `conversations.step` already
 held it. `scripts/admin-leads-live-check.ts` proves each row above.
 
+## Call
+
+**How the robot's call went - T23, 2026-10-25** (`AUTO-CALLS.md`). A lead is on
+two tracks at once: the texts, which the status and Step follow, and the
+automated call. So the call is a column of its own, not a status or a tab - a
+lead can be **Awaiting reply** and **Voicemail left** at the same time, and
+both are true.
+
+| Call | Means |
+|---|---|
+| - | The robot has not called the lead |
+| Calling now | Its call is going: ringing, asking, putting a "yes" through, or on hold |
+| Said yes · taken | Said yes, and a person took the transfer - the lead reads Working |
+| Said yes · nobody took it | Said yes, and nobody took it - first in the agents' queue as Wants a call until someone gets back to them (T22) |
+| Link sent | Said no, then yes to the link, which was texted |
+| Not interested | Said no twice |
+| Voicemail left | A machine answered; the message was left after its beep |
+| No response | Not understood twice, or silence |
+| Hung up | Picked up, and hung up before the script ended |
+| No answer | No person picked up - no answer, busy, a fax, or Twilio refused the lead's number |
+| Opted out | Said stop, or pressed 9 - the number is blocked, so the status reads Opted out too |
+| No result | No result an hour after the call was placed: its end never reached us (below) |
+
+The words are the timeline's (T21), capitalised: one list,
+`lib/call-results.ts`, for both screens - "Said yes · taken" here, where the
+timeline names who took it and how long they talked.
+
+**Worked out, never stored**, like the status: `robotCallSql` in
+`db/leads.ts` reads the lead's automated call - one per lead
+(`calls_one_automated_per_lead`), the newest should a second try ever be
+allowed - and gives `calls.script_result`. Every call that ends has one: set
+when the script ends, by `settleAutomatedCall` at the call's end if it never
+did, or `unanswered` when Twilio refused the lead's number. A call Twilio
+never placed for our own account's reasons, or never confirmed (`not_placed`,
+`AUTO-CALLS.md` "When Twilio refuses"), is not the lead's call and is left
+out: with only those, the lead reads Not called.
+One with none is still going, unless its end never reached us; no robot call
+lasts long - the hold line's own safety stop is 10 minutes - so an hour on it
+reads **No result**, never "Calling now" for ever. An agent's own call is
+never the robot's.
+
+**The filter** - "All calls" by default, then "Not called", then each value
+above in the order a call goes. `?call=` takes `none` or a value -
+`transferred`, `voicemail_left`, `unknown`... - and anything else is refused
+with 400 `invalid_call`. It narrows the tab counts as Source and Received do,
+so with "Voicemail left" chosen the tabs say how many of those leads are
+Awaiting reply, Working and so on. Kept in the address with the other filters:
+`/admin/leads?call=voicemail_left`.
+
+With automated calls off, every row reads "-" and the filter finds nothing but
+"Not called" - production, until `AUTO_CALLS` is on.
+
 ## The query
 
-`GET /api/admin/leads?status=&source=&since=&q=&page=`
+`GET /api/admin/leads?status=&source=&since=&call=&q=&page=`
 
 ### Filters
 
-Absent, empty or `all` means no filter. Anything else must be a known value, or
+Absent, empty or `all` means no filter - except `source`, a comma-separated
+list of any values, each matched exactly (`all` included). Anything else must
+be a known value, or
 the request is refused with a 400 and the query never runs: `invalid_status`,
-or `invalid_since` for a time window other than `1h`, `24h`, `7d` or `30d`.
+`invalid_since` for a time window other than `1h`, `24h`, `7d` or `30d`, or
+`invalid_call` (T23 - "Call" above; `call=all` is refused, absent is every
+lead).
 
 Until 2026-09-28 this route silently read an unknown value as no filter, while
 the queue refused the same `?since=` with a 400 - one filter, two behaviours.
@@ -203,9 +266,12 @@ finds `+16026203572`.
 `scripts/admin-leads-live-check.ts` proves the statuses against a real
 database: every SMS status, each kind of agent trace on its own, Closed and a
 lead closed under a retired value, reopening by a later callback or a text,
-and the tab counts - 37 checks as of 2026-10-06, all passing. A missed call
-reopening a closed lead, and an outcome settling it, are in
-`scripts/calls-live-check.ts`.
+and the tab counts; and the Call column (T23) - each result, two tracks at
+once, a "yes" taken reading Working, Calling now and No result by the call's
+age, a lead never called and an agent's own call reading nothing, the filter
+alone, with a tab and with the counts, and Not called - 51 checks as of
+2026-10-25, all passing. A missed call reopening a closed lead, and an outcome
+settling it, are in `scripts/calls-live-check.ts`.
 
 Score and tier are the running values, returned at every stage. Scoring starts
 at the first reply, so a lead part-way through has a real score - 10 for
@@ -237,6 +303,9 @@ band as the queue. Built from the queue's own parts, so the two cannot drift:
 | Opted out | Whole row tinted red | Its status in red; the row is plain |
 | Header | Title only | "Live · updated just now", as on the queue - `LiveStatus` |
 | Row | Not clickable | Opens the lead's timeline |
+
+*(T23, 2026-10-25: a **Call** column after Step, and a Call filter between
+Source and Received - "Call" above.)*
 
 The status icons follow a lead's life: a clock for Awaiting reply, a chat
 bubble for Answering, then an empty circle (Ready), a half-filled one (Working,
@@ -273,8 +342,9 @@ writes the checkpoint on every successful poll (`POLLER.md`, step 7), so the
 time is the last poll.
 
 **The view is in the address** - 2026-10-11, `frontend/src/lib/leads-view.ts`.
-The tab, the source, the time window, the search and the page number are read
-from the page's address and written back to it: `/admin/leads?status=answering&page=2`.
+The tab, the source, the call (T23), the time window, the search and the page
+number are read from the page's address and written back to it:
+`/admin/leads?status=answering&page=2`.
 They were held in the page's memory, so they were gone when the page was. On
 the Answering tab, open a lead, press Back - and the list was on All again,
 page one, every time: found in the first week of real use, working down a
@@ -286,7 +356,7 @@ tab one lead at a time.
   so Back from the list leaves it instead of stepping through every tab that
   was clicked.
 - Anything unrecognised in the address reads as its default and never reaches
-  the server.
+  the server - except the source, which is passed as it is.
 - The Leads link in the side menu still opens the plain page, on All.
 
 The queue, My Callbacks and the DNC list keep their view in memory and still
@@ -326,6 +396,19 @@ What changed, besides the index and the `jit` setting described there
   page reads only its own rows instead of sorting every lead.
 - "Has this lead answered anything?" is one look-up for that conversation; it
   had been planned as a read of every answer ever given.
+
+**Faster again with T22, 2026-10-24** - with no change to this page. "Closed"
+asks whether the lead has a missed call nobody returned, and that rule now
+lets Postgres work out the missed calls once per statement rather than once
+per lead (`QUEUE.md`, "How fast it is", where the reason is): one status tab
+175 ms to 156 ms, a late page 151 ms to 125 ms, the first page 92 ms to 84 ms,
+on the speed check's leads, robot calls included.
+
+**The Call column costs nothing - T23, 2026-10-25.** It is looked up after the
+page is chosen, for its fifty rows, like the last message. Same data, the code
+before and after: the first page 82 ms and 86 ms, one status tab 159 ms both
+times, a late page 124 ms and 123 ms. Filtering on one call result asks every
+lead - one look-up each, by the one-call-per-lead index - and takes 39 ms.
 
 `?page=` must be a whole number from 1 (400 otherwise). It used to reach the
 statement as whatever it parsed to - `2.5` skipped 75 rows, `1e30` was a 500.

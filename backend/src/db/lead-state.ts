@@ -39,6 +39,12 @@ const closingList = CLOSING_DISPOSITIONS.map((value) => {
  * The automated "we will call you back" text does not clear it: that text is
  * the promise, not the call back.
  *
+ * **Nor does an automated call** (T4, 2026-10-18; `AUTO-CALLS.md`) - the
+ * server's scripted call is not a person getting back to them. Once a person
+ * takes its transfer it carries their `agent_id`, and then it counts like any
+ * call an agent was on. So "a call that returns it" is an agent's own call, or
+ * any call with a person on it - answered, or under way.
+ *
  * **A call under way counts as returning it** - found on the first real
  * answered call, 2026-10-01: the agent was talking to the lead under a banner
  * saying nobody had answered them, because a call has no outcome until it
@@ -54,30 +60,84 @@ const closingList = CLOSING_DISPOSITIONS.map((value) => {
  *
  * **A text EZ Texting refused does not count.** It never reached the lead, so
  * nobody has got back to them.
+ *
+ * "Nobody has got back to them" is `nobodyGotBackSince`, shared with the
+ * missed "yes" below (T22) - one rule for both.
  */
 export const MISSED_CALL_SQL = `(
   EXISTS (
     SELECT 1 FROM calls mc
     WHERE mc.lead_id = l.id AND mc.direction = 'inbound' AND mc.outcome = 'missed'
-      AND NOT EXISTS (
+      AND ${nobodyGotBackSince('mc')}
+  )
+)`;
+
+/**
+ * Since the call `call` (a `calls` alias of the enclosing query), no person
+ * has got back to the lead: no agent's call, no call a person was on -
+ * answered, or under way in the last two hours - no text of an agent's that
+ * EZ Texting took, and no outcome saved. `MISSED_CALL_SQL` above says why each
+ * counts.
+ *
+ * A function so the rule is written once: a missed call and a missed "yes"
+ * are both a lead waiting on us, cleared the same way.
+ *
+ * **It names the call's lead, never `l`** (T22): its only tie to the lead
+ * being asked about is then the caller's `<call>.lead_id = l.id`, so Postgres
+ * can work out every such call once per statement - a set it looks each lead
+ * up in - instead of once per lead. The queue asks it of every lead, every
+ * five seconds: `QUEUE.md`, "How fast it is".
+ */
+function nobodyGotBackSince(call: string): string {
+  return `NOT EXISTS (
         SELECT 1 FROM calls rc
-        WHERE rc.lead_id = l.id AND rc.id > mc.id
+        WHERE rc.lead_id = ${call}.lead_id AND rc.id > ${call}.id
           AND (
             rc.direction = 'outbound'
-            OR rc.outcome = 'answered'
-            OR (rc.outcome IS NULL AND rc.started_at > now() - interval '2 hours')
+            OR (
+              rc.agent_id IS NOT NULL
+              AND (rc.outcome = 'answered' OR (rc.outcome IS NULL AND rc.started_at > now() - interval '2 hours'))
+            )
           )
       )
       AND NOT EXISTS (
         SELECT 1 FROM messages am
-        WHERE am.lead_id = l.id AND am.sent_by IS NOT NULL AND am.created_at > mc.created_at
+        WHERE am.lead_id = ${call}.lead_id AND am.sent_by IS NOT NULL AND am.created_at > ${call}.created_at
           AND am.delivery_status IS DISTINCT FROM 'failed'
       )
       AND NOT EXISTS (
         SELECT 1 FROM dispositions od
-        WHERE od.lead_id = l.id AND od.created_at > mc.created_at
-      )
-  )
+        WHERE od.lead_id = ${call}.lead_id AND od.created_at > ${call}.created_at
+      )`;
+}
+
+/**
+ * A missed "yes" - T22, `AUTO-CALLS.md`. The lead said yes on the robot's
+ * call, nobody took the transfer, and they heard "An agent will call you back
+ * shortly" (`script_result = 'transfer_missed'`). Since then nobody has got
+ * back to them - the same rule as a missed call: an agent calls them, texts
+ * them, answers when they ring, or saves an outcome.
+ *
+ * A robot call that ended any other way - not interested, voicemail, no
+ * answer - is not a lead waiting on us, and puts nobody in the queue.
+ *
+ * `MISSED_YES_SQL` says whether the lead has one; `MISSED_YES_AT_SQL` when
+ * that call was made, or null - what the queue sorts on, the longest waiting
+ * first. One automated call per lead (`calls_one_automated_per_lead`); the
+ * LIMIT keeps it one value should a second try ever be allowed.
+ */
+const MISSED_YES_CALL = `yc.direction = 'automated' AND yc.script_result = 'transfer_missed'
+    AND ${nobodyGotBackSince('yc')}`;
+
+export const MISSED_YES_SQL = `(
+  EXISTS (SELECT 1 FROM calls yc WHERE yc.lead_id = l.id AND ${MISSED_YES_CALL})
+)`;
+
+export const MISSED_YES_AT_SQL = `(
+  SELECT yc.created_at FROM calls yc
+  WHERE yc.lead_id = l.id AND ${MISSED_YES_CALL}
+  ORDER BY yc.id
+  LIMIT 1
 )`;
 
 /**
@@ -141,10 +201,47 @@ export const WORKED_SQL = `(
   OR EXISTS (SELECT 1 FROM callbacks wc WHERE wc.lead_id = l.id)
   OR EXISTS (SELECT 1 FROM dispositions wd WHERE wd.lead_id = l.id)
   -- A call an agent placed or answered. A missed incoming call is the lead's
-  -- doing, not an agent's work.
+  -- doing, not an agent's work; nor is an automated call nobody took (T4) -
+  -- answered by the lead, it still had no person on it.
   OR EXISTS (
     SELECT 1 FROM calls wk
-    WHERE wk.lead_id = l.id AND (wk.direction = 'outbound' OR wk.outcome = 'answered')
+    WHERE wk.lead_id = l.id
+      AND (wk.direction = 'outbound' OR (wk.outcome = 'answered' AND wk.agent_id IS NOT NULL))
   )
   OR EXISTS (SELECT 1 FROM messages wm WHERE wm.lead_id = l.id AND wm.sent_by IS NOT NULL)
 )`;
+
+/**
+ * When a phone call stopped the text questions of a conversation - 2026-10-27,
+ * Jeel, from the T25 doc check (STATE-MACHINE.md rule 2d): the lead answered
+ * the robot's question - a choice kept, yes, no or the link - or rang our
+ * number, answered or not, after the conversation began. Null when neither.
+ * The earliest such moment. Derived, never stored: the answer
+ * (`call_answers`) and the call (`calls`) are the record.
+ *
+ * `leadId` and `since` are SQL for the lead's id and the conversation's
+ * `created_at`, so a call to an earlier conversation never stops a later one.
+ */
+export function phoneTookOverAtSql(leadId: string, since: string): string {
+  return `(
+    SELECT min(pt.at) FROM (
+      SELECT ca.created_at AS at FROM call_answers ca
+      WHERE ca.lead_id = ${leadId} AND ca.result = 'choice' AND ca.created_at > ${since}
+      UNION ALL
+      SELECT ic.created_at FROM calls ic
+      WHERE ic.lead_id = ${leadId} AND ic.direction = 'inbound' AND ic.created_at > ${since}
+    ) pt
+  )`;
+}
+
+/**
+ * `phoneTookOverAtSql` for the screens: only when the questions were still
+ * running at the time - the conversation (alias `c`) still open, or expired
+ * after the call. A conversation that completed, went to review or was
+ * stopped got there before any such call: none can get there after one, since
+ * the replies that would take it there are no longer read.
+ */
+export function phoneStoppedQuestionsAtSql(c: string, leadId: string): string {
+  const at = phoneTookOverAtSql(leadId, `${c}.created_at`);
+  return `(CASE WHEN ${c}.status = 'open' OR (${c}.status = 'expired' AND ${at} < ${c}.expires_at) THEN ${at} END)`;
+}

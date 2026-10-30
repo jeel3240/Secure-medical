@@ -100,7 +100,7 @@ went a different way:
 | Auth | bcrypt (cost 12) and a JWT in an httpOnly, SameSite=Strict cookie. See `docs/AUTH.md`. |
 | Frontend | React 18, Vite 4, React Router 6, zustand, plain CSS with design tokens. |
 | Production web server | The `caddy` service is built from `frontend/Dockerfile`: the React build copied into a `caddy:2` image. |
-| Calling | Built 2026-10-01: the `twilio` library on the server, `@twilio/voice-sdk` in the browser. Outgoing calls, and incoming calls to one agent's browser; voicemail detection, recordings and transcripts, 2026-10-02; a recording notice, 2026-10-05. `docs/TWILIO.md`. |
+| Calling | Built 2026-10-01: the `twilio` library on the server, `@twilio/voice-sdk` in the browser. Outgoing calls, and incoming calls to one agent's browser; voicemail detection, recordings and transcripts, 2026-10-02; a recording notice, 2026-10-05. `docs/TWILIO.md`. With automated calls on, a call back nobody owns rings everyone free (T19). Automated outbound calls, placed by the server, 2026-10-18 on - `docs/AUTO-CALLS.md`. |
 
 **EZ Texting API notes**
 - Quick start: https://developers.eztexting.com/docs/quick-start-guide
@@ -139,7 +139,7 @@ secure-medical/
     Secure-Medical-Call-Center-Mockup.pdf
 ```
 
-All documentation lives in `docs/`, except `CLAUDE.md`. Keep it that way: when
+All documentation lives in `docs/`, except `CLAUDE.md` and a root `README.md` that only links into `docs/`. Keep it that way: when
 you change something the docs describe, update the doc in the same commit.
 
 **As built, 2026-09-14.** The tree above is the target. What exists today also includes:
@@ -147,18 +147,19 @@ you change something the docs describe, update the doc in the same commit.
 ```
   docker-compose.prod.yml   server-only override: RDS, no exposed ports, caddy service
   Caddyfile.dev             not used by anything; local dev goes through Vite
+  README.md                 a short index into docs/
   backend/
     scripts/migrate.js      migration runner
     src/api/auth/           sign-in, sessions, guards
     src/api/users/          superadmin account management
-    src/api/admin/leads.ts  Admin > Leads query endpoint
-    src/api/admin/config.ts    Admin > Configuration, read-only
+    src/api/admin/leads.ts  Admin > Leads query endpoint; its Call filter (T23)
+    src/api/admin/config.ts    Admin > Configuration, read-only; tells it whether automated calls are on, the calling number, whether calls are recorded (T24)
     src/api/admin/overview.ts  Admin > Overview statistics
     src/api/admin/dnc.ts       Admin > DNC list, read-only
     src/api/admin/health.ts    deep health check, superadmin only
     src/db/health.ts        database, poller, webhook, expiry, sending
-    src/db/admin-config.ts  live copy, scoring and tiers, with segment counts
-    src/db/admin-overview.ts  KPIs, funnel, per-agent table, activity feed
+    src/db/admin-config.ts  live copy, scoring and tiers, with segment counts; the call script line by line and the settings the robot reads, through its own readers (T24)
+    src/db/admin-overview.ts  KPIs, per-agent table, activity feed (no funnel since 2026-09-28)
     src/db/admin-dnc.ts     the DNC list, released rows included
     src/api/leads.ts        the agents' priority queue, and claim/release
     src/api/lead-workspace.ts  every route on one lead: card, timeline, notes, callbacks, SMS, dispositions, read
@@ -167,20 +168,22 @@ you change something the docs describe, update the doc in the same commit.
     src/db/claims.ts        claiming and releasing a lead
     src/db/read-flag.ts     clears has_unread_inbound
     src/db/lead-detail.ts   the lead card
-    src/db/timeline.ts      the merged lead timeline
+    src/db/timeline.ts      the merged lead timeline; a robot call's result and what the lead said on it (T21)
     src/db/notes.ts         agent notes, append-only
     src/api/callbacks.ts    My Callbacks: list, reschedule, mark done
-    src/api/calls.ts        browser calling: whether it is set up, and the call token
-    src/api/twilio-webhooks.ts  Twilio's signed webhooks: connect a call, a lead calling in, how it ended, who picked up, the recording, the recording notice
+    src/api/calls.ts        browser calling: whether it is set up, and the call token; the browser's word and the "Taking calls" switch (T9, T10); either saying someone is free rings them with a lead on hold (T17)
+    src/api/hold-watch.ts   the hold watcher: every 30 seconds, leads on hold offered to whoever is free (T17), and a lead nobody is coming for sent back to /auto/hold, cutting the music short (T16); a held call Twilio says is over ended from Twilio's record (T20 review)
+    src/api/twilio-webhooks.ts  Twilio's signed webhooks: connect a call, a lead calling in, how it ended, who picked up, the recording, the recording notice; the automated call's /auto/* (T12), its transfer, /auto/claim and /auto/after (T15a), and its hold line, /auto/hold (T16), and /auto/offer, a lead on hold ringing the person who came free (T17); /auto/amd acting on Twilio's verdict - the voicemail message (T18); /incoming/claim, a person accepting a call back that rang everyone free (T19)
     src/core/calls.ts       call rules, pure: identity, outcomes, refusals
-    src/db/calls.ts         may this call be placed, who an incoming call rings, and recording it
-    src/db/missed-call-text.ts  the text sent after a call to us nobody answered
-    src/integrations/twilio.ts  the file the routes use for the twilio library (twilio-health.ts, twilio-transcripts.ts and the configure CLI use it too)
+    src/db/calls.ts         may this call be placed, who an incoming call rings, and recording it; when an automated call is voicemail (TAKEN_BY_VERDICT_SQL, T18); a lead calling back whom nobody owns rings everyone free, and who takes it (T19)
+    src/db/lead-texts.ts    the texts a call leads to: after a call to us nobody answered, and the link a lead said yes to on the automated call (T14)
+    src/integrations/twilio.ts  the file the routes use for the twilio library (twilio-health.ts, twilio-transcripts.ts and the configure CLI use it too); the automated call's TwiML, and how it listens - Deepgram, measured (T13b); its transfer's ring (T15a); the voicemail message (T18); ringing everyone free for a lead calling back (T19)
     src/integrations/twilio-health.ts  the health report's calling check: do the number and the TwiML App point here
+    src/core/twilio-pointing.ts  what twilio:configure may point, and what it refuses - production's number from a laptop, above all
     src/integrations/twilio-transcripts.ts  Twilio's transcription service; src/core/transcripts.ts who said what, pure
     src/db/transcripts.ts   call recordings and transcripts; src/worker/transcripts.ts fetches them
     src/twilio-settings.ts  calling's settings: off, on or incomplete
-    scripts/calls-live-check.ts  proves the call SQL: holder, DNC, retries
+    scripts/calls-live-check.ts  proves the call SQL: holder, DNC, retries; an automated call voicemail only when taken over (T18)
     src/db/callbacks.ts     callbacks, and the today/upcoming/overdue windows
     src/db/dispositions.ts  setting a disposition, and the DNC block
     src/core/dispositions.ts  Closed and DNC, pure
@@ -190,10 +193,10 @@ you change something the docs describe, update the doc in the same commit.
     scripts/claims-live-check.ts  proves that SQL, including the claim race
     scripts/read-flag-live-check.ts  proves a read lead leaves the queue
     scripts/lead-detail-live-check.ts  proves the card's SQL
-    scripts/timeline-live-check.ts  proves the merge and the derived events
+    scripts/timeline-live-check.ts  proves the merge and the derived events; the robot's call with its result and answers (T21)
     scripts/callbacks-live-check.ts  proves the tab windows against a real clock
     scripts/dispositions-live-check.ts  proves the DNC block and the queue effect
-    scripts/agent-sms-live-check.ts  proves the take-over stops the questions
+    scripts/agent-sms-live-check.ts  proves the take-over stops the questions, and a phone call too (rule 2d)
     scripts/admin-live-check.ts  proves the three admin read models
     scripts/health-live-check.ts  proves the poller staleness signal
     src/core/queue-tags.ts  which tag a queued lead gets
@@ -202,9 +205,29 @@ you change something the docs describe, update the doc in the same commit.
     src/api/webhooks.ts     inbound SMS from EZ Texting
     src/core/messages.ts    renders outbound copy ({first_name}, segment limit)
     src/core/state-machine.ts  the SMS flow, pure: follows any flow's questions and choices; scoring and tiers
-    src/core/answers.ts     matches a reply to a choice of the question asked, pure
+    src/core/answers.ts     matches a reply to a choice of the question asked, pure - an SMS reply, and a spoken answer on the automated call (T7)
     src/db/flows.ts         loads a flow, starts a conversation on the active one, and gives its first question
     src/core/flow-fixtures.ts  the antibiotics flow as a constant, for tests only
+    src/core/call-script.ts the automated call's script, pure: its shape, what the call does after each answer (firstAsk, afterAnswer - T8), on a live call with a lead who may have hung up (handleAnswer), and when it listens (splitForListening) - T13; who a "yes" rings (planTransfer, planAfterHolder) - T15a, T15b; who let it ring out (rangOut) - T15c; who a lead on hold rings (pickOffer) - T17; what Twilio's verdict does - the beep decides (machineVerdict, onVerdict, voicemailLine) - T18
+    src/core/call-script-fixtures.ts  the call script as a constant, for tests only - the live check holds it to the database
+    src/db/call-script.ts   loads the automated call's script (migration 015), and the settings a call reads: confidence, ring time, a ring from hold's ring time (T17), when the robot calls (readCallHours, T20)
+    scripts/call-script-live-check.ts  proves migrations 015, 018 and 019: the script as agreed, its guards, answers add-only; and the call settings, 020's included
+    src/db/presence.ts      who can take a call now: each open browser says so, it holds two minutes (T9); FREE_SQL, who is free (T10); the switch turned off after a ring let run out (T15c); who is on a call or just off one, writing its note (T16, T17); another robot call's transfer ringing counts as someone coming (TRANSFER_RINGING_SQL)
+    scripts/presence-live-check.ts  proves it: the two minutes, busy, sign-out and deactivation clear it; the switch; who is free
+    src/api/taking-calls.ts the "Taking calls" switch: why it changed, and its activity row (T10)
+    src/auto-calls-settings.ts  AUTO_CALLS: on only when exactly "on" (T10); AUTO_CALL_TEST_NUMBERS, the only numbers rung outside production (T12)
+    src/db/auto-calls.ts    an automated call's row: written before Twilio is asked, linked to Twilio's call, ended if refused (T12); each answer, its result and a stop's block kept, and the end settled (T13); a transfer taken or missed (T15a); the verdict acted on under the call's lock, and nothing kept after a takeover (T18)
+    src/db/hold-offers.ts   a lead on hold rung to whoever comes free: the offer written before Twilio is asked, one at a time per lead and per person, never twice to one person; who is still coming for a lead (T17)
+    src/integrations/twilio-calls.ts  the only file that asks Twilio to ring a phone - once, never retried (T12); how each ring of a transfer ended (T15c); and redirects a live call - back to the hold page (T16), to ring someone from hold (T17); and replaces it with the voicemail message (T18); how Twilio says a call ended (callEnd)
+    src/worker/place-auto-call.ts  places one automated call: the row, then Twilio, then its answer - the dev command's and the dialler's path (T12); a refusal for our account not the lead's call (T28)
+    src/worker/auto-calls.ts  the robot placing its calls by itself: one look each tick - close calls that never reached Twilio, inside the hours only, the room, the leads due - new leads first, then those already waiting at the switch-on, oldest first (T20, T27)
+    src/db/auto-dial.ts     who the robot calls next (leadsToCall), the room (dialRoom), auto_calls_since, calls that never reached Twilio, one look at a time (T20); when they were last switched on (recordAutoCallsSwitch); a lead asked again before its call (stillDue); the robot stopped while Twilio is silent; the leads already waiting at the switch-on called too, after new leads (T27); paused 15 minutes after Twilio refuses a call for our account (T28)
+    src/core/auto-dial.ts   when the robot calls (insideCallHours, in the settings' own zone) and how many at once (callsToPlace), pure (T20)
+    scripts/auto-dial-live-check.ts  proves it: who is picked, when, the room, the lock, closing calls that never reached Twilio (T20); the leads already waiting at the switch-on (T27)
+    scripts/dev-auto-call.ts  local testing only: the server calls one lead - npm run dev:auto-call; --again gives the number to a fresh test lead, --unblock lifts a test block (T13); a lead with no text conversation is given one, nothing texted; scripts/dev-phone.ts reads the number
+    scripts/auto-calls-live-check.ts  proves placing one: the row, every refusal, linking, failing, two placements racing; each answer kept once; taking a transfer; acting on a voicemail verdict, under the call's lock (T18)
+    scripts/hold-offers-live-check.ts  proves migration 020: who a lead on hold rings, one at a time, never twice to one person; who is still coming (T17)
+    scripts/lead-texts-live-check.ts  proves the two texts: their words, the lead's thread, a blocked number getting neither (T14)
     src/core/questions.ts   what the screens call a question: "Q2", and "Q1-a" for a sub-question - one rule for every screen
     src/api/reply-flow.ts   runs the state machine for an inbound reply
     src/worker/expiry.ts    marks stale open conversations expired
@@ -214,21 +237,21 @@ you change something the docs describe, update the doc in the same commit.
     src/worker/opener.ts    sends question 1: shared by the poller, the retry and the resend
     scripts/retry-openers-live-check.ts  proves the backoff and the two must-nots
     scripts/send-waiting-openers-live-check.ts  proves the resend takes only what the retry gave up on, never twice, at its pace
-    scripts/end-to-end.ts   the whole system in one run - npm run e2e
+    scripts/end-to-end.ts   the whole system in one run - npm run e2e; since T25 the robot's calls too, Twilio stubbed at its HTTP boundary and its webhooks signed
     scripts/live-checks.sh  runs every live check, each on its own scratch database
     scripts/flows-live-check.ts  proves a second, five-question flow works from rows alone; scripts/live-flow.ts answers a flow for the other checks
     scripts/dev-ask-again.ts  local testing only: asks a held lead the questions again, so one phone can walk every path
     scripts/speed-check.ts  loads 50,000 fake leads into a scratch database and times every screen's read - npm run speed
-    src/db/leads.ts         Admin > Leads SQL
-    src/db/lead-state.ts    closed and worked, shared by the queue and Admin > Leads
+    src/db/leads.ts         Admin > Leads SQL; the Call column, the robot call's result (T23)
+    src/db/lead-state.ts    closed and worked, shared by the queue and Admin > Leads; a missed call, and a missed "yes" on the automated call (T22) - one "nobody got back to them" rule; when a phone call stopped the text questions (rule 2d)
     src/db/sql.ts           LIKE escaping and the expiry-days reader, shared by every query
     src/core/activity.ts    every action the activity log records
     src/db/activity.ts      writes the activity log and the raw webhook archive
     scripts/activity-live-check.ts  proves every action is recorded, and that the log cannot be altered
     src/db/holder.ts        who holds a lead - checked before every write on it
     src/db/failed-sends.ts  keeps an agent's own text that EZ Texting refused, marked failed
-    src/db/outbound.ts      sends an automated text and records it: opener, retry, reply flow, missed-call text
-    src/worker/index.ts     the worker loop: poll, expire, retry openers, fetch transcripts; src/worker/poller.ts is the poll
+    src/db/outbound.ts      sends an automated text and records it: opener, retry, reply flow, missed-call text, the call's link
+    src/worker/index.ts     the worker loop: poll, expire, retry openers, fetch transcripts, and the robot's calls (T20); src/worker/poller.ts is the poll
     src/api/app.ts          builds the Express app; index.ts starts it; deps.ts, http.ts are shared plumbing
     src/config.ts           reads the environment, and exits if a required variable is missing
     scripts/admin-leads-live-check.ts  proves the Admin > Leads statuses
@@ -244,16 +267,22 @@ you change something the docs describe, update the doc in the same commit.
     src/lib/format.ts       phone, dates, age, names
     src/lib/lock.ts         which queue rows an agent may open, and who may release a held lead
     src/lib/leads-view.ts   Admin > Leads' tab, filters and page, kept in the address so Back returns to them
-    src/api/calls.ts        calling config and token
+    src/api/calls.ts        calling config and token; the browser's word and the "Taking calls" switch
     src/lib/call-state.ts   a call's states, pure
     src/lib/calling.ts      the only file that uses Twilio's Voice SDK
-    src/lib/incoming-state.ts  a lead calling in: ringing, answered, missed - pure
+    src/lib/incoming-state.ts  a lead calling in: ringing, answered, missed; alone or one of several (T11) - pure
     src/lib/incoming-call.ts   the store that joins those states to Twilio
+    src/lib/presence.ts     what keeps this browser busy - a call, a ring, a note box; calling.ts tells the server (T9)
+    src/layout/TakingCalls.tsx  the "Taking calls" switch in the app bar, shown only with automated calls on (T10); "Missed a transfer · Taking calls off" (T15c)
+    src/lib/taking-calls.ts the switch as the server holds it, taken from the browser's 30-second report (T15c)
     src/layout/IncomingCall.tsx  the incoming-call card and missed-call notice, on every screen
-    src/lib/caller-context.ts  "Calling back · you tried 2× today", pure
+    src/lib/caller-context.ts  "Calling back · you tried 2× today", "· automated call, 28m ago" (T19), and a transfer's line (T11), pure
     src/lib/ringtone.ts        the ring of an incoming call, made in the browser
     src/lib/call-notification.ts  the desktop notification for an incoming call
     src/components/CallTranscript.tsx  a call's transcript, under the call
+    src/components/CallAnswers.tsx  what the lead said on the robot's call, under it (T21)
+    src/lib/call-results.ts  the robot call's result in words, one list for the timeline and Admin > Leads' Call column and filter (T23)
+    src/lib/call-settings.ts  the robot's call settings in words for Admin > Configuration - hours, days, waits (T24)
     src/lib/useSecond.ts    a clock that re-renders every second
     src/App.tsx, src/main.tsx  the routes; the entry point, which also arms the ringtone
     src/auth/               the session store and the route guards
@@ -272,6 +301,7 @@ you change something the docs describe, update the doc in the same commit.
     src/components/RowMenu.tsx       a row's "⋯" actions menu
     src/components/LockIcon.tsx      the padlock on a locked queue row
     src/components/DateTimeField.tsx the date and time picker, in the app's style
+    src/components/          also the shared pieces: Button, TextField, Modal, Drawer, Banner, Badge, Spinner, OneTimeSecret (a temporary password, shown once), AuthLayout and BrandMark (the sign-in pages), useDismiss (Escape to close)
     src/pages/QueuePage.tsx          the priority queue
     src/pages/WorkspacePage.tsx      the agent workspace shell
     src/pages/workspace/             header card, Call button and call bar, answers and score, notes, conversation, SMS compose, Wrap up
@@ -283,12 +313,15 @@ you change something the docs describe, update the doc in the same commit.
     AUTH.md  POLLER.md  WORKFLOW.md  WEBHOOKS.md  ADMIN-LEADS.md  STATE-MACHINE.md  TWILIO.md
     AUDIT.md                the activity log: nothing is lost
     FLOWS.md                how SMS scripts are stored as rows, how to add one, and how questions are named
-    AUTO-CALLS.md           automated outbound calls: the agreed design and the build tracker (planned 2026-10-15, not built)
+    AUTO-CALLS.md           automated outbound calls: the agreed design and the build tracker (T0-T25 done as of 2026-10-25: the server places a call, asks the script, keeps the answers, texts the link, puts a "yes" through to the lead's own agent first, then everyone free, switches off whoever let it ring out, holds a "yes" while someone is on a call or writing its note, rings the next person who comes free with the lead who has waited longest, leaves the voicemail message once a machine's greeting is over, rings everyone free for a lead calling back whom nobody owns, calls the right leads by itself at the pace the people free can take, shows each robot call on the lead's timeline with what was said, puts a "yes" nobody took first in the agents' queue, shows each lead's robot call on Admin > Leads, and the script and its settings on Admin > Configuration; every doc read against the code, and the end-to-end script runs three robot calls (T25); every path heard on a real phone, 2026-10-27 (T26); the leads already waiting at the switch-on called too, after new leads (T27, 2026-10-29); a Twilio account problem never uses up a lead's call (T28, 2026-10-29); going live left - T26, "Going live")
     QUEUE.md  AGENT-WORKSPACE.md  ADMIN.md  LOGGING.md  FRONTEND.md
 ```
 
-`core/` holds message rendering, the state machine and answer matching, all of
-it now driven from the webhook through `api/reply-flow.ts`. `docker-compose.yml`
+`core/` holds the pure rules: message rendering, the SMS state machine and
+answer matching (driven from the EZ Texting webhook through `api/reply-flow.ts`,
+and for spoken answers from `api/twilio-webhooks.ts`), the call script, the
+robot's timing and pace, call and disposition rules, and the queue's tags.
+`docker-compose.yml`
 is local only; production layers `docker-compose.prod.yml` on top of it.
 
 `api` and `worker` build from the same Dockerfile; only the start command differs.
@@ -311,20 +344,25 @@ is local only; production layers `docker-compose.prod.yml` on top of it.
 Rule: **only one `open` conversation per phone number, ever.**
 
 **As built, 2026-09-14.** The migrations in `backend/src/db/migrations/` - 001
-to 013 as of 2026-10-06 - are the source of truth and `docs/SCHEMA.md` explains
+to 020 as of 2026-10-22 - are the source of truth and `docs/SCHEMA.md` explains
 them. It differs from the list above:
 
-- **users** also has `session_version` and `last_login_at`.
+- **users** also has `session_version` and `last_login_at`, and since 016 (T9, 2026-10-18) `ringable_until`: until when the person's browser can take a call - said every 30 seconds, held two minutes, cleared when the session ends. `docs/AUTO-CALLS.md`, "Who is free". Since 017 (T10) `taking_calls` and `taking_calls_at`: the "Taking calls" switch, off at every sign-in and sign-out; and `taking_calls_why` (T15c), why it is so - `missed_transfer` when the server turned it off after a ring let run out.
 - **leads** has `group_id`, `group_name` and `ezt_added_at` instead of `group` and `ezt_contact_id`; EZ Texting returns no contact id.
 - **conversations** also has `agent_took_over_at` (003), `completed_at` (004), and `q1_label` to `q3_label` (009): the word the lead chose, kept with the number, so renaming a choice never renames an earlier answer.
 - **dnc_list** also has `released_at` and `released_reason` (002): a block is lifted, never deleted.
 - **settings** gained `message_missed_call` (007, reworded for eDrugstore by 012); `poll_interval_seconds` is 30 since 005.
 - **messages** also has `in_reply_to_ezt_id`, `from_number` and `received_at`; `ezt_message_id` is unique for outbound only.
 - **callbacks** also has `reason` (migration 008, 2026-10-01): `booked`, or `missed_call` for one the system books for the agent a missed call rang.
-- **calls** also has `ended_at`, and since migration 007 (2026-10-01) `direction`; an incoming call that rang nobody has no `agent_id`. Since 010 (2026-10-02) `answered_by`: who picked up a call we placed, a person or a machine - a machine makes the outcome `voicemail`.
+- **calls** also has `ended_at`, and since migration 007 (2026-10-01) `direction`; an incoming call that rang nobody has no `agent_id`, nor one ringing everyone free until someone takes it (T19). Since 010 (2026-10-02) `answered_by`: who picked up a call we placed, a person or a machine - a machine makes the outcome `voicemail` for an agent's call; an automated call only when the verdict took it over (T18, `docs/AUTO-CALLS.md` "Voicemail").
 - **leads.previous_lead_id** exists but is unused and expected to be dropped - see §6.
 - **leads.assigned_at** records when an agent claimed the lead. Claims do not expire; it is what lets a superadmin see one held too long. Added 2026-09-15.
 - **flows**, **flow_questions**, **flow_choices** and **conversation_answers** - migration 012, 2026-10-05. The SMS script is rows, not code: a flow's questions, each question's choices with its reply, points and where the lead goes next, and one add-only row per answer given. **conversations** gained `flow_id`, `current_question_id`, `question_sent_at` (when the text the lead must answer went out - a reply before then is not counted) and `end_outcome`, and `step` now holds the question's position (10, 11, 20, 30), no longer 1-3; its `q1`-`q3` columns and labels, `scoring_rules`, and the question, clarification, thanks and review rows in `settings` are no longer read. A question is named by its key, a sub-question after its parent: `q1-a`, shown "Q1-a". `docs/FLOWS.md`.
+- Migration 020, 2026-10-22 (T17, `docs/AUTO-CALLS.md`, "The hold line"): **call_offers** - each time a lead on hold rang someone who came free, ended once and never removed, one at a time per lead and per person; an index of calls by agent and end, for who has just finished a call; and the `auto_call_offer_ring_seconds` setting (20).
+- Migration 019, 2026-10-21 (T16, `docs/AUTO-CALLS.md`, "The hold line"): the place on hold as script words, `hold_next_body` ("You are next.") and `hold_place_body` ("You are number {place} in line."), and `calls.held_at`, when an automated call's lead went on hold - also how the robot knows someone is waiting (T20, `dialRoom`).
+- Migration 018, 2026-10-18 (after T12's first real call, `docs/AUTO-CALLS.md`, "The script"): the call's opening no longer says "This is an automated call" and says the offer before asking ("Today we're offering 25% off antibiotics. Are you interested in ordering?"); "won't" and "didn't" are written out, since Kore's "we won't call you again" sounded like "will" (T13); and its voice is Google Chirp3-HD Kore in place of Polly Joanna. It stops unless the three rows it changes are exactly as 015 left them.
+- Migration 015, 2026-10-18 (T6, `docs/AUTO-CALLS.md`): the automated call's script as rows - **call_scripts** (with the lines every step shares and the link text), **call_steps**, **call_choices** - and **call_answers**, add-only, one row per answer with what Twilio heard; and the `auto_call_*` rows in **settings** (11:00-17:00 America/Phoenix, Monday-Friday, 60 minutes after the first text, and the call's limits).
+- Migration 014, 2026-10-18 (T4, `docs/AUTO-CALLS.md`): **calls** can be `automated` - placed by the server, with no `agent_id` until a person takes its transfer - and gain `script_result`; one automated call per lead (`calls_one_automated_per_lead`) - a call Twilio never placed for our account's reasons (`not_placed`, T28) is not one. An automated call nobody took never makes a lead Working nor returns a missed call.
 - Migration 013, 2026-10-06: three indexes the queue and Admin > Leads needed - `callbacks (lead_id)`, agents' own texts in `messages`, and `leads` by arrival. With 50,000 leads the queue took 8 seconds; `docs/QUEUE.md`, "How fast it is".
 - **call_recordings** and **call_transcripts** - migration 011, 2026-10-02. A call's recording id at Twilio, and its transcript with who said what. `docs/TWILIO.md`, "Recordings and transcripts".
 - **activity_log** and **webhook_events** - migration 006, 2026-10-01. The company keeps data as proof: every action is one add-only row, and every inbound webhook is kept as received. The foreign keys to `leads` no longer cascade, so a lead with history cannot be deleted. `docs/AUDIT.md`.
@@ -371,7 +409,7 @@ Tiers: HOT 75–100, WARM 45–74, LOW 1–44
 3. On end, Twilio status callback → save to `calls`.
 4. Agent sets disposition/note/callback. DNC disposition = same as SMS STOP.
 
-Queue tags (New, Attempted 1x, In progress, Callback, Needs review, Stalled at Q2, Inbound reply, Seen before) *(2026-09-28: Stalled is gone - the queue holds only leads that need a person, `docs/QUEUE.md`)* are **computed** from these tables, not stored as a status. *(2026-09-19: "Seen before" cannot occur until repeat-lead handling is built - a future item, §10.)* *(2026-09-22: built - which tag wins when several apply is in `docs/QUEUE.md`.)* *(2026-09-28: only Working – name (was In progress), Inbound reply and Needs review are shown; the rest were dropped - `docs/QUEUE.md`, "The tag".)* *(2026-09-29: Callback – name · time is back, so four.)* *(2026-10-01: Missed call - the lead rang us and nobody answered - so five. `docs/TWILIO.md`, "A missed call".)* *(2026-10-05: Wants a call - the lead said No, then asked to hear from a rep - so six. `docs/QUEUE.md`.)*
+Queue tags (New, Attempted 1x, In progress, Callback, Needs review, Stalled at Q2, Inbound reply, Seen before) *(2026-09-28: Stalled is gone - the queue holds only leads that need a person, `docs/QUEUE.md`)* are **computed** from these tables, not stored as a status. *(2026-09-19: "Seen before" cannot occur until repeat-lead handling is built - a future item, §10.)* *(2026-09-22: built - which tag wins when several apply is in `docs/QUEUE.md`.)* *(2026-09-28: only Working – name (was In progress), Inbound reply and Needs review are shown; the rest were dropped - `docs/QUEUE.md`, "The tag".)* *(2026-09-29: Callback – name · time is back, so four.)* *(2026-10-01: Missed call - the lead rang us and nobody answered - so five. `docs/TWILIO.md`, "A missed call".)* *(2026-10-05: Wants a call - the lead said No, then asked to hear from a rep - so six. `docs/QUEUE.md`.)* *(2026-10-24, T22: Wants a call also marks a "yes" on the automated call that nobody took - ranked below Missed call, and those leads first in the queue. `docs/QUEUE.md`, "The order".)*
 
 **Paths, as of 2026-09-15.** Caddy forwards only `/api/*` to the API; everything
 else is the frontend, so every route lives under `/api`. The EZ Texting webhook
@@ -382,7 +420,7 @@ same treatment when they are built. The queue API was built that way:
 `GET /api/leads`, 2026-09-22. *(2026-10-01: Twilio built that way too -
 `POST /api/calls/token`, `POST /api/webhooks/twilio/voice` and
 `POST /api/webhooks/twilio/status`, and for a lead calling in
-`POST /api/webhooks/twilio/incoming` and `/incoming/after`; and `/answered-by`, Twilio's verdict on who picked up; `/recording`, a call's recording is ready (2026-10-02); and `/notice`, the recording notice a lead we called hears first (2026-10-05). `docs/TWILIO.md`.)*
+`POST /api/webhooks/twilio/incoming` and `/incoming/after`; and `/answered-by`, Twilio's verdict on who picked up; `/recording`, a call's recording is ready (2026-10-02); and `/notice`, the recording notice a lead we called hears first (2026-10-05). `docs/TWILIO.md`.)* *(2026-10-18: the automated call's `/api/webhooks/twilio/auto/answer`, `/auto/gather`, `/auto/status` and `/auto/amd`, only while `AUTO_CALLS` is on - `docs/AUTO-CALLS.md`, "How a call is placed".)* *(2026-10-20: its transfer's `/auto/claim` and `/auto/after` - "The transfer".)* *(2026-10-21: its hold line's `/auto/hold` - "The hold line".)* *(2026-10-22: `/auto/offer`, a lead on hold ringing the person who came free - "The hold line".)* *(2026-10-24: `/incoming/claim`, a person accepting a lead's call that rang everyone free - `docs/TWILIO.md`, "Who rings".)*
 
 ---
 
@@ -413,7 +451,7 @@ Frontend dev: `cd frontend && npm run dev` (Vite on :5173, proxies /api to :3000
 - Postgres is on host port **5433**, not 5432.
 - After migrating, create the first account: `docker compose exec api npm run dev:create-superadmin -- you@example.com "Your Name"`.
 - Colima works in place of Docker Desktop.
-- **Twilio locally:** nothing is pasted into Twilio by hand; `docker compose exec api npm run dev:twilio:configure` points the TwiML App and the phone number at `PUBLIC_URL`. **Never run it locally with production's number or TwiML App (Jeel, 2026-10-05)** - production is live on them, and it would move production's calls to the laptop, silently. **Calling is not tested locally at all (same day): the local `.env` keeps its `TWILIO_*` lines empty.** `docs/TWILIO.md`, "What it needs on the Twilio account".
+- **Twilio locally:** nothing is pasted into Twilio by hand; `docker compose exec api npm run dev:twilio:configure` points the TwiML App and the phone number at `PUBLIC_URL`. **Never run it locally with production's number or TwiML App (Jeel, 2026-10-05)** - production is live on them, and it would move production's calls to the laptop, silently. **Calling is not tested locally at all (same day): the local `.env` keeps its `TWILIO_*` lines empty.** *(2026-10-16: local now has its own number, (480) 530-8582, its own TwiML App and `TWILIO_IDENTITY_PREFIX=dev-`, so it can never ring production's browsers or be rung by them; calling stays off locally until a tunnel is set for a test - `docs/AUTO-CALLS.md`, T3.)* `docs/TWILIO.md`, "What it needs on the Twilio account".
 
 ---
 
@@ -479,8 +517,9 @@ onto them:
 | 1 | Week 1 | Done |
 | 2 | Week 2 | Done, approved 2026-09-23 |
 | 3 | Week 3 **and all of Week 4 except Twilio** | Done 2026-09-28, merged into `main` |
-| 4 | Week 4 items 1-4, Twilio calling | Done 2026-10-01 - `docs/TWILIO.md`. A real call placed and recorded the same day. Incoming calls - ring one agent, text the lead on a missed call, and a callback for the agent it rang - tested by Jeel with real calls and merged into `dev` the same day. Deploying them needs migrations 007 and 008, and `twilio:configure` run on the server |
-| 5 | Not in the original plan | **Flows** - decided by Jeel, 2026-10-05, before launch: the SMS questions and answers stored as rows so a group with different questions is new rows, not new code; the client's eDrugstore antibiotics script as the first flow; a recording notice on calls. Built on `feat/flows`. Reviewed by three independent reads and a 50,000-lead load test on 2026-10-06, then walked with a real phone the same day - eight paths, all as specified - and merged into `dev`. Deploying it needs migrations 012 and 013. Editing a flow from the website, and a flow per EZ Texting group, are later. `docs/FLOWS.md` |
+| 4 | Week 4 items 1-4, Twilio calling | Done 2026-10-01 - `docs/TWILIO.md`. A real call placed and recorded the same day. Incoming calls - ring one agent, text the lead on a missed call, and a callback for the agent it rang - tested by Jeel with real calls and merged into `dev` the same day. Deploying them needs migrations 007 and 008, and `twilio:configure` run on the server. On main and production since 2026-10-05 |
+| 5 | Not in the original plan | **Flows** - decided by Jeel, 2026-10-05, before launch: the SMS questions and answers stored as rows so a group with different questions is new rows, not new code; the client's eDrugstore antibiotics script as the first flow; a recording notice on calls. Built on `feat/flows`. Reviewed by three independent reads and a 50,000-lead load test on 2026-10-06, then walked with a real phone the same day - eight paths, all as specified - and merged into `dev`. Deploying it needs migrations 012 and 013. Editing a flow from the website, and a flow per EZ Texting group, are later. `docs/FLOWS.md`. On main and production since 2026-10-06 |
+| 6 | Not in the original plan | **Automated calls** - the server calls leads who never replied and puts a "yes" through to a person. T0-T25 done 2026-10-25; every path heard on a real phone 2026-10-27 (T26); the leads already waiting at the switch-on called too, after new leads, 2026-10-29 (T27); a Twilio account problem never uses up a lead's call (T28); going live left. Deploying it needs migrations 014 to 020, with `AUTO_CALLS` unset. `docs/AUTO-CALLS.md` |
 
 **Phase 3 is everything that is left except calling.** That means the Week 3
 list below, plus Week 4 items 5-9: error handling and retries, logging, the
@@ -506,9 +545,9 @@ They do not. Admin shows the configuration; it does not change it:
 | Screen | Was | Is |
 |---|---|---|
 | Scoring rules and tiers (6b) | Editable inline, with **Recalculate existing** | A read-only card. No Save, no Recalculate - the feature is dropped |
-| Message copy (6c) | Seven editable fields | Read-only, shown on the same page as the score table |
-| Settings (6f) | Expiry, delivery type, poll interval, caller ID | Not built. Expiry stays 7 days; the rest stay environment variables |
-| DNC list (6e) | Table plus **Add manually** | Read-only. Blocking happens through an agent's DNC disposition, a STOP reply, or an EZ Texting opt-out |
+| Message copy (6c) | Seven editable fields | Read-only, on Configuration's Texts tab; the score table is on its Scoring tab |
+| Settings (6f) | Expiry, delivery type, poll interval, caller ID | Not built as an editor. Expiry and the other flow settings are shown read-only on the Texts tab; the poll interval is a settings row, caller ID an environment variable |
+| DNC list (6e) | Table plus **Add manually** | Read-only. Blocking happens through an agent's DNC disposition, a STOP reply, an EZ Texting opt-out, or a stop said on the automated call (T13) |
 | Agents (6d) | Editable | Unchanged - creating and deactivating accounts is the point of it |
 
 **Why:** scoring and copy are not small changes. A mistyped point value silently
@@ -554,7 +593,7 @@ retry, the end-to-end script, and a README with how to test and known limits.
 - **Source always reads "API" in production** - it is how the contact was
   added to EZ Texting, not which partner sent it. Keep the column, or find the
   partner elsewhere.
-- **Deploy:** `npm run migrate` applies whatever the server has not run, up to 013. `main` holds 001 to 011 since 2026-10-05, so a deploy of today's `dev` adds 012, the SMS flows and the antibiotics script (`docs/FLOWS.md`), and 013, indexes for the two list screens (`docs/QUEUE.md`) - merged into `dev` on 2026-10-06. What 005 to 011 were (011: call recordings and transcripts, which also need `TWILIO_TRANSCRIPTION_SERVICE_SID` - `docs/TWILIO.md`; 010: voicemail detection; 009: the word kept with each answer - `docs/STATE-MACHINE.md`; 005, 2026-09-29: poll every 30s; 006, 2026-10-01: the activity log, the raw webhook archive, and leads that cannot be deleted - `docs/AUDIT.md`; 007 and 008, the same day: incoming calls and the callback a missed call books - `docs/TWILIO.md`). Calling also needs the seven Twilio settings - all or none, a partly set group stops the API starting - and `npm run twilio:configure` run on the server, last: the phone number rings only one deployment. Production also needs `EZT_WEBHOOK_TOKEN` set, or the API will not start - it is already set there.
+- **Deploy:** `npm run migrate` applies whatever the server has not run. `main` and production hold 001 to 013 - 012, the SMS flows and the antibiotics script (`docs/FLOWS.md`), and 013, indexes for the two list screens (`docs/QUEUE.md`), the last to reach them. `dev` adds 014 to 020, automated calls, for the next deploy, with `AUTO_CALLS` left unset - `docs/WORKFLOW.md`. What 005 to 011 were (011: call recordings and transcripts, which also need `TWILIO_TRANSCRIPTION_SERVICE_SID` - `docs/TWILIO.md`; 010: voicemail detection; 009: the word kept with each answer - `docs/STATE-MACHINE.md`; 005, 2026-09-29: poll every 30s; 006, 2026-10-01: the activity log, the raw webhook archive, and leads that cannot be deleted - `docs/AUDIT.md`; 007 and 008, the same day: incoming calls and the callback a missed call books - `docs/TWILIO.md`). Calling also needs the seven Twilio settings - all or none, a partly set group stops the API starting - and `npm run twilio:configure` run on the server, last: the phone number rings only one deployment. Production also needs `EZT_WEBHOOK_TOKEN` set, or the API will not start - it is already set there.
 
 Task 29 found nothing to fix in the app: all three bugs the end-to-end script
 surfaced were in the script itself. Two apparent failures were the app being
@@ -754,7 +793,7 @@ Before building it:
 2. If `createdAt` moves, build the rules as written.
 3. If not, the poller needs another signal for a return - for example
    `updatedAt`, a group move, or the partner telling us - and that has to be
-   found first. `docs/POLLER.md`, "Returning leads", has the detail.
+   found first. `docs/POLLER.md`, "Not done yet", has the detail.
 
 ---
 

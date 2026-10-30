@@ -3,7 +3,8 @@ import { getCallConfig } from '../api/calls';
 import { claimLead } from '../api/leads';
 import type { CallEvent } from './call-state';
 import { describeCallError, listenForCalls, type CallHandle, type IncomingRing } from './calling';
-import { incomingReducer, NO_CALL, type IncomingEvent, type IncomingState } from './incoming-state';
+import { incomingOccupiesAgent, incomingReducer, NO_CALL, type IncomingEvent, type IncomingState } from './incoming-state';
+import { isBrowserBusy, setBusy } from './presence';
 
 /**
  * The incoming call this browser is ringing with or is on - TWILIO.md,
@@ -52,8 +53,17 @@ export const useIncomingCall = create<IncomingCallStore>((set, get) => {
           set({ ringable: true });
           stop = listenForCalls({
             onRing: (incoming) => {
+              // A ring that went to several people is left to the others
+              // while anything here keeps this person busy - a call, a ring,
+              // a note box, on any screen (lib/presence.ts) - so an open note
+              // is never lost to it. Declined, so Twilio stops ringing this
+              // browser; the others keep ringing. T11, AUTO-CALLS.md.
+              if (incoming.kind.group && isBrowserBusy()) {
+                incoming.decline();
+                return;
+              }
               const before = get().state;
-              send({ type: 'ring', caller: incoming.lead, at: Date.now() });
+              send({ type: 'ring', caller: incoming.lead, kind: incoming.kind, at: Date.now() });
               // Shown, or turned away because this agent is already on a call.
               if (get().state !== before) ring = incoming;
             },
@@ -129,3 +139,7 @@ export const useIncomingCall = create<IncomingCallStore>((set, get) => {
     },
   };
 });
+
+// A lead ringing or on the line, or the note box after, keeps this browser
+// busy: no transfer rings it meanwhile (T9, lib/presence.ts).
+useIncomingCall.subscribe(({ state }) => setBusy('incoming-call', incomingOccupiesAgent(state)));

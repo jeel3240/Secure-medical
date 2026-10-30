@@ -1,18 +1,26 @@
 import { api } from './client';
+import type { PublicUser } from './types';
+
+/** The "Taking calls" switch as the server holds it, and why. */
+export type TakingCallsState = Pick<PublicUser, 'takingCalls' | 'takingCallsWhy'>;
 
 /**
  * Browser calling - Phase 4, TWILIO.md.
  *
- * Two requests. The config says whether calling is set up on this server and
- * which number leads will see; the token is the browser's short-lived
- * permission to place calls as the signed-in agent. Which lead a call may reach
- * is decided by the server when the call starts, not here.
+ * The config says whether calling is set up on this server and which number
+ * leads will see; the token is the browser's short-lived permission to place
+ * calls as the signed-in agent. Which lead a call may reach is decided by the
+ * server when the call starts, not here. And, for automated calls
+ * (AUTO-CALLS.md, "Who is free"): whether this browser can take a call now
+ * (T9), and the "Taking calls" switch (T10).
  */
 
 export interface CallConfig {
   enabled: boolean;
   /** The number leads see, E.164. Null when calling is off. */
   callerId: string | null;
+  /** Automated calls are on: the app bar shows the "Taking calls" switch. */
+  autoCalls: boolean;
 }
 
 let config: Promise<CallConfig> | null = null;
@@ -35,4 +43,21 @@ export function getCallConfig(): Promise<CallConfig> {
 export async function getCallToken(): Promise<string> {
   const { data } = await api.post<{ token: string }>('/calls/token');
   return data.token;
+}
+
+/**
+ * Tells the server whether this browser can take a call now. It holds for two
+ * minutes. Given up after ten seconds: these are sent one after another, and
+ * one stuck request must not hold back the rest. Answered with the switch as
+ * the server holds it - how the screen learns the server turned it off (T15c).
+ */
+export async function postRingable(available: boolean): Promise<TakingCallsState> {
+  const { data } = await api.post<TakingCallsState>('/calls/ringable', { available }, { timeout: 10_000 });
+  return data;
+}
+
+/** Switches "Taking calls" on or off for the signed-in person. Resolves to what it now is. */
+export async function setTakingCalls(on: boolean): Promise<TakingCallsState> {
+  const { data } = await api.post<TakingCallsState>('/calls/taking-calls', { on });
+  return data;
 }

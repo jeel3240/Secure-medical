@@ -7,13 +7,14 @@
  * also pin that no writer exists.
  */
 import request from 'supertest';
+import type { TwilioSettings } from '../../twilio-settings';
 import { buildApp, seedUser, signIn } from './helpers';
 
 const getAdminConfig = jest.fn();
 const getOverview = jest.fn();
 const listDnc = jest.fn();
 
-jest.mock('../../db/admin-config', () => ({ getAdminConfig: () => getAdminConfig() }));
+jest.mock('../../db/admin-config', () => ({ getAdminConfig: (calling: unknown) => getAdminConfig(calling) }));
 jest.mock('../../db/admin-overview', () => ({ getOverview: (p: unknown) => getOverview(p) }));
 jest.mock('../../db/admin-dnc', () => ({ listDnc: (q: unknown) => listDnc(q) }));
 
@@ -31,8 +32,8 @@ beforeEach(() => {
   });
 });
 
-async function setup() {
-  const { app, users } = await buildApp();
+async function setup(opts: { twilio?: TwilioSettings | null; autoCalls?: boolean } = {}) {
+  const { app, users } = await buildApp(opts);
   await seedUser(users, { email: 'maya@example.com', name: 'Maya', password: PASSWORD });
   await seedUser(users, {
     email: 'boss@example.com',
@@ -92,6 +93,36 @@ describe('Configuration', () => {
     expect(res.status).toBe(200);
     expect(res.body.scoring.maxScore).toBe(100);
     expect(res.body.messages[0].key).toBe('question_1');
+  });
+
+  // What only the api knows about calls, for the call script and its settings - T24.
+  const TWILIO: TwilioSettings = {
+    accountSid: `AC${'1'.repeat(32)}`,
+    authToken: 'f'.repeat(32),
+    apiKey: `SK${'2'.repeat(32)}`,
+    apiSecret: 'S'.repeat(32),
+    twimlAppSid: `AP${'3'.repeat(32)}`,
+    callerId: '+14805308582',
+    publicUrl: 'https://calls.example.com',
+    identityPrefix: 'dev-',
+  };
+
+  it('tells the read model whether automated calls are on, the calling number, and whether calls are recorded', async () => {
+    const { boss } = await setup({ twilio: { ...TWILIO, transcriptionServiceSid: `GA${'4'.repeat(32)}` }, autoCalls: true });
+    expect((await boss.get('/api/admin/config')).status).toBe(200);
+    expect(getAdminConfig).toHaveBeenCalledWith({ autoCalls: true, callbackNumber: '+14805308582', recorded: true });
+  });
+
+  it('calling set up, automated calls off, nothing recorded', async () => {
+    const { boss } = await setup({ twilio: TWILIO, autoCalls: false });
+    await boss.get('/api/admin/config');
+    expect(getAdminConfig).toHaveBeenCalledWith({ autoCalls: false, callbackNumber: '+14805308582', recorded: false });
+  });
+
+  it('calling not set up: off, no number', async () => {
+    const { boss } = await setup();
+    await boss.get('/api/admin/config');
+    expect(getAdminConfig).toHaveBeenCalledWith({ autoCalls: false, callbackNumber: null, recorded: false });
   });
 });
 

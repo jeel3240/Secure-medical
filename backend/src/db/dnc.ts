@@ -10,6 +10,7 @@
  *     `worker/poller.ts` (through here since 2026-10-01; before that it had
  *     its own insert, which wrote no record)
  *   - an agent setting the `DNC` disposition - `db/dispositions.ts`
+ *   - a lead saying stop on the automated call - `db/auto-calls.ts`
  *
  * These functions were `webhooks.ts` locals until task 8 needed the second
  * caller. Moved rather than copied: a compliance table with two insert
@@ -34,12 +35,16 @@ export const DNC_REASONS = {
   eztOptOut: 'ezt_opt_out',
   /** An agent chose the DNC disposition. */
   agentDisposition: 'agent_disposition',
+  /** On the automated call, the lead said stop, or pressed 9 (T13, AUTO-CALLS.md). */
+  callOptOut: 'call_opt_out',
 } as const;
 
 /** Why a block was lifted. Stored as `dnc_list.released_reason`. */
 export const RELEASE_REASONS = {
   /** The lead texted START. */
   smsStart: 'sms_start',
+  /** On a laptop only: `dev:auto-call --unblock` lifted a test block (T13, AUTO-CALLS.md). */
+  devTest: 'dev_test',
 } as const;
 
 /**

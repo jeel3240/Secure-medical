@@ -4,6 +4,7 @@ import type { AppDeps } from '../deps';
 import { asyncHandler, HttpError } from '../http';
 import { normalizeEmail } from '../users/rules';
 import { toPublicUser } from '../users/types';
+import { recordTakingCalls } from '../taking-calls';
 import { requireAuth, resolveSessionUser } from './middleware';
 import { burnPasswordCheck, hashPassword, validateNewPassword, verifyPassword } from './password';
 import {
@@ -76,12 +77,20 @@ export function authRouter(deps: AppDeps): Router {
 
       await deps.users.recordLogin(user.id);
       await deps.activity.record({ action: 'auth.signed_in', actorId: user.id });
+      // "Taking calls" starts off at every sign-in: the person chooses to be
+      // rung today (AUTO-CALLS.md, "Who is free"). Written every time, so the
+      // reason it is off is this sign-in - never yesterday's missed transfer;
+      // recorded only when it was on.
+      await deps.users.update(user.id, { takingCalls: { on: false, why: 'sign_in' } });
+      if (user.takingCalls) await recordTakingCalls(deps, user.id, false, 'sign_in');
       res.cookie(
         SESSION_COOKIE,
         signSession(user.id, user.sessionVersion, deps.jwtSecret),
         sessionCookieOptions(deps.secureCookies)
       );
-      res.json({ user: toPublicUser({ ...user, lastLoginAt: new Date() }) });
+      res.json({
+        user: toPublicUser({ ...user, lastLoginAt: new Date(), takingCalls: false, takingCallsWhy: 'sign_in' }),
+      });
     })
   );
 
@@ -96,8 +105,10 @@ export function authRouter(deps: AppDeps): Router {
       if (claims) {
         const user = await deps.users.findById(claims.userId);
         if (user && user.sessionVersion === claims.sessionVersion) {
-          await deps.users.update(user.id, { bumpSession: true });
+          // Signing out also switches "Taking calls" off, in the same statement.
+          await deps.users.update(user.id, { bumpSession: true, takingCalls: { on: false, why: 'sign_out' } });
           await deps.activity.record({ action: 'auth.signed_out', actorId: user.id });
+          if (user.takingCalls) await recordTakingCalls(deps, user.id, false, 'sign_out');
         }
       }
       res.clearCookie(SESSION_COOKIE, clearSessionCookieOptions(deps.secureCookies));

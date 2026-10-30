@@ -1,6 +1,6 @@
 /**
- * Browser calling's routes: the browser's two (config, token) and Twilio's two
- * (voice, status). The database layer is mocked; the route contract, Twilio's
+ * Browser calling's routes: the browser's three (config, token, ringable) and
+ * Twilio's. The database layer is mocked; the route contract, Twilio's
  * signature check and the refusals are what is under test. The SQL is proved by
  * scripts/calls-live-check.ts.
  */
@@ -18,11 +18,14 @@ const finishCall = jest.fn<Promise<FinishedCall>, FinishArgs>();
 const startIncomingCall = jest.fn<Promise<IncomingCall>, IncomingArgs>();
 type AnsweredArgs = Parameters<typeof import('../../db/calls').recordAnsweredBy>;
 const recordAnsweredBy = jest.fn<Promise<boolean>, AnsweredArgs>();
+type Taken = Awaited<ReturnType<typeof import('../../db/calls').takeIncomingCall>>;
+const takeIncomingCall = jest.fn<Promise<Taken>, [string, number]>();
 jest.mock('../../db/calls', () => ({
   startCall: (...a: StartArgs) => startCall(...a),
   finishCall: (...a: FinishArgs) => finishCall(...a),
   startIncomingCall: (...a: IncomingArgs) => startIncomingCall(...a),
   recordAnsweredBy: (...a: AnsweredArgs) => recordAnsweredBy(...a),
+  takeIncomingCall: (callSid: string, agentId: number) => takeIncomingCall(callSid, agentId),
 }));
 
 type RecordingArgs = Parameters<typeof import('../../db/transcripts').saveRecording>;
@@ -30,9 +33,23 @@ const saveRecording = jest.fn<Promise<boolean>, RecordingArgs>();
 jest.mock('../../db/transcripts', () => ({ saveRecording: (...a: RecordingArgs) => saveRecording(...a) }));
 
 const sendMissedCallText = jest.fn<Promise<boolean>, [number]>();
-jest.mock('../../db/missed-call-text', () => ({
+jest.mock('../../db/lead-texts', () => ({
   sendMissedCallText: (leadId: number) => sendMissedCallText(leadId),
 }));
+
+type RingableArgs = Parameters<typeof import('../../db/presence').setRingable>;
+type Switch = Awaited<ReturnType<typeof import('../../db/presence').setRingable>>;
+const setRingable = jest.fn<Promise<Switch>, RingableArgs>();
+jest.mock('../../db/presence', () => ({ setRingable: (...a: RingableArgs) => setRingable(...a) }));
+type Offer = NonNullable<Awaited<ReturnType<typeof import('../../db/hold-offers').startOffer>>>;
+const startOffer = jest.fn<Promise<Offer | null>, [number | null]>();
+const endOffer = jest.fn();
+jest.mock('../../db/hold-offers', () => ({
+  startOffer: (only: number | null) => startOffer(only),
+  endOffer: (...a: unknown[]) => endOffer(...a),
+}));
+const sendToOffer = jest.fn<Promise<boolean>, unknown[]>();
+jest.mock('../../integrations/twilio-calls', () => ({ sendToOffer: (...a: unknown[]) => sendToOffer(...a) }));
 
 // The raw archive writes through the pool; here it only has to be called.
 const poolQuery = jest.fn(async (_sql: string, _values?: unknown[]) => ({ rows: [], rowCount: 1 }));
@@ -44,8 +61,10 @@ beforeEach(() => {
   finishCall.mockReset().mockResolvedValue({ recorded: true, missedLeadId: null });
   startIncomingCall.mockReset().mockResolvedValue({ kind: 'unknown' });
   recordAnsweredBy.mockReset().mockResolvedValue(true);
+  takeIncomingCall.mockReset().mockResolvedValue({ ok: true, leadId: 7, tookOverFrom: null });
   saveRecording.mockReset().mockResolvedValue(true);
   sendMissedCallText.mockReset().mockResolvedValue(true);
+  setRingable.mockReset().mockResolvedValue({ takingCalls: true, takingCallsWhy: 'by_hand' });
 });
 
 const SETTINGS: TwilioSettings = {
@@ -56,6 +75,7 @@ const SETTINGS: TwilioSettings = {
   twimlAppSid: `AP${'3'.repeat(32)}`,
   callerId: '+14804708259',
   publicUrl: 'https://calls.example.com',
+  identityPrefix: '',
 };
 const PASSWORD = 'correct-horse-battery';
 
@@ -80,11 +100,13 @@ describe('the browser’s routes', () => {
     const { app } = await setup(SETTINGS);
     expect((await request(app).get('/api/calls/config')).status).toBe(401);
     expect((await request(app).post('/api/calls/token')).status).toBe(401);
+    expect((await request(app).post('/api/calls/ringable').send({ available: true })).status).toBe(401);
+    expect(setRingable).not.toHaveBeenCalled();
   });
 
   it('say calling is off, and refuse a token, when it is not set up', async () => {
     const { maya } = await setup(null);
-    expect((await maya.get('/api/calls/config')).body).toEqual({ enabled: false, callerId: null });
+    expect((await maya.get('/api/calls/config')).body).toEqual({ enabled: false, callerId: null, autoCalls: false });
     const res = await maya.post('/api/calls/token');
     expect(res.status).toBe(503);
     expect(res.body.error).toBe('calling_off');
@@ -92,12 +114,112 @@ describe('the browser’s routes', () => {
 
   it('give the caller ID and a token for the signed-in agent when it is', async () => {
     const { maya } = await setup(SETTINGS);
-    expect((await maya.get('/api/calls/config')).body).toEqual({ enabled: true, callerId: '+14804708259' });
+    expect((await maya.get('/api/calls/config')).body).toEqual({ enabled: true, callerId: '+14804708259', autoCalls: false });
     const res = await maya.post('/api/calls/token');
     expect(res.status).toBe(200);
     expect(res.body.identity).toMatch(/^agent-\d+$/);
     expect(typeof res.body.token).toBe('string');
     expect(res.body.ttlSeconds).toBe(3600);
+  });
+});
+
+describe('someone coming free is offered a lead on hold at once (T17)', () => {
+  async function setup(autoCalls: boolean) {
+    const { app, users } = await buildApp({ twilio: SETTINGS, autoCalls });
+    const user = await seedUser(users, { email: 'maya@example.com', name: 'Maya', password: PASSWORD });
+    return { mayaId: user.id, maya: await signIn(app, 'maya@example.com', PASSWORD) };
+  }
+  const settle = async () => {
+    for (let i = 0; i < 5; i++) await new Promise((resolve) => setImmediate(resolve));
+  };
+
+  beforeEach(() => {
+    startOffer.mockReset().mockResolvedValue({ offerId: 7, callId: 42, callSid: 'CA900', agentId: 0 });
+    endOffer.mockReset();
+    sendToOffer.mockReset().mockResolvedValue(true);
+  });
+
+  it('a browser saying it is free - note saved or skipped: the lead rings them, after the browser has its answer', async () => {
+    const { maya, mayaId } = await setup(true);
+    const res = await maya.post('/api/calls/ringable').send({ available: true });
+    expect(res.status).toBe(200);
+    await settle();
+    expect(startOffer).toHaveBeenCalledWith(mayaId);
+    expect(sendToOffer).toHaveBeenCalledWith(SETTINGS, 'CA900', 42, 7);
+  });
+
+  it('saying it is busy offers nothing', async () => {
+    const { maya } = await setup(true);
+    await maya.post('/api/calls/ringable').send({ available: false });
+    await settle();
+    expect(startOffer).not.toHaveBeenCalled();
+  });
+
+  it('switching "Taking calls" on: offered at once too', async () => {
+    const { maya, mayaId } = await setup(true);
+    await maya.post('/api/calls/taking-calls').send({ on: true });
+    await settle();
+    expect(startOffer).toHaveBeenCalledWith(mayaId);
+  });
+
+  it('with automated calls off, nothing is ever offered', async () => {
+    const { maya } = await setup(false);
+    await maya.post('/api/calls/ringable').send({ available: true });
+    await settle();
+    expect(startOffer).not.toHaveBeenCalled();
+  });
+
+  it('Twilio not taking it: the offer ended unsent - the browser\'s answer was never held up', async () => {
+    sendToOffer.mockResolvedValue(false);
+    const { maya } = await setup(true);
+    expect((await maya.post('/api/calls/ringable').send({ available: true })).status).toBe(200);
+    await settle();
+    expect(endOffer).toHaveBeenCalledWith(42, 7, 'unsent');
+  });
+});
+
+describe('a browser saying whether it can take a call', () => {
+  async function setup(twilioSettings: TwilioSettings | null) {
+    const { app, users } = await buildApp({ twilio: twilioSettings });
+    const user = await seedUser(users, { email: 'maya@example.com', name: 'Maya', password: PASSWORD });
+    return { mayaId: user.id, maya: await signIn(app, 'maya@example.com', PASSWORD) };
+  }
+
+  it.each([true, false])('available: %s is saved for the signed-in person, and nobody else', async (available) => {
+    const { maya, mayaId } = await setup(SETTINGS);
+    const res = await maya.post('/api/calls/ringable').send({ available });
+    expect(res.status).toBe(200);
+    expect(setRingable).toHaveBeenCalledTimes(1);
+    const [, userId, saved] = setRingable.mock.calls[0];
+    expect([userId, saved]).toEqual([mayaId, available]);
+  });
+
+  it('answers with the switch as the server holds it - how a browser learns it was turned off for a missed transfer (T15c)', async () => {
+    setRingable.mockResolvedValue({ takingCalls: false, takingCallsWhy: 'missed_transfer' });
+    const { maya } = await setup(SETTINGS);
+    const res = await maya.post('/api/calls/ringable').send({ available: true });
+    expect(res.body).toEqual({ takingCalls: false, takingCallsWhy: 'missed_transfer' });
+  });
+
+  it.each([
+    ['nothing', undefined],
+    ['a string', { available: 'true' }],
+    ['a number', { available: 1 }],
+    ['null', { available: null }],
+  ])('anything but true or false - %s - is refused and nothing is saved', async (_, body) => {
+    const { maya } = await setup(SETTINGS);
+    const res = await maya.post('/api/calls/ringable').send(body);
+    expect(res.status).toBe(400);
+    expect(res.body.error).toBe('invalid_available');
+    expect(setRingable).not.toHaveBeenCalled();
+  });
+
+  it('is refused when calling is not set up - no browser can be rung', async () => {
+    const { maya } = await setup(null);
+    const res = await maya.post('/api/calls/ringable').send({ available: true });
+    expect(res.status).toBe(503);
+    expect(res.body.error).toBe('calling_off');
+    expect(setRingable).not.toHaveBeenCalled();
   });
 });
 
@@ -174,6 +296,20 @@ describe('connecting a call', () => {
     const res = await fromTwilio(app, VOICE, A_CALL);
     expect(res.status).toBe(200);
     expect(res.text).toContain('could not be placed');
+  });
+
+  it('a copy of the app with an identity prefix reads its own browsers, and only its own', async () => {
+    const { app } = await buildApp({ twilio: { ...SETTINGS, identityPrefix: 'dev-' } });
+
+    const own = await fromTwilio(app, VOICE, { ...A_CALL, From: 'client:dev-agent-21' });
+    expect(own.text).toContain('<Dial');
+    expect(startCall).toHaveBeenCalledWith({ callSid: 'CA100', leadId: 7, agentId: 21 });
+
+    // Production's agent-21 is not this server's user 21.
+    startCall.mockClear();
+    const other = await fromTwilio(app, VOICE, A_CALL);
+    expect(other.text).toContain('<Hangup/>');
+    expect(startCall).not.toHaveBeenCalled();
   });
 });
 
@@ -295,7 +431,7 @@ describe('a lead calling our number', () => {
     expect(res.type).toBe('text/xml');
     expect(res.text).toContain('<Identity>agent-21</Identity>');
     expect(res.text).toContain('<Parameter name="leadId" value="7"/>');
-    expect(startIncomingCall).toHaveBeenCalledWith({ callSid: 'CA300', fromPhone: '+16026203572' });
+    expect(startIncomingCall).toHaveBeenCalledWith({ callSid: 'CA300', fromPhone: '+16026203572', ringFree: false });
     expect(sendMissedCallText).not.toHaveBeenCalled();
   });
 
@@ -365,6 +501,101 @@ describe('a lead calling our number', () => {
       const res = await fromTwilio(app, AFTER, { CallSid: 'CA300', DialCallStatus: 'completed' });
       expect(res.text).not.toContain('<Say>');
       expect(finishCall).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('a lead nobody holds or has called: everyone free rings (T19)', () => {
+    const CLAIM = '/api/webhooks/twilio/incoming/claim';
+    const GROUP_AFTER = `${AFTER}?ring=group`;
+    const group = { kind: 'group' as const, agentIds: [16, 19], lead: { id: 7, name: 'Priya Sharma', phone: '+16026203572' } };
+
+    it('only with automated calls on: asked to ring everyone free', async () => {
+      const { app } = await buildApp({ twilio: SETTINGS, autoCalls: true });
+      await fromTwilio(app, INCOMING, A_RING);
+      expect(startIncomingCall).toHaveBeenCalledWith({ callSid: 'CA300', fromPhone: '+16026203572', ringFree: true });
+    });
+
+    it('rings each of them, marked a shared ring, with the lead, the end taken from the whole ring', async () => {
+      startIncomingCall.mockResolvedValue(group);
+      const { app } = await buildApp({ twilio: SETTINGS, autoCalls: true });
+      const res = await fromTwilio(app, INCOMING, A_RING);
+      expect(res.text.match(/<Client /g)).toHaveLength(2);
+      expect(res.text).toContain('<Identity>agent-16</Identity>');
+      expect(res.text).toContain('<Identity>agent-19</Identity>');
+      expect(res.text.match(/<Parameter name="ring" value="group"\/>/g)).toHaveLength(2);
+      expect(res.text).toContain('<Parameter name="leadName" value="Priya Sharma"/>');
+      expect(res.text).toContain(`url="https://calls.example.com${CLAIM}"`);
+      expect(res.text).toContain(`action="https://calls.example.com${AFTER}?ring=group"`);
+      // No browser reports its own end: a cut-short ring says no-answer, and a
+      // refused second accept says completed - the whole ring's end decides.
+      expect(res.text).not.toContain('statusCallback');
+      expect(res.text).toContain('timeout="20"');
+      expect(sendMissedCallText).not.toHaveBeenCalled();
+    });
+
+    describe('someone accepts', () => {
+      const accept = { CallSid: 'CA301', ParentCallSid: 'CA300', To: 'client:agent-19' };
+
+      it('the call is theirs, and they are connected', async () => {
+        const { app } = await buildApp({ twilio: SETTINGS, autoCalls: true });
+        const res = await fromTwilio(app, CLAIM, accept);
+        expect(takeIncomingCall).toHaveBeenCalledWith('CA300', 19);
+        expect(res.text).toMatch(/<Response\/>$/);
+      });
+
+      it.each(['taken', 'inactive', 'not_found'] as const)('refused (%s): that leg is hung up', async (reason) => {
+        takeIncomingCall.mockResolvedValue({ ok: false, reason });
+        const { app } = await buildApp({ twilio: SETTINGS, autoCalls: true });
+        expect((await fromTwilio(app, CLAIM, accept)).text).toMatch(/<Response><Hangup\/><\/Response>$/);
+      });
+
+      it('another server\'s browser name, or no lead\'s call: hung up, nothing taken', async () => {
+        const { app } = await buildApp({ twilio: SETTINGS, autoCalls: true });
+        await fromTwilio(app, CLAIM, { ...accept, To: 'client:dev-agent-19' });
+        await fromTwilio(app, CLAIM, { CallSid: 'CA301', To: 'client:agent-19' });
+        expect(takeIncomingCall).not.toHaveBeenCalled();
+      });
+
+      it('the database failing as they accept: connected anyway - the lead is waiting', async () => {
+        takeIncomingCall.mockRejectedValue(new Error('connection refused'));
+        const { app } = await buildApp({ twilio: SETTINGS, autoCalls: true });
+        expect((await fromTwilio(app, CLAIM, accept)).text).toMatch(/<Response\/>$/);
+      });
+
+      it('never while automated calls are off, and only signed by Twilio', async () => {
+        const { app: off } = await buildApp({ twilio: SETTINGS, autoCalls: false });
+        expect((await fromTwilio(off, CLAIM, accept)).status).toBe(404);
+        const { app } = await buildApp({ twilio: SETTINGS, autoCalls: true });
+        expect((await request(app).post(CLAIM).type('form').send(accept)).status).toBe(403);
+        expect(takeIncomingCall).not.toHaveBeenCalled();
+      });
+    });
+
+    describe('the whole ring\'s end', () => {
+      it('taken and talked: the call ended with its length - nothing said', async () => {
+        const { app } = await buildApp({ twilio: SETTINGS, autoCalls: true });
+        const res = await fromTwilio(app, GROUP_AFTER, { CallSid: 'CA300', DialCallStatus: 'completed', DialCallDuration: '42' });
+        expect(finishCall).toHaveBeenCalledWith({ callSid: 'CA300', outcome: 'answered', durationSec: 42 });
+        expect(res.text).not.toContain('<Say>');
+        expect(sendMissedCallText).not.toHaveBeenCalled();
+      });
+
+      it('nobody took it: missed - the lead hears we will call back, and is texted', async () => {
+        finishCall.mockResolvedValue({ recorded: true, missedLeadId: 7 });
+        const { app } = await buildApp({ twilio: SETTINGS, autoCalls: true });
+        const res = await fromTwilio(app, GROUP_AFTER, { CallSid: 'CA300', DialCallStatus: 'no-answer' });
+        expect(finishCall).toHaveBeenCalledWith({ callSid: 'CA300', outcome: 'no_answer', durationSec: 0 });
+        expect(res.text).toContain('will call you back');
+        expect(sendMissedCallText).toHaveBeenCalledWith(7);
+      });
+
+      it('the lead hung up while it rang: missed, and texted', async () => {
+        finishCall.mockResolvedValue({ recorded: true, missedLeadId: 7 });
+        const { app } = await buildApp({ twilio: SETTINGS, autoCalls: true });
+        await fromTwilio(app, GROUP_AFTER, { CallSid: 'CA300', CallStatus: 'completed', DialCallStatus: 'no-answer' });
+        expect(finishCall).toHaveBeenCalledWith({ callSid: 'CA300', outcome: 'no_answer', durationSec: 0 });
+        expect(sendMissedCallText).toHaveBeenCalledWith(7);
+      });
     });
   });
 

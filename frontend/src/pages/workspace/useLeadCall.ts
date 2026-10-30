@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useReducer, useRef } from 'react';
-import { callReducer, IDLE, type CallState } from '../../lib/call-state';
+import { callReducer, IDLE, occupiesAgent, type CallState } from '../../lib/call-state';
 import { describeCallError, placeCall, type CallHandle } from '../../lib/calling';
+import { useBusyWhile } from '../../lib/presence';
 
 /**
  * One lead's call, for the workspace - Phase 4, TWILIO.md.
@@ -34,6 +35,9 @@ export function useLeadCall(
   onOver: () => void
 ): LeadCall {
   const [state, dispatch] = useReducer(callReducer, IDLE);
+  // The call, and its note box after, keep this browser busy: no transfer
+  // rings it meanwhile (T9, lib/presence.ts). Leaving the lead ends both.
+  useBusyWhile('lead-call', occupiesAgent(state));
 
   const handle = useRef<CallHandle | null>(null);
   /** True from the click until the call is over: no second call meanwhile. */

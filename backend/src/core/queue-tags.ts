@@ -48,6 +48,11 @@ export interface QueueFacts {
   hasUnreadInbound: boolean;
   /** The lead rang us, nobody answered, and nobody has called or texted back since. */
   missedCall?: boolean;
+  /**
+   * The lead said yes on the robot's call, nobody took it, and nobody has
+   * called or texted back since - T22, `MISSED_YES_SQL`.
+   */
+  missedYes?: boolean;
   /** The earliest callback not yet done, if any. */
   nextCallback?: { agentId: number; agentName: string; at: string } | null;
   /** The lead asked to hear from a rep - the flow ended `wants_contact`. */
@@ -60,11 +65,14 @@ export interface QueueFacts {
  * 1. someone already has it - nobody else should call;
  * 2. the lead rang us and nobody answered - they want to talk now, which
  *    outranks a text waiting to be read (2026-10-01);
- * 3. the lead has texted and nobody has read it;
- * 4. an agent has promised to call - it is theirs;
- * 5. the lead asked to hear from a rep - why a low-scoring lead is here at
+ * 3. the lead said yes on the robot's call and nobody took it - they too
+ *    want to talk now, and were told an agent would call back (T22). "Wants a
+ *    call", the words of 6: it is what both leads asked for;
+ * 4. the lead has texted and nobody has read it;
+ * 5. an agent has promised to call - it is theirs;
+ * 6. the lead asked to hear from a rep - why a low-scoring lead is here at
  *    all (2026-10-05, docs/FLOWS.md);
- * 6. their replies could not be understood, so a person must read them.
+ * 7. their replies could not be understood, so a person must read them.
  *
  * Otherwise `null`: nothing to say, the lead is waiting.
  */
@@ -75,6 +83,10 @@ export function queueTag(facts: QueueFacts): QueueTag | null {
 
   if (facts.missedCall) {
     return { kind: 'missed_call' };
+  }
+
+  if (facts.missedYes) {
+    return { kind: 'wants_call' };
   }
 
   if (facts.hasUnreadInbound) {

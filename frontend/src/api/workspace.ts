@@ -49,6 +49,8 @@ export interface LeadDetail {
     expiresAt: string | null;
     /** Set once an agent takes over - STATE-MACHINE.md 2b. */
     agentTookOverAt: string | null;
+    /** When a phone call stopped the questions - the lead answered the robot's call, or rang us (2d). */
+    phoneTookOverAt: string | null;
     /** Which flow the lead is in: 'antibiotics'. FLOWS.md. */
     flow: string | null;
     /** How the flow ended: completed, offers, wants_contact, declined - or null. */
@@ -67,6 +69,8 @@ export interface LeadDetail {
     expired: boolean;
     /** They rang us, nobody answered, and nobody has called or texted back. */
     missedCall: boolean;
+    /** They said yes on the robot's call, nobody took it, and nobody has called or texted back (T22). */
+    missedYes: boolean;
   };
 }
 
@@ -87,6 +91,14 @@ export type TimelineKind =
   | 'disposition'
   /** From the activity log: a pick-up, a release, a moved callback - AUDIT.md. */
   | 'activity';
+
+/**
+ * Which way a call went - a call entry's `detail.direction`. Mirrors
+ * `CallDirection` in backend/src/core/calls.ts: an agent called from the
+ * browser, the lead called us, or the server placed it - an automated call
+ * (T4, docs/AUTO-CALLS.md), which has an agent only once someone takes it.
+ */
+export type CallDirection = 'outbound' | 'inbound' | 'automated';
 
 export interface TimelineEntry {
   kind: TimelineKind;

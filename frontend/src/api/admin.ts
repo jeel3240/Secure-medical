@@ -47,6 +47,40 @@ export interface AdminConfig {
   longestFirstName: string;
   /** No name on file is longer than "there", the word used when a lead has none. */
   longestNameIsFallback: boolean;
+  /** The automated call's active script, every line in order; null when none is active (T24). */
+  callScript: { key: string; name: string; voice: string; lines: CallLine[] } | null;
+  callSettings: CallSettings;
+}
+
+/** One thing the robot says - mirrors CallLine in backend/src/db/admin-config.ts. */
+export interface CallLine {
+  key: string;
+  /** "Q1 · Offer", "After Q1 · Yes", "Busy". */
+  name: string;
+  /** When it is said: "When the lead picks up", "Then Q2". */
+  when: string;
+  /** As written: `{callback_number}` and `{place}` are filled in on the call. */
+  body: string;
+  /** The key that picks it - a choice, and stop. */
+  press: string | null;
+  /** What may be said for it. */
+  words: string[];
+}
+
+/** Mirrors CallSettings in backend/src/db/admin-config.ts: as the robot reads them. */
+export interface CallSettings {
+  on: boolean;
+  /** Minutes after midnight, in `timeZone`. */
+  startMinute: number;
+  endMinute: number;
+  timeZone: string;
+  days: string[];
+  waitMinutes: number;
+  ringSeconds: number;
+  offerRingSeconds: number;
+  holdMaxMinutes: number;
+  minConfidence: number;
+  callbackNumber: string | null;
 }
 
 export async function getConfig(): Promise<AdminConfig> {

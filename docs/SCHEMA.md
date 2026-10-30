@@ -1,6 +1,6 @@
 # Database schema
 
-The migrations in `backend/src/db/migrations/` - `001` to `013`, in order -
+The migrations in `backend/src/db/migrations/` - `001` to `020`, in order -
 are the source of truth for exact columns, types and constraints. `001_init.sql`
 is the starting schema; the ones after it add columns, tables and constraints. This explains what the tables are for and the
 parts that are not obvious from reading the SQL.
@@ -28,21 +28,24 @@ the RDS CA bundle if strict verification is ever wanted.
 
 | Table | Holds |
 |---|---|
-| `users` | Agents and superadmins. bcrypt hash, role, active flag, must-change-password flag, last sign-in, session version. |
+| `users` | Agents and superadmins. bcrypt hash, role, active flag, must-change-password flag, last sign-in, session version. Since 016 (T9, 2026-10-18) `ringable_until`: until when this person's browser can be rung - each open browser says so every 30 seconds and the word holds two minutes; NULL is not available. Cleared whenever the session version is bumped. Not a record of anything, so not in the activity log - "Who is free" in `AUTO-CALLS.md`. Since 017 (T10) `taking_calls`, the "Taking calls" switch - off by default, and off again at every sign-in and sign-out - and `taking_calls_at`, when it last changed; every change is also a `calls.availability_changed` row. And `taking_calls_why` (T15c, added to 017 before release): why it is as it is now - `by_hand`, `sign_in`, `sign_out`, or `missed_transfer` when the server turned it off after the person let a transfer ring out; written on every write of the switch, so the screen can say "Missed a transfer". |
 | `leads` | One person, pulled from EZ Texting. |
 | `conversations` | Where a lead is in its SMS flow: `flow_id`, `current_question_id`, status, score, tier, `question_sent_at` (when the text the lead has to answer went out; empty while we owe them one - a reply then is not an answer, `STATE-MACHINE.md` rule 2c), and `end_outcome` once it has ended. `step` is the current question's `position` - 10, 20, 30, and 11 for the sub-question `q1-a` - no longer 1 to 3 (012 dropped that check); the screens name a question from its key, not from it. One row per conversation. `q1`-`q3` and their label columns are retired (migration 012) - answers are rows in `conversation_answers`. `FLOWS.md`. |
 | `messages` | Every SMS in or out. |
-| `calls` | Twilio calls, with duration and outcome. Written since Phase 4 - `TWILIO.md`, "What is saved". `direction` says who called whom. `twilio_call_sid` is the call's first leg: the browser's for a call we placed, the lead's for one we received. An incoming call that rang nobody has no `agent_id`; an outgoing one always has - the `calls_outbound_has_agent` check (migration 007). |
+| `calls` | Twilio calls, with duration and outcome. Written since Phase 4 - `TWILIO.md`, "What is saved". `direction` says who called whom. `twilio_call_sid` is the call's first leg: the browser's for a call we placed, the lead's for one we received. An incoming call that rang nobody has no `agent_id`, nor one ringing everyone free until someone takes it (T19, `call.taken`); an agent's outgoing one always has - the `calls_outbound_has_agent` check (migration 007, reworded by 014). Since migration 014 (T4, 2026-10-18) `direction` can also be `automated` - a call the server placed (`AUTO-CALLS.md`) - with no `agent_id` until a person takes its transfer, a `script_result` saying how the script ended, and one per lead at most (`calls_one_automated_per_lead`) - leaving out a call Twilio never placed, `script_result` `not_placed`, which is not the lead's call (T28, `AUTO-CALLS.md` "When Twilio refuses"). Since 017 a small index of the calls still going, by agent (`calls_under_way_by_agent`): "not on a call" in `FREE_SQL` reads it. Since 019 (T16) `held_at`: when an automated call's lead went on hold - a call is waiting while it has one, no result and no end (`calls_on_hold`, an index of those); only an automated call can have one (`calls_held_is_automated`). Since 020 (T17) an index of calls by agent and end (`calls_ended_by_agent`), for "has just finished a call" (`JUST_OFF_A_CALL_SQL`), which keeps a lead on hold waiting while someone writes their note. |
 | `dispositions` | What an agent decided after contact. |
 | `notes` | Free text an agent wrote about a lead. |
 | `callbacks` | Scheduled follow-ups. `reason` is `booked` - a person booked it - or `missed_call`, booked by the system for the agent a missed call rang (migration 008). One open `missed_call` callback per lead is a rule in the SQL that books it (`db/calls.ts`), not a constraint; the partial index `idx_callbacks_open_missed_call` serves that lookup. |
 | `call_recordings` | A call's recording at Twilio: its id (`RE…`), length and channels. The audio stays at Twilio. Migration 011, `TWILIO.md`, "Recordings and transcripts". |
 | `call_transcripts` | The text of a recording: `pending` → `queued` → `completed` or `failed`, and once completed the sentences, each with its speaker (`agent` or `lead`). Written by the worker. Migration 011. |
 | `dnc_list` | Phones that must never be contacted. |
-| `settings` | Key/value config. Changed by migration; the parts a superadmin needs are shown read-only on Admin > Configuration. |
+| `settings` | Key/value config. Changed by migration; the parts a superadmin needs are shown read-only on Admin > Configuration. Since 015 also when automated calls go out - `auto_call_hours_start`, `_hours_end`, `_time_zone`, `_days`, `_wait_minutes`, `_ring_seconds`, `_hold_max_minutes`, `_min_confidence` (`AUTO-CALLS.md`), and since 020 `auto_call_offer_ring_seconds` (20): how long a lead on hold rings the person who came free. And two rows no migration writes (T20): `auto_calls_on`, whether the worker last started placing automated calls, and `auto_calls_since`, when they were last switched on - each start with them on after they were off moves it to now (`auto_calls.switched_on` keeps the time it replaced); leads that arrive after it are called first, then those already waiting (T27, `AUTO-CALLS.md` "Leads already waiting"). |
 | `scoring_rules` | Points per answer for the first, fixed flow. **No longer read** since migration 012: points are on `flow_choices`. Kept. |
 | `flows`, `flow_questions`, `flow_choices` | The SMS scripts, as rows: each flow's questions, each question's choices with the reply, the points and where the lead goes next. Migration 012, `FLOWS.md`. |
 | `conversation_answers` | One row per answer a lead gave, with the choice's label and points as they were then, and `message_id`: the inbound text it was read from. Add-only. Migration 012. |
+| `call_scripts`, `call_steps`, `call_choices` | The automated call's script, as rows - migration 015 (T6, 2026-10-18), `AUTO-CALLS.md`. A script carries the lines every step shares - stop, no response, voicemail, busy, hold, and since 019 the place on hold (`hold_next_body`, `hold_place_body`, which must say `{place}`) - its voice, and the text with the link; a step what it asks and how it asks again; a choice its key (never 9, which is stop), the words that may be said for it, its reply, and either the next step or an ending: `transfer`, `send_link` or `declined`. One active script; a choice can never lead into another script's step. Its own tables, not the SMS flow's - "Why not the SMS flow tables" in `AUTO-CALLS.md` Migration 018 (2026-10-18) changed the antibiotics script's opening - no "This is an automated call", and the offer before the question - wrote out "won't" and "didn't" in the stop and repeat lines, and changed its voice, to Google Chirp3-HD Kore. |
+| `call_answers` | One row per answer on an automated call: what Twilio heard, how sure (0 to 1), the keys pressed, and what it was taken to mean - a choice with its label as it was then, unclear, silence or stop. One per asking (`UNIQUE (call_id, step_id, attempt)`), so a repeated webhook saves one. Add-only. Migration 015 |
+| `call_offers` | Each time a lead waiting on hold rang one person who came free - migration 020 (T17, 2026-10-22), `AUTO-CALLS.md` "The hold line": the call, who was rung, when, and how it ended - `taken`, `declined`, `missed` (rang out), `failed` (the ring never completed - Twilio's `failed` or `canceled`), `hung_up`, `expired` (never heard back), `unsent` (never rung - Twilio would not take the redirect, or the call was not ours to ring). Written before Twilio is asked; ended once - a trigger refuses any other change, and every delete - so it is also how a lead is never offered twice to one person. One open offer per call and per person (`call_offers_one_live_per_call`, `call_offers_one_live_per_agent`), so two triggers at once cannot both ring. An end has its outcome and an outcome its end (`call_offers_ended_with_outcome`). |
 | `tiers` | HOT/WARM/LOW score bands. Changed by migration; shown read-only on Admin > Configuration. |
 | `activity_log` | One row per action a person or the system took - who, what, when, and what would otherwise be overwritten. Add-only: a trigger refuses every update and delete. Migration 006, `AUDIT.md`. |
 | `webhook_events` | Every request EZ Texting and Twilio sent, as it arrived. Add-only. Migration 006, `AUDIT.md`. |
@@ -83,7 +86,8 @@ a row with `released_at IS NULL` blocks anything**; every read - the poller,
 `sendMessage`, the Admin > Leads status, placing a call, and the callback a
 missed call would book - filters on it. Today the only thing
 that releases a row is a lead texting START; see STATE-MACHINE.md, "Opting back
-in".
+in". (On a laptop, `npm run dev:auto-call -- --unblock` also lifts a test block,
+released as `dev_test` - local testing only, `AUTO-CALLS.md`.)
 
 It has no `added_by`, and none is planned. An agent can now mark a number DNC
 (reason `agent_disposition`); who did is the actor of the `dnc.blocked` row in
@@ -148,11 +152,12 @@ EZTEXTING-API.md has the evidence.
 
 **`leads.has_unread_inbound` means a person has to read a reply** - since
 2026-09-28. The webhook sets it only when the questions cannot handle a message:
-after the conversation ended, or to an agent who took it over - and, since
-2026-10-06, when the text we owed the lead did not go out: a reply whose
-answer text failed to send, or a reply to a question unsent for over two
-minutes (`api/reply-flow.ts`; `STATE-MACHINE.md`, "Which replies need a
-person"). Picking the lead clears it.
+after the conversation ended, to an agent who took it over, or after a phone
+call took it over (rule 2d, 2026-10-27) - and, since 2026-10-06, when the text
+we owed the lead did not go out: a reply whose answer text failed to send, or
+a reply to a question unsent for over two minutes (`api/reply-flow.ts`;
+`STATE-MACHINE.md`, "Which replies need a person"). Picking the lead clears
+it, and so does saving an outcome.
 It decides who is in the queue, as *Inbound reply*.
 
 It used to be set on every inbound message, answers included. Migration 003
@@ -163,7 +168,8 @@ question failed to send is kept on purpose: the flow never answered it. Checked
 on seeded old-style flags before it shipped.
 
 **Leads are claimed and released explicitly.** An agent claims a lead, which
-sets `assigned_to` and `assigned_at`. Everyone else sees it as in progress. The
+sets `assigned_to` and `assigned_at`. Everyone else sees it as Working – name
+in the queue. The
 agent releases it by clearing both, and it returns to the queue. A superadmin
 can clear anyone's claim.
 
@@ -189,8 +195,8 @@ code: `core/activity.ts`, `db/activity.ts`, `db/dnc.ts`.)
 | Column | Written by | Status |
 |---|---|---|
 | `dispositions.value` | Agent, Phase 3 | The seven values are listed in `DESIGN-PROMPT.md` section 3: Interested, Callback set, No answer, Voicemail, Not interested, Wrong number, DNC. *(2026-09-23: they did not have to come from Jeel after all - the design brief already had them.)* *(2026-09-28: new rows are `closed` or `dnc` only; the seven above are retired, and old rows keep them - `core/dispositions.ts`. No migration: the column has no constraint to change.)* |
-| `calls.outcome` | Twilio's end-of-call callback, Phase 4 | `answered`, `no_answer`, `busy`, `failed`, `canceled` - mapped from Twilio's statuses in `core/calls.ts` - `missed`, for an incoming call nobody answered, and `voicemail`, for a call we placed that a machine picked up (`calls.answered_by`, migration 010). Null while a call is in progress. No constraint on the column. |
-| `dnc_list.reason` | Poller, webhook and the DNC outcome | Poller writes `ezt_opt_out` for a contact already opted out in EZ Texting; the webhook writes `sms_stop` for a STOP reply. An agent's DNC outcome writes `agent_disposition` (`db/dnc.ts`), since Phase 3 - `AGENT-WORKSPACE.md`. |
+| `calls.outcome` | Twilio's end-of-call callback, Phase 4 | `answered`, `no_answer`, `busy`, `failed`, `canceled` - mapped from Twilio's statuses in `core/calls.ts` - `missed`, for an incoming call nobody answered, and `voicemail`, for a call we placed that a machine picked up (`calls.answered_by`, migration 010) - an automated call only when the verdict took it over, the message left or a fax hung up on (T18, `TAKEN_BY_VERDICT_SQL`). Null while a call is in progress. No constraint on the column. |
+| `dnc_list.reason` | Poller, webhook and the DNC outcome | Poller writes `ezt_opt_out` for a contact already opted out in EZ Texting; the webhook writes `sms_stop` for a STOP reply. An agent's DNC outcome writes `agent_disposition` (`db/dnc.ts`), since Phase 3 - `AGENT-WORKSPACE.md`. A stop said on the automated call writes `call_opt_out` (T13, `AUTO-CALLS.md`). |
 | `messages.delivery_status` | Send path | Whatever EZ Texting returns. Unverified - we have never read a delivery status back. *(2026-09-28: we write two values. `failed` - a send EZ Texting refused, with no `ezt_message_id`. `sending` - an automated text between its row being written and EZ Texting's id being recorded, `db/outbound.ts`; it stays `sending` in two cases: the write after a successful send failed (it counts as sent), or the send timed out with no answer from EZ Texting (2026-10-06 - it may have gone, so it is neither marked failed nor retried). Everything else is NULL.)* |
 
 Each should get a CHECK once its values are known. Until then anything is
@@ -218,6 +224,9 @@ one it had, so the queue tabs, Admin > Leads and expiry are all unaffected.
 Opt-out is checked before it and is unaffected either way. Added in `003`; set by
 `db/agent-sms.ts` on an agent's first text to a lead whose conversation is
 still open, and read by the reply flow and the lead card.
+
+Rule 2d, a phone call taking the questions over, has no column: it is worked
+out from `call_answers` and `calls` (`phoneTookOverAtSql`, `db/lead-state.ts`).
 
 **`conversations.completed_at`** - migration `004`, 2026-09-28 - is when the
 lead finished the questions, whichever way their flow ended (until 012: when

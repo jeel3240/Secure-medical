@@ -14,11 +14,15 @@
  *     EZT_USERNAME=x EZT_PASSWORD=x EZT_GROUP=x npx ts-node --transpile-only scripts/queue-live-check.ts
  *
  * Re-running needs a fresh database: DROP and re-migrate - or
- * `scripts/live-checks.sh queue`. 55 checks as of 2026-10-06.
+ * `scripts/live-checks.sh queue`. 70 checks as of 2026-10-24.
  */
 import { pool } from '../src/db/pool';
 import { startFlow } from './live-flow';
 import { listQueue } from '../src/db/queue';
+import { getLeadDetail } from '../src/db/lead-detail';
+import { startAutomatedCall, missTransfer } from '../src/db/auto-calls';
+import { startCall } from '../src/db/calls';
+import { setDisposition } from '../src/db/dispositions';
 
 let failures = 0;
 const stable = (v: unknown) =>
@@ -232,6 +236,75 @@ async function main() {
   await pool.query(`UPDATE callbacks SET done_at = now() WHERE lead_id = $1`, [promised]);
   check('once done, nothing to say', (await listQueue({ limit: 200 })).leads.find((l) => l.id === promised)?.tag, null);
   check('as an inbound reply', withWrote.leads.find((l) => l.id === wrote)?.tag, { kind: 'inbound_reply' });
+
+  // A "yes" on the robot's call that nobody took - T22, AUTO-CALLS.md. Through
+  // the real writes: the robot's call (`startAutomatedCall`), nobody taking it
+  // (`missTransfer`), an agent's call (`startCall`), an outcome
+  // (`setDisposition`). The robot calls only leads who never replied: no score.
+  const robotCall = async (leadId: number, minutesAgo: number, result: 'transfer_missed' | 'voicemail_left') => {
+    const started = await startAutomatedCall({ leadId, mayRing: () => true });
+    if (!started.ok) throw new Error(`the robot's call was refused: ${started.reason}`);
+    if (result === 'transfer_missed') await missTransfer(started.callId);
+    else await pool.query(`UPDATE calls SET script_result = $2 WHERE id = $1`, [started.callId, result]);
+    await pool.query(`UPDATE calls SET created_at = now() - ($2 || ' minutes')::interval WHERE id = $1`, [started.callId, String(minutesAgo)]);
+  };
+  const before = (await listQueue()).total;
+  const silentLead = (phone: string, first: string) =>
+    lead({ phone, first, source: 'CORE-G-27', ageMin: 180, status: 'open', score: 0, tier: null });
+  const yesCalled = await silentLead('+15550000301', 'YesCalled');
+  const yesClosed = await silentLead('+15550000302', 'YesClosed');
+  const yesTexted = await silentLead('+15550000303', 'YesTexted');
+  const voicemail = await silentLead('+15550000304', 'Voicemail');
+  await robotCall(yesCalled, 30, 'transfer_missed');
+  await robotCall(yesClosed, 20, 'transfer_missed');
+  await robotCall(yesTexted, 10, 'transfer_missed');
+  await robotCall(voicemail, 25, 'voicemail_left');
+
+  const queueNow = async () => (await listQueue({ limit: 200 })).leads;
+  const at = (rows: { id: number }[], id: number) => rows.findIndex((l) => l.id === id);
+  let rows = await queueNow();
+  check('a "yes" nobody took is first - before the 90-point lead - the longest waiting on top',
+    rows.slice(0, 4).map((l) => l.firstName), ['YesCalled', 'YesClosed', 'YesTexted', 'Hot']);
+  check('with no score, tagged Wants a call', [rows[0].score, rows[0].tag], [0, { kind: 'wants_call' }]);
+  check('the lead card says so too', (await getLeadDetail(yesCalled))?.flags.missedYes, true);
+  check('a robot call that ended any other way puts nobody in the queue', at(rows, voicemail), -1);
+  check('nor raises the card\'s flag', (await getLeadDetail(voicemail))?.flags.missedYes, false);
+  const withYes = await listQueue();
+  check('counted in the total, under no tier', [withYes.total, withYes.counts.all, withYes.counts.HOT], [before + 3, before + 3, 2]);
+
+  // What does not get back to them.
+  await pool.query(
+    `INSERT INTO messages (lead_id, direction, body, delivery_status) VALUES ($1, 'outbound', 'eDrugstore: the link', 'sent')`,
+    [yesTexted]
+  );
+  await pool.query(
+    `INSERT INTO messages (lead_id, direction, body, sent_by, delivery_status) VALUES ($1, 'outbound', 'hi', $2, 'failed')`,
+    [yesTexted, michael]
+  );
+  check('an automated text, or an agent\'s EZ Texting refused, has not got back to them',
+    (await getLeadDetail(yesTexted))?.flags.missedYes, true);
+  await pool.query(`UPDATE leads SET assigned_to = $2, assigned_at = now() WHERE id = $1`, [yesCalled, michael]);
+  rows = await queueNow();
+  check('picked up: Working, and still first - holding it is not calling them',
+    [at(rows, yesCalled), rows[0].tag?.kind, (await getLeadDetail(yesCalled))?.flags.missedYes], [0, 'working', true]);
+
+  // What does - each on its own lead.
+  const placed = await startCall({ callSid: 'CA-T22-1', leadId: yesCalled, agentId: michael });
+  check('the agent\'s call is placed', placed.ok, true);
+  rows = await queueNow();
+  check('called: no longer first - still in, as Michael holds it, at its own score', [at(rows, yesCalled) > 0, rows[at(rows, yesCalled)]?.tag?.kind, (await getLeadDetail(yesCalled))?.flags.missedYes], [true, 'working', false]);
+  await pool.query(`UPDATE leads SET assigned_to = NULL, assigned_at = NULL WHERE id = $1`, [yesCalled]);
+  check('and once let go, out of the queue - it never replied', at(await queueNow(), yesCalled), -1);
+
+  await pool.query(
+    `INSERT INTO messages (lead_id, direction, body, sent_by, delivery_status) VALUES ($1, 'outbound', 'Sorry we missed you', $2, 'sent')`,
+    [yesTexted, michael]
+  );
+  check('an agent\'s text: out of the queue, the flag gone', [at(await queueNow(), yesTexted), (await getLeadDetail(yesTexted))?.flags.missedYes], [-1, false]);
+
+  check('the outcome is saved', (await setDisposition(yesClosed, michael, 'closed')).ok, true);
+  check('an outcome: out of the queue, the flag gone', [at(await queueNow(), yesClosed), (await getLeadDetail(yesClosed))?.flags.missedYes], [-1, false]);
+  check('the queue is as it was before the robot\'s calls', (await listQueue()).total, before);
 
   console.log(failures ? `\n${failures} FAILED` : '\nall checks passed');
   await pool.end();

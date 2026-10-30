@@ -21,9 +21,13 @@ The worker tick does four things, in this order: this poll, the expiry sweep
 in `worker/expiry.ts`, the retry of openers that never went out
 (`worker/retry-openers.ts`, "Retrying a failed opener" below), then fetching
 call transcripts (`TWILIO.md`) - each in its own try/catch so a failure
-on one does not stop the others. **Every call to EZ Texting gives up after 30
-seconds** (2026-10-06): without a limit one hung connection stopped all four,
-with nothing in the logs. Expiring is local work that must keep happening while EZ Texting is
+on one does not stop the others. With automated calls on (`AUTO_CALLS`) and
+calling set up, a fifth, last: the robot's calls (`worker/auto-calls.ts`,
+T20, `AUTO-CALLS.md` "When a lead is called") - in its own try/catch too, so
+a failure placing calls never stops the poll, nor the poll's the calls. It
+runs after the others in the same tick, so a slow poll delays it. **Every call to EZ
+Texting gives up after 30 seconds** (2026-10-06): without a limit one hung
+connection stopped all four, with nothing in the logs. Expiring is local work that must keep happening while EZ Texting is
 unreachable. The sweep's rules are in STATE-MACHINE.md, "Expiry"; what the
 poller owns is setting `expires_at` and `question_sent_at` when the opener
 goes out (`worker/opener.ts`) - the second is what lets the lead's first
@@ -158,7 +162,7 @@ One JSON line per poll, event `poll.tick` - structured since 2026-09-28,
 | `fetched` | rows returned by the API |
 | `inserted` | new leads written |
 | `skipped` | examined but not written - already known, or not in the group |
-| `suppressed` | opted out; lead written, added to `dnc_list` |
+| `suppressed` | opted out at EZ Texting, or already on `dnc_list`; lead written, nothing sent, and blocked if it was not already |
 | `openers` | question 1 sent. Lower than `inserted` means a send failed |
 
 These do not have to add up. Contacts below the cutoff stop the cycle and are
@@ -202,7 +206,7 @@ anyway could be sent question 1 again, their next answer then scored against
 question 2.
 
 **The text after a missed call is an automated row too** (`sent_by` null,
-`db/missed-call-text.ts`). It cannot reach a lead still waiting on question 1
+`db/lead-texts.ts`). It cannot reach a lead still waiting on question 1
 in normal use - a lead rings us back after an agent has called - but if it
 did, a sent one would count as a text of ours that went out and end the
 retries, and a refused one would count as an attempt.
@@ -340,7 +344,7 @@ Leads that arrived Oct 14, 2026, 12:00 AM to Oct 16, 2026, 9:48 AM, Arizona time
   #1 Priya ··0142  arrived Oct 14, 2026, 4:48 PM  5 failed attempts
   #2 Leo ··0188  arrived Oct 15, 2026, 3:48 AM  1 failed attempt
   #3 - ··0199  arrived Oct 15, 2026, 1:48 PM  5 failed attempts
-Would send 2, one every 30 seconds - about 1 minute.
+Would send 3, one every 30 seconds - about 1 minute.
 Dry run: nothing was sent.
 ```
 
@@ -349,6 +353,15 @@ wrong, another run was going, or it stopped at a text that did not go out.
 Proved by `scripts/send-waiting-openers-live-check.ts`: the leads it takes and
 the ones it must not, never twice across runs, the pace, stopping and carrying
 on, a lead that changes while it runs, and one run at a time.
+
+**Run on production, 2026-10-16**, the day EZ Texting unblocked the account.
+The dry run listed **174 leads**, every one with five failed attempts, in two
+batches: Oct 14, 3:23-5:32 AM, and Oct 15, 3:00-5:51 AM, Arizona time -
+the partner delivers its leads in the early morning, and none arrived after
+the client paused them on Oct 15. None had expired. The list was checked, then
+sent at one every 30 seconds - about 87 minutes. Gaps in the lead ids between
+the two batches are normal: every poll re-reads the last few minutes of
+contacts, and an insert that finds the phone already held still uses up an id.
 
 ## The other two failures in task 27
 

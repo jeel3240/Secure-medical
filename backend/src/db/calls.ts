@@ -14,7 +14,18 @@
 import { activityInsertSql, recordActivity } from './activity';
 import { finishMissedCallCallbacks } from './callbacks';
 import { pool } from './pool';
+import { FREE_SQL } from './presence';
 import type { AnsweredBy, CallOutcome, CallRefusal } from '../core/calls';
+import { MAX_RUNG_AT_ONCE } from '../core/call-script';
+
+/**
+ * An automated call Twilio's verdict took over - T18, AUTO-CALLS.md
+ * "Voicemail": the voicemail message left, or a fax hung up on (the only
+ * `unanswered` call a fax picked up). Only such a call is saved as
+ * `voicemail` for a machine's verdict: one the call ignored - a person Twilio
+ * got wrong - stays `answered`. Bare column names, for any query on `calls`.
+ */
+export const TAKEN_BY_VERDICT_SQL = `(script_result = 'voicemail_left' OR (script_result = 'unanswered' AND answered_by = 'fax'))`;
 
 export type StartCallResult = { ok: true; phone: string } | { ok: false; reason: CallRefusal };
 
@@ -136,8 +147,10 @@ export async function finishCall(opts: {
        UPDATE calls
        SET outcome = CASE
              WHEN direction = 'inbound' AND $2 <> 'answered' THEN 'missed'
-             -- Picked up, but by a machine: the verdict got here first.
-             WHEN $2 = 'answered' AND answered_by IN ('machine', 'fax') THEN 'voicemail'
+             -- Picked up, but by a machine: the verdict got here first. An
+             -- automated call only when the verdict took it over (T18).
+             WHEN $2 = 'answered' AND answered_by IN ('machine', 'fax')
+                  AND (direction <> 'automated' OR ${TAKEN_BY_VERDICT_SQL}) THEN 'voicemail'
              ELSE $2
            END,
            duration_sec = $3,
@@ -190,12 +203,15 @@ export async function finishCall(opts: {
 
 /**
  * Records who picked up a call we placed - a person or a machine - and, when it
- * was a machine, saves the call as `voicemail` rather than `answered`.
+ * was a machine, saves an agent's call as `voicemail` rather than `answered`.
+ * An agent's call or an automated one (T4); an automated call is `voicemail`
+ * only when the verdict took it over (T18, `TAKEN_BY_VERDICT_SQL`), which
+ * `finishCall` reads at its end - a verdict after the end is never acted on.
  *
  * The verdict and the end of the call arrive in either order: detection takes
  * a few seconds, and a short call can be over before it reports. So this
- * corrects an `answered` call that has already ended, and `finishCall` reads
- * the verdict for one that has not. Only the first verdict counts.
+ * corrects an agent's `answered` call that has already ended, and `finishCall`
+ * reads the verdict for one that has not. Only the first verdict counts.
  *
  * Changing `answered` to `voicemail` overwrites what the row said, so the
  * record keeps both - docs/AUDIT.md. One statement: the row and its record
@@ -204,14 +220,17 @@ export async function finishCall(opts: {
 export async function recordAnsweredBy(opts: { callSid: string; answeredBy: AnsweredBy }): Promise<boolean> {
   const { rowCount } = await pool.query(
     `WITH prev AS (
-       SELECT id, outcome FROM calls
-       WHERE twilio_call_sid = $1 AND direction = 'outbound' AND answered_by IS NULL
+       SELECT id, outcome, direction FROM calls
+       WHERE twilio_call_sid = $1 AND direction IN ('outbound', 'automated') AND answered_by IS NULL
        FOR UPDATE
      ),
      verdict AS (
        UPDATE calls c
        SET answered_by = $2,
-           outcome = CASE WHEN prev.outcome = 'answered' AND $2 IN ('machine', 'fax') THEN 'voicemail' ELSE c.outcome END
+           outcome = CASE
+             WHEN prev.outcome = 'answered' AND $2 IN ('machine', 'fax') AND prev.direction = 'outbound' THEN 'voicemail'
+             ELSE c.outcome
+           END
        FROM prev
        WHERE c.id = prev.id
        RETURNING c.id, c.lead_id, c.agent_id, c.outcome, prev.outcome AS outcome_was
@@ -236,6 +255,12 @@ export type IncomingCall =
   /** Ring this agent's browser. */
   | { kind: 'ring'; agentId: number; lead: { id: number; name: string; phone: string } }
   /**
+   * Ring everyone free together - a lead nobody holds or has called (T19,
+   * with automated calls on). The call is nobody's until one of them takes it
+   * (`takeIncomingCall`).
+   */
+  | { kind: 'group'; agentIds: number[]; lead: { id: number; name: string; phone: string } }
+  /**
    * A lead we hold, but no agent to ring. Already saved as missed. `firstReport`
    * is false on a retried webhook, so the lead is not texted twice.
    */
@@ -249,16 +274,23 @@ export type IncomingCall =
  *
  * **Whose.** The agent holding the lead; failing that, the agent who last
  * called them, since theirs is the call being returned. Only an active agent
- * counts. With neither, nobody rings: there is no "everyone" to ring yet - a
- * shared incoming queue is a later piece of work - and the call is saved as
- * missed straight away, so the lead is texted and shows in the queue.
+ * counts, switch or not. With neither, and `ringFree` - automated calls on
+ * (T19, AUTO-CALLS.md "A lead calling back") - everyone free rings together
+ * (`FREE_SQL`, at most ten): a lead returning the robot's voicemail has no
+ * agent yet. With nobody to ring, the call is saved as missed straight away,
+ * so the lead is texted and shows in the queue.
  *
  * A number we hold no lead for is `unknown`. `calls` needs a lead, so that call
  * is kept only in the activity log, by its phone number.
  *
- * Idempotent like `startCall`: a retried webhook finds the row and rings again.
+ * Idempotent like `startCall`: a retried webhook finds the row and keeps what
+ * was decided the first time - see below.
  */
-export async function startIncomingCall(opts: { callSid: string; fromPhone: string }): Promise<IncomingCall> {
+export async function startIncomingCall(opts: {
+  callSid: string;
+  fromPhone: string;
+  ringFree?: boolean;
+}): Promise<IncomingCall> {
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
@@ -275,7 +307,8 @@ export async function startIncomingCall(opts: { callSid: string; fromPhone: stri
                 (SELECT u.id FROM users u WHERE u.id = l.assigned_to AND u.is_active),
                 (SELECT c.agent_id FROM calls c
                  JOIN users u ON u.id = c.agent_id AND u.is_active
-                 WHERE c.lead_id = l.id AND c.direction = 'outbound'
+                 -- An automated call counts once a person took it (T4).
+                 WHERE c.lead_id = l.id AND c.direction IN ('outbound', 'automated')
                  ORDER BY c.id DESC LIMIT 1)
               ) AS agent_id
        FROM leads l
@@ -294,9 +327,48 @@ export async function startIncomingCall(opts: { callSid: string; fromPhone: stri
       await client.query('COMMIT');
       return { kind: 'unknown' };
     }
+    const who = { id: lead.id, name: [lead.first_name, lead.last_name].filter(Boolean).join(' '), phone: lead.phone };
+    const everyoneFree = async () =>
+      (
+        await client.query<{ id: number }>(`SELECT u.id FROM users u WHERE ${FREE_SQL} ORDER BY u.id LIMIT ${MAX_RUNG_AT_ONCE}`)
+      ).rows.map((r) => r.id);
+
+    // Twilio asking again about the same call: what was decided the first
+    // time holds - a call that is over stays over, one agent's ring rings them
+    // again, and a ring to everyone free rings whoever is free now. Nobody
+    // free now, that call is missed at once, and only then texted.
+    const { rows: before } = await client.query<{ id: number; agent_id: number | null; ended: boolean }>(
+      `SELECT id, agent_id, ended_at IS NOT NULL AS ended FROM calls WHERE twilio_call_sid = $1 AND direction = 'inbound'`,
+      [opts.callSid]
+    );
+    if (before[0]) {
+      const call = before[0];
+      let again: IncomingCall;
+      if (call.ended) again = { kind: 'missed', leadId: lead.id, firstReport: false };
+      else if (call.agent_id !== null) again = { kind: 'ring', agentId: call.agent_id, lead: who };
+      else {
+        const free = await everyoneFree();
+        if (free.length > 0) again = { kind: 'group', agentIds: free, lead: who };
+        else {
+          await client.query(`UPDATE calls SET outcome = 'missed', duration_sec = 0, ended_at = now() WHERE id = $1`, [call.id]);
+          await recordActivity(client, {
+            action: 'call.missed',
+            actorId: null,
+            leadId: lead.id,
+            detail: { callId: call.id, callSid: opts.callSid, because: 'no_agent' },
+          });
+          again = { kind: 'missed', leadId: lead.id, firstReport: true };
+        }
+      }
+      await client.query('COMMIT');
+      return again;
+    }
+
+    // Nobody's own: everyone free, when automated calls are on (T19).
+    const free = lead.agent_id === null && opts.ringFree ? await everyoneFree() : [];
 
     // With nobody to ring it is over before it starts: saved as missed now.
-    const nobody = lead.agent_id === null;
+    const nobody = lead.agent_id === null && free.length === 0;
     const inserted = await client.query(
       `INSERT INTO calls (lead_id, agent_id, twilio_call_sid, started_at, direction, outcome, duration_sec, ended_at)
        VALUES ($1, $2, $3, now(), 'inbound',
@@ -313,7 +385,12 @@ export async function startIncomingCall(opts: { callSid: string; fromPhone: stri
         actorId: null,
         leadId: lead.id,
         subjectUserId: lead.agent_id,
-        detail: { callId: inserted.rows[0].id, callSid: opts.callSid, ...(nobody ? { because: 'no_agent' } : {}) },
+        detail: {
+          callId: inserted.rows[0].id,
+          callSid: opts.callSid,
+          ...(nobody ? { because: 'no_agent' } : {}),
+          ...(free.length > 0 ? { ring: 'group', rung: free.length } : {}),
+        },
       });
     }
 
@@ -322,15 +399,78 @@ export async function startIncomingCall(opts: { callSid: string; fromPhone: stri
     if (nobody) {
       return { kind: 'missed', leadId: lead.id, firstReport: inserted.rowCount === 1 };
     }
-    return {
-      kind: 'ring',
-      agentId: lead.agent_id!,
-      lead: {
-        id: lead.id,
-        name: [lead.first_name, lead.last_name].filter(Boolean).join(' '),
-        phone: lead.phone,
-      },
+    if (lead.agent_id === null) return { kind: 'group', agentIds: free, lead: who };
+    return { kind: 'ring', agentId: lead.agent_id, lead: who };
+  } catch (err) {
+    await client.query('ROLLBACK');
+    throw err;
+  } finally {
+    client.release();
+  }
+}
+
+export type TakeIncomingResult =
+  | { ok: true; leadId: number; tookOverFrom: number | null }
+  | { ok: false; reason: 'taken' | 'inactive' | 'not_found' };
+
+/**
+ * A person accepted a lead's call that rang everyone free (T19): the call
+ * becomes theirs - `agent_id`, so they are on a call - with its `call.taken`
+ * record, and so does the lead, taken over from anyone who held it, with its
+ * `lead.picked_up` (`via: 'call_back'`) - in one transaction, as a transfer
+ * taken (`takeTransfer`). Their browser picks the lead up too as it accepts,
+ * and that can get here first; but in two accepts at once it can be the
+ * other person's, so the lead follows the call. The first to accept only:
+ * Twilio connects one person, and a second request - someone else's, or an
+ * account deactivated meanwhile - is refused, and that leg is hung up. The
+ * same person again changes nothing. `callSid` is the lead's call - our row's.
+ */
+export async function takeIncomingCall(callSid: string, agentId: number): Promise<TakeIncomingResult> {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const { rows } = await client.query<{ id: number; lead_id: number; agent_id: number | null; assigned_to: number | null }>(
+      `SELECT c.id, c.lead_id, c.agent_id, l.assigned_to
+       FROM calls c JOIN leads l ON l.id = c.lead_id
+       WHERE c.twilio_call_sid = $1 AND c.direction = 'inbound' AND c.ended_at IS NULL
+       FOR UPDATE OF c, l`,
+      [callSid]
+    );
+    const call = rows[0];
+    const refuse = async (reason: 'not_found' | 'taken' | 'inactive') => {
+      await client.query('ROLLBACK');
+      return { ok: false as const, reason };
     };
+    if (!call) return await refuse('not_found');
+    if (call.agent_id !== null && call.agent_id !== agentId) return await refuse('taken');
+    const agent = await client.query(`SELECT 1 FROM users WHERE id = $1 AND is_active`, [agentId]);
+    if (agent.rowCount === 0) return await refuse('inactive');
+
+    const tookOverFrom = call.assigned_to !== null && call.assigned_to !== agentId ? call.assigned_to : null;
+    if (call.agent_id === null) {
+      await client.query(`UPDATE calls SET agent_id = $2 WHERE id = $1`, [call.id, agentId]);
+      await recordActivity(client, {
+        action: 'call.taken',
+        actorId: agentId,
+        leadId: call.lead_id,
+        detail: { callId: call.id, callSid, ...(tookOverFrom === null ? {} : { tookOverFrom }) },
+      });
+    }
+    if (call.assigned_to !== agentId) {
+      await client.query(`UPDATE leads SET assigned_to = $2, assigned_at = now(), updated_at = now() WHERE id = $1`, [
+        call.lead_id,
+        agentId,
+      ]);
+      await recordActivity(client, {
+        action: 'lead.picked_up',
+        actorId: agentId,
+        leadId: call.lead_id,
+        detail: { via: 'call_back', callId: call.id, ...(tookOverFrom === null ? {} : { tookOverFrom }) },
+      });
+    }
+
+    await client.query('COMMIT');
+    return { ok: true, leadId: call.lead_id, tookOverFrom };
   } catch (err) {
     await client.query('ROLLBACK');
     throw err;

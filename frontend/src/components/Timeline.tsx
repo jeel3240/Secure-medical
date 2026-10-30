@@ -1,7 +1,9 @@
 import { useEffect, useRef } from 'react';
 import type { TimelineEntry, TimelineKind } from '../api/workspace';
 import { DISPOSITION_LABEL, type Disposition } from '../api/workspace';
-import { formatTime } from '../lib/format';
+import { CALL_RESULT_WORDS } from '../lib/call-results';
+import { dayLabel, formatDay, formatTime, isSameDay } from '../lib/format';
+import { CallAnswers } from './CallAnswers';
 import { CallTranscript } from './CallTranscript';
 
 /**
@@ -32,12 +34,6 @@ const LABEL: Record<TimelineKind, string> = {
   activity: 'LOG',
 };
 
-const dayFormat = new Intl.DateTimeFormat(undefined, {
-  weekday: 'short',
-  month: 'short',
-  day: 'numeric',
-});
-
 /** `34s`, `2:14` - how a call length reads in a list. */
 function duration(seconds: unknown): string {
   const n = typeof seconds === 'number' ? seconds : 0;
@@ -60,7 +56,28 @@ const CALL_OUTCOME: Record<string, string> = {
   canceled: 'cancelled',
 };
 
-export function callText(detail: Record<string, unknown>): string {
+
+/**
+ * The robot's call by how its script ended (`lib/call-results.ts`, shared with
+ * Admin > Leads), or null while it has no result - then it reads as T5 had it.
+ */
+function robotCallText(detail: Record<string, unknown>, author: string | null): string | null {
+  const result = detail.scriptResult;
+  if (typeof result !== 'string') return null;
+  if (result === 'transferred') return `Automated call · said yes · ${author ?? 'an agent'} took it · ${duration(detail.durationSec)}`;
+  // Never picked up: Twilio's words for why, as for any call we place.
+  if (result === 'unanswered') {
+    const why = typeof detail.outcome === 'string' && detail.outcome !== 'voicemail' ? CALL_OUTCOME[detail.outcome] : null;
+    return `Automated call · ${why ?? 'no answer'}`;
+  }
+  return `Automated call · ${CALL_RESULT_WORDS[result] ?? result.replace(/_/g, ' ')}`;
+}
+
+/**
+ * `author` is the agent on the call: theirs, the one it rang, or - on the
+ * robot's call - who took its transfer, named in the line itself.
+ */
+export function callText(detail: Record<string, unknown>, author: string | null = null): string {
   const { outcome } = detail;
   // A lead calling us. Missed says it all; an answered one has a length.
   if (detail.direction === 'inbound') {
@@ -69,9 +86,16 @@ export function callText(detail: Record<string, unknown>): string {
     if (outcome === 'answered') return `Incoming call · answered · ${duration(detail.durationSec)}`;
     return `Incoming call · ${CALL_OUTCOME[outcome] ?? outcome.replace(/_/g, ' ')}`;
   }
-  if (typeof outcome !== 'string') return 'Outbound call · in progress';
-  if (outcome === 'answered') return `Outbound call · answered · ${duration(detail.durationSec)}`;
-  return `Outbound call · ${CALL_OUTCOME[outcome] ?? outcome.replace(/_/g, ' ')}`;
+  // The robot's call says how its script ended (T21); until it has, and for an
+  // agent's call, the call itself in words (T5).
+  if (detail.direction === 'automated') {
+    const robot = robotCallText(detail, author);
+    if (robot) return robot;
+  }
+  const what = detail.direction === 'automated' ? 'Automated call' : 'Outbound call';
+  if (typeof outcome !== 'string') return `${what} · in progress`;
+  if (outcome === 'answered') return `${what} · answered · ${duration(detail.durationSec)}`;
+  return `${what} · ${CALL_OUTCOME[outcome] ?? outcome.replace(/_/g, ' ')}`;
 }
 
 const CALL_REFUSAL: Record<string, string> = {
@@ -99,7 +123,7 @@ export function activityText(detail: Record<string, unknown>, at: string): strin
   const subject = typeof detail.subject === 'string' ? detail.subject : null;
   const when = (iso: unknown) => {
     const date = typeof iso === 'string' ? new Date(iso) : null;
-    return date ? `${dayFormat.format(date)} ${formatTime(date)}` : 'an unknown time';
+    return date ? `${formatDay(date)} ${formatTime(date)}` : 'an unknown time';
   };
 
   switch (detail.action) {
@@ -149,6 +173,9 @@ export function systemText(detail: Record<string, unknown>): string {
     case 'agent_took_over':
       // Worth spelling out: this is why the automated questions stopped.
       return 'Agent took over - automated questions stopped';
+    case 'phone_took_over':
+      // The lead answered the robot's call, or rang us (STATE-MACHINE.md 2d).
+      return 'Phone call - automated questions stopped';
     case 'conversation_expired':
       return 'Conversation expired';
     default:
@@ -163,10 +190,10 @@ function entryText(entry: TimelineEntry): string {
     case 'system':
       return systemText(d);
     case 'call':
-      return callText(d);
+      return callText(d, entry.author);
     case 'callback': {
       const at = typeof d.scheduledAt === 'string' ? new Date(d.scheduledAt) : null;
-      const when = at ? `${dayFormat.format(at)} ${formatTime(at)}` : 'unscheduled';
+      const when = at ? `${formatDay(at)} ${formatTime(at)}` : 'unscheduled';
       // One the system booked because their call was missed has no chosen time.
       if (d.reason === 'missed_call') return d.doneAt ? 'Missed call returned' : 'Callback added · missed call';
       return d.doneAt ? `Callback completed (was ${when})` : `Callback scheduled for ${when}`;
@@ -181,9 +208,6 @@ function entryText(entry: TimelineEntry): string {
       return typeof d.body === 'string' ? d.body : '';
   }
 }
-
-const sameDay = (a: Date, b: Date) =>
-  a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
 
 export function Timeline({
   entries,
@@ -206,21 +230,28 @@ export function Timeline({
   }
 
   let lastDay: Date | null = null;
+  const now = new Date();
 
   return (
     <ol className="timeline">
       {entries.map((entry, index) => {
         const at = new Date(entry.at);
         // Day separators, so a lead worked over a week does not read as one
-        // long afternoon.
-        const newDay = !lastDay || !sameDay(lastDay, at);
+        // long afternoon - named as the conversation names them (W1).
+        const newDay = !lastDay || !isSameDay(lastDay, at);
         lastDay = at;
 
-        const failed = entry.kind === 'sms' && entry.detail.deliveryStatus === 'failed';
+        // Ours or an agent's own: a text EZ Texting refused is kept, marked
+        // failed (db/failed-sends.ts), and must not read as sent.
+        const failed =
+          (entry.kind === 'sms' || entry.kind === 'agent_sms') && entry.detail.deliveryStatus === 'failed';
+        // The robot's call names who took it in its own line (T21).
+        const robotCall = entry.kind === 'call' && entry.detail.direction === 'automated';
+        const byline = robotCall ? null : entry.author;
 
         return (
           <li key={`${entry.kind}-${entry.at}-${index}`}>
-            {newDay && <div className="timeline__day">{dayFormat.format(at)}</div>}
+            {newDay && <div className="timeline__day">{dayLabel(at, now)}</div>}
 
             <div className={`timeline__entry timeline__entry--${entry.kind}`}>
               <span className="timeline__kind">{LABEL[entry.kind]}</span>
@@ -228,9 +259,10 @@ export function Timeline({
               <div className="timeline__body">
                 <p className="timeline__text">{entryText(entry)}</p>
                 <p className="timeline__meta">
-                  {entry.author && <span className="timeline__author">{entry.author}</span>}
+                  {byline && <span className="timeline__author">{byline}</span>}
                   {failed && <span className="timeline__failed">Delivery failed</span>}
                 </p>
+                {entry.kind === 'call' && <CallAnswers detail={entry.detail} />}
                 {entry.kind === 'call' && <CallTranscript detail={entry.detail} agentName={entry.author} />}
               </div>
 

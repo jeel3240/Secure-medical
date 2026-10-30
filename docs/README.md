@@ -71,7 +71,10 @@ docker compose exec postgres psql -U app -d leads \
 | `REDIS_URL` | Not read by any code (2026-09-28). Redis runs in the compose files for a planned job queue; the `bull` and `redis` packages were removed as unused. |
 | `NODE_ENV` | `production` turns on the Secure cookie flag, RDS SSL, and the three start-up refusals: a weak `JWT_SECRET`, no `EZT_WEBHOOK_TOKEN`, and Twilio settings only partly set. Set by the compose files; no need to change it in `.env`. |
 | `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_API_KEY`, `TWILIO_API_SECRET`, `TWILIO_TWIML_APP_SID`, `TWILIO_PHONE_NUMBER`, `PUBLIC_URL` | Browser calling (`TWILIO.md`). All empty: calling is off and everything else works. All set: calling is on. Some set: off locally with a warning, and **the API refuses to start in production**. Where each comes from is in `.env.example`. |
+| `TWILIO_IDENTITY_PREFIX` | Optional, apart from the seven. Put in front of every browser's name at Twilio. **Empty in production; `dev-` locally**, because the laptop shares production's Twilio account and Twilio rings every browser with the same name - `TWILIO.md`, "What it needs on the Twilio account". Needed by the api |
 | `TWILIO_TRANSCRIPTION_SERVICE_SID` | Optional, apart from the seven. Set, every call is recorded and transcribed (`TWILIO.md`, "Recordings and transcripts"); empty, nothing is recorded. `npm run twilio:configure -- --transcription` creates the service and prints the id. Needed by both the api and the worker |
+| `AUTO_CALLS` | Automated calls (`AUTO-CALLS.md`). **Off unless exactly `on`**, and only with calling set up; `off` or empty is off, any other value is off and logged once as `auto_calls.off`, never a reason to refuse to start. Production gets every automated-calling change with it off. On, the app bar shows the "Taking calls" switch. Read by the api (and the dev command); passed to the worker too, which places the calls (T20). Changing it means recreating **both** - `docker compose up -d` does - or the worker goes on calling while the api answers its webhooks 404 (it then stops by itself: `auto_call.webhooks_silent`). On, it calls every lead still waiting for a reply - those that arrived before it was switched on too - new leads first (`AUTO-CALLS.md`, "Leads already waiting") |
+| `AUTO_CALL_TEST_NUMBERS` | Outside production, **the only numbers an automated call may ring** - our own phones, comma-separated E.164 (`+16025550123,+16025550124`). Empty, nothing is rung; an entry that is not E.164 is ignored. Production does not read it. `AUTO-CALLS.md`, "How a call is placed". Read where calls are placed: the dev command and the worker (T20) |
 | `PORT`, `SERVICE_NAME` | Not in `.env.example` and not set by the compose files. `PORT` is the API's port, 3000 by default. `SERVICE_NAME` overrides the `svc` field on every log line, which is otherwise worked out from the entry point (`api`, `worker`). |
 | `CADDY_DOMAIN` | Not read by anything. The production `Caddyfile` names `dailyleadhub.com` directly. |
 
@@ -109,17 +112,17 @@ contact in the group gets a text within a poll interval. `openers` in the
 ## How to test
 
 ```bash
-cd backend  && npm test && npm run lint    # 633 tests
-cd frontend && npm test && npm run lint    # 282 tests   (counts as of 2026-10-11)
+cd backend  && npm test && npm run lint    # 1,053 tests
+cd frontend && npm test && npm run lint    # 407 tests   (counts as of 2026-10-29)
 ```
 
 **Unit and route tests** mock the database and cover behaviour in isolation.
 
 **Live checks** prove the SQL against a real Postgres, because a mocked pool
 says nothing about aggregates, date windows, transactions or races. Each one
-refuses to run against a database that holds leads. Its header comment gives
-the command to run one by hand (the flows check points at `live-checks.sh
-flows`). To run them, each on its own scratch database:
+refuses to run against a database that holds leads (the presence check: users).
+Its header comment gives the command to run one by hand, or the
+`live-checks.sh` line that runs it. To run them, each on its own scratch database:
 
 ```bash
 cd backend
@@ -127,10 +130,10 @@ scripts/live-checks.sh              # all of them
 scripts/live-checks.sh flows queue  # just these
 ```
 
-There are sixteen live checks, covering the SMS flows (a second flow added as
+There are twenty-two live checks, covering the robot placing calls by itself (who is due, when, at what pace, never twice, calls that never reached Twilio), the texts a call leads to (the link, and the text after a missed call - EZ Texting stubbed), the automated call (its row, every refusal, linking it to Twilio's call, two placements racing; each answer kept once, a result never overwritten, a stop blocking once and ending the text questions, the end settling an unfinished script; a transfer taken - from the lead's holder, once, never by a second person - or missed; a lead on hold, its place in line, and hanging up on hold; Twilio's voicemail verdict acted on - the beep decides, under the call's lock, never twice), a lead on hold rung to whoever comes free (migration 020: longest waiting first, one ring at a time per lead and per person, never the same person twice, and who is still coming for a lead), who can take a call (migrations 016 and 017: the browser's word, the "Taking calls" switch and why it is so, who is free, the switch turned off after a ring let run out, and who counts as on a call, or just off one, while a lead is on hold), the automated call's script (migrations 015, 018 and 019, and 020's ring time), the SMS flows (a second flow added as
 rows only), the queue, claims, the read flag, the lead card,
 the timeline, callbacks, dispositions, agent SMS, calls (outgoing, incoming and
-missed), the activity log, Admin > Leads, the admin read models, health, the
+missed, and a call back ringing everyone free), the activity log, Admin > Leads, the admin read models, health, the
 opener retry, and the resend after an outage.
 
 **How fast it is with a lot of leads** is a separate check - it loads 50,000
@@ -147,7 +150,11 @@ DATABASE_URL=postgres://app:app@localhost:5433/speed JWT_SECRET=x EZT_USERNAME=x
 
 **The end-to-end script** runs the whole system in one go - a lead arrives,
 answers the antibiotics flow's questions through the real webhook, is scored, reaches the queue,
-is claimed, worked, dispositioned, and finally blocked:
+is claimed, worked, closed, and finally blocked; then, with automated calls on,
+the robot calls three leads who never replied, one at a time as one agent is
+free - one says yes and the agent takes it, one says yes and nobody does (first
+in the queue), one says no, then yes to the link, which is texted (T25,
+`AUTO-CALLS.md`):
 
 ```bash
 docker compose exec postgres psql -U app -d postgres -c 'CREATE DATABASE e2e'
@@ -156,10 +163,17 @@ docker compose exec -e DATABASE_URL=postgres://app:app@postgres:5432/e2e api   n
 docker compose exec -e DATABASE_URL=postgres://app:app@postgres:5432/e2e   -e EZT_SEND_GROUP=stub api npm run e2e
 ```
 
-Fifty-two checks. EZ Texting is stubbed at the HTTP boundary, so it proves
-everything up to the moment a text would leave the building - and nothing about
-whether a real phone buzzes. For that, set the real `EZT_*` values and add your
-own number to the test group, as "Sending" above describes.
+Ninety-seven checks (2026-10-27) - Avery's "thanks" after the link included,
+which goes to a person (`STATE-MACHINE.md` 2d). EZ Texting and Twilio are stubbed at their
+HTTP boundaries - `axios.post`, and the Twilio library's one request method,
+which answers only "place this call" and fails the run on anything else - so it
+proves everything up to the moment a text or a call would leave the building,
+and nothing about whether a real phone buzzes or rings. Twilio's side of each
+call is its webhooks, posted to the real routes and signed as Twilio signs them,
+each at the address the previous answer gave. It sets its own database's calling
+hours to every hour of every day, so it passes whenever it is run. For real
+texts, set the real `EZT_*` values and add your own number to the test group, as
+"Sending" above describes; for real calls, `AUTO-CALLS.md`, T26.
 
 ## Known limits
 
@@ -167,26 +181,31 @@ Things that are true today and will surprise someone who assumes otherwise.
 
 **Calling is simple.** Agents call leads from the browser (`TWILIO.md`, built
 2026-10-01). A lead who rings the number back rings one agent's browser - the
-one holding them, or who last called them - and otherwise gets a message, a
-text and a place in the queue as a missed call, and the agent it rang gets a
-callback; there is no call queue and no voicemail (`TWILIO.md`, "Incoming
-calls"). An agent's browser must be open and signed in to ring, and a number
+one holding them, or who last called them - or, with automated calls on,
+everyone free (T19); and otherwise gets a message, a text and a place in the
+queue as a missed call, and the agent it rang gets a callback (none when it
+rang everyone free); there is no
+call queue and no voicemail (`TWILIO.md`, "Incoming calls"). An agent's browser must be open and signed in to ring, and a number
 we hold no lead for rings nobody. Calls are recorded and transcribed when the
 transcription service is set, and the lead hears a recording notice first
 (`TWILIO.md`). A call that reaches voicemail is saved as
-voicemail, by Twilio's detection, which is not always right. There is no
-voicemail drop, transfer or hold, and the recording's audio is not played in
-the app. **Never run `twilio:configure` locally with production's phone number or
+voicemail, by Twilio's detection, which is not always right. An agent's call
+has no voicemail drop, transfer or hold - the automated call has all three
+(`AUTO-CALLS.md`) - and the recording's audio is not played in the app. **Never run `twilio:configure` locally with production's phone number or
 TwiML App** (2026-10-05): it points both at the laptop and production calling
-stops, silently, until it is run on the server again. Calling is not tested
-locally at all (next paragraph); if it ever is again, it needs its own Twilio
-number and TwiML App - `TWILIO.md`, "What it needs on the Twilio account". Admin > Overview shows no call totals - removed on 2026-09-28
+stops, silently, until it is run on the server again. Locally there is a dev
+number of its own (next paragraph) - `TWILIO.md`, "What it needs on the Twilio
+account". Admin > Overview shows no call totals - removed on 2026-09-28
 (`ADMIN.md`, "Overview") - though every call is on its lead's timeline.
 
-**Calling is not tested locally** (2026-10-05). The Twilio number is
-production's, so a local `.env` keeps the Twilio settings empty and calling
-reads "off"; a calling change is proved by tests and checked on the live
-server - `TWILIO.md`, "What it needs on the Twilio account".
+**Calling is off locally until a tunnel is set** (2026-10-16). From 2026-10-05
+the only Twilio number was production's, so a local `.env` kept the Twilio
+settings empty. Since 2026-10-16 local has its own: the dev number
+(480) 530-8582, the TwiML App `secure-medical-calling-dev`, and
+`TWILIO_IDENTITY_PREFIX=dev-`, so a laptop can never ring production's
+browsers or be rung by them. `PUBLIC_URL` stays empty - calling reads "off" -
+until a tunnel is set up for a test (`AUTO-CALLS.md`, T3). `TWILIO.md`, "What
+it needs on the Twilio account".
 
 **The message copy is the client's antibiotics script** (2026-10-05,
 `STATE-MACHINE.md`). Five lines in it were drafted here and are waiting for the
@@ -245,8 +264,9 @@ job queue (CLAUDE.md §2); no code reads or writes it, and since 2026-09-28 the
 `bull` and `redis` packages are gone and `REDIS_URL` is no longer required. The
 worker is a plain loop, not a job queue.
 
-**State and Consent ref have no data behind them.** EZ Texting sends neither, so
-both are shown as "-" or a note rather than left off the screen.
+**State and Consent ref have no data behind them.** EZ Texting sends neither.
+Consent ref is shown as "-" on the Lead Timeline page, so nobody wonders
+whether the page forgot it; State is not shown at all.
 
 ## Architecture
 
@@ -275,7 +295,7 @@ commit.
 | `POLLER.md` | How leads are pulled in | The poller or worker loop |
 | `WEBHOOKS.md` | How replies are received | The webhook handler |
 | `TWILIO.md` | Browser calling: how a call works, incoming calls and missed calls, what is saved, settings, testing, deploying | Anything about calls, Twilio's webhooks, the Call button, the incoming-call card or the call bar |
-| `AUTO-CALLS.md` | Automated outbound calls: the agreed script and flow, the transfer and hold rules, the "Taking calls" switch, and the build tracker. Planned, not built | A ticket from its tracker is merged, or any decision about automated calls |
+| `AUTO-CALLS.md` | Automated outbound calls: the agreed script and flow, the transfer and hold rules, the "Taking calls" switch, and the build tracker. T0-T25 are done (2026-10-25): the server places a call, asks the script, keeps every answer, texts the link, puts a "yes" through to the lead's own agent first, then everyone free, switches off whoever let it ring out, holds a "yes" while someone is on a call or writing its note, rings the next person who comes free with the lead who has waited longest, leaves the voicemail message once a machine's greeting is over, rings everyone free for a lead calling back whom nobody owns, calls the right leads by itself at the pace the people free can take, shows each robot call on the lead's timeline with what was said, puts a "yes" nobody took first in the agents' queue, shows each lead's robot call on Admin > Leads, and the script and its settings on Admin > Configuration, every doc read against the code and the end-to-end script running robot calls, and every path heard on a real phone (T26, 2026-10-27); going live is left - T26, "Going live" | A ticket from its tracker is merged, or any decision about automated calls |
 | `AUDIT.md` | The activity log and the raw webhook archive: what is recorded, why nothing can be edited or deleted, what it does not cover | **Any new action a person or the system can take** - it records itself, or this doc says why not |
 | `ADMIN-LEADS.md` | The superadmin Leads page | That page or its API |
 | `QUEUE.md` | The agents' priority queue API: who is in it, the order, the tags | `GET /api/leads`, the queue query or the tag rules |

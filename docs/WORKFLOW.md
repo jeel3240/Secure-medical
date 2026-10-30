@@ -34,6 +34,7 @@ commit message.
 cd backend && npx tsc --noEmit    # must be clean
 npm test                          # must pass
 npm run lint                      # must pass - ESLint for the backend
+scripts/live-checks.sh            # when the change touches SQL - README.md, "How to test"
 cd ../frontend && npm run build   # type-checks and builds the frontend
 npm test                          # must pass - Vitest
 npm run lint                      # ESLint for the frontend
@@ -80,6 +81,11 @@ production unless Jeel says otherwise - that assumption is cheap when wrong and
 expensive when right, because editing a file that has run leaves the two
 databases permanently different with nothing to show it.
 
+*(Jeel says otherwise, 2026-10-18: until automated calls are deployed as a
+whole, 014 onwards have not run in production and may be edited in place - 018
+was, for the call's opening. A laptop that already ran the old file re-applies
+it by hand and says so. After that deploy, the rule above holds again.)*
+
 This applies to the smallest changes as much as the large ones. Adding a column,
 widening one, adding an index, seeding a settings row, correcting a value: each
 one is a file. `002_dnc_release.sql` exists because two columns had to be added
@@ -95,18 +101,37 @@ ran the old 003 but never 004 misses the second part; rebuild it, or run the
 second part's SQL there once.
 
 *(The `004` on disk today, `004_conversation_completed_at.sql`, is a later and
-unrelated file. As of 2026-10-06 the files are 001 to 013: `main` holds 001 to
-011 - 006 to 011, the activity log, incoming calls, the callback a missed call
-books, the word kept with each answer, who picked up a call, and call
-recordings and transcripts, reached it on 2026-10-05. 012, the SMS flows as
-rows with the antibiotics script (`FLOWS.md`), and 013, three indexes for the
-queue and Admin > Leads (`QUEUE.md`, "How fast it is"), are on `dev` since
-2026-10-06, after a walk with a real phone (`FLOWS.md`); the next merge into
-`main` and deploy runs those two. *(012 was edited on that
-branch on 2026-10-06, after review and before it ran anywhere but a
-developer's machine: a local database that ran the earlier 012 has to be
-rebuilt.)* `npm run migrate` applies whatever the
-database has not run, in order.)*
+unrelated file.)*
+
+**Where the files stand - 2026-10-25.** `main` and production hold 001 to
+013. 014 to 020, for automated calls - T4, T6, T9, T10, T12, T13, T15c, T16
+and T17, `AUTO-CALLS.md` - are on `dev`, and the next deploy runs them. None
+changes a row production already has: 014 adds a third call direction, a
+column, two checks and an index; 015 adds the call script's four tables, its
+seed, and eight `settings` rows; 016 adds one empty column to `users`; 017
+adds three more - the "Taking calls" switch, off for everyone, when it changed
+and why - and an index of the calls still going; 018 changes three of 015's
+own rows - the call's opening, its stop and repeat lines, and its voice - and
+stops if they are not exactly as 015 left them; 019 adds the two place-on-hold
+lines to the script and `calls.held_at`, empty, with a check and an index; 020
+adds `call_offers`, empty, an index of calls by agent and end, and one
+`settings` row. Deploy with `AUTO_CALLS` unset: no automated call is placed
+until it is `on` - though W1, W2, Admin > Leads' Call column and the three
+Configuration tabs show at once - and then switch it on as `AUTO-CALLS.md`,
+T26, "Going live", says. Switched on, it calls every lead still waiting
+for a reply, those already waiting included - new leads first (T27). Run `npm run migrate` straight after the `up`: until
+017 has run, the new code cannot read `users` (`taking_calls`), so signing in
+and every page fail. `npm run migrate` applies whatever the database has not run,
+in order.
+
+*(History: 006 to 011 - the activity log, incoming calls, the callback a
+missed call books, the word kept with each answer, who picked up a call, and
+call recordings and transcripts - reached `main` on 2026-10-05; 012, the SMS
+flows as rows with the antibiotics script (`FLOWS.md`), and 013, three indexes
+for the queue and Admin > Leads (`QUEUE.md`, "How fast it is"), followed from
+`dev` after a walk with a real phone on 2026-10-06. 012 was edited on its
+branch that day, after review and before it ran anywhere but a developer's
+machine: a local database that ran the earlier 012 has to be rebuilt.)*
 
 Run migrations through `npm run migrate`, not by piping SQL into psql.
 Piping applies the schema without recording it, so the runner will try to apply
@@ -131,10 +156,12 @@ docker compose exec api npm run migrate
 first deploy that has calling, and whenever `PUBLIC_URL` or a Twilio setting
 changes. **Only ever on the server.** Run from a laptop with production's
 number, it moves production's calls to that laptop (2026-10-05; `TWILIO.md`,
-"What it needs on the Twilio account") - calling is not tested locally; if
-it ever is again, it needs its own number and TwiML App. It points the TwiML App and the phone
-number at this server, and refuses a number that rings somewhere else unless
-`--take-over` is passed. `TWILIO.md`, "Deploying it".
+"What it needs on the Twilio account"). Locally, since 2026-10-16, there is a
+dev number, (480) 530-8582, with its own TwiML App and
+`TWILIO_IDENTITY_PREFIX=dev-` - never production's. It points the TwiML App and the phone
+number at this server, and refuses to move either from something another server
+relies on unless `--take-over` is passed (`-- --dry-run` shows what it would
+do). `TWILIO.md`, "Deploying it".
 
 **`docker compose logs` returns nothing on the server.** The production
 override sets the `awslogs` log driver on api, worker and caddy, so container

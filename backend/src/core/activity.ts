@@ -31,6 +31,23 @@ export const ACTIVITY_ACTIONS = [
   'call.refused',
   'call.incoming',
   'call.missed',
+  /**
+   * A person took a lead's call that rang everyone free - `detail.callId`
+   * (T19, AUTO-CALLS.md "A lead calling back"). Once per call: the first to
+   * accept; the call is theirs from then.
+   */
+  'call.taken',
+  /**
+   * A person took an automated call's transfer - `detail.callId`, and
+   * `tookOverFrom` when the lead was someone else's (T15a, AUTO-CALLS.md).
+   * Written once per call, whoever held the lead before.
+   */
+  'call.transferred',
+  /**
+   * A "yes" nobody could take went on hold, waiting for someone on a call -
+   * `detail.callId` (T16, AUTO-CALLS.md "The hold line"). The system's doing.
+   */
+  'call.held',
   /** Twilio's verdict on who picked up a call we placed - a person or a machine. */
   'call.answered_by',
   /** A call's recording is in, and its transcript is in line. */
@@ -40,6 +57,18 @@ export const ACTIVITY_ACTIONS = [
   // The do-not-call list. Re-blocking a number overwrites its row.
   'dnc.blocked',
   'dnc.released',
+  /**
+   * The "Taking calls" switch went on or off - `detail.on`, and `detail.why`:
+   * `by_hand`, `sign_in` or `sign_out` (T10, AUTO-CALLS.md "Who is free").
+   */
+  'calls.availability_changed',
+  /**
+   * The worker started placing automated calls after they were off - or for
+   * the first time: `detail.since`, the new start, and `previousSince`, the
+   * one it replaced (T20 review, AUTO-CALLS.md "When a lead is called"). The
+   * system's doing - someone set `AUTO_CALLS=on`.
+   */
+  'auto_calls.switched_on',
   // Sign-in.
   'auth.signed_in',
   'auth.sign_in_failed',

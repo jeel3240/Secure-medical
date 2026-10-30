@@ -50,8 +50,10 @@ export function questionsLabel(conversation: LeadDetail['conversation']): string
       if (conversation.endOutcome === 'declined') return 'Not interested';
       return 'Completed';
     case 'open':
-      if (!q) return conversation.agentTookOverAt ? 'Agent took over' : 'Open';
-      return conversation.agentTookOverAt ? `Agent took over at ${q}` : `On ${q}`;
+      if (conversation.agentTookOverAt) return q ? `Agent took over at ${q}` : 'Agent took over';
+      // The lead answered the robot's call, or rang us - STATE-MACHINE.md 2d.
+      if (conversation.phoneTookOverAt) return q ? `Stopped at ${q} by a call` : 'Stopped by a call';
+      return q ? `On ${q}` : 'Open';
     case 'expired':
       return q ? `Stopped at ${q}` : 'Stopped';
     case 'review':

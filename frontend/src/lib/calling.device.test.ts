@@ -52,7 +52,11 @@ vi.mock('@twilio/voice-sdk', () => ({
     return device;
   }),
 }));
-vi.mock('../api/calls', () => ({ getCallToken: vi.fn(async () => 'token') }));
+const postRingable = vi.fn(async (_available: boolean) => undefined);
+vi.mock('../api/calls', () => ({
+  getCallToken: vi.fn(async () => 'token'),
+  postRingable: (available: boolean) => postRingable(available),
+}));
 
 const handlers = () => ({
   onRinging: vi.fn(),
@@ -71,7 +75,11 @@ async function fresh() {
 
 beforeEach(() => {
   vi.useRealTimers();
+  postRingable.mockReset().mockResolvedValue(undefined);
 });
+
+/** What the browser has told the server, in order. */
+const said = () => postRingable.mock.calls.map(([available]) => available);
 
 describe('calling a lead', () => {
   it('reports ringing, answered, muted and the end, and gives working controls', async () => {
@@ -162,9 +170,134 @@ describe('a lead calling in', () => {
     stop();
   });
 
+  it('says how it was rung - alone by default; a group, and a transfer with its question, when the server says so (T11)', async () => {
+    const { ring, incoming, stop } = await ringing();
+    expect(ring.kind).toEqual({ group: false, transfer: null });
+
+    const transfer = new FakeCall();
+    transfer.customParameters.set('ring', 'group');
+    transfer.customParameters.set('reason', 'transfer');
+    transfer.customParameters.set('step', 'Offer');
+    device.emit('incoming', transfer);
+    expect(incoming.onRing.mock.calls[1][0].kind).toEqual({ group: true, transfer: { step: 'Offer' } });
+    stop();
+  });
+
   it('stopping - signing out - destroys the device, so the browser cannot ring', async () => {
     const { stop, used } = await ringing();
     stop();
     await vi.waitFor(() => expect(used.destroy).toHaveBeenCalled());
+  });
+});
+
+describe('telling the server whether this browser can take a call', () => {
+  const listening = async () => {
+    const calling = await fresh();
+    // The same copy calling.ts uses, so marking busy here is seen there.
+    const presence = await import('./presence');
+    const stop = calling.listenForCalls({ onRing: vi.fn(), onRingOver: vi.fn() });
+    return { stop, presence };
+  };
+
+  it('available, once Twilio has registered it', async () => {
+    const { stop } = await listening();
+    await vi.waitFor(() => expect(said()).toEqual([true]));
+    expect(device.state).toBe('registered');
+    stop();
+  });
+
+  it('not available, at once, when a call or a ring starts - and available again, at once, when it is done', async () => {
+    const { stop, presence } = await listening();
+    await vi.waitFor(() => expect(said()).toEqual([true]));
+    presence.setBusy('lead-call', true);
+    await vi.waitFor(() => expect(said()).toEqual([true, false]));
+    presence.setBusy('lead-call', false);
+    await vi.waitFor(() => expect(said()).toEqual([true, false, true]));
+    stop();
+  });
+
+  it('not available while Twilio cannot be reached - said, not left unsaid for the server to time out', async () => {
+    const { Device } = await import('@twilio/voice-sdk');
+    vi.mocked(Device).mockImplementationOnce((() => {
+      device = new FakeDevice();
+      device.register = vi.fn(async (): Promise<void> => {
+        throw new Error('registration failed');
+      });
+      return device;
+    }) as never);
+    const { stop } = await listening();
+    await vi.waitFor(() => expect(said()).toEqual([false]));
+    expect(device.register).toHaveBeenCalled();
+    stop();
+  });
+
+  it('says it again every half minute, as it checks the registration', async () => {
+    vi.useFakeTimers();
+    const { stop } = await listening();
+    await vi.waitFor(() => expect(said()).toEqual([true]));
+    await vi.advanceTimersByTimeAsync(30_000);
+    await vi.waitFor(() => expect(said()).toEqual([true, true]));
+    stop();
+  });
+
+  it('in order: an older "available" never reaches the server after a newer "busy"', async () => {
+    let answer: () => void = () => undefined;
+    postRingable.mockImplementationOnce(() => new Promise<undefined>((resolve) => (answer = () => resolve(undefined))));
+    const { stop, presence } = await listening();
+    await vi.waitFor(() => expect(said()).toEqual([true]));
+
+    // The first is still on its way: the busy waits for it.
+    presence.setBusy('incoming-call', true);
+    await Promise.resolve();
+    expect(said()).toEqual([true]);
+    answer();
+    await vi.waitFor(() => expect(said()).toEqual([true, false]));
+    stop();
+  });
+
+  it('the answer carries the switch: turned off for a missed transfer, the signed-in user says so (T15c)', async () => {
+    postRingable.mockResolvedValue({ takingCalls: false, takingCallsWhy: 'missed_transfer' } as never);
+    const calling = await fresh();
+    // The same copy calling.ts reads and writes.
+    const { useAuth } = await import('../auth/store');
+    useAuth.setState({
+      status: 'authenticated',
+      user: {
+        id: 21,
+        email: 'maya@example.com',
+        name: 'Maya Chen',
+        role: 'agent',
+        isActive: true,
+        mustChangePassword: false,
+        lastLoginAt: null,
+        createdAt: '2026-09-01T00:00:00.000Z',
+        takingCalls: true,
+        takingCallsWhy: 'by_hand',
+      },
+    });
+    const stop = calling.listenForCalls({ onRing: vi.fn(), onRingOver: vi.fn() });
+    await vi.waitFor(() =>
+      expect(useAuth.getState().user).toMatchObject({ takingCalls: false, takingCallsWhy: 'missed_transfer' })
+    );
+    stop();
+  });
+
+  it('a failed report is left for the next check - nothing breaks', async () => {
+    postRingable.mockRejectedValueOnce(new Error('offline'));
+    const { stop, presence } = await listening();
+    await vi.waitFor(() => expect(said()).toEqual([true]));
+    presence.setBusy('lead-call', true);
+    await vi.waitFor(() => expect(said()).toEqual([true, false]));
+    stop();
+  });
+
+  it('stopping - signing out - says nothing more: the sign-out cleared it on the server, and a word now would be refused', async () => {
+    const { stop, presence } = await listening();
+    await vi.waitFor(() => expect(said()).toEqual([true]));
+    stop();
+    presence.setBusy('lead-call', true);
+    presence.setBusy('lead-call', false);
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(said()).toEqual([true]);
   });
 });
