@@ -116,12 +116,13 @@ the same day - and one more text under Messages, on Texts.
 | Card | Shows |
 |---|---|
 | Call script | Every line the robot says, in the order a lead can hear them, in the Messages card's own rows: each question ("Q1 · Offer", and when it is asked - "When the lead picks up", "After Q1 · No"); each answer's reply and what follows ("After Q1 · Yes" - "Then puts them through to a person"), with what picks it under it - "Key 1, or: yes, yeah, yep, …"; each question's repeat line ("Unclear · Q1"); then the lines every question shares, as the call goes on - No response, Stop (key 9 and its words), the recording notice when calls are recorded, Hold, Next in line, Place in line, Busy - and the Voicemail. The header names the script; the foot names the voice |
-| Calls | Automated calls On or Off; the hours and time zone ("11:00 AM - 5:00 PM", America/Phoenix); the days ("Monday to Friday"); the first call ("1 hour after the first text"); how long a "yes" rings people (25 seconds), and a lead on hold the person who came free (20); the hold line's safety stop (10 minutes); the confidence a spoken answer needs (0.4); and the call-back number the voicemail gives |
+| Calls | Automated calls On or Off; the hours and time zone ("11:00 AM - 5:00 PM", America/Phoenix); the days ("Monday to Friday"); the first call ("1 hour after the first text"); how many calls go out at once ("5 for each person free", T29); how long a "yes" rings people (25 seconds), and a lead on hold the person who came free (20); the hold line's safety stop (10 minutes); the confidence a spoken answer needs (0.4); and the call-back number the voicemail gives |
 | Messages | One more row, last: **Call · link**, the text a "yes" to the link sends - counted for length and segments like every other text |
 
 **The robot's own readers, not the rows** - `db/call-script.ts`:
 `loadActiveCallScript`, `readCallHours`, `readRingSeconds`,
-`readOfferRingSeconds`, `readHoldMaxSeconds`, `readMinConfidence`. A setting
+`readOfferRingSeconds`, `readHoldMaxSeconds`, `readMinConfidence`,
+`readCallsPerPerson`. A setting
 the robot cannot read shows what it uses instead - `25:00` as a start shows
 11:00 AM, as the robot calls at 11 - so the page never shows a value no call
 will use. Same reason as the rest of the page: a window on live values, not

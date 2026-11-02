@@ -28,7 +28,8 @@ function deps(over: Partial<DialDeps> = {}) {
     readCallHours: async () => DEFAULT_CALL_HOURS,
     dialRoom: async () => {
       order.push('room');
-      return { free: 2, underway: 0, onHold: false, silent: 0, scripted: true, refused: false };
+      // One person free, two calls each: room for two.
+      return { free: 1, perPerson: 2, underway: 0, onHold: false, silent: 0, scripted: true, refused: false };
     },
     leadsToCall,
     stillDue: async () => true,
@@ -64,10 +65,10 @@ describe('one look', () => {
   });
 
   it('no room - nobody free, or a lead on hold: no lead is even looked up', async () => {
-    const open = { free: 3, underway: 0, onHold: false, silent: 0, scripted: true, refused: false };
+    const open = { free: 3, perPerson: 5, underway: 0, onHold: false, silent: 0, scripted: true, refused: false };
     for (const [room, stopped] of [
       [{ ...open, free: 0 }, null],
-      [{ ...open, underway: 3 }, null],
+      [{ ...open, underway: 15 }, null],
       [{ ...open, onHold: true }, 'on_hold'],
       [{ ...open, silent: 2 }, 'silent'],
       [{ ...open, refused: true }, 'refused'],
@@ -87,7 +88,7 @@ describe('one look', () => {
       { kind: 'failed', callId: 3 },
     ];
     const { deps: d } = deps({
-      dialRoom: async () => ({ free: 5, underway: 0, onHold: false, silent: 0, scripted: true, refused: false }),
+      dialRoom: async () => ({ free: 5, perPerson: 5, underway: 0, onHold: false, silent: 0, scripted: true, refused: false }),
       placeAutoCall: async () => results.shift() ?? { kind: 'unconfirmed', callId: 4 },
       leadsToCall: async () => [1, 2, 3, 4],
     });
@@ -99,7 +100,7 @@ describe('one look', () => {
       const results: PlaceAutoCallResult[] = [{ kind: 'placed', callId: 9 }, stop];
       const placeAutoCall = jest.fn(async (): Promise<PlaceAutoCallResult> => results.shift() ?? { kind: 'placed', callId: 2 });
       const { deps: d } = deps({
-        dialRoom: async () => ({ free: 5, underway: 0, onHold: false, silent: 0, scripted: true, refused: false }),
+        dialRoom: async () => ({ free: 5, perPerson: 5, underway: 0, onHold: false, silent: 0, scripted: true, refused: false }),
         leadsToCall: async () => [1, 2, 3, 4],
         placeAutoCall,
       });

@@ -25,6 +25,7 @@ import { NAME_FALLBACK, SEGMENT_LIMIT } from '../core/messages';
 import {
   loadActiveCallScript,
   readCallHours,
+  readCallsPerPerson,
   readHoldMaxSeconds,
   readMinConfidence,
   readOfferRingSeconds,
@@ -98,6 +99,8 @@ export interface CallSettings {
   holdMaxMinutes: number;
   /** A spoken answer heard less surely than this is asked again. */
   minConfidence: number;
+  /** Calls going at once for each person free to take a "yes" (T29). */
+  callsPerPerson: number;
   /** The number the voicemail asks them to call back - the calling number. Null with calling not set up. */
   callbackNumber: string | null;
 }
@@ -233,12 +236,13 @@ function callLines(script: CallScript, recorded: boolean): CallLine[] {
 
 /** The settings an automated call reads, as the robot reads them - fallbacks included. */
 async function callSettings(calling: CallingContext): Promise<CallSettings> {
-  const [hours, ringSeconds, offerRingSeconds, holdMaxSeconds, minConfidence] = await Promise.all([
+  const [hours, ringSeconds, offerRingSeconds, holdMaxSeconds, minConfidence, callsPerPerson] = await Promise.all([
     readCallHours(pool),
     readRingSeconds(pool),
     readOfferRingSeconds(pool),
     readHoldMaxSeconds(pool),
     readMinConfidence(pool),
+    readCallsPerPerson(pool),
   ]);
   return {
     on: calling.autoCalls,
@@ -251,6 +255,7 @@ async function callSettings(calling: CallingContext): Promise<CallSettings> {
     offerRingSeconds,
     holdMaxMinutes: holdMaxSeconds / 60,
     minConfidence,
+    callsPerPerson,
     callbackNumber: calling.callbackNumber,
   };
 }

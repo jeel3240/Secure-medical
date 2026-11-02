@@ -199,7 +199,8 @@ async function main(): Promise<void> {
 
     check('the settings as the robot reads them - off, with calling not set up', config.callSettings, {
       on: false, startMinute: 660, endMinute: 1020, timeZone: 'America/Phoenix', days: ['mon', 'tue', 'wed', 'thu', 'fri'],
-      waitMinutes: 60, ringSeconds: 25, offerRingSeconds: 20, holdMaxMinutes: 10, minConfidence: 0.4, callbackNumber: null,
+      waitMinutes: 60, ringSeconds: 25, offerRingSeconds: 20, holdMaxMinutes: 10, minConfidence: 0.4, callsPerPerson: 5,
+      callbackNumber: null,
     });
 
     const live = await getAdminConfig({ autoCalls: true, callbackNumber: '+14805308582', recorded: true });
