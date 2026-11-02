@@ -6,9 +6,9 @@
  * 1. The robot's calls that never reached Twilio are closed
  *    (`closeUnplacedCalls`) - whatever the hour.
  * 2. Outside the calling hours, nothing more.
- * 3. The room: people free to take a "yes", less the robot's calls still
- *    going with nobody on them; none while a lead waits on hold
- *    (`callsToPlace`).
+ * 3. The room: five calls for each person free to take a "yes" (T29), less
+ *    the robot's calls still going with nobody on them; none while a lead
+ *    waits on hold (`callsToPlace`).
  * 4. The leads due, up to the room (`leadsToCall`) - new leads first, then
  *    those already waiting at the switch-on, oldest first - each asked again
  *    just before its call (`stillDue`) - the calls go out one after another,

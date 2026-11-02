@@ -43,12 +43,18 @@ describe('the calling hours - 11am to 5pm, Arizona time, Monday to Friday', () =
 });
 
 describe('how many calls at once - Traffic', () => {
-  const room = { free: 3, underway: 0, onHold: false, silent: 0, scripted: true, refused: false };
+  const room = { free: 3, perPerson: 5, underway: 0, onHold: false, silent: 0, scripted: true, refused: false };
 
-  it('as many as there are people free, less the robot\'s calls still going with nobody on them', () => {
-    expect(callsToPlace(room)).toBe(3);
-    expect(callsToPlace({ ...room, underway: 2 })).toBe(1);
-    expect(callsToPlace({ ...room, free: 2, underway: 3 })).toBe(0);
+  it('five for each person free, less the robot\'s calls still going with nobody on them (T29)', () => {
+    expect(callsToPlace(room)).toBe(15);
+    expect(callsToPlace({ ...room, underway: 12 })).toBe(3);
+    expect(callsToPlace({ ...room, free: 2, underway: 11 })).toBe(0);
+  });
+
+  it('as many for each person as the setting says - one, as before T29', () => {
+    expect(callsToPlace({ ...room, perPerson: 1 })).toBe(3);
+    expect(callsToPlace({ ...room, perPerson: 1, underway: 2 })).toBe(1);
+    expect(callsToPlace({ ...room, perPerson: 2, underway: 2 })).toBe(4);
   });
 
   it('nobody free: none', () => {

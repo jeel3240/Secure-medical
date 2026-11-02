@@ -80,6 +80,7 @@ export interface CallSettings {
   offerRingSeconds: number;
   holdMaxMinutes: number;
   minConfidence: number;
+  callsPerPerson: number;
   callbackNumber: string | null;
 }
 

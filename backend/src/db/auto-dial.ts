@@ -8,7 +8,7 @@
 import type { DialRoom } from '../core/auto-dial';
 import { activityInsertSql, recordActivity } from './activity';
 import { automatedCallUsedSql, ON_HOLD_SQL } from './auto-calls';
-import { readHoldMaxSeconds } from './call-script';
+import { readCallsPerPerson, readHoldMaxSeconds } from './call-script';
 import { WORKED_SQL } from './lead-state';
 import { pool } from './pool';
 import { FREE_SQL } from './presence';
@@ -101,6 +101,8 @@ export const REFUSED_PAUSE_MINUTES = 15;
  * Who can take a "yes" now, against the robot's calls still going -
  * `callsToPlace` - and what stops it altogether.
  *
+ * - **Per person**: how many calls may go at once for each person free -
+ *   `auto_call_calls_per_person`, 5 (T29).
  * - **On hold** counts only a hold younger than the safety stop and two
  *   minutes: no real hold lasts longer, so an older one is a call whose end
  *   never reached us, and must not stop the robot for good (the hold watcher
@@ -116,7 +118,7 @@ export const REFUSED_PAUSE_MINUTES = 15;
  *   (`failAutomatedCall`), or never confirmed it (`closeUnplacedCalls`).
  */
 export async function dialRoom(): Promise<DialRoom> {
-  const holdMaxSeconds = await readHoldMaxSeconds(pool);
+  const [holdMaxSeconds, perPerson] = await Promise.all([readHoldMaxSeconds(pool), readCallsPerPerson(pool)]);
   const { rows } = await pool.query<{
     free: number;
     underway: number;
@@ -142,7 +144,15 @@ export async function dialRoom(): Promise<DialRoom> {
     [holdMaxSeconds + 120]
   );
   const r = rows[0];
-  return { free: r.free, underway: r.underway, onHold: r.on_hold, silent: r.silent, scripted: r.scripted, refused: r.refused };
+  return {
+    free: r.free,
+    perPerson,
+    underway: r.underway,
+    onHold: r.on_hold,
+    silent: r.silent,
+    scripted: r.scripted,
+    refused: r.refused,
+  };
 }
 
 /**

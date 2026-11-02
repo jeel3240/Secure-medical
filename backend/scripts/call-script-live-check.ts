@@ -109,6 +109,8 @@ async function main(): Promise<void> {
   {
     const { rows } = await pool.query(`SELECT key, value FROM settings WHERE key LIKE 'auto\\_call\\_%' ORDER BY key`);
     check('every one, with its value', Object.fromEntries(rows.map((r) => [r.key, r.value])), {
+      // 021 (T29): calls going at once for each person free.
+      auto_call_calls_per_person: '5',
       auto_call_days: 'mon,tue,wed,thu,fri',
       auto_call_hold_max_minutes: '10',
       auto_call_hours_end: '17:00',

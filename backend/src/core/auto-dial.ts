@@ -68,7 +68,9 @@ export function insideCallHours(now: Date, hours: CallHours): boolean {
 export interface DialRoom {
   /** People free to take a transfer (`FREE_SQL`). */
   free: number;
-  /** Its own calls still going with nobody on them yet - each may need one of those people. */
+  /** Calls going at once for each of them - `auto_call_calls_per_person`, 5 (T29). */
+  perPerson: number;
+  /** Its own calls still going with nobody on them yet - any may need one of those people. */
   underway: number;
   /** A lead is waiting on hold: everyone free is spoken for (T16). */
   onHold: boolean;
@@ -89,15 +91,16 @@ export interface DialRoom {
 
 /**
  * How many calls to place now - "Traffic": never more going at once than
- * there are people free to take a "yes", none while a lead waits on hold, and
- * none when nobody is free. None either while Twilio's reports are not
- * reaching us - each call would reach a lead as Twilio's error, and use up the
- * one call they get - nor a while after Twilio refused one for our account's
- * reasons, nor with no script to say.
+ * `perPerson` for each person free to take a "yes" - most calls end without
+ * one (T29) - none while a lead waits on hold, and none when nobody is free.
+ * None either while Twilio's reports are not reaching us - each call would
+ * reach a lead as Twilio's error, and use up the one call they get - nor a
+ * while after Twilio refused one for our account's reasons, nor with no
+ * script to say.
  */
 export function callsToPlace(room: DialRoom): number {
   if (room.onHold || room.silent > 0 || room.refused || !room.scripted) return 0;
-  return Math.max(0, room.free - room.underway);
+  return Math.max(0, room.free * room.perPerson - room.underway);
 }
 
 /**

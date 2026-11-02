@@ -7,13 +7,15 @@ switches off whoever let it ring out, holds a "yes" nobody can take yet while
 someone is on a call or writing its note, rings the next person who comes
 free with the lead who has waited longest, leaves the voicemail message once a
 machine's greeting is over, rings everyone free for a lead calling back whom
-nobody owns, calls the right leads by itself at the pace the people free can
-take, shows each robot call on the lead's timeline with what was said, puts
+nobody owns, calls the right leads by itself - five at once for each person
+free (T29) - shows each robot call on the lead's timeline with what was said, puts
 a "yes" nobody took first in the agents' queue, shows how each lead's call
 went on Admin > Leads, and shows the script and its settings on Admin >
 Configuration; every doc has been read against the code, and the end-to-end
 script runs three robot calls; every path has been heard on a real phone
-(T26, 2026-10-27). Left: going live, by Jeel - T26, "Going live".**
+(T26, 2026-10-27). Merged into `main` on 2026-10-30 and live on production;
+on 2026-11-02 about 200 robot calls put 3 leads through to a person, so five
+calls now go out at once for each person free, not one (T29).**
 This
 doc is the agreed design and the tracker for building it. Each ticket below updates its row when it is merged,
 and the sections it touches, so the doc always says what is built and what is
@@ -204,8 +206,8 @@ awaiting answer stage gets called"). Nothing is started or stopped by hand.
   whenever it arrived. One whose conversation expires at 7 days is not
   called. Outside production, the test numbers only.
 - **When:** after new leads. A new lead keeps its call an hour after its
-  text; the waiting ones fill the room left - the people free, less the calls
-  going ("Traffic") - oldest first, so the lead nearest expiring goes first.
+  text; the waiting ones fill the room left - five calls for each person
+  free, less the calls going ("Traffic") - oldest first, so the lead nearest expiring goes first.
   Inside the calling hours only, as every call. With agents free and no new
   lead due, the first calls after switching on go to them.
 - **Once, as every lead.**
@@ -473,15 +475,32 @@ row: a choice with its key and label as they are now, or what else it was.
 
 The robot slows down and stops by itself:
 
-- never more calls at once than there are people free;
+- never more than five calls at once for each person free (T29) - one until
+  2026-11-02;
 - none while anyone is on hold;
 - none when nobody is free;
 - none outside 11am-5pm.
 
-**As built** (T20, `callsToPlace`, `dialRoom`): the room is the people free
-(`FREE_SQL`) less the robot's calls still going with nobody on them - no end,
-started within 10 minutes. A call taken by someone is theirs, so they are no
-longer free. Nothing at all is placed while:
+**As built** (T20, `callsToPlace`, `dialRoom`): the room is five calls for
+each person free (`FREE_SQL`) less the robot's calls still going with nobody
+on them - no end, started within 10 minutes. A call taken by someone is
+theirs, so they are no longer free. With two people free and three calls
+going, seven more go out; with one free, five in all.
+
+**Five for each person** (T29, Jeel, 2026-11-02): one call for each person
+free kept people waiting - most calls are not answered, or answered and not
+a "yes": about 200 calls on production that day put 3 leads through. The
+number is a setting, `auto_call_calls_per_person` (migration 021, 5; read on
+every look by `readCallsPerPerson` - anything but a whole number from 1 to
+10 is 5), shown on Admin > Configuration > Calls. More calls at once means
+two "yes"es can come together: the second rings whoever is still free, and
+with nobody left it waits on the hold line while someone is on a call or
+being rung - the robot then places nothing until it is taken or sent to the
+busy line ("The hold line"). Twilio places an account's calls at its own
+pace, one a second unless raised, and holds the rest in line for a moment
+rather than refusing them.
+
+Nothing at all is placed while:
 
 - **a lead waits on hold** - counting only a hold younger than the safety
   stop and two minutes: no real one lasts longer, so an older one is a call
@@ -1106,9 +1125,10 @@ ticket's own PR.
 | T24 | Admin > Configuration shows the call script | T6 | Done 2026-10-25 - seen in the browser: every line in order with its keys and words, and the settings, matching the database |
 | | **Finish** | | |
 | T25 | Everything written down and checked end to end | T0-T24 | Done 2026-10-25 - every doc read against the code, the faults fixed; `npm run e2e`, 93 checks, three robot calls |
-| T26 | Real phone, every path, then live | T25 | Real phone done 2026-10-27 - nineteen cases, calls 66-85, all as specified; going live left (Jeel) |
+| T26 | Real phone, every path, then live | T25 | Real phone done 2026-10-27 - nineteen cases, calls 66-85, all as specified; on `main` 2026-10-30 and live on production |
 | T27 | The leads already waiting at the switch-on | T20 | Done 2026-10-29 - called too, after new leads, nothing by hand |
 | T28 | A Twilio account problem never uses up a lead's call | T20 | Done 2026-10-29 - refused for our account: not the lead's call, and a 15-minute pause |
+| T29 | Five calls at once for each person free | T20 | Done 2026-11-02 - a setting, 5, migration 021; one before |
 | | **Other tickets - not calling** | | |
 | W1 | Day dividers in the agent's conversation | - | Done 2026-10-18 |
 | W2 | A phone call stops the text questions | T25 | Done 2026-10-27 |
@@ -2958,6 +2978,47 @@ live checks above.
 **Doc:** this one ("When Twilio refuses", "Traffic", "How a call is
 placed"); `SCHEMA.md`, `TWILIO.md`, `AUDIT.md`, `LOGGING.md`,
 `ADMIN-LEADS.md`, `README.md`, `CLAUDE.md`.
+
+#### T29 - Five calls at once for each person free
+
+**Goal:** agents taking calls are kept busy: the robot places five calls at
+once for each person free, not one. Jeel, 2026-11-02: on production about 200
+robot calls that day put 3 leads through to a person.
+**Needs:** T20. **Production:** once deployed with migration 021, the robot
+places up to five calls for each person free.
+
+**Build** (as built: "Traffic")
+- `callsToPlace`: the people free times `perPerson`, less the calls going.
+- `perPerson` is a settings row, `auto_call_calls_per_person`, 5 (migration
+  021), read on every look (`readCallsPerPerson`, in `dialRoom`); anything
+  but a whole number from 1 to 10 is 5.
+- Shown on Admin > Configuration > Calls: "Calls at once - 5 for each person
+  free".
+- Nothing else changes: a "yes" nobody free can take waits on the hold line
+  while someone is coming, and the robot places nothing while it waits.
+
+**Done when**
+- [x] Tests: five for each person free, less the calls going; the setting's
+      number, one included; a look never asks for more leads than the room;
+      the setting read, and every value it cannot use 5 (1,056 backend
+      tests).
+- [x] A live check: two free, five each, one call going - nine placed, the
+      next look none; the setting read on every look, and one it cannot
+      read 5 (`auto-dial-live-check`, 69); the setting as migration 021 seeds
+      it (`call-script-live-check`, 33); on Admin > Configuration
+      (`admin-live-check`, 77). `npm run e2e` - 98 checks: the setting is 5,
+      then set to 1 so its three robot calls go one at a time, as each story
+      needs.
+
+**Files:** `backend/src/db/migrations/021_calls_per_person.sql`,
+`backend/src/core/auto-dial.ts` (+ test), `backend/src/db/call-script.ts`
+(+ `calls-per-person.test.ts`), `backend/src/db/auto-dial.ts`,
+`backend/src/worker/auto-calls.ts` (+ test), `backend/src/db/admin-config.ts`,
+`frontend/src/api/admin.ts`, `frontend/src/pages/admin/ConfigPage.tsx`,
+`backend/scripts/auto-dial-live-check.ts`, `backend/scripts/call-script-live-check.ts`,
+`backend/scripts/admin-live-check.ts`, `backend/scripts/end-to-end.ts`.
+**Doc:** this one ("Traffic", "Leads already waiting"); `ADMIN.md`,
+`SCHEMA.md`, `WORKFLOW.md`, `README.md`, `CLAUDE.md`.
 
 ### Other tickets - not calling
 
