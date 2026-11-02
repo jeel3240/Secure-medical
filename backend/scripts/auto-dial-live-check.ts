@@ -7,8 +7,8 @@
  * reply, a call from them, held, worked, Closed, blocked, already called, the
  * test numbers - and in what order: new leads before those already waiting
  * at the switch-on; that a lead whose hour ended overnight is first at 11am; that
- * the room counts the people free and the robot's calls still going, and is
- * nothing while a lead waits on hold; that two workers never dial at once;
+ * the room counts five calls for each person free (T29) and the robot's calls
+ * still going, and is nothing while a lead waits on hold; that two workers never dial at once;
  * and that a call that never reached Twilio is closed. Getting those wrong
  * calls a lead who already replied, holds a new lead up behind the backlog,
  * or rings more leads than anyone can take.
@@ -236,6 +236,7 @@ async function main(): Promise<void> {
     // no end, nobody on it.
     check('nobody free; one of the robot\'s calls going', await dialRoom(), {
       free: 0,
+      perPerson: 5,
       underway: 1,
       onHold: false,
       silent: 0,
@@ -246,6 +247,11 @@ async function main(): Promise<void> {
     await person('ben@example.com', true);
     await person('off@example.com', false);
     check('two free - not the one with the switch off', (await dialRoom()).free, 2);
+    await pool.query(`UPDATE settings SET value = '2' WHERE key = 'auto_call_calls_per_person'`);
+    check('calls for each person free, as the setting says', (await dialRoom()).perPerson, 2);
+    await pool.query(`UPDATE settings SET value = 'lots' WHERE key = 'auto_call_calls_per_person'`);
+    check('one it cannot read: migration 021\'s 5', (await dialRoom()).perPerson, 5);
+    await pool.query(`UPDATE settings SET value = '5' WHERE key = 'auto_call_calls_per_person'`);
 
     const going = await lead({ sent: new Date(NOW.getTime() - minutes(90)) });
     const started = await startAutomatedCall({ leadId: going, mayRing: () => true });
@@ -259,6 +265,7 @@ async function main(): Promise<void> {
     await pool.query(`UPDATE calls SET outcome = 'answered', ended_at = now(), script_result = 'transfer_missed' WHERE id = $1`, [callId]);
     check('ended: neither going nor on hold', await dialRoom(), {
       free: 2,
+      perPerson: 5,
       underway: 1,
       onHold: false,
       silent: 0,
@@ -297,10 +304,10 @@ async function main(): Promise<void> {
     check('Twilio refusing a lead\'s number does not pause it', (await dialRoom()).refused, false);
   }
 
-  console.log('\na look, end to end - never more calls than people free');
+  console.log('\na look, end to end - never more than five calls for each person free');
   {
-    // Three more due, two free, one of the robot's calls still going: one call.
-    const only = ['+15550009101', '+15550009102', '+15550009103'];
+    // Twelve more due, two free, one of the robot's calls still going: nine calls.
+    const only = Array.from({ length: 12 }, (_, i) => `+155500091${String(i + 1).padStart(2, '0')}`);
     for (const phone of only) await lead({ sent: new Date(NOW.getTime() - minutes(120)), phone });
     const placed: number[] = [];
     const look: DialDeps = {
@@ -319,7 +326,7 @@ async function main(): Promise<void> {
       withDialLock,
     };
     const first = await dialDueLeads(look, NOW);
-    check('two free, one going: one call placed', [first.room, first.placed], [1, 1]);
+    check('two free, five each, one going: nine calls placed', [first.room, first.due, first.placed], [9, 9, 9]);
     const second = await dialDueLeads(look, NOW);
     check('the next look: that call going too - none', [second.room, second.placed], [0, 0]);
     check('each lead called once at most', new Set(placed).size, placed.length);

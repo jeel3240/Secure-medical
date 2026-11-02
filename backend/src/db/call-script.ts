@@ -64,6 +64,19 @@ export async function readHoldMaxSeconds(q: Db): Promise<number> {
   return (Number.isInteger(value) && value >= 1 && value <= 60 ? value : DEFAULT_HOLD_MAX_MINUTES) * 60;
 }
 
+/** Calls going at once for each person free to take a "yes" - `auto_call_calls_per_person`, T29. */
+export const DEFAULT_CALLS_PER_PERSON = 5;
+
+/**
+ * `settings.auto_call_calls_per_person`, read on every look: 5 when it is
+ * missing or not a whole number from 1 to 10.
+ */
+export async function readCallsPerPerson(q: Db): Promise<number> {
+  const { rows } = await q.query(`SELECT value FROM settings WHERE key = 'auto_call_calls_per_person'`);
+  const value = Number(rows[0]?.value);
+  return Number.isInteger(value) && value >= 1 && value <= 10 ? value : DEFAULT_CALLS_PER_PERSON;
+}
+
 /**
  * When the robot calls - T20: `auto_call_hours_start`, `_hours_end`,
  * `_time_zone`, `_days` and `_wait_minutes`, read on every look so a change by

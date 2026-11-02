@@ -360,6 +360,7 @@ function CallSettingsCard({ settings }: { settings: AdminConfig['callSettings'] 
     ['Time zone', settings.timeZone],
     ['Days', daysText(settings.days)],
     ['First call', `${minutesText(settings.waitMinutes)} after the first text`],
+    ['Calls at once', `${settings.callsPerPerson} for each person free`],
     ['A yes rings people for', `${settings.ringSeconds} seconds`],
     ['A lead on hold rings for', `${settings.offerRingSeconds} seconds`],
     ['On hold at most', minutesText(settings.holdMaxMinutes)],

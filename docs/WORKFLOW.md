@@ -85,6 +85,8 @@ databases permanently different with nothing to show it.
 whole, 014 onwards have not run in production and may be edited in place - 018
 was, for the call's opening. A laptop that already ran the old file re-applies
 it by hand and says so. After that deploy, the rule above holds again.)*
+*(Deployed - `main` took them on 2026-10-30 - so it does: 021 onwards are new
+files.)*
 
 This applies to the smallest changes as much as the large ones. Adding a column,
 widening one, adding an index, seeding a settings row, correcting a value: each
@@ -103,10 +105,15 @@ second part's SQL there once.
 *(The `004` on disk today, `004_conversation_completed_at.sql`, is a later and
 unrelated file.)*
 
-**Where the files stand - 2026-10-25.** `main` and production hold 001 to
-013. 014 to 020, for automated calls - T4, T6, T9, T10, T12, T13, T15c, T16
-and T17, `AUTO-CALLS.md` - are on `dev`, and the next deploy runs them. None
-changes a row production already has: 014 adds a third call direction, a
+**Where the files stand - 2026-11-02.** `main` and production hold 001 to
+020. 021 is on `dev`, and the next deploy runs it: one `settings` row,
+`auto_call_calls_per_person`, 5 - five automated calls at once for each
+person free (T29, `AUTO-CALLS.md` "Traffic"). Nothing to switch: the robot
+reads it on its next look, and without the row it uses 5 all the same.
+
+*(How 014 to 020 went out, on `main` from 2026-10-30 - automated calls, T4,
+T6, T9, T10, T12, T13, T15c, T16 and T17, `AUTO-CALLS.md`.)* None
+changed a row production already had: 014 adds a third call direction, a
 column, two checks and an index; 015 adds the call script's four tables, its
 seed, and eight `settings` rows; 016 adds one empty column to `users`; 017
 adds three more - the "Taking calls" switch, off for everyone, when it changed

@@ -494,8 +494,13 @@ async function main(): Promise<void> {
     withDialLock,
   };
 
+  // Five calls go out for each person free (T29). Here one, so each lead's
+  // story is told on its own - the setting changed as a migration would.
+  check('five calls at once for each person free, as migration 021 says', (await dialRoom()).perPerson, 5);
+  await pool.query(`UPDATE settings SET value = '1' WHERE key = 'auto_call_calls_per_person'`);
+
   const look = await dialDueLeads(dialler);
-  check('one look: one person free, so one call - to the lead waiting longest', [look.inside, look.room, look.placed], [true, 1, 1]);
+  check('one look: one person free, one call each here - to the lead waiting longest', [look.inside, look.room, look.placed], [true, 1, 1]);
   const placed = twilioAsked[twilioAsked.length - 1];
   const caseyCall = await robotCall(casey);
   check('Twilio is asked to ring Casey, from our number', [placed?.data.To, placed?.data.From], [CASEY, TWILIO.callerId]);
