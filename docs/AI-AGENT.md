@@ -1,6 +1,6 @@
 # AI agent on the automated call (Phase 7)
 
-Design agreed with Jeel, 2026-11-11. The tickets are in `docs/ai-agent-tickets/` (A01-A22). Built so far: A01, the key and the switch; A03, the knowledge loader; A04, her instructions; A07, the call-back time rules; A08, migration 022 (all 2026-11-11).
+Design agreed with Jeel, 2026-11-11. The tickets are in `docs/ai-agent-tickets/` (A01-A22). Built so far: A01, the key and the switch; A03, the knowledge loader; A04, her instructions; A05, the sentence check; A07, the call-back time rules; A08, migration 022 (all 2026-11-11).
 
 Today the automated call (`docs/AUTO-CALLS.md`) is a fixed script: it understands "yes", "no", "stop" and the keys 1, 2 and 9, and anything else is asked once more before the call ends. On day one (250 calls), 82 leads hung up and 65 ended as `no_response`.
 
@@ -216,7 +216,7 @@ Decided by Jeel, 2026-11-11.
 | OpenAI errors, or the WebSocket or ConversationRelay fails mid-call | The call **switches to today's script** (Twilio posts `SessionStatus=failed` to `/auto/ai-after`) |
 | **OpenAI down before calling** | **The robot places no calls.** Before each look for leads to call, it checks OpenAI (a tiny request, at most once a minute). Down: nobody is called, it checks again next minute. Each lead gets one robot call, so a lead is never spent on a broken AI |
 | 3 AI calls fall back in a row (`calls.ai_ended_with = 'fallback'`) | The robot pauses, like the Twilio pause (T28, `REFUSED_PAUSE_MINUTES`), then checks OpenAI again |
-| A sentence holds a price, medical advice or a made-up discount | **Every sentence is checked before Seri says it.** A price (`$`, "dollars"), advice words ("you should take", "dosage"), or any discount but "up to 25%" is replaced with "That's a great question for one of our specialists. Would you like me to connect you?" Every approved answer and playbook line passes the check unchanged (A05) |
+| A sentence holds a price, medical advice or a made-up discount | **Every sentence is checked before Seri says it.** A price (`$`, "dollars"), advice words ("you should take", "dosage"), or any discount but "up to 25%" is replaced with "That's a great question for one of our specialists. Would you like me to connect you?" Every approved answer and playbook line passes the check unchanged (A05). *As built:* `backend/src/ai/safety.ts`, `checkSentence` - four reasons, `price`, `advice`, `diagnosis`, `discount` (made-up urgency such as "today only" counts as one); the words around a risky word decide, so "I can take you off our list" and "an overdose" pass; what it found is kept with the call's turns, never logged. All 116 lines of the knowledge files pass, sentence by sentence |
 | Someone else connects to the WebSocket | The connection request must carry Twilio's signature for our relay URL, checked like every Twilio webhook. The call is named by a `<Parameter>`, which arrives in `setup`. Unsigned, or signed for another URL: closed |
 
 ---
