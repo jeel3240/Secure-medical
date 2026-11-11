@@ -105,11 +105,13 @@ second part's SQL there once.
 *(The `004` on disk today, `004_conversation_completed_at.sql`, is a later and
 unrelated file.)*
 
-**Where the files stand - 2026-11-02.** `main` and production hold 001 to
-020. 021 is on `dev`, and the next deploy runs it: one `settings` row,
-`auto_call_calls_per_person`, 5 - five automated calls at once for each
-person free (T29, `AUTO-CALLS.md` "Traffic"). Nothing to switch: the robot
-reads it on its next look, and without the row it uses 5 all the same.
+**Where the files stand - 2026-11-11.** `main` holds 001 to 021 - 021, five
+automated calls at once for each person free (T29, `AUTO-CALLS.md`
+"Traffic"), reached it through PR #29. 022 is on `dev`: Seri, the AI agent
+(Phase 7, `AI-AGENT.md`) - new columns on `calls` and `callbacks`, a new
+add-only table, `call_ai_turns`, and the `ai_agent` setting, `off`. It
+changes no existing row, and nothing writes to the new parts until later
+tickets; with the switch off, calls go on exactly as today.
 
 *(How 014 to 020 went out, on `main` from 2026-10-30 - automated calls, T4,
 T6, T9, T10, T12, T13, T15c, T16 and T17, `AUTO-CALLS.md`.)* None

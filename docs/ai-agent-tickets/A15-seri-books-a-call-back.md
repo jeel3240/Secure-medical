@@ -10,6 +10,7 @@
 
 - In `backend/src/db/callbacks.ts`: `bookAiCallback({ leadId, at, reason, callId })`. The lead's holder, if any, as `agent_id`; otherwise null. Reason `ai_booked`.
 - Checked again with `checkCallbackTime` (A07); refused times are a bug, logged.
+- **Every query that reads `callbacks` assumed an agent until 022** (found in A08): `WORKED_SQL` (`db/lead-state.ts`) counts any callback as a person having worked the lead - a Seri booking is not, as T4 decided for a robot call nobody took; and the queue joins `callbacks` to `users` (`db/queue.ts`, the Callback tag), which drops a booking with no agent (A16). Admin > Overview counts callbacks per agent, so it already leaves an unowned one out.
 - Activity log row.
 - The lead's page shows "Callback booked: Thu 3:00 PM" with the reason.
 - **The new result, `callback_booked`, everywhere a result is shown:** its words in `frontend/src/lib/call-results.ts` ("Call back booked"), so the timeline line and Admin > Leads' Call column read it; a value of the Call filter (`backend/src/api/admin/leads.ts`, which answers 400 to a value it does not know, and `backend/src/db/leads.ts`).

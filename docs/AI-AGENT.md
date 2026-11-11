@@ -1,6 +1,6 @@
 # AI agent on the automated call (Phase 7)
 
-Design agreed with Jeel, 2026-11-11. The tickets are in `docs/ai-agent-tickets/` (A01-A22). Built so far: A01, the key and the switch; A03, the knowledge loader (both 2026-11-11).
+Design agreed with Jeel, 2026-11-11. The tickets are in `docs/ai-agent-tickets/` (A01-A22). Built so far: A01, the key and the switch; A03, the knowledge loader; A08, migration 022 (all 2026-11-11).
 
 Today the automated call (`docs/AUTO-CALLS.md`) is a fixed script: it understands "yes", "no", "stop" and the keys 1, 2 and 9, and anything else is asked once more before the call ends. On day one (250 calls), 82 leads hung up and 65 ended as `no_response`.
 
@@ -274,6 +274,8 @@ Following `docs/AUDIT.md`: nothing is lost, add-only.
 | `activity_log` | `ai_agent.switched` (built, A01); `ai_agent.started`, `ai_agent.ended` with the action |
 
 The words are never written to the logs, the same rule as `auto_call.answer` today.
+
+*As built (A08, migration 022, 2026-11-11):* the columns and the table above, with the database keeping their rules - `ai_started_at` and `ai_knowledge_version` written together, `ai_ended_with` only after a start, all three only on an automated call; `call_ai_turns` add-only by trigger, `who` one of the four, `latency_ms` only on Seri's turns; a callback with no agent only when it is `ai_booked`, and every `ai_booked` one naming its call (`booked_by_call_id`); and `settings.ai_agent` seeded `off`, never over a value the command already wrote. `scripts/ai-agent-live-check.ts` proves each rule, 34 checks.
 
 **On screen:** under the robot call on the lead's timeline (T21, `CallAnswers`), Seri's conversation as a short chat: what the lead said, what Seri answered, how it ended. It is there for **the agent** who takes the transfer or the call back, so the lead does not repeat themselves. Nothing new on Admin.
 
