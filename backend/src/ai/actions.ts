@@ -116,12 +116,23 @@ export interface ActionContext {
   /** The agents' hours - `readCallHours`. */
   hours: CallHours;
   now: Date;
+  /** What she said in this reply before the action. */
+  said: string;
 }
 
 export type ActionResult =
   | { ok: true; handoff: Handoff }
-  /** Words for Seri, sent back as the tool's result: what is wrong, and what to do instead. */
-  | { ok: false; error: string };
+  | {
+      ok: false;
+      /** Words for Seri, sent back as the tool's result: what is wrong, and what to do instead. */
+      error: string;
+      /**
+       * Her reply asked the lead something: nothing more is said now, and the
+       * call goes on with the lead's answer. Any other refusal, she speaks
+       * again at once, with what to offer.
+       */
+      awaitLead?: true;
+    };
 
 const REFUSED: Record<CallbackRefusal, string> = {
   past: 'That time has already passed.',
@@ -131,6 +142,17 @@ const REFUSED: Record<CallbackRefusal, string> = {
 };
 
 export function toHandoff(call: ToolCall, context: ActionContext): ActionResult {
+  // Found by the answer test set (A09): the model asks "Would you like me to
+  // connect you?" and transfers in the same reply. A question is answered
+  // before anything ends the call.
+  if (context.said.trim().endsWith('?') && (ACTIONS as readonly string[]).includes(call.name)) {
+    return {
+      ok: false,
+      awaitLead: true,
+      error: `Not done: your reply asked the lead a question. Wait for their answer, and take ${call.name} in a later reply if it still fits.`,
+    };
+  }
+
   let args: Record<string, unknown>;
   try {
     const parsed: unknown = JSON.parse(call.arguments || '{}');
@@ -193,6 +215,48 @@ function bookCallback(args: Record<string, unknown>, { hours, now }: ActionConte
     return { ok: false, error: `Not booked. ${REFUSED[check.why]}${offer}` };
   }
   return { ok: true, handoff: { action: 'book_callback', at: when.toISOString(), timeZone: zone, reason } };
+}
+
+/**
+ * What the relay says after Seri's own words, before the session ends (A11) -
+ * found by the answer test set (A09). The lead always hears a last line, and
+ * an opt-out always ends with the stop line:
+ * - she took the action with no words: the action's own last line, in her voice;
+ * - she opted out without the stop line: the stop line;
+ * - otherwise nothing - her words were the last line.
+ */
+export function lineToAdd(handoff: Handoff, said: string, context: { stopLine: string; now: Date }): string | null {
+  if (!said.trim()) return lastLine(handoff, context);
+  if (handoff.action === 'opt_out' && !normalised(said).includes(normalised(context.stopLine))) return context.stopLine;
+  return null;
+}
+
+const normalised = (text: string) => text.toLowerCase().replace(/[‘’]/g, "'").replace(/[^a-z' ]/g, ' ').replace(/\s+/g, ' ').trim();
+
+/**
+ * An action's own last line, said when Seri gave none. A call back's says the
+ * time it was booked for, as checked. Null for `fallback`, which says nothing
+ * of its own.
+ */
+export function lastLine(handoff: Handoff, { stopLine, now }: { stopLine: string; now: Date }): string | null {
+  switch (handoff.action) {
+    case 'transfer_to_agent':
+      return 'Great, connecting you now.';
+    case 'book_callback':
+      return `Perfect, someone from our team will call you ${spokenTime(new Date(handoff.at), handoff.timeZone, now)}. Have a great day!`;
+    case 'send_link':
+      return "I'll text you the link now. Have a great day!";
+    case 'opt_out':
+      return stopLine;
+    case 'end_call':
+      return handoff.reason === 'wrong_person'
+        ? 'Sorry about that, have a great day.'
+        : handoff.reason === 'emergency'
+          ? 'If this is a medical emergency, please hang up and call 911.'
+          : 'Thanks for your time. Have a great day!';
+    case 'fallback':
+      return null;
+  }
 }
 
 /** The relay's own ending, when Seri failed: OpenAI, the socket, or the relay (A12). */

@@ -113,9 +113,11 @@ contact in the group gets a text within a poll interval. `openers` in the
 ## How to test
 
 ```bash
-cd backend  && npm test && npm run lint    # 1,384 tests
+cd backend  && npm test && npm run lint    # 1,409 tests
 cd frontend && npm test && npm run lint    # 407 tests   (counts as of 2026-11-11)
 ```
+
+**Seri's answer test set** runs against OpenAI, so it is run by hand, before every change to her knowledge files or instructions, never in CI: `cd backend && OPENAI_API_KEY=... npm run ai:eval` (`AI-AGENT.md`, section 8).
 
 **Unit and route tests** mock the database and cover behaviour in isolation.
 
@@ -297,7 +299,7 @@ commit.
 | `WEBHOOKS.md` | How replies are received | The webhook handler |
 | `TWILIO.md` | Browser calling: how a call works, incoming calls and missed calls, what is saved, settings, testing, deploying | Anything about calls, Twilio's webhooks, the Call button, the incoming-call card or the call bar |
 | `AUTO-CALLS.md` | Automated outbound calls: the agreed script and flow, the transfer and hold rules, the "Taking calls" switch, and the build tracker. T0-T25 are done (2026-10-25): the server places a call, asks the script, keeps every answer, texts the link, puts a "yes" through to the lead's own agent first, then everyone free, switches off whoever let it ring out, holds a "yes" while someone is on a call or writing its note, rings the next person who comes free with the lead who has waited longest, leaves the voicemail message once a machine's greeting is over, rings everyone free for a lead calling back whom nobody owns, calls the right leads by itself, five at once for each person free (T29), shows each robot call on the lead's timeline with what was said, puts a "yes" nobody took first in the agents' queue, shows each lead's robot call on Admin > Leads, and the script and its settings on Admin > Configuration, every doc read against the code and the end-to-end script running robot calls, and every path heard on a real phone (T26, 2026-10-27); live on production since the deploy of `main` from 2026-10-30 | A ticket from its tracker is merged, or any decision about automated calls |
-| `AI-AGENT.md` | Phase 7: Seri, the AI agent that runs the automated call - ConversationRelay with OpenAI, the sales playbook, who is there on every turn and her five actions, calls back at a time the lead picks, what she knows (`backend/src/ai/knowledge/`, and the edrugstore.com crawl in `data/edrugstore-site/` it was written from), limits and backups, the `ai-agent` switch command. Designed 2026-11-11; the build tracker is `ai-agent-tickets/README.md` (A01-A22), A01 and A03 to A08 done | Any ticket of Phase 7, a change to Seri's knowledge, or any decision about the AI agent |
+| `AI-AGENT.md` | Phase 7: Seri, the AI agent that runs the automated call - ConversationRelay with OpenAI, the sales playbook, who is there on every turn and her five actions, calls back at a time the lead picks, what she knows (`backend/src/ai/knowledge/`, and the edrugstore.com crawl in `data/edrugstore-site/` it was written from), limits and backups, the `ai-agent` switch command. Designed 2026-11-11; the build tracker is `ai-agent-tickets/README.md` (A01-A22), A01 and A03 to A09 done | Any ticket of Phase 7, a change to Seri's knowledge, or any decision about the AI agent |
 | `AUDIT.md` | The activity log and the raw webhook archive: what is recorded, why nothing can be edited or deleted, what it does not cover | **Any new action a person or the system can take** - it records itself, or this doc says why not |
 | `ADMIN-LEADS.md` | The superadmin Leads page | That page or its API |
 | `QUEUE.md` | The agents' priority queue API: who is in it, the order, the tags | `GET /api/leads`, the queue query or the tag rules |

@@ -134,9 +134,10 @@ function sharedPart({ knowledge, callbackNumber, stopLine }: InstructionsInput):
     '- They say no: ask why, once, and listen. Offer the other products - STI treatments and at-home test kits - then the link. After two clear no\'s, thank them and end the call.',
     '- A question: answer from the approved answers, then steer back to talking with someone, or the link. Never add facts of your own.',
     '- A question the answers don\'t cover, a medical question, or an upset caller: a specialist now, or a call back - see "Who is there".',
+    '- Never talk about doses, how often to take a medicine, side effects or interactions - not even to say who decides them. Say it\'s a great question for a licensed provider, and offer a specialist.',
     '- A medical emergency: give the emergency answer, then end the call.',
     '- Busy, or driving: ask when is a better time, and book a call back.',
-    '- They ask not to be called again, in any words: opt them out, every time, without trying to change their mind.',
+    '- They ask not to be called again, in any words: opt them out at once, every time - don\'t offer to, don\'t ask why, don\'t try to change their mind.',
     '- Never ask for or take personal details - date of birth, address, card numbers, medical history. Give the answer about personal details instead.',
     '',
     '## Who is there',
@@ -146,9 +147,9 @@ function sharedPart({ knowledge, callbackNumber, stopLine }: InstructionsInput):
     `- ${quote(whoIsThereNote('nobody'))}: nobody can take a call now. Do not transfer. Offer a call back at a time that suits them instead.`,
     '',
     '## Ending the call: your five actions',
-    'Every call ends with exactly one action. Say your last line first, then take the action.',
+    'Every call ends with exactly one action. When it is time, write your last line and take the action in the same reply: the line is said, then the call ends. Never end on a question - if your reply asks something, wait for the answer, and take the action in a later reply.',
     '- transfer_to_agent: they want to order now, or want a person, and someone is free or coming. Last line: "Great, connecting you now."',
-    `- book_callback: they want a call later, or nobody is there. Agree a time inside the agent hours under "${CALL_TITLE}", confirm it out loud in their own time zone - "So that's Thursday at 3 PM your time?" - and once they say yes, say goodbye and book it. If the time is not allowed, the action tells you which time to offer instead.`,
+    `- book_callback: they want a call later, or nobody is there. Only agree a day and time inside the agent hours under "${CALL_TITLE}": if they ask for one outside them - an evening, a weekend - say when our team is available and suggest the nearest time. Confirm it out loud in their own time zone - "So that's Thursday at 3 PM your time?" - and once they say yes, say goodbye and book it in the same reply. If the time is not allowed, the action tells you which time to offer instead.`,
     '- send_link: they would rather look for themselves. Say the link is on its way by text, then say goodbye.',
     `- opt_out: they asked not to be called again. Last line, exactly: ${quote(stopLine)}`,
     '- end_call: not interested after two no\'s, the wrong person, an emergency, or the call is done. Say goodbye, and give the reason.',
@@ -198,6 +199,7 @@ function callPart({ lead, now, hours }: InstructionsInput): string {
   const open = at(hours.startMinute);
   const close = at(hours.endMinute);
   const openToday = hours.days.has(weekdayIn(now, hours.timeZone));
+  const tomorrow = new Date(now.getTime() + 24 * 60 * 60 * 1000);
 
   return [
     CALL_HEADING,
@@ -205,11 +207,11 @@ function callPart({ lead, now, hours }: InstructionsInput): string {
     name
       ? `- The lead's first name: ${name}. Use it once or twice in the call, not in every sentence.`
       : '- We don\'t have the lead\'s name. Don\'t guess one.',
-    `- Now: ${longDate(now, hours.timeZone)} ${zoneName(hours.timeZone)} (${today}).`,
+    `- Now: ${longDate(now, hours.timeZone)} ${zoneName(hours.timeZone)} (${today}); tomorrow is ${longDay(tomorrow, hours.timeZone)} (${dateIn(tomorrow, hours.timeZone)}).`,
     known
-      ? `- The lead's time zone, from their area code: ${zoneName(zone)} (${zone}). For them it is ${longDate(now, zone)} (${dateIn(now, zone)}).`
+      ? `- The lead's time zone, from their area code: ${zoneName(zone)} (${zone}). For them it is ${longDate(now, zone)} (${dateIn(now, zone)}); tomorrow is ${longDay(tomorrow, zone)} (${dateIn(tomorrow, zone)}).`
       : `- We can't tell the lead's time zone from their number. Before agreeing a call back time, ask where they are. Until then, take it as ${zoneName(zone)} (${zone}).`,
-    `- Agent hours, for call backs: ${dayList(hours.days)}, ${spokenClock(open, hours.timeZone)} to ${spokenClock(close, hours.timeZone)} ${zoneName(hours.timeZone)}${
+    `- Agent hours, for call backs: ${dayList(hours.days)}${closedDays(hours.days)}, ${spokenClock(open, hours.timeZone)} to ${spokenClock(close, hours.timeZone)} ${zoneName(hours.timeZone)}${
       !openToday
         ? '. Today has none.'
         : known && zone !== hours.timeZone
@@ -250,6 +252,11 @@ function longDate(when: Date, zone: string): string {
   }).format(when);
 }
 
+/** "Thursday, November 12" in `zone`. */
+function longDay(when: Date, zone: string): string {
+  return new Intl.DateTimeFormat('en-US', { timeZone: zone, weekday: 'long', month: 'long', day: 'numeric' }).format(when);
+}
+
 /** "2026-11-11" in `zone` - the form `book_callback` takes its date in (A06). */
 function dateIn(when: Date, zone: string): string {
   return new Intl.DateTimeFormat('en-CA', { timeZone: zone, year: 'numeric', month: '2-digit', day: '2-digit' }).format(when);
@@ -278,6 +285,13 @@ function dayList(days: ReadonlySet<Weekday>): string {
   if (run) return `${DAY_NAMES[listed[0]]} to ${DAY_NAMES[listed[listed.length - 1]]}`;
   const names = listed.map((d) => DAY_NAMES[d]);
   return names.length > 1 ? `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}` : (names[0] ?? 'no days');
+}
+
+/** " - never Saturday or Sunday": the days with no hours, said plainly, since a lead asks for them. */
+function closedDays(days: ReadonlySet<Weekday>): string {
+  const closed = WEEKDAYS.filter((d) => !days.has(d)).map((d) => DAY_NAMES[d]);
+  if (closed.length === 0) return '';
+  return ` - never ${closed.length > 1 ? `${closed.slice(0, -1).join(', ')} or ${closed[closed.length - 1]}` : closed[0]}`;
 }
 
 /** 660 -> "11:00". */

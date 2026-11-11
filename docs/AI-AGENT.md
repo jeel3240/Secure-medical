@@ -1,6 +1,6 @@
 # AI agent on the automated call (Phase 7)
 
-Design agreed with Jeel, 2026-11-11. The tickets are in `docs/ai-agent-tickets/` (A01-A22). Built so far: A01, the key and the switch; A03, the knowledge loader; A04, her instructions; A05, the sentence check; A06, her five actions; A07, the call-back time rules; A08, migration 022 (all 2026-11-11).
+Design agreed with Jeel, 2026-11-11. The tickets are in `docs/ai-agent-tickets/` (A01-A22). Built so far: A01, the key and the switch; A03, the knowledge loader; A04, her instructions; A05, the sentence check; A06, her five actions; A07, the call-back time rules; A08, migration 022; A09, the answer test set, which chose the model (all 2026-11-11).
 
 Today the automated call (`docs/AUTO-CALLS.md`) is a fixed script: it understands "yes", "no", "stop" and the keys 1, 2 and 9, and anything else is asked once more before the call ends. On day one (250 calls), 82 leads hung up and 65 ended as `no_response`.
 
@@ -57,6 +57,8 @@ Decided by Jeel, 2026-11-11, after comparing published tests:
 | Streaming, short replies | Seri starts speaking on the first words OpenAI writes; replies are 1 to 2 sentences |
 
 Twilio provides Deepgram too, so the only accounts needed are Twilio (have it) and OpenAI (key from the client, 2026-11-09).
+
+**The model: `gpt-4.1-mini`** (`backend/src/ai/model.ts`), chosen by the answer test set (A09, 2026-11-11): 133 of 134 cases passed (99.3%), and Seri's first word came 0.55 s after the request (median), 90% within 0.68 s, measured from a laptop. Next best: `gpt-5.4-mini` with reasoning off, 94.8% at the same speed; `gpt-5-mini` 85.8% and slower; `gpt-4o-mini` 79.9%. The smaller models' commonest fault was saying goodbye without taking the action. The instructions' shared first part is sent with a cache key and was read from OpenAI's cache 87-95% of the time.
 
 **Checked on Twilio's ConversationRelay docs, 2026-11-11** (what later tickets rely on):
 
@@ -134,6 +136,8 @@ The relay waits for Twilio to say Seri has finished speaking (`agentSpeaking` of
 Seri has no action for payment, personal details (date of birth, address, card) or prescriptions, so she cannot do them.
 
 *As built (A06, 2026-11-11):* `backend/src/ai/actions.ts`. The five are OpenAI tools in strict mode: `book_callback` takes the time on the lead's own clock ("2026-11-12T15:00"), their IANA zone and a one-line reason; `end_call` a reason from a list - `not_interested`, `wrong_person`, `emergency`, `other`; the other three nothing. `toHandoff` checks a tool call against the turn's view of the call: a call back outside the hours, past, too soon or too far, and a transfer when nobody is there, come back to Seri as words saying what to offer instead ("Offer tomorrow at 1 PM your time instead, and if they agree, book it as 2026-11-12T13:00."), and the call goes on. The handoff is JSON - `{"action":"book_callback","at":"<instant>","timeZone":"America/New_York","reason":"..."}` - and `fromHandoff` reads Twilio's `HandoffData` back, keeping only what it knows: anything missing or unreadable is a `fallback`, never an error.
+
+**Two rules the answer test set led to (A09):** the lead always hears a last line - when Seri takes an action with no words, the relay says the action's own in her voice, and an opt-out always ends with the stop line (`lineToAdd`); and an action in a reply that ended on a question is held back - the lead answers first (`toHandoff`'s `awaitLead`).
 
 **Not an action Seri picks:** `fallback`, which the relay ends with when she fails (section 6). `/auto/ai-after` then asks the script's Q1 question - not its greeting, since Seri has introduced herself - and the call goes on as today.
 
@@ -258,7 +262,7 @@ Analysis of how calls went is done by hand when wanted: every turn is in the dat
 |---|---|
 | Unit | Pure functions in `backend/src/ai/`: the switch, the instructions, the sentence check, action to `handoffData`, booking times and time zones, the 3-minute and silence rules. No OpenAI, no Twilio |
 | WebSocket | The relay against a fake ConversationRelay and a fake OpenAI: setup, turns, each action, an interruption, a stop word, a timeout, a failure |
-| **Answer test set** | About 60 things leads say ("is this a scam", "how much", "I'm driving", "call me tomorrow at 3", "what should I take for a UTI", "stop calling"), each with the action that must follow and words that must not appear. Run against the real model before every change to the knowledge or the instructions: `npm run ai:eval`. The model is chosen by it (speed and answers) |
+| **Answer test set** | About 60 things leads say ("is this a scam", "how much", "I'm driving", "call me tomorrow at 3", "what should I take for a UTI", "stop calling"), each with the action that must follow and words that must not appear. Run against the real model before every change to the knowledge or the instructions: `npm run ai:eval`. The model is chosen by it (speed and answers). *As built (A09):* 67 cases in `backend/src/ai/evals/cases.json`, marked by `grade.ts` - the outcome checked as a call checks it, the words she must and must not say, and the sentence check. `cd backend && OPENAI_API_KEY=... npm run ai:eval` runs Seri's model; `-- --model gpt-5.4-mini:none --runs 2` compares. `gpt-4.1-mini`: 133 of 134, first word 0.55 s. The results and what each run changed: `ai-agent-tickets/A09-answer-test-set.md` |
 | End to end | `npm run e2e` gains robot calls that go to Seri, with Twilio and OpenAI stubbed at their edge |
 | Real phone | Every action, talking over Seri, silence, a voicemail, a hang-up, OpenAI switched off mid-call, on the dev number |
 

@@ -5,6 +5,7 @@
  * hours ahead of Arizona in winter).
  */
 import { DEFAULT_CALL_HOURS } from '../core/auto-dial';
+import { ANTIBIOTICS_CALL } from '../core/call-script-fixtures';
 import {
   ACTION_TOOLS,
   ACTIONS,
@@ -12,14 +13,23 @@ import {
   fallbackHandoff,
   fromHandoff,
   handoffData,
+  lastLine,
+  lineToAdd,
   toHandoff,
   type ActionContext,
   type Handoff,
 } from './actions';
+import { checkSentence } from './safety';
 
 const NOW = new Date('2026-11-11T19:00:00Z');
 const NY = 'America/New_York';
-const context = (over: Partial<ActionContext> = {}): ActionContext => ({ whoIsThere: 'free', hours: DEFAULT_CALL_HOURS, now: NOW, ...over });
+const context = (over: Partial<ActionContext> = {}): ActionContext => ({
+  whoIsThere: 'free',
+  hours: DEFAULT_CALL_HOURS,
+  now: NOW,
+  said: 'Great, connecting you now.',
+  ...over,
+});
 const call = (name: string, args: unknown = {}, over: Partial<ActionContext> = {}) =>
   toHandoff({ name, arguments: typeof args === 'string' ? args : JSON.stringify(args) }, context(over));
 const book = (time: string, over: Partial<ActionContext> = {}, zone = NY) =>
@@ -178,5 +188,66 @@ describe('what Twilio hands back, read safely', () => {
   it('extra fields are dropped, never passed on', () => {
     expect(fromHandoff('{"action":"opt_out","block":"+15551234567"}')).toEqual({ action: 'opt_out' });
     expect(fromHandoff('{"action":"end_call","reason":"other","say":"anything"}')).toEqual({ action: 'end_call', reason: 'other' });
+  });
+});
+
+describe('an action right after a question waits for the answer (A09)', () => {
+  it.each([...ACTIONS])('%s after "...connect you?" is held back, and nothing more is said', (name) => {
+    const args = name === 'book_callback' ? { time: '2026-11-12T15:00', time_zone: NY, reason: 'x' } : name === 'end_call' ? { reason: 'other' } : {};
+    expect(call(name, args, { said: 'You can get up to 25% off. Would you like me to connect you with someone now?' })).toEqual({
+      ok: false,
+      awaitLead: true,
+      error: `Not done: your reply asked the lead a question. Wait for their answer, and take ${name} in a later reply if it still fits.`,
+    });
+  });
+
+  it('a question earlier in the reply, or none at all, does not hold it back', () => {
+    expect(call('transfer_to_agent', {}, { said: 'Any questions? Great, connecting you now.' }).ok).toBe(true);
+    expect(call('transfer_to_agent', {}, { said: '' }).ok).toBe(true);
+  });
+
+  it('an action that does not exist is still named as such', () => {
+    expect(error(call('take_payment', {}, { said: 'Shall I?' }))).toMatch(/^There is no action called take_payment/);
+  });
+});
+
+describe('the line the relay adds after hers (A09)', () => {
+  const ctx = { stopLine: ANTIBIOTICS_CALL.optOutBody, now: NOW };
+  const booked: Handoff = { action: 'book_callback', at: '2026-11-12T20:00:00.000Z', timeZone: NY, reason: 'Wants to order' };
+
+  it('no words before the action: its own last line', () => {
+    expect(lineToAdd({ action: 'transfer_to_agent' }, '', ctx)).toBe('Great, connecting you now.');
+    expect(lineToAdd(booked, '  ', ctx)).toBe('Perfect, someone from our team will call you tomorrow at 3 PM your time. Have a great day!');
+    expect(lineToAdd({ action: 'send_link' }, '', ctx)).toBe("I'll text you the link now. Have a great day!");
+    expect(lineToAdd({ action: 'opt_out' }, '', ctx)).toBe('Okay, we will not call you again. Goodbye.');
+    expect(lineToAdd({ action: 'end_call', reason: 'not_interested' }, '', ctx)).toBe('Thanks for your time. Have a great day!');
+    expect(lineToAdd({ action: 'end_call', reason: 'wrong_person' }, '', ctx)).toBe('Sorry about that, have a great day.');
+    expect(lineToAdd({ action: 'end_call', reason: 'emergency' }, '', ctx)).toBe('If this is a medical emergency, please hang up and call 911.');
+    expect(lineToAdd(fallbackHandoff('openai_timeout'), '', ctx)).toBeNull();
+  });
+
+  it('her own words: nothing added', () => {
+    expect(lineToAdd({ action: 'transfer_to_agent' }, 'Sure thing, connecting you now.', ctx)).toBeNull();
+    expect(lineToAdd(booked, 'Perfect, talk to you then. Bye!', ctx)).toBeNull();
+  });
+
+  it('an opt-out always ends with the stop line', () => {
+    expect(lineToAdd({ action: 'opt_out' }, 'I understand. Okay, we will not call you again. Goodbye.', ctx)).toBeNull();
+    expect(lineToAdd({ action: 'opt_out' }, 'Okay, we will NOT call you again - goodbye!', ctx)).toBeNull();
+    expect(lineToAdd({ action: 'opt_out' }, "I'll remove your number right now.", ctx)).toBe('Okay, we will not call you again. Goodbye.');
+  });
+
+  it('every one passes the sentence check', () => {
+    const handoffs: Handoff[] = [
+      { action: 'transfer_to_agent' },
+      booked,
+      { action: 'send_link' },
+      { action: 'opt_out' },
+      ...END_REASONS.map((reason): Handoff => ({ action: 'end_call', reason })),
+    ];
+    for (const handoff of handoffs) {
+      const line = lastLine(handoff, ctx)!;
+      for (const sentence of line.split(/(?<=[.?!])\s+/)) expect(checkSentence(sentence).reason).toBeNull();
+    }
   });
 });
