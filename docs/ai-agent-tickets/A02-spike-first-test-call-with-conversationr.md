@@ -8,7 +8,7 @@
 
 ## Before the call
 
-- The Twilio account has completed ConversationRelay's onboarding in the console, including accepting Twilio's AI features addendum (`docs/AI-AGENT.md` section 1). Without it the call fails.
+- The Twilio account has completed ConversationRelay's onboarding in the console, including accepting Twilio's AI features addendum (`docs/AI-AGENT.md` section 1). Without it the call fails. Only the account owner can accept it: asked 2026-11-11, waiting.
 - The local `.env` holds only the dev number and dev TwiML App (`docs/TWILIO.md`), and a tunnel is set as `PUBLIC_URL`.
 
 ## Build

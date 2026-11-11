@@ -1,3 +1,4 @@
+import { KnowledgeError, loadKnowledge } from '../ai/knowledge';
 import { readAutoCalls } from '../auto-calls-settings';
 import { config } from '../config';
 import { outcomeForStatus, talkSeconds } from '../core/calls';
@@ -32,6 +33,21 @@ if (problems.length > 0) {
   process.exit(1);
 }
 
+// Seri's knowledge files - AI-AGENT.md section 5. A broken one must never
+// reach a call, so it stops the start, whether or not the AI agent is on: the
+// files are in the repo, so a broken one is a bug, found here on the first
+// start rather than when she is switched on.
+let knowledgeVersion: string;
+try {
+  knowledgeVersion = loadKnowledge().version;
+} catch (err) {
+  if (!(err instanceof KnowledgeError)) throw err;
+  for (const problem of err.problems) {
+    log.error('api.refused_start', { reason: 'ai_knowledge_invalid', problem });
+  }
+  process.exit(1);
+}
+
 // Locally a partial set only warns: calling stays off, everything else runs.
 if (config.twilio.status === 'incomplete') {
   log.warn('calling.off', { reason: 'incomplete_settings', missing: config.twilio.missing });
@@ -58,7 +74,12 @@ const app = createApp({
 
 const port = process.env.PORT || 3000;
 app.listen(port, () => {
-  log.info('api.started', { port, calling: config.twilio.status, autoCalls: autoCalls ? 'on' : 'off' });
+  log.info('api.started', {
+    port,
+    calling: config.twilio.status,
+    autoCalls: autoCalls ? 'on' : 'off',
+    knowledge: knowledgeVersion,
+  });
 });
 
 // A lead on hold is looked at every 30 seconds, not only when a track of hold
