@@ -1,6 +1,6 @@
 # AI agent on the automated call (Phase 7)
 
-Design agreed with Jeel, 2026-11-11. The tickets are in `docs/ai-agent-tickets/` (A01-A22). Built so far: A01, the key and the switch (2026-11-11).
+Design agreed with Jeel, 2026-11-11. The tickets are in `docs/ai-agent-tickets/` (A01-A22). Built so far: A01, the key and the switch; A03, the knowledge loader (both 2026-11-11).
 
 Today the automated call (`docs/AUTO-CALLS.md`) is a fixed script: it understands "yes", "no", "stop" and the keys 1, 2 and 9, and anything else is asked once more before the call ends. On day one (250 calls), 82 leads hung up and 65 ended as `no_response`.
 
@@ -174,6 +174,7 @@ data/edrugstore-site/      the crawl: reference only, never read by the app
 **Files, not database tables** (Jeel, 2026-11-11). Nobody edits answers from a screen, and every change goes through a PR either way, so tables would add a migration, a loader and a database for the test set, and buy nothing. Not shown on Admin > Configuration either.
 
 - **Loaded when the app starts.** A missing file, a missing field or a bad version stops the API from starting, and the tests catch it before a deploy.
+  *As built (A03, 2026-11-11):* `backend/src/ai/knowledge.ts` imports the three files - so the build carries them into `dist/` - and `loadKnowledge()` checks them once and hands them out typed. Every problem in every file is listed, each by file and field (`answers.json: answers[id=price].answer is missing`); `api/index.ts` logs each as `api.refused_start` (`reason: ai_knowledge_invalid`) and exits, whether or not the AI agent is on - a broken file is a bug in the repo. Checked: every field present and not empty; ids and product slugs used once; `status`, product `type` and `rx_required` from their lists; product URLs `https://`; one shared version; an open answer has its `fallback_answer`; no placeholder but `{callback_number}` in anything Seri says. **Two things never get past the loader:** a product's price (the typed product has no field for one), and an open answer's own text (an answer's `spoken` is its `fallback_answer` until it is approved). `api.started` names the version.
 - **One version** for all three (`approved-2026-11-11`). Every AI call saves it, so what Seri knew on any call can be traced.
 - **All of it goes into Seri's instructions on every call** - about 4,000 words. No search and no vector database, so an approved answer is never missed. The part that never changes comes first and the call's own details (first name, time, hours, who is there) last, so OpenAI can reuse what it has already read and start faster (A04).
 - **Changing anything:** edit the file, bump the version, run the answer test set (section 8), PR into `dev`. Never edit on the server.

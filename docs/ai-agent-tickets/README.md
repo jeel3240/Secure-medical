@@ -8,7 +8,7 @@ The build of `docs/AI-AGENT.md`, split into small tickets. Each is one PR into `
 |---|---|---|---|---|
 | A01 | [Setup: packages, OpenAI key, on/off switch](A01-setup-packages-openai-key-on-off-switch.md) | - | S | Done 2026-11-11 |
 | A02 | [Spike: first test call with ConversationRelay](A02-spike-first-test-call-with-conversationr.md) | A01 | S | To do |
-| A03 | [Knowledge loader](A03-knowledge-loader.md) | - | S | To do |
+| A03 | [Knowledge loader](A03-knowledge-loader.md) | - | S | Done 2026-11-11 |
 | A04 | [Seri's instructions (system prompt)](A04-seri-s-instructions-system-prompt.md) | A03 | M | To do |
 | A05 | [Sentence safety check](A05-sentence-safety-check.md) | A03 | S | To do |
 | A06 | [Seri's five actions](A06-seri-s-five-actions.md) | A07 | S | To do |
