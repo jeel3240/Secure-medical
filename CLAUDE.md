@@ -101,6 +101,7 @@ went a different way:
 | Frontend | React 18, Vite 4, React Router 6, zustand, plain CSS with design tokens. |
 | Production web server | The `caddy` service is built from `frontend/Dockerfile`: the React build copied into a `caddy:2` image. |
 | Calling | Built 2026-10-01: the `twilio` library on the server, `@twilio/voice-sdk` in the browser. Outgoing calls, and incoming calls to one agent's browser; voicemail detection, recordings and transcripts, 2026-10-02; a recording notice, 2026-10-05. `docs/TWILIO.md`. With automated calls on, a call back nobody owns rings everyone free (T19). Automated outbound calls, placed by the server, 2026-10-18 on - `docs/AUTO-CALLS.md`. |
+| AI agent | Phase 7, being built: Twilio ConversationRelay with an OpenAI text model, `openai` 6.x and `ws` on the server - `openai` 7 needs Node 22, and the app runs Node 20. `docs/AI-AGENT.md`. |
 
 **EZ Texting API notes**
 - Quick start: https://developers.eztexting.com/docs/quick-start-guide
@@ -256,9 +257,11 @@ you change something the docs describe, update the doc in the same commit.
     src/config.ts           reads the environment, and exits if a required variable is missing
     scripts/admin-leads-live-check.ts  proves the Admin > Leads statuses
     src/lib/log.ts          structured JSON logging, with redaction enforced
-    src/cli/                create-superadmin, twilio-configure, send-waiting-openers
+    src/cli/                create-superadmin, twilio-configure, send-waiting-openers, ai-agent (Seri's switch, A01)
+    src/ai/                 Phase 7, Seri, the AI agent on the automated call - every AI file lives here (docs/AI-AGENT.md): settings.ts, her switch and whether the next call goes to her (A01); knowledge/, what she knows - three JSON files
     src/integrations/       EZ Texting client
     src/db/users.ts         user queries; src/db/pool.ts
+  data/edrugstore-site/     the edrugstore.com crawl Seri's knowledge was written from - reference only, never read by the app; raw/ is git-ignored
   frontend/
     Dockerfile              production Caddy image with the built app
     src/api/usePolling.ts   the one place every live screen fetches from
@@ -314,6 +317,7 @@ you change something the docs describe, update the doc in the same commit.
     AUDIT.md                the activity log: nothing is lost
     FLOWS.md                how SMS scripts are stored as rows, how to add one, and how questions are named
     AUTO-CALLS.md           automated outbound calls: the agreed design and the build tracker (T0-T25 done as of 2026-10-25: the server places a call, asks the script, keeps the answers, texts the link, puts a "yes" through to the lead's own agent first, then everyone free, switches off whoever let it ring out, holds a "yes" while someone is on a call or writing its note, rings the next person who comes free with the lead who has waited longest, leaves the voicemail message once a machine's greeting is over, rings everyone free for a lead calling back whom nobody owns, calls the right leads by itself at the pace the people free can take, shows each robot call on the lead's timeline with what was said, puts a "yes" nobody took first in the agents' queue, shows each lead's robot call on Admin > Leads, and the script and its settings on Admin > Configuration; every doc read against the code, and the end-to-end script runs three robot calls (T25); every path heard on a real phone, 2026-10-27 (T26); the leads already waiting at the switch-on called too, after new leads (T27, 2026-10-29); a Twilio account problem never uses up a lead's call (T28, 2026-10-29); on `main` 2026-10-30 and live; five calls at once for each person free, not one (T29, 2026-11-02))
+    AI-AGENT.md             Phase 7: Seri, the AI agent that runs the automated call - the design; ai-agent-tickets/ is its build tracker (A01-A22)
     QUEUE.md  AGENT-WORKSPACE.md  ADMIN.md  LOGGING.md  FRONTEND.md
 ```
 
@@ -521,6 +525,7 @@ onto them:
 | 4 | Week 4 items 1-4, Twilio calling | Done 2026-10-01 - `docs/TWILIO.md`. A real call placed and recorded the same day. Incoming calls - ring one agent, text the lead on a missed call, and a callback for the agent it rang - tested by Jeel with real calls and merged into `dev` the same day. Deploying them needs migrations 007 and 008, and `twilio:configure` run on the server. On main and production since 2026-10-05 |
 | 5 | Not in the original plan | **Flows** - decided by Jeel, 2026-10-05, before launch: the SMS questions and answers stored as rows so a group with different questions is new rows, not new code; the client's eDrugstore antibiotics script as the first flow; a recording notice on calls. Built on `feat/flows`. Reviewed by three independent reads and a 50,000-lead load test on 2026-10-06, then walked with a real phone the same day - eight paths, all as specified - and merged into `dev`. Deploying it needs migrations 012 and 013. Editing a flow from the website, and a flow per EZ Texting group, are later. `docs/FLOWS.md`. On main and production since 2026-10-06 |
 | 6 | Not in the original plan | **Automated calls** - the server calls leads who never replied and puts a "yes" through to a person. T0-T25 done 2026-10-25; every path heard on a real phone 2026-10-27 (T26); the leads already waiting at the switch-on called too, after new leads, 2026-10-29 (T27); a Twilio account problem never uses up a lead's call (T28). On `main` 2026-10-30 with migrations 014 to 020, and live. Five calls at once for each person free, not one - T29, 2026-11-02, migration 021, on `dev`. `docs/AUTO-CALLS.md` |
+| 7 | Not in the original plan | **AI agent** - Seri, from eDrugstore, runs the automated call from the start: she answers questions, handles objections, knows on every turn whether anyone can take the call, and ends each call with a transfer, a call back at a time the lead picks, the link, an opt-out or a goodbye; today's script stays as the backup. Designed 2026-11-11, in 22 tickets. A01 done 2026-11-11: the OpenAI key, and the switch, changed only by `npm run ai-agent -- on\|off` and recorded in the activity log. `docs/AI-AGENT.md`; tracker `docs/ai-agent-tickets/README.md` |
 
 **Phase 3 is everything that is left except calling.** That means the Week 3
 list below, plus Week 4 items 5-9: error handling and retries, logging, the

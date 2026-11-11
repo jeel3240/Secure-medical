@@ -69,6 +69,12 @@ export const ACTIVITY_ACTIONS = [
    * system's doing - someone set `AUTO_CALLS=on`.
    */
   'auto_calls.switched_on',
+  /**
+   * Seri, the AI agent, switched on or off - `detail.from`, what
+   * `settings.ai_agent` said before (null when it was never set), `to`, and
+   * `via: 'command'` (AI-AGENT.md section 7). Run on the server, so no actor.
+   */
+  'ai_agent.switched',
   // Sign-in.
   'auth.signed_in',
   'auth.sign_in_failed',

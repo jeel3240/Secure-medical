@@ -96,7 +96,7 @@ async function isOnDnc(phone: string): Promise<boolean> {
  *
  * That means keeping leads.phone unique, allowing many conversations per lead,
  * and dropping previous_lead_id - "seen before" in the queue is then derived
- * from the prior conversations. Blocked on Jim confirming whether a
+ * from the prior conversations. Blocked on confirming whether a
  * re-delivered phone arrives as a new EZ Texting contact or an update to the
  * existing one, since that decides whether createdAt moves and the poller sees
  * it at all. Wire it with the state machine.

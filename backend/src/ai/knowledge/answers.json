@@ -1,0 +1,448 @@
+{
+ "version": "approved-2026-11-11",
+ "rules": [
+  "Never guarantee a prescription or approval.",
+  "Never diagnose, or recommend a specific medication or dose.",
+  "Never quote prices. Offer a representative or text the link.",
+  "Always say 'up to 25% off your first order'.",
+  "Never claim to be a doctor, a pharmacy or a medical practice.",
+  "Never collect personal, medical or payment details.",
+  "Medical questions: offer an agent or a callback.",
+  "Upset callers: transfer now, or promise a callback.",
+  "Do not repeat marketing claims from the site (e.g. 'most powerful', success rates).",
+  "Keep answers to 1 to 3 short sentences, then steer back to: talk to an agent, or get the link."
+ ],
+ "answers": [
+  {
+   "id": "why_calling",
+   "topic": "About the call",
+   "questions": [
+    "Why are you calling me?",
+    "Who is this?"
+   ],
+   "answer": "This is eDrugstore. You recently signed up on one of our partner sites and asked to be contacted, so we're calling about our offer of up to 25% off your first order.",
+   "source": "Client email, Nov 9 2026",
+   "status": "approved"
+  },
+  {
+   "id": "how_got_number",
+   "topic": "About the call",
+   "questions": [
+    "How did you get my number?",
+    "I never signed up."
+   ],
+   "answer": "You signed up on one of our partner sites and asked to be contacted. If you'd rather not get calls, I can take you off our list right now.",
+   "source": "Client email, Nov 9 2026",
+   "status": "approved",
+   "note": "Opt-out line is ours, to match the existing STOP handling."
+  },
+  {
+   "id": "medical_web",
+   "topic": "About the call",
+   "questions": [
+    "What is Medical Web?",
+    "Your caller ID says Medical Web."
+   ],
+   "answer": "Medical Web is the name on our phone line. We're calling on behalf of eDrugstore.",
+   "fallback_answer": "We're calling on behalf of eDrugstore.",
+   "source": "Jeel (CNAM registered as Medical Web, Medicalweb LLC)",
+   "status": "needs_confirmation",
+   "note": "Confirm with the client how Medical Web relates to eDrugstore. Until then Seri says only the fallback_answer."
+  },
+  {
+   "id": "who_we_are",
+   "topic": "About the company",
+   "questions": [
+    "Who are you?",
+    "What is eDrugstore?",
+    "Who is Secure Medical?"
+   ],
+   "answer": "eDrugstore has been helping people get treatment online for over 25 years. The telemedicine platform is run by Secure Medical, and licensed U.S. healthcare providers make every prescribing decision.",
+   "source": "edrugstore.com/about-us, /credentials",
+   "status": "approved",
+   "note": "Site pages disagree on exact numbers (1998 vs 1999, customer counts), so the AI says 'over 25 years' only. Approved by Jeel, Nov 11 2026."
+  },
+  {
+   "id": "offer",
+   "topic": "Offer and price",
+   "questions": [
+    "What's the discount?",
+    "What is the 25% off?"
+   ],
+   "answer": "You can get up to 25% off your first order.",
+   "source": "Client email, Nov 9 2026",
+   "status": "approved",
+   "note": "Always say 'up to' and 'first order'."
+  },
+  {
+   "id": "price",
+   "topic": "Offer and price",
+   "questions": [
+    "How much does it cost?",
+    "What's the price of amoxicillin?"
+   ],
+   "answer": "Prices depend on the medication and quantity. I can connect you with a representative, or text you a link where you can see the prices.",
+   "source": "Client email, Nov 5 2026",
+   "status": "approved",
+   "note": "Never quote prices, even though they are on the site."
+  },
+  {
+   "id": "cheaper_pharmacy",
+   "topic": "Objections",
+   "questions": [
+    "I can get it cheaper at my pharmacy."
+   ],
+   "answer": "I'd encourage you to double-check your pharmacy's pricing. There's a good chance our pricing is lower, and we ship it right to your home.",
+   "source": "Client email, Nov 9 2026",
+   "status": "approved"
+  },
+  {
+   "id": "scam",
+   "topic": "Objections",
+   "questions": [
+    "Is this a scam?",
+    "Is this legit?",
+    "I've been scammed before."
+   ],
+   "answer": "I understand your hesitation. eDrugstore has been around for over 25 years, and you can check our customer reviews on Trustpilot.",
+   "source": "Client email, Nov 9 2026 + Trustpilot from edrugstore.com/faqs",
+   "status": "approved",
+   "note": "Trustpilot confirmed by Jeel, Nov 11 2026."
+  },
+  {
+   "id": "insurance",
+   "topic": "Offer and price",
+   "questions": [
+    "Does insurance cover it?",
+    "Can I use insurance?",
+    "Can I use my HSA or FSA card?"
+   ],
+   "answer": "We don't bill insurance directly. You pay our cost, and if your insurance covers it, they reimburse you. We also accept HSA and FSA cards with a Visa or Mastercard logo.",
+   "source": "Client email, Nov 9 2026 + edrugstore.com/faqs",
+   "status": "approved"
+  },
+  {
+   "id": "payment",
+   "topic": "Offer and price",
+   "questions": [
+    "How do I pay?",
+    "What cards do you take?"
+   ],
+   "answer": "We accept Visa, Mastercard and American Express, and the charge shows as eDrugstore.com on your statement.",
+   "source": "edrugstore.com/faqs",
+   "status": "approved",
+   "note": "Approved by Jeel, Nov 11 2026."
+  },
+  {
+   "id": "when_charged",
+   "topic": "Offer and price",
+   "questions": [
+    "When will I be charged?",
+    "What if I'm not approved?"
+   ],
+   "answer": "You're only charged after a licensed provider approves your prescription. If you're not approved, you're not charged.",
+   "source": "edrugstore.com/faqs",
+   "status": "approved",
+   "note": "Approved by Jeel, Nov 11 2026."
+  },
+  {
+   "id": "antibiotics",
+   "topic": "Products",
+   "questions": [
+    "What antibiotics do you carry?",
+    "Do you have amoxicillin?"
+   ],
+   "answer": "We carry a few antibiotics, like amoxicillin, and amoxicillin is the most commonly purchased. A licensed provider decides which one is right for you.",
+   "source": "Client email, Nov 9 2026",
+   "status": "approved",
+   "note": "Keep it as 'amoxicillin'. The full name 'amoxicillin-clavulanate' is too confusing on a call (Jeel, Nov 11)."
+  },
+  {
+   "id": "products_overview",
+   "topic": "Products",
+   "questions": [
+    "What do you offer?",
+    "What products do you have?"
+   ],
+   "answer": "On these calls we mainly help with antibiotics, STI treatments and at-home health test kits. eDrugstore also offers treatments for things like hair loss and weight loss, and a representative can tell you more.",
+   "source": "Client email, Nov 9 2026 + Client email, Nov 5 2026",
+   "status": "approved",
+   "note": "Approved by Jeel, Nov 11 2026."
+  },
+  {
+   "id": "test_kits",
+   "topic": "Products",
+   "questions": [
+    "How do the test kits work?",
+    "Do you have STD tests?"
+   ],
+   "answer": "Yes. We have at-home test kits, including STD tests. The kit is mailed to your home, you collect the sample yourself, and it's processed by a certified lab, so you don't have to visit a clinic.",
+   "source": "edrugstore.com/test-kits product pages",
+   "status": "approved",
+   "note": "Approved by Jeel, Nov 11 2026."
+  },
+  {
+   "id": "which_medication",
+   "topic": "Products",
+   "questions": [
+    "Which antibiotic should I take?",
+    "What's best for my infection?"
+   ],
+   "answer": "That's a great question for a licensed provider. They'll review your health information and decide what's right for you. I can connect you with a representative, or have someone call you back.",
+   "source": "Client email, Nov 5 2026",
+   "status": "approved"
+  },
+  {
+   "id": "need_prescription",
+   "topic": "How it works",
+   "questions": [
+    "Do I need a prescription?",
+    "Do I need to see a doctor?"
+   ],
+   "answer": "Yes, a prescription is needed, but you don't have to visit a doctor's office. You fill out a short online medical questionnaire, and a licensed provider reviews it. If they need more information, they may follow up by video or phone.",
+   "source": "edrugstore.com/faqs",
+   "status": "approved",
+   "note": "Approved by Jeel, Nov 11 2026."
+  },
+  {
+   "id": "how_it_works",
+   "topic": "How it works",
+   "questions": [
+    "How does it work?",
+    "How do I order?"
+   ],
+   "answer": "You pick your medication on our website, create an account, and fill out a short medical questionnaire. A licensed provider reviews it, and if you're approved, a licensed U.S. pharmacy ships it to you.",
+   "source": "Client email, Nov 5 2026 + edrugstore.com/faqs",
+   "status": "approved",
+   "note": "Approved by Jeel, Nov 11 2026."
+  },
+  {
+   "id": "consult_cost",
+   "topic": "How it works",
+   "questions": [
+    "Do I pay for the consultation?",
+    "Is there a doctor fee?"
+   ],
+   "answer": "No, the online medical consultation is included at no additional cost.",
+   "source": "edrugstore.com/faqs",
+   "status": "approved",
+   "note": "Approved by Jeel, Nov 11 2026."
+  },
+  {
+   "id": "states",
+   "topic": "How it works",
+   "questions": [
+    "Do you serve my state?"
+   ],
+   "answer": "Yes, we serve all 50 states.",
+   "source": "Client email, Nov 5 2026",
+   "status": "approved"
+  },
+  {
+   "id": "photo_id",
+   "topic": "How it works",
+   "questions": [
+    "Do I need to send a photo ID?"
+   ],
+   "answer": "Usually no. For U.S. customers, we verify your age electronically. If it doesn't match, we may ask for a copy of your ID.",
+   "source": "edrugstore.com/faqs",
+   "status": "approved",
+   "note": "Approved by Jeel, Nov 11 2026."
+  },
+  {
+   "id": "replace_doctor",
+   "topic": "How it works",
+   "questions": [
+    "Does this replace my regular doctor?"
+   ],
+   "answer": "No. It's meant to work alongside your regular doctor, not replace them. We encourage you to keep your doctor informed.",
+   "source": "edrugstore.com/faqs",
+   "status": "approved",
+   "note": "Approved by Jeel, Nov 11 2026."
+  },
+  {
+   "id": "talk_to_doctor",
+   "topic": "How it works",
+   "questions": [
+    "Can I talk to a doctor?"
+   ],
+   "answer": "Yes. If you're prescribed a medication, you can talk with your prescribing provider about follow-up questions. A representative can help you set that up.",
+   "source": "edrugstore.com/faqs",
+   "status": "approved",
+   "note": "Approved by Jeel, Nov 11 2026."
+  },
+  {
+   "id": "legal",
+   "topic": "Trust",
+   "questions": [
+    "Is this legal?",
+    "Can a doctor prescribe online?"
+   ],
+   "answer": "Yes. A licensed healthcare provider in your state reviews your information and decides if a prescription is right for you. eDrugstore doesn't prescribe, the provider does.",
+   "source": "FAQ #2 (updated wording from Jeel, Nov 9)",
+   "status": "approved",
+   "note": "Approved by Jeel, Nov 11 2026."
+  },
+  {
+   "id": "safe",
+   "topic": "Trust",
+   "questions": [
+    "Is this safe?",
+    "Is telemedicine safe?"
+   ],
+   "answer": "Every request is reviewed by a licensed provider before anything is prescribed. If they feel telemedicine isn't right for you, they may ask for more information or suggest an in-person visit.",
+   "source": "FAQ #3 (updated wording from Jeel, Nov 9)",
+   "status": "approved",
+   "note": "Approved by Jeel, Nov 11 2026."
+  },
+  {
+   "id": "privacy",
+   "topic": "Trust",
+   "questions": [
+    "Is my information private?",
+    "Do you sell my data?"
+   ],
+   "answer": "Your information is protected with encryption and strict access controls, and Secure Medical never sells your health information or medical records.",
+   "source": "FAQ #5 (updated wording from Jeel, Nov 9)",
+   "status": "approved",
+   "note": "Approved by Jeel, Nov 11 2026."
+  },
+  {
+   "id": "authentic",
+   "topic": "Trust",
+   "questions": [
+    "Are the medications real?",
+    "Are they FDA-approved?"
+   ],
+   "answer": "Yes. Medications are dispensed by licensed U.S. pharmacies, and each package has the manufacturer and lot number so you can verify it.",
+   "source": "edrugstore.com/faqs, /shipping-medications",
+   "status": "approved",
+   "note": "Approved by Jeel, Nov 11 2026."
+  },
+  {
+   "id": "shipping",
+   "topic": "Shipping",
+   "questions": [
+    "How long does shipping take?",
+    "Is shipping free?"
+   ],
+   "answer": "Free USPS shipping is our most popular option, and many customers get their order in 1 to 3 business days. FedEx Next Day and 2-Day are also available.",
+   "source": "Client email, Nov 5 2026 + edrugstore.com/faqs",
+   "status": "approved"
+  },
+  {
+   "id": "discreet",
+   "topic": "Shipping",
+   "questions": [
+    "Is the packaging discreet?",
+    "Will anyone know what's inside?"
+   ],
+   "answer": "Yes. It comes in a plain FedEx or USPS envelope with no pharmacy name on the outside.",
+   "source": "edrugstore.com/faqs",
+   "status": "approved",
+   "note": "Approved by Jeel, Nov 11 2026."
+  },
+  {
+   "id": "ship_where",
+   "topic": "Shipping",
+   "questions": [
+    "Can you ship to a P.O. Box?",
+    "Can I pick it up?"
+   ],
+   "answer": "Yes. We ship to homes, businesses, hotels, military bases and P.O. Boxes. With FedEx, you can also have it held at a FedEx location or a participating Walgreens for pickup.",
+   "source": "Client email, Nov 5 2026 + edrugstore.com/faqs",
+   "status": "approved"
+  },
+  {
+   "id": "tracking",
+   "topic": "Shipping",
+   "questions": [
+    "Can I track my order?"
+   ],
+   "answer": "Yes. Once it ships, you get a tracking number by email or text, and you can also see it in your account.",
+   "source": "edrugstore.com/faqs",
+   "status": "approved",
+   "note": "Approved by Jeel, Nov 11 2026."
+  },
+  {
+   "id": "cancel_return",
+   "topic": "Orders",
+   "questions": [
+    "Can I cancel?",
+    "What's your return policy?",
+    "Is there a money-back guarantee?"
+   ],
+   "answer": "You can cancel any time before the pharmacy ships it. Prescription medications can't be returned once dispensed, but we do have a money-back guarantee, and customer service can check if your order qualifies.",
+   "source": "edrugstore.com/faqs, /our-guarantee",
+   "status": "approved",
+   "note": "Approved by Jeel, Nov 11 2026."
+  },
+  {
+   "id": "refill",
+   "topic": "Orders",
+   "questions": [
+    "How do I get a refill?"
+   ],
+   "answer": "You can sign in to your account and use Easy Refill to reorder in a few clicks.",
+   "source": "edrugstore.com/easy-refill",
+   "status": "approved",
+   "note": "Approved by Jeel, Nov 11 2026."
+  },
+  {
+   "id": "customer_service",
+   "topic": "Orders",
+   "questions": [
+    "What's your phone number?",
+    "How do I call you back?"
+   ],
+   "answer": "You can call us back at this number, {callback_number}.",
+   "source": "Jeel, Nov 11 2026",
+   "status": "approved",
+   "note": "{callback_number} is the number the call came from (TWILIO_PHONE_NUMBER), read digit by digit: production's 480-470-8259 on the server, the dev number on a laptop."
+  },
+  {
+   "id": "medical_question",
+   "topic": "Handoff",
+   "questions": [
+    "Any symptom, dosage, side effect or drug interaction question"
+   ],
+   "answer": "That's a question for a licensed provider, and I don't want to give you the wrong answer. I can connect you with a representative now, or have someone call you back.",
+   "source": "Client email, Nov 5 2026",
+   "status": "approved",
+   "note": "Action: transfer to agent, or add to callback queue."
+  },
+  {
+   "id": "upset",
+   "topic": "Handoff",
+   "questions": [
+    "Caller is upset or has a complaint"
+   ],
+   "answer": "I'm sorry about that. Let me get you to someone who can help right away.",
+   "source": "Client email, Nov 5 2026",
+   "status": "approved",
+   "note": "Action: transfer immediately; if no agent is free, promise a callback and add to callback queue."
+  },
+  {
+   "id": "personal_info",
+   "topic": "Handoff",
+   "questions": [
+    "Caller tries to give date of birth, address or card number"
+   ],
+   "answer": "Please don't share that over the phone with me. You can sign up securely on our website, and I can text you the link.",
+   "source": "Client email, Nov 5 2026",
+   "status": "approved",
+   "note": "Never collect personal or payment details. Signup: https://www.edrugstore.com/account/register"
+  },
+  {
+   "id": "emergency",
+   "topic": "Handoff",
+   "questions": [
+    "Caller describes a medical emergency"
+   ],
+   "answer": "If this is a medical emergency, please hang up and call 911. For a possible overdose or poisoning, call Poison Control at 1-800-222-1222.",
+   "source": "edrugstore.com/faqs",
+   "status": "approved",
+   "note": "Action: end call after giving this."
+  }
+ ]
+}

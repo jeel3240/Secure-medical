@@ -14,6 +14,7 @@
  *     EZT_USERNAME=x EZT_PASSWORD=x EZT_GROUP=x npx ts-node --transpile-only scripts/activity-live-check.ts
  */
 import { pool } from '../src/db/pool';
+import { switchAiAgent } from '../src/ai/settings';
 import { archiveWebhook, recordActivity } from '../src/db/activity';
 import { createCallback, updateCallback } from '../src/db/callbacks';
 import { finishCall, startCall } from '../src/db/calls';
@@ -294,6 +295,36 @@ async function main(): Promise<void> {
     ]);
     check('the refusal says why - its only record, there being no call row', rows[0].detail.reason, 'not_holder');
     check('the end is Twilio’s report, against the agent who called', [rows[3].actor, rows[3].subject, rows[3].detail.outcome, rows[3].detail.durationSec], [null, maya, 'answered', 42]);
+  }
+
+  console.log('\nthe AI agent switched on and off (A01, AI-AGENT.md section 7)');
+  {
+    // jsonb keeps its own key order, so a record is compared field by field.
+    const switches = async () =>
+      (
+        await pool.query(`SELECT actor_id, detail FROM activity_log WHERE action = 'ai_agent.switched' ORDER BY id`)
+      ).rows.map((r) => [r.actor_id, r.detail.from, r.detail.to, r.detail.via]);
+    const stored = async () => (await pool.query(`SELECT value FROM settings WHERE key = 'ai_agent'`)).rows[0]?.value ?? null;
+
+    check('switched on with no row yet: on, from nothing', await switchAiAgent(pool, 'on'), { from: null, to: 'on', changed: true });
+    check('the row says on', await stored(), 'on');
+    check('recorded once, in the same transaction, by nobody signed in', await switches(), [[null, null, 'on', 'command']]);
+    check('on again changes nothing', await switchAiAgent(pool, 'on'), { from: 'on', to: 'on', changed: false });
+    check('and records nothing', (await switches()).length, 1);
+    check('switched off', await switchAiAgent(pool, 'off'), { from: 'on', to: 'off', changed: true });
+    check('the row says off, and the log keeps what it was', [await stored(), (await switches())[1]], [
+      'off',
+      [null, 'on', 'off', 'command'],
+    ]);
+    await pool.query(`UPDATE settings SET value = 'ON' WHERE key = 'ai_agent'`);
+    check('a value it cannot read, switched off: written as off, the old value kept', [
+      await switchAiAgent(pool, 'off'),
+      await stored(),
+      (await switches())[2],
+    ], [{ from: 'ON', to: 'off', changed: true }, 'off', [null, 'ON', 'off', 'command']]);
+    const both = await Promise.all([switchAiAgent(pool, 'on'), switchAiAgent(pool, 'on')]);
+    check('two at once take turns: one switches, the other finds it done', both.map((r) => r.changed).sort(), [false, true]);
+    check('and one record between them', (await switches()).length, 4);
   }
 
   console.log('\nthe log cannot be altered');

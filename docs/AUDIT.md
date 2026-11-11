@@ -65,6 +65,7 @@ it.
 | `user.created`, `user.updated`, `user.password_reset` | A superadmin changes an agent's account | `created`: `email`, `name`, `role`. `updated`: `changes`, each field as `{ from, to }`. `password_reset`: nothing more. Never a password |
 | `calls.availability_changed` | The "Taking calls" switch went on or off (T10, `AUTO-CALLS.md` "Who is free") - by the person, or because they signed in or out; or off by the system because they let a transfer ring out (T15c) - then no actor, the person its subject. Only when it really changed | `on`, and `why`: `by_hand`, `sign_in`, `missed_transfer` (with the `callId`) or `sign_out` |
 | `auto_calls.switched_on` | The worker started placing automated calls after they were off, or for the first time - leads that arrive after it are called before those already waiting (T20, T27, `AUTO-CALLS.md` "When a lead is called"). The system's doing - someone set `AUTO_CALLS=on`. It overwrites `settings.auto_calls_since`, so the time it replaced is kept here | `since`, `previousSince` |
+| `ai_agent.switched` | Seri, the AI agent, switched on or off with the server command, `npm run ai-agent -- on\|off` (A01, `AI-AGENT.md` section 7). Only when it really changed. Run by someone on the server, who is no user of the app, so no actor. It overwrites `settings.ai_agent`, so what it said before is kept here | `from` (null when never set), `to`, `via: 'command'` |
 
 The list is `ACTIVITY_ACTIONS` in `core/activity.ts`. A new action is added
 there first, so the vocabulary stays in one place.
@@ -80,7 +81,9 @@ too, with what Twilio heard, since migration 015), and each time a lead on
 hold rang someone who came free (`call_offers`, since 020 - who, when, and how
 it ended). When automated calls were last switched on (`auto_calls_since` in
 `settings`, T20) is overwritten at each switch-on, so each switch-on is
-recorded with the time it replaced - `auto_calls.switched_on`. Each robot call
+recorded with the time it replaced - `auto_calls.switched_on`. The AI agent's
+switch (`ai_agent` in `settings`) is overwritten at each change, so each change
+is recorded with what it replaced - `ai_agent.switched`. Each robot call
 the worker places is its `call.started`, as one placed by hand. A reply that was not counted because it
 arrived before our text had gone out is kept in `messages` like any other,
 and written to the application log as `reply.before_our_text` (`LOGGING.md`) -
