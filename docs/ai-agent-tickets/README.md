@@ -11,7 +11,7 @@ The build of `docs/AI-AGENT.md`, split into small tickets. Each is one PR into `
 | A03 | [Knowledge loader](A03-knowledge-loader.md) | - | S | Done 2026-11-11 |
 | A04 | [Seri's instructions (system prompt)](A04-seri-s-instructions-system-prompt.md) | A03 | M | Done 2026-11-11 |
 | A05 | [Sentence safety check](A05-sentence-safety-check.md) | A03 | S | Done 2026-11-11 |
-| A06 | [Seri's five actions](A06-seri-s-five-actions.md) | A07 | S | To do |
+| A06 | [Seri's five actions](A06-seri-s-five-actions.md) | A07 | S | Done 2026-11-11 |
 | A07 | [Call-back time rules](A07-call-back-time-rules.md) | - | S | Done 2026-11-11 |
 | A08 | [Migration 022](A08-migration-022.md) | - | S | Done 2026-11-11 |
 | A09 | [Answer test set](A09-answer-test-set.md) | A04, A05, A06 | M | To do |
