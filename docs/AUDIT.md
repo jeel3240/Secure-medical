@@ -77,7 +77,8 @@ missed call, and the link a lead asked for on the automated call), a lead arrivi
 (`leads`), a conversation completing or expiring (`conversations`), and each
 answer a lead gives (`conversation_answers` - add-only, and tied to the
 inbound text it was read from; on an automated call, `call_answers` - add-only
-too, with what Twilio heard, since migration 015), and each time a lead on
+too, with what Twilio heard, since migration 015; and each turn of Seri's
+conversation, `call_ai_turns` - add-only, since 022), and each time a lead on
 hold rang someone who came free (`call_offers`, since 020 - who, when, and how
 it ended). When automated calls were last switched on (`auto_calls_since` in
 `settings`, T20) is overwritten at each switch-on, so each switch-on is
@@ -119,7 +120,8 @@ lead nobody holds writes nothing.
 ### It cannot be altered
 
 A trigger on `activity_log`, on `webhook_events`, on `conversation_answers`
-(since migration 012) and on `call_answers` (since 015) refuses every `UPDATE`
+(since migration 012), on `call_answers` (since 015) and on `call_ai_turns` (since
+022 - every turn of Seri's conversations, `AI-AGENT.md`) refuses every `UPDATE`
 and `DELETE`:
 
 ```

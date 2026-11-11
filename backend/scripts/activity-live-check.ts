@@ -306,9 +306,10 @@ async function main(): Promise<void> {
       ).rows.map((r) => [r.actor_id, r.detail.from, r.detail.to, r.detail.via]);
     const stored = async () => (await pool.query(`SELECT value FROM settings WHERE key = 'ai_agent'`)).rows[0]?.value ?? null;
 
-    check('switched on with no row yet: on, from nothing', await switchAiAgent(pool, 'on'), { from: null, to: 'on', changed: true });
+    check('migration 022 starts it off', await stored(), 'off');
+    check('switched on: on, from off', await switchAiAgent(pool, 'on'), { from: 'off', to: 'on', changed: true });
     check('the row says on', await stored(), 'on');
-    check('recorded once, in the same transaction, by nobody signed in', await switches(), [[null, null, 'on', 'command']]);
+    check('recorded once, in the same transaction, by nobody signed in', await switches(), [[null, 'off', 'on', 'command']]);
     check('on again changes nothing', await switchAiAgent(pool, 'on'), { from: 'on', to: 'on', changed: false });
     check('and records nothing', (await switches()).length, 1);
     check('switched off', await switchAiAgent(pool, 'off'), { from: 'on', to: 'off', changed: true });
@@ -325,6 +326,12 @@ async function main(): Promise<void> {
     const both = await Promise.all([switchAiAgent(pool, 'on'), switchAiAgent(pool, 'on')]);
     check('two at once take turns: one switches, the other finds it done', both.map((r) => r.changed).sort(), [false, true]);
     check('and one record between them', (await switches()).length, 4);
+    await pool.query(`DELETE FROM settings WHERE key = 'ai_agent'`);
+    check('never set - a database before 022 - switched off: written, from nothing', [
+      await switchAiAgent(pool, 'off'),
+      await stored(),
+      (await switches())[4],
+    ], [{ from: null, to: 'off', changed: true }, 'off', [null, null, 'off', 'command']]);
   }
 
   console.log('\nthe log cannot be altered');
