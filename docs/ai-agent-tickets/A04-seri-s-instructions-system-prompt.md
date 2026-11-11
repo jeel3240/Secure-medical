@@ -50,4 +50,6 @@
 - **One rule for reading a number out:** `spokenNumber` was taken out of `voicemailLine` (`core/call-script.ts`), so the voicemail and Seri say a number the same way; and `spokenClock` out of `spokenTime` (A07).
 - **The repo's first snapshot test.** A change to a knowledge file or to the wording fails it, so the PR shows the new instructions; after reading the difference, `npx jest -u src/ai/instructions` writes the new one.
 
+- **Changed by A09 (the answer test set), 2026-11-11:** the last line and the action in the same reply, never after a question; only agree call-back times inside the agent hours; never talk about doses, frequency, side effects or interactions; opt out at once, without offering or asking; and the call's details give tomorrow's date and the days with no agent hours ("Monday to Friday - never Saturday or Sunday"). The snapshot was rewritten after reading the difference.
+
 Design: `docs/AI-AGENT.md`. All AI code in `backend/src/ai/`. One PR into `dev`.

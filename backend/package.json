@@ -24,6 +24,7 @@
     "dev:ask-again": "ts-node --transpile-only scripts/dev-ask-again.ts",
     "dev:auto-call": "ts-node --transpile-only scripts/dev-auto-call.ts",
     "speed": "ts-node --transpile-only scripts/speed-check.ts",
+    "ai:eval": "ts-node --transpile-only src/ai/evals/run.ts",
     "lint": "eslint src scripts"
   },
   "dependencies": {

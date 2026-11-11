@@ -114,9 +114,9 @@ describe('this call\'s details', () => {
         CALL_HEADING,
         '- The greeting you have already said: "Hi, is this John?"',
         '- The lead\'s first name: John. Use it once or twice in the call, not in every sentence.',
-        '- Now: Wednesday, November 11, 2026 at 12:00 PM Arizona time (2026-11-11).',
-        '- The lead\'s time zone, from their area code: Eastern time (America/New_York). For them it is Wednesday, November 11, 2026 at 2:00 PM (2026-11-11).',
-        '- Agent hours, for call backs: Monday to Friday, 11 AM to 5 PM Arizona time - today, 1 PM to 7 PM the lead\'s time.',
+        '- Now: Wednesday, November 11, 2026 at 12:00 PM Arizona time (2026-11-11); tomorrow is Thursday, November 12 (2026-11-12).',
+        '- The lead\'s time zone, from their area code: Eastern time (America/New_York). For them it is Wednesday, November 11, 2026 at 2:00 PM (2026-11-11); tomorrow is Thursday, November 12 (2026-11-12).',
+        '- Agent hours, for call backs: Monday to Friday - never Saturday or Sunday, 11 AM to 5 PM Arizona time - today, 1 PM to 7 PM the lead\'s time.',
         '',
       ].join('\n')
     );
@@ -136,27 +136,30 @@ describe('this call\'s details', () => {
 
   it('a lead in Arizona: the hours once, not converted', () => {
     expect(callPart(build({ lead: { firstName: 'John', phone: '+14805551234' } }))).toContain(
-      '- Agent hours, for call backs: Monday to Friday, 11 AM to 5 PM Arizona time.'
+      '- Agent hours, for call backs: Monday to Friday - never Saturday or Sunday, 11 AM to 5 PM Arizona time.'
     );
   });
 
   it('in summer, 3 PM in New York is noon in Arizona', () => {
     const text = callPart(build({ now: new Date('2026-07-15T19:00:00Z') }));
-    expect(text).toContain('Now: Wednesday, July 15, 2026 at 12:00 PM Arizona time (2026-07-15).');
+    expect(text).toContain('Now: Wednesday, July 15, 2026 at 12:00 PM Arizona time (2026-07-15); tomorrow is Thursday, July 16 (2026-07-16).');
     expect(text).toContain('today, 2 PM to 8 PM the lead\'s time.');
   });
 
   it('a day with no hours says so', () => {
     expect(callPart(build({ now: new Date('2026-11-14T19:00:00Z') }))).toContain(
-      'Monday to Friday, 11 AM to 5 PM Arizona time. Today has none.'
+      'Monday to Friday - never Saturday or Sunday, 11 AM to 5 PM Arizona time. Today has none.'
     );
   });
 
   it('the hours and days the settings name', () => {
     const days = (list: string[]) => ({ ...DEFAULT_CALL_HOURS, days: new Set(list) as typeof DEFAULT_CALL_HOURS.days });
-    expect(build({ hours: days(['mon', 'tue', 'wed', 'thu', 'fri', 'sat']) })).toContain('Monday to Saturday, 11 AM');
-    expect(build({ hours: days(['mon', 'wed', 'fri']) })).toContain('Monday, Wednesday and Friday, 11 AM');
-    expect(build({ hours: days(['tue', 'thu']) })).toContain('Tuesday and Thursday, 11 AM');
+    expect(build({ hours: days(['mon', 'tue', 'wed', 'thu', 'fri', 'sat']) })).toContain('Monday to Saturday - never Sunday, 11 AM');
+    expect(build({ hours: days(['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun']) })).toContain('Monday to Sunday, 11 AM');
+    expect(build({ hours: days(['mon', 'wed', 'fri']) })).toContain(
+      'Monday, Wednesday and Friday - never Tuesday, Thursday, Saturday or Sunday, 11 AM'
+    );
+    expect(build({ hours: days(['tue', 'thu']) })).toContain('Tuesday and Thursday - never Monday, Wednesday, Friday, Saturday or Sunday, 11 AM');
     expect(build({ hours: { ...DEFAULT_CALL_HOURS, startMinute: 9 * 60 + 30, endMinute: 15 * 60 } })).toContain(
       '9:30 AM to 3 PM Arizona time - today, 11:30 AM to 5 PM the lead\'s time.'
     );
