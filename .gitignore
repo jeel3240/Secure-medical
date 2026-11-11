@@ -11,3 +11,6 @@ postgres_data/
 # this does not touch.
 /*.png
 /frontend/*.png
+
+# Raw crawl of edrugstore.com (13 MB), regenerate instead of committing
+/data/edrugstore-site/raw/

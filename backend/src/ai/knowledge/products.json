@@ -1,0 +1,276 @@
+{
+ "version": "approved-2026-11-11",
+ "note": "Products Seri may mention on calls: antibiotics, STI treatments, test kits (client email, Nov 9 2026). site_price_usd is reference only: Seri never quotes prices.",
+ "products": [
+  {
+   "slug": "amoxicillin-clavulanate-potass",
+   "name": "Amoxicillin-Clavulanate 875-125 mg",
+   "type": "antibiotic",
+   "rx_required": "yes",
+   "spoken_line": "Amoxicillin-clavulanate, a prescription antibiotic. A licensed provider decides if it's right for you.",
+   "url": "https://www.edrugstore.com/emergency-medical-treatments/amoxicillin-clavulanate-potass/",
+   "site_price_usd": "39.00"
+  },
+  {
+   "slug": "sulfamethoxazole-trimethoprim",
+   "name": "Sulfamethoxazole-Trimethoprim 800-160 mg",
+   "type": "antibiotic",
+   "rx_required": "yes",
+   "spoken_line": "Sulfamethoxazole-trimethoprim, a prescription antibiotic. A licensed provider decides if it's right for you.",
+   "url": "https://www.edrugstore.com/emergency-medical-treatments/sulfamethoxazole-trimethoprim/",
+   "site_price_usd": "39.00"
+  },
+  {
+   "slug": "azithromycin",
+   "name": "Azithromycin 250 mg",
+   "type": "antibiotic",
+   "rx_required": "yes",
+   "spoken_line": "Azithromycin, a prescription antibiotic. A licensed provider decides if it's right for you.",
+   "url": "https://www.edrugstore.com/emergency-medical-treatments/azithromycin/",
+   "site_price_usd": "39.00"
+  },
+  {
+   "slug": "doxycycline-hyclate",
+   "name": "Doxycycline Hyclate 100 mg",
+   "type": "antibiotic",
+   "rx_required": "yes",
+   "spoken_line": "Doxycycline, a prescription antibiotic. A licensed provider decides if it's right for you.",
+   "url": "https://www.edrugstore.com/sexual-health/doxycycline-hyclate/",
+   "site_price_usd": "69.00"
+  },
+  {
+   "slug": "doxy-pep",
+   "name": "Doxy PEP 100 mg",
+   "type": "antibiotic",
+   "rx_required": "yes",
+   "spoken_line": "Doxy PEP, a prescription antibiotic taken after sex to help prevent some bacterial STIs. A licensed provider decides if it's right for you.",
+   "url": "https://www.edrugstore.com/sexual-health/doxy-pep/",
+   "site_price_usd": "49.00"
+  },
+  {
+   "slug": "metronidazole",
+   "name": "Metronidazole 500 mg",
+   "type": "antibiotic",
+   "rx_required": "yes",
+   "spoken_line": "Metronidazole, a prescription medication for certain infections. A licensed provider decides if it's right for you.",
+   "url": "https://www.edrugstore.com/sexual-health/metronidazole/",
+   "site_price_usd": "59.00"
+  },
+  {
+   "slug": "nitrofurantoin-mono-macro",
+   "name": "Nitrofurantoin 100 mg",
+   "type": "antibiotic",
+   "rx_required": "yes",
+   "spoken_line": "Nitrofurantoin, a prescription antibiotic for urinary tract infections. A licensed provider decides if it's right for you.",
+   "url": "https://www.edrugstore.com/urinary-tract-infection/nitrofurantoin-mono-macro/",
+   "site_price_usd": "99.00"
+  },
+  {
+   "slug": "acyclovir",
+   "name": "Acyclovir 400 mg",
+   "type": "antiviral",
+   "rx_required": "yes",
+   "spoken_line": "Acyclovir, a prescription antiviral for herpes. A licensed provider decides if it's right for you.",
+   "url": "https://www.edrugstore.com/sexual-health/acyclovir/",
+   "site_price_usd": "69.00"
+  },
+  {
+   "slug": "valacyclovir",
+   "name": "Valacyclovir 500 mg",
+   "type": "antiviral",
+   "rx_required": "yes",
+   "spoken_line": "Valacyclovir, the generic of Valtrex, a prescription antiviral for herpes. A licensed provider decides if it's right for you.",
+   "url": "https://www.edrugstore.com/sexual-health/valacyclovir/",
+   "site_price_usd": "97.50"
+  },
+  {
+   "slug": "penciclovir",
+   "name": "Penciclovir 1% cream",
+   "type": "antiviral",
+   "rx_required": "yes",
+   "spoken_line": "Penciclovir, a prescription cream for cold sores. A licensed provider decides if it's right for you.",
+   "url": "https://www.edrugstore.com/sexual-health/penciclovir/",
+   "site_price_usd": "249.00"
+  },
+  {
+   "slug": "denavir",
+   "name": "Denavir 1% cream",
+   "type": "antiviral",
+   "rx_required": "yes",
+   "spoken_line": "Denavir, the brand-name prescription cream for cold sores. A licensed provider decides if it's right for you.",
+   "url": "https://www.edrugstore.com/sexual-health/denavir/",
+   "site_price_usd": "999.00"
+  },
+  {
+   "slug": "emergency-medical-kit",
+   "name": "Emergency Medical Kit (8 prescriptions)",
+   "type": "kit",
+   "rx_required": "yes",
+   "spoken_line": "Our Emergency Medical Kit, eight doctor-selected prescriptions to have on hand for travel or emergencies. A licensed provider reviews it before it ships.",
+   "url": "https://www.edrugstore.com/bundles/emergency-medical-kit/",
+   "site_price_usd": null
+  },
+  {
+   "slug": "uber-box-std-test-kit",
+   "name": "Uber Box STD Test Kit (8 panel)",
+   "type": "test_kit",
+   "rx_required": "no",
+   "spoken_line": "The Uber Box, an at-home kit that tests for eight common STDs, including chlamydia, gonorrhea, herpes and HIV.",
+   "url": "https://www.edrugstore.com/test-kits/uber-box-std-test-kit/",
+   "site_price_usd": "269.00"
+  },
+  {
+   "slug": "total-box-test-kit",
+   "name": "Total Box STD Test Kit",
+   "type": "test_kit",
+   "rx_required": "no",
+   "spoken_line": "The Total Box, our most complete at-home STD test kit.",
+   "url": "https://www.edrugstore.com/test-kits/total-box-test-kit/",
+   "site_price_usd": null
+  },
+  {
+   "slug": "safe-box-test-kit",
+   "name": "Safe Box STD Test Kit",
+   "type": "test_kit",
+   "rx_required": "no",
+   "spoken_line": "The Safe Box, an at-home kit that tests for four of the most common STDs.",
+   "url": "https://www.edrugstore.com/test-kits/safe-box-test-kit/",
+   "site_price_usd": "189.00"
+  },
+  {
+   "slug": "v-box-test-kit",
+   "name": "V-Box Vaginal Health Test Kit",
+   "type": "test_kit",
+   "rx_required": "no",
+   "spoken_line": "The V-Box, an at-home vaginal health test kit.",
+   "url": "https://www.edrugstore.com/test-kits/v-box-test-kit/",
+   "site_price_usd": null
+  },
+  {
+   "slug": "chlamydia-gonorrhea-test-kit",
+   "name": "Chlamydia and Gonorrhea Test Kit",
+   "type": "test_kit",
+   "rx_required": "no",
+   "spoken_line": "An at-home test for chlamydia and gonorrhea.",
+   "url": "https://www.edrugstore.com/test-kits/chlamydia-gonorrhea-test-kit/",
+   "site_price_usd": "89.00"
+  },
+  {
+   "slug": "hiv-home-test-kit",
+   "name": "HIV Home Test Kit",
+   "type": "test_kit",
+   "rx_required": "no",
+   "spoken_line": "An at-home HIV test.",
+   "url": "https://www.edrugstore.com/test-kits/hiv-home-test-kit/",
+   "site_price_usd": "89.00"
+  },
+  {
+   "slug": "herpes-test-kit",
+   "name": "Herpes Test Kit",
+   "type": "test_kit",
+   "rx_required": "no",
+   "spoken_line": "An at-home herpes test.",
+   "url": "https://www.edrugstore.com/test-kits/herpes-test-kit/",
+   "site_price_usd": "89.00"
+  },
+  {
+   "slug": "trichomoniasis-home-test-kit",
+   "name": "Trichomoniasis Test Kit",
+   "type": "test_kit",
+   "rx_required": "no",
+   "spoken_line": "An at-home test for trichomoniasis.",
+   "url": "https://www.edrugstore.com/test-kits/trichomoniasis-home-test-kit/",
+   "site_price_usd": "89.00"
+  },
+  {
+   "slug": "uti-test-strips",
+   "name": "UTI Test Strips (100)",
+   "type": "test_kit",
+   "rx_required": "no",
+   "spoken_line": "UTI test strips you can use at home.",
+   "url": "https://www.edrugstore.com/urinary-tract-infection/uti-test-strips/",
+   "site_price_usd": "19.00"
+  },
+  {
+   "slug": "diabetes-hemoglobin-a1c-screening-test",
+   "name": "Diabetes A1c Screening Test",
+   "type": "test_kit",
+   "rx_required": "no",
+   "spoken_line": "An at-home diabetes A1c screening test.",
+   "url": "https://www.edrugstore.com/test-kits/diabetes-hemoglobin-a1c-screening-test/",
+   "site_price_usd": "74.00"
+  },
+  {
+   "slug": "cholesterol-lipids-test-kit",
+   "name": "Cholesterol and Lipids Test",
+   "type": "test_kit",
+   "rx_required": "no",
+   "spoken_line": "An at-home cholesterol test.",
+   "url": "https://www.edrugstore.com/test-kits/cholesterol-lipids-test-kit/",
+   "site_price_usd": "89.00"
+  },
+  {
+   "slug": "testosterone-home-test-kit",
+   "name": "Testosterone Test Kit",
+   "type": "test_kit",
+   "rx_required": "no",
+   "spoken_line": "An at-home testosterone test.",
+   "url": "https://www.edrugstore.com/test-kits/testosterone-home-test-kit/",
+   "site_price_usd": "79.00"
+  },
+  {
+   "slug": "colotest",
+   "name": "ColoTest",
+   "type": "test_kit",
+   "rx_required": "no",
+   "spoken_line": "ColoTest, an at-home colorectal screening test.",
+   "url": "https://www.edrugstore.com/test-kits/colotest/",
+   "site_price_usd": "29.00"
+  },
+  {
+   "slug": "colorectal-cancer-screening",
+   "name": "Colorectal Cancer Screening Kit",
+   "type": "test_kit",
+   "rx_required": "no",
+   "spoken_line": "An at-home colorectal cancer screening kit.",
+   "url": "https://www.edrugstore.com/test-kits/colorectal-cancer-screening/",
+   "site_price_usd": "79.00"
+  },
+  {
+   "slug": "covid-19-flu",
+   "name": "COVID-19 and Flu Test",
+   "type": "test_kit",
+   "rx_required": "no",
+   "spoken_line": "An at-home COVID-19 and flu test.",
+   "url": "https://www.edrugstore.com/test-kits/covid-19-flu/",
+   "site_price_usd": null
+  },
+  {
+   "slug": "weight-loss-test",
+   "name": "Weight Loss Hormone Test",
+   "type": "test_kit",
+   "rx_required": "no",
+   "spoken_line": "An at-home hormone test for weight loss.",
+   "url": "https://www.edrugstore.com/test-kits/weight-loss-test/",
+   "site_price_usd": "249.00"
+  },
+  {
+   "slug": "anti-aging-test",
+   "name": "Anti-Aging Hormone Test",
+   "type": "test_kit",
+   "rx_required": "no",
+   "spoken_line": "An at-home hormone test for healthy aging.",
+   "url": "https://www.edrugstore.com/test-kits/anti-aging-test/",
+   "site_price_usd": "219.00"
+  },
+  {
+   "slug": "blood-test-lab-visit",
+   "name": "Comprehensive Blood Test (lab visit)",
+   "type": "test_kit",
+   "rx_required": "no",
+   "spoken_line": "A comprehensive blood test done at a local lab.",
+   "url": "https://www.edrugstore.com/test-kits/blood-test-lab-visit/",
+   "site_price_usd": null
+  }
+ ]
+}

@@ -58,6 +58,8 @@ services:
       AUTO_CALLS: ${AUTO_CALLS:-}
       # Outside production, the only numbers an automated call may ring.
       AUTO_CALL_TEST_NUMBERS: ${AUTO_CALL_TEST_NUMBERS:-}
+      # Seri, the AI agent on the automated call - docs/AI-AGENT.md. Empty, she is off.
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
     depends_on:
       postgres:
         condition: service_healthy
@@ -95,6 +97,8 @@ services:
       # The worker places the automated calls (T20) - docs/AUTO-CALLS.md.
       AUTO_CALLS: ${AUTO_CALLS:-}
       AUTO_CALL_TEST_NUMBERS: ${AUTO_CALL_TEST_NUMBERS:-}
+      # The worker checks OpenAI before placing calls with Seri on - docs/AI-AGENT.md.
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
     depends_on:
       postgres:
         condition: service_healthy

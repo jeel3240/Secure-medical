@@ -38,4 +38,12 @@ export const config = {
   },
   /** Browser calling: on, off, or set up only partly - twilio-settings.ts, TWILIO.md. */
   twilio: readTwilioSettings(process.env),
+  /**
+   * Seri, the AI agent on the automated call - AI-AGENT.md section 7. Not in
+   * `required`: without a key the AI agent is off, whatever its switch says
+   * (ai/settings.ts), and every call gets today's script.
+   */
+  openai: {
+    apiKey: (process.env.OPENAI_API_KEY ?? '').trim(),
+  },
 };
