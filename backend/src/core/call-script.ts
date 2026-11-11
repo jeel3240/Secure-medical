@@ -502,16 +502,23 @@ export function onVerdict(verdict: MachineVerdict, call: VerdictCall): VerdictAc
 
 /**
  * The voicemail message as said: `{callback_number}` - our number, E.164 -
- * read out digit by digit, in its groups: "4 8 0, 4 7 0, 8 2 5 9". A number
- * that is not a US one is read digit by digit, whole.
+ * read out as `spokenNumber` reads it.
  */
 export function voicemailLine(script: CallScript, callbackNumber: string): string {
-  const digits = callbackNumber.replace(/\D/g, '');
+  return script.voicemailBody.split('{callback_number}').join(spokenNumber(callbackNumber));
+}
+
+/**
+ * A phone number written to be read out digit by digit, in its groups:
+ * "+14804708259" -> "4 8 0, 4 7 0, 8 2 5 9". A number that is not a US one is
+ * read digit by digit, whole. The voicemail message uses it, and Seri's
+ * answers (ai/instructions.ts).
+ */
+export function spokenNumber(phone: string): string {
+  const digits = phone.replace(/\D/g, '');
   const national = digits.length === 11 && digits.startsWith('1') ? digits.slice(1) : digits;
   const spaced = (part: string) => part.split('').join(' ');
-  const spoken =
-    national.length === 10
-      ? [national.slice(0, 3), national.slice(3, 6), national.slice(6)].map(spaced).join(', ')
-      : spaced(national);
-  return script.voicemailBody.split('{callback_number}').join(spoken);
+  return national.length === 10
+    ? [national.slice(0, 3), national.slice(3, 6), national.slice(6)].map(spaced).join(', ')
+    : spaced(national);
 }

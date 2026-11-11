@@ -326,9 +326,14 @@ export function spokenTime(when: Date, leadZone: string, now: Date): string {
           ? name
           : `${name}, ${MONTH_NAMES[t.month - 1]} ${t.day}`;
 
-  const hour24 = Math.floor(t.minute / 60);
-  const minutes = t.minute % 60;
+  return `${day} at ${spokenClock(when, leadZone)} your time`;
+}
+
+/** What a clock in `zone` reads at `when`, as said: "3 PM", "11:30 AM", "12 PM" for noon. */
+export function spokenClock(when: Date, zone: string): string {
+  const minute = localTime(when.getTime(), zone).minute;
+  const hour24 = Math.floor(minute / 60);
   const hour = hour24 % 12 === 0 ? 12 : hour24 % 12;
-  const clock = minutes === 0 ? `${hour}` : `${hour}:${String(minutes).padStart(2, '0')}`;
-  return `${day} at ${clock} ${hour24 < 12 ? 'AM' : 'PM'} your time`;
+  const clock = minute % 60 === 0 ? `${hour}` : `${hour}:${String(minute % 60).padStart(2, '0')}`;
+  return `${clock} ${hour24 < 12 ? 'AM' : 'PM'}`;
 }
