@@ -1,6 +1,6 @@
 # AI agent on the automated call (Phase 7)
 
-Design agreed with Jeel, 2026-11-11. The tickets are in `docs/ai-agent-tickets/` (A01-A22). Built so far: A01, the key and the switch; A03, the knowledge loader; A08, migration 022 (all 2026-11-11).
+Design agreed with Jeel, 2026-11-11. The tickets are in `docs/ai-agent-tickets/` (A01-A22). Built so far: A01, the key and the switch; A03, the knowledge loader; A07, the call-back time rules; A08, migration 022 (all 2026-11-11).
 
 Today the automated call (`docs/AUTO-CALLS.md`) is a fixed script: it understands "yes", "no", "stop" and the keys 1, 2 and 9, and anything else is asked once more before the call ends. On day one (250 calls), 82 leads hung up and 65 ended as `no_response`.
 
@@ -153,6 +153,8 @@ Decided by Jeel, 2026-11-11.
 
 1. **Agent hours only:** weekdays 11 AM to 5 PM Arizona, the robot's own calling hours (`auto_call_*` settings, read by `readCallHours`). "8 PM tonight" → "Our team is available weekdays 11 to 5. Would tomorrow at 11 work?"
 2. **The lead's time zone:** worked out from the area code, and confirmed out loud: "So that's Thursday at 3 PM your time?" Agents see it in Arizona time - Arizona keeps no daylight saving, so 3 PM in New York is 1 PM there in winter and 12 PM in summer.
+
+*As built (A07, 2026-11-11):* `backend/src/ai/callback-time.ts`, pure. `leadTimeZone` maps 353 area codes to a zone - a code across two zones takes the one most of its people are in - and an unknown one gives Arizona's zone with `known: false`, so Seri asks. `checkCallbackTime` accepts a time inside the hours, at least 15 minutes and at most 14 days ahead; refused, it says why (`past`, `too_soon`, `too_far`, `outside_hours`) and offers what a salesperson would: a weekend keeps the time on the lead's clock (Saturday at 3 → Monday at 3), a time outside the hours becomes the next opening (8 PM → tomorrow at 11 Arizona), past or too soon the first quarter hour far enough ahead, too far the same time on the last day in reach. `atLocalTime` reads the wall clock Seri gives ("2026-11-12T15:00") in a zone, one instant whichever clock it was said on. `spokenTime` says it back: "tomorrow at 1 PM your time", "Monday at 3 PM your time", and the date from a week on. Holidays are not known, as they are not to the robot's own hours. The ticket: `ai-agent-tickets/A07-call-back-time-rules.md`.
 
 **In the database:** `callbacks.agent_id` becomes nullable for a callback Seri books (today it must name an agent - migration 001), with a new reason `ai_booked` beside `booked` and `missed_call` (migration 008). The queue and My Callbacks read it as above. The new result, `callback_booked`, shows on the lead's timeline and in Admin > Leads' Call column and filter like every other result (A15). A "yes" that was put through and that nobody took still uses today's **Wants a call** rule (T22).
 
