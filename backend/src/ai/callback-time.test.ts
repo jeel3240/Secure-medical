@@ -16,6 +16,7 @@ import {
   leadTimeZone,
   MAX_AHEAD_DAYS,
   spokenTime,
+  toLocalTime,
 } from './callback-time';
 
 const at = (iso: string) => new Date(iso);
@@ -77,6 +78,13 @@ describe('a wall clock read in a zone', () => {
     expect(atLocalTime('2026-03-09T15:00', NY)).toEqual(at('2026-03-09T19:00:00Z')); // Monday, summer
     expect(atLocalTime('2026-10-31T15:00', NY)).toEqual(at('2026-10-31T19:00:00Z')); // Saturday, summer
     expect(atLocalTime('2026-11-02T15:00', NY)).toEqual(at('2026-11-02T20:00:00Z')); // Monday, winter
+  });
+
+  it('and back again: an instant as a wall clock in a zone', () => {
+    expect(toLocalTime(at('2026-11-12T20:00:00Z'), NY)).toBe('2026-11-12T15:00');
+    expect(toLocalTime(at('2026-11-12T20:00:00Z'), AZ)).toBe('2026-11-12T13:00');
+    expect(toLocalTime(at('2026-07-16T19:05:00Z'), NY)).toBe('2026-07-16T15:05');
+    expect(atLocalTime(toLocalTime(at('2026-11-12T20:00:00Z'), NY), NY)).toEqual(at('2026-11-12T20:00:00Z'));
   });
 
   it('seconds of :00 are fine', () => {

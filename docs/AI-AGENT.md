@@ -1,6 +1,6 @@
 # AI agent on the automated call (Phase 7)
 
-Design agreed with Jeel, 2026-11-11. The tickets are in `docs/ai-agent-tickets/` (A01-A22). Built so far: A01, the key and the switch; A03, the knowledge loader; A04, her instructions; A05, the sentence check; A07, the call-back time rules; A08, migration 022 (all 2026-11-11).
+Design agreed with Jeel, 2026-11-11. The tickets are in `docs/ai-agent-tickets/` (A01-A22). Built so far: A01, the key and the switch; A03, the knowledge loader; A04, her instructions; A05, the sentence check; A06, her five actions; A07, the call-back time rules; A08, migration 022 (all 2026-11-11).
 
 Today the automated call (`docs/AUTO-CALLS.md`) is a fixed script: it understands "yes", "no", "stop" and the keys 1, 2 and 9, and anything else is asked once more before the call ends. On day one (250 calls), 82 leads hung up and 65 ended as `no_response`.
 
@@ -132,6 +132,8 @@ Seri ends every call by choosing exactly one. She says her last line herself, in
 The relay waits for Twilio to say Seri has finished speaking (`agentSpeaking` off) before it ends the session, so her last line is never cut off (A02 confirms how).
 
 Seri has no action for payment, personal details (date of birth, address, card) or prescriptions, so she cannot do them.
+
+*As built (A06, 2026-11-11):* `backend/src/ai/actions.ts`. The five are OpenAI tools in strict mode: `book_callback` takes the time on the lead's own clock ("2026-11-12T15:00"), their IANA zone and a one-line reason; `end_call` a reason from a list - `not_interested`, `wrong_person`, `emergency`, `other`; the other three nothing. `toHandoff` checks a tool call against the turn's view of the call: a call back outside the hours, past, too soon or too far, and a transfer when nobody is there, come back to Seri as words saying what to offer instead ("Offer tomorrow at 1 PM your time instead, and if they agree, book it as 2026-11-12T13:00."), and the call goes on. The handoff is JSON - `{"action":"book_callback","at":"<instant>","timeZone":"America/New_York","reason":"..."}` - and `fromHandoff` reads Twilio's `HandoffData` back, keeping only what it knows: anything missing or unreadable is a `fallback`, never an error.
 
 **Not an action Seri picks:** `fallback`, which the relay ends with when she fails (section 6). `/auto/ai-after` then asks the script's Q1 question - not its greeting, since Seri has introduced herself - and the call goes on as today.
 

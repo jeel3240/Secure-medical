@@ -201,6 +201,13 @@ export function atLocalTime(local: string, zone: string): Date | null {
   return new Date(instantAt({ year, month, day, minute: hour * 60 + minute }, zone));
 }
 
+/** `when` as a wall clock in `zone`, the form `atLocalTime` reads: "2026-11-12T15:00". */
+export function toLocalTime(when: Date, zone: string): string {
+  const t = localTime(when.getTime(), zone);
+  const two = (n: number) => String(n).padStart(2, '0');
+  return `${t.year}-${two(t.month)}-${two(t.day)}T${two(Math.floor(t.minute / 60))}:${two(t.minute % 60)}`;
+}
+
 // ---------------------------------------------------------------------------
 // The check
 

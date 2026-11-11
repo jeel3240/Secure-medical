@@ -1,0 +1,249 @@
+/**
+ * Seri's five actions - Phase 7, A06, docs/AI-AGENT.md section 3. Defined
+ * once here: what OpenAI is offered (`ACTION_TOOLS`), what a tool call becomes
+ * (`toHandoff`), and what Twilio hands back to `/auto/ai-after` (`fromHandoff`),
+ * so the relay and the page that carries the action out agree. Pure.
+ *
+ * Every call ends with exactly one: she says her last line, the relay ends the
+ * ConversationRelay session with the action as `handoffData`, and Twilio posts
+ * it back as `HandoffData` (A11, A14). A tool call that cannot be carried out -
+ * a call back at 8 PM, a transfer with nobody there - is refused with words
+ * that tell her what to offer instead, and the call goes on.
+ *
+ * `fallback` is not hers: the relay ends with it when she fails (A12), and
+ * anything unreadable handed back reads as it, so the call falls back to the
+ * script rather than to nothing.
+ */
+
+import type { ChatCompletionFunctionTool } from 'openai/resources/chat/completions';
+import type { CallHours } from '../core/auto-dial';
+import { isTimeZone } from '../db/sql';
+import { atLocalTime, checkCallbackTime, MAX_AHEAD_DAYS, MIN_AHEAD_MINUTES, spokenTime, toLocalTime, type CallbackRefusal } from './callback-time';
+import type { WhoIsThere } from './instructions';
+
+export const ACTIONS = ['transfer_to_agent', 'book_callback', 'send_link', 'opt_out', 'end_call'] as const;
+export type ActionName = (typeof ACTIONS)[number];
+
+/** Why she ended the call with `end_call` - kept with the action. */
+export const END_REASONS = ['not_interested', 'wrong_person', 'emergency', 'other'] as const;
+export type EndReason = (typeof END_REASONS)[number];
+
+/** A call back's reason, as she gives it: one short line for the agent who takes it. */
+const MAX_REASON_LENGTH = 200;
+
+/** What the session ends with, and `/auto/ai-after` carries out. */
+export type Handoff =
+  | { action: 'transfer_to_agent' }
+  | {
+      action: 'book_callback';
+      /** The instant, ISO - the same however it was said. */
+      at: string;
+      /** The zone she and the lead agreed it in - how it is said back to them, and shown. */
+      timeZone: string;
+      reason: string;
+    }
+  | { action: 'send_link' }
+  | { action: 'opt_out' }
+  | { action: 'end_call'; reason: EndReason }
+  | { action: 'fallback'; why: string };
+
+// ---------------------------------------------------------------------------
+// What OpenAI is offered
+
+const noArguments = { type: 'object', properties: {}, required: [], additionalProperties: false };
+
+const tool = (name: ActionName, description: string, parameters: Record<string, unknown>): ChatCompletionFunctionTool => ({
+  type: 'function',
+  function: { name, description, parameters, strict: true },
+});
+
+/** The five actions, as OpenAI tools. Strict: the arguments always match the schema. */
+export const ACTION_TOOLS: ChatCompletionFunctionTool[] = [
+  tool(
+    'transfer_to_agent',
+    'Put the lead through to a person now. Only when the lead wants to order now or wants a person, and someone is free or coming. Say your last line first: "Great, connecting you now."',
+    noArguments
+  ),
+  tool(
+    'book_callback',
+    'Book a call from a person at a time the lead agreed, after you confirmed it out loud in their own time zone and said goodbye. The time must be inside the agent hours.',
+    {
+      type: 'object',
+      properties: {
+        time: {
+          type: 'string',
+          description: 'The date and time the lead agreed, as their own clock reads it: YYYY-MM-DDTHH:MM, for example 2026-11-12T15:00.',
+        },
+        time_zone: {
+          type: 'string',
+          description: 'The lead\'s time zone, as an IANA name, for example America/New_York.',
+        },
+        reason: {
+          type: 'string',
+          description: 'One short line for the person who calls back, for example "Wants to order antibiotics".',
+        },
+      },
+      required: ['time', 'time_zone', 'reason'],
+      additionalProperties: false,
+    }
+  ),
+  tool('send_link', 'Text the lead a link to look for themselves. Say first that it is on its way, and goodbye.', noArguments),
+  tool('opt_out', 'The lead asked not to be called again. Say the stop line first. Never ask why or try to change their mind.', noArguments),
+  tool(
+    'end_call',
+    'End the call: not interested after two clear no\'s, the wrong person, a medical emergency, or the call is done. Say goodbye first.',
+    {
+      type: 'object',
+      properties: { reason: { type: 'string', enum: [...END_REASONS] } },
+      required: ['reason'],
+      additionalProperties: false,
+    }
+  ),
+];
+
+// ---------------------------------------------------------------------------
+// A tool call, turned into a handoff - or refused, for Seri to put right
+
+export interface ToolCall {
+  name: string;
+  /** As OpenAI sends them: a JSON string. */
+  arguments: string;
+}
+
+/** What a tool call is checked against: this turn's view of the call. */
+export interface ActionContext {
+  whoIsThere: WhoIsThere;
+  /** The agents' hours - `readCallHours`. */
+  hours: CallHours;
+  now: Date;
+}
+
+export type ActionResult =
+  | { ok: true; handoff: Handoff }
+  /** Words for Seri, sent back as the tool's result: what is wrong, and what to do instead. */
+  | { ok: false; error: string };
+
+const REFUSED: Record<CallbackRefusal, string> = {
+  past: 'That time has already passed.',
+  too_soon: `That is too soon: a call back must be at least ${MIN_AHEAD_MINUTES} minutes away.`,
+  too_far: `That is too far ahead: call backs are booked up to ${MAX_AHEAD_DAYS} days ahead.`,
+  outside_hours: 'That is outside the agent hours.',
+};
+
+export function toHandoff(call: ToolCall, context: ActionContext): ActionResult {
+  let args: Record<string, unknown>;
+  try {
+    const parsed: unknown = JSON.parse(call.arguments || '{}');
+    if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) throw new Error('not an object');
+    args = parsed as Record<string, unknown>;
+  } catch {
+    return { ok: false, error: `The arguments for ${call.name} could not be read. Try again.` };
+  }
+
+  switch (call.name) {
+    case 'transfer_to_agent':
+      if (context.whoIsThere === 'nobody') {
+        return {
+          ok: false,
+          error:
+            'Nobody can take a call right now, so do not transfer. Tell the lead everyone is busy, offer a call back at a time that suits them inside the agent hours, and book it with book_callback.',
+        };
+      }
+      return { ok: true, handoff: { action: 'transfer_to_agent' } };
+
+    case 'book_callback':
+      return bookCallback(args, context);
+
+    case 'send_link':
+      return { ok: true, handoff: { action: 'send_link' } };
+
+    case 'opt_out':
+      return { ok: true, handoff: { action: 'opt_out' } };
+
+    case 'end_call': {
+      const reason = (END_REASONS as readonly unknown[]).includes(args.reason) ? (args.reason as EndReason) : null;
+      if (!reason) return { ok: false, error: `end_call needs a reason: one of ${END_REASONS.join(', ')}.` };
+      return { ok: true, handoff: { action: 'end_call', reason } };
+    }
+
+    default:
+      return { ok: false, error: `There is no action called ${call.name}. Use one of: ${ACTIONS.join(', ')}.` };
+  }
+}
+
+function bookCallback(args: Record<string, unknown>, { hours, now }: ActionContext): ActionResult {
+  const zone = typeof args.time_zone === 'string' ? args.time_zone.trim() : '';
+  if (!isTimeZone(zone)) {
+    return { ok: false, error: 'time_zone must be the lead\'s time zone as an IANA name, for example America/New_York.' };
+  }
+  const when = typeof args.time === 'string' ? atLocalTime(args.time, zone) : null;
+  if (!when) {
+    return { ok: false, error: 'time must be the date and time the lead agreed, as their own clock reads it: YYYY-MM-DDTHH:MM, for example 2026-11-12T15:00.' };
+  }
+  const reason = typeof args.reason === 'string' ? args.reason.trim().replace(/\s+/g, ' ') : '';
+  if (!reason || reason.length > MAX_REASON_LENGTH) {
+    return { ok: false, error: `reason must be one short line for the person who calls back, at most ${MAX_REASON_LENGTH} characters.` };
+  }
+
+  const check = checkCallbackTime(when, zone, hours, now);
+  if (!check.ok) {
+    const offer = check.offer
+      ? ` Offer ${spokenTime(check.offer, zone, now)} instead, and if they agree, book it as ${toLocalTime(check.offer, zone)}.`
+      : ' Offer to text them the link instead.';
+    return { ok: false, error: `Not booked. ${REFUSED[check.why]}${offer}` };
+  }
+  return { ok: true, handoff: { action: 'book_callback', at: when.toISOString(), timeZone: zone, reason } };
+}
+
+/** The relay's own ending, when Seri failed: OpenAI, the socket, or the relay (A12). */
+export function fallbackHandoff(why: string): Handoff {
+  return { action: 'fallback', why };
+}
+
+// ---------------------------------------------------------------------------
+// Across Twilio and back
+
+/** What the relay sends as `handoffData` when it ends the session. */
+export function handoffData(handoff: Handoff): string {
+  return JSON.stringify(handoff);
+}
+
+/**
+ * Twilio's `HandoffData`, posted to `/auto/ai-after`, read safely: whatever is
+ * missing, malformed or unknown is a `fallback` - never a throw, and never a
+ * guess at an action.
+ */
+export function fromHandoff(raw: unknown): Handoff {
+  if (typeof raw !== 'string' || raw.trim() === '') return fallbackHandoff('no_handoff');
+  let data: unknown;
+  try {
+    data = JSON.parse(raw);
+  } catch {
+    return fallbackHandoff('unreadable_handoff');
+  }
+  if (typeof data !== 'object' || data === null || Array.isArray(data)) return fallbackHandoff('unreadable_handoff');
+  const h = data as Record<string, unknown>;
+
+  switch (h.action) {
+    case 'transfer_to_agent':
+    case 'send_link':
+    case 'opt_out':
+      return { action: h.action };
+    case 'end_call':
+      return (END_REASONS as readonly unknown[]).includes(h.reason)
+        ? { action: 'end_call', reason: h.reason as EndReason }
+        : fallbackHandoff('unreadable_handoff');
+    case 'book_callback': {
+      const at = typeof h.at === 'string' && /^\d{4}-\d\d-\d\dT/.test(h.at) ? new Date(h.at) : null;
+      const reason = typeof h.reason === 'string' ? h.reason.trim() : '';
+      const valid = at && !Number.isNaN(at.getTime()) && isTimeZone(h.timeZone) && reason && reason.length <= MAX_REASON_LENGTH;
+      return valid
+        ? { action: 'book_callback', at: at.toISOString(), timeZone: h.timeZone as string, reason }
+        : fallbackHandoff('unreadable_handoff');
+    }
+    case 'fallback':
+      return fallbackHandoff(typeof h.why === 'string' && h.why ? h.why.slice(0, MAX_REASON_LENGTH) : 'unknown');
+    default:
+      return fallbackHandoff('unknown_action');
+  }
+}
