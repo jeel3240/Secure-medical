@@ -75,6 +75,12 @@ export const ACTIVITY_ACTIONS = [
    * `via: 'command'` (AI-AGENT.md section 7). Run on the server, so no actor.
    */
   'ai_agent.switched',
+  /**
+   * Seri took an automated call: the relay's `setup` - `detail.callId` and
+   * `knowledgeVersion`, the version of her knowledge files (A10, AI-AGENT.md
+   * section 9). The system's doing. Once per call.
+   */
+  'ai_agent.started',
   // Sign-in.
   'auth.signed_in',
   'auth.sign_in_failed',

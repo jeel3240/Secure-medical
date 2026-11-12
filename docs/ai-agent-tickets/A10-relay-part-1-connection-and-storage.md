@@ -4,7 +4,7 @@
 
 **Why:** The pipe first, without OpenAI, so it can be tested on its own.
 
-**Depends on:** A01, A08  ·  **Size:** Medium (about a day)
+**Depends on:** A01, A08  ·  **Size:** Medium (about a day)  ·  **Status:** Done 2026-11-12
 
 ## Build
 
@@ -17,8 +17,8 @@
 
 ## Done when
 
-- [ ] A fake ConversationRelay client test connects, sends setup and prompts, and the turns are in the database.
-- [ ] An unsigned or wrongly signed connection, and a second `setup` for the same call, are refused.
+- [x] A fake ConversationRelay client test connects, sends setup and prompts, and the turns are in the database - `relay.test.ts` against a fake database; the SQL in `ai-agent-live-check`; and by hand, the real API on a scratch database.
+- [x] An unsigned or wrongly signed connection, and a second `setup` for the same call, are refused - 403 before any WebSocket; the second connection closed, `already_started`, also when two race.
 
 ## Tests
 
@@ -31,5 +31,18 @@
 ## Not in this ticket
 
 - OpenAI (A11), limits (A12).
+
+## As built
+
+`docs/AI-AGENT.md` section 9, "As built (A10)". Beyond the ticket:
+
+- **Three files, not one:** `relay.ts` (the WebSocket and the session), `relay-messages.ts` (the address, the signature check and each message Twilio sends, pure - as A02 recorded them) and `relay-store.ts` (the SQL). `relayUrl` is there for A13's TwiML.
+- **Refused before a WebSocket opens:** an unsigned request gets a plain 403 and never a socket; another path a 404. The relay is attached only with automated calls on.
+- **"Not ours" is exact:** `setup`'s `callSid` must be the row's `twilio_call_sid` - which `/auto/answer` saves before it answers (T12) - so a signed connection naming another call's row is refused (`other_call`). And a call already ended, or with a script result, is `over`.
+- **`ai_agent.started`** in the activity log, in the same transaction as `ai_started_at` (section 9 listed it).
+- **Her greeting is her first turn** - Twilio says it, from the same `welcomeGreeting` A13 uses - so the record starts where the call does.
+- **More than prompts and replies are kept:** a key as `(pressed 1)`; being cut off and Twilio's errors as `system` notes. Partial and empty prompts are not turns.
+- **In order:** one message at a time, so a prompt arriving while `setup` is being saved waits for it.
+- **The fixed line:** "Thanks. Someone from our team will be in touch soon." - never heard by a lead: no call reaches the relay before A13, and A11 replaces it.
 
 Design: `docs/AI-AGENT.md`. All AI code in `backend/src/ai/`. One PR into `dev`.
