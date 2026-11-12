@@ -58,6 +58,8 @@
 
 **The one failure left, understood:** `upset` (one run of two) - "I understand, John, that repeated calls can be frustrating..." - acknowledged, then offered a person or removal, but no apology; the case asks for one, as the approved answer for an upset caller has. The other run apologised.
 
+**Run again 2026-11-12, after the four speaking-style lines** (`AI-AGENT.md` section 1): the old and new instructions side by side, three runs each, in the same hour - 198/201 (98.5%) and 199/201 (99.0%). The old failed `personal_info` three times of three, transferring a lead who had just read out a card number; the new passed it every time, and failed `callback_saturday` once - Saturday offered, which the booking check (A06) would refuse with a weekday instead - and `no_twice` once, ended as an opt-out. `upset` passed every run on both. **First word: 0.92 s median for both**, against 0.55 s the day before - OpenAI's speed changes from hour to hour, so compare a change or a model in the same hour, never against an old run.
+
 **What it does not cover:** how she sounds, talking over her, silence and timing - the relay's (A11, A12) and the real phone's (A21). A case is one reply at a time, not a whole call. The 9 PM and Saturday cases check what she says, while the booking check (A06) is what stops such a time being booked. A stop said in the lead's own words is also caught by the relay's own stop-word check before Seri replies (A11); the six stop cases test her without it.
 
 Design: `docs/AI-AGENT.md`. All AI code in `backend/src/ai/`. One PR into `dev`.
