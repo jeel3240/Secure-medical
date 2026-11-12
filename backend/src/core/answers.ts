@@ -170,6 +170,29 @@ const toPhrases = <T>(list: readonly string[], owner: T) =>
     .filter(Boolean)
     .map((p) => ({ tokens: p.split(' '), owner }));
 
+/** Said around a one-word stop without making it anything else: "stop it", "no, stop", "just stop, please". */
+const AROUND_A_STOP = new Set(['please', 'just', 'it', 'now', 'ok', 'okay', 'no']);
+
+/**
+ * Whether the lead asked to stop, somewhere in what they said - the relay's
+ * own check on every turn Seri hears, whatever she would answer (A11,
+ * AI-AGENT.md section 2). The script's stop words, but read for a
+ * conversation rather than an answer to a yes-or-no question: a phrase -
+ * "stop calling", "remove me" - counts anywhere in it; a single word - "stop",
+ * "unsubscribe" - only said on its own, since "do I need to stop my other
+ * medicine?" is a question for her, not a stop. Seri herself catches every
+ * other way of asking. No length limit: a turn may be long.
+ */
+export function saysStop(said: string, optOutWords: readonly string[]): boolean {
+  const spoken = said.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, ' ').trim();
+  if (!spoken) return false;
+  const words = spoken.split(' ');
+  const phrases = toPhrases(optOutWords, 'stop');
+  if (phrasesFound(words, phrases.filter((p) => p.tokens.length > 1)).size > 0) return true;
+  const rest = [...new Set(words.filter((w) => !AROUND_A_STOP.has(w)))];
+  return rest.length === 1 && phrases.some((p) => p.tokens.length === 1 && p.tokens[0] === rest[0]);
+}
+
 /**
  * What a spoken or keyed answer to one step means. Pure.
  *

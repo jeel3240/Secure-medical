@@ -9,6 +9,8 @@
  */
 
 import twilio from 'twilio';
+import { handoffData, type Handoff } from './actions';
+import type { SafetyReason } from './safety';
 
 /** Where Twilio opens the relay's WebSocket. Under `/api`, so Caddy passes it on (A02). */
 export const RELAY_PATH = '/api/ai/relay';
@@ -100,13 +102,22 @@ export function parseRelayMessage(raw: string): RelayMessage | null {
   }
 }
 
-/** Seri says a line: the whole of it, in one message. */
-export function textMessage(line: string): string {
-  return JSON.stringify({ type: 'text', token: line, last: true });
+/**
+ * Words for Twilio to say. A reply goes a sentence at a time, `last` false,
+ * then an empty `last` true to close it; a line said on its own is one
+ * message, `last` true.
+ */
+export function textMessage(token: string, last: boolean): string {
+  return JSON.stringify({ type: 'text', token, last });
+}
+
+/** Ends the session: Twilio says what it was given, then posts the action URL with this as `HandoffData` (A02). */
+export function endMessage(handoff: Handoff): string {
+  return JSON.stringify({ type: 'end', handoffData: handoffData(handoff) });
 }
 
 // The turns that are not someone's words, as kept in `call_ai_turns`. A key is
-// the lead's; a cut-off line and Twilio's error are the relay's own notes.
+// the lead's; the rest are the relay's own notes.
 
 /** A key the lead pressed, kept as their turn. */
 export const keyTurn = (digit: string): string => `(pressed ${digit})`;
@@ -116,3 +127,14 @@ export const interruptedNote = (heard: string): string => `Cut off. Heard: "${he
 
 /** Twilio reported an error on the relay. Kept here, not in the logs: it can quote her words. */
 export const twilioErrorNote = (description: string): string => `Twilio error: ${description}`;
+
+/** A sentence the check replaced with the specialist line (A05): why, the words found, and the sentence. */
+export const replacedNote = (reason: SafetyReason, found: string | null, sentence: string): string =>
+  `Replaced (${reason}${found ? `, "${found}"` : ''}): ${sentence}`;
+
+/** An action refused, and what she was told (A06). */
+export const refusedNote = (action: string, error: string): string => `Not done: ${action}. ${error}`;
+
+/** The relay's own stop check ended the call, whatever she would have said (A11). */
+export const stopNote = (via: 'words' | 'key'): string =>
+  via === 'key' ? 'Stop key 9 pressed: opted out.' : 'Stop words heard: opted out.';

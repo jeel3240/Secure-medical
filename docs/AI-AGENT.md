@@ -127,6 +127,22 @@ applicationReconnect="true"
 - **The lead hanging up:** `SessionStatus=completed`, `CallStatus=completed`, no `HandoffData`.
 - **Our WebSocket dropping mid-call** (the test server restarted): Twilio logged error 64105 and requested the `action` URL - the backup path in section 6 (A12).
 
+### How a reply is made (A11, as built 2026-11-12)
+
+`backend/src/ai/conversation.ts`, one per call, behind the relay (section 9); OpenAI through `ai/openai.ts`, asked exactly as the answer test set asks - her model, the five actions as tools, one at most, the shared prompt cached, no retries.
+
+- **At the start:** her instructions are built for the call (A04) - the lead's first name and number, the agents' hours (`readCallHours`), our number (`TWILIO_PHONE_NUMBER`), the script's stop line. OpenAI's history starts with them and the greeting Twilio said. No active script: the session is closed as a failure before she starts (`ai_relay.no_script`).
+- **Each thing the lead says:** first **the stop check**, then who is there now (`whoIsThere` - `freePeople`, then `someoneOnOrJustOffCall`, the transfer's own rules), then OpenAI with the whole call; the lead's turn is `leadMessage` - the note of who is there, then their words - the same function the answer test set uses (`evals/grade.ts`). A failure to read who is there counts as nobody, so she never promises a transfer.
+- **Her reply, a sentence at a time:** OpenAI's words are cut into sentences as they arrive (`ai/sentences.ts` - "Dr." and "3 p.m." end none); each is checked (A05) and sent the moment it is whole, as a `text` with `last` false, and the reply closed with an empty `last` true. A replaced sentence - the specialist line said in its place - is the last of that reply; any action in it waits, since the specialist line asks a question; the sentence and why are kept as a `system` turn.
+- **Her action:** checked as the test set checks it (`toHandoff`, with who is there for this turn). Taken: the last line the relay adds when she gave none (`lineToAdd`), the reply closed, then `end` with the action as `handoffData` straight after - Twilio says the whole line first (A02) - and `calls.ai_ended_with` with `ai_agent.ended` recorded together, once. Refused: she is told why, as the tool's answer in her history, and speaks again at once - or waits for the lead when her reply asked a question (`awaitLead`); after two refusals in a row she waits for the lead.
+- **Talked over:** her reply stops at once (the OpenAI request is aborted) and nothing more of it is sent; the history keeps only what Twilio says the lead heard (`utteranceUntilInterrupt`) - the reply still being written, or the last one already sent, or the greeting. Nothing heard: the history is left as it was.
+- **The lead says more before she answers:** what she was writing is dropped and one reply answers all of it; what she had already said stands in the history.
+- **The stop check** (`saysStop`, `core/answers.ts`): the script's stop words, read for a conversation - a phrase ("stop calling", "remove me", "don't call") anywhere in what the lead said, a single word ("stop", "unsubscribe") only said on its own ("Stop.", "No, stop", "Stop it, please"). So "Do I need to stop my other medicine?" is hers to answer, not an opt-out that blocks the number; she catches every other way of asking herself. Key 9 is a stop too. Either way, at once and without OpenAI: the script's stop line, then `end` as `opt_out`.
+- **Kept as turns:** her greeting; each lead turn and key; each of her replies as said, with `latency_ms` - from the lead's words reaching us to her first sentence going out; a sentence replaced, an action refused, a stop heard (`system`); and her action as its `handoffData` (`action`). Never in the logs: each reply logs only its times, how many sentences, whether one was replaced, and the action (`ai_relay.reply`).
+- **Not yet:** silence, the 3-minute limit, and OpenAI slow or failing - A12. Until then a failed reply is logged (`ai_relay.model_failed`) and nothing is said.
+
+**How fast, measured** (2026-11-12, the real API on a scratch database, a fake Twilio client, the real OpenAI, from a laptop): from the lead's words reaching us to her first sentence going out, 0.66-0.90 s - OpenAI's first word 0.54-0.85 s of it, the first sentence being written whole only 0.03-0.11 s more. A first run the same hour took 1.19-1.75 s, all of it OpenAI's: its speed changes from minute to minute. A stop: 1 ms. On a call Twilio's own part comes on top - about 0.3 s to start her voice, and Deepgram deciding the lead has finished (A02, above).
+
 ---
 
 ## 2. The AI runs the whole call
@@ -143,7 +159,7 @@ Decided by Jeel, 2026-11-11, reversing the earlier "keep the script, hand off wh
 |---|---|
 | Lead picks up | `/auto/answer` connects the call to Seri (`<Connect action="/auto/ai-after"><ConversationRelay welcomeGreeting="Hi, is this John?"/></Connect>`) instead of asking the script's Q1 |
 | Voicemail | **Unchanged.** Twilio's machine detection runs as today; a beep replaces the call with the voicemail message (`onVerdict`, T18). Until the verdict has come, an action that would end the call waits (A18), so a greeting such as "he's not available" is never taken for the lead saying no |
-| "Stop" | Seri's `opt_out` action - and a check of every lead turn, independent of the AI: the script's stop words (`call_scripts.opt_out_words`) or key 9 end the session as an opt-out even if the AI misses it |
+| "Stop" | Seri's `opt_out` action - and a check of every lead turn, independent of the AI: the script's stop words (`call_scripts.opt_out_words`) or key 9 end the session as an opt-out even if the AI misses it. *As built (A11):* a stop phrase counts anywhere in what the lead said, a one-word stop word ("stop") only said on its own - section 1, "How a reply is made" |
 | Transfer, hold line, busy line, link text | **Unchanged.** Seri's action ends the session, and `/auto/ai-after` runs today's code |
 | Today's script | Kept, only as the backup (section 6) |
 
@@ -338,18 +354,18 @@ Following `docs/AUDIT.md`: nothing is lost, add-only.
 | `calls.script_result` | Adds `callback_booked` |
 | `call_ai_turns` (new) | One row per turn: call, who (lead, Seri, action, system), the text, when, how long Seri took to start |
 | `callbacks` | Seri's bookings: no agent until taken, reason `ai_booked` |
-| `activity_log` | `ai_agent.switched` (built, A01); `ai_agent.started`, `ai_agent.ended` with the action |
+| `activity_log` | `ai_agent.switched` (built, A01); `ai_agent.started` (built, A10), `ai_agent.ended` with the action (built, A11) |
 
 The words are never written to the logs, the same rule as `auto_call.answer` today.
 
 *As built (A08, migration 022, 2026-11-11):* the columns and the table above, with the database keeping their rules - `ai_started_at` and `ai_knowledge_version` written together, `ai_ended_with` only after a start, all three only on an automated call; `call_ai_turns` add-only by trigger, `who` one of the four, `latency_ms` only on Seri's turns; a callback with no agent only when it is `ai_booked`, and every `ai_booked` one naming its call (`booked_by_call_id`); and `settings.ai_agent` seeded `off`, never over a value the command already wrote. `scripts/ai-agent-live-check.ts` proves each rule, 34 checks.
 
-*As built (A10, 2026-11-12) - the relay, the pipe without OpenAI:* `backend/src/ai/relay.ts`, a WebSocket on the API's own server at `/api/ai/relay` (`ws`, attached in `api/index.ts`), only with automated calls on, like their webhooks.
+*As built (A10, 2026-11-12) - the relay, the pipe:* `backend/src/ai/relay.ts`, a WebSocket on the API's own server at `/api/ai/relay` (`ws`, attached in `api/index.ts`), only with automated calls on, like their webhooks.
 
 - **Who may connect:** the request must carry Twilio's signature for `wss://` + `PUBLIC_URL`'s host + the path and query it asked for, with no parameters (`relaySigned`, `ai/relay-messages.ts`, as A02 found). Anything else is refused before a WebSocket opens - 403, or 404 for another path. Then the first message must be `setup`, within 10 seconds.
 - **Which call:** `setup` names our row in `customParameters.call` (A13's `<Parameter name="call">`). `startAiCall` (`ai/relay-store.ts`) marks `ai_started_at` and `ai_knowledge_version`, and records `ai_agent.started`, in one transaction - only for an automated call whose `twilio_call_sid` is the `callSid` connecting, not yet Seri's, not ended and with no script result. One UPDATE decides, so two connections for one call cannot both start it; the other is closed (code 1008), and the log says why.
 - **Every turn kept, in order:** her greeting first - Twilio says it (A13), from the same `welcomeGreeting` - then the lead's final words (`last: true`; a partial or empty prompt is not a turn), each of her lines with `latency_ms`, a key as the lead's `(pressed 1)`, and as `system` notes being cut off (`Cut off. Heard: "..."`) and Twilio's errors - which can quote her words, so they are kept here and not logged. Messages are handled one at a time in the order they came, so a prompt that arrives while `setup` is still being saved waits for it. A turn the database refuses is logged (`ai_relay.turn_not_saved`) and the call goes on.
-- **What Seri says, for now:** one fixed line to everything, "Thanks. Someone from our team will be in touch soon." - `deps.reply`, which A11 replaces with OpenAI. No call reaches the relay until A13.
+- **What Seri said, in A10:** one fixed line to everything, a stand-in until A11 gave her OpenAI - section 1, "How a reply is made". No call reaches the relay until A13.
 - **Tested:** `relay.test.ts` - a real WebSocket on a real server, a fake ConversationRelay sending A02's messages, a fake database (21 tests); `relay-messages.test.ts` (17); 1,447 backend tests in all. The SQL on a real Postgres - started once, two connections racing, each refusal, nothing recorded for one, turns in order: `scripts/ai-agent-live-check.ts`, 51 checks. And once by hand: the real API on a scratch database with calling and automated calls on, a fake client signing as Twilio - started, four turns, the activity row; a second connection and an unsigned one refused.
 
 **On screen:** under the robot call on the lead's timeline (T21, `CallAnswers`), Seri's conversation as a short chat: what the lead said, what Seri answered, how it ended. It is there for **the agent** who takes the transfer or the call back, so the lead does not repeat themselves. Nothing new on Admin.

@@ -1,6 +1,6 @@
 /**
  * Proves migration 022 against a real Postgres - Phase 7, A08,
- * docs/AI-AGENT.md sections 4 and 9 - and the relay's SQL on it (A10).
+ * docs/AI-AGENT.md sections 4 and 9 - and the relay's SQL on it (A10, A11).
  *
  * Seri's columns on a call, the turns of her conversation, and the call backs
  * she books are kept by the database's own checks and triggers, which the
@@ -12,7 +12,7 @@
  *
  *   scripts/live-checks.sh ai-agent
  */
-import { saveTurn, startAiCall } from '../src/ai/relay-store';
+import { endAiCall, saveTurn, startAiCall, whoIsThere } from '../src/ai/relay-store';
 import { pool } from '../src/db/pool';
 
 let failures = 0;
@@ -223,6 +223,65 @@ async function main(): Promise<void> {
       ),
       'call_ai_turns_check'
     );
+  }
+
+  console.log('\nhow her part ended (A11)');
+  {
+    const lead = await makeLead();
+    const call = await makeCall(lead, 'automated');
+    await startAiCall(pool, { callId: call, callSid: `CA-check-${lead}-automated`, knowledgeVersion: 'approved-test' });
+    const records = () =>
+      pool
+        .query(`SELECT actor_id, lead_id, detail FROM activity_log WHERE action = 'ai_agent.ended' AND (detail->>'callId')::int = $1`, [call])
+        .then((r) => r.rows);
+
+    check('recorded', await endAiCall(pool, call, { action: 'end_call', reason: 'wrong_person' }), true);
+    check('on the call', (await pool.query(`SELECT ai_ended_with FROM calls WHERE id = $1`, [call])).rows[0].ai_ended_with, 'end_call');
+    check('in the activity log, by the system, with the reason', await records(), [
+      { actor_id: null, lead_id: lead, detail: { action: 'end_call', callId: call, reason: 'wrong_person' } },
+    ]);
+    check('once: a second end changes nothing', await endAiCall(pool, call, { action: 'opt_out' }), false);
+    check('the first stands', (await pool.query(`SELECT ai_ended_with FROM calls WHERE id = $1`, [call])).rows[0].ai_ended_with, 'end_call');
+    check('and is recorded once', (await records()).length, 1);
+
+    const neverLead = await makeLead();
+    const never = await makeCall(neverLead, 'automated');
+    check('a call she never took: nothing recorded', await endAiCall(pool, never, { action: 'transfer_to_agent' }), false);
+
+    const otherLead = await makeLead();
+    const other = await makeCall(otherLead, 'automated');
+    await startAiCall(pool, { callId: other, callSid: `CA-check-${otherLead}-automated`, knowledgeVersion: 'approved-test' });
+    await endAiCall(pool, other, { action: 'transfer_to_agent' });
+    check(
+      'any other action: no reason in the record',
+      (await pool.query(`SELECT detail FROM activity_log WHERE action = 'ai_agent.ended' AND (detail->>'callId')::int = $1`, [other])).rows[0].detail,
+      { action: 'transfer_to_agent', callId: other }
+    );
+  }
+
+  console.log('\nwho is there, before each reply (A11)');
+  {
+    const lead = await makeLead();
+    const call = await makeCall(lead, 'automated');
+    await pool.query(`UPDATE users SET taking_calls = false, ringable_until = NULL`);
+    check('nobody taking calls: nobody', await whoIsThere(pool, call), 'nobody');
+
+    const { rows: added } = await pool.query(
+      `INSERT INTO users (email, password_hash, name, role, taking_calls, ringable_until)
+       VALUES ('ana@example.com', 'x', 'Ana', 'agent', true, now() + interval '2 minutes') RETURNING id`
+    );
+    const ana = added[0].id;
+    check('someone taking calls, app open, not on a call: someone free', await whoIsThere(pool, call), 'free');
+
+    const busyLead = await makeLead();
+    await pool.query(
+      `INSERT INTO calls (lead_id, agent_id, direction, twilio_call_sid, started_at) VALUES ($1, $2, 'outbound', 'CA-check-ana-busy', now())`,
+      [busyLead, ana]
+    );
+    check('the same person on a call: someone coming - the hold line', await whoIsThere(pool, call), 'coming');
+
+    await pool.query(`UPDATE users SET taking_calls = false WHERE id = $1`, [ana]);
+    check('on a call with the switch off: nobody - never rung for a transfer', await whoIsThere(pool, call), 'nobody');
   }
 
   console.log(failures === 0 ? '\nall checks passed' : `\n${failures} check(s) FAILED`);

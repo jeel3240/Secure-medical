@@ -1,17 +1,29 @@
 /**
- * The relay - A10. A real WebSocket on a real server, a fake ConversationRelay
- * on the other end (the messages as A02 recorded them), and a fake database:
- * who may connect, which call it is, and every turn kept in order. The SQL
- * itself is proved in scripts/ai-agent-live-check.ts.
+ * The relay - A10, A11. A real WebSocket on a real server, a fake
+ * ConversationRelay on the other end (the messages as A02 recorded them), a
+ * fake OpenAI and a fake database: who may connect, which call it is, every
+ * turn kept in order, and Seri talking - her reply in sentences, an action
+ * ending the session, the stop check. What she says turn by turn is
+ * conversation.test.ts; the SQL is scripts/ai-agent-live-check.ts.
  */
 import http from 'http';
 import type { AddressInfo } from 'net';
+import type { ChatCompletionMessageParam } from 'openai/resources/chat/completions';
 import twilio from 'twilio';
 import WebSocket, { type WebSocketServer } from 'ws';
+import { DEFAULT_CALL_HOURS } from '../core/auto-dial';
+import { ANTIBIOTICS_CALL } from '../core/call-script-fixtures';
 import * as logModule from '../lib/log';
-import { attachRelay, FIXED_LINE } from './relay';
+import type { Handoff } from './actions';
+import { CALL_HEADING, type WhoIsThere } from './instructions';
+import { loadKnowledge } from './knowledge';
+import type { ModelEvent, SeriModel } from './openai';
+import { attachRelay } from './relay';
 import { RELAY_PATH } from './relay-messages';
-import type { AiCall, RelayStore, StartResult, Turn } from './relay-store';
+import type { AiCall, CallSettings, RelayStore, StartResult, Turn } from './relay-store';
+
+const KNOWLEDGE = loadKnowledge();
+const STOP = ANTIBIOTICS_CALL.optOutBody;
 
 const TOKEN = 'test-auth-token';
 const PUBLIC = 'https://calls.example.test';
@@ -37,7 +49,43 @@ class FakeStore implements RelayStore {
     if (this.saveFails) throw new Error('database down');
     this.turns.push(turn);
   }
+
+  settings: CallSettings = { script: ANTIBIOTICS_CALL, hours: DEFAULT_CALL_HOURS };
+  async callSettings(): Promise<CallSettings> {
+    return this.settings;
+  }
+
+  who: WhoIsThere = 'free';
+  async whoIsThere(): Promise<WhoIsThere> {
+    return this.who;
+  }
+
+  endedWith: { callId: number; handoff: Handoff }[] = [];
+  async endAiCall(callId: number, handoff: Handoff): Promise<boolean> {
+    this.endedWith.push({ callId, handoff });
+    return true;
+  }
 }
+
+const text = (t: string): ModelEvent => ({ type: 'text', text: t });
+const tool = (name: string, args: Record<string, unknown> = {}): ModelEvent => ({
+  type: 'tool',
+  call: { id: `call_${name}`, name, arguments: JSON.stringify(args) },
+});
+
+/** OpenAI, answering as told: "Sure." unless given replies. */
+class FakeModel implements SeriModel {
+  asked: ChatCompletionMessageParam[][] = [];
+  replies: ModelEvent[][] = [];
+  async *reply(messages: ChatCompletionMessageParam[]): AsyncIterable<ModelEvent> {
+    this.asked.push(messages);
+    for (const event of this.replies.shift() ?? [text('Sure.')]) {
+      await Promise.resolve();
+      yield event;
+    }
+  }
+}
+let model: FakeModel;
 
 let server: http.Server;
 let relay: WebSocketServer;
@@ -49,10 +97,10 @@ const sockets: WebSocket[] = [];
 async function start(opts: { setupTimeoutMs?: number } = {}): Promise<void> {
   server = http.createServer((_req, res) => res.writeHead(404).end());
   relay = attachRelay(server, {
-    twilio: { authToken: TOKEN, publicUrl: PUBLIC },
-    knowledgeVersion: 'approved-test',
+    twilio: { authToken: TOKEN, publicUrl: PUBLIC, callerId: '+14805308582' },
+    knowledge: KNOWLEDGE,
     store,
-    reply: () => FIXED_LINE,
+    model,
     setupTimeoutMs: opts.setupTimeoutMs,
   });
   await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
@@ -61,6 +109,7 @@ async function start(opts: { setupTimeoutMs?: number } = {}): Promise<void> {
 
 beforeEach(async () => {
   store = new FakeStore();
+  model = new FakeModel();
   logged = [];
   for (const level of ['info', 'warn', 'error'] as const) {
     jest.spyOn(logModule.log, level).mockImplementation((event: string, fields?: unknown) => {
@@ -130,13 +179,16 @@ async function until(done: () => boolean, what: string): Promise<void> {
 
 const events = (event: string) => logged.filter((l) => l.event === event).map((l) => l.fields);
 
+/** The session's end has reached the client - it is sent before anything is saved, but may arrive after. */
+const gotEnd = (c: Connection) => c.received.some((m) => (m as { type: string }).type === 'end');
+
 describe('a call Seri takes', () => {
   it('setup starts her on the call Twilio names, and her greeting is her first turn', async () => {
     const c = await connected();
     c.send(SETUP);
     await until(() => store.turns.length === 1, 'the greeting');
 
-    expect(store.started).toEqual([{ callId: 7, callSid: 'CA1', knowledgeVersion: 'approved-test' }]);
+    expect(store.started).toEqual([{ callId: 7, callSid: 'CA1', knowledgeVersion: KNOWLEDGE.version }]);
     expect(store.turns).toEqual([{ callId: 7, who: 'seri', text: 'Hi, is this John?' }]);
     expect(events('ai_relay.started')).toEqual([{ callId: 7, leadId: 3, callSid: 'CA1' }]);
   });
@@ -149,17 +201,20 @@ describe('a call Seri takes', () => {
     expect(store.turns[0].text).toBe('Hi there!');
   });
 
-  it('what the lead says gets her line, and both are kept, in order', async () => {
+  it('what the lead says gets her reply, and both are kept, in order', async () => {
     const c = await connected();
     c.send(SETUP);
     c.send({ type: 'prompt', voicePrompt: 'Who is this?', lang: 'en', last: true });
-    await until(() => store.turns.length === 3, 'three turns');
+    await until(() => store.turns.length === 3 && c.received.length === 2, 'three turns, and her reply');
 
-    expect(c.received).toEqual([{ type: 'text', token: FIXED_LINE, last: true }]);
+    expect(c.received).toEqual([
+      { type: 'text', token: 'Sure. ', last: false },
+      { type: 'text', token: '', last: true },
+    ]);
     expect(store.turns.map(({ who, text }) => ({ who, text }))).toEqual([
       { who: 'seri', text: 'Hi, is this John?' },
       { who: 'lead', text: 'Who is this?' },
-      { who: 'seri', text: FIXED_LINE },
+      { who: 'seri', text: 'Sure.' },
     ]);
     expect(store.turns[1].latencyMs).toBeUndefined();
     expect(store.turns[2].latencyMs).toEqual(expect.any(Number));
@@ -176,16 +231,16 @@ describe('a call Seri takes', () => {
     c.send({ type: 'prompt', voicePrompt: '   ', last: true });
     c.send({ type: 'dtmf', digit: '1' });
     c.send({ type: 'prompt', voicePrompt: 'Who is this?', last: true });
-    await until(() => store.turns.length === 5, 'five turns');
+    await until(() => store.turns.length === 5 && c.received.length === 2, 'five turns, and her reply');
 
     expect(store.turns.map(({ who, text }) => [who, text])).toEqual([
       ['seri', 'Hi, is this John?'],
       ['system', 'Cut off. Heard: "Hi, is"'],
       ['lead', '(pressed 1)'],
       ['lead', 'Who is this?'],
-      ['seri', FIXED_LINE],
+      ['seri', 'Sure.'],
     ]);
-    expect(c.received).toHaveLength(1);
+    expect(c.received).toHaveLength(2);
   });
 
   it('Twilio\'s error is kept as a note, and only that one came is logged', async () => {
@@ -231,7 +286,7 @@ describe('a call Seri takes', () => {
     store.saveFails = true;
     c.send(SETUP);
     c.send({ type: 'prompt', voicePrompt: 'Hello?', last: true });
-    await until(() => c.received.length === 1, 'her line');
+    await until(() => c.received.length === 2, 'her reply');
     await until(() => events('ai_relay.turn_not_saved').length === 3, 'three failures');
     expect(events('ai_relay.turn_not_saved').map((f) => (f as { who: string }).who)).toEqual(['seri', 'lead', 'seri']);
     expect(c.ws.readyState).toBe(WebSocket.OPEN);
@@ -250,13 +305,15 @@ describe('a call Seri takes', () => {
   it('never logs what was said', async () => {
     const c = await connected();
     c.send(SETUP);
+    model.replies.push([text('Thanks. Someone from our team can help.')]);
     c.send({ type: 'prompt', voicePrompt: 'My card number is 4111', last: true });
+    await until(() => store.turns.length === 3, 'her reply');
     c.send({ type: 'interrupt', utteranceUntilInterrupt: 'Thanks. Someone', durationUntilInterruptMs: 300 });
     await until(() => store.turns.length === 4, 'four turns');
     c.ws.close(1000);
     await until(() => events('ai_relay.closed').length === 1, 'the close');
     const all = JSON.stringify(logged);
-    for (const words of ['4111', 'Someone', 'John', '+1555']) expect(all).not.toContain(words);
+    for (const words of ['4111', 'Someone', 'Thanks', 'John', '+1555']) expect(all).not.toContain(words);
   });
 });
 
@@ -335,5 +392,107 @@ describe('who may connect', () => {
     c.send(SETUP);
     expect(await c.closed).toBe(1011);
     expect(events('ai_relay.failed')).toEqual([{ callId: null, err: expect.stringContaining('database down') }]);
+  });
+});
+
+describe('Seri talks (A11)', () => {
+  it('her instructions are built for this call and lead, and her reply goes out in sentences', async () => {
+    store.who = 'coming';
+    model.replies.push([text('This is Seri from eDrugstore. '), text('How are you today?')]);
+    const c = await connected();
+    c.send(SETUP);
+    c.send({ type: 'prompt', voicePrompt: 'Who is this?', last: true });
+    await until(() => c.received.length === 3, 'her reply');
+
+    const [system, greeting, lead] = model.asked[0];
+    expect(system.role).toBe('system');
+    expect(system.content).toContain(CALL_HEADING);
+    expect(system.content).toContain('John');
+    expect(system.content).toContain(STOP);
+    expect(greeting).toEqual({ role: 'assistant', content: 'Hi, is this John?' });
+    expect(lead).toEqual({ role: 'user', content: '[Who is there: someone coming] Who is this?' });
+    expect(c.received).toEqual([
+      { type: 'text', token: 'This is Seri from eDrugstore. ', last: false },
+      { type: 'text', token: 'How are you today? ', last: false },
+      { type: 'text', token: '', last: true },
+    ]);
+  });
+
+  it('an action ends the session with its handoffData, straight after her last line', async () => {
+    model.replies.push([text('No problem. Thanks for your time, have a great day!'), tool('end_call', { reason: 'not_interested' })]);
+    const c = await connected();
+    c.send(SETUP);
+    c.send({ type: 'prompt', voicePrompt: 'Not interested', last: true });
+    await until(() => store.endedWith.length === 1 && gotEnd(c) && events('ai_relay.ended').length === 1, 'the end');
+
+    expect(c.received.slice(-3)).toEqual([
+      { type: 'text', token: 'Thanks for your time, have a great day! ', last: false },
+      { type: 'text', token: '', last: true },
+      { type: 'end', handoffData: '{"action":"end_call","reason":"not_interested"}' },
+    ]);
+    expect(store.endedWith).toEqual([{ callId: 7, handoff: { action: 'end_call', reason: 'not_interested' } }]);
+    expect(store.turns.at(-1)).toEqual({ callId: 7, who: 'action', text: '{"action":"end_call","reason":"not_interested"}' });
+    expect(events('ai_relay.ended')).toEqual([{ callId: 7, action: 'end_call' }]);
+  });
+
+  it('"stop calling me" ends the session as an opt-out though OpenAI would answer something else', async () => {
+    model.replies.push([text('Sure, happy to help!')]);
+    const c = await connected();
+    c.send(SETUP);
+    c.send({ type: 'prompt', voicePrompt: 'Stop calling me.', last: true });
+    await until(() => store.endedWith.length === 1 && store.turns.length === 5 && gotEnd(c), 'the end');
+    expect(model.asked).toEqual([]);
+    expect(c.received).toEqual([
+      { type: 'text', token: STOP, last: true },
+      { type: 'end', handoffData: '{"action":"opt_out"}' },
+    ]);
+    expect(store.turns.map((t) => [t.who, t.text])).toEqual([
+      ['seri', 'Hi, is this John?'],
+      ['lead', 'Stop calling me.'],
+      ['system', 'Stop words heard: opted out.'],
+      ['seri', STOP],
+      ['action', '{"action":"opt_out"}'],
+    ]);
+  });
+
+  it('key 9 too', async () => {
+    const c = await connected();
+    c.send(SETUP);
+    c.send({ type: 'dtmf', digit: '9' });
+    await until(() => store.endedWith.length === 1 && gotEnd(c), 'the end');
+    expect(model.asked).toEqual([]);
+    expect(store.endedWith[0].handoff).toEqual({ action: 'opt_out' });
+    expect(c.received.at(-1)).toEqual({ type: 'end', handoffData: '{"action":"opt_out"}' });
+  });
+
+  it('with nobody there, a transfer is refused back to her; she offers a call back instead', async () => {
+    store.who = 'nobody';
+    model.replies.push([tool('transfer_to_agent')], [text('Everyone is busy right now. When suits you for a call back?')]);
+    const c = await connected();
+    c.send(SETUP);
+    c.send({ type: 'prompt', voicePrompt: 'Put me through', last: true });
+    await until(() => c.received.length === 3, 'her second reply');
+    expect(c.received.some((m) => (m as { type: string }).type === 'end')).toBe(false);
+    expect(model.asked[1].at(-1)).toMatchObject({ role: 'tool', content: expect.stringMatching(/^Nobody can take a call right now/) });
+    expect(store.endedWith).toEqual([]);
+  });
+
+  it('with someone coming, the transfer goes through', async () => {
+    store.who = 'coming';
+    model.replies.push([text('Great, connecting you now.'), tool('transfer_to_agent')]);
+    const c = await connected();
+    c.send(SETUP);
+    c.send({ type: 'prompt', voicePrompt: 'Yes, put me through', last: true });
+    await until(() => store.endedWith.length === 1 && gotEnd(c), 'the end');
+    expect(c.received.at(-1)).toEqual({ type: 'end', handoffData: '{"action":"transfer_to_agent"}' });
+  });
+
+  it('no call script active: closed as a failure, and never started', async () => {
+    store.settings = { script: null, hours: DEFAULT_CALL_HOURS };
+    const c = await connected();
+    c.send(SETUP);
+    expect(await c.closed).toBe(1011);
+    expect(store.started).toEqual([]);
+    expect(events('ai_relay.no_script')).toEqual([{ callId: 7 }]);
   });
 });

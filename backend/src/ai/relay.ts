@@ -1,56 +1,59 @@
 /**
- * The relay: Seri's side of a ConversationRelay call - A10, docs/AI-AGENT.md
- * sections 1, 6 and 9.
+ * The relay: Seri's side of a ConversationRelay call - A10 and A11,
+ * docs/AI-AGENT.md sections 1, 6 and 9.
  *
  * Twilio opens a WebSocket to `/api/ai/relay` when an automated call is
  * connected to Seri (A13), sends what the lead says as text, and speaks what
  * we send back. This part is the pipe: who may connect, which call it is, and
- * every turn kept. What Seri answers is `deps.reply` - one fixed line until
- * OpenAI is added (A11).
+ * every turn kept. What she says is the conversation's (conversation.ts).
  *
  *   connection  refused unless signed by Twilio for the relay's own address
  *   setup       names our `calls` row; Seri starts it once (relay-store.ts),
- *               and her greeting - which Twilio says itself - is her first turn
- *   prompt      the lead's words, then her reply: two turns
- *   dtmf        the key, as the lead's turn
+ *               with her instructions built for the call, and her greeting -
+ *               which Twilio says itself - is her first turn
+ *   prompt      the lead's words, kept, then hers to answer
+ *   dtmf        the key, kept as the lead's turn; 9 is a stop
  *   interrupt   what she had said when the lead spoke over her, as a note
  *
- * Messages are handled one at a time, in the order they came, so the turns are
- * kept in the order they were said. A turn that cannot be saved is logged and
- * the call goes on: the lead is talking to her.
+ * Messages are handled one at a time, in the order they came. Turns are kept
+ * on their own line of writes, in the order they were said, and nothing on the
+ * call waits for them: a turn that cannot be saved is logged and the call goes
+ * on - the lead is talking to her.
  */
 
 import type { Server } from 'http';
 import type { Duplex } from 'stream';
 import { WebSocketServer, type RawData, type WebSocket } from 'ws';
 import { errText, log } from '../lib/log';
-import { welcomeGreeting } from './instructions';
+import { Conversation } from './conversation';
+import { buildInstructions, welcomeGreeting } from './instructions';
+import type { Knowledge } from './knowledge';
+import type { SeriModel } from './openai';
 import {
   interruptedNote,
   keyTurn,
   parseRelayMessage,
   RELAY_PATH,
   relaySigned,
-  textMessage,
   twilioErrorNote,
   type RelayMessage,
 } from './relay-messages';
 import type { AiCall, RelayStore, Turn } from './relay-store';
 
 export interface RelayDeps {
-  /** From calling's settings: the token signatures are checked with, and our public address. */
-  twilio: { authToken: string; publicUrl: string };
-  /** The version of Seri's knowledge files, kept on each call she takes. */
-  knowledgeVersion: string;
+  /**
+   * From calling's settings: the token signatures are checked with, our
+   * public address, and the number she gives when asked how to call back.
+   */
+  twilio: { authToken: string; publicUrl: string; callerId: string };
+  /** Seri's knowledge files, checked at start-up; their version is kept on each call she takes. */
+  knowledge: Knowledge;
   store: RelayStore;
-  /** What Seri answers to what the lead said. */
-  reply: (call: AiCall, said: string) => string;
+  model: SeriModel;
   /** How long Twilio has, once connected, to send `setup`. */
   setupTimeoutMs?: number;
+  now?: () => Date;
 }
-
-/** Seri's one line until she has OpenAI (A11). Never reaches a lead: no call goes to her before A13. */
-export const FIXED_LINE = 'Thanks. Someone from our team will be in touch soon.';
 
 const SETUP_TIMEOUT_MS = 10_000;
 
@@ -97,10 +100,13 @@ function refuseUpgrade(socket: Duplex, status: 403 | 404): void {
 function runSession(ws: WebSocket, deps: RelayDeps): void {
   /** Set once `setup` has started Seri on the call. */
   let call: AiCall | null = null;
+  let conversation: Conversation | null = null;
   let setupSeen = false;
   let turns = 0;
-  /** Each message waits for the one before it. */
+  /** Each message waits for the one before it - only `setup` takes long. */
   let line: Promise<void> = Promise.resolve();
+  /** Each write waits for the one before it, so turns are kept in the order said. Nothing on the call waits for them. */
+  let writes: Promise<void> = Promise.resolve();
 
   const close = (code: number, reason: string) => {
     clearTimeout(setupTimer);
@@ -116,18 +122,26 @@ function runSession(ws: WebSocket, deps: RelayDeps): void {
     if (!setupSeen) refuse('no_setup');
   }, deps.setupTimeoutMs ?? SETUP_TIMEOUT_MS);
 
-  const keep = async (turn: Omit<Turn, 'callId'>) => {
-    const callId = call!.callId;
-    try {
-      await deps.store.saveTurn({ callId, ...turn });
-      turns++;
-    } catch (err) {
-      log.error('ai_relay.turn_not_saved', { callId, who: turn.who, err: errText(err) });
-    }
+  const write = (what: () => Promise<unknown>, failed: (err: unknown) => void) => {
+    writes = writes.then(what).then(
+      () => undefined,
+      (err: unknown) => failed(err)
+    );
   };
 
-  const say = (text: string) => {
-    if (ws.readyState === ws.OPEN) ws.send(textMessage(text));
+  const keep = (turn: Omit<Turn, 'callId'>) => {
+    const callId = call!.callId;
+    write(
+      async () => {
+        await deps.store.saveTurn({ callId, ...turn });
+        turns++;
+      },
+      (err) => log.error('ai_relay.turn_not_saved', { callId, who: turn.who, err: errText(err) })
+    );
+  };
+
+  const send = (message: string) => {
+    if (ws.readyState === ws.OPEN) ws.send(message);
   };
 
   const handle = async (msg: RelayMessage | null) => {
@@ -141,45 +155,85 @@ function runSession(ws: WebSocket, deps: RelayDeps): void {
       clearTimeout(setupTimer);
       if (msg.type !== 'setup') return refuse('no_setup', { first: msg.type });
       if (msg.callId === null || msg.callSid === '') return refuse('bad_setup');
+      const settings = await deps.store.callSettings();
+      if (!settings.script) {
+        // Nothing to take her stop line and words from. The action URL is
+        // asked next, and the call goes on there.
+        log.error('ai_relay.no_script', { callId: msg.callId });
+        close(FAILED, 'no_script');
+        return;
+      }
       const started = await deps.store.startAiCall({
         callId: msg.callId,
         callSid: msg.callSid,
-        knowledgeVersion: deps.knowledgeVersion,
+        knowledgeVersion: deps.knowledge.version,
       });
       if (!started.ok) return refuse(started.reason, { callId: msg.callId, callSid: msg.callSid });
-      call = started.call;
-      log.info('ai_relay.started', { callId: call.callId, leadId: call.leadId, callSid: msg.callSid });
+      const aiCall = started.call;
+      call = aiCall;
+      log.info('ai_relay.started', { callId: aiCall.callId, leadId: aiCall.leadId, callSid: msg.callSid });
+
+      const now = deps.now?.() ?? new Date();
       // Twilio says the greeting itself, the moment the lead picks up (A13),
       // from the same function: it is what she has said so far.
-      await keep({ who: 'seri', text: welcomeGreeting(call.firstName) });
+      const greeting = welcomeGreeting(aiCall.firstName);
+      conversation = new Conversation(
+        {
+          callId: aiCall.callId,
+          instructions: buildInstructions({
+            knowledge: deps.knowledge,
+            lead: { firstName: aiCall.firstName, phone: aiCall.phone },
+            now,
+            hours: settings.hours,
+            callbackNumber: deps.twilio.callerId,
+            stopLine: settings.script.optOutBody,
+          }),
+          greeting,
+          hours: settings.hours,
+          stopLine: settings.script.optOutBody,
+          optOutWords: settings.script.optOutWords,
+        },
+        {
+          model: deps.model,
+          whoIsThere: () => deps.store.whoIsThere(aiCall.callId),
+          keep,
+          ended: (handoff) =>
+            write(
+              () => deps.store.endAiCall(aiCall.callId, handoff),
+              (err) => log.error('ai_relay.end_not_saved', { callId: aiCall.callId, action: handoff.action, err: errText(err) })
+            ),
+          send,
+          now: deps.now,
+        }
+      );
+      keep({ who: 'seri', text: greeting });
       return;
     }
     // Refused, and closing.
-    if (call === null) return;
+    if (call === null || conversation === null) return;
 
     switch (msg.type) {
       case 'setup':
         log.warn('ai_relay.second_setup', { callId: call.callId });
         return;
-      case 'prompt': {
+      case 'prompt':
         if (!msg.last || msg.text === '') return;
-        const heardAt = Date.now();
-        const reply = deps.reply(call, msg.text);
-        say(reply);
-        const latencyMs = Date.now() - heardAt;
-        await keep({ who: 'lead', text: msg.text });
-        await keep({ who: 'seri', text: reply, latencyMs });
+        keep({ who: 'lead', text: msg.text });
+        conversation.heard(msg.text);
         return;
-      }
       case 'dtmf':
-        if (msg.digit !== '') await keep({ who: 'lead', text: keyTurn(msg.digit) });
+        if (msg.digit === '') return;
+        keep({ who: 'lead', text: keyTurn(msg.digit) });
+        conversation.pressed(msg.digit);
         return;
       case 'interrupt':
-        await keep({ who: 'system', text: interruptedNote(msg.heard) });
+        // Her turn first, then the note of what was heard of it.
+        conversation.interrupted(msg.heard);
+        keep({ who: 'system', text: interruptedNote(msg.heard) });
         return;
       case 'error':
         log.warn('ai_relay.twilio_error', { callId: call.callId });
-        await keep({ who: 'system', text: twilioErrorNote(msg.description) });
+        keep({ who: 'system', text: twilioErrorNote(msg.description) });
         return;
       default:
         return;
@@ -198,7 +252,11 @@ function runSession(ws: WebSocket, deps: RelayDeps): void {
 
   ws.on('close', (code: number) => {
     clearTimeout(setupTimer);
-    if (call) log.info('ai_relay.closed', { callId: call.callId, code, turns });
+    conversation?.close();
+    if (call) {
+      const callId = call.callId;
+      void writes.then(() => log.info('ai_relay.closed', { callId, code, turns }));
+    }
   });
 
   ws.on('error', (err: Error) => {

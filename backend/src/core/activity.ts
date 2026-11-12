@@ -81,6 +81,12 @@ export const ACTIVITY_ACTIONS = [
    * section 9). The system's doing. Once per call.
    */
   'ai_agent.started',
+  /**
+   * How Seri's part of a call ended - `detail.callId`, `action` (one of her
+   * five, or `fallback`), and for `end_call` its `reason` (A11, AI-AGENT.md
+   * section 9). The system's doing. Once per call, with `calls.ai_ended_with`.
+   */
+  'ai_agent.ended',
   // Sign-in.
   'auth.signed_in',
   'auth.sign_in_failed',
