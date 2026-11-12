@@ -1,4 +1,6 @@
 import { KnowledgeError, loadKnowledge } from '../ai/knowledge';
+import { attachRelay, FIXED_LINE } from '../ai/relay';
+import { pgRelayStore } from '../ai/relay-store';
 import { readAutoCalls } from '../auto-calls-settings';
 import { config } from '../config';
 import { outcomeForStatus, talkSeconds } from '../core/calls';
@@ -73,7 +75,7 @@ const app = createApp({
 });
 
 const port = process.env.PORT || 3000;
-app.listen(port, () => {
+const server = app.listen(port, () => {
   log.info('api.started', {
     port,
     calling: config.twilio.status,
@@ -81,6 +83,18 @@ app.listen(port, () => {
     knowledge: knowledgeVersion,
   });
 });
+
+// Seri's relay - the WebSocket Twilio opens when a call goes to her (A10,
+// AI-AGENT.md). Only with automated calls on, like their webhooks: she only
+// ever takes an automated call.
+if (autoCalls && config.twilio.status === 'on') {
+  attachRelay(server, {
+    twilio: config.twilio.settings,
+    knowledgeVersion,
+    store: pgRelayStore(pool),
+    reply: () => FIXED_LINE,
+  });
+}
 
 // A lead on hold is looked at every 30 seconds, not only when a track of hold
 // music ends, and offered to whoever is free - AUTO-CALLS.md "The hold line".
