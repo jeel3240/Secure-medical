@@ -4,11 +4,15 @@
  */
 import twilio from 'twilio';
 import {
+  endMessage,
   interruptedNote,
   keyTurn,
   parseRelayMessage,
+  refusedNote,
   relaySigned,
   relayUrl,
+  replacedNote,
+  stopNote,
   textMessage,
   twilioErrorNote,
 } from './relay-messages';
@@ -128,13 +132,26 @@ describe('reading what Twilio sends', () => {
 });
 
 describe('what the relay sends, and keeps', () => {
-  it('a line: the whole of it, in one message', () => {
-    expect(JSON.parse(textMessage('Sure.'))).toEqual({ type: 'text', token: 'Sure.', last: true });
+  it('words: a sentence of a reply, its close, or a line on its own', () => {
+    expect(JSON.parse(textMessage('Sure. ', false))).toEqual({ type: 'text', token: 'Sure. ', last: false });
+    expect(JSON.parse(textMessage('', true))).toEqual({ type: 'text', token: '', last: true });
+  });
+
+  it('the end of the session, with the action as handoffData - a string, as Twilio hands it back', () => {
+    expect(JSON.parse(endMessage({ action: 'end_call', reason: 'wrong_person' }))).toEqual({
+      type: 'end',
+      handoffData: '{"action":"end_call","reason":"wrong_person"}',
+    });
   });
 
   it('the turns that are not words', () => {
     expect(keyTurn('9')).toBe('(pressed 9)');
     expect(interruptedNote('Hi, is this')).toBe('Cut off. Heard: "Hi, is this"');
     expect(twilioErrorNote('Invalid message')).toBe('Twilio error: Invalid message');
+    expect(replacedNote('price', '$', 'It is $39.')).toBe('Replaced (price, "$"): It is $39.');
+    expect(replacedNote('advice', null, 'Take two.')).toBe('Replaced (advice): Take two.');
+    expect(refusedNote('transfer_to_agent', 'Nobody can take a call.')).toBe('Not done: transfer_to_agent. Nobody can take a call.');
+    expect(stopNote('words')).toBe('Stop words heard: opted out.');
+    expect(stopNote('key')).toBe('Stop key 9 pressed: opted out.');
   });
 });

@@ -14,7 +14,8 @@ import type { ChatCompletionMessageParam } from 'openai/resources/chat/completio
 import { DEFAULT_CALL_HOURS } from '../../core/auto-dial';
 import { ANTIBIOTICS_CALL } from '../../core/call-script-fixtures';
 import { ACTIONS, lineToAdd, toHandoff, type ToolCall } from '../actions';
-import { buildInstructions, welcomeGreeting, whoIsThereNote, type WhoIsThere } from '../instructions';
+import { leadMessage } from '../conversation';
+import { buildInstructions, welcomeGreeting, type WhoIsThere } from '../instructions';
 import type { Knowledge } from '../knowledge';
 import { checkSentence } from '../safety';
 import casesFile from './cases.json';
@@ -77,7 +78,7 @@ export function loadCases(): EvalCase[] {
   }));
 }
 
-/** The conversation as OpenAI gets it - as the relay will send it (A11). */
+/** The conversation as OpenAI gets it - as a call sends it (`Conversation`, A11). */
 export function caseMessages(c: EvalCase, knowledge: Knowledge): ChatCompletionMessageParam[] {
   const instructions = buildInstructions({
     knowledge,
@@ -92,7 +93,7 @@ export function caseMessages(c: EvalCase, knowledge: Knowledge): ChatCompletionM
     { role: 'system', content: instructions },
     { role: 'assistant', content: welcomeGreeting(c.lead.firstName) },
     ...turns.map((t): ChatCompletionMessageParam =>
-      'lead' in t ? { role: 'user', content: `${whoIsThereNote(c.who)} ${t.lead}` } : { role: 'assistant', content: t.seri }
+      'lead' in t ? leadMessage(c.who, t.lead) : { role: 'assistant', content: t.seri }
     ),
   ];
 }

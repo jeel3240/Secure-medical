@@ -1,5 +1,6 @@
-import { KnowledgeError, loadKnowledge } from '../ai/knowledge';
-import { attachRelay, FIXED_LINE } from '../ai/relay';
+import { KnowledgeError, loadKnowledge, type Knowledge } from '../ai/knowledge';
+import { openAiModel } from '../ai/openai';
+import { attachRelay } from '../ai/relay';
 import { pgRelayStore } from '../ai/relay-store';
 import { readAutoCalls } from '../auto-calls-settings';
 import { config } from '../config';
@@ -39,9 +40,9 @@ if (problems.length > 0) {
 // reach a call, so it stops the start, whether or not the AI agent is on: the
 // files are in the repo, so a broken one is a bug, found here on the first
 // start rather than when she is switched on.
-let knowledgeVersion: string;
+let knowledge: Knowledge;
 try {
-  knowledgeVersion = loadKnowledge().version;
+  knowledge = loadKnowledge();
 } catch (err) {
   if (!(err instanceof KnowledgeError)) throw err;
   for (const problem of err.problems) {
@@ -80,19 +81,19 @@ const server = app.listen(port, () => {
     port,
     calling: config.twilio.status,
     autoCalls: autoCalls ? 'on' : 'off',
-    knowledge: knowledgeVersion,
+    knowledge: knowledge.version,
   });
 });
 
 // Seri's relay - the WebSocket Twilio opens when a call goes to her (A10,
-// AI-AGENT.md). Only with automated calls on, like their webhooks: she only
-// ever takes an automated call.
+// A11, AI-AGENT.md). Only with automated calls on, like their webhooks: she
+// only ever takes an automated call. OpenAI is reached only when a call does.
 if (autoCalls && config.twilio.status === 'on') {
   attachRelay(server, {
     twilio: config.twilio.settings,
-    knowledgeVersion,
+    knowledge,
     store: pgRelayStore(pool),
-    reply: () => FIXED_LINE,
+    model: openAiModel(config.openai.apiKey),
   });
 }
 
