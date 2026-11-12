@@ -50,10 +50,11 @@ Decided by Jeel, 2026-11-11, after comparing published tests:
 
 | Setting | What it does |
 |---|---|
-| ElevenLabs voice (`ttsProvider="ElevenLabs"`) | One of the most natural voices. Provided by Twilio: no ElevenLabs account. Jeel picks one of two or three on the dev number (A02). It exists only inside the ConversationRelay session - a TwiML `<Say>` cannot use it - so Seri says her own last line before the session ends (section 3) |
+| ElevenLabs voice (`ttsProvider="ElevenLabs"`) | One of the most natural voices: **Rachel, on ElevenLabs's newest model** (`21m00Tcm4TlvDq8ikWAM-v4-0.4_0.8`), picked by Jeel on the dev number (A02, below). Provided by Twilio: no ElevenLabs account. It exists only inside the ConversationRelay session - a TwiML `<Say>` cannot use it - so Seri says her own last line before the session ends (section 3) |
 | `welcomeGreeting` | The opening ("Hi, is this John?") is said by Twilio the moment the lead picks up, with no wait on OpenAI - the second in which most of the 82 hung up |
 | `interruptible="speech"` | Seri keeps listening while she talks, and stops the moment the lead speaks. The part she never said is cut from the AI's history |
-| Deepgram end-of-turn detection | Seri replies when the lead has finished a thought, not at the first pause |
+| Deepgram end-of-turn detection, `speechModel="flux"` | Seri replies when the lead has finished a thought, not at the first pause - Deepgram's default model, `nova-3`, took a pause mid-sentence for the end (A02) |
+| `ignoreBackchannel="true"` | "Uh huh" and "okay" while Seri talks do not stop her (A02) |
 | Streaming, short replies | Seri starts speaking on the first words OpenAI writes; replies are 1 to 2 sentences |
 
 **Her words, not only her voice** (Jeel, 2026-11-12). A natural voice still sounds like a machine reading when the words are written rather than spoken. Read against ElevenLabs' prompting guide for voice agents and Twilio's ConversationRelay best practices, Seri's style already had short replies, acknowledging first, and "Sure", "Got it"; four lines were added to `style` in `sales-playbook.json` (version `approved-2026-11-12`):
@@ -72,11 +73,59 @@ Twilio provides Deepgram too, so the only accounts needed are Twilio (have it) a
 **Checked on Twilio's ConversationRelay docs, 2026-11-11** (what later tickets rely on):
 
 - When `<Connect>` ends, Twilio requests its `action` URL with `SessionStatus`: `ended` (we ended it, with our `HandoffData`), `failed` (with `ErrorCode`), or `completed` (the caller hung up).
-- The WebSocket request carries Twilio's signature (`X-Twilio-Signature`), as every webhook does. `<Parameter>`s inside `<ConversationRelay>` arrive in the `setup` message under `customParameters`.
-- `events="speaker-events"` sends `agentSpeaking` and `clientSpeaking` messages - how the server knows when Seri has stopped talking. Their exact shape is checked in A02.
+- The WebSocket request carries Twilio's signature (`X-Twilio-Signature`), as every webhook does. `<Parameter>`s inside `<ConversationRelay>` arrive in the `setup` message under `customParameters`. Both confirmed, and which address is signed, below.
+- `events="speaker-events"` sends `agentSpeaking` and `clientSpeaking` messages - how the server knows when Seri has stopped talking. Their shape is below.
 - `dtmfDetection="true"` sends key presses over the WebSocket.
-- **Not documented:** whether `end` waits for Seri's last words to be heard or cuts them off. A02 finds out.
-- **Before the first call:** the Twilio account must complete ConversationRelay's onboarding in the console, which includes accepting Twilio's AI features addendum. Until then a `<ConversationRelay>` call fails.
+- **Not documented:** whether `end` waits for Seri's last words to be heard or cuts them off. It waits - below.
+- **Before the first call:** the Twilio account must complete ConversationRelay's onboarding in the console, which includes accepting Twilio's AI features addendum. Until then a `<ConversationRelay>` call fails. Done before A02's calls.
+
+### What the first test calls showed (A02, 2026-11-11 and 12)
+
+A throwaway server answered the dev number, (480) 530-8582, with `<ConversationRelay>` and said back what it heard - no OpenAI. It was never merged; only these findings are kept. Calls from Jeel's phone, and from the dev number calling itself, recorded on both sides so the gaps could be measured in the audio.
+
+**The voice: Rachel, on ElevenLabs's `v4` model** - `21m00Tcm4TlvDq8ikWAM-v4-0.4_0.8`, picked by Jeel, 2026-11-12, from four voices (Rachel, Jessica, Matilda, Sarah) saying the same lines. The string is the voice id, the model, then stability 0.4 and similarity 0.8 - a little livelier than the default, still the same voice. With no model named, Twilio uses ElevenLabs's oldest English model, `flash_v2`, which Jeel found less human. With `v4` (and `v3`) the speed must be left out or be 1.0. She speaks about 160-200 words a minute on short lines; people on the phone speak about 165.
+
+**How fast:**
+
+| Step | Measured |
+|---|---|
+| Our `text` message → Seri's voice starts (`agentSpeaking` on) | 0.29 s median, 0.49 s slowest - 17 turns, both models |
+| The lead's last word → Seri's first sound, with an echo instead of the AI (from the recordings) | 0.66-0.76 s with `nova-3`, 0.74-1.06 s with `flux` |
+| The same with OpenAI's first word added (0.55 s on 2026-11-11, 0.92 s on 2026-11-12) | About 1.3-1.9 s expected; A11 measures it on every turn (`call_ai_turns.latency_ms`) |
+
+People leave about 0.2 s between turns, and more than about 0.8 s starts to feel slow, so the relay saves time where it can: OpenAI's words streamed, the first sentence sent the moment it is whole, a short first sentence (A11).
+
+**Listening:**
+
+- `nova-3`, Deepgram's default, took a short pause mid-sentence for the end of the turn and sent the two halves as two prompts - Seri would answer half a sentence. `flux` waited for the whole thought, a little slower (above).
+- `ignoreBackchannel="true"`: "uh huh" and "okay" said while Seri talked did not stop her. Speaking did, at once.
+- The greeting can be talked over (the default, `welcomeGreetingInterruptible="any"`), like every other line.
+
+**The settings A13 starts from** - heard together on the dev number:
+
+```
+ttsProvider="ElevenLabs" voice="21m00Tcm4TlvDq8ikWAM-v4-0.4_0.8"
+transcriptionProvider="Deepgram" speechModel="flux"
+interruptible="speech" interruptSensitivity="low" ignoreBackchannel="true"
+elevenlabsTextNormalization="on" dtmfDetection="true" events="speaker-events"
+applicationReconnect="true"
+```
+
+`interruptSensitivity="low"` asks for clear speech before she stops; `elevenlabsTextNormalization="on"` reads numbers and short forms as words; `applicationReconnect="true"` has Twilio try again if our WebSocket drops - for a deploy mid-call, not yet tried (A12). None of the three was tested on its own.
+
+**Confirmed** - what the relay is built on:
+
+- **The signature.** The WebSocket request carries `X-Twilio-Signature`, signed for the `wss://` address exactly as written in the TwiML, query string included, with no parameters (`{}`). The same address with `https://`, or without its query, does not match. A10 checks it that way.
+- **Caddy.** Production's rule, `handle /api/* { reverse_proxy api:3000 }`, passes the WebSocket as it is: the calls went through Caddy 2 with that rule, behind the tunnel. Nothing to change.
+- **The messages**, as they arrived:
+  - `setup`: `sessionId`, `callSid`, `parentCallSid`, `from`, `to`, `forwardedFrom`, `callerName`, `direction`, `callType` (`PSTN`), `callStatus` (`IN_PROGRESS`), `accountSid`, and `customParameters` - each `<Parameter>` by name.
+  - The lead: `{ "type": "prompt", "voicePrompt": "How can you help me?", "lang": "en-US", "last": true }` (`lang` is `en` with `flux`).
+  - Speaker events: `{ "type": "info", "name": "agentSpeaking", "value": "on" }` - `clientSpeaking` the same way, `off` when it stops.
+  - Talking over her: `{ "type": "interrupt", "utteranceUntilInterrupt": "...what she had said...", "durationUntilInterruptMs": 8636 }`.
+  - A key: `{ "type": "dtmf", "digit": "1" }`.
+- **`end` never cuts her last line short.** A 13-second line with `end` sent straight after it was heard to the last word. Twilio ends the session about a second after `agentSpeaking` off, then posts the `action` URL with `SessionStatus=ended` and our `HandoffData`. So the relay sends `end` straight after her last line, with no wait (A11).
+- **The lead hanging up:** `SessionStatus=completed`, `CallStatus=completed`, no `HandoffData`.
+- **Our WebSocket dropping mid-call** (the test server restarted): Twilio logged error 64105 and requested the `action` URL - the backup path in section 6 (A12).
 
 ---
 
@@ -140,7 +189,7 @@ Seri ends every call by choosing exactly one. She says her last line herself, in
 | `opt_out` | Asks not to be called | The script's stop line ("Okay, we will not call you again...") | Blocks the number (T13), hangs up | `opted_out` |
 | `end_call` | Not interested, wrong person, an emergency, done | Goodbye | Hangs up. The reason she gave is kept with the action | `not_interested` |
 
-The relay waits for Twilio to say Seri has finished speaking (`agentSpeaking` off) before it ends the session, so her last line is never cut off (A02 confirms how).
+The relay sends `end` straight after Seri's last line: Twilio says the whole line first and only then ends the session, so her last line is never cut off (A02, section 1).
 
 Seri has no action for payment, personal details (date of birth, address, card) or prescriptions, so she cannot do them.
 

@@ -4,7 +4,7 @@
 
 **Why:** If the WebSocket does not pass through Caddy, or the voice or speed is bad, or Twilio cuts Seri's last line short, we find out now, not after A10-A14.
 
-**Depends on:** A01  ·  **Size:** Small (a few hours)
+**Depends on:** A01  ·  **Size:** Small (a few hours)  ·  **Status:** Done 2026-11-12
 
 ## Before the call
 
@@ -21,15 +21,15 @@
 
 ## Done when
 
-- [ ] Jeel has called it and **picked a voice**. The voice id is written in `docs/AI-AGENT.md` section 1.
-- [ ] Talking over Seri stops her (`interrupt` message received).
-- [ ] Timing measured and written in `docs/AI-AGENT.md`: typical and slowest turn.
-- [ ] Confirmed: WebSocket works through Caddy (or the change Caddy needs is written down).
-- [ ] Confirmed and written down: the WebSocket request carries `X-Twilio-Signature`, and what URL it is signed for (A10 checks it).
-- [ ] Confirmed and written down: the shape of the `agentSpeaking` messages, and whether a `<Parameter>` arrives in `setup`.
-- [ ] Confirmed and written down: **does `end` straight after a `text` cut the line short?** Say a long line, then `end`; then the same waiting for `agentSpeaking` off. The relay (A11) is built on the answer.
-- [ ] Confirmed: a key press arrives as a `dtmf` message.
-- [ ] The spike route and WebSocket are **removed** before merging, or never merged: only the findings are kept.
+- [x] Jeel has called it and **picked a voice**. The voice id is written in `docs/AI-AGENT.md` section 1 - Rachel on ElevenLabs's `v4` model, `21m00Tcm4TlvDq8ikWAM-v4-0.4_0.8`, 2026-11-12.
+- [x] Talking over Seri stops her (`interrupt` message received) - with the words she had said and for how long.
+- [x] Timing measured and written in `docs/AI-AGENT.md`: typical and slowest turn - our text to her voice 0.29 s median, 0.49 s slowest; the lead's last word to her first sound, with an echo, 0.66-1.06 s.
+- [x] Confirmed: WebSocket works through Caddy (or the change Caddy needs is written down) - production's `/api/*` rule, unchanged.
+- [x] Confirmed and written down: the WebSocket request carries `X-Twilio-Signature`, and what URL it is signed for (A10 checks it) - the `wss://` address as written, query included, no parameters.
+- [x] Confirmed and written down: the shape of the `agentSpeaking` messages, and whether a `<Parameter>` arrives in `setup` - it does, under `customParameters`.
+- [x] Confirmed and written down: **does `end` straight after a `text` cut the line short?** Say a long line, then `end`; then the same waiting for `agentSpeaking` off. The relay (A11) is built on the answer - it does not: the whole line is heard either way.
+- [x] Confirmed: a key press arrives as a `dtmf` message.
+- [x] The spike route and WebSocket are **removed** before merging, or never merged: only the findings are kept - never committed.
 
 ## Tests
 
@@ -42,5 +42,14 @@
 ## Not in this ticket
 
 - OpenAI. The echo is enough to test voice, listening and speed of the Twilio side.
+
+## As built
+
+- **Not a route in the app:** a standalone script, run beside the app on the dev number through a tunnel and a local Caddy 2 with production's `/api/*` rule, so nothing in `src/` changed and nothing had to be removed. It answered the number with a key menu: 1-5 the voices with an echo and the long-line tests (keys 1, 2, 3 on the call), 6 the settings A13 starts from, 9 the voices one after another on the same lines. The dev number was pointed back afterwards.
+- **Recorded calls** - the dev number calling itself, both sides recorded - so the gap between the lead's last word and Seri's first sound was measured in the audio, not guessed from the messages.
+- **Four voices, then a model:** the first round, on ElevenLabs's default model (`flash_v2`), did not sound human enough to Jeel; the second, on `v4` with stability 0.4 and similarity 0.8, picked Rachel.
+- **Found beyond the ticket:** Deepgram's default `nova-3` splits a sentence at a pause, `flux` does not; `ignoreBackchannel` keeps "uh huh" from stopping her; a hang-up is `SessionStatus=completed` with no `HandoffData`; our WebSocket dropping is Twilio error 64105, then the `action` URL. All in `docs/AI-AGENT.md` section 1, "What the first test calls showed".
+- **Changed by it:** A11 sends `end` straight after Seri's last line, with no wait for `agentSpeaking` off; A13 uses the settings in section 1.
+- **Same day, from what the calls sounded like:** four speaking-style lines in the sales playbook - contractions, varied words, an occasional "So" or "Oh", matching the lead's mood (`docs/AI-AGENT.md` section 1, "Her words, not only her voice"; A04, A09).
 
 Design: `docs/AI-AGENT.md`. All AI code in `backend/src/ai/`. One PR into `dev`.
