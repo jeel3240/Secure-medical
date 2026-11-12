@@ -8,7 +8,7 @@
 
 ## Build
 
-- `/auto/answer` in `backend/src/api/twilio-webhooks.ts`: when `readAiAgentOn` (A01) says on, reply with `<Connect action="/api/webhooks/twilio/auto/ai-after?call=...">` and `<ConversationRelay>`: the voice from A02, Deepgram, `interruptible="speech"`, `dtmfDetection="true"`, `events="speaker-events"`, the opening as `welcomeGreeting` ("Hi, is this John?", or "Hi there"), the relay URL, and `<Parameter name="call">` with the row id. Off: exactly today's `firstAsk`.
+- `/auto/answer` in `backend/src/api/twilio-webhooks.ts`: when `readAiAgentOn` (A01) says on, reply with `<Connect action="/api/webhooks/twilio/auto/ai-after?call=...">` and `<ConversationRelay>` with the settings A02 found (`docs/AI-AGENT.md` section 1, "The settings A13 starts from": Rachel on `v4`, Deepgram's `flux`, `interruptible="speech"`, `ignoreBackchannel`, `dtmfDetection="true"`, `events="speaker-events"`), the opening as `welcomeGreeting` ("Hi, is this John?", or "Hi there"), the relay URL, and `<Parameter name="call">` with the row id. Off: exactly today's `firstAsk`.
 - TwiML built in `backend/src/integrations/twilio.ts` next to `autoCallTwiml`.
 - Machine detection unchanged.
 
