@@ -128,7 +128,7 @@ applicationReconnect="true"
 
 *As built (A13):* these, word for word, are `RELAY_SETTINGS` in `backend/src/ai/relay-messages.ts`, which every call to her uses (section 2).
 
-`interruptSensitivity="low"` asks for clear speech before she stops; `elevenlabsTextNormalization="on"` reads numbers and short forms as words; `applicationReconnect="true"` has Twilio try again if our WebSocket drops - for a deploy mid-call. On every A21 call Twilio logged a warning (12200) that the attribute is not allowed on `<ConversationRelay>`, so it may be ignored. Not tried, and not handled: the relay takes a call once (`startAiCall`), so a reconnect's `setup` is refused; Twilio then posts `failed` and the script takes the call (A14). None of the three was tested on its own.
+`interruptSensitivity="low"` asks for clear speech before she stops; `elevenlabsTextNormalization="on"` reads numbers and short forms as words; `applicationReconnect="true"` has Twilio try again if our WebSocket drops - for a deploy mid-call. On every A21 call Twilio logged a warning (12200) that the attribute is not allowed on `<ConversationRelay>` - but it is in Twilio's ConversationRelay reference (checked 2026-11-13: when `true`, Twilio buffers what happens while the socket is down and replays it once reconnected; `false`, the default, ends the call `failed`), so the warning is Twilio's XML check not knowing it yet. Whether a reconnect works is not tested. Not tried, and not handled: the relay takes a call once (`startAiCall`), so a reconnect's `setup` is refused; Twilio then posts `failed` and the script takes the call (A14). None of the three was tested on its own.
 
 **Confirmed** - what the relay is built on:
 
