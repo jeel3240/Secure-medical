@@ -262,8 +262,15 @@ describe('an action right after a question waits for the answer (A09)', () => {
     });
   });
 
-  it('a question earlier in the reply, or none at all, does not hold it back', () => {
-    expect(call('transfer_to_agent', {}, { said: 'Any questions? Great, connecting you now.' }).ok).toBe(true);
+  it('a question anywhere in the reply holds it back too - asked, then the link sent before the answer (A21, call 89)', () => {
+    expect(
+      call('send_link', {}, { said: 'Got it, Jeel. Is it more the timing, or just not something you need right now? I can also text you a link to browse later.' })
+    ).toMatchObject({ ok: false, awaitLead: true });
+    expect(call('transfer_to_agent', {}, { said: 'Any questions? Great, connecting you now.' })).toMatchObject({ ok: false, awaitLead: true });
+  });
+
+  it('no question at all: taken', () => {
+    expect(call('send_link', {}, { said: "Sure, I'll text you the link now. Have a great day!" }).ok).toBe(true);
     expect(call('transfer_to_agent', {}, { said: '' }).ok).toBe(true);
   });
 

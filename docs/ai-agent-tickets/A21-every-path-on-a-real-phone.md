@@ -91,7 +91,9 @@ Seen on every call so far, not changed: Twilio logs a warning (12200) that `appl
 
 Call 92's call back and offer fixed on `fix/seri-callback-asks-time` - a call back is booked only for a time she said back and the lead agreed, and with nobody free she asks when instead of offering to connect: `docs/AI-AGENT.md` section 4, "Changed after A21's call 92".
 
-Still open from these calls: **the link texted without a yes** (call 89) - `toHandoff` holds an action back only when her reply *ends* on a question, and hers asked one mid-reply, then offered the link and sent it.
+Call 89's link fixed on `fix/seri-link-needs-a-yes` - an action waits for the answer to a question anywhere in her reply, not only at its end; `docs/AI-AGENT.md` section 3, "Two rules".
+
+Nothing found on calls 86-92 is still open. The rest of the list above is still to walk.
 
 ## Done when
 

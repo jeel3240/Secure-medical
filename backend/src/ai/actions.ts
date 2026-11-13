@@ -175,10 +175,13 @@ const REFUSED: Record<CallbackRefusal, string> = {
 export function toHandoff(call: ToolCall, context: ActionContext): ActionResult {
   // Found by the answer test set (A09): the model asks "Would you like me to
   // connect you?" and transfers in the same reply. A question is answered
-  // before anything ends the call - except a stop, taken at once every time:
-  // on A21's test runs she opted a lead out and then said her greeting again,
-  // and the question held the stop back.
-  if (call.name !== 'opt_out' && context.said.trim().endsWith('?') && (ACTIONS as readonly string[]).includes(call.name)) {
+  // before anything ends the call - wherever it is in the reply: on A21's call
+  // 89 she asked "Is it more the timing, or just not something you need right
+  // now?", offered the link and texted it in the same reply, before the lead
+  // could answer. Except a stop, taken at once every time: on A21's test runs
+  // she opted a lead out and then said her greeting again, and the question
+  // held the stop back.
+  if (call.name !== 'opt_out' && context.said.includes('?') && (ACTIONS as readonly string[]).includes(call.name)) {
     return {
       ok: false,
       awaitLead: true,
