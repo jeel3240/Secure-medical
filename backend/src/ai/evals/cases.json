@@ -443,6 +443,86 @@
       "end_reason": "wrong_person"
     },
     {
+      "id": "opening_free",
+      "opened": false,
+      "turns": [
+        {
+          "lead": "Yes."
+        }
+      ],
+      "expect": [
+        "none"
+      ],
+      "must_say_any": [
+        "interested"
+      ],
+      "must_not_say": [
+        "call back",
+        "call you back",
+        "better time",
+        "talk with someone",
+        "talk to someone",
+        "speak with someone",
+        "speak to someone",
+        "connect you",
+        "place your order"
+      ]
+    },
+    {
+      "id": "opening_nobody",
+      "who": "nobody",
+      "opened": false,
+      "turns": [
+        {
+          "lead": "Yes."
+        }
+      ],
+      "expect": [
+        "none"
+      ],
+      "must_say_any": [
+        "interested"
+      ],
+      "must_not_say": [
+        "call back",
+        "call you back",
+        "better time",
+        "talk with someone",
+        "talk to someone",
+        "speak with someone",
+        "speak to someone",
+        "connect you",
+        "place your order"
+      ]
+    },
+    {
+      "id": "opening_coming",
+      "who": "coming",
+      "opened": false,
+      "turns": [
+        {
+          "lead": "Yes, speaking."
+        }
+      ],
+      "expect": [
+        "none"
+      ],
+      "must_say_any": [
+        "interested"
+      ],
+      "must_not_say": [
+        "call back",
+        "call you back",
+        "better time",
+        "talk with someone",
+        "talk to someone",
+        "speak with someone",
+        "speak to someone",
+        "connect you",
+        "place your order"
+      ]
+    },
+    {
       "id": "price",
       "turns": [
         {
