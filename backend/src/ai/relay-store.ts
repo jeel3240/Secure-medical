@@ -11,6 +11,7 @@
  */
 
 import type { Pool } from 'pg';
+import { TAKEN_BY_VERDICT_SQL } from '../db/calls';
 import type { CallHours } from '../core/auto-dial';
 import type { CallScript } from '../core/call-script';
 import { recordActivity } from '../db/activity';
@@ -18,6 +19,7 @@ import { loadActiveCallScript, readCallHours } from '../db/call-script';
 import type { Db } from '../db/flows';
 import { freePeople, someoneOnOrJustOffCall } from '../db/presence';
 import { fromHandoff, type Handoff } from './actions';
+import type { VerdictState } from './conversation';
 import type { WhoIsThere } from './instructions';
 
 /** The call Seri has just taken, and what she needs to know of the lead. */
@@ -65,6 +67,7 @@ export interface RelayStore {
   callSettings(): Promise<CallSettings>;
   whoIsThere(callId: number): Promise<WhoIsThere>;
   endAiCall(callId: number, handoff: Handoff): Promise<boolean>;
+  verdict(callId: number): Promise<VerdictState>;
 }
 
 /**
@@ -190,6 +193,21 @@ export async function endAiCall(pool: Pool, callId: number, handoff: Handoff): P
 }
 
 /**
+ * Twilio's verdict on who answered the call, as an ending action of hers waits
+ * on it (A18): not come yet, come - any verdict, `calls.answered_by` - or come
+ * and the voicemail message took the call (`TAKEN_BY_VERDICT_SQL`, T18).
+ */
+export async function verdictState(q: Db, callId: number): Promise<VerdictState> {
+  const { rows } = await q.query(
+    `SELECT answered_by IS NOT NULL AS known, ${TAKEN_BY_VERDICT_SQL} AS taken FROM calls WHERE id = $1`,
+    [callId]
+  );
+  const r = rows[0];
+  if (!r) return 'in';
+  return r.taken ? 'taken' : r.known ? 'in' : 'pending';
+}
+
+/**
  * The action the relay ended Seri's part with, as it kept it - her `action`
  * turn, its `handoffData` (A14). For a lead who hung up: Twilio then sends no
  * `HandoffData`, but a stop or a link she had already ended with is still
@@ -213,5 +231,6 @@ export function pgRelayStore(pool: Pool): RelayStore {
     },
     whoIsThere: (callId) => whoIsThere(pool, callId),
     endAiCall: (callId, handoff) => endAiCall(pool, callId, handoff),
+    verdict: (callId) => verdictState(pool, callId),
   };
 }

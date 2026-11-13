@@ -212,6 +212,7 @@ function runSession(ws: WebSocket, deps: RelayDeps): void {
               (err) => log.error('ai_relay.end_not_saved', { callId: aiCall.callId, action: handoff.action, err: errText(err) })
             ),
           send,
+          verdict: () => deps.store.verdict(aiCall.callId),
           now: deps.now,
           timers: deps.timers,
         }

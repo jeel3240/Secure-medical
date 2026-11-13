@@ -10,7 +10,18 @@ import { DEFAULT_CALL_HOURS } from '../core/auto-dial';
 import { ANTIBIOTICS_CALL } from '../core/call-script-fixtures';
 import * as logModule from '../lib/log';
 import type { Handoff } from './actions';
-import { Conversation, FILLER_LINE, leadMessage, LIMITS, STILL_THERE_LINE, WRAP_UP_NOTE } from './conversation';
+import {
+  Conversation,
+  FILLER_LINE,
+  leadMessage,
+  LIMITS,
+  STILL_THERE_LINE,
+  VERDICT_POLL_MS,
+  VERDICT_WAIT_MS,
+  VOICEMAIL_TOOK_NOTE,
+  WRAP_UP_NOTE,
+  type VerdictState,
+} from './conversation';
 import { FakeClock } from './fake-clock';
 import type { WhoIsThere } from './instructions';
 import type { ModelEvent, SeriModel } from './openai';
@@ -787,5 +798,162 @@ describe('limits and failures (A12)', () => {
 
   it('every line the relay says itself passes the sentence check', () => {
     for (const line of [STILL_THERE_LINE, FILLER_LINE]) expect(checkSentence(line).reason).toBeNull();
+  });
+});
+
+describe('waiting for Twilio\'s verdict before ending (A18)', () => {
+  let verdict: VerdictState;
+  let asked: number;
+  let seri: Conversation;
+
+  beforeEach(() => {
+    verdict = 'pending';
+    asked = 0;
+    seri = new Conversation(
+      {
+        callId: 7,
+        instructions: 'THE INSTRUCTIONS',
+        greeting: 'Hi, is this John?',
+        hours: DEFAULT_CALL_HOURS,
+        stopLine: STOP,
+        optOutWords: ANTIBIOTICS_CALL.optOutWords,
+      },
+      {
+        model,
+        whoIsThere: async () => who,
+        keep: (turn) => kept.push(turn),
+        ended: (handoff) => ended.push(handoff),
+        send: (message) => sent.push(JSON.parse(message)),
+        verdict: async () => {
+          asked++;
+          return verdict;
+        },
+        now: () => NOW,
+        timers: clock,
+      }
+    );
+  });
+
+  /** "John isn't available" - a greeting she takes for the wrong person. */
+  const sheEndsOnTheGreeting = async () => {
+    model.replies.push([text('Sorry about that, have a great day.'), tool('end_call', { reason: 'wrong_person' })]);
+    seri.heard("John isn't available right now.");
+    await until(() => tokens().some(([t]) => t === 'Sorry about that, have a great day. '), 'her last line');
+    await settle();
+  };
+  const waitLogs = () => logged.filter((l) => l.event === 'ai_relay.verdict_wait').map((l) => l.fields);
+  /** Time passing as it does on a call: a poll every half second, each answered before the next. */
+  const pass = async (ms: number) => {
+    for (let waited = 0; waited < ms; waited += VERDICT_POLL_MS) {
+      clock.advance(VERDICT_POLL_MS);
+      await settle();
+    }
+  };
+
+  it('no verdict yet: her last line said and her choice kept, but the call not ended', async () => {
+    await sheEndsOnTheGreeting();
+    expect(kept.filter((t) => t.who === 'action')).toEqual([{ who: 'action', text: JSON.stringify({ action: 'end_call', reason: 'wrong_person' }) }]);
+    expect(ends()).toEqual([]);
+    expect(ended).toEqual([]);
+    expect(seri.isOver).toBe(true);
+  });
+
+  it('a person: the verdict comes, and the call ends as she chose', async () => {
+    await sheEndsOnTheGreeting();
+    await pass(1_000);
+    verdict = 'in';
+    await pass(VERDICT_POLL_MS);
+    expect(ends()).toEqual([{ type: 'end', handoffData: JSON.stringify({ action: 'end_call', reason: 'wrong_person' }) }]);
+    expect(ended).toEqual([{ action: 'end_call', reason: 'wrong_person' }]);
+    expect(waitLogs()).toEqual([{ callId: 7, action: 'end_call', waitedMs: 1_500, verdict: 'in' }]);
+  });
+
+  it('a greeting, then its beep: the voicemail message took the call - nothing ended, nothing recorded, a note why', async () => {
+    await sheEndsOnTheGreeting();
+    await pass(4_000);
+    verdict = 'taken';
+    await pass(VERDICT_POLL_MS);
+    await pass(VERDICT_WAIT_MS);
+    expect(ends()).toEqual([]);
+    expect(ended).toEqual([]);
+    expect(kept.at(-1)).toEqual({ who: 'system', text: VOICEMAIL_TOOK_NOTE });
+    expect(waitLogs()).toEqual([{ callId: 7, action: 'end_call', waitedMs: 4_500, verdict: 'taken' }]);
+  });
+
+  it('no verdict in 15 seconds: the call ends all the same', async () => {
+    await sheEndsOnTheGreeting();
+    await pass(VERDICT_WAIT_MS);
+    expect(ends()).toHaveLength(1);
+    expect(ended).toEqual([{ action: 'end_call', reason: 'wrong_person' }]);
+    expect(waitLogs()).toEqual([{ callId: 7, action: 'end_call', waitedMs: VERDICT_WAIT_MS, verdict: 'none' }]);
+    expect(clock.waiting).toBe(0);
+  });
+
+  it('the socket closes while it waits - the lead hung up, or the message took the call: nothing more', async () => {
+    await sheEndsOnTheGreeting();
+    seri.close();
+    expect(clock.waiting).toBe(0);
+    verdict = 'in';
+    clock.advance(VERDICT_WAIT_MS);
+    await settle();
+    expect(ends()).toEqual([]);
+    expect(ended).toEqual([]);
+  });
+
+  it('the link and a call back wait too', async () => {
+    model.replies.push([text("I'll text you the link now."), tool('send_link')]);
+    seri.heard('Just text me.');
+    await until(() => tokens().length > 0, 'her line');
+    await settle();
+    expect(ends()).toEqual([]);
+    expect(asked).toBeGreaterThan(0);
+  });
+
+  it('a transfer and a stop do not wait - the verdict is not even asked', async () => {
+    model.replies.push([text('Great, connecting you now.'), tool('transfer_to_agent')]);
+    seri.heard('Yes, put me through.');
+    await until(() => ends().length === 1, 'the transfer');
+    expect(asked).toBe(0);
+
+    sent = [];
+    const stopper = new Conversation(
+      { callId: 8, instructions: 'I', greeting: 'Hi there!', hours: DEFAULT_CALL_HOURS, stopLine: STOP, optOutWords: ANTIBIOTICS_CALL.optOutWords },
+      {
+        model,
+        whoIsThere: async () => who,
+        keep: () => undefined,
+        ended: () => undefined,
+        send: (message) => sent.push(JSON.parse(message)),
+        verdict: async () => {
+          asked++;
+          return 'pending';
+        },
+        timers: clock,
+      }
+    );
+    stopper.heard('Stop calling me.');
+    expect(ends()).toHaveLength(1);
+    expect(asked).toBe(0);
+  });
+
+  it('the verdict cannot be read: the call is not held', async () => {
+    const failing = new Conversation(
+      { callId: 9, instructions: 'I', greeting: 'Hi there!', hours: DEFAULT_CALL_HOURS, stopLine: STOP, optOutWords: ANTIBIOTICS_CALL.optOutWords },
+      {
+        model,
+        whoIsThere: async () => who,
+        keep: () => undefined,
+        ended: (handoff) => ended.push(handoff),
+        send: (message) => sent.push(JSON.parse(message)),
+        verdict: async () => {
+          throw new Error('database down');
+        },
+        timers: clock,
+      }
+    );
+    model.replies.push([text('Thanks for your time.'), tool('end_call', { reason: 'not_interested' })]);
+    failing.heard('Not interested.');
+    await until(() => ends().length === 1, 'the end');
+    expect(ended).toEqual([{ action: 'end_call', reason: 'not_interested' }]);
   });
 });

@@ -970,6 +970,12 @@ A call whose script has its result already, or that is over, is left alone.
 Only the first verdict is acted on: Twilio sends one, and a repeat changes
 nothing (`recordAnsweredBy` keeps the first).
 
+**On a call Seri took** (Phase 7, A18, `AI-AGENT.md` section 2) the same rule
+holds: anything the lead said to her counts as an answer, and a key pressed
+while she talked as a key. Her goodbye, the link or a call back waits for the
+verdict - up to 15 seconds after her last line - so a greeting she took for a
+"no" still gets the message when its beep comes.
+
 **Taking the call over** (`actOnVerdict`, `db/auto-calls.ts`): the call row
 is locked while it decides - the same lock an answer is kept under
 (`keepAnswer`), so an answer arriving at that moment waits, then finds the

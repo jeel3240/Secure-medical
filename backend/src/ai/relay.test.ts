@@ -16,7 +16,7 @@ import { DEFAULT_CALL_HOURS } from '../core/auto-dial';
 import { ANTIBIOTICS_CALL } from '../core/call-script-fixtures';
 import * as logModule from '../lib/log';
 import type { Handoff } from './actions';
-import { Conversation } from './conversation';
+import { Conversation, type VerdictState } from './conversation';
 import { FakeClock } from './fake-clock';
 import { CALL_HEADING, type WhoIsThere } from './instructions';
 import { loadKnowledge } from './knowledge';
@@ -67,6 +67,14 @@ class FakeStore implements RelayStore {
   async endAiCall(callId: number, handoff: Handoff): Promise<boolean> {
     this.endedWith.push({ callId, handoff });
     return true;
+  }
+
+  /** Twilio's verdict (A18): come, unless a test says otherwise. */
+  verdictNow: VerdictState = 'in';
+  verdictAsked = 0;
+  async verdict(): Promise<VerdictState> {
+    this.verdictAsked++;
+    return this.verdictNow;
   }
 }
 
@@ -619,5 +627,65 @@ describe('limits and failures (A12)', () => {
     expect(c.received).toEqual([{ type: 'end', handoffData: '{"action":"fallback","why":"relay_failed"}' }]);
     expect(events('ai_relay.failed')).toEqual([{ callId: 7, err: expect.stringContaining('boom') }]);
     expect(c.ws.readyState).toBe(WebSocket.OPEN);
+  });
+});
+
+describe('Twilio\'s verdict before an ending action (A18)', () => {
+  /** "John isn't available right now." - a voicemail greeting she takes for the wrong person. */
+  async function endsOnTheGreeting(): Promise<Connection> {
+    model.replies.push([text('Sorry about that, have a great day.'), tool('end_call', { reason: 'wrong_person' })]);
+    const c = await connected();
+    c.send(SETUP);
+    c.send({ type: 'prompt', voicePrompt: "John isn't available right now.", last: true });
+    await until(() => store.turns.some((t) => t.who === 'action'), 'her choice');
+    return c;
+  }
+  /** Time passing on a call: the relay asks for the verdict every half second. */
+  async function pass(ms: number): Promise<void> {
+    for (let waited = 0; waited < ms; waited += 500) {
+      const asked = store.verdictAsked;
+      clock.advance(500);
+      await until(() => store.verdictAsked > asked || gotEnd(c0), 'the next look');
+    }
+  }
+  let c0: Connection;
+
+  it('early - the verdict already in: the end straight after her last line, as before', async () => {
+    c0 = await endsOnTheGreeting();
+    await until(() => gotEnd(c0) && store.endedWith.length === 1, 'the end');
+    expect(store.verdictAsked).toBe(1);
+  });
+
+  it('late - a person decided a second on: then the end, and her part recorded', async () => {
+    store.verdictNow = 'pending';
+    c0 = await endsOnTheGreeting();
+    await pass(1_000);
+    expect(gotEnd(c0)).toBe(false);
+    expect(store.endedWith).toEqual([]);
+    store.verdictNow = 'in';
+    clock.advance(500);
+    await until(() => gotEnd(c0) && store.endedWith.length === 1, 'the end');
+    expect(store.endedWith).toEqual([{ callId: 7, handoff: { action: 'end_call', reason: 'wrong_person' } }]);
+  });
+
+  it('never - no verdict in 15 seconds: the end all the same', async () => {
+    store.verdictNow = 'pending';
+    c0 = await endsOnTheGreeting();
+    await pass(15_000);
+    await until(() => gotEnd(c0) && store.endedWith.length === 1, 'the end');
+  });
+
+  it('the greeting\'s beep - the voicemail message took the call: no end, nothing recorded, a note why', async () => {
+    store.verdictNow = 'pending';
+    c0 = await endsOnTheGreeting();
+    await pass(3_000);
+    store.verdictNow = 'taken';
+    clock.advance(500);
+    await until(() => store.turns.at(-1)?.who === 'system', 'the note');
+    expect(store.turns.at(-1)?.text).toBe('Not done: a machine answered, and the voicemail message took the call.');
+    clock.advance(20_000);
+    await new Promise((r) => setTimeout(r, 30));
+    expect(gotEnd(c0)).toBe(false);
+    expect(store.endedWith).toEqual([]);
   });
 });
