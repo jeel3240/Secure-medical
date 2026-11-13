@@ -81,14 +81,15 @@
 | 89 | Aria with tones: busy, "is it a scam?", "No" | Her opening said "You signed up on one of our partner sites" - not wanted. After the "No" she texted the link in the same reply as asking why - not asked for (below) |
 | 90 | The new opening; "Who is this?"; "How did you get my number?" | The partner sites only when asked how we got the number - right. "No worries, Jeel" and "let me know when you're ready, Jeel" sounded personal - the soft tones; seven of nine replies offered to connect |
 | 91 | "Yes" to the greeting, with Jeel's browser not open - nobody free | Her first reply skipped "is that something you'd be interested in?" and asked "talk with someone now, or a call back at a better time?" - the "Yes" taken as interest, the who-is-there note acted on at once. Hung up after it |
+| 92 | The api restarted after her second reply, through a local Caddy set up as production's | Picked back up: Twilio's second try reconnected 4 seconds later, the "Yes" said meanwhile replayed and answered, no second greeting. Then, nobody free, she booked a call back for Monday at 11 AM without asking when - and had offered to connect him now with nobody free |
 
 All changed on `feat/seri-voice-aria-tone` - `docs/AI-AGENT.md` section 1, "Her voice and tone": Aria; seven businesslike tones; the opening and "Who is this?" without the partner sites; no "no worries" or "when you're ready"; a note against offering to connect twice in a row; an action written in brackets taken; and a stop never held back by a question.
 
 Call 91's opening fixed on `fix/seri-opening-line` - `docs/AI-AGENT.md` section 1, "Her first reply is always the opening".
 
-Seen on every call so far, not changed: Twilio logs a warning (12200) that `applicationReconnect` is not allowed on `<ConversationRelay>`. The attribute is in Twilio's own ConversationRelay reference, so the warning is its XML check out of date, and the calls are unaffected; whether a reconnect after a dropped WebSocket (a deploy mid-call) works is not tested (`docs/AI-AGENT.md` section 2, the TwiML).
+Seen on every call so far, not changed: Twilio logs a warning (12200) that `applicationReconnect` is not allowed on `<ConversationRelay>`. The attribute is in Twilio's own ConversationRelay reference, so the warning is its XML check out of date, and the calls are unaffected. Looking into it found the relay refused Twilio's reconnect - a deploy mid-call handed the lead to the script, or to Twilio's error. Fixed on `feat/seri-reconnect` and heard on call 92 - `docs/AI-AGENT.md` section 2, "When the line drops".
 
-Still open from these calls: **the link texted without a yes** (call 89) - `toHandoff` holds an action back only when her reply *ends* on a question, and hers asked one mid-reply, then offered the link and sent it.
+Still open from these calls: **a call back booked without asking when** (call 92) - with nobody free, a "yes" to being connected got "someone will call you Monday at 11 AM", not asked or confirmed; **offering to connect with nobody free** after the opening (call 92); and **the link texted without a yes** (call 89) - `toHandoff` holds an action back only when her reply *ends* on a question, and hers asked one mid-reply, then offered the link and sent it.
 
 ## Done when
 
