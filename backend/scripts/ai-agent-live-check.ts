@@ -2,8 +2,8 @@
  * Proves migration 022 against a real Postgres - Phase 7, A08,
  * docs/AI-AGENT.md sections 4 and 9 - the relay's SQL on it (A10, A11), and
  * whether an answered call goes to her (A13), carrying out how her part ended
- * (A14), the call backs she books (A15), and her fallbacks pausing the robot
- * (A17).
+ * (A14), the call backs she books (A15), her fallbacks pausing the robot
+ * (A17), and the voicemail verdict while she talks (A18).
  *
  * Seri's columns on a call, the turns of her conversation, and the call backs
  * she books are kept by the database's own checks and triggers, which the
@@ -17,9 +17,10 @@
  */
 import { seriGreeting } from '../src/ai/answer';
 import { fallbackStreak } from '../src/ai/health';
-import { endAiCall, recordedHandoff, saveTurn, startAiCall, whoIsThere } from '../src/ai/relay-store';
+import { endAiCall, recordedHandoff, saveTurn, startAiCall, verdictState, whoIsThere } from '../src/ai/relay-store';
 import { switchAiAgent } from '../src/ai/settings';
-import { keepCallResult, transferContext } from '../src/db/auto-calls';
+import { actOnVerdict, keepCallResult, transferContext } from '../src/db/auto-calls';
+import { recordAnsweredBy } from '../src/db/calls';
 import { getLeadDetail } from '../src/db/lead-detail';
 import { WORKED_SQL } from '../src/db/lead-state';
 import { getTimeline } from '../src/db/timeline';
@@ -437,9 +438,11 @@ async function main(): Promise<void> {
     ]);
     check(
       'recorded, the system\'s doing, with the call and the lead\'s zone - her words stay on the callback',
-      (await pool.query(`SELECT actor_id, subject_user_id, detail FROM activity_log WHERE action = 'callback.booked' AND lead_id = $1`, [open])).rows,
-      // jsonb writes a time with its offset, as every callback record does.
-      [{ actor_id: null, subject_user_id: null, detail: { via: 'seri', callId: openCall, timeZone: 'America/New_York', callbackId: first.callbackId, scheduledAt: at.toISOString().replace('Z', '+00:00') } }]
+      (await pool.query(`SELECT actor_id, subject_user_id, detail FROM activity_log WHERE action = 'callback.booked' AND lead_id = $1`, [open])).rows.map(
+        // jsonb writes the time its own way - an offset, no trailing zeros: compared as a time.
+        (r) => ({ ...r, detail: { ...r.detail, scheduledAt: new Date(r.detail.scheduledAt).toISOString() } })
+      ),
+      [{ actor_id: null, subject_user_id: null, detail: { via: 'seri', callId: openCall, timeZone: 'America/New_York', callbackId: first.callbackId, scheduledAt: at.toISOString() } }]
     );
     check('Twilio asking again: booked once', [(await book(openCall)).callbackId, (await booking(open)).length], [null, 1]);
     check('her booking is no person\'s work: the lead is not worked', await worked(open), false);
@@ -515,6 +518,39 @@ async function main(): Promise<void> {
     check('one more fallback: paused again', await fallbackStreak(pool, 15), true);
     await seriCall('send_link', 0);
     check('a call she ended herself: the streak is broken', await fallbackStreak(pool, 15), false);
+  }
+
+  console.log('\nthe voicemail verdict while she talks (A18)');
+  {
+    /** A call she is on, with what the lead has said or pressed so far. */
+    const onCall = async (leadSaid: string[]) => {
+      const lead = await makeLead();
+      const call = await makeCall(lead, 'automated');
+      await pool.query(`UPDATE calls SET ai_started_at = now(), ai_knowledge_version = 'v' WHERE id = $1`, [call]);
+      await saveTurn(pool, { callId: call, who: 'seri', text: 'Hi, is this John?' });
+      for (const text of leadSaid) await saveTurn(pool, { callId: call, who: 'lead', text });
+      return call;
+    };
+    const takesOver = async () => true;
+    const result = async (call: number) =>
+      (await pool.query(`SELECT script_result FROM calls WHERE id = $1`, [call])).rows[0].script_result;
+
+    const silent = await onCall([]);
+    check('a machine, nothing said to her: the voicemail message', (await actOnVerdict(silent, 'machine', takesOver))?.action, 'voicemail');
+    const greeted = await onCall(["John isn't available right now."]);
+    check('a machine, no beep, after words she heard - the greeting, or a person: carry on, as on the script', (await actOnVerdict(greeted, 'machine', takesOver))?.action, 'carry_on');
+    const beeped = await onCall(["John isn't available. Leave a message after the tone."]);
+    check('the beep, after the greeting she heard: the voicemail message - the beep decides', (await actOnVerdict(beeped, 'beep', takesOver))?.action, 'voicemail');
+    check('kept as on the script', await result(beeped), 'voicemail_left');
+    const pressed = await onCall(['(pressed 1)']);
+    check('a key pressed while she talked: a person, whatever Twilio says', (await actOnVerdict(pressed, 'beep', takesOver))?.action, 'carry_on');
+
+    check('her verdict reader: nothing yet', await verdictState(pool, greeted), 'pending');
+    const sid = (await pool.query(`SELECT twilio_call_sid FROM calls WHERE id = $1`, [greeted])).rows[0].twilio_call_sid;
+    await recordAnsweredBy({ callSid: sid, answeredBy: 'human' });
+    check('a verdict come', await verdictState(pool, greeted), 'in');
+    check('the message took the call', await verdictState(pool, beeped), 'taken');
+    check('no such call: not held', await verdictState(pool, 999999), 'in');
   }
 
   console.log(failures === 0 ? '\nall checks passed' : `\n${failures} check(s) FAILED`);

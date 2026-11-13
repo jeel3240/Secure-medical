@@ -150,7 +150,10 @@ export function endMessage(handoff: Handoff): string {
 // the lead's; the rest are the relay's own notes.
 
 /** A key the lead pressed, kept as their turn. */
-export const keyTurn = (digit: string): string => `(pressed ${digit})`;
+/** How a key the lead pressed begins its turn - read back by the voicemail rule (A18): only a person presses keys. */
+export const KEY_TURN_PREFIX = '(pressed ';
+
+export const keyTurn = (digit: string): string => `${KEY_TURN_PREFIX}${digit})`;
 
 /** The lead spoke over Seri: what she had said by then. */
 export const interruptedNote = (heard: string): string => `Cut off. Heard: "${heard}"`;

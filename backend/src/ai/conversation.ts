@@ -35,6 +35,12 @@
  *   OpenAI slow        no first word in 4 seconds: "One moment..."; none 4
  *                      seconds later: `fallback` - the script takes the call (A14)
  *   OpenAI failing     `fallback`; so does the socket or the relay failing (`fail`)
+ *
+ * Voicemail (A18): an action that ends the call - a goodbye, the link, a call
+ * back - waits for Twilio's verdict on who answered, up to 15 seconds after
+ * her last line, so a greeting she took for a "no" still gets the voicemail
+ * message when its beep comes (`onVerdict`, T18). A transfer and a stop do
+ * not wait.
  */
 
 import type { ChatCompletionMessageParam } from 'openai/resources/chat/completions';
@@ -85,6 +91,27 @@ export const STILL_THERE_LINE = 'Hello, are you still there?';
 /** Said while OpenAI is slow. Not in the history: she would start saying it herself. */
 export const FILLER_LINE = 'One moment...';
 
+/**
+ * How long an action that ends the call waits, after her last line, for
+ * Twilio's verdict on who answered - A18. On the real calls to a person Twilio
+ * decided 3.4 to 6.6 seconds in (AUTO-CALLS.md, "Voicemail"), so a person
+ * seldom waits, and then only moments after her goodbye; a call Twilio has not
+ * decided by then is most likely a machine still greeting, whose beep comes
+ * when the greeting ends - 9 seconds in on T18's real voicemail.
+ */
+export const VERDICT_WAIT_MS = 15_000;
+/** How often the wait asks whether the verdict has come. */
+export const VERDICT_POLL_MS = 500;
+
+/** Twilio's verdict as the relay waits on it: not yet, come - or come and the voicemail message took the call. */
+export type VerdictState = 'pending' | 'in' | 'taken';
+
+/** Kept when the voicemail message took the call while her ending action waited. */
+export const VOICEMAIL_TOOK_NOTE = 'Not done: a machine answered, and the voicemail message took the call.';
+
+/** The actions that wait for the verdict: those that end the call. A transfer and a stop do not. */
+const WAITS_FOR_VERDICT: ReadonlySet<Handoff['action']> = new Set(['end_call', 'send_link', 'book_callback'] as const);
+
 /** Given to her with her first reply after three minutes. */
 export const WRAP_UP_NOTE =
   'The call has gone on for three minutes. Wrap up now: answer briefly if they asked something, then offer once - to put them through to a person if someone is free or coming, a call back if nobody is, or to text them the link - and ask which they would like. When they answer, end the call with the action that fits. Do not start anything new.';
@@ -122,6 +149,8 @@ export interface ConversationDeps {
   ended: (handoff: Handoff) => void;
   /** A message to Twilio. */
   send: (message: string) => void;
+  /** Twilio's verdict on who answered (A18). Absent: nothing waits for it. */
+  verdict?: () => Promise<VerdictState>;
   now?: () => Date;
   timers?: Timers;
 }
@@ -170,6 +199,10 @@ export class Conversation {
   private wrapUp: 'not_yet' | 'due' | 'given' = 'not_yet';
   /** The 20 seconds ran out while she was saying a reply: the call ends once it is over. */
   private endOnceSaid = false;
+  /** The WebSocket closed: whatever was waiting does nothing more. */
+  private closed = false;
+  /** The wait for Twilio's verdict before an ending action (A18). */
+  private verdictTimer: unknown = null;
 
   constructor(
     private readonly setup: ConversationSetup,
@@ -260,6 +293,8 @@ export class Conversation {
   /** The WebSocket closed. */
   close(): void {
     this.over = true;
+    this.closed = true;
+    this.timers.clear(this.verdictTimer);
     this.stopClocks();
     if (this.reply) {
       this.timers.clear(this.reply.timer);
@@ -544,7 +579,56 @@ export class Conversation {
   private end(handoff: Handoff): void {
     this.over = true;
     this.stopClocks();
+    // Her choice is kept at once, waiting or not: a lead who hangs up in the
+    // wait still gets what needs no line - the action URL reads it (A14).
     this.deps.keep({ who: 'action', text: handoffData(handoff) });
+    if (WAITS_FOR_VERDICT.has(handoff.action) && this.deps.verdict) {
+      this.awaitVerdict(handoff, 0);
+      return;
+    }
+    this.endNow(handoff);
+  }
+
+  /**
+   * An action that ends the call, held until Twilio's verdict has come (A18):
+   * then it ends as chosen; after `VERDICT_WAIT_MS` it ends all the same. The
+   * voicemail message took the call meanwhile - the greeting's beep - and it
+   * ends nothing: the call is the message's, her part is left unrecorded, and
+   * a note says why her choice was not carried out. The socket closing
+   * meanwhile - the lead hung up - leaves it to the action URL. Unable to read
+   * the verdict, it does not hold the call.
+   */
+  private awaitVerdict(handoff: Handoff, waitedMs: number): void {
+    if (this.closed) return;
+    this.deps.verdict!().then(
+      (state) => this.afterVerdict(handoff, waitedMs, state),
+      () => this.afterVerdict(handoff, waitedMs, 'in')
+    );
+  }
+
+  private afterVerdict(handoff: Handoff, waitedMs: number, state: VerdictState): void {
+    if (this.closed) return;
+    if (state === 'pending' && waitedMs < VERDICT_WAIT_MS) {
+      this.verdictTimer = this.timers.set(() => this.awaitVerdict(handoff, waitedMs + VERDICT_POLL_MS), VERDICT_POLL_MS);
+      return;
+    }
+    if (waitedMs > 0 || state === 'taken') {
+      log.info('ai_relay.verdict_wait', {
+        callId: this.setup.callId,
+        action: handoff.action,
+        waitedMs,
+        verdict: state === 'pending' ? 'none' : state,
+      });
+    }
+    if (state === 'taken') {
+      this.deps.keep({ who: 'system', text: VOICEMAIL_TOOK_NOTE });
+      return;
+    }
+    this.endNow(handoff);
+  }
+
+  /** Her part over: recorded, and Twilio told - straight after her last line (A02). Her choice is already kept (`end`). */
+  private endNow(handoff: Handoff): void {
     this.deps.ended(handoff);
     this.deps.send(endMessage(handoff));
     const reason = handoff.action === 'end_call' ? handoff.reason : handoff.action === 'fallback' ? handoff.why : undefined;

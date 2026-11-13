@@ -20,6 +20,7 @@ import {
   type MachineVerdict,
   type VerdictAction,
 } from '../core/call-script';
+import { KEY_TURN_PREFIX } from '../ai/relay-messages';
 import { activityInsertSql, recordActivity } from './activity';
 import { TAKEN_BY_VERDICT_SQL } from './calls';
 import { bookAiCallback } from './callbacks';
@@ -389,7 +390,9 @@ export async function settleAutomatedCall(callId: number): Promise<void> {
 
 /**
  * Acts on Twilio's verdict on who answered the automated call `callId` - T18,
- * AUTO-CALLS.md "Voicemail". The call is locked while it decides
+ * AUTO-CALLS.md "Voicemail". On a call Seri took (A18), anything the lead said
+ * to her counts as an answer, and a key pressed as a key: the same rule - the
+ * beep decides. The call is locked while it decides
  * (`onVerdict`), so an answer kept at the same moment (`keepAnswer`) is either
  * seen or waits. A takeover - the message, or hanging up on a fax - saves its
  * result first, `voicemail_left` or `unanswered`, and ends a ring from hold it
@@ -416,12 +419,18 @@ export async function actOnVerdict(
       `SELECT c.twilio_call_sid,
               c.script_result IS NOT NULL OR c.ended_at IS NOT NULL AS ended,
               c.agent_id IS NOT NULL AS agent_took,
-              EXISTS (SELECT 1 FROM call_answers a WHERE a.call_id = c.id AND a.digits IS NOT NULL) AS key_pressed,
-              EXISTS (SELECT 1 FROM call_answers a WHERE a.call_id = c.id AND a.result = 'choice') AS answered
+              EXISTS (SELECT 1 FROM call_answers a WHERE a.call_id = c.id AND a.digits IS NOT NULL)
+                -- A key pressed while Seri talked (A18).
+                OR EXISTS (SELECT 1 FROM call_ai_turns k WHERE k.call_id = c.id AND k.who = 'lead' AND k.text LIKE ($2 || '%'))
+                AS key_pressed,
+              EXISTS (SELECT 1 FROM call_answers a WHERE a.call_id = c.id AND a.result = 'choice')
+                -- Anything the lead said to Seri counts as an answer (A18): the beep decides.
+                OR EXISTS (SELECT 1 FROM call_ai_turns t WHERE t.call_id = c.id AND t.who = 'lead')
+                AS answered
        FROM calls c
        WHERE c.id = $1 AND c.direction = 'automated'
        FOR UPDATE`,
-      [callId]
+      [callId, KEY_TURN_PREFIX]
     );
     const call = rows[0];
     if (!call?.twilio_call_sid) {
