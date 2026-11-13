@@ -43,6 +43,6 @@
 - **A refused call back after Seri said goodbye** - her instructions have her confirm and say goodbye before booking - is put right in the same call: the error tells her what to offer, and she offers it. Rare, since her instructions give her the agent hours in the lead's own time.
 - `toLocalTime` was added to `callback-time.ts` (A07): an instant written back as a wall clock in a zone, for the time to book.
 
-- **Changed by A09 (the answer test set), 2026-11-11:** `ActionContext` gains `said`, what she said before the action, and an action after a reply that ended on a question is refused with `awaitLead` - nothing more is said, and the call goes on with the lead's answer. `lineToAdd` and `lastLine` give the line the relay says after hers: the action's own when she said none, the stop line after an opt-out without it.
+- **Changed by A09 (the answer test set), 2026-11-11:** `ActionContext` gains `said`, what she said before the action, and an action after a reply that ended on a question is refused with `awaitLead` - nothing more is said, and the call goes on with the lead's answer. *(Since A21's call 89: a question anywhere in the reply.)* `lineToAdd` and `lastLine` give the line the relay says after hers: the action's own when she said none, the stop line after an opt-out without it.
 
 Design: `docs/AI-AGENT.md`. All AI code in `backend/src/ai/`. One PR into `dev`.

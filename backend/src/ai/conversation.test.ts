@@ -489,6 +489,26 @@ describe('her actions', () => {
   });
 });
 
+describe('a question anywhere in her reply: the action waits for the answer (A21, call 89)', () => {
+  it('asked why, offered the link and sent it in one reply: nothing sent, and the call goes on with the lead\'s answer', async () => {
+    model.replies.push([
+      text('Got it. Is it more the timing, or just not something you need right now? I can also text you a link to browse later.'),
+      tool('send_link'),
+    ]);
+    conversation.heard('No.');
+    await until(() => tokens().length === 4, 'her reply');
+    await settle();
+    expect(ended).toEqual([]);
+    expect(ends()).toEqual([]);
+    expect(kept.at(-1)).toEqual({ who: 'system', text: expect.stringMatching(/^Not done: send_link\. Not done: your reply asked the lead a question/) });
+
+    model.replies.push([text("Sure, I'll text you the link now. Have a great day!"), tool('send_link')]);
+    conversation.heard('Just the timing. Sure, text me the link.');
+    await until(() => ends().length === 1, 'the end');
+    expect(ended).toEqual([{ action: 'send_link' }]);
+  });
+});
+
 describe('an action written in brackets (A21)', () => {
   it('is taken as if she had taken it, never said, and logged', async () => {
     model.replies.push([text("[friendly] Sure, John. I'll text you the link now. Have a great day! [send_link]")]);

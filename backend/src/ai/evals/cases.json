@@ -327,6 +327,29 @@
       ]
     },
     {
+      "id": "no_after_scam_question",
+      "turns": [
+        {
+          "lead": "I'm a bit busy right now."
+        },
+        {
+          "seri": "[understanding] No problem. [curious] When's a better time for us to call you back?"
+        },
+        {
+          "lead": "You can call me. Is it a scam?"
+        },
+        {
+          "seri": "[reassuring, calm] I understand your hesitation. eDrugstore has been around for over 25 years, and you can check our customer reviews on Trustpilot. [curious] Would you like me to connect you with someone now to place your order?"
+        },
+        {
+          "lead": "No."
+        }
+      ],
+      "expect": [
+        "none"
+      ]
+    },
+    {
       "id": "no_twice",
       "turns": [
         {

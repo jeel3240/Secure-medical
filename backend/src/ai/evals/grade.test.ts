@@ -17,8 +17,8 @@ const reply = (text: string, ...calls: [string, object?][]) => ({
 });
 
 describe('the cases', () => {
-  it('73, each named once', () => {
-    expect(cases).toHaveLength(73);
+  it('74, each named once', () => {
+    expect(cases).toHaveLength(74);
     expect(new Set(cases.map((c) => c.id)).size).toBe(cases.length);
   });
 
