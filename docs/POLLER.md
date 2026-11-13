@@ -25,7 +25,10 @@ on one does not stop the others. With automated calls on (`AUTO_CALLS`) and
 calling set up, a fifth, last: the robot's calls (`worker/auto-calls.ts`,
 T20, `AUTO-CALLS.md` "When a lead is called") - in its own try/catch too, so
 a failure placing calls never stops the poll, nor the poll's the calls. It
-runs after the others in the same tick, so a slow poll delays it. **Every call to EZ
+runs after the others in the same tick, so a slow poll delays it. With Seri,
+the AI agent, switched on, it first asks whether she can take calls - OpenAI
+answering, at most once a minute, and her last calls not all falling back
+(A17, `AI-AGENT.md` section 6). **Every call to EZ
 Texting gives up after 30 seconds** (2026-10-06): without a limit one hung
 connection stopped all four, with nothing in the logs. Expiring is local work that must keep happening while EZ Texting is
 unreachable. The sweep's rules are in STATE-MACHINE.md, "Expiry"; what the

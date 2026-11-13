@@ -1,3 +1,5 @@
+import { cachedProbe, fallbackStreak, openAiProbe, seriState } from '../ai/health';
+import { readAiAgentOn } from '../ai/settings';
 import { config } from '../config';
 import { readAutoCalls, readAutoCallTestNumbers } from '../auto-calls-settings';
 import {
@@ -6,6 +8,7 @@ import {
   dialRoom,
   leadsToCall,
   recordAutoCallsSwitch,
+  REFUSED_PAUSE_MINUTES,
   stillDue,
   withDialLock,
 } from '../db/auto-dial';
@@ -35,7 +38,10 @@ async function pollIntervalMs(): Promise<number> {
 /**
  * The robot placing its calls (T20, `worker/auto-calls.ts`) - only with
  * `AUTO_CALLS` on and calling set up; null otherwise. Outside production, only
- * the test numbers are ever looked at (`AUTO_CALL_TEST_NUMBERS`).
+ * the test numbers are ever looked at (`AUTO_CALL_TEST_NUMBERS`). With Seri
+ * switched on, she is asked about first (A17, `ai/health.ts`): the switch is
+ * read on every look, as the API reads it on every call; OpenAI at most once a
+ * minute; the pause after three fallbacks as long as Twilio's (T28).
  */
 function autoDialler(): DialDeps | null {
   if (!readAutoCalls(process.env).on || config.twilio.status !== 'on') return null;
@@ -51,6 +57,11 @@ function autoDialler(): DialDeps | null {
     stillDue: (opts) => stillDue({ ...opts, only }),
     placeAutoCall: (leadId) => placeAutoCall({ leadId, settings, numbers }),
     withDialLock,
+    seriReady: seriState({
+      on: () => readAiAgentOn(pool, config.openai.apiKey),
+      paused: () => fallbackStreak(pool, REFUSED_PAUSE_MINUTES),
+      probe: cachedProbe(openAiProbe(config.openai.apiKey)),
+    }),
   };
 }
 
@@ -58,8 +69,8 @@ const dialler = autoDialler();
 
 /**
  * Why the robot stopped - a lead waited on hold too long to be real, Twilio
- * went silent, Twilio refused our calls, no script - logged once when it
- * starts and once when it ends,
+ * went silent, Twilio refused our calls, no script, OpenAI down or Seri's
+ * calls falling back (A17) - logged once when it starts and once when it ends,
  * not every half minute (T20 review). Waiting on hold is the robot working as
  * it should, so it is not an alarm.
  */
@@ -70,6 +81,8 @@ function noteStop(look: DialLook): void {
   if (now === 'silent') log.error('auto_call.webhooks_silent', { calls: look.silent });
   else if (now === 'refused') log.error('auto_call.twilio_refusing', {});
   else if (now === 'no_script') log.error('auto_call.no_script', {});
+  else if (now === 'openai_down') log.error('ai_agent.openai_down', { err: look.aiError });
+  else if (now === 'ai_fallbacks') log.error('ai_agent.fallbacks_paused', { minutes: REFUSED_PAUSE_MINUTES });
   else log.info('auto_call.dialling_again', { after: stoppedFor });
   stoppedFor = now;
 }

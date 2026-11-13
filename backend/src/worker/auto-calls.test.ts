@@ -140,10 +140,64 @@ describe('one look', () => {
       notPlaced: 0,
       unconfirmed: 0,
       locked: false,
+      aiError: null,
     };
     expect(worthLogging(quiet)).toBe(false);
     expect(worthLogging({ ...quiet, due: 1, placed: 1 })).toBe(true);
     expect(worthLogging({ ...quiet, closed: 1 })).toBe(true);
     expect(worthLogging({ ...quiet, locked: true })).toBe(true);
+  });
+});
+
+describe('Seri asked about first (A17)', () => {
+  it('ready: the calls go out as before', async () => {
+    const seriReady = jest.fn(async () => ({ state: 'ready' as const }));
+    const { deps: d, placeAutoCall } = deps({ seriReady });
+    const look = await dialDueLeads(d, NOON);
+    expect(placeAutoCall).toHaveBeenCalledTimes(2);
+    expect(look).toMatchObject({ stopped: null, placed: 2, aiError: null });
+  });
+
+  it('OpenAI down: nothing placed this look, nothing even looked up - and why', async () => {
+    const seriReady = async () => ({ state: 'openai_down' as const, err: 'OpenAI 401 invalid_api_key' });
+    const { deps: d, leadsToCall, placeAutoCall } = deps({ seriReady });
+    const look = await dialDueLeads(d, NOON);
+    expect(look).toMatchObject({ stopped: 'openai_down', room: 0, aiError: 'OpenAI 401 invalid_api_key', placed: 0 });
+    expect(leadsToCall).not.toHaveBeenCalled();
+    expect(placeAutoCall).not.toHaveBeenCalled();
+  });
+
+  it('back up: the next look places again', async () => {
+    let state: 'openai_down' | 'ready' = 'openai_down';
+    const seriReady = async () => (state === 'ready' ? { state } : { state, err: 'OpenAI timed out' });
+    const { deps: d, placeAutoCall } = deps({ seriReady });
+    expect((await dialDueLeads(d, NOON)).placed).toBe(0);
+    state = 'ready';
+    expect((await dialDueLeads(d, NOON)).placed).toBe(2);
+    expect(placeAutoCall).toHaveBeenCalledTimes(2);
+  });
+
+  it('her last three calls fell back: paused, nothing placed', async () => {
+    const { deps: d, placeAutoCall } = deps({ seriReady: async () => ({ state: 'fallbacks' as const }) });
+    const look = await dialDueLeads(d, NOON);
+    expect(look).toMatchObject({ stopped: 'ai_fallbacks', room: 0, placed: 0 });
+    expect(placeAutoCall).not.toHaveBeenCalled();
+  });
+
+  it('off: the calls go out - the script needs no OpenAI', async () => {
+    const { deps: d, placeAutoCall } = deps({ seriReady: async () => ({ state: 'off' as const }) });
+    expect((await dialDueLeads(d, NOON)).placed).toBe(2);
+    expect(placeAutoCall).toHaveBeenCalledTimes(2);
+  });
+
+  it('not asked when there is no room, nor outside the hours - OpenAI is not checked to place nothing', async () => {
+    const seriReady = jest.fn(async () => ({ state: 'ready' as const }));
+    const full = deps({
+      seriReady,
+      dialRoom: async () => ({ free: 0, perPerson: 5, underway: 0, onHold: false, silent: 0, scripted: true, refused: false }),
+    });
+    await dialDueLeads(full.deps, NOON);
+    await dialDueLeads(deps({ seriReady }).deps, EARLY);
+    expect(seriReady).not.toHaveBeenCalled();
   });
 });
