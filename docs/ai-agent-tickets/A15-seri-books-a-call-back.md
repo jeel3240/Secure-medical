@@ -4,7 +4,7 @@
 
 **Why:** Leads who say "call me tomorrow at 3" must reach a person at 3.
 
-**Depends on:** A07, A08, A14  ·  **Size:** Small (a few hours)
+**Depends on:** A07, A08, A14  ·  **Size:** Small (a few hours)  ·  **Status:** Done 2026-11-12
 
 ## Build
 
@@ -17,8 +17,8 @@
 
 ## Done when
 
-- [ ] A live check: held lead gets their agent; unheld lead gets none; the activity row is written.
-- [ ] Admin > Leads filters on `callback_booked`; the timeline and the Call column read "Call back booked".
+- [x] A live check: held lead gets their agent; unheld lead gets none; the activity row is written - and a lead held by a deactivated account gets none, once per call, not worked, on the lead's page and timeline, the note's rules (`ai-agent-live-check`, 100).
+- [x] Admin > Leads filters on `callback_booked`; the timeline and the Call column read "Callback booked" - the app's own word, as My Callbacks and the timeline's "Callback scheduled" have it (`admin-leads-live-check`, 55).
 
 ## Tests
 
@@ -36,5 +36,18 @@
 ## Not in this ticket
 
 - Showing it in the queue (A16).
+
+## As built
+
+- **Booked with her result, in one transaction:** `keepCallResult` (`db/auto-calls.ts`) takes the booking and calls `bookAiCallback` (`db/callbacks.ts`) only when it saved `callback_booked` - the result and the call back never come apart, and Twilio asking twice books once.
+- **Migration 023, beyond the ticket:** `callbacks.note`, her one-line reason - the table had nowhere for it - only on hers and at most 200 characters; and `callbacks_one_per_ai_call`, one per call she booked it on.
+- **Whose:** the lead's holder if active; a lead held by a deactivated account gets none, as the queue reads a holder.
+- **The re-check:** `checkCallbackTime` against `readCallHours`, in `/auto/ai-after`; a refusal is logged (`auto_call.callback_time_refused`, error) only for a booking made, and it is booked all the same - the lead was told.
+- **Recorded:** `callback.booked`, no actor, `via: 'seri'`, `callId`, `timeZone`; the note stays on the callback.
+- **On screen:** a navy badge on the lead's page (`aiCallback`, `aiCallbackLabel`) - "Callback booked · Thu, Nov 13 3:00 PM · Wants to order antibiotics"; the timeline's "Callback booked by Seri for ... · her line"; Admin > Leads' "Callback booked". The ticket said "Call back booked": the app writes "Callback" everywhere else.
+- **Not worked:** `WORKED_SQL` leaves `ai_booked` out.
+- **Tests:** route - the booking passed with her time, line and zone, the refused time logged once (2); the filter value; the words and the badge (frontend 413); live checks above. 1,598 backend tests, all 23 live checks.
+- **Seen on the real API:** two bookings through `/auto/ai-after` - open to everyone and Maya's - a repeat booking nothing, read back signed in on the lead's page, its timeline and Admin > Leads filtered.
+- **Applied locally:** migration 023 on the local database, since the local API runs the source.
 
 Design: `docs/AI-AGENT.md`. All AI code in `backend/src/ai/`. One PR into `dev`.

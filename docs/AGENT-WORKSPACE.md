@@ -225,6 +225,33 @@ the time of the latest, both read from `calls` rather than written onto the
 callback, so the first call's time is not overwritten.
 `TWILIO.md`, "A missed call".
 
+**Seri books one too - A15, 2026-11-12** (`AI-AGENT.md` section 4). When the
+lead picks a time with Seri on the automated call, `/auto/ai-after` books it
+with her result, `callback_booked`, in one transaction (`bookAiCallback`,
+`keepCallResult`): `reason = 'ai_booked'`, the call it was booked on
+(`booked_by_call_id`), and her one-line reason for whoever calls - `note`,
+"Wants to order antibiotics" (migration 023). It is **the lead's own agent's**
+when an active one holds the lead; otherwise it has **no agent** - open to
+everyone until someone takes it (A16 puts it in the queue). One per call: Twilio
+asking twice books once. Its time is checked again against the agents' hours;
+a refusal there is a bug - the relay checked it before she could book - so it is
+logged (`auto_call.callback_time_refused`) and booked all the same, since the
+lead was told someone would call then. Recorded as `callback.booked`, the
+system's doing, `via: 'seri'`, with the call and the lead's zone; the note stays
+on the callback, never in the log.
+
+- **On the lead's page,** while it is open: a badge, "Callback booked · Thu,
+  Nov 13 3:00 PM · Wants to order antibiotics" - the viewer's own time, then
+  whose it is once someone has it, then her line (`aiCallback` on the lead
+  card, `aiCallbackLabel`).
+- **On the timeline:** "Callback booked by Seri for Thu, Nov 13 3:00 PM ·
+  Wants to order antibiotics", with no author; done, "Callback completed".
+- **Not a person's work:** a lead whose only trace is her booking is not
+  Working (`WORKED_SQL`) - no person has been near it, as with a robot call
+  nobody took (T4).
+- **Not yet:** on My Callbacks, which lists an agent's own - an unowned one has
+  no agent to list it under - and in the queue: A16.
+
 **Whose callback it is.** An agent sees and changes only their own; a superadmin
 may list another agent's and may change one, which is how a callback left by
 someone off sick gets moved. A refusal names the owner so the screen can say who
@@ -242,7 +269,9 @@ has passed is overdue and not also today, that completing twice keeps the
 first time, and that rescheduling moves a callback between tabs - 29 checks.
 The missed call's callback - booked once, under Today, its count and latest
 time, what finishes it - is in `scripts/calls-live-check.ts` and
-`agent-sms-live-check.ts`.
+`agent-sms-live-check.ts`. Seri's - whose it is, once per call, its record, not
+worked, on the lead's page and timeline, the note's rules - in
+`scripts/ai-agent-live-check.ts`.
 
 
 ## Dispositions

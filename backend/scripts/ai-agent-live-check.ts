@@ -1,8 +1,8 @@
 /**
  * Proves migration 022 against a real Postgres - Phase 7, A08,
  * docs/AI-AGENT.md sections 4 and 9 - the relay's SQL on it (A10, A11), and
- * whether an answered call goes to her (A13), and carrying out how her part
- * ended (A14).
+ * whether an answered call goes to her (A13), carrying out how her part ended
+ * (A14), and the call backs she books (A15).
  *
  * Seri's columns on a call, the turns of her conversation, and the call backs
  * she books are kept by the database's own checks and triggers, which the
@@ -18,6 +18,9 @@ import { seriGreeting } from '../src/ai/answer';
 import { endAiCall, recordedHandoff, saveTurn, startAiCall, whoIsThere } from '../src/ai/relay-store';
 import { switchAiAgent } from '../src/ai/settings';
 import { keepCallResult, transferContext } from '../src/db/auto-calls';
+import { getLeadDetail } from '../src/db/lead-detail';
+import { WORKED_SQL } from '../src/db/lead-state';
+import { getTimeline } from '../src/db/timeline';
 import { pool } from '../src/db/pool';
 
 let failures = 0;
@@ -142,7 +145,8 @@ async function main(): Promise<void> {
       );
 
     check('hers, open to everyone: no agent, the call it was booked on', await book(null, 'ai_booked', call), 'allowed');
-    check('hers, owned by the lead\'s agent', await book(maya, 'ai_booked', call), 'allowed');
+    // Another call: one call back per call she booked it on (023, A15).
+    check('hers, owned by the lead\'s agent', await book(maya, 'ai_booked', await makeCall(await makeLead(), 'automated')), 'allowed');
     check('an agent\'s own with no agent: still refused', await book(null, 'booked', null), 'callbacks_agent_unless_ai');
     check('a missed call\'s with no agent: still refused', await book(null, 'missed_call', null), 'callbacks_agent_unless_ai');
     check('hers without the call it was booked on: refused', await book(null, 'ai_booked', null), 'callbacks_ai_names_its_call');
@@ -346,12 +350,14 @@ async function main(): Promise<void> {
       saved: true,
       leadId: lead,
       takenByVerdict: false,
+      callbackId: null,
     });
     check('on the call', await result(), 'link_sent');
     check('Twilio asking again: not saved again - the link texted once', await keepCallResult({ callId: call, result: 'link_sent', blockNumber: false }), {
       saved: false,
       leadId: lead,
       takenByVerdict: false,
+      callbackId: null,
     });
     check('a later result never overwrites it', (await keepCallResult({ callId: call, result: 'not_interested', blockNumber: false }), await result()), 'link_sent');
 
@@ -374,6 +380,7 @@ async function main(): Promise<void> {
       saved: false,
       leadId: (await pool.query(`SELECT lead_id FROM calls WHERE id = $1`, [odd])).rows[0].lead_id,
       takenByVerdict: false,
+      callbackId: null,
     });
     const maya = (await pool.query(`SELECT id FROM users WHERE email = 'maya@example.com'`)).rows[0].id;
     const agentCall = await makeCall(await makeLead(), 'outbound', maya);
@@ -381,6 +388,7 @@ async function main(): Promise<void> {
       saved: false,
       leadId: null,
       takenByVerdict: false,
+      callbackId: null,
     });
     const vmLead = await makeLead();
     const vm = await makeCall(vmLead, 'automated');
@@ -389,6 +397,7 @@ async function main(): Promise<void> {
       saved: false,
       leadId: vmLead,
       takenByVerdict: true,
+      callbackId: null,
     });
 
     const { rows: first } = await pool.query(
@@ -399,6 +408,83 @@ async function main(): Promise<void> {
     await pool.query(`UPDATE calls SET ai_started_at = now(), ai_knowledge_version = 'v' WHERE id = $1`, [seriCall]);
     check('her transfer rings as a yes to the offer, the script\'s first step', (await transferContext(seriCall))?.yesStepId, first[0].id);
     check('a script call with no answer yet: none, as before', (await transferContext(scriptCall))?.yesStepId, null);
+  }
+
+  console.log('\nthe call backs she books (A15)');
+  {
+    const maya = (await pool.query(`SELECT id FROM users WHERE email = 'maya@example.com'`)).rows[0].id;
+    const at = new Date(Date.now() + 2 * 86_400_000);
+    const book = (callId: number) =>
+      keepCallResult({
+        callId,
+        result: 'callback_booked',
+        blockNumber: false,
+        callback: { at, note: 'Wants to order antibiotics', timeZone: 'America/New_York' },
+      });
+    const booking = async (leadId: number) =>
+      (await pool.query(`SELECT agent_id, reason, note, scheduled_at, booked_by_call_id FROM callbacks WHERE lead_id = $1`, [leadId])).rows;
+    const worked = async (leadId: number) =>
+      (await pool.query(`SELECT ${WORKED_SQL} AS worked FROM leads l WHERE l.id = $1`, [leadId])).rows[0].worked;
+
+    const open = await makeLead();
+    const openCall = await makeCall(open, 'automated');
+    const first = await book(openCall);
+    check('booked with her result', [first.saved, first.callbackId !== null], [true, true]);
+    check('nobody holds the lead: open to everyone - no agent', await booking(open), [
+      { agent_id: null, reason: 'ai_booked', note: 'Wants to order antibiotics', scheduled_at: at, booked_by_call_id: openCall },
+    ]);
+    check(
+      'recorded, the system\'s doing, with the call and the lead\'s zone - her words stay on the callback',
+      (await pool.query(`SELECT actor_id, subject_user_id, detail FROM activity_log WHERE action = 'callback.booked' AND lead_id = $1`, [open])).rows,
+      // jsonb writes a time with its offset, as every callback record does.
+      [{ actor_id: null, subject_user_id: null, detail: { via: 'seri', callId: openCall, timeZone: 'America/New_York', callbackId: first.callbackId, scheduledAt: at.toISOString().replace('Z', '+00:00') } }]
+    );
+    check('Twilio asking again: booked once', [(await book(openCall)).callbackId, (await booking(open)).length], [null, 1]);
+    check('her booking is no person\'s work: the lead is not worked', await worked(open), false);
+
+    const held = await makeLead();
+    await pool.query(`UPDATE leads SET assigned_to = $2, assigned_at = now() WHERE id = $1`, [held, maya]);
+    await book(await makeCall(held, 'automated'));
+    check('the lead held: their own agent\'s', (await booking(held)).map((b) => b.agent_id), [maya]);
+
+    const inactive = (await pool.query(
+      `INSERT INTO users (email, password_hash, name, role, is_active) VALUES ('gone@example.com', 'x', 'Gone', 'agent', false) RETURNING id`
+    )).rows[0].id;
+    const stale = await makeLead();
+    await pool.query(`UPDATE leads SET assigned_to = $2 WHERE id = $1`, [stale, inactive]);
+    await book(await makeCall(stale, 'automated'));
+    check('held by a deactivated account: open to everyone', (await booking(stale)).map((b) => b.agent_id), [null]);
+
+    const detail = await getLeadDetail(open);
+    check('on the lead\'s page: when, her line, nobody\'s yet', detail?.aiCallback, {
+      at: at.toISOString(),
+      note: 'Wants to order antibiotics',
+      agentName: null,
+    });
+    check('and the held lead\'s, with its agent', (await getLeadDetail(held))?.aiCallback?.agentName, 'Maya');
+    await pool.query(`UPDATE callbacks SET done_at = now() WHERE lead_id = $1`, [open]);
+    check('done: no longer on the page', (await getLeadDetail(open))?.aiCallback, null);
+    const entry = (await getTimeline(open))?.find((e) => e.kind === 'callback');
+    check('on the timeline, with her line, no author', [entry?.author, entry?.detail.reason, entry?.detail.note], [null, 'ai_booked', 'Wants to order antibiotics']);
+
+    check(
+      'a note only on hers',
+      await attempt(`INSERT INTO callbacks (lead_id, agent_id, scheduled_at, note) VALUES ($1, $2, now(), 'x')`, [held, maya]),
+      'callbacks_note_is_ai'
+    );
+    check(
+      'and one line at most',
+      await attempt(
+        `INSERT INTO callbacks (lead_id, scheduled_at, reason, booked_by_call_id, note) VALUES ($1, now(), 'ai_booked', $2, repeat('x', 201))`,
+        [held, await makeCall(await makeLead(), 'automated')]
+      ),
+      'callbacks_note_length'
+    );
+    check(
+      'one per call she booked it on',
+      await attempt(`INSERT INTO callbacks (lead_id, scheduled_at, reason, booked_by_call_id) VALUES ($1, now(), 'ai_booked', $2)`, [open, openCall]),
+      'callbacks_one_per_ai_call'
+    );
   }
 
   console.log(failures === 0 ? '\nall checks passed' : `\n${failures} check(s) FAILED`);

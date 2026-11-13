@@ -117,7 +117,7 @@ const QUERIES: { kind: TimelineKind; sql: string }[] = [
     kind: 'callback',
     sql: `
       SELECT cb.created_at AS at, u.name AS author,
-             cb.scheduled_at, cb.done_at, cb.reason
+             cb.scheduled_at, cb.done_at, cb.reason, cb.note
       FROM callbacks cb
       LEFT JOIN users u ON u.id = cb.agent_id
       WHERE cb.lead_id = $1
@@ -269,6 +269,8 @@ interface TimelineRow {
   duration_sec?: number | null;
   scheduled_at?: Date | null;
   reason?: string | null;
+  /** Seri's one-line reason, on a call back she booked (A15). */
+  note?: string | null;
   transcript_status?: string | null;
   transcript_lines?: unknown[] | null;
   /** The robot's call: how its script ended, and what the lead said (T21). */
@@ -363,7 +365,13 @@ function toEntry(kind: TimelineKind, row: TimelineRow): TimelineEntry {
         kind,
         at,
         author: row.author,
-        detail: { scheduledAt: iso(row.scheduled_at), doneAt: iso(row.done_at), reason: row.reason ?? 'booked' },
+        detail: {
+          scheduledAt: iso(row.scheduled_at),
+          doneAt: iso(row.done_at),
+          reason: row.reason ?? 'booked',
+          // Seri's one-line reason, on a call back she booked (A15).
+          ...(row.note ? { note: row.note } : {}),
+        },
       };
     case 'disposition':
       return { kind, at, author: row.author, detail: { value: row.value } };

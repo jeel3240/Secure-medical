@@ -46,6 +46,7 @@ const A_LEAD: LeadDetail = {
   ],
   claimedBy: null,
   closed: null,
+  aiCallback: null,
   flags: { dnc: false, needsReview: false, unread: false, expired: false, missedCall: false, missedYes: false },
 };
 

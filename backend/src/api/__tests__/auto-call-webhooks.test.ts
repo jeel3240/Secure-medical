@@ -25,7 +25,7 @@ type Taken = Awaited<ReturnType<typeof import('../../db/auto-calls').takeTransfe
 const takeTransfer = jest.fn<Promise<Taken>, [number, number]>();
 const missTransfer = jest.fn();
 type KeepResultArgs = Parameters<typeof import('../../db/auto-calls').keepCallResult>;
-const keepCallResult = jest.fn<Promise<{ saved: boolean; leadId: number | null; takenByVerdict: boolean }>, KeepResultArgs>();
+const keepCallResult = jest.fn<Promise<{ saved: boolean; leadId: number | null; takenByVerdict: boolean; callbackId: number | null }>, KeepResultArgs>();
 const holdCall = jest.fn<Promise<boolean>, unknown[]>();
 type HoldState = Awaited<ReturnType<typeof import('../../db/auto-calls').holdState>>;
 const holdState = jest.fn<Promise<HoldState>, unknown[]>();
@@ -69,7 +69,10 @@ const readMinConfidence = jest.fn<Promise<number>, unknown[]>();
 const readRingSeconds = jest.fn<Promise<number>, unknown[]>();
 const readHoldMaxSeconds = jest.fn<Promise<number>, unknown[]>();
 const readOfferRingSeconds = jest.fn<Promise<number>, unknown[]>();
+type Hours = Awaited<ReturnType<typeof import('../../db/call-script').readCallHours>>;
+const readCallHours = jest.fn<Promise<Hours>, unknown[]>();
 jest.mock('../../db/call-script', () => ({
+  readCallHours: (...a: unknown[]) => readCallHours(...a),
   loadActiveCallScript: (...a: unknown[]) => loadActiveCallScript(...a),
   readMinConfidence: (...a: unknown[]) => readMinConfidence(...a),
   readRingSeconds: (...a: unknown[]) => readRingSeconds(...a),
@@ -129,7 +132,15 @@ afterEach(afterResponse);
 beforeEach(() => {
   linkAutomatedCall.mockReset().mockResolvedValue(true);
   keepAnswer.mockReset().mockResolvedValue({ kept: true, leadId: 7, takenByVerdict: false });
-  keepCallResult.mockReset().mockResolvedValue({ saved: true, leadId: 7, takenByVerdict: false });
+  keepCallResult.mockReset().mockResolvedValue({ saved: true, leadId: 7, takenByVerdict: false, callbackId: null });
+  // Every day, all day: a call back's time is the relay's to check, not this test's.
+  readCallHours.mockReset().mockResolvedValue({
+    startMinute: 0,
+    endMinute: 24 * 60,
+    timeZone: 'America/Phoenix',
+    days: new Set(['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'] as const),
+    waitMinutes: 60,
+  });
   recordedHandoff.mockReset().mockResolvedValue(null);
   endAiCall.mockReset().mockResolvedValue(false);
   // Acts as the database would on a verdict it takes the call over for.
@@ -431,7 +442,7 @@ describe('after Seri (A14)', () => {
       const { app } = await on();
       const res = await fromTwilio(app, AFTER, ended({ action: 'transfer_to_agent' }, { CallStatus: 'completed' }));
       expect(res.text).not.toContain('<Dial');
-      expect(keepCallResult).toHaveBeenCalledWith({ callId: 42, result: null, blockNumber: false });
+      expect(keepCallResult).toHaveBeenCalledWith({ callId: 42, result: null, blockNumber: false, callback: null });
     });
   });
 
@@ -449,21 +460,53 @@ describe('after Seri (A14)', () => {
     const { app } = await on();
     const res = await fromTwilio(app, AFTER, ended(handoff));
     expect(res.text).toMatch(/<Response><Hangup\/><\/Response>$/);
-    expect(keepCallResult).toHaveBeenCalledWith({ callId: 42, ...saved });
+    expect(keepCallResult).toHaveBeenCalledWith({ callId: 42, ...saved, callback: saved.result === 'callback_booked' ? expect.anything() : null });
     expect(sendCallLinkText).not.toHaveBeenCalled();
     expect(info).toHaveBeenCalledWith('auto_call.ai_after', { callId: 42, status: 'ended', action: handoff.action, hungUp: false });
+  });
+
+  it('a call back: booked with the result, at her time, with her line and the lead\'s zone (A15)', async () => {
+    keepCallResult.mockResolvedValue({ saved: true, leadId: 7, takenByVerdict: false, callbackId: 31 });
+    const { app } = await on();
+    const at = new Date(Date.now() + 2 * 86_400_000);
+    at.setUTCHours(20, 0, 0, 0);
+    const booked: Handoff = { action: 'book_callback', at: at.toISOString(), timeZone: 'America/New_York', reason: 'Wants to order' };
+    await fromTwilio(app, AFTER, ended(booked));
+    expect(keepCallResult).toHaveBeenCalledWith({
+      callId: 42,
+      result: 'callback_booked',
+      blockNumber: false,
+      callback: { at, note: 'Wants to order', timeZone: 'America/New_York' },
+    });
+    expect(info).toHaveBeenCalledWith('auto_call.callback_booked', { callId: 42, callbackId: 31 });
+    expect(error).not.toHaveBeenCalledWith('auto_call.callback_time_refused', expect.anything());
+  });
+
+  it('a call back at a time the hours do not allow - a bug, since the relay checked it: booked all the same, and logged', async () => {
+    keepCallResult.mockResolvedValue({ saved: true, leadId: 7, takenByVerdict: false, callbackId: 31 });
+    const { app } = await on();
+    const past: Handoff = { action: 'book_callback', at: '2026-01-05T18:00:00.000Z', timeZone: 'America/New_York', reason: 'Wants to order' };
+    await fromTwilio(app, AFTER, ended(past));
+    expect(keepCallResult).toHaveBeenCalledWith(expect.objectContaining({ result: 'callback_booked', callback: expect.objectContaining({ note: 'Wants to order' }) }));
+    expect(error).toHaveBeenCalledWith('auto_call.callback_time_refused', { callId: 42, callbackId: 31, why: 'past' });
+
+    // Twilio asking again books nothing, and logs nothing again.
+    error.mockClear();
+    keepCallResult.mockResolvedValue({ saved: false, leadId: 7, takenByVerdict: false, callbackId: null });
+    await fromTwilio(app, AFTER, ended(past));
+    expect(error).not.toHaveBeenCalled();
   });
 
   it('the link: link_sent, the call ends, and the link texted once Twilio has its answer - once, not for a repeat', async () => {
     const { app } = await on();
     const res = await fromTwilio(app, AFTER, ended({ action: 'send_link' }));
     expect(res.text).toMatch(/<Response><Hangup\/><\/Response>$/);
-    expect(keepCallResult).toHaveBeenCalledWith({ callId: 42, result: 'link_sent', blockNumber: false });
+    expect(keepCallResult).toHaveBeenCalledWith({ callId: 42, result: 'link_sent', blockNumber: false, callback: null });
     await afterResponse();
     expect(sendCallLinkText).toHaveBeenCalledTimes(1);
     expect(sendCallLinkText).toHaveBeenCalledWith(7);
 
-    keepCallResult.mockResolvedValue({ saved: false, leadId: 7, takenByVerdict: false });
+    keepCallResult.mockResolvedValue({ saved: false, leadId: 7, takenByVerdict: false, callbackId: null });
     await fromTwilio(app, AFTER, ended({ action: 'send_link' }));
     await afterResponse();
     expect(sendCallLinkText).toHaveBeenCalledTimes(1);
@@ -511,7 +554,7 @@ describe('after Seri (A14)', () => {
       const { app } = await on();
       const res = await fromTwilio(app, AFTER, failed);
       expect(res.text).toMatch(/<Response><Hangup\/><\/Response>$/);
-      expect(keepCallResult).toHaveBeenCalledWith({ callId: 42, result: 'link_sent', blockNumber: false });
+      expect(keepCallResult).toHaveBeenCalledWith({ callId: 42, result: 'link_sent', blockNumber: false, callback: null });
     });
 
     it('an action Twilio handed back unreadable: the script, never a guess', async () => {
@@ -532,7 +575,7 @@ describe('after Seri (A14)', () => {
       const { app } = await on();
       await fromTwilio(app, AFTER, hungUp);
       expect(recordedHandoff).toHaveBeenCalledWith(expect.anything(), 42);
-      expect(keepCallResult).toHaveBeenCalledWith({ callId: 42, result: 'opted_out', blockNumber: true });
+      expect(keepCallResult).toHaveBeenCalledWith({ callId: 42, result: 'opted_out', blockNumber: true, callback: null });
       // Hers to record, not ours: nothing written to her part of the call.
       expect(endAiCall).not.toHaveBeenCalled();
     });
@@ -549,7 +592,7 @@ describe('after Seri (A14)', () => {
       const { app } = await on();
       const res = await fromTwilio(app, AFTER, hungUp);
       expect(res.text).toMatch(/<Response><Hangup\/><\/Response>$/);
-      expect(keepCallResult).toHaveBeenCalledWith({ callId: 42, result: null, blockNumber: false });
+      expect(keepCallResult).toHaveBeenCalledWith({ callId: 42, result: null, blockNumber: false, callback: null });
       expect(loadActiveCallScript).not.toHaveBeenCalled();
     });
   });

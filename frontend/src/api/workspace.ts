@@ -61,6 +61,11 @@ export interface LeadDetail {
   claimedBy: { id: number; name: string; at: string } | null;
   /** Set while the lead is closed: who closed it and when. */
   closed: { by: string | null; at: string } | null;
+  /**
+   * The call back Seri booked, while open (A15): when, her one-line reason,
+   * and whose it is - null while it is open to everyone.
+   */
+  aiCallback: { at: string; note: string | null; agentName: string | null } | null;
   flags: {
     /** A live dnc_list row: blocks every action, not just SMS. */
     dnc: boolean;
@@ -191,8 +196,11 @@ export interface Callback {
   agentName: string;
   scheduledAt: string;
   doneAt: string | null;
-  /** `missed_call`: booked by the system because the lead rang and this agent did not pick up. */
-  reason: 'booked' | 'missed_call';
+  /**
+   * `missed_call`: booked by the system because the lead rang and this agent
+   * did not pick up. `ai_booked`: Seri booked it on the automated call (A15).
+   */
+  reason: 'booked' | 'missed_call' | 'ai_booked';
 }
 
 /**

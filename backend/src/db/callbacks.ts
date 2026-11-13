@@ -7,6 +7,7 @@
 
 import { startOfTodaySql } from './sql';
 import { activityInsertSql, type ActivityWriter } from './activity';
+import type { Db } from './flows';
 import { pool } from './pool';
 
 export type CallbackWhen = 'today' | 'upcoming' | 'overdue' | 'all';
@@ -14,9 +15,10 @@ export type CallbackWhen = 'today' | 'upcoming' | 'overdue' | 'all';
 /**
  * Why a callback exists. `booked`: a person booked it. `missed_call`: the lead
  * rang, the agent it rang did not pick up, and the system booked it for them -
- * `db/calls.ts`, `finishCall`.
+ * `db/calls.ts`, `finishCall`. `ai_booked`: Seri booked it on the automated
+ * call, at a time the lead picked - `bookAiCallback` (A15).
  */
-export type CallbackReason = 'booked' | 'missed_call';
+export type CallbackReason = 'booked' | 'missed_call' | 'ai_booked';
 
 export interface Callback {
   id: number;
@@ -116,6 +118,44 @@ export async function finishMissedCallCallbacks(
      FROM finished`,
     [leadId, actorId, because]
   );
+}
+
+/**
+ * A call back Seri booked on the automated call `callId` - A15,
+ * docs/AI-AGENT.md section 4: at `at`, with her one-line reason (`note`).
+ *
+ * The lead's own agent's, when an active one holds the lead; otherwise it has
+ * no agent - open to everyone until someone takes it (A16). Booked once per
+ * call (`callbacks_one_per_ai_call`): Twilio asking again books nothing, and
+ * null is returned. In the caller's transaction, with its record in the same
+ * statement - `callback.booked`, the system's doing, `via: 'seri'`. The note
+ * is on the callback, not in the log: it is her words.
+ */
+export async function bookAiCallback(
+  q: Db,
+  opts: { leadId: number; callId: number; at: Date; note: string; timeZone: string }
+): Promise<{ callbackId: number; agentId: number | null } | null> {
+  const { rows } = await q.query(
+    `WITH holder AS (
+       SELECT u.id FROM leads l JOIN users u ON u.id = l.assigned_to AND u.is_active WHERE l.id = $1
+     ),
+     booked AS (
+       INSERT INTO callbacks (lead_id, agent_id, scheduled_at, reason, booked_by_call_id, note)
+       VALUES ($1, (SELECT id FROM holder), $3, 'ai_booked', $2, $4)
+       ON CONFLICT (booked_by_call_id) WHERE booked_by_call_id IS NOT NULL DO NOTHING
+       RETURNING id, agent_id, scheduled_at
+     ),
+     logged AS (
+       ${activityInsertSql}
+       SELECT NULL::int, 'callback.booked', $1, agent_id,
+              jsonb_build_object('callbackId', id, 'scheduledAt', scheduled_at, 'via', 'seri',
+                                 'callId', $2::int, 'timeZone', $5::text)
+       FROM booked
+     )
+     SELECT id, agent_id FROM booked`,
+    [opts.leadId, opts.callId, opts.at, opts.note, opts.timeZone]
+  );
+  return rows[0] ? { callbackId: rows[0].id, agentId: rows[0].agent_id } : null;
 }
 
 /**

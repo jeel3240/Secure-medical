@@ -13,6 +13,13 @@
 - My Callbacks (`frontend/src/pages/CallbacksPage.tsx`) lists it for its agent once claimed.
 - Not due yet: the lead is not pushed up.
 
+## From A15
+
+- Her bookings are `callbacks` rows with `reason = 'ai_booked'`, `booked_by_call_id`, `note` (her line), and `agent_id` null unless an active agent held the lead (`bookAiCallback`). The lead card already carries the open one (`aiCallback`).
+- `db/queue.ts` joins `callbacks` to `users` for the Callback tag (`JOIN users cu ON cu.id = cb.agent_id`), which drops one with no agent; and My Callbacks (`listCallbacks`) lists by agent, so an unowned one appears in neither yet.
+- Taking it: `updateCallback` refuses a callback that is not the caller's (`not_yours`) - an unowned one included - so claiming needs its own write, recorded.
+- `WORKED_SQL` already leaves her bookings out.
+
 ## Done when
 
 - [ ] Queue live check: before due, at due, overdue, claimed.

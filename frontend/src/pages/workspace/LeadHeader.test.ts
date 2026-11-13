@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { LeadDetail } from '../../api/workspace';
-import { questionsLabel, sourceLabel } from './LeadHeader';
+import { formatDay, formatTime } from '../../lib/format';
+import { aiCallbackLabel, questionsLabel, sourceLabel } from './LeadHeader';
 
 const convo = (over: Partial<NonNullable<LeadDetail['conversation']>>): LeadDetail['conversation'] => ({
   id: 1,
@@ -46,5 +47,24 @@ describe('the header in words', () => {
     ['no conversation', null, 'Not started'],
   ])('questions: %s', (_, conversation, label) => {
     expect(questionsLabel(conversation)).toBe(label);
+  });
+});
+
+describe('the call back Seri booked (A15)', () => {
+  const at = '2026-11-13T22:00:00.000Z';
+  const when = `${formatDay(new Date(at))} ${formatTime(new Date(at))}`;
+
+  it('when, in the viewer\'s own time, and her line for whoever calls', () => {
+    expect(aiCallbackLabel({ at, note: 'Wants to order antibiotics', agentName: null })).toBe(
+      `Callback booked · ${when} · Wants to order antibiotics`
+    );
+  });
+
+  it('whose it is, once an agent has it', () => {
+    expect(aiCallbackLabel({ at, note: 'Wants to order', agentName: 'Maya' })).toBe(`Callback booked · ${when} · Maya · Wants to order`);
+  });
+
+  it('no line: the time alone', () => {
+    expect(aiCallbackLabel({ at, note: null, agentName: null })).toBe(`Callback booked · ${when}`);
   });
 });

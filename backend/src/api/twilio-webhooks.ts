@@ -36,6 +36,7 @@
 import express, { type NextFunction, type Request, type Response, Router } from 'express';
 import { fallbackHandoff, fromHandoff, type Handoff } from '../ai/actions';
 import { afterSeri, fallbackAsk, sessionStatus } from '../ai/after';
+import { checkCallbackTime } from '../ai/callback-time';
 import { matchSpokenChoice, type SpokenAnswer } from '../core/answers';
 import {
   firstAsk,
@@ -159,6 +160,7 @@ function autoCalls() {
     loadScript: () => script.loadActiveCallScript(pool),
     readMinConfidence: () => script.readMinConfidence(pool),
     readRingSeconds: () => script.readRingSeconds(pool),
+    readCallHours: () => script.readCallHours(pool),
   };
 }
 
@@ -706,6 +708,18 @@ export function twilioWebhooksRouter(deps: AppDeps): Router {
   );
 
   /**
+   * A call back Seri booked, checked once more against the agents' hours (A15)
+   * - the relay checked it before she could take the action (`toHandoff`), so
+   * a refusal here is a bug, to be logged once it is booked; it is booked all
+   * the same, since the lead was told someone would call then.
+   */
+  const checkedCallback = async (booked: Extract<Handoff, { action: 'book_callback' }>) => {
+    const at = new Date(booked.at);
+    const check = checkCallbackTime(at, booked.timeZone, await autoCalls().readCallHours(), new Date());
+    return { callback: { at, note: booked.reason, timeZone: booked.timeZone }, refused: check.ok ? null : check.why };
+  };
+
+  /**
    * `/auto/ai-after`'s answer to Twilio. `textLink` is told the lead to text
    * the link to - once, for the request that saved `link_sent` - so it goes
    * after Twilio has its answer, as on the script (T14).
@@ -752,13 +766,19 @@ export function twilioWebhooksRouter(deps: AppDeps): Router {
     });
 
     if (next.kind === 'end') {
-      const { saved, leadId, takenByVerdict } = await ac.keepCallResult({
+      const booking = next.callback && (await checkedCallback(next.callback));
+      const { saved, leadId, takenByVerdict, callbackId } = await ac.keepCallResult({
         callId: call.callId,
         result: next.result,
         blockNumber: next.blockNumber,
+        callback: booking ? booking.callback : null,
       });
       if (takenByVerdict) log.info('auto_call.after_takeover', { callId: call.callId, path: req.path });
       else if (next.sendLink && saved && leadId !== null) textLink(leadId);
+      if (callbackId !== null) {
+        log.info('auto_call.callback_booked', { callId: call.callId, callbackId });
+        if (booking?.refused) log.error('auto_call.callback_time_refused', { callId: call.callId, callbackId, why: booking.refused });
+      }
       return hangupTwiml();
     }
 

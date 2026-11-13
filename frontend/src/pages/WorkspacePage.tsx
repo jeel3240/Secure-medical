@@ -13,7 +13,7 @@ import { ActionsPanel } from './workspace/ActionsPanel';
 import { Conversation } from './workspace/Conversation';
 import { LeadAnswers } from './workspace/LeadAnswers';
 import { CallBar } from './workspace/CallBar';
-import { LeadHeader } from './workspace/LeadHeader';
+import { aiCallbackLabel, LeadHeader } from './workspace/LeadHeader';
 import { LeadNotes } from './workspace/LeadNotes';
 import { SmsCompose } from './workspace/SmsCompose';
 import { useLeadCall } from './workspace/useLeadCall';
@@ -290,6 +290,8 @@ export function WorkspacePage() {
         {/* A "yes" on the robot's call nobody took (T22): the queue's words,
             kept here once the lead is picked up and the queue says Working. */}
         {lead.flags.missedYes && <Badge tone="warning">Wants a call</Badge>}
+        {/* A time the lead picked with Seri, for a person to call them (A15). */}
+        {lead.aiCallback && <Badge tone="navy">{aiCallbackLabel(lead.aiCallback)}</Badge>}
         {lead.flags.needsReview && <Badge tone="warning">Needs review</Badge>}
         {lead.flags.expired && <Badge tone="muted">Expired</Badge>}
         {lead.conversation?.agentTookOverAt && (
