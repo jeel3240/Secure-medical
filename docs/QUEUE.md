@@ -162,7 +162,7 @@ why is it here? When several apply, the first wins:
 
 **One status for two reasons - T22.** A missed "yes" reads **Wants a call**,
 the words of row 7: both leads asked to talk to a person. It ranks with the
-missed call, though, not with row 6 - the lead was promised a call back a few
+missed call, though, not with row 7 - the lead was promised a call back a few
 minutes ago and wants to talk now, which outranks a text waiting to be read.
 The lead's card keeps saying it once the lead is picked up and the queue says
 Working - a **Wants a call** badge beside Missed call (`flags.missedYes`,
@@ -194,8 +194,8 @@ lead up takes it**: claiming the lead (`claimLead`, `db/claims.ts`) makes every
 open call back of hers that nobody has taken theirs, in the same statement, and
 records `callback.taken` - on the lead's timeline as "Took the callback Seri
 booked for ...". From then it is on their My Callbacks, with her line in the
-note column ("Seri: Wants to order antibiotics") until a note of their own
-replaces it; put back in the queue, the lead still sits at the top while it is
+Last note column ("Seri: Wants to order antibiotics") while the lead has no
+note - the column shows the lead's newest note, anyone's, once there is one; put back in the queue, the lead still sits at the top while it is
 due, now as "Callback – Maya Chen · 3:00 PM". A later pick-up by someone else
 leaves it with the first. One booked for a lead someone held was theirs from
 the start (A15).

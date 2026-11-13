@@ -19,7 +19,7 @@
 
 - [x] A missing field in any file fails a test and stops startup - tested in each of the three files; and the compiled API, started with `price`'s answer taken out, logged `api.refused_start` with `answers.json: answers[id=price].answer is missing` and exited 1. Intact, it started and logged `knowledge: approved-2026-11-11`.
 - [x] The production Docker image contains the three files (checked with `docker compose build api`): `dist/ai/knowledge/` holds all three, and `loadKnowledge()` reads them there.
-- [x] `loadKnowledge().version` is `approved-2026-11-11`.
+- [x] `loadKnowledge().version` is `approved-2026-11-11` - `approved-2026-11-12` since four speaking-style lines were added the next day (b58f583).
 
 ## Tests
 

@@ -8,12 +8,31 @@
 
 ## Build
 
-- Merge `dev` into `main`. Deploy after 5 PM as usual: pull, build, **migrate (022 and 023)**, up. 023 (A15) adds `callbacks.note`, Seri's one-line reason on a call back she books, and one call back per call; like 022 it changes no existing row.
-- Server `.env`: `OPENAI_API_KEY`, then recreate the api and the worker (`up -d api worker`; a restart keeps the old environment). `ai_agent` stays `off`: calls exactly as today.
-- Next calling day, switch it on with the command - no restart, recorded in the activity log:
+The steps are `docs/WORKFLOW.md`'s, "Seri, the AI agent" - every command with
+both `-f` files, as production runs:
+
+- Merge `dev` into `main`. Deploy after 5 PM Arizona time, when the robot is
+  not calling.
+- Put `OPENAI_API_KEY` in the server's `.env` first, so the `up -d --build`
+  recreates the api and the worker with it. Added later, recreate both with
+  `docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d api worker`
+  - a `restart` keeps the old environment.
+- Pull, `up -d --build`, then **`npm run migrate` straight after the `up`**
+  (022 and 023): until they have run, the lead page, its timeline and My
+  Callbacks read columns that are not there yet. Neither changes an existing
+  row; 023 (A15) adds `callbacks.note`, Seri's one-line reason on a call back
+  she books, and one call back per call.
+- `ai_agent` stays `off` (022 seeds it): calls go on exactly as today, the
+  script from its first question.
+- Next calling day, switch her on - no restart, recorded in the activity log,
+  refused without the key:
   `docker compose -f docker-compose.yml -f docker-compose.prod.yml exec api npm run ai-agent -- on`
-- Watch the first calls in `call_ai_turns` and the logs.
-- Off again at any time with `-- off`: every call back on the script, a call already with Seri left to finish.
+- Watch the first calls: each lead's timeline shows her conversation under the
+  call (A19), and the logs are in CloudWatch, log group `/leads-app`, streams
+  `api` and `worker` - `ai_relay.*`, `auto_call.ai_after`, `auto_call.dial`
+  (`docs/LOGGING.md`). The words are only in `call_ai_turns`, never the logs.
+- Off again at any time with `-- off`: a call already with her finishes; the
+  next call gets the script.
 
 ## Done when
 

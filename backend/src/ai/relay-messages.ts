@@ -149,7 +149,6 @@ export function endMessage(handoff: Handoff): string {
 // The turns that are not someone's words, as kept in `call_ai_turns`. A key is
 // the lead's; the rest are the relay's own notes.
 
-/** A key the lead pressed, kept as their turn. */
 /** How a key the lead pressed begins its turn - read back by the voicemail rule (A18): only a person presses keys. */
 export const KEY_TURN_PREFIX = '(pressed ';
 

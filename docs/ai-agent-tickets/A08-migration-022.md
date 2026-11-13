@@ -40,7 +40,7 @@
 
 - **More rules held by the database than the ticket listed**, each named: `calls_ai_started_with_version` (the start and the version are written together), `calls_ai_ended_after_start`, `calls_ai_is_automated` (all three columns, not only `ai_ended_with`); `latency_ms` only on Seri's turns, and never negative; `callbacks_ai_names_its_call` - every `ai_booked` call back names its call, and no other kind names one.
 - `call_ai_turns` is indexed by `(call_id, id)`: the timeline (A19) reads one call's turns in order.
-- **Found while building, for A15:** every query that reads `callbacks` was written when every callback had an agent. Two need a decision when Seri's bookings are written - `WORKED_SQL` counts any callback as a person's work, and the queue's Callback tag joins `users` - written down in A15. Nothing changes now: no row without an agent exists until then.
+- **Found while building, for A15:** every query that reads `callbacks` was written when every callback had an agent. Two need a decision when Seri's bookings are written - `WORKED_SQL` counts any callback as a person's work, and the queue's Callback tag joins `users` - written down in A15. Nothing changes now: no row without an agent exists until then. *(Resolved: A15 left `ai_booked` out of `WORKED_SQL`; A16 made the queue's callback join keep a callback with no agent.)*
 - `activity-live-check`'s A01 case assumed no `ai_agent` row; on a database at 022 it now starts from the seeded `off`, and tries "never set" by removing the row (54 checks).
 - Deploy notes: `docs/WORKFLOW.md`, "Where the files stand" - it changes no existing row, and with the switch off calls go on as today.
 

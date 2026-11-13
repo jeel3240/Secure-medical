@@ -113,8 +113,8 @@ contact in the group gets a text within a poll interval. `openers` in the
 ## How to test
 
 ```bash
-cd backend  && npm test && npm run lint    # 1,409 tests
-cd frontend && npm test && npm run lint    # 407 tests   (counts as of 2026-11-11)
+cd backend  && npm test && npm run lint    # 1,634 tests
+cd frontend && npm test && npm run lint    # 432 tests   (counts as of 2026-11-13)
 ```
 
 **Seri's answer test set** runs against OpenAI, so it is run by hand, before every change to her knowledge files or instructions, never in CI: `cd backend && OPENAI_API_KEY=... npm run ai:eval` (`AI-AGENT.md`, section 8).
@@ -133,7 +133,7 @@ scripts/live-checks.sh              # all of them
 scripts/live-checks.sh flows queue  # just these
 ```
 
-There are twenty-three live checks, covering Seri's tables (migration 022: her part of a call, the turns of her conversation - add-only - and the call backs she books, the only kind that may have no agent), the robot placing calls by itself (who is due, when, at what pace, never twice, calls that never reached Twilio), the texts a call leads to (the link, and the text after a missed call - EZ Texting stubbed), the automated call (its row, every refusal, linking it to Twilio's call, two placements racing; each answer kept once, a result never overwritten, a stop blocking once and ending the text questions, the end settling an unfinished script; a transfer taken - from the lead's holder, once, never by a second person - or missed; a lead on hold, its place in line, and hanging up on hold; Twilio's voicemail verdict acted on - the beep decides, under the call's lock, never twice), a lead on hold rung to whoever comes free (migration 020: longest waiting first, one ring at a time per lead and per person, never the same person twice, and who is still coming for a lead), who can take a call (migrations 016 and 017: the browser's word, the "Taking calls" switch and why it is so, who is free, the switch turned off after a ring let run out, and who counts as on a call, or just off one, while a lead is on hold), the automated call's script (migrations 015, 018 and 019, and 020's ring time), the SMS flows (a second flow added as
+There are twenty-three live checks, covering Seri (`ai-agent-live-check`: migration 022 - her part of a call, the turns of her conversation, add-only, and the call backs she books, the only kind that may have no agent - and 023; the relay's SQL; whether a call goes to her; carrying out how her part ended; her call backs; her fallbacks pausing the robot; the voicemail rule with what the lead said to her), the robot placing calls by itself (who is due, when, at what pace, never twice, calls that never reached Twilio), the texts a call leads to (the link, and the text after a missed call - EZ Texting stubbed), the automated call (its row, every refusal, linking it to Twilio's call, two placements racing; each answer kept once, a result never overwritten, a stop blocking once and ending the text questions, the end settling an unfinished script; a transfer taken - from the lead's holder, once, never by a second person - or missed; a lead on hold, its place in line, and hanging up on hold; Twilio's voicemail verdict acted on - the beep decides, under the call's lock, never twice), a lead on hold rung to whoever comes free (migration 020: longest waiting first, one ring at a time per lead and per person, never the same person twice, and who is still coming for a lead), who can take a call (migrations 016 and 017: the browser's word, the "Taking calls" switch and why it is so, who is free, the switch turned off after a ring let run out, and who counts as on a call, or just off one, while a lead is on hold), the automated call's script (migrations 015, 018 and 019, and 020's ring time), the SMS flows (a second flow added as
 rows only), the queue, claims, the read flag, the lead card,
 the timeline, callbacks, dispositions, agent SMS, calls (outgoing, incoming and
 missed, and a call back ringing everyone free), the activity log, Admin > Leads, the admin read models, health, the
@@ -193,6 +193,13 @@ texts, set the real `EZT_*` values and add your own number to the test group, as
 ## Known limits
 
 Things that are true today and will surprise someone who assumes otherwise.
+
+**Seri, the AI agent, is built but not yet heard on a real phone or deployed**
+(2026-11-13). She is proved end to end with Twilio and OpenAI stubbed
+(`npm run e2e`), and her answers against the real model (`npm run ai:eval`),
+but not on a real call (A21), and production has neither her migrations nor
+her switch on (A22). `AI-AGENT.md`; its open points are in each ticket's "Not
+covered".
 
 **Calling is simple.** Agents call leads from the browser (`TWILIO.md`, built
 2026-10-01). A lead who rings the number back rings one agent's browser - the
@@ -289,6 +296,7 @@ whether the page forgot it; State is not shown at all.
 - **Frontend**: React + Vite
 - **Calling**: Twilio - the `twilio` library on the server, `@twilio/voice-sdk`
   in the browser. Audio goes browser to Twilio, never through our server
+- **AI agent** (Phase 7, `AI-AGENT.md`): Seri runs the automated call when switched on - Twilio ConversationRelay (Deepgram listening, an ElevenLabs voice) and OpenAI's `gpt-4.1-mini`, through a WebSocket at `/api/ai/relay`. Off unless `OPENAI_API_KEY` is set and her switch is on (`npm run ai-agent -- on`); off, every call gets the script
 - **Deployment**: EC2 (Caddy + Docker Compose) + RDS
 
 *As of 2026-09-14:* all API routes are under `/api`, which is the only path
@@ -311,7 +319,7 @@ commit.
 | `WEBHOOKS.md` | How replies are received | The webhook handler |
 | `TWILIO.md` | Browser calling: how a call works, incoming calls and missed calls, what is saved, settings, testing, deploying | Anything about calls, Twilio's webhooks, the Call button, the incoming-call card or the call bar |
 | `AUTO-CALLS.md` | Automated outbound calls: the agreed script and flow, the transfer and hold rules, the "Taking calls" switch, and the build tracker. T0-T25 are done (2026-10-25): the server places a call, asks the script, keeps every answer, texts the link, puts a "yes" through to the lead's own agent first, then everyone free, switches off whoever let it ring out, holds a "yes" while someone is on a call or writing its note, rings the next person who comes free with the lead who has waited longest, leaves the voicemail message once a machine's greeting is over, rings everyone free for a lead calling back whom nobody owns, calls the right leads by itself, five at once for each person free (T29), shows each robot call on the lead's timeline with what was said, puts a "yes" nobody took first in the agents' queue, shows each lead's robot call on Admin > Leads, and the script and its settings on Admin > Configuration, every doc read against the code and the end-to-end script running robot calls, and every path heard on a real phone (T26, 2026-10-27); live on production since the deploy of `main` from 2026-10-30 | A ticket from its tracker is merged, or any decision about automated calls |
-| `AI-AGENT.md` | Phase 7: Seri, the AI agent that runs the automated call - ConversationRelay with OpenAI, the sales playbook, who is there on every turn and her five actions, calls back at a time the lead picks, what she knows (`backend/src/ai/knowledge/`, and the edrugstore.com crawl in `data/edrugstore-site/` it was written from), limits and backups, the `ai-agent` switch command. Designed 2026-11-11; the build tracker is `ai-agent-tickets/README.md` (A01-A22), A01 and A03 to A09 done | Any ticket of Phase 7, a change to Seri's knowledge, or any decision about the AI agent |
+| `AI-AGENT.md` | Phase 7: Seri, the AI agent that runs the automated call - ConversationRelay with OpenAI, the sales playbook, who is there on every turn and her five actions, calls back at a time the lead picks, what she knows (`backend/src/ai/knowledge/`, and the edrugstore.com crawl in `data/edrugstore-site/` it was written from), limits and backups, the `ai-agent` switch command. Designed 2026-11-11; the build tracker is `ai-agent-tickets/README.md` (A01-A22): A01 to A20 done (2026-11-12) and on `dev`; A21 (every path on a real phone) and A22 (deploy, then switch on) to do | Any ticket of Phase 7, a change to Seri's knowledge, or any decision about the AI agent |
 | `AUDIT.md` | The activity log and the raw webhook archive: what is recorded, why nothing can be edited or deleted, what it does not cover | **Any new action a person or the system can take** - it records itself, or this doc says why not |
 | `ADMIN-LEADS.md` | The superadmin Leads page | That page or its API |
 | `QUEUE.md` | The agents' priority queue API: who is in it, the order, the tags | `GET /api/leads`, the queue query or the tag rules |
