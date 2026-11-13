@@ -40,7 +40,10 @@ function sinceSql(period: OverviewPeriod, timeZone?: string): string {
 export interface AgentRow {
   agentId: number;
   name: string;
-  /** Open callbacks due now or overdue - not ones booked for later. */
+  /**
+   * Open callbacks of theirs due by the end of today, overdue included - not
+   * later ones. A call back Seri booked counts once someone has it (A16).
+   */
   callbacksDue: number;
   /** Leads this agent holds right now, whatever the period. */
   holding: number;

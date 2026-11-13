@@ -828,7 +828,11 @@ robot's calls ringing its transfer counts too** (T20 review,
 while the first rings everyone free - their browsers say busy and no call is
 theirs yet, so they were neither free nor on a call, and the second lead heard
 the busy line though someone would be free in seconds. The call asking leaves
-itself out.
+itself out. A call Seri took counts the same once her part ended with
+`transfer_to_agent` (`calls.ai_ended_with`): it keeps no script answer, so
+until 2026-11-13 - found in the doc check after A20 - a "yes" during her
+transfer's ring heard the busy line, and she herself was told nobody was
+coming.
 
 **The music is Twilio's own classical hold music** (Jeel, 2026-10-21) - six
 tracks in a list in `integrations/twilio.ts` (`HOLD_MUSIC`), more to be added

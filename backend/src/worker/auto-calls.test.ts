@@ -4,7 +4,7 @@
  * never places more than there is room for.
  */
 import { DEFAULT_CALL_HOURS } from '../core/auto-dial';
-import { dialDueLeads, worthLogging, type DialDeps } from './auto-calls';
+import { dialDueLeads, stopChange, worthLogging, type DialDeps } from './auto-calls';
 import type { PlaceAutoCallResult } from './place-auto-call';
 
 // Monday 2026-10-26, 12:00 in Arizona; and 10:00, before the hours.
@@ -199,5 +199,28 @@ describe('Seri asked about first (A17)', () => {
     await dialDueLeads(full.deps, NOON);
     await dialDueLeads(deps({ seriReady }).deps, EARLY);
     expect(seriReady).not.toHaveBeenCalled();
+  });
+});
+
+describe('a stop logged once when it starts and once when it ends', () => {
+  it('a new stop, and dialling again, are changes; the same stop again is not', () => {
+    expect(stopChange(null, { stopped: 'silent', room: 0 })).toEqual({ now: 'silent' });
+    expect(stopChange('silent', { stopped: 'silent', room: 0 })).toBeNull();
+    expect(stopChange('silent', { stopped: null, room: 2 })).toEqual({ now: null });
+  });
+
+  it('waiting on hold is no stop', () => {
+    expect(stopChange(null, { stopped: 'on_hold', room: 0 })).toBeNull();
+  });
+
+  it('OpenAI down: a look with no room says nothing about Seri - the stop stands until she is asked again (A17)', () => {
+    expect(stopChange(null, { stopped: 'openai_down', room: 0 })).toEqual({ now: 'openai_down' });
+    expect(stopChange('openai_down', { stopped: null, room: 0 })).toBeNull();
+    expect(stopChange('ai_fallbacks', { stopped: null, room: 0 })).toBeNull();
+    expect(stopChange('openai_down', { stopped: null, room: 3 })).toEqual({ now: null });
+  });
+
+  it('another stop while she was down is still a change', () => {
+    expect(stopChange('openai_down', { stopped: 'refused', room: 0 })).toEqual({ now: 'refused' });
   });
 });

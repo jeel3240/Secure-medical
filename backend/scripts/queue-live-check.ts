@@ -14,7 +14,7 @@
  *     EZT_USERNAME=x EZT_PASSWORD=x EZT_GROUP=x npx ts-node --transpile-only scripts/queue-live-check.ts
  *
  * Re-running needs a fresh database: DROP and re-migrate - or
- * `scripts/live-checks.sh queue`. 70 checks as of 2026-10-24.
+ * `scripts/live-checks.sh queue`. 84 checks as of 2026-11-12.
  */
 import { pool } from '../src/db/pool';
 import { startFlow } from './live-flow';
