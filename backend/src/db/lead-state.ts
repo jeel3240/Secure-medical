@@ -239,6 +239,11 @@ export const WORKED_SQL = `(
  * The earliest such moment. Derived, never stored: the answer
  * (`call_answers`) and the call (`calls`) are the record.
  *
+ * On a call Seri took (Phase 7) the robot asks no question: anything the lead
+ * said or pressed to her (`call_ai_turns`, `who = 'lead'`) is answering the
+ * call - unless the voicemail message took that call over (T18, A18), when
+ * what she heard was a machine's greeting, not the lead.
+ *
  * `leadId` and `since` are SQL for the lead's id and the conversation's
  * `created_at`, so a call to an earlier conversation never stops a later one.
  */
@@ -250,6 +255,10 @@ export function phoneTookOverAtSql(leadId: string, since: string): string {
       UNION ALL
       SELECT ic.created_at FROM calls ic
       WHERE ic.lead_id = ${leadId} AND ic.direction = 'inbound' AND ic.created_at > ${since}
+      UNION ALL
+      SELECT st.created_at FROM call_ai_turns st JOIN calls sc ON sc.id = st.call_id
+      WHERE sc.lead_id = ${leadId} AND st.who = 'lead' AND st.created_at > ${since}
+        AND NOT COALESCE(sc.script_result = 'voicemail_left' OR (sc.script_result = 'unanswered' AND sc.answered_by = 'fax'), false)
     ) pt
   )`;
 }

@@ -197,7 +197,7 @@ you change something the docs describe, update the doc in the same commit.
     scripts/timeline-live-check.ts  proves the merge and the derived events; the robot's call with its result and answers (T21); Seri's conversation on a call she took, and how her part ended (A19)
     scripts/callbacks-live-check.ts  proves the tab windows against a real clock
     scripts/dispositions-live-check.ts  proves the DNC block and the queue effect
-    scripts/agent-sms-live-check.ts  proves the take-over stops the questions, and a phone call too (rule 2d)
+    scripts/agent-sms-live-check.ts  proves the take-over stops the questions, and a phone call too (rule 2d), Seri's included
     scripts/admin-live-check.ts  proves the three admin read models
     scripts/health-live-check.ts  proves the poller staleness signal
     src/core/queue-tags.ts  which tag a queued lead gets; Seri's call back, bold once due (A16)
@@ -245,7 +245,7 @@ you change something the docs describe, update the doc in the same commit.
     scripts/dev-ask-again.ts  local testing only: asks a held lead the questions again, so one phone can walk every path
     scripts/speed-check.ts  loads 50,000 fake leads into a scratch database and times every screen's read - npm run speed
     src/db/leads.ts         Admin > Leads SQL; the Call column, the robot call's result (T23)
-    src/db/lead-state.ts    closed and worked, shared by the queue and Admin > Leads; a missed call, and a missed "yes" on the automated call (T22) - one "nobody got back to them" rule; when a phone call stopped the text questions (rule 2d)
+    src/db/lead-state.ts    closed and worked, shared by the queue and Admin > Leads; a missed call, and a missed "yes" on the automated call (T22) - one "nobody got back to them" rule; when a phone call stopped the text questions (rule 2d) - a call Seri took included, once the lead talked to her
     src/db/sql.ts           LIKE escaping and the expiry-days reader, shared by every query
     src/core/activity.ts    every action the activity log records
     src/db/activity.ts      writes the activity log and the raw webhook archive
