@@ -8,7 +8,7 @@
 
 ## Build
 
-- Merge `dev` into `main`. Deploy after 5 PM as usual: pull, build, **migrate (022)**, up.
+- Merge `dev` into `main`. Deploy after 5 PM as usual: pull, build, **migrate (022 and 023)**, up. 023 (A15) adds `callbacks.note`, Seri's one-line reason on a call back she books, and one call back per call; like 022 it changes no existing row.
 - Server `.env`: `OPENAI_API_KEY`, then recreate the api and the worker (`up -d api worker`; a restart keeps the old environment). `ai_agent` stays `off`: calls exactly as today.
 - Next calling day, switch it on with the command - no restart, recorded in the activity log:
   `docker compose -f docker-compose.yml -f docker-compose.prod.yml exec api npm run ai-agent -- on`
