@@ -4,6 +4,7 @@
  * the marking is right.
  */
 import { ACTIONS } from '../actions';
+import { NOBODY_NOTE } from '../conversation';
 import { CALL_HEADING } from '../instructions';
 import { loadKnowledge } from '../knowledge';
 import { caseMessages, grade, loadCases, OUTCOMES, says, type EvalCase } from './grade';
@@ -17,8 +18,13 @@ const reply = (text: string, ...calls: [string, object?][]) => ({
 });
 
 describe('the cases', () => {
-  it('74, each named once', () => {
-    expect(cases).toHaveLength(74);
+  it('a case may set when the call happens; the rest take the default (A21, call 93)', () => {
+    expect(byId('friday_tomorrow_nobody').now.toISOString()).toBe('2026-11-13T23:39:50.000Z');
+    expect(byId('busy').now.toISOString()).toBe('2026-11-11T19:00:00.000Z');
+  });
+
+  it('76, each named once', () => {
+    expect(cases).toHaveLength(76);
     expect(new Set(cases.map((c) => c.id)).size).toBe(cases.length);
   });
 
@@ -57,7 +63,11 @@ describe('a case, as OpenAI gets it', () => {
 
   it('a case at the greeting starts there; one with nobody there says so', () => {
     expect(caseMessages(byId('wrong_person_at_greeting'), knowledge).map((m) => m.role)).toEqual(['system', 'assistant', 'user']);
-    expect(caseMessages(byId('yes_order_now_nobody'), knowledge)[4].content).toBe('[Who is there: nobody] Yes, I\'d like to order now.');
+    const nobody = caseMessages(byId('yes_order_now_nobody'), knowledge);
+    expect(nobody.slice(-2)).toEqual([
+      { role: 'user', content: '[Who is there: nobody] Yes, I\'d like to order now.' },
+      { role: 'system', content: NOBODY_NOTE },
+    ]);
   });
 });
 
