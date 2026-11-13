@@ -257,6 +257,28 @@ async function main(): Promise<void> {
       (await pool.query(`SELECT detail FROM activity_log WHERE action = 'ai_agent.ended' AND (detail->>'callId')::int = $1`, [other])).rows[0].detail,
       { action: 'transfer_to_agent', callId: other }
     );
+
+    console.log('\nher part failing: the fallback (A12)');
+    const failLead = await makeLead();
+    const failed = await makeCall(failLead, 'automated');
+    await startAiCall(pool, { callId: failed, callSid: `CA-check-${failLead}-automated`, knowledgeVersion: 'approved-test' });
+    check('recorded', await endAiCall(pool, failed, { action: 'fallback', why: 'model_slow' }), true);
+    check('on the call as fallback - what the robot counts (A17)', (await pool.query(`SELECT ai_ended_with FROM calls WHERE id = $1`, [failed])).rows[0].ai_ended_with, 'fallback');
+    check(
+      'in the activity log, with why',
+      (await pool.query(`SELECT detail FROM activity_log WHERE action = 'ai_agent.ended' AND (detail->>'callId')::int = $1`, [failed])).rows[0].detail,
+      { why: 'model_slow', action: 'fallback', callId: failed }
+    );
+
+    const silentLead = await makeLead();
+    const silent = await makeCall(silentLead, 'automated');
+    await startAiCall(pool, { callId: silent, callSid: `CA-check-${silentLead}-automated`, knowledgeVersion: 'approved-test' });
+    await endAiCall(pool, silent, { action: 'end_call', reason: 'no_response' });
+    check(
+      'the relay\'s own ending - silence - is end_call, with its reason',
+      (await pool.query(`SELECT c.ai_ended_with, a.detail FROM calls c JOIN activity_log a ON a.action = 'ai_agent.ended' AND (a.detail->>'callId')::int = c.id WHERE c.id = $1`, [silent])).rows[0],
+      { ai_ended_with: 'end_call', detail: { action: 'end_call', callId: silent, reason: 'no_response' } }
+    );
   }
 
   console.log('\nwho is there, before each reply (A11)');

@@ -30,6 +30,19 @@ export interface SeriModel {
 /** Replies are a sentence or two; this only stops a runaway one. */
 const MAX_REPLY_TOKENS = 300;
 
+/**
+ * OpenAI's failure as the relay logs it (`ai_relay.model_failed`, A12): its
+ * status and code, never its message - a refused key comes back quoted in it,
+ * partly hidden. Being stopped on purpose is left as it is.
+ */
+export function plainError(err: unknown): unknown {
+  if (err instanceof OpenAI.APIUserAbortError) return err;
+  if (err instanceof OpenAI.APIConnectionTimeoutError) return new Error('OpenAI timed out');
+  if (err instanceof OpenAI.APIConnectionError) return new Error('OpenAI could not be reached');
+  if (err instanceof OpenAI.APIError) return new Error(['OpenAI', err.status, err.code ?? err.type].filter(Boolean).join(' '));
+  return err;
+}
+
 export function openAiModel(apiKey: string): SeriModel {
   // Made on the first call, not at start-up: without a key no call reaches her
   // (A13), and the API starts all the same.
@@ -37,30 +50,34 @@ export function openAiModel(apiKey: string): SeriModel {
   return {
     async *reply(messages, signal) {
       // No retries: a second try is seconds of silence on a live call. A
-      // failure is handled on the call instead (A12).
+      // failure ends her part with the fallback instead (A12).
       client ??= new OpenAI({ apiKey, timeout: 15_000, maxRetries: 0 });
-      const stream = await client.chat.completions.create(
-        {
-          model: SERI_MODEL,
-          messages,
-          tools: ACTION_TOOLS,
-          parallel_tool_calls: false,
-          stream: true,
-          max_completion_tokens: MAX_REPLY_TOKENS,
-          prompt_cache_key: PROMPT_CACHE_KEY,
-        },
-        { signal }
-      );
       const calls: ModelToolCall[] = [];
-      for await (const chunk of stream) {
-        const delta = chunk.choices[0]?.delta;
-        if (delta?.content) yield { type: 'text', text: delta.content };
-        for (const part of delta?.tool_calls ?? []) {
-          const call = (calls[part.index] ??= { id: '', name: '', arguments: '' });
-          call.id += part.id ?? '';
-          call.name += part.function?.name ?? '';
-          call.arguments += part.function?.arguments ?? '';
+      try {
+        const stream = await client.chat.completions.create(
+          {
+            model: SERI_MODEL,
+            messages,
+            tools: ACTION_TOOLS,
+            parallel_tool_calls: false,
+            stream: true,
+            max_completion_tokens: MAX_REPLY_TOKENS,
+            prompt_cache_key: PROMPT_CACHE_KEY,
+          },
+          { signal }
+        );
+        for await (const chunk of stream) {
+          const delta = chunk.choices[0]?.delta;
+          if (delta?.content) yield { type: 'text', text: delta.content };
+          for (const part of delta?.tool_calls ?? []) {
+            const call = (calls[part.index] ??= { id: '', name: '', arguments: '' });
+            call.id += part.id ?? '';
+            call.name += part.function?.name ?? '';
+            call.arguments += part.function?.arguments ?? '';
+          }
         }
+      } catch (err) {
+        throw plainError(err);
       }
       for (const call of calls) if (call) yield { type: 'tool', call };
     },

@@ -10,6 +10,7 @@ import {
   ACTION_TOOLS,
   ACTIONS,
   END_REASONS,
+  RELAY_END_REASONS,
   fallbackHandoff,
   fromHandoff,
   handoffData,
@@ -78,6 +79,14 @@ describe('a tool call, carried across Twilio and back', () => {
 
   it('the relay\'s own fallback, too', () => {
     expect(fromHandoff(handoffData(fallbackHandoff('openai_timeout')))).toEqual({ action: 'fallback', why: 'openai_timeout' });
+  });
+
+  it('the relay\'s own endings read back (A12) - but she cannot choose them', () => {
+    for (const reason of RELAY_END_REASONS) {
+      const handoff: Handoff = { action: 'end_call', reason };
+      expect(fromHandoff(handoffData(handoff))).toEqual(handoff);
+      expect(call('end_call', { reason })).toEqual({ ok: false, error: expect.stringMatching(/^end_call needs a reason/) });
+    }
   });
 
   it('no arguments at all reads as none', () => {
@@ -223,6 +232,8 @@ describe('the line the relay adds after hers (A09)', () => {
     expect(lineToAdd({ action: 'end_call', reason: 'not_interested' }, '', ctx)).toBe('Thanks for your time. Have a great day!');
     expect(lineToAdd({ action: 'end_call', reason: 'wrong_person' }, '', ctx)).toBe('Sorry about that, have a great day.');
     expect(lineToAdd({ action: 'end_call', reason: 'emergency' }, '', ctx)).toBe('If this is a medical emergency, please hang up and call 911.');
+    expect(lineToAdd({ action: 'end_call', reason: 'no_response' }, '', ctx)).toBe('Sorry I missed you, have a great day.');
+    expect(lineToAdd({ action: 'end_call', reason: 'time_limit' }, '', ctx)).toBe('Thanks so much for your time today. Have a great day!');
     expect(lineToAdd(fallbackHandoff('openai_timeout'), '', ctx)).toBeNull();
   });
 
@@ -243,7 +254,7 @@ describe('the line the relay adds after hers (A09)', () => {
       booked,
       { action: 'send_link' },
       { action: 'opt_out' },
-      ...END_REASONS.map((reason): Handoff => ({ action: 'end_call', reason })),
+      ...[...END_REASONS, ...RELAY_END_REASONS].map((reason): Handoff => ({ action: 'end_call', reason })),
     ];
     for (const handoff of handoffs) {
       const line = lastLine(handoff, ctx)!;

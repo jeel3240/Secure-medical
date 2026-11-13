@@ -1,9 +1,10 @@
 /**
- * The relay - A10, A11. A real WebSocket on a real server, a fake
+ * The relay - A10, A11, A12. A real WebSocket on a real server, a fake
  * ConversationRelay on the other end (the messages as A02 recorded them), a
- * fake OpenAI and a fake database: who may connect, which call it is, every
- * turn kept in order, and Seri talking - her reply in sentences, an action
- * ending the session, the stop check. What she says turn by turn is
+ * fake OpenAI, a fake database and a clock moved by hand: who may connect,
+ * which call it is, every turn kept in order, Seri talking - her reply in
+ * sentences, an action ending the session, the stop check - and the limits and
+ * failures reaching the call. What she says turn by turn is
  * conversation.test.ts; the SQL is scripts/ai-agent-live-check.ts.
  */
 import http from 'http';
@@ -15,6 +16,8 @@ import { DEFAULT_CALL_HOURS } from '../core/auto-dial';
 import { ANTIBIOTICS_CALL } from '../core/call-script-fixtures';
 import * as logModule from '../lib/log';
 import type { Handoff } from './actions';
+import { Conversation } from './conversation';
+import { FakeClock } from './fake-clock';
 import { CALL_HEADING, type WhoIsThere } from './instructions';
 import { loadKnowledge } from './knowledge';
 import type { ModelEvent, SeriModel } from './openai';
@@ -73,12 +76,16 @@ const tool = (name: string, args: Record<string, unknown> = {}): ModelEvent => (
   call: { id: `call_${name}`, name, arguments: JSON.stringify(args) },
 });
 
-/** OpenAI, answering as told: "Sure." unless given replies. */
+/** OpenAI, answering as told: "Sure." unless given replies - or failing, or never answering until stopped. */
 class FakeModel implements SeriModel {
   asked: ChatCompletionMessageParam[][] = [];
   replies: ModelEvent[][] = [];
-  async *reply(messages: ChatCompletionMessageParam[]): AsyncIterable<ModelEvent> {
+  fail: Error | null = null;
+  hang = false;
+  async *reply(messages: ChatCompletionMessageParam[], signal: AbortSignal): AsyncIterable<ModelEvent> {
     this.asked.push(messages);
+    if (this.fail) throw this.fail;
+    if (this.hang) await new Promise((_, reject) => signal.addEventListener('abort', () => reject(new Error('aborted'))));
     for (const event of this.replies.shift() ?? [text('Sure.')]) {
       await Promise.resolve();
       yield event;
@@ -91,6 +98,7 @@ let server: http.Server;
 let relay: WebSocketServer;
 let port: number;
 let store: FakeStore;
+let clock: FakeClock;
 let logged: { level: string; event: string; fields: unknown }[];
 const sockets: WebSocket[] = [];
 
@@ -102,6 +110,7 @@ async function start(opts: { setupTimeoutMs?: number } = {}): Promise<void> {
     store,
     model,
     setupTimeoutMs: opts.setupTimeoutMs,
+    timers: clock,
   });
   await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
   port = (server.address() as AddressInfo).port;
@@ -110,6 +119,7 @@ async function start(opts: { setupTimeoutMs?: number } = {}): Promise<void> {
 beforeEach(async () => {
   store = new FakeStore();
   model = new FakeModel();
+  clock = new FakeClock();
   logged = [];
   for (const level of ['info', 'warn', 'error'] as const) {
     jest.spyOn(logModule.log, level).mockImplementation((event: string, fields?: unknown) => {
@@ -299,7 +309,9 @@ describe('a call Seri takes', () => {
     await until(() => store.turns.length === 3, 'three turns');
     c.ws.close(1000);
     await until(() => events('ai_relay.closed').length === 1, 'the close');
-    expect(events('ai_relay.closed')).toEqual([{ callId: 7, code: 1000, turns: 3 }]);
+    // A hang-up: nothing of hers ended, nothing recorded - the action URL's to record (A14).
+    expect(events('ai_relay.closed')).toEqual([{ callId: 7, code: 1000, turns: 3, ended: false }]);
+    expect(store.endedWith).toEqual([]);
   });
 
   it('never logs what was said', async () => {
@@ -432,7 +444,7 @@ describe('Seri talks (A11)', () => {
     ]);
     expect(store.endedWith).toEqual([{ callId: 7, handoff: { action: 'end_call', reason: 'not_interested' } }]);
     expect(store.turns.at(-1)).toEqual({ callId: 7, who: 'action', text: '{"action":"end_call","reason":"not_interested"}' });
-    expect(events('ai_relay.ended')).toEqual([{ callId: 7, action: 'end_call' }]);
+    expect(events('ai_relay.ended')).toEqual([{ callId: 7, action: 'end_call', reason: 'not_interested' }]);
   });
 
   it('"stop calling me" ends the session as an opt-out though OpenAI would answer something else', async () => {
@@ -494,5 +506,118 @@ describe('Seri talks (A11)', () => {
     expect(await c.closed).toBe(1011);
     expect(store.started).toEqual([]);
     expect(events('ai_relay.no_script')).toEqual([{ callId: 7 }]);
+  });
+});
+
+describe('limits and failures (A12)', () => {
+  /** Waits until the relay has handled everything sent before a key, by the key's turn being kept. */
+  async function handled(c: Connection, digit: string, turns: number): Promise<void> {
+    c.send({ type: 'dtmf', digit });
+    await until(() => store.turns.length === turns, `the key ${digit}`);
+  }
+
+  it('Twilio\'s speaker events count the silence: "are you still there?", then a goodbye, and her part ended', async () => {
+    const c = await connected();
+    c.send(SETUP);
+    c.send({ type: 'info', name: 'agentSpeaking', value: 'on' });
+    await handled(c, '1', 2);
+    clock.advance(60_000);
+    expect(c.received).toEqual([]);
+
+    c.send({ type: 'info', name: 'agentSpeaking', value: 'off' });
+    await handled(c, '2', 3);
+    clock.advance(6_000);
+    await until(() => c.received.length === 1, 'the line');
+    expect(c.received).toEqual([{ type: 'text', token: 'Hello, are you still there?', last: true }]);
+    clock.advance(6_000);
+    await until(() => gotEnd(c) && store.endedWith.length === 1 && store.turns.length === 6, 'the end');
+
+    expect(c.received.slice(1)).toEqual([
+      { type: 'text', token: 'Sorry I missed you, have a great day.', last: true },
+      { type: 'end', handoffData: '{"action":"end_call","reason":"no_response"}' },
+    ]);
+    expect(store.endedWith).toEqual([{ callId: 7, handoff: { action: 'end_call', reason: 'no_response' } }]);
+    expect(store.turns.map((t) => [t.who, t.text])).toEqual([
+      ['seri', 'Hi, is this John?'],
+      ['lead', '(pressed 1)'],
+      ['lead', '(pressed 2)'],
+      ['seri', 'Hello, are you still there?'],
+      ['seri', 'Sorry I missed you, have a great day.'],
+      ['action', '{"action":"end_call","reason":"no_response"}'],
+    ]);
+  });
+
+  it('the call\'s three minutes count from setup: 20 seconds after, a goodbye and the end', async () => {
+    const c = await connected();
+    c.send(SETUP);
+    c.send({ type: 'info', name: 'clientSpeaking', value: 'on' });
+    await handled(c, '1', 2);
+    clock.advance(3 * 60_000 + 20_000);
+    await until(() => gotEnd(c) && store.endedWith.length === 1, 'the end');
+    expect(c.received).toEqual([
+      { type: 'text', token: 'Thanks so much for your time today. Have a great day!', last: true },
+      { type: 'end', handoffData: '{"action":"end_call","reason":"time_limit"}' },
+    ]);
+  });
+
+  it('OpenAI never answering: "One moment...", then the fallback, recorded', async () => {
+    model.hang = true;
+    const c = await connected();
+    c.send(SETUP);
+    c.send({ type: 'prompt', voicePrompt: 'Hello?', last: true });
+    await until(() => model.asked.length === 1, 'the request');
+    clock.advance(4_000);
+    await until(() => c.received.length === 1, 'the filler');
+    expect(c.received).toEqual([{ type: 'text', token: 'One moment... ', last: false }]);
+    clock.advance(4_000);
+    await until(() => gotEnd(c) && store.endedWith.length === 1, 'the end');
+
+    expect(c.received.slice(1)).toEqual([
+      { type: 'text', token: '', last: true },
+      { type: 'end', handoffData: '{"action":"fallback","why":"model_slow"}' },
+    ]);
+    expect(store.endedWith).toEqual([{ callId: 7, handoff: { action: 'fallback', why: 'model_slow' } }]);
+    await until(() => store.turns.length === 4, 'the turns');
+    expect(store.turns.map((t) => [t.who, t.text])).toEqual([
+      ['seri', 'Hi, is this John?'],
+      ['lead', 'Hello?'],
+      ['seri', 'One moment...'],
+      ['action', '{"action":"fallback","why":"model_slow"}'],
+    ]);
+  });
+
+  it('OpenAI failing: the fallback, recorded', async () => {
+    model.fail = new Error('openai down');
+    const c = await connected();
+    c.send(SETUP);
+    c.send({ type: 'prompt', voicePrompt: 'Hello?', last: true });
+    await until(() => gotEnd(c) && store.endedWith.length === 1, 'the end');
+    expect(c.received).toEqual([{ type: 'end', handoffData: '{"action":"fallback","why":"model_failed"}' }]);
+    expect(store.endedWith).toEqual([{ callId: 7, handoff: { action: 'fallback', why: 'model_failed' } }]);
+  });
+
+  it('the socket failing: her part recorded as a fallback, and the close says it had ended', async () => {
+    const c = await connected();
+    c.send(SETUP);
+    await until(() => store.turns.length === 1, 'the greeting');
+    c.send('x'.repeat(70 * 1024));
+    expect(await c.closed).toBe(1009);
+    await until(() => store.endedWith.length === 1 && events('ai_relay.closed').length === 1, 'the fallback and the close');
+    expect(store.endedWith[0].handoff).toEqual({ action: 'fallback', why: 'socket_error' });
+    expect(events('ai_relay.socket_error')).toHaveLength(1);
+    expect(events('ai_relay.closed')).toEqual([{ callId: 7, code: expect.any(Number), turns: 2, ended: true }]);
+  });
+
+  it('the relay failing once she is talking: the session ends with the fallback, not a dropped socket', async () => {
+    jest.spyOn(Conversation.prototype, 'heard').mockImplementation(() => {
+      throw new Error('boom');
+    });
+    const c = await connected();
+    c.send(SETUP);
+    c.send({ type: 'prompt', voicePrompt: 'Hello?', last: true });
+    await until(() => gotEnd(c) && store.endedWith.length === 1, 'the end');
+    expect(c.received).toEqual([{ type: 'end', handoffData: '{"action":"fallback","why":"relay_failed"}' }]);
+    expect(events('ai_relay.failed')).toEqual([{ callId: 7, err: expect.stringContaining('boom') }]);
+    expect(c.ws.readyState).toBe(WebSocket.OPEN);
   });
 });

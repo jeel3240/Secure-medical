@@ -17,7 +17,7 @@ The build of `docs/AI-AGENT.md`, split into small tickets. Each is one PR into `
 | A09 | [Answer test set](A09-answer-test-set.md) | A04, A05, A06 | M | Done 2026-11-11 |
 | A10 | [Relay part 1: connection and storage](A10-relay-part-1-connection-and-storage.md) | A01, A08 | M | Done 2026-11-12 |
 | A11 | [Relay part 2: Seri talks (OpenAI)](A11-relay-part-2-seri-talks-openai.md) | A04, A05, A06, A10 | L | Done 2026-11-12 |
-| A12 | [Relay part 3: limits and failures](A12-relay-part-3-limits-and-failures.md) | A11 | M | To do |
+| A12 | [Relay part 3: limits and failures](A12-relay-part-3-limits-and-failures.md) | A11 | M | Done 2026-11-12 |
 | A13 | [The call goes to Seri](A13-the-call-goes-to-seri.md) | A01, A10 | S | To do |
 | A14 | [After Seri: carrying out her action](A14-after-seri-carrying-out-her-action.md) | A06, A13 | M | To do |
 | A15 | [Seri books a call back](A15-seri-books-a-call-back.md) | A07, A08, A14 | S | To do |

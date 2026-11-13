@@ -33,6 +33,12 @@
 
 - `docs/AI-AGENT.md` section 3.
 
+## Where it hooks in (from A12)
+
+- `end_call` also comes from the relay itself, with reasons Seri is never offered (`RELAY_END_REASONS`, `ai/actions.ts`): `no_response` - the lead silent after "are you still there?", which reads as today's `no_response` - and `time_limit` - the three minutes ran out. Seri's own goodbye has been said either way.
+- `fallback` comes with why: `model_failed`, `model_slow`, `socket_error`, `relay_failed`. The relay has already recorded it (`ai_ended_with`, `ai_agent.ended`); `endAiCall` records once, so calling it again changes nothing.
+- `SessionStatus=failed` with nothing recorded - Twilio's side failing, or the relay never starting her - should record `fallback` here (`endAiCall`), so the robot counts every one (A17). `ai_ended_with` stays empty for a call she never started.
+
 ## Not in this ticket
 
 - Saving the callback itself (A15).

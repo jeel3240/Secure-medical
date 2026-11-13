@@ -1,5 +1,5 @@
 /**
- * The relay: Seri's side of a ConversationRelay call - A10 and A11,
+ * The relay: Seri's side of a ConversationRelay call - A10, A11 and A12,
  * docs/AI-AGENT.md sections 1, 6 and 9.
  *
  * Twilio opens a WebSocket to `/api/ai/relay` when an automated call is
@@ -14,6 +14,13 @@
  *   prompt      the lead's words, kept, then hers to answer
  *   dtmf        the key, kept as the lead's turn; 9 is a stop
  *   interrupt   what she had said when the lead spoke over her, as a note
+ *   info        who is talking - `agentSpeaking`, `clientSpeaking` - for the
+ *               silence count (A12); not kept
+ *
+ * When Seri cannot go on - OpenAI failing or too slow, the socket or the relay
+ * failing - the session ends with `fallback` and the script takes the call
+ * (A12, A14). A session that closes with no end of ours - the lead hung up, or
+ * Twilio's side failed - is the action URL's to record (A14, A18).
  *
  * Messages are handled one at a time, in the order they came. Turns are kept
  * on their own line of writes, in the order they were said, and nothing on the
@@ -25,7 +32,7 @@ import type { Server } from 'http';
 import type { Duplex } from 'stream';
 import { WebSocketServer, type RawData, type WebSocket } from 'ws';
 import { errText, log } from '../lib/log';
-import { Conversation } from './conversation';
+import { Conversation, type Timers } from './conversation';
 import { buildInstructions, welcomeGreeting } from './instructions';
 import type { Knowledge } from './knowledge';
 import type { SeriModel } from './openai';
@@ -53,6 +60,8 @@ export interface RelayDeps {
   /** How long Twilio has, once connected, to send `setup`. */
   setupTimeoutMs?: number;
   now?: () => Date;
+  /** Where the call's limits are counted (A12) - a fake clock in tests. */
+  timers?: Timers;
 }
 
 const SETUP_TIMEOUT_MS = 10_000;
@@ -204,9 +213,11 @@ function runSession(ws: WebSocket, deps: RelayDeps): void {
             ),
           send,
           now: deps.now,
+          timers: deps.timers,
         }
       );
       keep({ who: 'seri', text: greeting });
+      conversation.start();
       return;
     }
     // Refused, and closing.
@@ -231,6 +242,9 @@ function runSession(ws: WebSocket, deps: RelayDeps): void {
         conversation.interrupted(msg.heard);
         keep({ who: 'system', text: interruptedNote(msg.heard) });
         return;
+      case 'speaking':
+        conversation.speaking(msg.who, msg.on);
+        return;
       case 'error':
         log.warn('ai_relay.twilio_error', { callId: call.callId });
         keep({ who: 'system', text: twilioErrorNote(msg.description) });
@@ -246,20 +260,26 @@ function runSession(ws: WebSocket, deps: RelayDeps): void {
       .then(() => handle(msg))
       .catch((err: unknown) => {
         log.error('ai_relay.failed', { callId: call?.callId ?? null, err: errText(err) });
-        close(FAILED, 'failed');
+        // Once she is talking, the session ends as hers does, with the
+        // fallback; before, there is nothing to end, and closing is enough.
+        if (conversation && !conversation.isOver) conversation.fail('relay_failed');
+        else close(FAILED, 'failed');
       });
   });
 
   ws.on('close', (code: number) => {
     clearTimeout(setupTimer);
+    // Whether her part had ended - with her action or a fallback - before the socket closed.
+    const ended = conversation?.isOver ?? false;
     conversation?.close();
     if (call) {
       const callId = call.callId;
-      void writes.then(() => log.info('ai_relay.closed', { callId, code, turns }));
+      void writes.then(() => log.info('ai_relay.closed', { callId, code, turns, ended }));
     }
   });
 
   ws.on('error', (err: Error) => {
     log.warn('ai_relay.socket_error', { callId: call?.callId ?? null, err: errText(err) });
+    conversation?.fail('socket_error');
   });
 }

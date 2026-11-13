@@ -1,5 +1,6 @@
 /**
- * One call's conversation with Seri - A11, docs/AI-AGENT.md sections 1-3.
+ * One call's conversation with Seri - A11 and A12, docs/AI-AGENT.md sections
+ * 1-3 and 6.
  *
  * The relay (relay.ts) hands this what the lead says and does; this asks
  * OpenAI, and sends Twilio what she says, a sentence at a time:
@@ -20,13 +21,27 @@
  * The history is what OpenAI is sent: the instructions, the greeting Twilio
  * said, then each turn - built as the answer test set builds it (`leadMessage`,
  * evals/grade.ts), so what is tested is what calls use.
+ *
+ * The limits (A12), counted from `start()` on `timers` - a fake clock in tests:
+ *
+ *   silence            the lead says nothing for 6 seconds after Twilio says
+ *                      she stopped talking (`agentSpeaking` off): "Hello, are
+ *                      you still there?"; silent again, a goodbye and
+ *                      `end_call` (`no_response`)
+ *   3 minutes          a note to her, with her next reply, to wrap up; 20
+ *                      seconds on, the call ends (`time_limit`) - after the
+ *                      reply she is saying, if she has started one, given
+ *                      10 seconds more at most
+ *   OpenAI slow        no first word in 4 seconds: "One moment..."; none 4
+ *                      seconds later: `fallback` - the script takes the call (A14)
+ *   OpenAI failing     `fallback`; so does the socket or the relay failing (`fail`)
  */
 
 import type { ChatCompletionMessageParam } from 'openai/resources/chat/completions';
 import type { CallHours } from '../core/auto-dial';
 import { saysStop } from '../core/answers';
 import { errText, log } from '../lib/log';
-import { handoffData, lineToAdd, toHandoff, type Handoff } from './actions';
+import { fallbackHandoff, handoffData, lastLine, lineToAdd, toHandoff, type Handoff } from './actions';
 import { whoIsThereNote, type WhoIsThere } from './instructions';
 import type { ModelToolCall, SeriModel } from './openai';
 import { endMessage, refusedNote, replacedNote, stopNote, textMessage } from './relay-messages';
@@ -47,6 +62,43 @@ export const STOP_KEY = '9';
  * first refusal tells her what to do instead, and she speaks again at once.
  */
 const MAX_ACTION_TRIES = 2;
+
+/** The limits - section 6, decided by Jeel, 2026-11-11. */
+export const LIMITS = {
+  /** The lead silent this long after she stopped talking. */
+  silenceMs: 6_000,
+  /** How long the call goes on before she is told to wrap up. */
+  callMs: 3 * 60_000,
+  /** How long she then has, before the relay ends the call. */
+  wrapUpMs: 20_000,
+  /** A reply she has started by then has this long to be written whole. */
+  lastReplyMs: 10_000,
+  /** No first word from OpenAI in this long: the filler. */
+  firstWordMs: 4_000,
+  /** Still none this long after the filler: the fallback. */
+  afterFillerMs: 4_000,
+} as const;
+
+/** Said after the first silence. */
+export const STILL_THERE_LINE = 'Hello, are you still there?';
+
+/** Said while OpenAI is slow. Not in the history: she would start saying it herself. */
+export const FILLER_LINE = 'One moment...';
+
+/** Given to her with her first reply after three minutes. */
+export const WRAP_UP_NOTE =
+  'The call has gone on for three minutes. Wrap up now: answer briefly if they asked something, then offer once - to put them through to a person if someone is free or coming, a call back if nobody is, or to text them the link - and ask which they would like. When they answer, end the call with the action that fits. Do not start anything new.';
+
+/** Where the limits are counted: the real clock, or a fake one in tests. */
+export interface Timers {
+  set(run: () => void, ms: number): unknown;
+  clear(handle: unknown): void;
+}
+
+export const realTimers: Timers = {
+  set: (run, ms) => setTimeout(run, ms),
+  clear: (handle) => clearTimeout(handle as ReturnType<typeof setTimeout>),
+};
 
 export interface ConversationSetup {
   callId: number;
@@ -71,6 +123,7 @@ export interface ConversationDeps {
   /** A message to Twilio. */
   send: (message: string) => void;
   now?: () => Date;
+  timers?: Timers;
 }
 
 /** One reply of Seri's, from the lead's words to her last sentence. */
@@ -89,6 +142,10 @@ interface Reply {
   replaced: boolean;
   action: string | null;
   done: boolean;
+  /** The wait for OpenAI's first word (A12). */
+  timer: unknown;
+  /** "One moment..." was said: OpenAI was slow. */
+  filler: boolean;
 }
 
 export class Conversation {
@@ -98,6 +155,21 @@ export class Conversation {
   private reply: Reply | null = null;
   private over = false;
   private readonly now: () => Date;
+  private readonly timers: Timers;
+  /** The limits are counting. */
+  private started = false;
+  /** Twilio's speaker events (`events="speaker-events"`, A13): the silence counts only while nobody talks. */
+  private agentSpeaking = false;
+  private leadSpeaking = false;
+  private silenceTimer: unknown = null;
+  /** "Are you still there?" was said, and nothing has come from the lead since. */
+  private askedStillThere = false;
+  private callTimer: unknown = null;
+  private wrapUpTimer: unknown = null;
+  /** The three minutes are up: the note goes with her next reply, once. */
+  private wrapUp: 'not_yet' | 'due' | 'given' = 'not_yet';
+  /** The 20 seconds ran out while she was saying a reply: the call ends once it is over. */
+  private endOnceSaid = false;
 
   constructor(
     private readonly setup: ConversationSetup,
@@ -108,6 +180,7 @@ export class Conversation {
       { role: 'assistant', content: setup.greeting },
     ];
     this.now = deps.now ?? (() => new Date());
+    this.timers = deps.timers ?? realTimers;
   }
 
   /** The session has been ended: nothing more is said. */
@@ -120,10 +193,29 @@ export class Conversation {
     return this.history;
   }
 
+  /** Twilio is saying her greeting: the limits start counting (A12). */
+  start(): void {
+    if (this.started || this.over) return;
+    this.started = true;
+    this.callTimer = this.timers.set(() => this.callTimeUp(), LIMITS.callMs);
+    this.watchSilence();
+  }
+
+  /** Twilio's speaker events: who is talking now. */
+  speaking(who: 'agent' | 'client', on: boolean): void {
+    if (this.over) return;
+    if (who === 'agent') this.agentSpeaking = on;
+    else this.leadSpeaking = on;
+    if (on) this.stopSilence();
+    else this.watchSilence();
+  }
+
   /** The lead finished saying something. */
   heard(said: string): void {
     if (this.over) return;
     const heardAt = Date.now();
+    this.askedStillThere = false;
+    this.stopSilence();
     if (saysStop(said, this.setup.optOutWords)) {
       this.optOut('words');
       return;
@@ -134,21 +226,48 @@ export class Conversation {
     void this.respond({ heardAt, attempt: 0 });
   }
 
-  /** The lead pressed a key. Only the stop key means anything to her. */
+  /** The lead pressed a key. Only the stop key means anything to her; any key says they are there. */
   pressed(digit: string): void {
-    if (this.over || digit !== STOP_KEY) return;
-    this.optOut('key');
+    if (this.over) return;
+    this.askedStillThere = false;
+    if (digit === STOP_KEY) {
+      this.optOut('key');
+      return;
+    }
+    this.watchSilence();
   }
 
   /** The lead spoke over her: `heard` is what she had said by then. */
   interrupted(heard: string): void {
     if (this.over) return;
-    if (this.reply) {
-      this.finish(this.reply, { heard });
-      return;
-    }
+    if (this.reply) this.finish(this.reply, { heard });
     // Her reply was all written - Twilio was still saying it.
-    if (!heard) return;
+    else if (heard) this.replaceLastSaid(heard);
+    this.afterReply();
+  }
+
+  /**
+   * Seri cannot go on - OpenAI, the socket or the relay failed: whatever she
+   * was saying is closed, and the session ends with `fallback`, so the script
+   * takes the call (A14).
+   */
+  fail(why: string): void {
+    if (this.over) return;
+    if (this.reply) this.finish(this.reply);
+    this.end(fallbackHandoff(why));
+  }
+
+  /** The WebSocket closed. */
+  close(): void {
+    this.over = true;
+    this.stopClocks();
+    if (this.reply) {
+      this.timers.clear(this.reply.timer);
+      this.reply.abort.abort();
+    }
+  }
+
+  private replaceLastSaid(heard: string): void {
     for (let i = this.history.length - 1; i > 0; i--) {
       const message = this.history[i];
       if (message.role === 'assistant') {
@@ -158,13 +277,12 @@ export class Conversation {
     }
   }
 
-  /** The WebSocket closed. */
-  close(): void {
-    this.over = true;
-    this.reply?.abort.abort();
-  }
-
   private async respond(opts: { heardAt: number; attempt: number; who?: WhoIsThere }): Promise<void> {
+    if (this.endOnceSaid) {
+      this.endBy({ action: 'end_call', reason: 'time_limit' });
+      return;
+    }
+    this.stopSilence();
     const reply: Reply = {
       abort: new AbortController(),
       heardAt: opts.heardAt,
@@ -176,8 +294,11 @@ export class Conversation {
       replaced: false,
       action: null,
       done: false,
+      timer: null,
+      filler: false,
     };
     this.reply = reply;
+    reply.timer = this.timers.set(() => this.slow(reply), LIMITS.firstWordMs);
 
     if (!opts.who) {
       try {
@@ -190,13 +311,21 @@ export class Conversation {
       this.history.push(leadMessage(reply.who, this.pending.join(' ')));
       this.pending = [];
     }
+    if (this.wrapUp === 'due') {
+      this.wrapUp = 'given';
+      this.history.push({ role: 'system', content: WRAP_UP_NOTE });
+      log.info('ai_relay.wrap_up', { callId: this.setup.callId });
+    }
 
     const splitter = new SentenceSplitter();
     let tool: ModelToolCall | null = null;
     try {
       for await (const event of this.deps.model.reply([...this.history], reply.abort.signal)) {
         if (reply.done) return;
-        reply.firstWordAt ??= Date.now();
+        if (reply.firstWordAt === null) {
+          reply.firstWordAt = Date.now();
+          this.timers.clear(reply.timer);
+        }
         if (event.type === 'tool') {
           tool ??= event.call;
           continue;
@@ -213,10 +342,9 @@ export class Conversation {
         }
       }
     } catch (err) {
-      if (reply.done) return; // stopped on purpose: talked over, or the lead said more
-      // What happens on the call is A12's: for now she says no more.
+      if (reply.done) return; // stopped on purpose: talked over, the lead said more, too slow
       log.error('ai_relay.model_failed', { callId: this.setup.callId, err: errText(err) });
-      this.finish(reply);
+      this.fail('model_failed');
       return;
     }
     if (reply.done) return;
@@ -229,6 +357,24 @@ export class Conversation {
     }
     if (reply.sent.length === 0) log.warn('ai_relay.empty_reply', { callId: this.setup.callId });
     this.finish(reply);
+    this.afterReply();
+  }
+
+  /** OpenAI has not started her reply: the filler at 4 seconds, the script at 8 (section 6). */
+  private slow(reply: Reply): void {
+    if (reply.done || this.over || reply.firstWordAt !== null) return;
+    const waitedMs = Date.now() - reply.heardAt;
+    if (!reply.filler) {
+      reply.filler = true;
+      // Opens her utterance: what she says next follows it, and `finish` closes it.
+      this.deps.send(textMessage(`${FILLER_LINE} `, false));
+      this.deps.keep({ who: 'seri', text: FILLER_LINE, latencyMs: waitedMs });
+      log.warn('ai_relay.filler', { callId: this.setup.callId, waitedMs });
+      reply.timer = this.timers.set(() => this.slow(reply), LIMITS.afterFillerMs);
+      return;
+    }
+    log.error('ai_relay.model_slow', { callId: this.setup.callId, waitedMs });
+    this.fail('model_slow');
   }
 
   /** Checks one sentence and sends it - or the specialist line in its place, ending the reply. */
@@ -270,7 +416,10 @@ export class Conversation {
     );
     reply.notes.push({ who: 'system', text: refusedNote(tool.name, result.error) });
     this.finish(reply, { inHistory: true });
-    if (result.awaitLead || attempt + 1 >= MAX_ACTION_TRIES) return;
+    if (result.awaitLead || attempt + 1 >= MAX_ACTION_TRIES) {
+      this.afterReply();
+      return;
+    }
     void this.respond({ heardAt: reply.heardAt, attempt: attempt + 1, who: reply.who });
   }
 
@@ -284,12 +433,14 @@ export class Conversation {
   private finish(reply: Reply, how: { heard?: string; cut?: true; inHistory?: true } = {}): void {
     if (reply.done) return;
     reply.done = true;
+    this.timers.clear(reply.timer);
     reply.abort.abort();
     if (this.reply === reply) this.reply = null;
 
     const said = reply.sent.join(' ');
+    // The filler opened her utterance too: it is closed whatever came after it.
+    if ((said || reply.filler) && how.heard === undefined) this.deps.send(textMessage('', true));
     if (said) {
-      if (how.heard === undefined) this.deps.send(textMessage('', true));
       this.deps.keep({ who: 'seri', text: said, latencyMs: Math.max(0, (reply.firstSentAt ?? Date.now()) - reply.heardAt) });
       if (!how.inHistory) {
         const heard = how.heard === undefined ? said : how.heard;
@@ -308,23 +459,103 @@ export class Conversation {
       replaced: reply.replaced,
       action: reply.action,
       stopped: how.heard !== undefined ? 'talked_over' : how.cut ? 'lead_said_more' : null,
+      filler: reply.filler,
     });
+  }
+
+  /** Her reply is over and it is the lead's turn: the silence counts - or, past the time limit, the call ends. */
+  private afterReply(): void {
+    if (this.over || this.reply) return;
+    if (this.endOnceSaid) {
+      this.endBy({ action: 'end_call', reason: 'time_limit' });
+      return;
+    }
+    this.watchSilence();
+  }
+
+  /** Counts the silence from now, while nobody is talking and she is not answering. */
+  private watchSilence(): void {
+    this.stopSilence();
+    if (!this.started || this.over || this.reply || this.agentSpeaking || this.leadSpeaking) return;
+    this.silenceTimer = this.timers.set(() => this.silent(), LIMITS.silenceMs);
+  }
+
+  private stopSilence(): void {
+    if (this.silenceTimer !== null) this.timers.clear(this.silenceTimer);
+    this.silenceTimer = null;
+  }
+
+  private silent(): void {
+    this.silenceTimer = null;
+    if (this.over || this.reply) return;
+    if (this.askedStillThere) {
+      this.endBy({ action: 'end_call', reason: 'no_response' });
+      return;
+    }
+    this.askedStillThere = true;
+    this.say(STILL_THERE_LINE);
+    this.history.push({ role: 'assistant', content: STILL_THERE_LINE });
+    log.info('ai_relay.still_there', { callId: this.setup.callId });
+    // Counted again from now - and from the end of the line, once Twilio says it was said.
+    this.watchSilence();
+  }
+
+  private callTimeUp(): void {
+    if (this.over) return;
+    this.wrapUp = 'due';
+    this.wrapUpTimer = this.timers.set(() => this.wrapUpOver(), LIMITS.wrapUpMs);
+  }
+
+  private wrapUpOver(): void {
+    if (this.over) return;
+    // A reply she has started saying may be her wrap-up, with its action: it is
+    // let finish - within a limit, for a reply OpenAI never finishes.
+    if (this.reply && this.reply.firstWordAt !== null) {
+      this.endOnceSaid = true;
+      this.wrapUpTimer = this.timers.set(() => this.endBy({ action: 'end_call', reason: 'time_limit' }), LIMITS.lastReplyMs);
+      return;
+    }
+    this.endBy({ action: 'end_call', reason: 'time_limit' });
+  }
+
+  /** The relay ends the call itself - silence, the time limit: the action's own last line, then the end. */
+  private endBy(handoff: Handoff): void {
+    if (this.over) return;
+    if (this.reply) this.finish(this.reply, { cut: true });
+    const line = lastLine(handoff, { stopLine: this.setup.stopLine, now: this.now() });
+    if (line) this.say(line);
+    this.end(handoff);
+  }
+
+  /** A line of the relay's own, said on its own in her voice, and kept as hers. */
+  private say(line: string, latencyMs: number | null = null): void {
+    this.deps.send(textMessage(line, true));
+    this.deps.keep({ who: 'seri', text: line, latencyMs });
   }
 
   /** The lead asked to stop: the script's stop line, then the opt-out - whatever she was saying. */
   private optOut(via: 'words' | 'key'): void {
     if (this.reply) this.finish(this.reply, { cut: true });
     this.deps.keep({ who: 'system', text: stopNote(via) });
-    this.deps.send(textMessage(this.setup.stopLine, true));
-    this.deps.keep({ who: 'seri', text: this.setup.stopLine, latencyMs: 0 });
+    this.say(this.setup.stopLine, 0);
     this.end({ action: 'opt_out' });
   }
 
   private end(handoff: Handoff): void {
     this.over = true;
+    this.stopClocks();
     this.deps.keep({ who: 'action', text: handoffData(handoff) });
     this.deps.ended(handoff);
     this.deps.send(endMessage(handoff));
-    log.info('ai_relay.ended', { callId: this.setup.callId, action: handoff.action });
+    const reason = handoff.action === 'end_call' ? handoff.reason : handoff.action === 'fallback' ? handoff.why : undefined;
+    log.info('ai_relay.ended', { callId: this.setup.callId, action: handoff.action, ...(reason ? { reason } : {}) });
+  }
+
+  private stopClocks(): void {
+    this.stopSilence();
+    this.timers.clear(this.callTimer);
+    this.timers.clear(this.wrapUpTimer);
+    this.callTimer = null;
+    this.wrapUpTimer = null;
   }
 }
