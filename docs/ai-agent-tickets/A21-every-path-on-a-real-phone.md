@@ -80,8 +80,13 @@
 | - | Aria plain, with tones, and with tones more freely | Tones at stability 0.4 picked |
 | 89 | Aria with tones: busy, "is it a scam?", "No" | Her opening said "You signed up on one of our partner sites" - not wanted. After the "No" she texted the link in the same reply as asking why - not asked for (below) |
 | 90 | The new opening; "Who is this?"; "How did you get my number?" | The partner sites only when asked how we got the number - right. "No worries, Jeel" and "let me know when you're ready, Jeel" sounded personal - the soft tones; seven of nine replies offered to connect |
+| 91 | "Yes" to the greeting, with Jeel's browser not open - nobody free | Her first reply skipped "is that something you'd be interested in?" and asked "talk with someone now, or a call back at a better time?" - the "Yes" taken as interest, the who-is-there note acted on at once. Hung up after it |
 
 All changed on `feat/seri-voice-aria-tone` - `docs/AI-AGENT.md` section 1, "Her voice and tone": Aria; seven businesslike tones; the opening and "Who is this?" without the partner sites; no "no worries" or "when you're ready"; a note against offering to connect twice in a row; an action written in brackets taken; and a stop never held back by a question.
+
+Call 91's opening fixed on `fix/seri-opening-line` - `docs/AI-AGENT.md` section 1, "Her first reply is always the opening".
+
+Seen on every call so far, not changed: Twilio logs a warning (12200) that `applicationReconnect` is not allowed on `<ConversationRelay>` - the call goes on, but Twilio may ignore it, so a WebSocket dropped mid-call (a deploy) may not reconnect (`docs/AI-AGENT.md` section 2, the TwiML).
 
 Still open from these calls: **the link texted without a yes** (call 89) - `toHandoff` holds an action back only when her reply *ends* on a question, and hers asked one mid-reply, then offered the link and sent it.
 
