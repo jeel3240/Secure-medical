@@ -20,7 +20,9 @@ import { pool } from '../src/db/pool';
 import { startFlow } from './live-flow';
 import { listQueue } from '../src/db/queue';
 import { getLeadDetail } from '../src/db/lead-detail';
-import { startAutomatedCall, missTransfer } from '../src/db/auto-calls';
+import { keepCallResult, startAutomatedCall, missTransfer } from '../src/db/auto-calls';
+import { listCallbacks } from '../src/db/callbacks';
+import { claimLead, releaseLead } from '../src/db/claims';
 import { startCall } from '../src/db/calls';
 import { setDisposition } from '../src/db/dispositions';
 
@@ -305,6 +307,61 @@ async function main() {
   check('the outcome is saved', (await setDisposition(yesClosed, michael, 'closed')).ok, true);
   check('an outcome: out of the queue, the flag gone', [at(await queueNow(), yesClosed), (await getLeadDetail(yesClosed))?.flags.missedYes], [-1, false]);
   check('the queue is as it was before the robot\'s calls', (await listQueue()).total, before);
+
+  // A call back Seri booked - A16, AI-AGENT.md section 4. Booked as
+  // /auto/ai-after books it (`keepCallResult`), taken as an agent picks the
+  // lead up (`claimLead`). The robot calls only leads who never replied: no score.
+  console.log('\nSeri\'s call backs (A16)');
+  const seriBook = async (leadId: number, minutesFromNow: number) => {
+    const started = await startAutomatedCall({ leadId, mayRing: () => true });
+    if (!started.ok) throw new Error(`the robot's call was refused: ${started.reason}`);
+    const at = new Date(Date.now() + minutesFromNow * 60_000);
+    await keepCallResult({ callId: started.callId, result: 'callback_booked', blockNumber: false, callback: { at, note: 'Wants to order', timeZone: 'America/New_York' } });
+    return at;
+  };
+  const seriLead = await silentLead('+15550000311', 'SeriBooked');
+  await seriBook(seriLead, 30);
+  check('booked, not yet due: not pushed up - not in the queue at all, it never replied', at(await queueNow(), seriLead), -1);
+  await pool.query(`UPDATE callbacks SET scheduled_at = now() - interval '1 minute' WHERE lead_id = $1`, [seriLead]);
+  const dueAt = (await pool.query(`SELECT scheduled_at FROM callbacks WHERE lead_id = $1`, [seriLead])).rows[0].scheduled_at.toISOString();
+  rows = await queueNow();
+  check('due: in, and first - before the 90-point lead - with no score', [rows[0].firstName, rows[0].score, rows[1].firstName], ['SeriBooked', 0, 'Hot']);
+  check('tagged as a callback, nobody\'s yet, due', rows[0].tag, { kind: 'callback', at: dueAt, due: true });
+
+  const late = await silentLead('+15550000312', 'SeriLate');
+  await seriBook(late, -45);
+  const yesNow = await silentLead('+15550000313', 'YesNow');
+  await robotCall(yesNow, 10, 'transfer_missed');
+  rows = await queueNow();
+  check('overdue: stays at the top - the longest waiting first, beside a missed "yes"',
+    rows.slice(0, 4).map((l) => l.firstName), ['SeriLate', 'YesNow', 'SeriBooked', 'Hot']);
+
+  check('the first agent to pick the lead up takes it', (await claimLead(seriLead, michael)).ok, true);
+  check('the call back is theirs now', (await pool.query(`SELECT agent_id FROM callbacks WHERE lead_id = $1`, [seriLead])).rows[0].agent_id, michael);
+  check(
+    'recorded, by them, in the same statement',
+    (await pool.query(`SELECT actor_id, subject_user_id, detail->>'callbackId' IS NOT NULL AS named FROM activity_log WHERE action = 'callback.taken' AND lead_id = $1`, [seriLead])).rows,
+    [{ actor_id: michael, subject_user_id: michael, named: true }]
+  );
+  check('on their My Callbacks, overdue', (await listCallbacks({ agentId: michael, when: 'overdue' })).callbacks.map((c) => [c.leadId, c.reason, c.note]),
+    [[seriLead, 'ai_booked', 'Wants to order']]);
+  rows = await queueNow();
+  check('picked up: Working, and still among the first - holding it is not calling them', [rows[at(rows, seriLead)]?.tag?.kind, at(rows, seriLead) < 3], ['working', true]);
+  check('put back: still due - now named as theirs, bold, at the top', (await releaseLead(seriLead, michael, false)).ok, true);
+  rows = await queueNow();
+  check('the row', rows[at(rows, seriLead)]?.tag, { kind: 'callback', agentId: michael, agentName: 'Michael', at: dueAt, due: true });
+
+  const { rows: ana } = await pool.query(
+    `INSERT INTO users (email, password_hash, name, role) VALUES ('ana-a16@example.com', 'x', 'Ana', 'agent') RETURNING id`
+  );
+  await claimLead(seriLead, ana[0].id);
+  check('another agent picking it up later: the call back stays the first one\'s, taken once',
+    [(await pool.query(`SELECT agent_id FROM callbacks WHERE lead_id = $1`, [seriLead])).rows[0].agent_id,
+     (await pool.query(`SELECT count(*)::int AS n FROM activity_log WHERE action = 'callback.taken' AND lead_id = $1`, [seriLead])).rows[0].n],
+    [michael, 1]);
+
+  check('the outcome is saved', (await setDisposition(late, michael, 'closed')).ok, true);
+  check('an outcome finishes it: out of the queue', at(await queueNow(), late), -1);
 
   console.log(failures ? `\n${failures} FAILED` : '\nall checks passed');
   await pool.end();

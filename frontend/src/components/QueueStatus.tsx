@@ -35,6 +35,10 @@ import { StatusIcon, type StatusIconName } from './StatusIcon';
  * **Callback is back - Jeel, 2026-09-29**, naming whose it is: "Callback –
  * Maya Chen · 8:13 PM", with the date as well when it is not today. Without it
  * another agent could pick the lead up and call first.
+ *
+ * **One Seri booked - A16** reads "Callback · 3:00 PM" while it is nobody's:
+ * the first agent to pick the lead up takes it. Once its time has come it is
+ * bold and the row is first in the queue - the lead was promised a call then.
  */
 
 /** 8:13 PM today, Sep 30, 8:13 PM otherwise. */
@@ -54,8 +58,10 @@ export function tagText(tag: QueueTag): string {
       return 'Missed call';
     case 'inbound_reply':
       return 'Inbound reply';
-    case 'callback':
-      return `Callback – ${tag.agentName ?? 'an agent'}${tag.at ? ` · ${when(tag.at)}` : ''}`;
+    case 'callback': {
+      const at = tag.at ? ` · ${when(tag.at)}` : '';
+      return tag.agentName ? `Callback – ${tag.agentName}${at}` : `Callback${at}`;
+    }
     case 'wants_call':
       return 'Wants a call';
     case 'needs_review':
@@ -77,8 +83,10 @@ const ICON: Record<QueueTag['kind'], StatusIconName> = {
 const WAITING_ON_US = new Set<QueueTag['kind']>(['inbound_reply', 'missed_call']);
 
 export function QueueStatus({ tag }: { tag: QueueTag }) {
+  // A due call back Seri booked is waiting on us as much as a missed call is.
+  const strong = WAITING_ON_US.has(tag.kind) || tag.due === true;
   return (
-    <span className={`status${WAITING_ON_US.has(tag.kind) ? ' status--strong' : ''}`}>
+    <span className={`status${strong ? ' status--strong' : ''}`}>
       <StatusIcon name={ICON[tag.kind]} />
       {tagText(tag)}
     </span>

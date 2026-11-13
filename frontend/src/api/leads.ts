@@ -80,10 +80,12 @@ export interface QueueTag {
   kind: QueueTagKind;
   /** `working`: who holds it - the id to match on. */
   agentId?: number;
-  /** `working`: who holds it - the name to show. `callback`: whose it is. */
+  /** `working`: who holds it - the name to show. `callback`: whose it is - absent for one Seri booked that nobody has taken. */
   agentName?: string;
   /** `callback`: when it is due, ISO. */
   at?: string;
+  /** `callback`: one Seri booked whose time has come - bold, first in the queue (A16). */
+  due?: true;
 }
 
 /** Mirrors QueueRow in backend/src/db/queue.ts. */

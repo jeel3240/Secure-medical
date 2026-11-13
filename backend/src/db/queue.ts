@@ -10,7 +10,7 @@
 
 import { queueTag, type QueueTag } from '../core/queue-tags';
 import { NOT_FOR_AGENTS } from '../core/state-machine';
-import { CLOSED_SQL, MISSED_CALL_SQL, MISSED_YES_AT_SQL, MISSED_YES_SQL } from './lead-state';
+import { AI_CALLBACK_DUE_AT_SQL, AI_CALLBACK_DUE_SQL, CLOSED_SQL, MISSED_CALL_SQL, MISSED_YES_AT_SQL, MISSED_YES_SQL } from './lead-state';
 import { likeLiteral } from './sql';
 import { pool } from './pool';
 
@@ -132,6 +132,10 @@ const BASE = `
  * said yes on the robot's call and nobody took it. The robot calls only leads
  * who never replied, so such a lead has no score, and it is never closed: an
  * outcome saved after the call is what clears it.
+ *
+ * **And a call back Seri booked, once it is due** - A16 (`AI_CALLBACK_DUE_SQL`).
+ * The lead picked a time with her on the robot's call; at that time a person
+ * must call. No score for the same reason, and an outcome finishes it.
  */
 /** Safe to inline: a constant from this codebase, each value checked to be a plain word. */
 const notForAgents = NOT_FOR_AGENTS.map((ending) => {
@@ -148,6 +152,7 @@ const INCLUDED = `
     OR l.has_unread_inbound
     OR ${MISSED_CALL_SQL}
     OR ${MISSED_YES_SQL}
+    OR ${AI_CALLBACK_DUE_SQL}
     OR (
       c.score > 0
       AND NOT ${CLOSED_SQL}
@@ -241,9 +246,15 @@ interface QueueDbRow {
   missed_call: boolean;
   /** When the robot's call that ended in a missed "yes" was made; null for none. */
   missed_yes_at: Date | null;
+  /** The earliest promised call: a missed "yes", or a call back Seri booked that is due. */
+  promised_at: Date | null;
   callback_agent_id: number | null;
   callback_agent_name: string | null;
   callback_at: Date | null;
+  /** A call back Seri booked that is due (A16): when, and whose - null while it is nobody's. */
+  due_callback_at: Date | null;
+  due_callback_agent_id: number | null;
+  due_callback_agent_name: string | null;
 }
 
 /**
@@ -258,7 +269,9 @@ interface QueueDbRow {
  * yes to a person on the robot's call and was told an agent would call them
  * back shortly. Nothing outranks that, and with no score it would otherwise
  * sink to the bottom. Several: the one waiting longest first, as on the hold
- * line.
+ * line. **So does a call back Seri booked, once it is due** - A16: the lead
+ * was promised a person's call at that time. Both are a promised call, sorted
+ * together on when it was promised for (`promised_at`).
  *
  * **One statement, and one pass over the leads** - 2026-10-06. Whether a lead
  * belongs in the queue is worked out from several tables, for every lead we
@@ -291,7 +304,9 @@ export async function listQueue(query: QueueQuery = {}): Promise<QueuePage> {
               ${RECEIVED} AS received_at,
               c.id AS conversation_id, c.score, c.tier, c.status, c.end_outcome,
               u.id AS agent_id, u.name AS agent_name, l.has_unread_inbound,
-              ${MISSED_YES_AT_SQL} AS missed_yes_at
+              ${MISSED_YES_AT_SQL} AS missed_yes_at,
+              -- LEAST skips a null: whichever promised call came first.
+              LEAST(${MISSED_YES_AT_SQL}, ${AI_CALLBACK_DUE_AT_SQL}) AS promised_at
        ${BASE}
        ${inQueue}
      ),
@@ -310,25 +325,37 @@ export async function listQueue(query: QueueQuery = {}): Promise<QueuePage> {
                FROM conversation_answers a WHERE a.conversation_id = l.conversation_id) AS answers,
               l.agent_id, l.agent_name, l.has_unread_inbound,
               ${MISSED_CALL_SQL} AS missed_call,
-              l.missed_yes_at,
+              l.missed_yes_at, l.promised_at,
               ncb.agent_id AS callback_agent_id, ncb.agent_name AS callback_agent_name,
-              ncb.scheduled_at AS callback_at
+              ncb.scheduled_at AS callback_at,
+              dcb.scheduled_at AS due_callback_at, dcb.agent_id AS due_callback_agent_id,
+              dcb.agent_name AS due_callback_agent_name
        -- Named l, as the lead is everywhere else: the missed-call rule reads l.id.
        FROM (
          SELECT q.* FROM q
          ${onPage}
-         ORDER BY q.missed_yes_at ASC NULLS LAST, q.score DESC, q.received_at DESC, q.id DESC
+         ORDER BY q.promised_at ASC NULLS LAST, q.score DESC, q.received_at DESC, q.id DESC
          LIMIT ${limit}
        ) l
+       -- The next callback - Seri's included, which has no agent until someone
+       -- takes it (A16).
        LEFT JOIN LATERAL (
          SELECT cb.agent_id, cu.name AS agent_name, cb.scheduled_at
-         FROM callbacks cb JOIN users cu ON cu.id = cb.agent_id
+         FROM callbacks cb LEFT JOIN users cu ON cu.id = cb.agent_id
          WHERE cb.lead_id = l.id AND cb.done_at IS NULL
          ORDER BY cb.scheduled_at, cb.id
          LIMIT 1
        ) ncb ON true
+       -- Seri's, due: what puts the lead at the top.
+       LEFT JOIN LATERAL (
+         SELECT dc.agent_id, du.name AS agent_name, dc.scheduled_at
+         FROM callbacks dc LEFT JOIN users du ON du.id = dc.agent_id
+         WHERE dc.lead_id = l.id AND dc.reason = 'ai_booked' AND dc.done_at IS NULL AND dc.scheduled_at <= now()
+         ORDER BY dc.scheduled_at, dc.id
+         LIMIT 1
+       ) dcb ON true
      ) page ON true
-     ORDER BY page.missed_yes_at ASC NULLS LAST, page.score DESC, page.received_at DESC, page.id DESC`,
+     ORDER BY page.promised_at ASC NULLS LAST, page.score DESC, page.received_at DESC, page.id DESC`,
     values
   );
 
@@ -379,14 +406,16 @@ export async function listQueue(query: QueueQuery = {}): Promise<QueuePage> {
         missedCall: r.missed_call,
         missedYes: r.missed_yes_at !== null,
         wantsContact: r.end_outcome === 'wants_contact',
-        nextCallback:
-          r.callback_agent_id === null || !r.callback_at
-            ? null
-            : {
-                agentId: r.callback_agent_id,
-                agentName: r.callback_agent_name ?? 'Another agent',
-                at: r.callback_at.toISOString(),
-              },
+        dueCallback: r.due_callback_at
+          ? { agentId: r.due_callback_agent_id, agentName: r.due_callback_agent_name, at: r.due_callback_at.toISOString() }
+          : null,
+        nextCallback: r.callback_at
+          ? {
+              agentId: r.callback_agent_id,
+              agentName: r.callback_agent_id === null ? null : (r.callback_agent_name ?? 'Another agent'),
+              at: r.callback_at.toISOString(),
+            }
+          : null,
       }),
     })),
     counts: byTier,

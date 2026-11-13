@@ -249,8 +249,15 @@ on the callback, never in the log.
 - **Not a person's work:** a lead whose only trace is her booking is not
   Working (`WORKED_SQL`) - no person has been near it, as with a robot call
   nobody took (T4).
-- **Not yet:** on My Callbacks, which lists an agent's own - an unowned one has
-  no agent to list it under - and in the queue: A16.
+- **In the queue once due, and taken on pick-up - A16.** Due, it puts the lead
+  at the top of the queue, "Callback · 3:00 PM" in bold (`QUEUE.md`). The first
+  agent to pick the lead up takes it - `claimLead` makes it theirs in the same
+  statement, `callback.taken`, "Took the callback Seri booked for ..." on the
+  timeline - and from then it is on their **My Callbacks**, with her line in
+  the note column ("Seri: Wants to order antibiotics") until a note of theirs
+  is newer. Until someone takes it, only a superadmin's "All agents" view lists
+  it, with no agent, and only a superadmin may move it (`not_yours`
+  otherwise).
 
 **Whose callback it is.** An agent sees and changes only their own; a superadmin
 may list another agent's and may change one, which is how a callback left by

@@ -33,12 +33,15 @@ export interface QueueTag {
   kind: QueueTagKind;
   /**
    * `working`: who holds it - the id to compare with, the name to show.
-   * `callback`: whose callback it is.
+   * `callback`: whose callback it is - absent for one Seri booked that nobody
+   * has taken yet (A16).
    */
   agentId?: number;
   agentName?: string;
   /** `callback`: when it is due, ISO. */
   at?: string;
+  /** `callback`: a call back Seri booked whose time has come - shown bold, first in the queue (A16). */
+  due?: true;
 }
 
 export interface QueueFacts {
@@ -53,8 +56,13 @@ export interface QueueFacts {
    * called or texted back since - T22, `MISSED_YES_SQL`.
    */
   missedYes?: boolean;
-  /** The earliest callback not yet done, if any. */
-  nextCallback?: { agentId: number; agentName: string; at: string } | null;
+  /**
+   * The earliest callback not yet done, if any. No agent: one Seri booked that
+   * nobody has taken yet (A16).
+   */
+  nextCallback?: { agentId: number | null; agentName: string | null; at: string } | null;
+  /** A call back Seri booked whose time has come, the earliest - A16. */
+  dueCallback?: { agentId: number | null; agentName: string | null; at: string } | null;
   /** The lead asked to hear from a rep - the flow ended `wants_contact`. */
   wantsContact?: boolean;
 }
@@ -67,12 +75,14 @@ export interface QueueFacts {
  *    outranks a text waiting to be read (2026-10-01);
  * 3. the lead said yes on the robot's call and nobody took it - they too
  *    want to talk now, and were told an agent would call back (T22). "Wants a
- *    call", the words of 6: it is what both leads asked for;
- * 4. the lead has texted and nobody has read it;
- * 5. an agent has promised to call - it is theirs;
- * 6. the lead asked to hear from a rep - why a low-scoring lead is here at
+ *    call", the words of 7: it is what both leads asked for;
+ * 4. a call back Seri booked has come due - the lead was promised a person's
+ *    call at that time (A16). A callback, shown as one, but bold and first;
+ * 5. the lead has texted and nobody has read it;
+ * 6. an agent has promised to call - it is theirs;
+ * 7. the lead asked to hear from a rep - why a low-scoring lead is here at
  *    all (2026-10-05, docs/FLOWS.md);
- * 7. their replies could not be understood, so a person must read them.
+ * 8. their replies could not be understood, so a person must read them.
  *
  * Otherwise `null`: nothing to say, the lead is waiting.
  */
@@ -89,13 +99,16 @@ export function queueTag(facts: QueueFacts): QueueTag | null {
     return { kind: 'wants_call' };
   }
 
+  if (facts.dueCallback) {
+    return { ...callbackTag(facts.dueCallback), due: true };
+  }
+
   if (facts.hasUnreadInbound) {
     return { kind: 'inbound_reply' };
   }
 
   if (facts.nextCallback) {
-    const { agentId, agentName, at } = facts.nextCallback;
-    return { kind: 'callback', agentId, agentName, at };
+    return callbackTag(facts.nextCallback);
   }
 
   if (facts.wantsContact) {
@@ -107,4 +120,11 @@ export function queueTag(facts: QueueFacts): QueueTag | null {
   }
 
   return null;
+}
+
+/** A callback as a tag: when, and whose - nobody's yet for one Seri booked (A16). */
+function callbackTag(callback: { agentId: number | null; agentName: string | null; at: string }): QueueTag {
+  return callback.agentId === null
+    ? { kind: 'callback', at: callback.at }
+    : { kind: 'callback', agentId: callback.agentId, agentName: callback.agentName ?? 'Another agent', at: callback.at };
 }
