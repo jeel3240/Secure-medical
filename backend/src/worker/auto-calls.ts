@@ -17,10 +17,16 @@
  *    answering, ends the look there: the next call would go the same way
  *    (and the robot then pauses - `dialRoom`, `refused`).
  *
+ * Between them, with Seri switched on and room to place calls: is she ready
+ * (`seriReady`, A17, `ai/health.ts`)? OpenAI not answering, or her last three
+ * calls all falling back, and nothing is placed this look - a lead's one call
+ * is never spent on a broken Seri.
+ *
  * Steps 3 and 4 hold the dial lock (`withDialLock`): a second worker looks
  * nothing up while one is dialling.
  */
 
+import type { SeriState } from '../ai/health';
 import { callsToPlace, insideCallHours, type CallHours, type DialRoom } from '../core/auto-dial';
 import type { PlaceAutoCallResult } from './place-auto-call';
 
@@ -34,6 +40,8 @@ export interface DialDeps {
   stillDue: (opts: { leadId: number; now: Date; since: Date; waitMinutes: number }) => Promise<boolean>;
   placeAutoCall: (leadId: number) => Promise<PlaceAutoCallResult>;
   withDialLock: <T>(look: () => Promise<T>) => Promise<T | null>;
+  /** Whether Seri can take the calls (A17). Absent: she is never asked about - the calls get the script. */
+  seriReady?: () => Promise<SeriState>;
 }
 
 /** What a look did - logged when anything happened. */
@@ -45,9 +53,13 @@ export interface DialLook {
   room: number;
   /**
    * Why there was none, when it was not only nobody free: a lead on hold,
-   * Twilio silent, Twilio refusing our calls a short while ago, no script.
+   * Twilio silent, Twilio refusing our calls a short while ago, no script; and
+   * with Seri on, OpenAI not answering, or her last three calls falling back
+   * (A17).
    */
-  stopped: 'on_hold' | 'silent' | 'refused' | 'no_script' | null;
+  stopped: 'on_hold' | 'silent' | 'refused' | 'no_script' | 'openai_down' | 'ai_fallbacks' | null;
+  /** OpenAI's failure when it was down: its status and code (`plainError`). */
+  aiError: string | null;
   /** The robot's calls Twilio has said nothing about since they were placed (`dialRoom`). */
   silent: number;
   /** Leads due, up to the room. */
@@ -79,6 +91,7 @@ export async function dialDueLeads(deps: DialDeps, now = new Date()): Promise<Di
     notPlaced: 0,
     unconfirmed: 0,
     locked: false,
+    aiError: null,
   };
   look.closed = await deps.closeUnplacedCalls();
   // When automated calls were last switched on - written by the worker at
@@ -103,6 +116,14 @@ export async function dialDueLeads(deps: DialDeps, now = new Date()): Promise<Di
             : null;
     look.room = callsToPlace(room);
     if (look.room === 0) return;
+    // Asked only with room to place calls: OpenAI is not checked to place none.
+    const seri = deps.seriReady ? await deps.seriReady() : null;
+    if (seri?.state === 'openai_down' || seri?.state === 'fallbacks') {
+      look.stopped = seri.state === 'openai_down' ? 'openai_down' : 'ai_fallbacks';
+      look.aiError = seri.state === 'openai_down' ? seri.err : null;
+      look.room = 0;
+      return;
+    }
     const leads = await deps.leadsToCall({ now, since, waitMinutes: hours.waitMinutes, limit: look.room });
     look.due = leads.length;
     for (const leadId of leads) {

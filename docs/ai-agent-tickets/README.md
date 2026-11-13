@@ -22,7 +22,7 @@ The build of `docs/AI-AGENT.md`, split into small tickets. Each is one PR into `
 | A14 | [After Seri: carrying out her action](A14-after-seri-carrying-out-her-action.md) | A06, A13 | M | Done 2026-11-12 |
 | A15 | [Seri books a call back](A15-seri-books-a-call-back.md) | A07, A08, A14 | S | Done 2026-11-12 |
 | A16 | [Seri's call backs in the queue](A16-seri-s-call-backs-in-the-queue.md) | A15 | M | Done 2026-11-12 |
-| A17 | [OpenAI checked before calling](A17-openai-checked-before-calling.md) | A12 | S | To do |
+| A17 | [OpenAI checked before calling](A17-openai-checked-before-calling.md) | A12 | S | Done 2026-11-12 |
 | A18 | [Voicemail and hang-ups while Seri talks](A18-voicemail-and-hang-ups-while-seri-talks.md) | A14 | S | To do |
 | A19 | [Seri's conversation on the timeline](A19-seri-s-conversation-on-the-timeline.md) | A10 | S | To do |
 | A20 | [End-to-end and live checks](A20-end-to-end-and-live-checks.md) | A13, A14, A15, A16, A17, A18, A19 | M | To do |

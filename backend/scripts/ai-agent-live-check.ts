@@ -2,7 +2,8 @@
  * Proves migration 022 against a real Postgres - Phase 7, A08,
  * docs/AI-AGENT.md sections 4 and 9 - the relay's SQL on it (A10, A11), and
  * whether an answered call goes to her (A13), carrying out how her part ended
- * (A14), and the call backs she books (A15).
+ * (A14), the call backs she books (A15), and her fallbacks pausing the robot
+ * (A17).
  *
  * Seri's columns on a call, the turns of her conversation, and the call backs
  * she books are kept by the database's own checks and triggers, which the
@@ -15,6 +16,7 @@
  *   scripts/live-checks.sh ai-agent
  */
 import { seriGreeting } from '../src/ai/answer';
+import { fallbackStreak } from '../src/ai/health';
 import { endAiCall, recordedHandoff, saveTurn, startAiCall, whoIsThere } from '../src/ai/relay-store';
 import { switchAiAgent } from '../src/ai/settings';
 import { keepCallResult, transferContext } from '../src/db/auto-calls';
@@ -485,6 +487,34 @@ async function main(): Promise<void> {
       await attempt(`INSERT INTO callbacks (lead_id, scheduled_at, reason, booked_by_call_id) VALUES ($1, now(), 'ai_booked', $2)`, [open, openCall]),
       'callbacks_one_per_ai_call'
     );
+  }
+
+  console.log('\nher fallbacks pause the robot (A17)');
+  {
+    // Every earlier section's calls are hers no longer: only these count.
+    await pool.query(`UPDATE calls SET ai_started_at = NULL, ai_knowledge_version = NULL, ai_ended_with = NULL WHERE ai_started_at IS NOT NULL`);
+    const seriCall = async (endedWith: string | null, minutesAgo: number) => {
+      const id = await makeCall(await makeLead(), 'automated');
+      await pool.query(
+        `UPDATE calls SET ai_started_at = now() - make_interval(mins => $2), ai_knowledge_version = 'v', ai_ended_with = $3 WHERE id = $1`,
+        [id, minutesAgo, endedWith]
+      );
+      return id;
+    };
+    check('no calls of hers: not paused', await fallbackStreak(pool, 15), false);
+    await seriCall('fallback', 40);
+    await seriCall('fallback', 30);
+    check('two fallbacks: not paused', await fallbackStreak(pool, 15), false);
+    const third = await seriCall('fallback', 5);
+    check('three in a row, the latest 5 minutes ago: paused', await fallbackStreak(pool, 15), true);
+    await seriCall(null, 2);
+    check('a lead who hung up on her before she ended: neither breaks nor adds to it', await fallbackStreak(pool, 15), true);
+    await pool.query(`UPDATE calls SET ai_started_at = now() - interval '20 minutes' WHERE id = $1`, [third]);
+    check('the latest 20 minutes ago: the pause is over - OpenAI asked again, the next call tells', await fallbackStreak(pool, 15), false);
+    await seriCall('fallback', 1);
+    check('one more fallback: paused again', await fallbackStreak(pool, 15), true);
+    await seriCall('send_link', 0);
+    check('a call she ended herself: the streak is broken', await fallbackStreak(pool, 15), false);
   }
 
   console.log(failures === 0 ? '\nall checks passed' : `\n${failures} check(s) FAILED`);

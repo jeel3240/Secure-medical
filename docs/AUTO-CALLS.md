@@ -516,7 +516,14 @@ Nothing at all is placed while:
 - **no call script is active** - logged once, `auto_call.no_script`;
 - **Twilio refused one of its calls for our account's reasons, or never
   confirmed placing it, in the last 15 minutes** - logged once, as an error,
-  `auto_call.twilio_refusing` ("When Twilio refuses", below).
+  `auto_call.twilio_refusing` ("When Twilio refuses", below);
+- **with Seri, the AI agent, switched on** (Phase 7, A17, `AI-AGENT.md`
+  section 6): **OpenAI not answering** - asked with a one-word request at most
+  once a minute, and only when there is room to place calls - logged once,
+  `ai_agent.openai_down`; or **her last three calls all falling back** to this
+  script, the latest within the same 15 minutes - logged once,
+  `ai_agent.fallbacks_paused`. A lead's one call is never spent on a broken
+  Seri. With her off, neither is asked: this script needs no OpenAI.
 
 One look at a time: the room and the leads are read holding an advisory lock
 (`withDialLock`), so two workers never dial together - and a connection whose
