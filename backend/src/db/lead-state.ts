@@ -141,6 +141,23 @@ export const MISSED_YES_AT_SQL = `(
 )`;
 
 /**
+ * A call back Seri booked that is due - A16, docs/AI-AGENT.md section 4: open,
+ * and its time has come. Due, it puts the lead in the queue on its own - the
+ * robot calls leads who never replied, so most have no score - and at the top,
+ * beside a missed "yes": the lead was promised a person's call at that time.
+ * Before its time it pushes nothing up. Done, it is gone.
+ *
+ * `AI_CALLBACK_DUE_SQL` says whether the lead has one; `AI_CALLBACK_DUE_AT_SQL`
+ * since when - the earliest - or null: what the queue sorts on, the longest
+ * waiting first.
+ */
+const AI_CALLBACK_DUE = `dc.lead_id = l.id AND dc.reason = 'ai_booked' AND dc.done_at IS NULL AND dc.scheduled_at <= now()`;
+
+export const AI_CALLBACK_DUE_SQL = `(EXISTS (SELECT 1 FROM callbacks dc WHERE ${AI_CALLBACK_DUE}))`;
+
+export const AI_CALLBACK_DUE_AT_SQL = `(SELECT min(dc.scheduled_at) FROM callbacks dc WHERE ${AI_CALLBACK_DUE})`;
+
+/**
  * Closed: the newest disposition is `closed` (or a retired value that meant
  * the same - `core/dispositions.ts`), and nothing has reopened it since. Two
  * things reopen a closed lead:

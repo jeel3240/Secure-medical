@@ -321,6 +321,12 @@ describe('what the activity log adds - AUDIT.md', () => {
     expect(activityText(detail, at)).toBe(text);
   });
 
+  it('a call back Seri booked, taken by the agent who picked the lead up (A16)', () => {
+    expect(activityText({ action: 'callback.taken', scheduledAt: '2026-11-13T22:00:00Z' }, at)).toMatch(
+      /^Took the callback Seri booked for .+$/
+    );
+  });
+
   it('a moved callback says where from and where to', () => {
     const text = activityText({ action: 'callback.rescheduled', from: '2026-10-01T17:00:00Z', to: '2026-10-03T17:00:00Z' }, at);
     expect(text).toMatch(/^Callback moved from .+ to .+$/);

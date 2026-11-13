@@ -42,6 +42,7 @@ const A_CALLBACK = {
   scheduledAt: AT,
   doneAt: null,
   reason: 'booked' as const,
+  note: null,
 };
 
 beforeEach(() => {

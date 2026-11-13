@@ -4,7 +4,7 @@
 
 **Why:** A booked call back nobody sees is a lost lead.
 
-**Depends on:** A15  ·  **Size:** Medium (about a day)
+**Depends on:** A15  ·  **Size:** Medium (about a day)  ·  **Status:** Done 2026-11-12
 
 ## Build
 
@@ -22,8 +22,8 @@
 
 ## Done when
 
-- [ ] Queue live check: before due, at due, overdue, claimed.
-- [ ] Speed check (`npm run speed`) still under its limits.
+- [x] Queue live check: before due, at due, overdue, claimed - and put back, a second agent's pick-up, an outcome (`queue-live-check`, 84).
+- [x] Speed check (`npm run speed`) still under its limits - the queue at 50,000 leads 74 ms before, 76 ms after, same data and laptop.
 
 ## Tests
 
@@ -32,5 +32,16 @@
 ## Docs to update in the same commit
 
 - `docs/QUEUE.md` "The order" and "The tag".
+
+## As built
+
+- **In the queue on its own once due:** `AI_CALLBACK_DUE_SQL` in `INCLUDED` (`db/queue.ts`) - no score needed, as with a missed "yes". Before its time it adds nothing.
+- **At the top with the missed "yes":** both are a promised call, sorted together on `promised_at` - `LEAST` of when the "yes" call was made and when the call back was due - the earliest first. Not "with Missed call": a missed call sorts by score like any lead, so ranking with it would have left these at the bottom.
+- **The tag:** `callback` with `due` (`core/queue-tags.ts`), ranked after a missed call and a missed "yes", before an unread reply - "Callback · 3:00 PM", bold; named once taken. An unowned one not yet due, on a lead in the queue for another reason, reads "Callback · 3:00 PM" in the ordinary place - the next-callback join no longer drops a callback with no agent.
+- **Taken on pick-up:** `claimLead` (`db/claims.ts`) updates every open, unowned `ai_booked` callback of the lead to the claimer in the same statement, with `callback.taken` (new action, on the timeline). A transfer or a call back taken in the browser picks the lead up as it rings in, so it takes it too.
+- **My Callbacks:** listed for the agent once taken; her line fills the note column ("Seri: ...") until a note of theirs is newer. `Callback` carries `note`; `agentId` may be null.
+- **Speed check:** its leads now include her call backs - one robot call in twenty.
+- **Tests:** tag rules (4), the queue's words and the timeline line (frontend 417), `queue-live-check` 84; 1,602 backend tests, all 23 live checks.
+- **Not covered:** a due call back on a lead held by an agent stays at the top under Working - it is that agent's call to make, and the row is locked to others, as a missed "yes" held is.
 
 Design: `docs/AI-AGENT.md`. All AI code in `backend/src/ai/`. One PR into `dev`.

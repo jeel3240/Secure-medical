@@ -17,6 +17,8 @@ export const ACTIVITY_ACTIONS = [
   'outcome.set',
   // Callbacks. A reschedule and a reopen overwrite the row; the log keeps both sides.
   'callback.booked',
+  // A call back Seri booked, taken by the first agent to pick the lead up (A16).
+  'callback.taken',
   'callback.rescheduled',
   'callback.done',
   'callback.reopened',

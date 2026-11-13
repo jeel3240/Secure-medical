@@ -98,3 +98,35 @@ describe('a "yes" on the robot\'s call that nobody took - T22', () => {
     expect(queueTag(facts({ missedYes: true, missedCall: true }))?.kind).toBe('missed_call');
   });
 });
+
+describe('a call back Seri booked (A16)', () => {
+  const at = '2026-11-13T22:00:00.000Z';
+
+  it('nobody\'s yet: a callback with no name - the first agent to pick the lead up takes it', () => {
+    expect(queueTag(facts({ nextCallback: { agentId: null, agentName: null, at } }))).toEqual({ kind: 'callback', at });
+  });
+
+  it('due: a callback, marked due, named once someone has it', () => {
+    expect(queueTag(facts({ dueCallback: { agentId: null, agentName: null, at } }))).toEqual({ kind: 'callback', at, due: true });
+    expect(queueTag(facts({ dueCallback: { agentId: 21, agentName: 'Maya Chen', at } }))).toEqual({
+      kind: 'callback',
+      agentId: 21,
+      agentName: 'Maya Chen',
+      at,
+      due: true,
+    });
+  });
+
+  it('due, it outranks an unread text and another callback - the lead was promised a call then', () => {
+    const dueCallback = { agentId: null, agentName: null, at };
+    const nextCallback = { agentId: 21, agentName: 'Maya Chen', at: '2026-11-13T21:00:00.000Z' };
+    expect(queueTag(facts({ dueCallback, hasUnreadInbound: true, nextCallback }))).toEqual({ kind: 'callback', at, due: true });
+  });
+
+  it('but not someone working the lead, a missed call, or a missed "yes"', () => {
+    const dueCallback = { agentId: null, agentName: null, at };
+    expect(queueTag(facts({ dueCallback, holder: { id: 7, name: 'Michael' } }))?.kind).toBe('working');
+    expect(queueTag(facts({ dueCallback, missedCall: true }))?.kind).toBe('missed_call');
+    expect(queueTag(facts({ dueCallback, missedYes: true }))?.kind).toBe('wants_call');
+  });
+});

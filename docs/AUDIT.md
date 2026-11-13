@@ -44,6 +44,7 @@ it.
 | `reply.read` | An unread reply is opened - once, by whoever cleared it | |
 | `note.added` | A note is saved | `noteId` - the text stays in `notes`, not copied |
 | `outcome.set` | Closed or DNC is saved | `value`, `dispositionId` |
+| `callback.taken` | A call back Seri booked, which nobody had, became an agent's: the first to pick the lead up takes it (A16, `QUEUE.md`). Written in the same statement as the pick-up. Actor and subject are that agent. On the lead's timeline | `callbackId`, `scheduledAt` |
 | `callback.booked` | A callback is booked. Actor is who booked it, subject who it is for. No actor when the system booked it for a missed call, nor when Seri booked it on the automated call (A15) - then no subject either until an agent holds the lead, and the same statement that books it | `callbackId`, `scheduledAt`, `because: 'missed_call'`; Seri's: `via: 'seri'`, `callId`, `timeZone` - the lead's zone she agreed it in. Her one-line reason is on the callback (`note`), not here |
 | `callback.rescheduled` | Its time changes | `from`, `to` |
 | `callback.done` | Marked done, finished by an outcome, or - a missed call's callback - by the lead being got back to. Actor is who did that | `scheduledAt`, `because`: `outcome`, `called_back`, `texted_back` or `answered` |

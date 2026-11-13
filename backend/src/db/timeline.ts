@@ -44,6 +44,7 @@ export interface TimelineEntry {
 const TIMELINE_ACTIONS: ActivityAction[] = [
   'lead.picked_up',
   'lead.released',
+  'callback.taken',
   'callback.rescheduled',
   'callback.reopened',
   'sms.blocked',

@@ -23,11 +23,14 @@ export type CallbackReason = 'booked' | 'missed_call' | 'ai_booked';
 export interface Callback {
   id: number;
   leadId: number;
-  agentId: number;
+  /** Null only for one Seri booked that nobody has taken yet (A15, A16). */
+  agentId: number | null;
   agentName: string;
   scheduledAt: string;
   doneAt: string | null;
   reason: CallbackReason;
+  /** Seri's one-line reason, on one she booked (A15); null otherwise. */
+  note: string | null;
 }
 
 /** A row on My Callbacks: the callback, plus enough of the lead to act on it. */
@@ -70,7 +73,7 @@ export type UpdateResult =
 
 async function readCallback(id: number): Promise<Callback | null> {
   const { rows } = await pool.query(
-    `SELECT cb.id, cb.lead_id, cb.agent_id, cb.scheduled_at, cb.done_at, cb.reason, u.name
+    `SELECT cb.id, cb.lead_id, cb.agent_id, cb.scheduled_at, cb.done_at, cb.reason, cb.note, u.name
      FROM callbacks cb
      LEFT JOIN users u ON u.id = cb.agent_id
      WHERE cb.id = $1`,
@@ -86,6 +89,7 @@ async function readCallback(id: number): Promise<Callback | null> {
     scheduledAt: r.scheduled_at.toISOString(),
     doneAt: r.done_at?.toISOString() ?? null,
     reason: r.reason,
+    note: r.note ?? null,
   };
 }
 
@@ -316,7 +320,7 @@ export async function listCallbacks(opts: {
   const params = everyone ? [] : [opts.agentId];
 
   const { rows } = await pool.query(
-    `SELECT cb.id, cb.lead_id, cb.agent_id, cb.scheduled_at, cb.done_at, cb.reason,
+    `SELECT cb.id, cb.lead_id, cb.agent_id, cb.scheduled_at, cb.done_at, cb.reason, cb.note,
             u.name AS agent_name,
             l.phone, l.first_name, l.last_name, l.source,
             c.tier,
@@ -370,6 +374,7 @@ export async function listCallbacks(opts: {
       scheduledAt: r.scheduled_at.toISOString(),
       doneAt: r.done_at?.toISOString() ?? null,
       reason: r.reason,
+      note: r.note ?? null,
       lead: {
         phone: r.phone,
         firstName: r.first_name,

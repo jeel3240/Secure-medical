@@ -44,6 +44,11 @@ export type ReleaseResult =
  *
  * Re-claiming a lead you already hold succeeds and leaves `assigned_at` alone,
  * because opening a lead twice is not a new claim.
+ *
+ * **A call back Seri booked that nobody has taken becomes the claimer's** -
+ * A16, docs/AI-AGENT.md section 4: the first agent to pick the lead up takes
+ * it, `callback.taken` records it, and from then it is on their My Callbacks.
+ * One already someone's stays theirs.
  */
 export async function claimLead(leadId: number, agentId: number): Promise<ClaimResult> {
   // One statement, so the claim and its record cannot come apart and the race
@@ -81,6 +86,17 @@ export async function claimLead(leadId: number, agentId: number): Promise<ClaimR
               jsonb_strip_nulls(jsonb_build_object('tookOverFrom', previous_holder))
        FROM claimed
        WHERE previous_holder IS DISTINCT FROM $2
+     ),
+     taken AS (
+       UPDATE callbacks cb SET agent_id = $2
+       FROM claimed
+       WHERE cb.lead_id = $1 AND cb.reason = 'ai_booked' AND cb.agent_id IS NULL AND cb.done_at IS NULL
+       RETURNING cb.id, cb.scheduled_at
+     ),
+     took AS (
+       ${activityInsertSql}
+       SELECT $2, 'callback.taken', $1, $2, jsonb_build_object('callbackId', id, 'scheduledAt', scheduled_at)
+       FROM taken
      )
      SELECT assigned_at FROM claimed`,
     [leadId, agentId]

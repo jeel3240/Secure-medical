@@ -106,14 +106,15 @@ to a person as Inbound reply, never an automated "sorry" (`STATE-MACHINE.md`
 ## What agents see in the queue
 
 The queue's STATUS column shows at most one of six things, in this order when
-more than one applies - Wants a call has two places, one for each reason. Most
-rows show none.
+more than one applies - Wants a call and Callback each have two places, one for
+each reason. Most rows show none.
 
 | STATUS | Means |
 |---|---|
 | **Working – karm** | karm is holding the lead right now. Others see it locked |
 | **Missed call** | The lead rang our number and nobody answered. They were told, and texted, that we will call back |
 | **Wants a call** | Said yes on the automated call and nobody took it; they were told an agent will call back. These leads are first in the queue, the longest waiting on top, until an agent calls or texts them or saves an outcome (T22, `QUEUE.md`) |
+| **Callback · 3:00 PM**, bold | A call back the lead booked with Seri on the automated call, and its time has come. First in the queue beside a missed "yes"; the first agent to pick the lead up takes it, and it reads "Callback – karm · 3:00 PM" after (A16, `QUEUE.md`) |
 | **Inbound reply** | The lead texted us and nobody has read it - or they answered and our text back failed to send |
 | **Callback – karm · 3:00 PM** | karm has a callback booked on it. Not locked, but it is karm's call to make |
 | **Wants a call** | Said No to the first question, then asked to hear from a rep - the same words, lower down |

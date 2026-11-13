@@ -138,6 +138,8 @@ export function activityText(detail: Record<string, unknown>, at: string): strin
           : 'Put the lead back in the queue';
       return held ? `${how} · held ${held}` : how;
     }
+    case 'callback.taken':
+      return `Took the callback Seri booked for ${when(detail.scheduledAt)}`;
     case 'callback.rescheduled':
       return `Callback moved from ${when(detail.from)} to ${when(detail.to)}`;
     case 'callback.reopened':

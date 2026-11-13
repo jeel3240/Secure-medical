@@ -24,7 +24,7 @@ from it.
 |---|---|
 | No live `dnc_list` row for the phone | An opt-out is absolute. A row released by START (`released_at` set) does not count - `STATE-MACHINE.md`, "Opting back in". |
 
-**Four reasons stand on their own** - no score needed, and the first three
+**Five reasons stand on their own** - no score needed, and the first three
 keep even a closed lead in:
 
 | Reason | Why a person is needed |
@@ -33,6 +33,7 @@ keep even a closed lead in:
 | `has_unread_inbound` | Texted something the questions cannot handle - after the conversation ended, to an agent who took it over, or after a phone call took it over (rule 2d). `STATE-MACHINE.md`, "Which replies need a person" |
 | An unreturned **missed call** | They rang our number and nobody answered - 2026-10-01. This one needs no reply and no score: a lead who has never texted is in the queue for it. `TWILIO.md`, "A missed call" |
 | An unreturned **missed "yes"** | They said yes on the automated call, nobody took the transfer, and they heard "An agent will call you back shortly" (`script_result = 'transfer_missed'`) - T22, 2026-10-24, `AUTO-CALLS.md`. The robot calls only leads who never replied, so these have no score. Cleared exactly as a missed call is - an agent calls or texts them, answers when they ring, or saves an outcome - so it never meets a closed lead: closing it is one of the things that clears it |
+| A **call back Seri booked, once it is due** | The lead picked a time with Seri on the automated call (`callbacks.reason = 'ai_booked'`), and that time has come - A16, 2026-11-12, `AI-AGENT.md` section 4. No score for the same reason. Before its time it does not put the lead in: the lead's page says when (`AGENT-WORKSPACE.md`, "Callbacks"). Finished like any callback - marked done, or an outcome saved - `AI_CALLBACK_DUE_SQL` |
 
 **Three more need a score above 0 and a lead that is not closed.** Scoring
 starts at the first reply, so a score is the mark of a responder:
@@ -86,8 +87,9 @@ the first one having expired.
 
 ## The order
 
-A missed "yes" first, the longest waiting on top; then `score DESC`, then the
-most recently received, then id.
+A promised call first - a missed "yes", or a call back Seri booked that is due -
+the longest waiting on top; then `score DESC`, then the most recently received,
+then id.
 
 Score first is the point of the screen. Freshest next, because speed to contact
 is what the score is for - `DESIGN-PROMPT.md` section 2, "sorted by score then
@@ -110,8 +112,19 @@ says to the person who let one ring out (`AUTO-CALLS.md`, T15c). Off, it keeps
 the old words: no transfers are made. (One nobody got back to before automated
 calls were switched off still sorts first, under the old words.)
 
+**So does a call back Seri booked, once it is due - A16, 2026-11-12.** The lead
+picked that time with her, and was told someone would call then. Both are a
+promised call, so they share the top, sorted together on when the call was
+promised for - the missed "yes" on when its call was made, the call back on the
+time it was booked for, the earliest first (`promised_at`: `LEAST` of
+`MISSED_YES_AT_SQL` and `AI_CALLBACK_DUE_AT_SQL`, `db/lead-state.ts`). An
+overdue one stays there until someone calls. Not yet due, it is not pushed
+up - and with no score, not in the queue at all. An agent's own callback is
+not moved: it is theirs, on My Callbacks, and keeps the lead at its score.
+
 **Only under All.** A missed "yes" has no tier, so picking Hot, Warm or Low
-hides it, like any lead with no score. The switcher starts on All.
+hides it, like any lead with no score. The switcher starts on All. So does a
+due call back from Seri, for the same reason.
 
 A lead with no score - held before it answered, or one who rang us and was
 missed - sorts to the bottom. The list stops at 100 rows, so in a queue that
@@ -140,14 +153,15 @@ why is it here? When several apply, the first wins:
 | 1 | `working` | An **active** agent holds the lead | `agentId`, `agentName` |
 | 2 | `missed_call` | The lead rang us, nobody answered, and nobody has got back to them since - `MISSED_CALL_SQL`, `TWILIO.md`. Bold. A held lead still reads Working | |
 | 3 | `wants_call` | A missed "yes": the lead said yes on the automated call, nobody took it, and nobody has got back to them since - `MISSED_YES_SQL` (T22, 2026-10-24). These rows are first in the queue. A held lead still reads Working | |
-| 4 | `inbound_reply` | The lead has texted and nobody has read it | |
-| 5 | `callback` | A callback is booked and not done - the soonest one. "Callback – Maya Chen · 8:13 PM", with the date when not today. Does not lock the row | `agentId`, `agentName`, `at` |
-| 6 | `wants_call` | The lead said No to the first question, then asked to hear from a rep - the flow ended `wants_contact` (2026-10-05). Says why a lead with 10 points is in the queue | |
-| 7 | `needs_review` | Conversation `review`: replies we could not read | |
+| 4 | `callback`, `due` | A call back Seri booked whose time has come - the earliest (A16). "Callback · 3:00 PM" while it is nobody's, "Callback – Maya Chen · 3:00 PM" once taken; bold, like a missed call: we owe it. A held lead still reads Working | `at`, `due`, and `agentId`, `agentName` once taken |
+| 5 | `inbound_reply` | The lead has texted and nobody has read it | |
+| 6 | `callback` | A callback is booked and not done - the soonest one. "Callback – Maya Chen · 8:13 PM", with the date when not today; "Callback · 8:13 PM" for one Seri booked that nobody has taken (A16). Does not lock the row | `agentId`, `agentName` (absent while nobody's), `at` |
+| 7 | `wants_call` | The lead said No to the first question, then asked to hear from a rep - the flow ended `wants_contact` (2026-10-05). Says why a lead with 10 points is in the queue | |
+| 8 | `needs_review` | Conversation `review`: replies we could not read | |
 | - | `null` | None of those: the lead is waiting to be picked up. The screen shows a hyphen | |
 
 **One status for two reasons - T22.** A missed "yes" reads **Wants a call**,
-the words of row 6: both leads asked to talk to a person. It ranks with the
+the words of row 7: both leads asked to talk to a person. It ranks with the
 missed call, though, not with row 6 - the lead was promised a call back a few
 minutes ago and wants to talk now, which outranks a text waiting to be read.
 The lead's card keeps saying it once the lead is picked up and the queue says
@@ -172,6 +186,19 @@ have read "New" again.
 A booked callback keeps a lead **in** the queue ("Who is in it" above), unless
 the lead is closed, and shows as Callback – name · time unless a higher tag
 applies.
+
+**Seri's call backs - A16, 2026-11-12** (`AI-AGENT.md` section 4). One she
+booked for a lead nobody holds has no agent. Due, it puts the lead in the queue
+on its own and at the top (above), tagged row 4. **The first agent to pick the
+lead up takes it**: claiming the lead (`claimLead`, `db/claims.ts`) makes every
+open call back of hers that nobody has taken theirs, in the same statement, and
+records `callback.taken` - on the lead's timeline as "Took the callback Seri
+booked for ...". From then it is on their My Callbacks, with her line in the
+note column ("Seri: Wants to order antibiotics") until a note of their own
+replaces it; put back in the queue, the lead still sits at the top while it is
+due, now as "Callback – Maya Chen · 3:00 PM". A later pick-up by someone else
+leaves it with the first. One booked for a lead someone held was theirs from
+the start (A15).
 
 *(Earlier the same day there was also a `stalled` tag - "Stalled at Q1 / Q2" -
 for a lead partway through. Partway leads are no longer in the queue, so it
@@ -314,6 +341,21 @@ the missed "yes" are each worked out once - and so is the missed call inside
 "Closed", which is why Admin > Leads gained too. The last 7 days loses a few
 milliseconds: the sets cover every call, however few leads the date leaves.
 
+**Timed again for A16, 2026-11-12.** The speed check's leads now include the
+call backs Seri books - one robot call in twenty, done by an agent except those
+of the last two days. Same 50,000 leads, same laptop, the code before and
+after, two rounds each:
+
+| | Before A16 | After |
+|---|---|---|
+| The queue as it opens | 74 ms | 76 ms |
+| One tier | 74 ms | 77 ms |
+| A name search | 16 ms | 16 ms |
+| The last 7 days | 11 ms | 11 ms |
+
+Three milliseconds for one more question of every lead - "does it have a call
+back of Seri's whose time has come?" - answered from `callbacks (lead_id)`.
+
 ## What this does not cover
 
 - **The STATE column in the mockup is not returned.** EZ Texting sends no state
@@ -365,6 +407,15 @@ automated text, nor an agent's text EZ Texting refused clears it; picking the
 lead up shows Working and keeps it first. An agent's call, an agent's text and
 an outcome each clear it, and the queue is as it was before the robot's
 calls.
+
+Seri's call backs (A16) the same way, booked as `/auto/ai-after` books them
+(`keepCallResult`) and taken by `claimLead` - 84 checks in all as of
+2026-11-12: not yet due, not in the queue; due, first before the 90-point lead,
+with no score, tagged as a callback nobody has, due; an overdue one first,
+beside a missed "yes", in the order they were promised; picked up, it is the
+agent's, recorded once by them, on their My Callbacks overdue with her line;
+put back, still at the top, named as theirs; a second agent's pick-up leaves
+it with the first; an outcome finishes it.
 
 ## The polling hook
 

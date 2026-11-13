@@ -192,7 +192,8 @@ export async function setDisposition(
 export interface Callback {
   id: number;
   leadId: number;
-  agentId: number;
+  /** Null only for one Seri booked that nobody has taken yet (A16). */
+  agentId: number | null;
   agentName: string;
   scheduledAt: string;
   doneAt: string | null;
@@ -201,6 +202,8 @@ export interface Callback {
    * did not pick up. `ai_booked`: Seri booked it on the automated call (A15).
    */
   reason: 'booked' | 'missed_call' | 'ai_booked';
+  /** Seri's one-line reason, on one she booked (A15). */
+  note: string | null;
 }
 
 /**
