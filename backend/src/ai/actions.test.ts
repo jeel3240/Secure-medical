@@ -16,6 +16,7 @@ import {
   handoffData,
   lastLine,
   lineToAdd,
+  NOT_AGREED,
   toHandoff,
   writtenAction,
   type ActionContext,
@@ -30,12 +31,20 @@ const context = (over: Partial<ActionContext> = {}): ActionContext => ({
   hours: DEFAULT_CALL_HOURS,
   now: NOW,
   said: 'Great, connecting you now.',
+  before: "So that's tomorrow at 3 PM your time?",
   ...over,
 });
 const call = (name: string, args: unknown = {}, over: Partial<ActionContext> = {}) =>
   toHandoff({ name, arguments: typeof args === 'string' ? args : JSON.stringify(args) }, context(over));
+/** "2026-11-12T13:00" said back as she confirms it: "So that's 1 PM your time?" */
+const saidBack = (time: string) => {
+  const [hour24, minute] = time.slice(11).split(':').map(Number);
+  const hour = hour24 % 12 === 0 ? 12 : hour24 % 12;
+  return `So that's ${hour}${minute ? `:${String(minute).padStart(2, '0')}` : ''} ${hour24 < 12 ? 'AM' : 'PM'} your time?`;
+};
+/** A call back for `time`, which she has said back to the lead - unless the test says otherwise. */
 const book = (time: string, over: Partial<ActionContext> = {}, zone = NY) =>
-  call('book_callback', { time, time_zone: zone, reason: 'Wants to order antibiotics' }, over);
+  call('book_callback', { time, time_zone: zone, reason: 'Wants to order antibiotics' }, { before: saidBack(time), ...over });
 const error = (result: ReturnType<typeof call>) => (result.ok ? 'booked' : result.error);
 
 describe('the tools OpenAI is offered', () => {
@@ -128,6 +137,41 @@ describe('a call back at a time that cannot be booked: refused, with what to off
   });
 });
 
+describe('a call back only for the time she said back, and they agreed (A21, call 92)', () => {
+  it('never said back - a "yes" to being put through, with nobody free: refused, and she asks when instead', () => {
+    expect(error(book('2026-11-11T14:15', { before: 'Would you like me to connect you with someone now to place your order?', whoIsThere: 'nobody' }))).toBe(NOT_AGREED);
+    expect(NOT_AGREED).toMatch(/Ask when suits them/);
+  });
+
+  it('another time said back: refused', () => {
+    expect(error(book('2026-11-12T16:00', { before: "So that's tomorrow at 3 PM your time?" }))).toBe(NOT_AGREED);
+    expect(error(book('2026-11-12T15:00', { before: "So that's tomorrow at 13 PM your time?" }))).toBe(NOT_AGREED);
+  });
+
+  it('said back as she says it, or any usual way: booked', () => {
+    for (const before of ["So that's tomorrow at 3 PM your time?", 'Tomorrow at 3:00 p.m., right?', 'tomorrow at 3pm?', 'Thursday at 3 P.M. your time?']) {
+      expect(book('2026-11-12T15:00', { before }).ok).toBe(true);
+    }
+  });
+
+  it('half past: the minutes are said too', () => {
+    expect(error(book('2026-11-12T15:30', { before: "So that's tomorrow at 3 PM your time?" }))).toBe(NOT_AGREED);
+    expect(book('2026-11-12T15:30', { before: "So that's tomorrow at 3:30 PM your time?" }).ok).toBe(true);
+  });
+
+  it('noon, in words or as 12 PM', () => {
+    // Noon in Arizona, inside the agents' hours.
+    const AZ = 'America/Phoenix';
+    expect(book('2026-11-12T12:00', { before: 'So tomorrow at noon your time?' }, AZ).ok).toBe(true);
+    expect(book('2026-11-12T12:00', { before: 'So tomorrow at 12 PM your time?' }, AZ).ok).toBe(true);
+    expect(error(book('2026-11-12T12:00', { before: 'So tomorrow at 12 AM your time?' }, AZ))).toBe(NOT_AGREED);
+  });
+
+  it('a time outside the hours is refused with what to offer first, said back or not', () => {
+    expect(error(book('2026-11-11T20:00', { before: 'Would that work?' }))).toMatch(/^Not booked\. That is outside the agent hours\. Offer tomorrow at 1 PM/);
+  });
+});
+
 describe('a call back\'s arguments, checked', () => {
   it.each([
     [{ time: '2026-11-12 15:00', time_zone: NY, reason: 'x' }, /^time must be/],
@@ -150,7 +194,7 @@ describe('who is there decides a transfer', () => {
 
   it('nobody: refused, with a call back to offer instead', () => {
     expect(error(call('transfer_to_agent', {}, { whoIsThere: 'nobody' }))).toBe(
-      'Nobody can take a call right now, so do not transfer. Tell the lead everyone is busy, offer a call back at a time that suits them inside the agent hours, and book it with book_callback.'
+      'Nobody can take a call right now, so do not transfer. Tell the lead everyone is busy, and ask when would be a good time for a call back, inside the agent hours. Book it with book_callback only once you have said their time back to them and they have said yes.'
     );
     expect(book('2026-11-12T15:00', { whoIsThere: 'nobody' }).ok).toBe(true);
   });

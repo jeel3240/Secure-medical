@@ -17,8 +17,8 @@ const reply = (text: string, ...calls: [string, object?][]) => ({
 });
 
 describe('the cases', () => {
-  it('71, each named once', () => {
-    expect(cases).toHaveLength(71);
+  it('73, each named once', () => {
+    expect(cases).toHaveLength(73);
     expect(new Set(cases.map((c) => c.id)).size).toBe(cases.length);
   });
 
@@ -114,8 +114,9 @@ describe('marking a reply', () => {
 
   it('booked for the wrong time, or refused', () => {
     const c = byId('callback_confirmed');
+    // 4 PM, when she had said back 3 PM: never booked, as on a call (A21, call 92).
     expect(grade(c, reply('Bye!', ['book_callback', { time: '2026-11-12T16:00', time_zone: 'America/New_York', reason: 'x' }])).problems).toEqual([
-      'booked for 2026-11-12T21:00:00.000Z, expected 2026-11-12T20:00:00.000Z',
+      expect.stringMatching(/^refused: Not booked: they have not agreed this time with you\./),
     ]);
     expect(grade(c, reply('Bye!', ['book_callback', { time: '2026-11-12T21:00', time_zone: 'America/New_York', reason: 'x' }])).problems[0]).toMatch(
       /^refused: Not booked\. That is outside the agent hours\./

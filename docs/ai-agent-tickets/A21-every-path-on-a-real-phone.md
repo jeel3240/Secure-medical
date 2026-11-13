@@ -89,7 +89,9 @@ Call 91's opening fixed on `fix/seri-opening-line` - `docs/AI-AGENT.md` section 
 
 Seen on every call so far, not changed: Twilio logs a warning (12200) that `applicationReconnect` is not allowed on `<ConversationRelay>`. The attribute is in Twilio's own ConversationRelay reference, so the warning is its XML check out of date, and the calls are unaffected. Looking into it found the relay refused Twilio's reconnect - a deploy mid-call handed the lead to the script, or to Twilio's error. Fixed on `feat/seri-reconnect` and heard on call 92 - `docs/AI-AGENT.md` section 2, "When the line drops".
 
-Still open from these calls: **a call back booked without asking when** (call 92) - with nobody free, a "yes" to being connected got "someone will call you Monday at 11 AM", not asked or confirmed; **offering to connect with nobody free** after the opening (call 92); and **the link texted without a yes** (call 89) - `toHandoff` holds an action back only when her reply *ends* on a question, and hers asked one mid-reply, then offered the link and sent it.
+Call 92's call back and offer fixed on `fix/seri-callback-asks-time` - a call back is booked only for a time she said back and the lead agreed, and with nobody free she asks when instead of offering to connect: `docs/AI-AGENT.md` section 4, "Changed after A21's call 92".
+
+Still open from these calls: **the link texted without a yes** (call 89) - `toHandoff` holds an action back only when her reply *ends* on a question, and hers asked one mid-reply, then offered the link and sent it.
 
 ## Done when
 

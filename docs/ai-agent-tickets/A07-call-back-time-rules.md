@@ -13,6 +13,8 @@
 - `checkCallbackTime(when, leadZone, hours)`: inside agent hours (the `auto_call_*` hours and days, read by `readCallHours`), in the future, within 14 days. Returns ok, or the nearest allowed time to offer.
 - `spokenTime(when, leadZone)`: "Thursday at 3 PM your time".
 
+**Added after A21's call 92 (2026-11-13):** `saysClock` - whether a reply named a call back's time on the lead's clock ("3 PM", "3:00 p.m.", "noon"), which the booking now requires (A06). `docs/AI-AGENT.md` section 4.
+
 ## Done when
 
 - [x] 8 PM is refused with the next morning offered; a weekend is refused with Monday offered - 8 PM Wednesday in Arizona offers Thursday at 11, said "tomorrow at 11 AM your time"; in New York, "tomorrow at 1 PM your time". Saturday at 3 PM in New York offers Monday at 3 PM; Saturday evening, Monday's opening.

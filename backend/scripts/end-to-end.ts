@@ -871,11 +871,20 @@ async function main(): Promise<void> {
     String(firstAsk?.messages[2]?.content).endsWith('Who is this?'),
   ], ['system', '[friendly] Hi, is this Dana?', true]);
   check('she answers, a sentence at a time', d.relay.said(), "It's Seri from eDrugstore. We have up to 25% off antibiotics today. Is now a good time? ");
+  // A call back only for a time she has said back and Dana agreed (A21, call 92).
+  openAiReplies.push({ tool: { name: 'book_callback', args: { time: tomorrowAtThreeInNewYork(), time_zone: 'America/New_York', reason: 'Wants to order antibiotics' } } });
+  openAiReplies.push({ say: "No problem. So that's tomorrow at 3 PM your time?" });
+  await d.relay.says("I'm driving. Can someone call me tomorrow at 3?");
+  check('booking before saying the time back: refused, and she confirms it instead', [
+    String(openAiAsked.filter((a) => a.stream).at(-1)?.messages.at(-1)?.content).startsWith('Not booked: they have not agreed this time'),
+    d.relay.said().endsWith("So that's tomorrow at 3 PM your time? "),
+    d.relay.received.some((m) => m.type === 'end'),
+  ], [true, true, false]);
   openAiReplies.push({
-    say: 'No problem, someone will call you tomorrow at 3 PM your time. Have a great day!',
+    say: 'Perfect, someone will call you tomorrow at 3 PM your time. Have a great day!',
     tool: { name: 'book_callback', args: { time: tomorrowAtThreeInNewYork(), time_zone: 'America/New_York', reason: 'Wants to order antibiotics' } },
   });
-  await d.relay.says("I'm driving. Can someone call me tomorrow at 3?");
+  await d.relay.says('Yes, that works.');
   const danaHandoff = await d.relay.ended();
   check('her action ends the session, after her last line', JSON.parse(danaHandoff).action, 'book_callback');
   d.relay.close();
@@ -887,7 +896,7 @@ async function main(): Promise<void> {
   check('her call back: nobody\'s yet, with her line for whoever calls', danaBooking, [{ agent_id: null, reason: 'ai_booked', note: 'Wants to order antibiotics' }]);
   check('on Dana\'s page', (await getLeadDetail(dana))?.aiCallback?.note, 'Wants to order antibiotics');
   const danaSeri = ((await getTimeline(dana)) ?? []).find((e) => e.kind === 'call')?.detail.seri as { turns: unknown[]; ended: { action: string } };
-  check('on the timeline: her conversation - greeting, two each - and how it ended', [danaSeri?.turns.length, danaSeri?.ended.action], [5, 'book_callback']);
+  check('on the timeline: her conversation - greeting, three each - and how it ended', [danaSeri?.turns.length, danaSeri?.ended.action], [7, 'book_callback']);
   check('Admin > Leads: Callback booked', (await listAdminLeads({})).leads.find((l) => l.id === dana)?.call, 'callback_booked');
   check('not due yet: not in the queue', (await listQueue({})).leads.some((l) => l.id === dana), false);
 
@@ -1005,13 +1014,16 @@ async function main(): Promise<void> {
   const restarted = await startApi();
   // Twilio reconnects to the api that started, then replays what Ivy said meanwhile.
   const v2 = await Relay.open(restarted.port, v.answered.twiml, v.call.sid, 1);
+  const askedBeforeRestart = openAiAsked.filter((a) => a.stream).length;
+  openAiReplies.push({ say: "Sure. So that's tomorrow at 3 PM your time?" });
+  await v2.says('Yes. Can someone call me tomorrow at 3?');
+  const afterRestart = openAiAsked.filter((a) => a.stream)[askedBeforeRestart];
   openAiReplies.push({
     say: 'Perfect, someone will call you tomorrow at 3 PM your time. Have a great day!',
     tool: { name: 'book_callback', args: { time: tomorrowAtThreeInNewYork(), time_zone: 'America/New_York', reason: 'Wants to hear about the offer' } },
   });
-  await v2.says('Yes. Can someone call me tomorrow at 3?');
+  await v2.says('Yes.');
   const ivyHandoff = await v2.ended();
-  const afterRestart = openAiAsked.filter((a) => a.stream).at(-1);
   check('OpenAI is asked with the call so far - her greeting, Ivy\'s question, her answer - then what Ivy said after the restart', [
     afterRestart?.messages[1]?.content,
     String(afterRestart?.messages[2]?.content).endsWith('Who is this?'),
@@ -1037,9 +1049,9 @@ async function main(): Promise<void> {
     ['ai_agent.ended', 'book_callback'],
   ]);
   const ivyTurns = (await pool.query(`SELECT who FROM call_ai_turns WHERE call_id = $1 ORDER BY id`, [v.call.id])).rows.map((r) => r.who);
-  check('every turn kept, in order, with a note where the line dropped', ivyTurns, ['seri', 'lead', 'seri', 'system', 'lead', 'seri', 'action']);
+  check('every turn kept, in order, with a note where the line dropped', ivyTurns, ['seri', 'lead', 'seri', 'system', 'lead', 'seri', 'lead', 'seri', 'action']);
   const ivySeri = ((await getTimeline(ivy)) ?? []).find((e) => e.kind === 'call')?.detail.seri as { turns: unknown[]; ended: { action: string } };
-  check('on the timeline: one conversation, as if nothing happened', [ivySeri?.turns.length, ivySeri?.ended.action], [5, 'book_callback']);
+  check('on the timeline: one conversation, as if nothing happened', [ivySeri?.turns.length, ivySeri?.ended.action], [7, 'book_callback']);
 
   restarted.server.close();
   openAi.close();

@@ -105,6 +105,18 @@ export function caseMessages(c: EvalCase, knowledge: Knowledge): ChatCompletionM
   ];
 }
 
+/** Her reply the lead's last turn answered, as the relay reads it (`answeredReply`, conversation.ts): her words. */
+export function answeredReply(c: EvalCase): string {
+  const turns: Turn[] = [...(c.opened ? [{ lead: casesFile.opening.lead }, { seri: casesFile.opening.seri }] : []), ...c.turns];
+  let last = welcomeGreeting(c.lead.firstName);
+  let answered = last;
+  for (const t of turns) {
+    if ('seri' in t) last = t.seri;
+    else answered = last;
+  }
+  return spokenWords(answered);
+}
+
 /** What Seri answered: her words, and any action she took. */
 export interface Reply {
   text: string;
@@ -145,7 +157,7 @@ export function grade(c: EvalCase, reply: Reply): Grade {
   let text = said;
   let added = false;
   const [action, ...more] = written ? [written] : reply.toolCalls;
-  const result = action ? toHandoff(action, { whoIsThere: c.who, hours: DEFAULT_CALL_HOURS, now: c.now, said }) : null;
+  const result = action ? toHandoff(action, { whoIsThere: c.who, hours: DEFAULT_CALL_HOURS, now: c.now, said, before: answeredReply(c) }) : null;
   // An action after a question is held back, as the relay does: the call goes
   // on with the lead's answer - no action yet.
   const outcome = !action || (result && !result.ok && result.awaitLead) ? 'none' : action.name;
