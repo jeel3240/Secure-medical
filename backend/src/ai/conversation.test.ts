@@ -14,7 +14,10 @@ import {
   Conversation,
   FILLER_LINE,
   leadMessage,
+  leadTurn,
   LIMITS,
+  NO_REPEAT_NOTE,
+  offeredToConnect,
   STILL_THERE_LINE,
   VERDICT_POLL_MS,
   VERDICT_WAIT_MS,
@@ -134,7 +137,7 @@ describe('what OpenAI is sent', () => {
     await until(() => model.asked.length === 1, 'the request');
     expect(model.asked[0]).toEqual([
       { role: 'system', content: 'THE INSTRUCTIONS' },
-      { role: 'assistant', content: 'Hi, is this John?' },
+      { role: 'assistant', content: '[friendly] Hi, is this John?' },
       { role: 'user', content: '[Who is there: someone free] Who is this?' },
     ]);
   });
@@ -232,6 +235,62 @@ describe('her reply', () => {
   });
 });
 
+describe('her tone (tone.ts)', () => {
+  it('the voice is sent her tones; the record keeps her words; OpenAI reads back what it wrote', async () => {
+    model.replies.push([text('[understanding] Oh, I completely understand. '), text('[curious] Would later work better?')]);
+    conversation.heard("I'm busy right now");
+    await until(() => tokens().length === 3, 'the reply');
+    expect(tokens()).toEqual([
+      ['[understanding] Oh, I completely understand. ', false],
+      ['[curious] Would later work better? ', false],
+      ['', true],
+    ]);
+    expect(kept).toEqual([{ who: 'seri', text: 'Oh, I completely understand. Would later work better?', latencyMs: expect.any(Number) }]);
+    expect(conversation.messages.at(-1)).toEqual({
+      role: 'assistant',
+      content: '[understanding] Oh, I completely understand. [curious] Would later work better?',
+    });
+  });
+
+  it('a tone not on the list, or the who-is-there note read back, never reaches the voice', async () => {
+    model.replies.push([text('[laughs] Sure thing. [Who is there: someone free] Connecting you.')]);
+    conversation.heard('Can I talk to someone?');
+    await until(() => tokens().length === 3, 'the reply');
+    expect(tokens()).toEqual([
+      ['Sure thing. ', false],
+      ['Connecting you. ', false],
+      ['', true],
+    ]);
+  });
+
+  it('a tone alone is nothing to say', async () => {
+    model.replies.push([text('Sure. [friendly]')]);
+    conversation.heard('Okay');
+    await until(() => tokens().length === 2, 'the reply');
+    expect(tokens()).toEqual([
+      ['Sure. ', false],
+      ['', true],
+    ]);
+  });
+
+  it('the safety check reads her words: a tone does not hide a price, and the note keeps the words', async () => {
+    model.replies.push([text('[cheerfully] It is only $20 a month.')]);
+    conversation.heard('How much is it?');
+    await until(() => tokens().length === 2, 'the reply');
+    expect(tokens()[0]).toEqual([`${SPECIALIST_LINE} `, false]);
+    expect(kept[1]).toEqual({ who: 'system', text: 'Replaced (price, "$"): It is only $20 a month.' });
+  });
+
+  it('a tone on the stop line still counts as the stop line: nothing said twice', async () => {
+    model.replies.push([text(`[friendly] ${STOP}`), tool('opt_out')]);
+    conversation.heard('Please never ring me again');
+    await until(() => ends().length === 1, 'the end');
+    // Two sentences, each sent whole - and the stop line not said again after them.
+    expect(tokens().map(([token]) => token).join('')).toBe(`[friendly] ${STOP} `);
+    expect(tokens().at(-1)).toEqual(['', true]);
+  });
+});
+
 describe('talked over', () => {
   it('while she speaks: the reply stops, and the history keeps only what was heard', async () => {
     const g = gate();
@@ -262,7 +321,7 @@ describe('talked over', () => {
 
   it('before a word was heard: the history is left as it was', () => {
     conversation.interrupted('');
-    expect(conversation.messages[1]).toEqual({ role: 'assistant', content: 'Hi, is this John?' });
+    expect(conversation.messages[1]).toEqual({ role: 'assistant', content: '[friendly] Hi, is this John?' });
   });
 
   it('the lead says more while she is still thinking: one reply, to all of it', async () => {
@@ -396,8 +455,76 @@ describe('her actions', () => {
     expect(ends()).toEqual([]);
     conversation.heard('Yes');
     await until(() => model.asked.length === 2, 'the next request');
-    expect(model.asked[1].slice(-3).map((m) => m.role)).toEqual(['assistant', 'tool', 'user']);
-    expect(model.asked[1].at(-3)).toMatchObject({ content: 'Would you like me to connect you now?' });
+    // Her question offered to connect them: the note says a yes goes ahead (A21).
+    expect(model.asked[1].slice(-4).map((m) => m.role)).toEqual(['assistant', 'tool', 'user', 'system']);
+    expect(model.asked[1].at(-4)).toMatchObject({ content: 'Would you like me to connect you now?' });
+    expect(model.asked[1].at(-1)).toEqual({ role: 'system', content: NO_REPEAT_NOTE });
+  });
+});
+
+describe('an action written in brackets (A21)', () => {
+  it('is taken as if she had taken it, never said, and logged', async () => {
+    model.replies.push([text("[friendly] Sure, John. I'll text you the link now. Have a great day! [send_link]")]);
+    conversation.heard('Just send me the link');
+    await until(() => ends().length === 1, 'the end');
+    expect(tokens().map(([token]) => token).join('')).toBe("[friendly] Sure, John. I'll text you the link now. Have a great day! ");
+    expect(ended).toEqual([{ action: 'send_link' }]);
+    expect(logged).toContainEqual({ event: 'ai_relay.written_action', fields: { callId: 7, action: 'send_link' } });
+  });
+
+  it('a real action wins over a written one', async () => {
+    model.replies.push([text('Great, connecting you now. [send_link]'), tool('transfer_to_agent')]);
+    conversation.heard('Put me through');
+    await until(() => ends().length === 1, 'the end');
+    expect(ended).toEqual([{ action: 'transfer_to_agent' }]);
+  });
+});
+
+describe('offering to connect, not twice in a row (A21)', () => {
+  it('after a reply that offered, the lead\'s next turn carries the note', async () => {
+    model.replies.push([text('[friendly] We ship in one to three days. [curious] Would you like me to connect you with someone now?')]);
+    conversation.heard('How long is shipping?');
+    await until(() => tokens().length === 3, 'her reply');
+    conversation.heard('Do you take Visa?');
+    await until(() => model.asked.length === 2, 'the next request');
+    expect(model.asked[1].slice(-2)).toEqual([
+      { role: 'user', content: '[Who is there: someone free] Do you take Visa?' },
+      { role: 'system', content: NO_REPEAT_NOTE },
+    ]);
+  });
+
+  it('after a reply that did not offer, no note', async () => {
+    model.replies.push([text("[friendly] We ship in one to three days. Anything else you'd like to know?")]);
+    conversation.heard('How long is shipping?');
+    await until(() => tokens().length === 3, 'her reply');
+    conversation.heard('Do you take Visa?');
+    await until(() => model.asked.length === 2, 'the next request');
+    expect(model.asked[1].at(-1)).toEqual({ role: 'user', content: '[Who is there: someone free] Do you take Visa?' });
+  });
+
+  it('what counts as an offer', () => {
+    for (const said of [
+      'Would you like me to connect you with someone now?',
+      'Ready to talk with a representative now?',
+      'Want to speak to someone on our team?',
+      'I can transfer you now.',
+      'Would you like to talk to one of our specialists?',
+    ]) {
+      expect(offeredToConnect(said)).toBe(true);
+    }
+    for (const said of ["Anything else you'd like to know?", 'We ship in one to three days.', 'Hi, is this John?']) {
+      expect(offeredToConnect(said)).toBe(false);
+    }
+  });
+
+  it('the lead\'s turn as the answer test set builds it', () => {
+    expect(leadTurn('free', 'Yes', 'Would you like me to connect you now?')).toEqual([
+      { role: 'user', content: '[Who is there: someone free] Yes' },
+      { role: 'system', content: NO_REPEAT_NOTE },
+    ]);
+    expect(leadTurn('free', 'Yes', 'Is that something you would be interested in?')).toEqual([
+      { role: 'user', content: '[Who is there: someone free] Yes' },
+    ]);
   });
 });
 

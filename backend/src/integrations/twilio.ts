@@ -10,6 +10,7 @@
 import twilio from 'twilio';
 import type VoiceResponse from 'twilio/lib/twiml/VoiceResponse';
 import { CALL_PARAMETER, RELAY_SETTINGS, relayUrl } from '../ai/relay-messages';
+import { greetingWithTone } from '../ai/tone';
 import { splitForListening, voicemailLine, type AskOrEnd, type CallScript, type CallStep } from '../core/call-script';
 import { identityFor, INCOMING_RING_SECONDS, MISSED_CALL_SPEECH, RECORDING_NOTICE } from '../core/calls';
 import type { TwilioSettings } from '../twilio-settings';
@@ -361,10 +362,11 @@ export function autoCallTwiml(
  * The automated call connected to Seri - A13, docs/AI-AGENT.md section 2. In
  * place of the script's first question, when she is switched on.
  *
- * Twilio opens her relay's WebSocket and says `greeting` itself the moment it
- * connects, with no wait on OpenAI - so no second of quiet first, unlike the
- * script. The `<Parameter>` names our row, which the relay reads in `setup`;
- * the relay's address carries nothing, since Twilio signs it as written (A02).
+ * Twilio opens her relay's WebSocket and says `greeting` itself, warmly
+ * (`greetingWithTone`), the moment it connects, with no wait on OpenAI - so
+ * no second of quiet first, unlike the script. The `<Parameter>` names our
+ * row, which the relay reads in `setup`; the relay's address carries
+ * nothing, since Twilio signs it as written (A02).
  * Her voice and how she listens are `RELAY_SETTINGS`, as heard on the dev
  * number. When her part ends - her action, a failure, or the lead hanging up -
  * Twilio asks `/auto/ai-after` (A14) with the session's status.
@@ -379,7 +381,7 @@ export function seriTwiml(settings: TwilioSettings, opts: { callId: number; gree
   // differently (`ignorebackchannel`), and some not at all.
   const relay = connect.conversationRelay({
     url: relayUrl(settings.publicUrl),
-    welcomeGreeting: opts.greeting,
+    welcomeGreeting: greetingWithTone(opts.greeting),
     ...RELAY_SETTINGS,
   } as VoiceResponse.ConversationRelayAttributes);
   relay.parameter({ name: CALL_PARAMETER, value: String(opts.callId) });

@@ -7,17 +7,20 @@
  * note of who is there before it. A reply passes when its outcome - no action
  * yet, or the action she took, checked as the relay checks it - is one the
  * case allows, and her words hold what they must and nothing they must not,
- * nor anything the sentence check would replace.
+ * nor anything the sentence check would replace. Her words are what the lead
+ * hears - her tones taken out, as the relay keeps them - and a bracket that is
+ * not one of her tones fails (tone.ts).
  */
 
 import type { ChatCompletionMessageParam } from 'openai/resources/chat/completions';
 import { DEFAULT_CALL_HOURS } from '../../core/auto-dial';
 import { ANTIBIOTICS_CALL } from '../../core/call-script-fixtures';
-import { ACTIONS, lineToAdd, toHandoff, type ToolCall } from '../actions';
-import { leadMessage } from '../conversation';
+import { ACTIONS, lineToAdd, toHandoff, writtenAction, type ToolCall } from '../actions';
+import { leadTurn } from '../conversation';
 import { buildInstructions, welcomeGreeting, type WhoIsThere } from '../instructions';
 import type { Knowledge } from '../knowledge';
 import { checkSentence } from '../safety';
+import { greetingWithTone, hasTone, spokenWords, strayBrackets } from '../tone';
 import casesFile from './cases.json';
 
 /** Production's number: what Seri reads out when asked how to call back. */
@@ -89,12 +92,16 @@ export function caseMessages(c: EvalCase, knowledge: Knowledge): ChatCompletionM
     stopLine: ANTIBIOTICS_CALL.optOutBody,
   });
   const turns: Turn[] = [...(c.opened ? [{ lead: casesFile.opening.lead }, { seri: casesFile.opening.seri }] : []), ...c.turns];
+  const greeting = greetingWithTone(welcomeGreeting(c.lead.firstName));
+  let herLast = greeting;
   return [
     { role: 'system', content: instructions },
-    { role: 'assistant', content: welcomeGreeting(c.lead.firstName) },
-    ...turns.map((t): ChatCompletionMessageParam =>
-      'lead' in t ? leadMessage(c.who, t.lead) : { role: 'assistant', content: t.seri }
-    ),
+    { role: 'assistant', content: greeting },
+    ...turns.flatMap((t): ChatCompletionMessageParam[] => {
+      if ('lead' in t) return leadTurn(c.who, t.lead, herLast);
+      herLast = t.seri;
+      return [{ role: 'assistant', content: t.seri }];
+    }),
   ];
 }
 
@@ -111,6 +118,10 @@ export interface Grade {
   heard: string;
   /** The relay added a line after hers: the action's own, or the stop line. */
   defaultLine: boolean;
+  /** She gave at least one sentence a tone. */
+  toned: boolean;
+  /** She wrote her action in brackets rather than taking it - taken all the same, as the relay does. */
+  wroteAction: boolean;
 }
 
 /** Whether `phrase` is in `text`: as whole words when it starts and ends with one, else anywhere. Any case. */
@@ -123,10 +134,17 @@ export function says(text: string, phrase: string): boolean {
 
 export function grade(c: EvalCase, reply: Reply): Grade {
   const problems: string[] = [];
-  const said = reply.text.trim();
+  // A made-up tone, or the who-is-there note read back: the relay drops it,
+  // but it should never be written - the voice may say an unknown one aloud.
+  // An action written in brackets is taken by the relay, and counted instead.
+  const written = reply.toolCalls.length === 0 ? writtenAction(reply.text) : null;
+  for (const bracket of strayBrackets(reply.text)) {
+    if (!writtenAction(bracket)) problems.push(`not one of her tones: ${bracket}`);
+  }
+  const said = spokenWords(reply.text);
   let text = said;
   let added = false;
-  const [action, ...more] = reply.toolCalls;
+  const [action, ...more] = written ? [written] : reply.toolCalls;
   const result = action ? toHandoff(action, { whoIsThere: c.who, hours: DEFAULT_CALL_HOURS, now: c.now, said }) : null;
   // An action after a question is held back, as the relay does: the call goes
   // on with the lead's answer - no action yet.
@@ -165,5 +183,5 @@ export function grade(c: EvalCase, reply: Reply): Grade {
     const check = checkSentence(sentence);
     if (check.reason) problems.push(`would be replaced (${check.reason}, "${check.found}"): ${sentence}`);
   }
-  return { outcome, problems, heard: text, defaultLine: added };
+  return { outcome, problems, heard: text, defaultLine: added, toned: hasTone(reply.text), wroteAction: writtenAction(reply.text) !== null };
 }

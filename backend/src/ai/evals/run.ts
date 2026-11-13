@@ -17,6 +17,7 @@ import type { ReasoningEffort } from 'openai/resources/shared';
 import { ACTION_TOOLS, type ToolCall } from '../actions';
 import { loadKnowledge } from '../knowledge';
 import { PROMPT_CACHE_KEY, SERI_MODEL } from '../model';
+import { spokenWords } from '../tone';
 import { caseMessages, grade, loadCases, type EvalCase, type Grade } from './grade';
 
 interface Model {
@@ -156,6 +157,8 @@ async function main(): Promise<void> {
             problems: [err.message],
             heard: '',
             defaultLine: false,
+            toned: false,
+            wroteAction: false,
           })
         )
       )
@@ -163,7 +166,9 @@ async function main(): Promise<void> {
     const results = await pool(jobs, concurrency);
 
     for (const r of results) {
-      const heard = `${r.defaultLine ? '(said for her) ' : ''}${r.heard.replace(/\s+/g, ' ').trim()}`;
+      // What she wrote, tones and all; what the relay added after it, when it did.
+      const added = r.defaultLine ? ` (said for her: ${r.heard.slice(spokenWords(r.text).length).trim()})` : '';
+      const heard = `${r.text.replace(/\s+/g, ' ').trim()}${added}`;
       console.log(`${r.problems.length === 0 ? 'PASS' : 'FAIL'}  ${r.id.padEnd(26)} ${seconds(r.firstMs).padStart(6)}  ${r.outcome.padEnd(17)} ${heard}`);
       for (const p of r.problems) console.log(`        - ${p}`);
     }
@@ -175,7 +180,9 @@ async function main(): Promise<void> {
       `${label}: ${passed}/${results.length} passed (${((100 * passed) / results.length).toFixed(1)}%), ` +
       `first word median ${seconds(percentile(firsts, 0.5))}, 90% within ${seconds(percentile(firsts, 0.9))}, ` +
       `prompt read from cache ${prompt ? Math.round((100 * cached) / prompt) : 0}%, ` +
-      `last line said for her ${results.filter((r) => r.defaultLine).length} times`;
+      `last line said for her ${results.filter((r) => r.defaultLine).length} times, ` +
+      `a tone in ${results.filter((r) => r.toned).length} replies, ` +
+      `an action written in brackets ${results.filter((r) => r.wroteAction).length} times`;
     console.log(`\n${summary}`);
     summaries.push(summary);
   }

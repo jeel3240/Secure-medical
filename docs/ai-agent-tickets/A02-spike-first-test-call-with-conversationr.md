@@ -21,7 +21,7 @@
 
 ## Done when
 
-- [x] Jeel has called it and **picked a voice**. The voice id is written in `docs/AI-AGENT.md` section 1 - Rachel on ElevenLabs's `v4` model, `21m00Tcm4TlvDq8ikWAM-v4-0.4_0.8`, 2026-11-12.
+- [x] Jeel has called it and **picked a voice** *(replaced by Aria on A21's real calls, 2026-11-13 - `docs/AI-AGENT.md` section 1, "Her voice and tone")*. The voice id is written in `docs/AI-AGENT.md` section 1 - Rachel on ElevenLabs's `v4` model, `21m00Tcm4TlvDq8ikWAM-v4-0.4_0.8`, 2026-11-12.
 - [x] Talking over Seri stops her (`interrupt` message received) - with the words she had said and for how long.
 - [x] Timing measured and written in `docs/AI-AGENT.md`: typical and slowest turn - our text to her voice 0.29 s median, 0.49 s slowest; the lead's last word to her first sound, with an echo, 0.66-1.06 s.
 - [x] Confirmed: WebSocket works through Caddy (or the change Caddy needs is written down) - production's `/api/*` rule, unchanged.

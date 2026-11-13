@@ -289,8 +289,8 @@ describe('the call goes to Seri (A13)', () => {
     expect(res.text).toContain(
       '<Connect action="https://calls.example.com/api/webhooks/twilio/auto/ai-after?call=42" method="POST">'
     );
-    expect(res.text).toContain('<ConversationRelay url="wss://calls.example.com/api/ai/relay" welcomeGreeting="Hi, is this John?"');
-    expect(res.text).toContain('voice="21m00Tcm4TlvDq8ikWAM-v4-0.4_0.8"');
+    expect(res.text).toContain('<ConversationRelay url="wss://calls.example.com/api/ai/relay" welcomeGreeting="[friendly] Hi, is this John?"');
+    expect(res.text).toContain('voice="9BWtsMINqrJLrRacOk9x-v4-0.4_0.8"');
     expect(res.text).toContain('<Parameter name="call" value="42"/>');
     expect(res.text).not.toMatch(/<Say|<Gather|<Pause/);
     // The lead's name is read for the row the address names.
@@ -302,7 +302,7 @@ describe('the call goes to Seri (A13)', () => {
   it('no first name for the lead: "Hi there!"', async () => {
     seriRows('on', null);
     const { app } = await withKey();
-    expect((await fromTwilio(app, ANSWER, PICKED_UP)).text).toContain('welcomeGreeting="Hi there!"');
+    expect((await fromTwilio(app, ANSWER, PICKED_UP)).text).toContain('welcomeGreeting="[friendly] Hi there!"');
   });
 
   it('switched off, or never set: today\'s first question, exactly as before', async () => {

@@ -19,7 +19,7 @@
  *                      what the lead heard of it
  *
  * The history is what OpenAI is sent: the instructions, the greeting Twilio
- * said, then each turn - built as the answer test set builds it (`leadMessage`,
+ * said, then each turn - built as the answer test set builds it (`leadTurn`,
  * evals/grade.ts), so what is tested is what calls use.
  *
  * The limits (A12), counted from `start()` on `timers` - a fake clock in tests:
@@ -47,13 +47,14 @@ import type { ChatCompletionMessageParam } from 'openai/resources/chat/completio
 import type { CallHours } from '../core/auto-dial';
 import { saysStop } from '../core/answers';
 import { errText, log } from '../lib/log';
-import { fallbackHandoff, handoffData, lastLine, lineToAdd, toHandoff, type Handoff } from './actions';
+import { fallbackHandoff, handoffData, lastLine, lineToAdd, toHandoff, writtenAction, type Handoff } from './actions';
 import { whoIsThereNote, type WhoIsThere } from './instructions';
 import type { ModelToolCall, SeriModel } from './openai';
 import { endMessage, refusedNote, replacedNote, stopNote, textMessage } from './relay-messages';
 import type { Turn } from './relay-store';
 import { checkSentence } from './safety';
 import { SentenceSplitter } from './sentences';
+import { greetingWithTone, spokenWords, withTone } from './tone';
 
 /** The lead's turn as OpenAI gets it: who is there now, then what they said. */
 export function leadMessage(who: WhoIsThere, said: string): ChatCompletionMessageParam {
@@ -111,6 +112,31 @@ export const VOICEMAIL_TOOK_NOTE = 'Not done: a machine answered, and the voicem
 
 /** The actions that wait for the verdict: those that end the call. A transfer and a stop do not. */
 const WAITS_FOR_VERDICT: ReadonlySet<Handoff['action']> = new Set(['end_call', 'send_link', 'book_callback'] as const);
+
+/**
+ * Her reply offered to put the lead through - "connect you", "talk to
+ * someone". Found on A21's real call 90: seven of her nine replies ended so,
+ * and the lead asked why she kept saying it.
+ */
+const OFFERED_TO_CONNECT = /\b(connect(ing)? you|transfer you|(talk|speak) (to|with) (someone|somebody|a (person|representative|specialist|real person)|one of our))\b/i;
+
+export function offeredToConnect(said: string): boolean {
+  return OFFERED_TO_CONNECT.test(said);
+}
+
+/**
+ * Given to her with the lead's next turn after a reply that offered to
+ * connect them: her instructions say not to offer twice in a row, and she did
+ * all the same - a note at the moment is what she follows (A21).
+ */
+export const NO_REPEAT_NOTE =
+  "Your last reply already offered to connect them with someone. If they said yes, go ahead. If not, don't offer it again in this reply: answer them, then ask if there's anything else they'd like to know.";
+
+/** The lead's turn, and the note against offering twice in a row when her last reply offered (`NO_REPEAT_NOTE`). */
+export function leadTurn(who: WhoIsThere, said: string, herLastReply: string): ChatCompletionMessageParam[] {
+  const turn = leadMessage(who, said);
+  return offeredToConnect(herLastReply) ? [turn, { role: 'system', content: NO_REPEAT_NOTE }] : [turn];
+}
 
 /** Given to her with her first reply after three minutes. */
 export const WRAP_UP_NOTE =
@@ -210,7 +236,8 @@ export class Conversation {
   ) {
     this.history = [
       { role: 'system', content: setup.instructions },
-      { role: 'assistant', content: setup.greeting },
+      // As the voice was sent it, warmly: she reads back her own tone, and keeps to it.
+      { role: 'assistant', content: greetingWithTone(setup.greeting) },
     ];
     this.now = deps.now ?? (() => new Date());
     this.timers = deps.timers ?? realTimers;
@@ -302,6 +329,15 @@ export class Conversation {
     }
   }
 
+  /** What she said last, as OpenAI reads it back - the greeting before her first reply. */
+  private lastReply(): string {
+    for (let i = this.history.length - 1; i > 0; i--) {
+      const message = this.history[i];
+      if (message.role === 'assistant') return typeof message.content === 'string' ? message.content : '';
+    }
+    return '';
+  }
+
   private replaceLastSaid(heard: string): void {
     for (let i = this.history.length - 1; i > 0; i--) {
       const message = this.history[i];
@@ -343,7 +379,7 @@ export class Conversation {
         log.error('ai_relay.who_failed', { callId: this.setup.callId, err: errText(err) });
       }
       if (reply.done || this.over) return;
-      this.history.push(leadMessage(reply.who, this.pending.join(' ')));
+      this.history.push(...leadTurn(reply.who, this.pending.join(' '), this.lastReply()));
       this.pending = [];
     }
     if (this.wrapUp === 'due') {
@@ -354,6 +390,8 @@ export class Conversation {
 
     const splitter = new SentenceSplitter();
     let tool: ModelToolCall | null = null;
+    // Everything she wrote, brackets and all: an action written instead of taken is in it.
+    let written = '';
     try {
       for await (const event of this.deps.model.reply([...this.history], reply.abort.signal)) {
         if (reply.done) return;
@@ -365,6 +403,7 @@ export class Conversation {
           tool ??= event.call;
           continue;
         }
+        written += event.text;
         for (const sentence of splitter.push(event.text)) {
           if (!this.speak(reply, sentence)) break;
         }
@@ -383,6 +422,15 @@ export class Conversation {
       return;
     }
     if (reply.done) return;
+
+    // She wrote her action instead of taking it: taken all the same (actions.ts).
+    if (!tool) {
+      const action = writtenAction(written);
+      if (action) {
+        tool = { id: '', ...action };
+        log.warn('ai_relay.written_action', { callId: this.setup.callId, action: action.name });
+      }
+    }
 
     // A replaced sentence asked whether they want a specialist: the action
     // waits for the answer.
@@ -412,27 +460,36 @@ export class Conversation {
     this.fail('model_slow');
   }
 
-  /** Checks one sentence and sends it - or the specialist line in its place, ending the reply. */
+  /**
+   * Checks one sentence and sends it - or the specialist line in its place,
+   * ending the reply. Her words are checked; the voice is sent them with her
+   * tone (tone.ts). A tone with no words is nothing to say.
+   */
   private speak(reply: Reply, sentence: string): boolean {
-    const check = checkSentence(sentence);
-    this.deps.send(textMessage(`${check.say} `, false));
-    reply.sent.push(check.say);
+    const words = spokenWords(sentence);
+    if (!words) return true;
+    const check = checkSentence(words);
+    const said = check.reason ? check.say : withTone(sentence);
+    this.deps.send(textMessage(`${said} `, false));
+    reply.sent.push(said);
     reply.firstSentAt ??= Date.now();
     if (!check.reason) return true;
     reply.replaced = true;
-    reply.notes.push({ who: 'system', text: replacedNote(check.reason, check.found, sentence) });
+    reply.notes.push({ who: 'system', text: replacedNote(check.reason, check.found, words) });
     reply.abort.abort();
     return false;
   }
 
   private act(reply: Reply, tool: ModelToolCall, attempt: number): void {
+    // With her tone, for OpenAI's history; her words alone, for the checks.
     const said = reply.sent.join(' ');
+    const words = spokenWords(said);
     const now = this.now();
     reply.action = tool.name;
-    const result = toHandoff({ name: tool.name, arguments: tool.arguments }, { whoIsThere: reply.who, hours: this.setup.hours, now, said });
+    const result = toHandoff({ name: tool.name, arguments: tool.arguments }, { whoIsThere: reply.who, hours: this.setup.hours, now, said: words });
 
     if (result.ok) {
-      const line = lineToAdd(result.handoff, said, { stopLine: this.setup.stopLine, now });
+      const line = lineToAdd(result.handoff, words, { stopLine: this.setup.stopLine, now });
       if (line) {
         this.deps.send(textMessage(`${line} `, false));
         reply.sent.push(line);
@@ -472,11 +529,13 @@ export class Conversation {
     reply.abort.abort();
     if (this.reply === reply) this.reply = null;
 
+    // With her tone: what OpenAI wrote, and reads back in its history. Kept on
+    // record as her words alone - the tone is how they were said (tone.ts).
     const said = reply.sent.join(' ');
     // The filler opened her utterance too: it is closed whatever came after it.
     if ((said || reply.filler) && how.heard === undefined) this.deps.send(textMessage('', true));
     if (said) {
-      this.deps.keep({ who: 'seri', text: said, latencyMs: Math.max(0, (reply.firstSentAt ?? Date.now()) - reply.heardAt) });
+      this.deps.keep({ who: 'seri', text: spokenWords(said), latencyMs: Math.max(0, (reply.firstSentAt ?? Date.now()) - reply.heardAt) });
       if (!how.inHistory) {
         const heard = how.heard === undefined ? said : how.heard;
         if (heard) this.history.push({ role: 'assistant', content: heard });

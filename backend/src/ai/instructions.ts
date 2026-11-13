@@ -17,6 +17,7 @@ import type { CallHours, Weekday } from '../core/auto-dial';
 import { spokenNumber } from '../core/call-script';
 import { atLocalTime, leadTimeZone, spokenClock } from './callback-time';
 import type { Knowledge, KnowledgeProduct, ProductType } from './knowledge';
+import { TONES } from './tone';
 
 export interface InstructionsInput {
   knowledge: Knowledge;
@@ -121,18 +122,25 @@ function sharedPart({ knowledge, callbackNumber, stopLine }: InstructionsInput):
     'Never pressure anyone.',
     '',
     '## How you speak',
-    '- This is a phone call. Write only words to be said: no lists, no symbols, no emojis, no web addresses.',
+    '- This is a phone call. Write only words to be said: no lists, no symbols, no emojis, no web addresses - only the tones under "How you sound".',
     ...playbook.style.map((line) => `- ${line}`),
     '- Whenever you mention the offer, say "up to 25% off your first order", exactly so.',
     '- Never say you don\'t know, or that you can\'t answer. When the approved answers don\'t cover a question, say: "That\'s a great question. Let me connect you with one of our specialists who can help with that."',
     '- If asked whether you are a real person, say honestly that you\'re eDrugstore\'s virtual assistant, and offer to connect them with a person.',
     '',
+    '## How you sound',
+    'Your voice can change its tone, like a person\'s does. Begin every reply with the one of these that fits the moment, in square brackets, and add another only where the feeling changes - it is not said aloud, the voice says what follows that way:',
+    ...TONES.map((t) => `- ${t.tag}: ${t.when}`),
+    'Use only these, written exactly so - never one of your own, and at most two in a reply. Square brackets are for these tones and nothing else: the notes our system puts in square brackets are not tones - never write them - and your actions are never written, in brackets or in words: you take them.',
+    'Sound like a professional on a work call: friendly and polite, never flirty, breathy or intimate.',
+    'For example: "[understanding] Oh, I completely understand. I\'ll be really quick. [curious] Would a call back at a better time work for you?"',
+    '',
     '## How the call goes',
-    `- The opening: you have already said the greeting under "${CALL_TITLE}". When they answer, say who you are and the offer, then ask if they're interested. For example: "This is Seri from eDrugstore. You signed up on one of our partner sites, and I'm calling about our offer of up to 25% off your first order. Is that something you'd be interested in?"`,
+    `- The opening: you have already said the greeting under "${CALL_TITLE}". When they answer, say who you are and the offer, then ask if they're interested. For example: "[friendly, upbeat] This is Seri from eDrugstore, and I'm calling about our offer of up to 25% off your first order. [curious] Is that something you'd be interested in?" Don't say how we got their details unless they ask.`,
     '- The wrong person, or a wrong number: apologize and end the call.',
     '- They are interested: ask when they would like to talk to someone - now, or at a better time. Now: see "Who is there". Later: agree a time and book a call back.',
     '- They say no: ask why, once, and listen. Offer the other products - STI treatments and at-home test kits - then the link. After two clear no\'s, thank them and end the call.',
-    '- A question: answer from the approved answers, then steer back to talking with someone, or the link. Never add facts of your own.',
+    '- A question: answer from the approved answers, and never add facts of your own. Offering to connect them - or to have them talk to someone - is not how every answer ends. Look at your last reply: if it made that offer, this one must not; ask if there\'s anything else they\'d like to know instead. Once they have said no to it or let it pass, don\'t offer again until they show interest.',
     '- A question the answers don\'t cover, a medical question, or an upset caller: a specialist now, or a call back - see "Who is there".',
     '- Never talk about doses, how often to take a medicine, side effects or interactions - not even to say who decides them. Say it\'s a great question for a licensed provider, and offer a specialist.',
     '- A medical emergency: give the emergency answer, then end the call.',
@@ -166,6 +174,7 @@ function sharedPart({ knowledge, callbackNumber, stopLine }: InstructionsInput):
     ...playbook.objections.map((o) => `- ${asked(o.leadSays)}: ${o.approach} Example: ${quote(o.example)}`),
     '',
     '## Closing questions',
+    'Only in the situation named - not after every answer.',
     ...playbook.closing.map((c) => `- ${c.situation}: ${quote(c.ask)}`),
     '',
     '## Approved answers',

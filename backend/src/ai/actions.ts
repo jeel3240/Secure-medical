@@ -118,6 +118,22 @@ export interface ToolCall {
   arguments: string;
 }
 
+const WRITTEN_ACTION = new RegExp(`\\[\\s*(?:functions\\.)?(${ACTIONS.join('|')})\\s*(?:[:(]\\s*(\\{[^\\][]*\\})?\\s*\\)?)?\\s*\\]`);
+
+/**
+ * An action she wrote in square brackets instead of taking it - "[send_link]",
+ * "[functions.book_callback:{...}]". Seen on the answer test set (A09) once
+ * her tones put brackets in her words (A21): now and then the action went in
+ * them too, and once it was not taken at all - she said a call back was
+ * booked, and none was. The relay takes it as if she had, through the same
+ * checks (`toHandoff`); the bracket itself is never said (tone.ts). Null when
+ * there is none.
+ */
+export function writtenAction(text: string): ToolCall | null {
+  const match = WRITTEN_ACTION.exec(text);
+  return match ? { name: match[1], arguments: match[2] ?? '{}' } : null;
+}
+
 /** What a tool call is checked against: this turn's view of the call. */
 export interface ActionContext {
   whoIsThere: WhoIsThere;
@@ -152,8 +168,10 @@ const REFUSED: Record<CallbackRefusal, string> = {
 export function toHandoff(call: ToolCall, context: ActionContext): ActionResult {
   // Found by the answer test set (A09): the model asks "Would you like me to
   // connect you?" and transfers in the same reply. A question is answered
-  // before anything ends the call.
-  if (context.said.trim().endsWith('?') && (ACTIONS as readonly string[]).includes(call.name)) {
+  // before anything ends the call - except a stop, taken at once every time:
+  // on A21's test runs she opted a lead out and then said her greeting again,
+  // and the question held the stop back.
+  if (call.name !== 'opt_out' && context.said.trim().endsWith('?') && (ACTIONS as readonly string[]).includes(call.name)) {
     return {
       ok: false,
       awaitLead: true,
