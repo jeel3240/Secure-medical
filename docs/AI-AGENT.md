@@ -138,8 +138,8 @@ applicationReconnect="true"
 - **Talked over:** her reply stops at once (the OpenAI request is aborted) and nothing more of it is sent; the history keeps only what Twilio says the lead heard (`utteranceUntilInterrupt`) - the reply still being written, or the last one already sent, or the greeting. Nothing heard: the history is left as it was.
 - **The lead says more before she answers:** what she was writing is dropped and one reply answers all of it; what she had already said stands in the history.
 - **The stop check** (`saysStop`, `core/answers.ts`): the script's stop words, read for a conversation - a phrase ("stop calling", "remove me", "don't call") anywhere in what the lead said, a single word ("stop", "unsubscribe") only said on its own ("Stop.", "No, stop", "Stop it, please"). So "Do I need to stop my other medicine?" is hers to answer, not an opt-out that blocks the number; she catches every other way of asking herself. Key 9 is a stop too. Either way, at once and without OpenAI: the script's stop line, then `end` as `opt_out`.
-- **Kept as turns:** her greeting; each lead turn and key; each of her replies as said, with `latency_ms` - from the lead's words reaching us to her first sentence going out; a sentence replaced, an action refused, a stop heard (`system`); and her action as its `handoffData` (`action`). Never in the logs: each reply logs only its times, how many sentences, whether one was replaced, and the action (`ai_relay.reply`).
-- **Not yet:** silence, the 3-minute limit, and OpenAI slow or failing - A12. Until then a failed reply is logged (`ai_relay.model_failed`) and nothing is said.
+- **Kept as turns:** her greeting; each lead turn and key; each of her replies as said, with `latency_ms` - from the lead's words reaching us to her first sentence going out; a sentence replaced, an action refused, a stop heard (`system`); and her action as its `handoffData` (`action`). Since A12 also the relay's own lines, as hers: "One moment...", "Hello, are you still there?" and the goodbye when the relay ends the call. Never in the logs: each reply logs only its times, how many sentences, whether one was replaced, whether the filler was said, and the action (`ai_relay.reply`).
+- **Limits and failures** - silence, the three minutes, OpenAI slow or failing, the socket or the relay failing: section 6, "As built (A12)".
 
 **How fast, measured** (2026-11-12, the real API on a scratch database, a fake Twilio client, the real OpenAI, from a laptop): from the lead's words reaching us to her first sentence going out, 0.66-0.90 s - OpenAI's first word 0.54-0.85 s of it, the first sentence being written whole only 0.03-0.11 s more. A first run the same hour took 1.19-1.75 s, all of it OpenAI's: its speed changes from minute to minute. A stop: 1 ms. On a call Twilio's own part comes on top - about 0.3 s to start her voice, and Deepgram deciding the lead has finished (A02, above).
 
@@ -205,6 +205,8 @@ Seri ends every call by choosing exactly one. She says her last line herself, in
 | `opt_out` | Asks not to be called | The script's stop line ("Okay, we will not call you again...") | Blocks the number (T13), hangs up | `opted_out` |
 | `end_call` | Not interested, wrong person, an emergency, done | Goodbye | Hangs up. The reason she gave is kept with the action | `not_interested` |
 
+The relay itself also ends a call with `end_call`, with a reason she is never offered: `no_response` - the lead silent after "are you still there?" - and `time_limit` - the three minutes and the 20 seconds after them run out (section 6, A12).
+
 The relay sends `end` straight after Seri's last line: Twilio says the whole line first and only then ends the session, so her last line is never cut off (A02, section 1).
 
 Seri has no action for payment, personal details (date of birth, address, card) or prescriptions, so she cannot do them.
@@ -213,7 +215,7 @@ Seri has no action for payment, personal details (date of birth, address, card) 
 
 **Two rules the answer test set led to (A09):** the lead always hears a last line - when Seri takes an action with no words, the relay says the action's own in her voice, and an opt-out always ends with the stop line (`lineToAdd`); and an action in a reply that ended on a question is held back - the lead answers first (`toHandoff`'s `awaitLead`).
 
-**Not an action Seri picks:** `fallback`, which the relay ends with when she fails (section 6). `/auto/ai-after` then asks the script's Q1 question - not its greeting, since Seri has introduced herself - and the call goes on as today.
+**Not an action Seri picks:** `fallback`, which the relay ends with when she fails (section 6) - with why: `model_failed`, `model_slow`, `socket_error` or `relay_failed` (A12). `/auto/ai-after` then asks the script's Q1 question - not its greeting, since Seri has introduced herself - and the call goes on as today.
 
 ---
 
@@ -290,14 +292,32 @@ Decided by Jeel, 2026-11-11.
 
 | Situation | What happens |
 |---|---|
-| Conversation reaches **3 minutes** | Seri wraps up: offers a person or the link once, then ends. No limit on the number of questions |
-| Lead silent **6 seconds** after Seri stops talking (`agentSpeaking` off) | "Hello, are you still there?" Silent again: "Sorry I missed you, have a great day," and the call ends |
-| OpenAI gives no first word in **4 seconds** | Seri says a filler ("One moment..."); still nothing, the call **switches to today's script** |
-| OpenAI errors, or the WebSocket or ConversationRelay fails mid-call | The call **switches to today's script** (Twilio posts `SessionStatus=failed` to `/auto/ai-after`) |
+| Conversation reaches **3 minutes** | Seri wraps up: offers a person or the link once, then ends. No limit on the number of questions. *As built (A12):* a note to her with her next reply; 20 seconds after the three minutes, the relay ends the call itself - `end_call`, `time_limit` |
+| Lead silent **6 seconds** after Seri stops talking (`agentSpeaking` off) | "Hello, are you still there?" Silent again: "Sorry I missed you, have a great day," and the call ends. *As built (A12):* `end_call` with the reason `no_response` |
+| OpenAI gives no first word in **4 seconds** | Seri says a filler ("One moment..."); still nothing, the call **switches to today's script**. *As built (A12):* 4 seconds after the filler, `fallback` with `model_slow` |
+| OpenAI errors, or the WebSocket or ConversationRelay fails mid-call | The call **switches to today's script** (Twilio posts `SessionStatus=failed` to `/auto/ai-after`). *As built (A12):* an OpenAI error, our socket failing or the relay failing ends the session with `fallback` - `model_failed`, `socket_error`, `relay_failed` - so Twilio posts `ended` with it, or `failed` when the socket is gone; either way the script takes the call (A14) |
 | **OpenAI down before calling** | **The robot places no calls.** Before each look for leads to call, it checks OpenAI (a tiny request, at most once a minute). Down: nobody is called, it checks again next minute. Each lead gets one robot call, so a lead is never spent on a broken AI |
 | 3 AI calls fall back in a row (`calls.ai_ended_with = 'fallback'`) | The robot pauses, like the Twilio pause (T28, `REFUSED_PAUSE_MINUTES`), then checks OpenAI again |
 | A sentence holds a price, medical advice or a made-up discount | **Every sentence is checked before Seri says it.** A price (`$`, "dollars"), advice words ("you should take", "dosage"), or any discount but "up to 25%" is replaced with "That's a great question for one of our specialists. Would you like me to connect you?" Every approved answer and playbook line passes the check unchanged (A05). *As built:* `backend/src/ai/safety.ts`, `checkSentence` - four reasons, `price`, `advice`, `diagnosis`, `discount` (made-up urgency such as "today only" counts as one); the words around a risky word decide, so "I can take you off our list" and "an overdose" pass; what it found is kept with the call's turns, never logged. All 116 lines of the knowledge files pass, sentence by sentence |
 | Someone else connects to the WebSocket | The connection request must carry Twilio's signature for our relay URL, checked like every Twilio webhook. The call is named by a `<Parameter>`, which arrives in `setup`. Unsigned, or signed for another URL: closed. *As built (A10):* refused before any WebSocket opens, with a plain 403; and `setup` must name an automated call whose Twilio call is the one connecting, not yet Seri's and not over - section 9 |
+
+### As built (A12, 2026-11-12)
+
+`backend/src/ai/conversation.ts`, beside her replies; the relay passes Twilio's speaker events to it, and starts its clocks once `setup` has started her on the call.
+
+- **The clocks.** Counted from `setup`, which is when Twilio starts her greeting: the three minutes, and the silence. Each on `timers` - the real clock, or one moved by hand in the tests (`ai/fake-clock.ts`) - and all stopped the moment her part ends or the socket closes.
+- **Silence** needs Twilio's speaker events (`events="speaker-events"`, which A13 sets). It counts only while nobody is talking and she is not answering: from `agentSpeaking` off, from her reply's end if Twilio's off came first, from `clientSpeaking` off when no words followed (a noise), and again from a key. 6 seconds: "Hello, are you still there?" - said in her voice, kept as hers and put in what OpenAI reads, so she knows she asked. Then counted again from the end of that line; 6 more seconds: "Sorry I missed you, have a great day." and `end_call` with `no_response`. Anything from the lead - words or a key - puts it right: two silences in a row are needed again.
+- **Three minutes.** A note to her goes with her next reply, once (`WRAP_UP_NOTE`): answer briefly, then offer once - a person if someone is free or coming, a call back if nobody is, or the link - and ask which they would like; end the call when they answer. Not on its own at the three-minute mark: at that moment the lead may be about to answer her. 20 seconds after the three minutes, if she has not ended the call: a reply she has started saying is said whole - it may be her wrap-up, with its action; OpenAI has 10 seconds more at most to finish writing it - and then, as for one OpenAI has not started, "Thanks so much for your time today. Have a great day!" and `end_call` with `time_limit`. The lead saying more by then gets the goodbye, not another reply.
+- **OpenAI slow.** Counted from the start of each reply - a refused action's second try has its own. 4 seconds with no first word: "One moment..." - sent as the start of her reply, so what she says next follows it, and kept as her turn with how long it took; it is not put in what OpenAI reads, or she would start saying it herself. 4 more seconds: the request is stopped, her utterance closed, and `fallback` with `model_slow`.
+- **Failing.** OpenAI erroring (`model_failed`) - before or during her reply; what she had said is closed first. Our socket failing (`socket_error`): her part is recorded as a fallback, though Twilio no longer hears the `end` - it posts `failed`. The relay itself failing once she is on the call (`relay_failed`): the session ends with the fallback rather than a dropped socket. Before `setup` has started her there is nothing to end: the socket is closed as before, and Twilio posts `failed`.
+- **What is recorded.** Every fallback is `calls.ai_ended_with = 'fallback'` and `ai_agent.ended` with `why` - what the robot counts (A17). A session that closes with no end of ours - the lead hanging up, or Twilio's side failing - is not recorded here: the action URL has `SessionStatus` and records it (A14, A18). `ai_relay.closed` says whether her part had ended (`ended`).
+- **The logs** never quote OpenAI's error: it can hold part of the key ("Incorrect API key provided: sk-abcd*****wxyz"). Only its status and code - `OpenAI 401 invalid_api_key`, `OpenAI timed out` (`plainError`, `ai/openai.ts`).
+
+**Seen on the real API** (2026-11-12, a scratch database, a fake Twilio client that says each line as Twilio would): "Hello, are you still there?" 6.00 s after `agentSpeaking` off, the goodbye and `end` 6.00 s after that; OpenAI pointed at a server that never answers - "One moment..." at 4.00 s, the fallback at 8.01 s; OpenAI refusing a key - the fallback at 0.56 s. Each recorded on the call and in the activity log as above.
+
+**The wrap-up note on the real model** (`gpt-4.1-mini`, three cases three times each, at the three-minute mark of a conversation): with the first wording ("offer once ... then end the call") she once texted the link with nobody there without asking, and never offered a call back. With the note as built she asked which they would like in all nine, and took no action before an answer. Twice in nine she offered a person with nobody there, as on A11's run - the transfer is refused if they say yes, and she offers a call back; and she sometimes says "someone is free now" in those words. Both for A21 to listen for.
+
+**Not covered:** OpenAI stopping partway through a reply, after its first word - the 15-second request timeout does not cover a stream that stalls; such a call ends with the time limit, three and a half minutes in at the latest. A reply with neither words nor an action (`empty_reply`) says nothing; the silence then asks "are you still there?".
 
 ---
 
@@ -350,11 +370,11 @@ Following `docs/AUDIT.md`: nothing is lost, add-only.
 |---|---|
 | `calls.ai_started_at` | When Seri took the call. Null for a script call |
 | `calls.ai_knowledge_version` | Which knowledge version she used |
-| `calls.ai_ended_with` | How her part ended: one of the five actions, or `fallback`. Null when the lead hung up first. A fallback call then gets the script's own `script_result`, so this is the only record that Seri failed (A17 counts it) |
+| `calls.ai_ended_with` | How her part ended: one of the five actions, or `fallback`. Null when the lead hung up first. A fallback call then gets the script's own `script_result`, so this is the only record that Seri failed (A17 counts it). *As built:* written by the relay when she acts (A11) and for every fallback it decides (A12); Twilio's own failure, by the action URL (A14) |
 | `calls.script_result` | Adds `callback_booked` |
 | `call_ai_turns` (new) | One row per turn: call, who (lead, Seri, action, system), the text, when, how long Seri took to start |
 | `callbacks` | Seri's bookings: no agent until taken, reason `ai_booked` |
-| `activity_log` | `ai_agent.switched` (built, A01); `ai_agent.started` (built, A10), `ai_agent.ended` with the action (built, A11) |
+| `activity_log` | `ai_agent.switched` (built, A01); `ai_agent.started` (built, A10), `ai_agent.ended` with the action (built, A11), and `why` for a fallback (A12) |
 
 The words are never written to the logs, the same rule as `auto_call.answer` today.
 

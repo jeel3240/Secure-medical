@@ -13,6 +13,10 @@
 - Three Seri calls in a row ending in `fallback` (`calls.ai_ended_with`, A08): pause like `REFUSED_PAUSE_MINUTES` (T28), then check OpenAI again.
 - With Seri off, nothing here runs. The worker reads the same switch (`readAiAgentOn`, A01) and needs `OPENAI_API_KEY` too - passed to it since A01.
 
+## From A12
+
+- A fallback is `calls.ai_ended_with = 'fallback'`, written by the relay with why in `ai_agent.ended` - `model_failed`, `model_slow`, `socket_error`, `relay_failed` - and, for Twilio's own failures, by `/auto/ai-after` (A14). The relay's `end_call` for silence or the time limit is not a fallback, and does not count.
+
 ## Done when
 
 - [ ] Worker test: OpenAI down places nothing; back up places again; three fallbacks pause.

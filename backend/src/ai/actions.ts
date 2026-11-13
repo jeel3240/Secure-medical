@@ -28,6 +28,14 @@ export type ActionName = (typeof ACTIONS)[number];
 export const END_REASONS = ['not_interested', 'wrong_person', 'emergency', 'other'] as const;
 export type EndReason = (typeof END_REASONS)[number];
 
+/**
+ * Why the relay itself ended the call with `end_call` (A12): the lead stayed
+ * silent after "are you still there?", or the call ran past its time. Never
+ * offered to OpenAI - only the relay ends a call for these.
+ */
+export const RELAY_END_REASONS = ['no_response', 'time_limit'] as const;
+export type RelayEndReason = (typeof RELAY_END_REASONS)[number];
+
 /** A call back's reason, as she gives it: one short line for the agent who takes it. */
 const MAX_REASON_LENGTH = 200;
 
@@ -44,7 +52,7 @@ export type Handoff =
     }
   | { action: 'send_link' }
   | { action: 'opt_out' }
-  | { action: 'end_call'; reason: EndReason }
+  | { action: 'end_call'; reason: EndReason | RelayEndReason }
   | { action: 'fallback'; why: string };
 
 // ---------------------------------------------------------------------------
@@ -249,17 +257,28 @@ export function lastLine(handoff: Handoff, { stopLine, now }: { stopLine: string
     case 'opt_out':
       return stopLine;
     case 'end_call':
-      return handoff.reason === 'wrong_person'
-        ? 'Sorry about that, have a great day.'
-        : handoff.reason === 'emergency'
-          ? 'If this is a medical emergency, please hang up and call 911.'
-          : 'Thanks for your time. Have a great day!';
+      switch (handoff.reason) {
+        case 'wrong_person':
+          return 'Sorry about that, have a great day.';
+        case 'emergency':
+          return 'If this is a medical emergency, please hang up and call 911.';
+        case 'no_response':
+          return 'Sorry I missed you, have a great day.';
+        case 'time_limit':
+          return 'Thanks so much for your time today. Have a great day!';
+        default:
+          return 'Thanks for your time. Have a great day!';
+      }
     case 'fallback':
       return null;
   }
 }
 
-/** The relay's own ending, when Seri failed: OpenAI, the socket, or the relay (A12). */
+/**
+ * The relay's own ending, when Seri failed (A12) - `why`: `model_failed`
+ * (OpenAI errored), `model_slow` (no first word in 8 seconds), `socket_error`,
+ * `relay_failed`. `/auto/ai-after` then goes on with the script (A14).
+ */
 export function fallbackHandoff(why: string): Handoff {
   return { action: 'fallback', why };
 }
@@ -294,8 +313,8 @@ export function fromHandoff(raw: unknown): Handoff {
     case 'opt_out':
       return { action: h.action };
     case 'end_call':
-      return (END_REASONS as readonly unknown[]).includes(h.reason)
-        ? { action: 'end_call', reason: h.reason as EndReason }
+      return ([...END_REASONS, ...RELAY_END_REASONS] as readonly unknown[]).includes(h.reason)
+        ? { action: 'end_call', reason: h.reason as EndReason | RelayEndReason }
         : fallbackHandoff('unreadable_handoff');
     case 'book_callback': {
       const at = typeof h.at === 'string' && /^\d{4}-\d\d-\d\dT/.test(h.at) ? new Date(h.at) : null;

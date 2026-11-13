@@ -151,6 +151,7 @@ export async function whoIsThere(q: Db, callId: number): Promise<WhoIsThere> {
 /**
  * How her part of the call ended - `ai_ended_with` - and `ai_agent.ended`,
  * together. Once: false when it was already recorded, or she never started.
+ * A `fallback` is written here too, with why (A12): the robot counts them (A17).
  */
 export async function endAiCall(pool: Pool, callId: number, handoff: Handoff): Promise<boolean> {
   const client = await pool.connect();
@@ -170,7 +171,12 @@ export async function endAiCall(pool: Pool, callId: number, handoff: Handoff): P
       action: 'ai_agent.ended',
       actorId: null,
       leadId: rows[0].leadId,
-      detail: { callId, action: handoff.action, ...(handoff.action === 'end_call' ? { reason: handoff.reason } : {}) },
+      detail: {
+        callId,
+        action: handoff.action,
+        ...(handoff.action === 'end_call' ? { reason: handoff.reason } : {}),
+        ...(handoff.action === 'fallback' ? { why: handoff.why } : {}),
+      },
     });
     await client.query('COMMIT');
     return true;

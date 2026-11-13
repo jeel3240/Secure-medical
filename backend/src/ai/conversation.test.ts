@@ -1,14 +1,17 @@
 /**
- * One call's conversation with Seri - A11. A fake OpenAI that answers as told,
- * and the messages the relay would send Twilio: sentences as they are whole,
- * the sentence check, being talked over, each action, and the stop check.
+ * One call's conversation with Seri - A11, A12. A fake OpenAI that answers as
+ * told, a clock moved by hand, and the messages the relay would send Twilio:
+ * sentences as they are whole, the sentence check, being talked over, each
+ * action, the stop check; and the limits - silence, three minutes, OpenAI
+ * slow, failing or never answering.
  */
 import type { ChatCompletionMessageParam } from 'openai/resources/chat/completions';
 import { DEFAULT_CALL_HOURS } from '../core/auto-dial';
 import { ANTIBIOTICS_CALL } from '../core/call-script-fixtures';
 import * as logModule from '../lib/log';
 import type { Handoff } from './actions';
-import { Conversation, leadMessage } from './conversation';
+import { Conversation, FILLER_LINE, leadMessage, LIMITS, STILL_THERE_LINE, WRAP_UP_NOTE } from './conversation';
+import { FakeClock } from './fake-clock';
 import type { WhoIsThere } from './instructions';
 import type { ModelEvent, SeriModel } from './openai';
 import type { Turn } from './relay-store';
@@ -60,6 +63,7 @@ let sent: Record<string, unknown>[];
 let kept: Omit<Turn, 'callId'>[];
 let ended: Handoff[];
 let logged: { event: string; fields: unknown }[];
+let clock: FakeClock;
 let conversation: Conversation;
 
 beforeEach(() => {
@@ -69,6 +73,7 @@ beforeEach(() => {
   kept = [];
   ended = [];
   logged = [];
+  clock = new FakeClock();
   for (const level of ['info', 'warn', 'error'] as const) {
     jest.spyOn(logModule.log, level).mockImplementation((event: string, fields?: unknown) => {
       logged.push({ event, fields });
@@ -90,6 +95,7 @@ beforeEach(() => {
       ended: (handoff) => ended.push(handoff),
       send: (message) => sent.push(JSON.parse(message)),
       now: () => NOW,
+      timers: clock,
     }
   );
 });
@@ -203,15 +209,8 @@ describe('her reply', () => {
       replaced: false,
       action: null,
       stopped: null,
+      filler: false,
     });
-  });
-
-  it('OpenAI failing is logged, and nothing is said (what the call does next is A12\'s)', async () => {
-    model.fail = new Error('openai down');
-    conversation.heard('Hello?');
-    await until(() => logged.some((l) => l.event === 'ai_relay.model_failed'), 'the failure');
-    expect(sent).toEqual([]);
-    expect(conversation.isOver).toBe(false);
   });
 
   it('a reply with nothing in it is logged', async () => {
@@ -437,5 +436,356 @@ describe('the stop check, before OpenAI', () => {
     conversation.heard('Do I need to stop my other medicine?');
     await until(() => model.asked.length === 1, 'the request');
     expect(ended).toEqual([]);
+  });
+});
+
+describe('limits and failures (A12)', () => {
+  /** The call has started and Twilio has said the greeting. */
+  const greeted = () => {
+    conversation.start();
+    conversation.speaking('agent', true);
+    conversation.speaking('agent', false);
+  };
+  const stillThere = () => tokens().filter(([t]) => t === STILL_THERE_LINE).length;
+  /** Three minutes in, the lead having talked all the while, so no silence was counted. */
+  const threeMinutesIn = (extraMs = 0) => {
+    conversation.start();
+    conversation.speaking('client', true);
+    clock.advance(LIMITS.callMs + extraMs);
+    conversation.speaking('client', false);
+  };
+  const GOODBYE = 'Thanks so much for your time today. Have a great day!';
+
+  describe('silence', () => {
+    it('6 seconds after she stops talking: "are you still there?"; silent again, a goodbye and the end', () => {
+      greeted();
+      clock.advance(5_999);
+      expect(sent).toEqual([]);
+      clock.advance(1);
+      expect(sent).toEqual([{ type: 'text', token: STILL_THERE_LINE, last: true }]);
+      expect(kept).toEqual([{ who: 'seri', text: STILL_THERE_LINE, latencyMs: null }]);
+      expect(conversation.messages.at(-1)).toEqual({ role: 'assistant', content: STILL_THERE_LINE });
+
+      // Nothing counts while Twilio says it.
+      conversation.speaking('agent', true);
+      clock.advance(20_000);
+      expect(ends()).toEqual([]);
+      conversation.speaking('agent', false);
+      clock.advance(6_000);
+
+      expect(sent.slice(1)).toEqual([
+        { type: 'text', token: 'Sorry I missed you, have a great day.', last: true },
+        { type: 'end', handoffData: '{"action":"end_call","reason":"no_response"}' },
+      ]);
+      expect(ended).toEqual([{ action: 'end_call', reason: 'no_response' }]);
+      expect(kept.at(-1)).toEqual({ who: 'action', text: '{"action":"end_call","reason":"no_response"}' });
+      expect(model.asked).toEqual([]);
+      expect(conversation.isOver).toBe(true);
+      expect(clock.waiting).toBe(0);
+      expect(logged.filter((l) => l.event === 'ai_relay.ended').map((l) => l.fields)).toEqual([
+        { callId: 7, action: 'end_call', reason: 'no_response' },
+      ]);
+    });
+
+    it('counted from when she stops talking, and not while the lead talks', () => {
+      conversation.start();
+      conversation.speaking('agent', true);
+      clock.advance(20_000);
+      conversation.speaking('agent', false);
+      clock.advance(5_000);
+      conversation.speaking('client', true);
+      clock.advance(20_000);
+      expect(sent).toEqual([]);
+      // A noise, and no words: counted from when it stopped.
+      conversation.speaking('client', false);
+      clock.advance(5_999);
+      expect(sent).toEqual([]);
+      clock.advance(1);
+      expect(stillThere()).toBe(1);
+    });
+
+    it('the lead answering puts it right: two silences in a row are needed again', async () => {
+      greeted();
+      clock.advance(6_000);
+      conversation.heard('Yes, sorry');
+      await until(() => kept.length === 2, 'her reply');
+      expect(model.asked[0].slice(-2)).toEqual([
+        { role: 'assistant', content: STILL_THERE_LINE },
+        { role: 'user', content: '[Who is there: someone free] Yes, sorry' },
+      ]);
+      conversation.speaking('agent', true);
+      conversation.speaking('agent', false);
+      clock.advance(6_000);
+      expect(stillThere()).toBe(2);
+      expect(ended).toEqual([]);
+    });
+
+    it('a key says they are there too', () => {
+      greeted();
+      clock.advance(6_000);
+      conversation.pressed('1');
+      clock.advance(6_000);
+      expect(stillThere()).toBe(2);
+      expect(ended).toEqual([]);
+    });
+
+    it('not counted while she is answering', async () => {
+      const g = gate();
+      model.replies.push({ events: [text('Sure. '), text('Anything else?')], waitBefore: (i) => (i === 1 ? g.wait() : Promise.resolve()) });
+      greeted();
+      conversation.heard('Hello?');
+      await until(() => tokens().length === 1, 'her first sentence');
+      clock.advance(30_000);
+      expect(tokens()).toEqual([['Sure. ', false]]);
+      g.open();
+      await until(() => kept.length === 1, 'her turn');
+      clock.advance(6_000);
+      expect(stillThere()).toBe(1);
+    });
+
+    it('not before the call has started', () => {
+      clock.advance(10 * 60_000);
+      expect(sent).toEqual([]);
+      expect(clock.waiting).toBe(0);
+    });
+  });
+
+  describe('three minutes', () => {
+    it('a note to wrap up goes with her next reply, once', async () => {
+      threeMinutesIn();
+      expect(model.asked).toEqual([]);
+      conversation.heard('Tell me more');
+      await until(() => kept.length === 1, 'her reply');
+      expect(model.asked[0].slice(-2)).toEqual([
+        { role: 'user', content: '[Who is there: someone free] Tell me more' },
+        { role: 'system', content: WRAP_UP_NOTE },
+      ]);
+      conversation.heard('Okay');
+      await until(() => model.asked.length === 2, 'the second request');
+      expect(model.asked[1].filter((m) => m.content === WRAP_UP_NOTE)).toHaveLength(1);
+      expect(logged.filter((l) => l.event === 'ai_relay.wrap_up')).toHaveLength(1);
+    });
+
+    it('her action inside the 20 seconds ends the call as she chose', async () => {
+      threeMinutesIn();
+      model.replies.push([text("I'll text you the link now. Have a great day!"), tool('send_link')]);
+      conversation.heard('I need to go');
+      await until(() => ends().length === 1, 'the end');
+      expect(ended).toEqual([{ action: 'send_link' }]);
+      clock.advance(LIMITS.wrapUpMs);
+      expect(ends()).toHaveLength(1);
+      expect(clock.waiting).toBe(0);
+    });
+
+    it('20 seconds on without an ending: a goodbye, and the end', () => {
+      conversation.start();
+      conversation.speaking('client', true);
+      clock.advance(LIMITS.callMs + LIMITS.wrapUpMs - 1);
+      expect(sent).toEqual([]);
+      clock.advance(1);
+      expect(sent).toEqual([
+        { type: 'text', token: GOODBYE, last: true },
+        { type: 'end', handoffData: '{"action":"end_call","reason":"time_limit"}' },
+      ]);
+      expect(ended).toEqual([{ action: 'end_call', reason: 'time_limit' }]);
+    });
+
+    it('the 20 seconds run out while she is saying a reply: it is said whole, then the goodbye', async () => {
+      const g = gate();
+      threeMinutesIn();
+      model.replies.push({ events: [text('Sure. '), text('Would you like the link?')], waitBefore: (i) => (i === 1 ? g.wait() : Promise.resolve()) });
+      conversation.heard('Hmm');
+      await until(() => tokens().length === 1, 'her first sentence');
+      clock.advance(LIMITS.wrapUpMs);
+      expect(ends()).toEqual([]);
+      g.open();
+      await until(() => ends().length === 1, 'the end');
+      expect(tokens()).toEqual([
+        ['Sure. ', false],
+        ['Would you like the link? ', false],
+        ['', true],
+        [GOODBYE, true],
+      ]);
+      expect(ended).toEqual([{ action: 'end_call', reason: 'time_limit' }]);
+    });
+
+    it('... but a reply OpenAI never finishes is given 10 seconds, then the goodbye', async () => {
+      const g = gate();
+      threeMinutesIn();
+      model.replies.push({ events: [text('Sure. '), text('Would you like the link?')], waitBefore: (i) => (i === 1 ? g.wait() : Promise.resolve()) });
+      conversation.heard('Hmm');
+      await until(() => tokens().length === 1, 'her first sentence');
+      clock.advance(LIMITS.wrapUpMs + LIMITS.lastReplyMs - 1);
+      expect(ends()).toEqual([]);
+      clock.advance(1);
+      expect(tokens()).toEqual([
+        ['Sure. ', false],
+        ['', true],
+        [GOODBYE, true],
+      ]);
+      expect(ended).toEqual([{ action: 'end_call', reason: 'time_limit' }]);
+      expect(clock.waiting).toBe(0);
+    });
+
+    it('... or the lead says more by then: the goodbye, not another reply', async () => {
+      const g = gate();
+      threeMinutesIn();
+      model.replies.push({ events: [text('Sure. '), text('Would you like the link?')], waitBefore: (i) => (i === 1 ? g.wait() : Promise.resolve()) });
+      conversation.heard('Hmm');
+      await until(() => tokens().length === 1, 'her first sentence');
+      clock.advance(LIMITS.wrapUpMs);
+      conversation.heard('Wait, one more question');
+      await settle();
+      expect(model.asked).toHaveLength(1);
+      expect(tokens()).toEqual([
+        ['Sure. ', false],
+        ['', true],
+        [GOODBYE, true],
+      ]);
+      expect(ended).toEqual([{ action: 'end_call', reason: 'time_limit' }]);
+    });
+
+    it('... while OpenAI has not answered yet: ended at once', async () => {
+      const g = gate();
+      threeMinutesIn(LIMITS.wrapUpMs - 2_000);
+      model.replies.push({ events: [text('Sure.')], waitBefore: () => g.wait() });
+      conversation.heard('Hmm');
+      await until(() => model.asked.length === 1, 'the request');
+      clock.advance(2_000);
+      expect(sent).toEqual([
+        { type: 'text', token: GOODBYE, last: true },
+        { type: 'end', handoffData: '{"action":"end_call","reason":"time_limit"}' },
+      ]);
+      g.open();
+      await settle();
+      expect(sent).toHaveLength(2);
+    });
+  });
+
+  describe('OpenAI slow', () => {
+    it('no first word in 4 seconds: "One moment...", and her reply follows it', async () => {
+      const g = gate();
+      model.replies.push({ events: [text('Sure, '), text('happy to help.')], waitBefore: (i) => (i === 0 ? g.wait() : Promise.resolve()) });
+      conversation.heard('Hello?');
+      await until(() => model.asked.length === 1, 'the request');
+      clock.advance(LIMITS.firstWordMs - 1);
+      expect(sent).toEqual([]);
+      clock.advance(1);
+      expect(tokens()).toEqual([[`${FILLER_LINE} `, false]]);
+      expect(kept).toEqual([{ who: 'seri', text: FILLER_LINE, latencyMs: expect.any(Number) }]);
+
+      g.open();
+      await until(() => kept.length === 2, 'her reply');
+      expect(tokens()).toEqual([
+        [`${FILLER_LINE} `, false],
+        ['Sure, happy to help. ', false],
+        ['', true],
+      ]);
+      expect(kept[1]).toEqual({ who: 'seri', text: 'Sure, happy to help.', latencyMs: expect.any(Number) });
+      // Not in what OpenAI reads: she would start saying it herself.
+      expect(conversation.messages.at(-1)).toEqual({ role: 'assistant', content: 'Sure, happy to help.' });
+      expect(replyEvents()[0]).toMatchObject({ filler: true, sentences: 1 });
+      expect(logged.filter((l) => l.event === 'ai_relay.filler')).toEqual([{ event: 'ai_relay.filler', fields: { callId: 7, waitedMs: expect.any(Number) } }]);
+      clock.advance(60_000);
+      expect(ends()).toEqual([]);
+    });
+
+    it('still nothing 4 seconds later: the fallback - the script takes the call', async () => {
+      const g = gate();
+      model.replies.push({ events: [text('Sure.')], waitBefore: () => g.wait() });
+      conversation.heard('Hello?');
+      await until(() => model.asked.length === 1, 'the request');
+      clock.advance(LIMITS.firstWordMs + LIMITS.afterFillerMs - 1);
+      expect(ends()).toEqual([]);
+      clock.advance(1);
+      expect(sent).toEqual([
+        { type: 'text', token: `${FILLER_LINE} `, last: false },
+        { type: 'text', token: '', last: true },
+        { type: 'end', handoffData: '{"action":"fallback","why":"model_slow"}' },
+      ]);
+      expect(ended).toEqual([{ action: 'fallback', why: 'model_slow' }]);
+      expect(conversation.isOver).toBe(true);
+      expect(logged.some((l) => l.event === 'ai_relay.model_slow')).toBe(true);
+      g.open();
+      await settle();
+      expect(sent).toHaveLength(3);
+    });
+
+    it('the first word at 3.9 seconds: no filler', async () => {
+      const g = gate();
+      model.replies.push({ events: [text('Sure.')], waitBefore: (i) => (i === 0 ? g.wait() : Promise.resolve()) });
+      conversation.heard('Hello?');
+      await until(() => model.asked.length === 1, 'the request');
+      clock.advance(3_900);
+      g.open();
+      await until(() => kept.length === 1, 'her reply');
+      clock.advance(60_000);
+      expect(tokens()).toEqual([
+        ['Sure. ', false],
+        ['', true],
+      ]);
+    });
+
+    it('a refused action\'s second try is timed on its own', async () => {
+      who = 'nobody';
+      const g = gate();
+      model.replies.push([tool('transfer_to_agent')], { events: [text('Everyone is busy.')], waitBefore: () => g.wait() });
+      conversation.heard('Put me through');
+      await until(() => model.asked.length === 2, 'the second request');
+      clock.advance(LIMITS.firstWordMs);
+      expect(tokens()).toEqual([[`${FILLER_LINE} `, false]]);
+      g.open();
+      await until(() => tokens().length === 3, 'her reply');
+      expect(ends()).toEqual([]);
+    });
+  });
+
+  describe('failing', () => {
+    it('OpenAI failing: the session ends with the fallback', async () => {
+      model.fail = new Error('openai down');
+      conversation.heard('Hello?');
+      await until(() => conversation.isOver, 'the end');
+      expect(sent).toEqual([{ type: 'end', handoffData: '{"action":"fallback","why":"model_failed"}' }]);
+      expect(ended).toEqual([{ action: 'fallback', why: 'model_failed' }]);
+      expect(kept).toEqual([{ who: 'action', text: '{"action":"fallback","why":"model_failed"}' }]);
+      expect(logged.filter((l) => l.event === 'ai_relay.model_failed')).toHaveLength(1);
+    });
+
+    it('failing mid-reply: what she said is closed first, then the fallback', async () => {
+      model.replies.push({ events: [text('Sure. '), text('And more.')], waitBefore: (i) => (i === 1 ? Promise.reject(new Error('stream broke')) : Promise.resolve()) });
+      conversation.heard('Hello?');
+      await until(() => conversation.isOver, 'the end');
+      expect(sent).toEqual([
+        { type: 'text', token: 'Sure. ', last: false },
+        { type: 'text', token: '', last: true },
+        { type: 'end', handoffData: '{"action":"fallback","why":"model_failed"}' },
+      ]);
+      expect(kept.map((t) => t.who)).toEqual(['seri', 'action']);
+    });
+
+    it('the socket or the relay failing: the fallback, once, and every clock stopped', () => {
+      greeted();
+      conversation.fail('socket_error');
+      conversation.fail('relay_failed');
+      expect(sent).toEqual([{ type: 'end', handoffData: '{"action":"fallback","why":"socket_error"}' }]);
+      expect(ended).toEqual([{ action: 'fallback', why: 'socket_error' }]);
+      expect(clock.waiting).toBe(0);
+    });
+
+    it('closing stops every clock', async () => {
+      const g = gate();
+      model.replies.push({ events: [text('Sure.')], waitBefore: () => g.wait() });
+      greeted();
+      conversation.heard('Hello?');
+      await until(() => model.asked.length === 1, 'the request');
+      conversation.close();
+      expect(clock.waiting).toBe(0);
+      clock.advance(10 * 60_000);
+      expect(sent).toEqual([]);
+    });
+  });
+
+  it('every line the relay says itself passes the sentence check', () => {
+    for (const line of [STILL_THERE_LINE, FILLER_LINE]) expect(checkSentence(line).reason).toBeNull();
   });
 });
