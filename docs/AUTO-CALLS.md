@@ -608,7 +608,7 @@ only with a transfer ("The transfer").
 **The call's webhooks** - each names the call's row, `?call=<id>`, in the
 address Twilio signs, so the row cannot be swapped: a request for row 43
 signed as row 42 is refused. A webhook whose row is not an automated call, or
-is linked to another Twilio call, is not acted on. All eight answer 404 while
+is linked to another Twilio call, is not acted on. All nine answer 404 while
 automated calls are off, and 403 unsigned (`TWILIO.md`, "Why the webhooks can
 be trusted").
 
@@ -622,6 +622,7 @@ be trusted").
 | `POST /api/webhooks/twilio/auto/after` | The transfer's ringing is over: taken, nothing more; the lead's own agent did not take it, everyone else free rung (T15b); not taken, on hold while someone is on a call or writing its note (T16), else `transfer_missed` and the busy line (T15a); whoever let it ring out switched off, after Twilio has its answer (T15c). A ring from hold not taken: its offer ended, back on hold (T17). The address names the step and who was rung - `holder`, `rung`, or `offer` | - |
 | `POST /api/webhooks/twilio/auto/hold` | A lead waiting on hold: their place, then a track of hold music, then back here; nobody coming for them any more, or the safety stop, the busy line (T16, T17, "The hold line"). Asked when a track ends, and by the hold watcher (`via=watcher`). While the lead is ringing someone from hold, the same ring again, nothing changed | - |
 | `POST /api/webhooks/twilio/auto/offer` | A lead on hold ringing the person who came free: the server cuts the music and sends the call here - when someone's browser says it can take a call, or they switch on (`api/calls.ts`), or on the hold watcher's look; that browser alone rings, for `auto_call_offer_ring_seconds` (20), as a transfer of the lead's yes (T17, "The hold line"). The offer gone, back on hold | - |
+| `POST /api/webhooks/twilio/auto/ai-after` | Only on a call Seri took (Phase 7): her part is over, and her action is carried out with this doc's code - the transfer, the link, a stop's block, a goodbye's result - or the script takes the call from its first question when she failed. `AI-AGENT.md` section 3, "As built (A14)" | - |
 
 **Trying it locally** - `npm run dev:auto-call -- <phone>` (`scripts/dev-auto-call.ts`)
 calls the local lead with that number. It needs, in the environment the api

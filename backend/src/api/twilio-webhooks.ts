@@ -21,6 +21,7 @@
  *   POST /api/webhooks/twilio/auto/after      the transfer's ringing is over (T15a)
  *   POST /api/webhooks/twilio/auto/hold       a lead waiting on hold: their place, the music (T16)
  *   POST /api/webhooks/twilio/auto/offer      a lead on hold ringing the person who came free (T17)
+ *   POST /api/webhooks/twilio/auto/ai-after   Seri's part is over: her action carried out, or the script (A14)
  *
  * Unauthenticated, like the EZ Texting webhook, but unlike it Twilio signs
  * every request (X-Twilio-Signature), so anything unsigned or mis-signed is
@@ -33,6 +34,8 @@
  */
 
 import express, { type NextFunction, type Request, type Response, Router } from 'express';
+import { fallbackHandoff, fromHandoff, type Handoff } from '../ai/actions';
+import { afterSeri, fallbackAsk, sessionStatus } from '../ai/after';
 import { matchSpokenChoice, type SpokenAnswer } from '../core/answers';
 import {
   firstAsk,
@@ -45,9 +48,9 @@ import {
   planNobodyTook,
   planTransfer,
   rangOut,
-  type AskOrEnd,
   type CallResult,
   type CallScript,
+  type TransferAction,
   type TransferPlan,
 } from '../core/call-script';
 import {
@@ -125,10 +128,15 @@ function autoCalls() {
   const offers = require('../db/hold-offers') as typeof import('../db/hold-offers');
   // eslint-disable-next-line @typescript-eslint/no-require-imports
   const seri = require('../ai/answer') as typeof import('../ai/answer');
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const relayStore = require('../ai/relay-store') as typeof import('../ai/relay-store');
   return {
     seriGreeting: (callId: number, apiKey: string) => seri.seriGreeting(pool, callId, apiKey),
+    recordedHandoff: (callId: number) => relayStore.recordedHandoff(pool, callId),
+    endAiCall: (callId: number, handoff: Handoff) => relayStore.endAiCall(pool, callId, handoff),
     linkAutomatedCall: rows.linkAutomatedCall,
     keepAnswer: rows.keepAnswer,
+    keepCallResult: rows.keepCallResult,
     actOnVerdict: rows.actOnVerdict,
     takenByVerdict: rows.takenByVerdict,
     replaceCall: twilioCalls.replaceCall,
@@ -152,6 +160,12 @@ function autoCalls() {
     readMinConfidence: () => script.readMinConfidence(pool),
     readRingSeconds: () => script.readRingSeconds(pool),
   };
+}
+
+/** A "yes" planned against who is free (`planYes`), with the lead the ring shows. */
+interface PlannedYes {
+  plan: TransferPlan;
+  lead: TransferContext['lead'];
 }
 
 const field = (body: Record<string, unknown>, key: string): string =>
@@ -503,6 +517,61 @@ export function twilioWebhooksRouter(deps: AppDeps): Router {
   const backOnHold = (callId: number, script: CallScript) =>
     holdTwiml(deps.twilio!, { callId, script, say: [], track: null });
 
+  /**
+   * A "yes" to put through, planned against who is free right now - the
+   * lead's own agent alone first, if they are (T15a, T15b); nobody free, on
+   * hold for someone on a call (T16), or the busy line. Shared by an answer on
+   * the script (`/auto/gather`) and Seri's transfer (`/auto/ai-after`, A14).
+   * Its result, if it ends now, is kept by the caller before `yesTwiml`.
+   */
+  const planYes = async (callId: number, script: CallScript, transfer: TransferAction): Promise<PlannedYes> => {
+    const ac = autoCalls();
+    const [context, free, onCall] = await Promise.all([
+      ac.transferContext(callId),
+      ac.freePeople(),
+      ac.someoneOnOrJustOffCall(callId),
+    ]);
+    if (!context) throw new Error('the automated call has no row');
+    return { plan: planTransfer(script, transfer, { free, holder: context.heldBy, onCall }), lead: context.lead };
+  };
+
+  /**
+   * What Twilio is told for a planned "yes", once its result is kept: the
+   * people rung, after the recording notice; on hold - marked so now, with the
+   * notice too, since whoever takes them from hold is recorded (T17); or the
+   * busy line. `step` is what the ring shows the lead said yes to.
+   */
+  const yesTwiml = async (
+    call: { callId: number; callSid: string },
+    script: CallScript,
+    yes: PlannedYes,
+    step: { id: number; heading: string }
+  ): Promise<string> => {
+    const { plan } = yes;
+    if (plan.kind === 'ring') {
+      log.info('auto_call.transfer', { callId: call.callId, rung: plan.agentIds.length, holderFirst: plan.holderFirst });
+      return transferTwiml(deps.twilio!, {
+        callId: call.callId,
+        callSid: call.callSid,
+        script,
+        say: plan.say,
+        notice: true,
+        agentIds: plan.agentIds,
+        holderFirst: plan.holderFirst,
+        lead: yes.lead,
+        step,
+        ringSeconds: await autoCalls().readRingSeconds(),
+      });
+    }
+    if (plan.kind === 'hold') {
+      await autoCalls().holdCall(call.callId);
+      log.info('auto_call.hold', { callId: call.callId });
+      return holdTwiml(deps.twilio!, { callId: call.callId, script, say: plan.say, track: null, notice: true });
+    }
+    log.info('auto_call.transfer_missed', { callId: call.callId, reason: 'nobody_free' });
+    return autoCallTwiml(deps.twilio!, { callId: call.callId, script, action: plan });
+  };
+
   // The lead picked up: connected to Seri when she is switched on (A13,
   // AI-AGENT.md section 2); otherwise a second's quiet, then the first
   // question, listening for the answer. Anything wrong and the call simply
@@ -581,32 +650,11 @@ export function twilioWebhooksRouter(deps: AppDeps): Router {
         const hungUp = field(body, 'CallStatus') === 'completed';
         const outcome = handleAnswer(script, stepId, attempt, match, hungUp);
 
-        // A "yes" to a transfer rings whoever is free right now - the lead's
-        // own agent alone first, if they are (T15a, T15b). Nobody free, it
-        // waits on hold for someone on a call (T16), or hears the busy line.
-        let next: AskOrEnd | null = null;
-        let ring: (Extract<TransferPlan, { kind: 'ring' }> & { lead: TransferContext['lead'] }) | null = null;
-        let hold: string[] | null = null;
-        let result: CallResult | null = outcome.result;
-        if (outcome.next?.kind === 'transfer') {
-          const [context, free, onCall] = await Promise.all([
-            ac.transferContext(call.callId),
-            ac.freePeople(),
-            ac.someoneOnOrJustOffCall(call.callId),
-          ]);
-          if (!context) throw new Error('the automated call has no row');
-          const plan = planTransfer(script, outcome.next, { free, holder: context.heldBy, onCall });
-          if (plan.kind === 'ring') {
-            ring = { ...plan, lead: context.lead };
-          } else if (plan.kind === 'hold') {
-            hold = plan.say;
-          } else {
-            next = plan;
-            result = plan.result;
-          }
-        } else {
-          next = outcome.next;
-        }
+        // A "yes" to a transfer is put through to whoever is free right now -
+        // `planYes`; nobody, and its result is the busy line's.
+        const yes = outcome.next?.kind === 'transfer' ? await planYes(call.callId, script, outcome.next) : null;
+        const next = outcome.next?.kind === 'transfer' ? null : outcome.next;
+        const result: CallResult | null = yes?.plan.kind === 'end' ? yes.plan.result : outcome.result;
 
         const { kept, leadId, takenByVerdict } = await ac.keepAnswer({
           callId: call.callId,
@@ -625,11 +673,6 @@ export function twilioWebhooksRouter(deps: AppDeps): Router {
           res.send(hangupTwiml());
           return;
         }
-        if (ring) {
-          log.info('auto_call.transfer', { callId: call.callId, rung: ring.agentIds.length, holderFirst: ring.holderFirst });
-        } else if (outcome.next?.kind === 'transfer' && !hold) {
-          log.info('auto_call.transfer_missed', { callId: call.callId, reason: 'nobody_free' });
-        }
         // What was heard stays in the database, never in the logs.
         log.info('auto_call.answer', {
           callId: call.callId,
@@ -647,27 +690,8 @@ export function twilioWebhooksRouter(deps: AppDeps): Router {
         // without waiting on EZ Texting (T14).
         if (outcome.sendLink && kept && leadId !== null) linkFor = leadId;
 
-        if (ring) {
-          res.send(
-            transferTwiml(deps.twilio!, {
-              callId: call.callId,
-              callSid: call.callSid,
-              script,
-              say: ring.say,
-              notice: true,
-              agentIds: ring.agentIds,
-              holderFirst: ring.holderFirst,
-              lead: ring.lead,
-              step: { id: stepId, heading: step?.heading ?? '' },
-              ringSeconds: await ac.readRingSeconds(),
-            })
-          );
-        } else if (hold) {
-          // After the answer is kept: on hold, the time it began, `call.held`.
-          await ac.holdCall(call.callId);
-          log.info('auto_call.hold', { callId: call.callId });
-          // The notice too: whoever takes them from hold is recorded (T17).
-          res.send(holdTwiml(deps.twilio!, { callId: call.callId, script, say: hold, track: null, notice: true }));
+        if (yes) {
+          res.send(await yesTwiml(call, script, yes, { id: stepId, heading: step?.heading ?? '' }));
         } else {
           res.send(next ? autoCallTwiml(deps.twilio!, { callId: call.callId, script, action: next }) : hangupTwiml());
         }
@@ -677,6 +701,117 @@ export function twilioWebhooksRouter(deps: AppDeps): Router {
       }
       // Never throws: a text that could not be sent is logged, and the call's
       // answer is already saved as `link_sent`.
+      if (linkFor !== null) await leadTexts().sendCallLinkText(linkFor);
+    })
+  );
+
+  /**
+   * `/auto/ai-after`'s answer to Twilio. `textLink` is told the lead to text
+   * the link to - once, for the request that saved `link_sent` - so it goes
+   * after Twilio has its answer, as on the script (T14).
+   */
+  const afterSeriTwiml = async (req: Request, textLink: (leadId: number) => void): Promise<string> => {
+    const call = await automatedCall(req);
+    if (!call) {
+      log.warn('auto_call.unknown_call', { path: req.path, callId: req.query.call });
+      return hangupTwiml();
+    }
+    const ac = autoCalls();
+    // The voicemail message took the call while she talked (T18): the end of
+    // her session is the page it replaced. Nothing follows from it.
+    if (await ac.takenByVerdict(call.callId)) {
+      log.info('auto_call.after_takeover', { callId: call.callId, path: req.path });
+      return hangupTwiml();
+    }
+
+    const body = (req.body ?? {}) as Record<string, unknown>;
+    const status = sessionStatus(field(body, 'SessionStatus'));
+    const hungUp = status === 'completed' || field(body, 'CallStatus') === 'completed';
+    // Ended by us: the action in `HandoffData`. Otherwise Twilio sends none,
+    // and the relay's own record says what she had ended with, if anything;
+    // failed with nothing recorded, the script takes the call.
+    const recorded = status === 'ended' ? null : await ac.recordedHandoff(call.callId);
+    const handoff: Handoff | null =
+      status === 'ended'
+        ? fromHandoff(field(body, 'HandoffData'))
+        : status === 'failed'
+          ? (recorded ?? fallbackHandoff('twilio_failed'))
+          : recorded;
+    // Recorded once, by whichever comes first - the relay, or this when the
+    // relay never could: Twilio's side failing (A12). A17 counts fallbacks.
+    if (handoff && status !== 'completed') await ac.endAiCall(call.callId, handoff);
+
+    const next = afterSeri(handoff, hungUp);
+    log.info('auto_call.ai_after', {
+      callId: call.callId,
+      status,
+      action: handoff?.action ?? null,
+      hungUp,
+      ...(status === 'failed' ? { errorCode: field(body, 'ErrorCode') || null } : {}),
+      ...(handoff?.action === 'fallback' ? { why: handoff.why } : {}),
+    });
+
+    if (next.kind === 'end') {
+      const { saved, leadId, takenByVerdict } = await ac.keepCallResult({
+        callId: call.callId,
+        result: next.result,
+        blockNumber: next.blockNumber,
+      });
+      if (takenByVerdict) log.info('auto_call.after_takeover', { callId: call.callId, path: req.path });
+      else if (next.sendLink && saved && leadId !== null) textLink(leadId);
+      return hangupTwiml();
+    }
+
+    const script = await ac.loadScript();
+    if (!script) {
+      log.error('auto_call.no_script', { callId: call.callId });
+      return hangupTwiml();
+    }
+    if (next.kind === 'script') {
+      const ask = fallbackAsk(script);
+      if (!ask) log.error('auto_call.broken_script', { callId: call.callId });
+      return ask ? autoCallTwiml(deps.twilio!, { callId: call.callId, script, action: ask }) : hangupTwiml();
+    }
+
+    // Her "Great, connecting you now." is said: the recording notice, then the
+    // script's own transfer. What the ring shows the lead said yes to is the
+    // offer, the script's first step - her call is that offer.
+    const yes = await planYes(call.callId, script, { kind: 'transfer', say: [] });
+    const kept = await ac.keepCallResult({
+      callId: call.callId,
+      result: yes.plan.kind === 'end' ? yes.plan.result : null,
+      blockNumber: false,
+    });
+    if (kept.takenByVerdict) {
+      log.info('auto_call.after_takeover', { callId: call.callId, path: req.path });
+      return hangupTwiml();
+    }
+    const offer = script.steps[0];
+    return yesTwiml(call, script, yes, { id: offer?.id ?? 0, heading: offer?.heading ?? '' });
+  };
+
+  // Seri's part of the call is over - A14, AI-AGENT.md section 3. Her action
+  // carried out with today's code: a transfer as the script's "yes" is put
+  // through, the link texted, a stop blocked, a goodbye's result saved - and
+  // nothing said that she has said; or, when she failed, the script from its
+  // first question (`afterSeri`). The lead hung up: what she had already
+  // ended with is still carried out where it needs no one on the line.
+  router.post(
+    '/auto/ai-after',
+    asyncHandler(async (req, res) => {
+      res.type('text/xml');
+      let reply = hangupTwiml();
+      /** The lead to text the link to, once Twilio has its answer. */
+      let linkFor: number | null = null;
+      try {
+        reply = await afterSeriTwiml(req, (leadId) => (linkFor = leadId));
+      } catch (err) {
+        log.error('auto_call.ai_after_failed', { callId: req.query.call, err: errText(err) });
+        reply = hangupTwiml();
+      }
+      res.send(reply);
+      // Never throws: a text that could not be sent is logged, and the result
+      // is already saved as `link_sent`.
       if (linkFor !== null) await leadTexts().sendCallLinkText(linkFor);
     })
   );

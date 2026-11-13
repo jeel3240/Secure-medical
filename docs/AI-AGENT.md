@@ -1,6 +1,6 @@
 # AI agent on the automated call (Phase 7)
 
-Design agreed with Jeel, 2026-11-11. The tickets are in `docs/ai-agent-tickets/` (A01-A22). Built so far: A01, the key and the switch; A03, the knowledge loader; A04, her instructions; A05, the sentence check; A06, her five actions; A07, the call-back time rules; A08, migration 022; A09, the answer test set, which chose the model (all 2026-11-11); A02, the first test calls, which picked her voice; A10-A12, the relay - Seri talking on a call, with its limits and failures; A13, an answered call connected to her when she is switched on (2026-11-12). What each built is under "As built" in its section, and in its ticket.
+Design agreed with Jeel, 2026-11-11. The tickets are in `docs/ai-agent-tickets/` (A01-A22). Built so far: A01, the key and the switch; A03, the knowledge loader; A04, her instructions; A05, the sentence check; A06, her five actions; A07, the call-back time rules; A08, migration 022; A09, the answer test set, which chose the model (all 2026-11-11); A02, the first test calls, which picked her voice; A10-A12, the relay - Seri talking on a call, with its limits and failures; A13, an answered call connected to her when she is switched on; A14, her action carried out when her part ends, or the script when she failed (2026-11-12). What each built is under "As built" in its section, and in its ticket.
 
 Today the automated call (`docs/AUTO-CALLS.md`) is a fixed script: it understands "yes", "no", "stop" and the keys 1, 2 and 9, and anything else is asked once more before the call ends. On day one (250 calls), 82 leads hung up and 65 ended as `no_response`.
 
@@ -188,7 +188,7 @@ Decided by Jeel, 2026-11-11, reversing the earlier "keep the script, hand off wh
 - **Logged:** `auto_call.answered` with `to` - `seri` or `script` (`LOGGING.md`).
 - **Tested:** the TwiML word for word (`integrations/twilio.test.ts`); the route switched on with a name and without, off and never set, on without a key over two calls, with no script, with the switch unreadable (`auto-call-webhooks.test.ts`); `seriGreeting` on a real Postgres (`scripts/ai-agent-live-check.ts`, 72 checks).
 - **Seen on the real API** (2026-11-12, a scratch database, requests signed as Twilio signs them): with the switch on, `/auto/answer` replied with the TwiML above, "Hi, is this Dana?"; a client connecting to the relay exactly as that TwiML said - its address, signed for it, the `call` parameter in `setup` - started her on that call (`ai_started_at`, `ai_agent.started`, the greeting her first turn); switched off with the command while the API ran, the next call got the script with no restart; on with no key, the script on two calls and `ai_agent.no_key` logged once; a lead with no first name, "Hi there!".
-- **Not yet:** `/auto/ai-after`, where Twilio goes when her part ends, is A14's. Until it exists the switch stays off: the end of her part would reach no page, and the call would end on a Twilio error rather than her action.
+- **Where her part ends:** `/auto/ai-after`, built in A14 - section 3, "As built (A14)".
 
 ---
 
@@ -243,6 +243,40 @@ Seri has no action for payment, personal details (date of birth, address, card) 
 **Two rules the answer test set led to (A09):** the lead always hears a last line - when Seri takes an action with no words, the relay says the action's own in her voice, and an opt-out always ends with the stop line (`lineToAdd`); and an action in a reply that ended on a question is held back - the lead answers first (`toHandoff`'s `awaitLead`).
 
 **Not an action Seri picks:** `fallback`, which the relay ends with when she fails (section 6) - with why: `model_failed`, `model_slow`, `socket_error` or `relay_failed` (A12). `/auto/ai-after` then asks the script's Q1 question - not its greeting, since Seri has introduced herself - and the call goes on as today.
+
+### As built (A14, 2026-11-12)
+
+`POST /api/webhooks/twilio/auto/ai-after?call=<row>` (`backend/src/api/twilio-webhooks.ts`), the `action` of every call's `<Connect>` (A13). Like every `/auto/*` webhook: signed by Twilio, kept in `webhook_events`, 404 while automated calls are off. What follows her part is one pure rule, `afterSeri` (`backend/src/ai/after.ts`); the route carries it out with the script's own code.
+
+**Which action** - from Twilio's `SessionStatus`:
+
+| Twilio says | The action carried out |
+|---|---|
+| `ended` - we ended the session | Hers, from `HandoffData` (`fromHandoff`); anything unreadable is a `fallback` |
+| `failed` - Twilio's side, or our socket, failed | What the relay had recorded she ended with, if anything; otherwise `fallback`, recorded here as `twilio_failed` (`ai_ended_with`, `ai_agent.ended`) so the robot counts it (A17) |
+| `completed` - the lead hung up | What the relay had recorded she ended with (`recordedHandoff`, her last `action` turn) - Twilio sends none. Nothing recorded: nothing is done, and the call's end saves `hung_up` |
+
+Her action is also passed to `endAiCall` on `ended` and `failed`: recorded once, by whichever comes first, so a record the relay could not write is not lost.
+
+**What each does** - the script's own code, and nothing said that she has said:
+
+| Her action | The lead on the line | The lead gone |
+|---|---|---|
+| `transfer_to_agent` | The recording notice (on recorded calls), then the script's transfer as it is: the lead's own agent alone first, everyone free, the hold line with the notice, or the busy line and `transfer_missed` (`planYes`, `yesTwiml`, shared with `/auto/gather`). The ring shows "Transfer · said yes to the offer": her call is the offer, the script's first step (`transferContext` gives that step for a call she took) | Nobody rung; `hung_up` |
+| `book_callback` | `callback_booked`, hang up. Saving the call back itself is A15 | The same |
+| `send_link` | `link_sent`, hang up, the link texted after Twilio has its answer - once: only the request that saved the result texts | The same |
+| `opt_out` | `opted_out`, the number blocked (`call_opt_out`) and the lead's open text conversation ended, as a stop on the script, hang up | The same - a stop said just before hanging up still blocks |
+| `end_call` | `not_interested` whatever her reason - the reason is kept with her action - except the relay's `no_response`, which is the script's `no_response`; hang up | `not_interested`; `no_response` becomes `hung_up` |
+| `fallback` | "Sorry about that." then the script's first question alone - "Are you interested in ordering?" - in the script's voice, listening as on any first asking; the answer goes to `/auto/gather` and the call carries on as today. No script: the call ends | Nothing; `hung_up` |
+
+As on the script, as said while hanging up (`handleAnswer`): a stop still blocks, a link is still texted, a "yes" reaches nobody.
+
+- **The result is saved once** - `keepCallResult` (`backend/src/db/auto-calls.ts`), the same transaction `keepAnswer` uses, now shared: the call locked, the result written only if it has none, a stop's block. A request Twilio sends twice saves and texts nothing the second time.
+- **After the voicemail message has taken the call** (T18): nothing is done, logged `auto_call.after_takeover`, as `/auto/gather` and `/auto/after` do.
+- **Logged:** `auto_call.ai_after` - the status, the action, `hungUp`, Twilio's `errorCode` on a failure, `why` for a fallback; then the transfer's own lines (`LOGGING.md`). Anything failing: `auto_call.ai_after_failed`, and the call ends quietly.
+- **Tested:** `afterSeri` and `fallbackAsk`, every action with the lead on the line and gone (17, `ai/after.test.ts`); the route - each action, a transfer to people free, to the lead's own agent, on hold, the busy line and with the lead gone, the link once, the fallback from the relay, from Twilio failing and from unreadable data, a hang-up after a stop and after the link, the voicemail's takeover, a call not ours, the database failing (23, `auto-call-webhooks.test.ts`), and none of them saying a line she has said; on a real Postgres, the recorded action, the result once, the block once, the voicemail's takeover, a transfer's step (`ai-agent-live-check`, 86 checks).
+- **Seen on the real API** (2026-11-12, a scratch database, a pretend Twilio): "Stop calling me." - the relay said the stop line and ended with `opt_out`, `/auto/ai-after` hung up, the number blocked, `opted_out`; "Remove me from your list." then the lead hanging up (`completed`, no `HandoffData`) - blocked all the same from the relay's record; OpenAI refusing the key - the relay's `fallback`, then "Sorry about that." and the script's question, listening on step 1; a transfer with one agent free - rung, "said yes to the offer".
+- **Not covered:** a lead who hangs up before Twilio has passed their last words to the relay - "stop calling me" and the phone down at once. The relay never hears it, so nothing blocks the number; on the script Twilio still posts what was heard after a hang-up. For A21 to try on a real phone.
 
 ---
 
@@ -397,7 +431,7 @@ Following `docs/AUDIT.md`: nothing is lost, add-only.
 |---|---|
 | `calls.ai_started_at` | When Seri took the call. Null for a script call |
 | `calls.ai_knowledge_version` | Which knowledge version she used |
-| `calls.ai_ended_with` | How her part ended: one of the five actions, or `fallback`. Null when the lead hung up first. A fallback call then gets the script's own `script_result`, so this is the only record that Seri failed (A17 counts it). *As built:* written by the relay when she acts (A11) and for every fallback it decides (A12); Twilio's own failure, by the action URL (A14) |
+| `calls.ai_ended_with` | How her part ended: one of the five actions, or `fallback`. Null when the lead hung up first. A fallback call then gets the script's own `script_result`, so this is the only record that Seri failed (A17 counts it). *As built:* written by the relay when she acts (A11) and for every fallback it decides (A12); Twilio's own failure, by the action URL, `twilio_failed` (A14) |
 | `calls.script_result` | Adds `callback_booked` |
 | `call_ai_turns` (new) | One row per turn: call, who (lead, Seri, action, system), the text, when, how long Seri took to start |
 | `callbacks` | Seri's bookings: no agent until taken, reason `ai_booked` |

@@ -4,7 +4,7 @@
 
 **Why:** All the hard call logic already exists; this connects Seri to it.
 
-**Depends on:** A06, A13  ·  **Size:** Medium (about a day)
+**Depends on:** A06, A13  ·  **Size:** Medium (about a day)  ·  **Status:** Done 2026-11-12
 
 ## Build
 
@@ -21,9 +21,9 @@
 
 ## Done when
 
-- [ ] Each action gives the same calls, rows and texts as the same outcome on today's script.
-- [ ] No action's TwiML says a script line Seri already said.
-- [ ] Every existing `/auto/*` test still passes.
+- [x] Each action gives the same calls, rows and texts as the same outcome on today's script - the same transfer code, the same result saved once, the same block, the link texted once.
+- [x] No action's TwiML says a script line Seri already said - checked on every route test.
+- [x] Every existing `/auto/*` test still passes - 99, with `/auto/gather`'s transfer moved into shared functions.
 
 ## Tests
 
@@ -47,5 +47,18 @@
 ## Not in this ticket
 
 - Saving the callback itself (A15).
+
+## As built
+
+- **One pure rule**, `afterSeri` in `backend/src/ai/after.ts`: her action, with the lead on the line or gone, becomes a transfer, the script, or an end with its result, a block, the link, or a call back to save. `fallbackAsk`: "Sorry about that." (`FALLBACK_LINE`) and the first step's question alone.
+- **The route reads which action from `SessionStatus`:** `ended` - `HandoffData`; `failed` - what the relay had recorded, else a fallback recorded here as `twilio_failed`; `completed` - what the relay had recorded (`recordedHandoff`, `ai/relay-store.ts`, her last `action` turn), since Twilio sends no `HandoffData` on a hang-up. Beyond the ticket: a hang-up after her action still carries out what needs no line - a stop blocks, the link is texted, as said while hanging up on the script.
+- **Shared, not copied:** `/auto/gather`'s transfer became `planYes` and `yesTwiml` in the router, used by both; `keepAnswer`'s transaction became `inCallLock` and `saveOutcome` in `db/auto-calls.ts`, used by it and by `keepCallResult`, which saves her result once and a stop's block, with no answer row.
+- **`end_call` results:** `not_interested` for every reason she gives and for the time limit; `no_response` only for the relay's silence, and none (`hung_up`) when the lead hung up.
+- **The ring of her transfer** reads "Transfer · said yes to the offer" - the script's first step's heading, also given by `transferContext` for a call she took, so a ring from hold reads the same. A19 or A21 may want it to say Seri.
+- **After the voicemail's takeover** nothing is done and `auto_call.after_takeover` is logged - one of A18's points, built here since the check is the same as `/auto/after`'s.
+- **`CallResult`** (`core/call-script.ts`) gained `callback_booked`, which migration 022 already allowed.
+- **Tests:** 17 for the rule, 23 for the route, 14 live checks (86 in `ai-agent-live-check`); 1,595 backend tests; all 23 live checks.
+- **Seen on the real API** (a scratch database, a pretend Twilio through the relay): a stop, a stop then a hang-up, OpenAI refusing the key, a transfer - each carried out and recorded as above.
+- **Not covered:** a lead who says stop and hangs up before Twilio passes the words to the relay - nothing blocks the number. For A21.
 
 Design: `docs/AI-AGENT.md`. All AI code in `backend/src/ai/`. One PR into `dev`.
