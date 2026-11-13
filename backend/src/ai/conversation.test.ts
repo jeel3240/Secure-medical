@@ -18,6 +18,7 @@ import {
   LIMITS,
   NO_REPEAT_NOBODY_NOTE,
   NO_REPEAT_NOTE,
+  NOBODY_NOTE,
   offeredToConnect,
   STILL_THERE_LINE,
   VERDICT_POLL_MS,
@@ -149,10 +150,12 @@ describe('what OpenAI is sent', () => {
     who = 'nobody';
     conversation.heard('Okay');
     await until(() => model.asked.length === 2, 'the second request');
-    expect(model.asked[1].slice(-3)).toEqual([
+    expect(model.asked[1].slice(-4)).toEqual([
       { role: 'user', content: '[Who is there: someone free] Who is this?' },
       { role: 'assistant', content: 'Sure.' },
       { role: 'user', content: '[Who is there: nobody] Okay' },
+      // With nobody there, the note not to offer a person now (A21, call 93).
+      { role: 'system', content: NOBODY_NOTE },
     ]);
   });
 
@@ -580,6 +583,12 @@ describe('offering to connect, not twice in a row (A21)', () => {
       { role: 'system', content: NO_REPEAT_NOBODY_NOTE },
     ]);
     expect(leadTurn('coming', 'Yes', 'Would you like me to connect you with someone now?')[1]).toEqual({ role: 'system', content: NO_REPEAT_NOTE });
+    // Nobody, and no offer before: the note not to offer one now (call 93).
+    expect(leadTurn('nobody', 'Yes', 'Is that something you would be interested in?')).toEqual([
+      { role: 'user', content: '[Who is there: nobody] Yes' },
+      { role: 'system', content: NOBODY_NOTE },
+    ]);
+    expect(leadTurn('coming', 'Yes', 'Is that something you would be interested in?')).toHaveLength(1);
     expect(NO_REPEAT_NOBODY_NOTE).toMatch(/ask when would be a good time for a call back - don't book one until they have agreed a time/);
   });
 });

@@ -140,11 +140,24 @@ export const NO_REPEAT_NOTE =
 export const NO_REPEAT_NOBODY_NOTE =
   "Your last reply offered to connect them with someone, but nobody can take a call now. If they said yes, tell them everyone on our team is busy right now and ask when would be a good time for a call back - don't book one until they have agreed a time. If not, don't offer it again: answer them, then ask if there's anything else they'd like to know.";
 
-/** The lead's turn, and the note against offering twice in a row when her last reply offered (`NO_REPEAT_NOTE`; with nobody there, `NO_REPEAT_NOBODY_NOTE`). */
+/**
+ * With every lead turn while nobody can take a call: her instructions say not
+ * to offer a person then, and she still asked "Would you like me to connect
+ * you with someone now?" on call 93, and in 5 of 10 runs of it - a note at the
+ * moment is what she follows (A21).
+ */
+export const NOBODY_NOTE =
+  "Nobody can take a call now: don't offer to connect them now, or ask if they want to talk to someone now. If they want to talk to someone, say everyone on our team is busy right now and ask when would be a good time for a call back.";
+
+/**
+ * The lead's turn, and a note after it when one is due: her last reply offered
+ * to connect them - not twice in a row (`NO_REPEAT_NOTE`; with nobody there,
+ * `NO_REPEAT_NOBODY_NOTE`); or nobody can take a call (`NOBODY_NOTE`).
+ */
 export function leadTurn(who: WhoIsThere, said: string, herLastReply: string): ChatCompletionMessageParam[] {
   const turn = leadMessage(who, said);
-  if (!offeredToConnect(herLastReply)) return [turn];
-  return [turn, { role: 'system', content: who === 'nobody' ? NO_REPEAT_NOBODY_NOTE : NO_REPEAT_NOTE }];
+  if (offeredToConnect(herLastReply)) return [turn, { role: 'system', content: who === 'nobody' ? NO_REPEAT_NOBODY_NOTE : NO_REPEAT_NOTE }];
+  return who === 'nobody' ? [turn, { role: 'system', content: NOBODY_NOTE }] : [turn];
 }
 
 /** Given to her with her first reply after three minutes. */

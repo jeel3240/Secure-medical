@@ -2,7 +2,7 @@
  * Picking a call back up after the line dropped - the conversation so far,
  * rebuilt from the turns kept on the call, as the call itself built it.
  */
-import { FILLER_LINE, leadMessage, NO_REPEAT_NOTE, STILL_THERE_LINE } from './conversation';
+import { FILLER_LINE, leadMessage, NO_REPEAT_NOTE, NOBODY_NOTE, STILL_THERE_LINE } from './conversation';
 import { interruptedNote, keyTurn, reconnectedNote, refusedNote, replacedNote, stopNote, twilioErrorNote } from './relay-messages';
 import { earlierConversation, type KeptTurn } from './resume';
 
@@ -68,6 +68,7 @@ describe('the conversation so far, from the kept turns', () => {
     const turns = [greeting, lead('Put me through.'), seri('Sure.'), note(refused)];
     expect(earlierConversation(turns, GREETING, 'nobody').messages).toEqual([
       leadMessage('nobody', 'Put me through.'),
+      { role: 'system', content: NOBODY_NOTE },
       said('Sure.'),
       { role: 'system', content: refused },
     ]);

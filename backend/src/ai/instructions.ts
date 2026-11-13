@@ -227,7 +227,29 @@ function callPart({ lead, now, hours }: InstructionsInput): string {
           ? ` - today, ${spokenClock(open, zone)} to ${spokenClock(close, zone)} the lead's time.`
           : '.'
     }`,
+    nextDays(now, close, hours),
   ].join('\n');
+}
+
+/**
+ * The next days a call back can be on, worked out for her: on call 93, a
+ * Friday afternoon, she agreed "tomorrow at 2 PM" - a Saturday - though told
+ * both "tomorrow is Saturday" and "Monday to Friday" (A21). Today while its
+ * hours last, then the next three days with hours; and a day with none said
+ * plainly when it is tomorrow, the one a lead asks for most.
+ */
+function nextDays(now: Date, close: Date, hours: CallHours): string {
+  const zone = hours.timeZone;
+  const DAY = 24 * 60 * 60 * 1000;
+  const open: string[] = [];
+  if (hours.days.has(weekdayIn(now, zone)) && now < close) open.push(`today, until ${spokenClock(close, zone)}`);
+  for (let d = 1; d <= 14 && open.length < 4; d++) {
+    const day = new Date(now.getTime() + d * DAY);
+    if (hours.days.has(weekdayIn(day, zone))) open.push(`${d === 1 ? 'tomorrow, ' : ''}${longDay(day, zone)}`);
+  }
+  const tomorrow = new Date(now.getTime() + DAY);
+  const closedTomorrow = hours.days.has(weekdayIn(tomorrow, zone)) ? '' : ` Tomorrow, ${longDay(tomorrow, zone)}, has none: never agree a call back then.`;
+  return `- The next days with agent hours: ${open.length ? open.join('; ') : 'none in the next two weeks'}.${closedTomorrow}`;
 }
 
 const ZONE_NAMES: Record<string, string> = {

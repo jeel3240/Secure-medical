@@ -210,6 +210,7 @@ At-home test kits:
 - Now: Wednesday, November 11, 2026 at 12:00 PM Arizona time (2026-11-11); tomorrow is Thursday, November 12 (2026-11-12).
 - The lead's time zone, from their area code: Eastern time (America/New_York). For them it is Wednesday, November 11, 2026 at 2:00 PM (2026-11-11); tomorrow is Thursday, November 12 (2026-11-12).
 - Agent hours, for call backs: Monday to Friday - never Saturday or Sunday, 11 AM to 5 PM Arizona time - today, 1 PM to 7 PM the lead's time.
+- The next days with agent hours: today, until 5 PM; tomorrow, Thursday, November 12; Friday, November 13; Monday, November 16.
 "
 `;
 
@@ -423,5 +424,6 @@ At-home test kits:
 - Now: Wednesday, November 11, 2026 at 12:00 PM Arizona time (2026-11-11); tomorrow is Thursday, November 12 (2026-11-12).
 - The lead's time zone, from their area code: Eastern time (America/New_York). For them it is Wednesday, November 11, 2026 at 2:00 PM (2026-11-11); tomorrow is Thursday, November 12 (2026-11-12).
 - Agent hours, for call backs: Monday to Friday - never Saturday or Sunday, 11 AM to 5 PM Arizona time - today, 1 PM to 7 PM the lead's time.
+- The next days with agent hours: today, until 5 PM; tomorrow, Thursday, November 12; Friday, November 13; Monday, November 16.
 "
 `;

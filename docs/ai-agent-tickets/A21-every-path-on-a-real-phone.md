@@ -82,6 +82,7 @@
 | 90 | The new opening; "Who is this?"; "How did you get my number?" | The partner sites only when asked how we got the number - right. "No worries, Jeel" and "let me know when you're ready, Jeel" sounded personal - the soft tones; seven of nine replies offered to connect |
 | 91 | "Yes" to the greeting, with Jeel's browser not open - nobody free | Her first reply skipped "is that something you'd be interested in?" and asked "talk with someone now, or a call back at a better time?" - the "Yes" taken as interest, the who-is-there note acted on at once. Hung up after it |
 | 92 | The api restarted after her second reply, through a local Caddy set up as production's | Picked back up: Twilio's second try reconnected 4 seconds later, the "Yes" said meanwhile replayed and answered, no second greeting. Then, nobody free, she booked a call back for Monday at 11 AM without asking when - and had offered to connect him now with nobody free |
+| 93 | Nobody free, a Friday at 4:39 PM: "Yes", then "call me tomorrow at two" | She offered to connect him now again, then "Would 2 PM tomorrow work?" - a Saturday; refused by the check, she asked again for Monday at 2 PM, booked. Repeated itself - fixed on `fix/seri-friday-callback`: `docs/AI-AGENT.md` section 4, "Changed after A21's call 93" |
 
 All changed on `feat/seri-voice-aria-tone` - `docs/AI-AGENT.md` section 1, "Her voice and tone": Aria; seven businesslike tones; the opening and "Who is this?" without the partner sites; no "no worries" or "when you're ready"; a note against offering to connect twice in a row; an action written in brackets taken; and a stop never held back by a question.
 
@@ -93,7 +94,7 @@ Call 92's call back and offer fixed on `fix/seri-callback-asks-time` - a call ba
 
 Call 89's link fixed on `fix/seri-link-needs-a-yes` - an action waits for the answer to a question anywhere in her reply, not only at its end; `docs/AI-AGENT.md` section 3, "Two rules".
 
-Nothing found on calls 86-92 is still open. The rest of the list above is still to walk.
+Nothing found on calls 86-93 is still open. The rest of the list above is still to walk.
 
 ## Done when
 

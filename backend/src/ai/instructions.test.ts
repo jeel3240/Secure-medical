@@ -117,9 +117,38 @@ describe('this call\'s details', () => {
         '- Now: Wednesday, November 11, 2026 at 12:00 PM Arizona time (2026-11-11); tomorrow is Thursday, November 12 (2026-11-12).',
         '- The lead\'s time zone, from their area code: Eastern time (America/New_York). For them it is Wednesday, November 11, 2026 at 2:00 PM (2026-11-11); tomorrow is Thursday, November 12 (2026-11-12).',
         '- Agent hours, for call backs: Monday to Friday - never Saturday or Sunday, 11 AM to 5 PM Arizona time - today, 1 PM to 7 PM the lead\'s time.',
+        '- The next days with agent hours: today, until 5 PM; tomorrow, Thursday, November 12; Friday, November 13; Monday, November 16.',
         '',
       ].join('\n')
     );
+  });
+
+  describe('the next days with agent hours, worked out for her (A21, call 93)', () => {
+    const next = (iso: string) => callPart(build({ now: new Date(iso) })).split('\n').find((l) => l.startsWith('- The next days'));
+
+    it('a Friday afternoon: today until 5, then Monday on - and tomorrow, a Saturday, never', () => {
+      expect(next('2026-11-13T23:39:50Z')).toBe(
+        '- The next days with agent hours: today, until 5 PM; Monday, November 16; Tuesday, November 17; Wednesday, November 18. Tomorrow, Saturday, November 14, has none: never agree a call back then.'
+      );
+    });
+
+    it('a Friday evening, the hours over: from Monday', () => {
+      expect(next('2026-11-14T01:00:00Z')).toBe(
+        '- The next days with agent hours: Monday, November 16; Tuesday, November 17; Wednesday, November 18; Thursday, November 19. Tomorrow, Saturday, November 14, has none: never agree a call back then.'
+      );
+    });
+
+    it('a Sunday: tomorrow is Monday, and said so', () => {
+      expect(next('2026-11-15T19:00:00Z')).toBe(
+        '- The next days with agent hours: tomorrow, Monday, November 16; Tuesday, November 17; Wednesday, November 18; Thursday, November 19.'
+      );
+    });
+
+    it('no days with hours at all: said, never made up', () => {
+      expect(callPart(build({ hours: { ...DEFAULT_CALL_HOURS, days: new Set() } }))).toContain(
+        '- The next days with agent hours: none in the next two weeks. Tomorrow, Thursday, November 12, has none: never agree a call back then.'
+      );
+    });
   });
 
   it('no name: the greeting without one, and no name guessed', () => {

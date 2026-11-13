@@ -173,6 +173,81 @@
       ]
     },
     {
+      "id": "friday_yes_nobody",
+      "lead": {
+        "firstName": "Jeel",
+        "phone": "+16026203572"
+      },
+      "now": "2026-11-13T23:39:50Z",
+      "who": "nobody",
+      "opened": false,
+      "turns": [
+        {
+          "lead": "Yes."
+        },
+        {
+          "seri": "[friendly, upbeat] This is Seri from eDrugstore, and I'm calling about our offer of up to 25% off your first order. [curious] Is that something you'd be interested in?"
+        },
+        {
+          "lead": "Yes."
+        }
+      ],
+      "expect": [
+        "none"
+      ],
+      "must_say_any": [
+        "when",
+        "what time",
+        "better time",
+        "good time"
+      ],
+      "must_not_say": [
+        "connect you",
+        "someone now",
+        "talk to someone now",
+        "speak with someone now"
+      ]
+    },
+    {
+      "id": "friday_tomorrow_nobody",
+      "lead": {
+        "firstName": "Jeel",
+        "phone": "+16026203572"
+      },
+      "now": "2026-11-13T23:39:50Z",
+      "who": "nobody",
+      "opened": false,
+      "turns": [
+        {
+          "lead": "Yes."
+        },
+        {
+          "seri": "[friendly, upbeat] This is Seri from eDrugstore, and I'm calling about our offer of up to 25% off your first order. [curious] Is that something you'd be interested in?"
+        },
+        {
+          "lead": "Yes."
+        },
+        {
+          "seri": "[understanding] Everyone on our team is busy right now. [curious] When would be a good time for us to call you back?"
+        },
+        {
+          "lead": "Can you call me tomorrow at two?"
+        }
+      ],
+      "expect": [
+        "none"
+      ],
+      "must_say_any": [
+        "monday"
+      ],
+      "must_not_say": [
+        "so that's tomorrow",
+        "would 2 pm tomorrow",
+        "would tomorrow at 2",
+        "tomorrow at 2 pm your time?"
+      ]
+    },
+    {
       "id": "yes_later",
       "turns": [
         {

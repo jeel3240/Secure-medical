@@ -55,6 +55,8 @@ interface RawCase {
   who?: string;
   opened?: boolean;
   lead?: { firstName: string | null; phone: string };
+  /** When the call happens, if not the default's - a Friday afternoon, say (A21, call 93). */
+  now?: string;
   turns: Turn[];
   expect: string[];
   end_reason?: string;
@@ -71,7 +73,7 @@ export function loadCases(): EvalCase[] {
     who: (c.who ?? defaults.who) as WhoIsThere,
     opened: c.opened ?? defaults.opened,
     lead: c.lead ?? defaults.lead,
-    now: new Date(defaults.now),
+    now: new Date(c.now ?? defaults.now),
     turns: c.turns,
     expect: c.expect as Outcome[],
     endReason: c.end_reason,
