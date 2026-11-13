@@ -9,6 +9,7 @@
 
 import twilio from 'twilio';
 import type VoiceResponse from 'twilio/lib/twiml/VoiceResponse';
+import { CALL_PARAMETER, RELAY_SETTINGS, relayUrl } from '../ai/relay-messages';
 import { splitForListening, voicemailLine, type AskOrEnd, type CallScript, type CallStep } from '../core/call-script';
 import { identityFor, INCOMING_RING_SECONDS, MISSED_CALL_SPEECH, RECORDING_NOTICE } from '../core/calls';
 import type { TwilioSettings } from '../twilio-settings';
@@ -262,6 +263,8 @@ export const AUTO_AFTER_PATH = '/api/webhooks/twilio/auto/after';
 export const AUTO_HOLD_PATH = '/api/webhooks/twilio/auto/hold';
 /** A lead on hold, now ringing the person who came free (T17). */
 export const AUTO_OFFER_PATH = '/api/webhooks/twilio/auto/offer';
+/** Seri's part of the call is over: what she ended it with, or why it failed (A13, A14). */
+export const AUTO_AI_AFTER_PATH = '/api/webhooks/twilio/auto/ai-after';
 
 /** The full address of one of those webhooks, for one call. */
 export function autoCallUrl(
@@ -351,6 +354,35 @@ export function autoCallTwiml(
     method: 'POST',
   });
   if (question) gather.say(voice, question);
+  return response.toString();
+}
+
+/**
+ * The automated call connected to Seri - A13, docs/AI-AGENT.md section 2. In
+ * place of the script's first question, when she is switched on.
+ *
+ * Twilio opens her relay's WebSocket and says `greeting` itself the moment it
+ * connects, with no wait on OpenAI - so no second of quiet first, unlike the
+ * script. The `<Parameter>` names our row, which the relay reads in `setup`;
+ * the relay's address carries nothing, since Twilio signs it as written (A02).
+ * Her voice and how she listens are `RELAY_SETTINGS`, as heard on the dev
+ * number. When her part ends - her action, a failure, or the lead hanging up -
+ * Twilio asks `/auto/ai-after` (A14) with the session's status.
+ */
+export function seriTwiml(settings: TwilioSettings, opts: { callId: number; greeting: string }): string {
+  const response = new twilio.twiml.VoiceResponse();
+  const connect = response.connect({
+    action: autoCallUrl(settings, AUTO_AI_AFTER_PATH, opts.callId),
+    method: 'POST',
+  });
+  // Written as A02's test calls wrote them; the library's typings spell a few
+  // differently (`ignorebackchannel`), and some not at all.
+  const relay = connect.conversationRelay({
+    url: relayUrl(settings.publicUrl),
+    welcomeGreeting: opts.greeting,
+    ...RELAY_SETTINGS,
+  } as VoiceResponse.ConversationRelayAttributes);
+  relay.parameter({ name: CALL_PARAMETER, value: String(opts.callId) });
   return response.toString();
 }
 

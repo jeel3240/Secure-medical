@@ -7,6 +7,7 @@ import request from 'supertest';
 import twilio from 'twilio';
 import { ANTIBIOTICS_CALL, LINK_STEP, OFFER_STEP } from '../../core/call-script-fixtures';
 import type { CallScript } from '../../core/call-script';
+import * as logModule from '../../lib/log';
 import type { TwilioSettings } from '../../twilio-settings';
 import { buildApp } from './helpers';
 
@@ -86,7 +87,7 @@ jest.mock('../../db/lead-texts', () => ({
   sendMissedCallText: (...a: unknown[]) => sendMissedCallText(...a),
   sendCallLinkText: (leadId: number) => sendCallLinkText(leadId),
 }));
-const poolQuery = jest.fn(async (_sql: string, _values?: unknown[]) => ({ rows: [], rowCount: 1 }));
+const poolQuery = jest.fn(async (_sql: string, _values?: unknown[]): Promise<{ rows: unknown[]; rowCount: number }> => ({ rows: [], rowCount: 1 }));
 jest.mock('../../db/pool', () => ({ pool: { query: (...a: [string, unknown[]?]) => poolQuery(...a) } }));
 
 const SETTINGS: TwilioSettings = {
@@ -230,6 +231,98 @@ describe('the lead picks up', () => {
     const failed = await fromTwilio(app, ANSWER, PICKED_UP);
     expect(failed.status).toBe(200);
     expect(failed.text).toMatch(/<Response><Hangup\/><\/Response>$/);
+  });
+});
+
+describe('the call goes to Seri (A13)', () => {
+  /** The database's answers to Seri's two reads - her switch, the lead's first name - and nothing else. */
+  const seriRows = (switchValue: string | null, firstName: string | null = 'John') =>
+    poolQuery.mockImplementation(async (sql: string) => {
+      if (/key = 'ai_agent'/.test(sql)) return { rows: switchValue === null ? [] : [{ value: switchValue }], rowCount: 1 };
+      if (/first_name/.test(sql)) return { rows: [{ firstName }], rowCount: 1 };
+      return { rows: [], rowCount: 1 };
+    });
+  const withKey = () => buildApp({ twilio: SETTINGS, autoCalls: true, openAiKey: 'sk-test' });
+  let info: jest.SpyInstance;
+  let warn: jest.SpyInstance;
+  beforeEach(() => {
+    info = jest.spyOn(logModule.log, 'info').mockImplementation(() => undefined);
+    warn = jest.spyOn(logModule.log, 'warn').mockImplementation(() => undefined);
+  });
+  afterEach(() => {
+    info.mockRestore();
+    warn.mockRestore();
+    poolQuery.mockImplementation(async () => ({ rows: [], rowCount: 1 }));
+  });
+
+  it('switched on, with a key: connected to her relay, greeted by name - no question, nothing said by the script', async () => {
+    seriRows('on');
+    const { app } = await withKey();
+    const res = await fromTwilio(app, ANSWER, PICKED_UP);
+    expect(res.status).toBe(200);
+    expect(res.type).toBe('text/xml');
+    expect(linkAutomatedCall).toHaveBeenCalledWith(42, 'CA900');
+    expect(res.text).toContain(
+      '<Connect action="https://calls.example.com/api/webhooks/twilio/auto/ai-after?call=42" method="POST">'
+    );
+    expect(res.text).toContain('<ConversationRelay url="wss://calls.example.com/api/ai/relay" welcomeGreeting="Hi, is this John?"');
+    expect(res.text).toContain('voice="21m00Tcm4TlvDq8ikWAM-v4-0.4_0.8"');
+    expect(res.text).toContain('<Parameter name="call" value="42"/>');
+    expect(res.text).not.toMatch(/<Say|<Gather|<Pause/);
+    // The lead's name is read for the row the address names.
+    const nameRead = poolQuery.mock.calls.find(([sql]) => /first_name/.test(sql))!;
+    expect(nameRead[1]).toEqual([42]);
+    expect(info).toHaveBeenCalledWith('auto_call.answered', { callId: 42, callSid: 'CA900', to: 'seri' });
+  });
+
+  it('no first name for the lead: "Hi there!"', async () => {
+    seriRows('on', null);
+    const { app } = await withKey();
+    expect((await fromTwilio(app, ANSWER, PICKED_UP)).text).toContain('welcomeGreeting="Hi there!"');
+  });
+
+  it('switched off, or never set: today\'s first question, exactly as before', async () => {
+    for (const value of ['off', null]) {
+      seriRows(value);
+      const { app } = await withKey();
+      const res = await fromTwilio(app, ANSWER, PICKED_UP);
+      expect(res.text).toContain('<Pause length="1"/><Say voice="Google.en-US-Chirp3-HD-Kore">Hi, this is Seri calling from eDrugstore.');
+      expect(res.text).not.toContain('ConversationRelay');
+      expect(poolQuery.mock.calls.some(([sql]) => /first_name/.test(sql))).toBe(false);
+    }
+    expect(info).toHaveBeenCalledWith('auto_call.answered', { callId: 42, callSid: 'CA900', to: 'script' });
+  });
+
+  it('switched on without OPENAI_API_KEY: today\'s script, and ai_agent.no_key logged once - not on every call', async () => {
+    seriRows('on');
+    const { app } = await on();
+    for (let i = 0; i < 2; i++) {
+      const res = await fromTwilio(app, ANSWER, PICKED_UP);
+      expect(res.text).toContain('<Gather');
+      expect(res.text).not.toContain('ConversationRelay');
+    }
+    expect(warn.mock.calls.filter(([event]) => event === 'ai_agent.no_key')).toHaveLength(1);
+  });
+
+  it('no script active: the call ends, Seri or not - it is her backup, and her stop line', async () => {
+    seriRows('on');
+    loadActiveCallScript.mockResolvedValue(null);
+    const { app } = await withKey();
+    expect((await fromTwilio(app, ANSWER, PICKED_UP)).text).toMatch(/<Response><Hangup\/><\/Response>$/);
+  });
+
+  it('the switch cannot be read: the call ends quietly, as for any database failure', async () => {
+    poolQuery.mockImplementation(async (sql: string) => {
+      if (/key = 'ai_agent'/.test(sql)) throw new Error('connection refused');
+      return { rows: [], rowCount: 1 };
+    });
+    const error = jest.spyOn(logModule.log, 'error').mockImplementation(() => undefined);
+    const { app } = await withKey();
+    const res = await fromTwilio(app, ANSWER, PICKED_UP);
+    expect(res.status).toBe(200);
+    expect(res.text).toMatch(/<Response><Hangup\/><\/Response>$/);
+    expect(error).toHaveBeenCalledWith('auto_call.answer_failed', expect.objectContaining({ callId: '42' }));
+    error.mockRestore();
   });
 });
 

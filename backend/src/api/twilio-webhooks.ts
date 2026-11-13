@@ -13,7 +13,7 @@
  * And the automated call's, T12 on (AUTO-CALLS.md) - each naming the call's
  * row, `?call=<id>`, in the address Twilio signs:
  *
- *   POST /api/webhooks/twilio/auto/answer     the lead picked up: the first question
+ *   POST /api/webhooks/twilio/auto/answer     the lead picked up: the first question - or Seri (A13)
  *   POST /api/webhooks/twilio/auto/gather     the lead answered a question, or said nothing (T13)
  *   POST /api/webhooks/twilio/auto/status     how the call ended
  *   POST /api/webhooks/twilio/auto/amd        who picked up: a person or a machine - a machine's voicemail (T18)
@@ -70,6 +70,7 @@ import {
   refusalTwiml,
   ringAgentTwiml,
   ringEveryoneTwiml,
+  seriTwiml,
   transferTwiml,
   voicemailTwiml,
 } from '../integrations/twilio';
@@ -108,7 +109,7 @@ function leadTexts() {
   return require('../db/lead-texts') as typeof import('../db/lead-texts');
 }
 
-/** The automated call's row, and the script it says - loaded lazily, as above. */
+/** The automated call's row, the script it says, and whether Seri takes it - loaded lazily, as above. */
 function autoCalls() {
   // eslint-disable-next-line @typescript-eslint/no-require-imports
   const rows = require('../db/auto-calls') as typeof import('../db/auto-calls');
@@ -122,7 +123,10 @@ function autoCalls() {
   const twilioCalls = require('../integrations/twilio-calls') as typeof import('../integrations/twilio-calls');
   // eslint-disable-next-line @typescript-eslint/no-require-imports
   const offers = require('../db/hold-offers') as typeof import('../db/hold-offers');
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const seri = require('../ai/answer') as typeof import('../ai/answer');
   return {
+    seriGreeting: (callId: number, apiKey: string) => seri.seriGreeting(pool, callId, apiKey),
     linkAutomatedCall: rows.linkAutomatedCall,
     keepAnswer: rows.keepAnswer,
     actOnVerdict: rows.actOnVerdict,
@@ -499,9 +503,10 @@ export function twilioWebhooksRouter(deps: AppDeps): Router {
   const backOnHold = (callId: number, script: CallScript) =>
     holdTwiml(deps.twilio!, { callId, script, say: [], track: null });
 
-  // The lead picked up: a second's quiet, then the first question, listening
-  // for the answer. Anything wrong and the call simply ends - the lead is
-  // never left listening to Twilio's "application error".
+  // The lead picked up: connected to Seri when she is switched on (A13,
+  // AI-AGENT.md section 2); otherwise a second's quiet, then the first
+  // question, listening for the answer. Anything wrong and the call simply
+  // ends - the lead is never left listening to Twilio's "application error".
   router.post(
     '/auto/answer',
     asyncHandler(async (req, res) => {
@@ -513,15 +518,22 @@ export function twilioWebhooksRouter(deps: AppDeps): Router {
           res.send(hangupTwiml());
           return;
         }
+        // Read first, for her too: she says its stop line, and it is her backup (A14).
         const script = await autoCalls().loadScript();
         if (!script) {
           log.error('auto_call.no_script', { callId: call.callId });
           res.send(hangupTwiml());
           return;
         }
+        const greeting = await autoCalls().seriGreeting(call.callId, deps.openAiKey ?? '');
+        if (greeting !== null) {
+          log.info('auto_call.answered', { callId: call.callId, callSid: call.callSid, to: 'seri' });
+          res.send(seriTwiml(deps.twilio!, { callId: call.callId, greeting }));
+          return;
+        }
         const action = firstAsk(script);
         if (action.kind === 'end' && action.brokenScript) log.error('auto_call.broken_script', { callId: call.callId });
-        log.info('auto_call.answered', { callId: call.callId, callSid: call.callSid });
+        log.info('auto_call.answered', { callId: call.callId, callSid: call.callSid, to: 'script' });
         res.send(autoCallTwiml(deps.twilio!, { callId: call.callId, script, action, pauseFirst: true }));
       } catch (err) {
         log.error('auto_call.answer_failed', { callId: req.query.call, err: errText(err) });

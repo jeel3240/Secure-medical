@@ -4,7 +4,7 @@
 
 **Why:** The switch that changes every call.
 
-**Depends on:** A01, A10  ·  **Size:** Small (a few hours)
+**Depends on:** A01, A10  ·  **Size:** Small (a few hours)  ·  **Status:** Done 2026-11-12
 
 ## Build
 
@@ -14,9 +14,9 @@
 
 ## Done when
 
-- [ ] Off: every existing `/auto/answer` test passes unchanged.
-- [ ] On: the TwiML has the right voice, greeting, action URL, relay URL and call parameter.
-- [ ] On without `OPENAI_API_KEY`: today's script, and `ai_agent.no_key` logged once.
+- [x] Off: every existing `/auto/answer` test passes unchanged - 93 webhook tests, untouched.
+- [x] On: the TwiML has the right voice, greeting, action URL, relay URL and call parameter - the whole TwiML compared word for word.
+- [x] On without `OPENAI_API_KEY`: today's script, and `ai_agent.no_key` logged once - over two calls, in the route tests and on the real API.
 
 ## Tests
 
@@ -29,5 +29,16 @@
 ## Not in this ticket
 
 - Carrying out the action (A14).
+
+## As built
+
+- **Who takes the call is one function**, `seriGreeting` in `backend/src/ai/answer.ts`: the switch and the key (`readAiAgentOn`, A01), then the lead's first name for her greeting. Null sends the call to the script. `/auto/answer` reads the script first, for her too - it is her backup and holds her stop line - so no script ends the call quietly either way, as before.
+- **The settings live in `backend/src/ai/relay-messages.ts`** - `RELAY_SETTINGS`, and `CALL_PARAMETER` (`call`), which the relay's `setup` reader uses too - so the TwiML and the relay cannot disagree. `seriTwiml` in `backend/src/integrations/twilio.ts` writes them as A02's calls did: the library's typings spell `ignorebackchannel` in lower case and leave out `applicationReconnect`, so its attributes are passed as written.
+- **The key reaches the routes as `openAiKey`** (`api/deps.ts`), from `config.openai.apiKey`; the route tests' app takes one too.
+- **No second of quiet before the greeting**, unlike the script's first question: Twilio says it as the relay connects. For A21 to listen for.
+- **`auto_call.answered` says where the call went:** `to`, `seri` or `script`.
+- **Tests:** the TwiML word for word, its relay address with no query, a name XML must escape (3, `integrations/twilio.test.ts`); the route - on with a name, with none, off and never set, on without a key over two calls, no script, the switch unreadable (6, `auto-call-webhooks.test.ts`). 1,555 backend tests. `seriGreeting` on a real Postgres - off, on with a name, without one, no key, off again at once (`ai-agent-live-check`, 72 checks).
+- **Seen on the real API** (a scratch database, signed requests): the TwiML as above; a client connecting to the relay exactly as it said started Seri on that call - `ai_started_at`, `ai_agent.started`, her greeting as her first turn; switched off by the command while the API ran, the next call got the script; no key, the script and one `ai_agent.no_key`; no first name, "Hi there!".
+- **Until A14** builds `/auto/ai-after`, the switch stays off: the end of her part would reach no page.
 
 Design: `docs/AI-AGENT.md`. All AI code in `backend/src/ai/`. One PR into `dev`.
