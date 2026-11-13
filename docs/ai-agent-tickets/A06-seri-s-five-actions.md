@@ -15,6 +15,8 @@
 - `fromHandoff(raw)` parses `HandoffData` from Twilio's post back, safely, for `/auto/ai-after`.
 - A `fallback` handoff, used by the relay when OpenAI fails (A12).
 
+**Changed after A21's call 92 (2026-11-13):** `book_callback` is refused unless her reply the lead has just answered named the time - she said it back and they agreed (`NOT_AGREED`; the context gains `before`); and the refused transfer with nobody there now says to ask when, not to book. `docs/AI-AGENT.md` section 4.
+
 ## Done when
 
 - [x] Round trip: tool call to `handoffData` to `fromHandoff` gives the same action - each of the five, every `end_call` reason, and the relay's `fallback`.

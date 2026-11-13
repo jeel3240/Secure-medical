@@ -18,7 +18,7 @@
 import type { ChatCompletionFunctionTool } from 'openai/resources/chat/completions';
 import type { CallHours } from '../core/auto-dial';
 import { isTimeZone } from '../db/sql';
-import { atLocalTime, checkCallbackTime, MAX_AHEAD_DAYS, MIN_AHEAD_MINUTES, spokenTime, toLocalTime, type CallbackRefusal } from './callback-time';
+import { atLocalTime, checkCallbackTime, MAX_AHEAD_DAYS, MIN_AHEAD_MINUTES, saysClock, spokenTime, toLocalTime, type CallbackRefusal } from './callback-time';
 import type { WhoIsThere } from './instructions';
 
 export const ACTIONS = ['transfer_to_agent', 'book_callback', 'send_link', 'opt_out', 'end_call'] as const;
@@ -142,6 +142,13 @@ export interface ActionContext {
   now: Date;
   /** What she said in this reply before the action. */
   said: string;
+  /**
+   * Her reply the lead has just answered - her words. A call back is booked
+   * only for a time named in it: she said it back, and they said yes (A21,
+   * call 92 - a "yes" to being put through, with nobody free, was booked for a
+   * time she chose herself).
+   */
+  before: string;
 }
 
 export type ActionResult =
@@ -194,7 +201,7 @@ export function toHandoff(call: ToolCall, context: ActionContext): ActionResult 
         return {
           ok: false,
           error:
-            'Nobody can take a call right now, so do not transfer. Tell the lead everyone is busy, offer a call back at a time that suits them inside the agent hours, and book it with book_callback.',
+            'Nobody can take a call right now, so do not transfer. Tell the lead everyone is busy, and ask when would be a good time for a call back, inside the agent hours. Book it with book_callback only once you have said their time back to them and they have said yes.',
         };
       }
       return { ok: true, handoff: { action: 'transfer_to_agent' } };
@@ -219,7 +226,11 @@ export function toHandoff(call: ToolCall, context: ActionContext): ActionResult 
   }
 }
 
-function bookCallback(args: Record<string, unknown>, { hours, now }: ActionContext): ActionResult {
+/** A call back she never said back to the lead - told to her instead of booking it. */
+export const NOT_AGREED =
+  'Not booked: they have not agreed this time with you. Ask when suits them, inside the agent hours, then say the day and time back to them in their time zone and ask them to confirm. Book it once they say yes.';
+
+function bookCallback(args: Record<string, unknown>, { hours, now, before }: ActionContext): ActionResult {
   const zone = typeof args.time_zone === 'string' ? args.time_zone.trim() : '';
   if (!isTimeZone(zone)) {
     return { ok: false, error: 'time_zone must be the lead\'s time zone as an IANA name, for example America/New_York.' };
@@ -240,6 +251,8 @@ function bookCallback(args: Record<string, unknown>, { hours, now }: ActionConte
       : ' Offer to text them the link instead.';
     return { ok: false, error: `Not booked. ${REFUSED[check.why]}${offer}` };
   }
+  // The time must be the one she said back to them, which they then agreed.
+  if (!saysClock(before, when, zone)) return { ok: false, error: NOT_AGREED };
   return { ok: true, handoff: { action: 'book_callback', at: when.toISOString(), timeZone: zone, reason } };
 }
 

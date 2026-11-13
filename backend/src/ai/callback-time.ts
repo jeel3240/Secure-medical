@@ -336,6 +336,22 @@ export function spokenTime(when: Date, leadZone: string, now: Date): string {
   return `${day} at ${spokenClock(when, leadZone)} your time`;
 }
 
+/**
+ * Whether `text` names the time a clock in `zone` reads at `when` - "3 PM",
+ * "3:00 p.m.", "3pm", "11:30 AM", "noon" - as Seri says a call back's time back
+ * to the lead to confirm it (A21, call 92). The minutes must be said unless
+ * on the hour; "13 PM" is not "3 PM".
+ */
+export function saysClock(text: string, when: Date, zone: string): boolean {
+  const minuteOfDay = localTime(when.getTime(), zone).minute;
+  const hour24 = Math.floor(minuteOfDay / 60);
+  const minute = minuteOfDay % 60;
+  const hour = hour24 % 12 === 0 ? 12 : hour24 % 12;
+  const minutes = minute === 0 ? '(?::00)?' : `:${String(minute).padStart(2, '0')}`;
+  const clock = new RegExp(`(?<![\\d:])${hour}${minutes}\\s*${hour24 < 12 ? 'a' : 'p'}\\.?\\s*m\\b`, 'i');
+  return clock.test(text) || (hour24 === 12 && minute === 0 && /\bnoon\b/i.test(text));
+}
+
 /** What a clock in `zone` reads at `when`, as said: "3 PM", "11:30 AM", "12 PM" for noon. */
 export function spokenClock(when: Date, zone: string): string {
   const minute = localTime(when.getTime(), zone).minute;

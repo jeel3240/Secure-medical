@@ -120,6 +120,59 @@
       ]
     },
     {
+      "id": "yes_short_nobody",
+      "who": "nobody",
+      "turns": [
+        {
+          "lead": "Yes."
+        }
+      ],
+      "expect": [
+        "none"
+      ],
+      "must_say_any": [
+        "when",
+        "what time",
+        "better time",
+        "good time"
+      ],
+      "must_not_say": [
+        "connect you",
+        "someone now",
+        "talk to someone now",
+        "speak with someone now",
+        "will call you"
+      ]
+    },
+    {
+      "id": "connect_yes_nobody",
+      "who": "nobody",
+      "turns": [
+        {
+          "lead": "Yes."
+        },
+        {
+          "seri": "[cheerfully] Great! [curious] Would you like me to connect you with someone now to place your order?"
+        },
+        {
+          "lead": "Yes."
+        }
+      ],
+      "expect": [
+        "none"
+      ],
+      "must_say_any": [
+        "when",
+        "what time",
+        "better time",
+        "good time"
+      ],
+      "must_not_say": [
+        "will call you",
+        "connecting you"
+      ]
+    },
+    {
       "id": "yes_later",
       "turns": [
         {

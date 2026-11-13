@@ -133,10 +133,18 @@ export function offeredToConnect(said: string): boolean {
 export const NO_REPEAT_NOTE =
   "Your last reply already offered to connect them with someone. If they said yes, go ahead. If not, don't offer it again in this reply: answer them, then ask if there's anything else they'd like to know.";
 
-/** The lead's turn, and the note against offering twice in a row when her last reply offered (`NO_REPEAT_NOTE`). */
+/**
+ * The same with nobody to take the call: "go ahead" on a yes made her book a
+ * call back at a time she chose herself (A21, call 92) - so a yes is asked when.
+ */
+export const NO_REPEAT_NOBODY_NOTE =
+  "Your last reply offered to connect them with someone, but nobody can take a call now. If they said yes, tell them everyone on our team is busy right now and ask when would be a good time for a call back - don't book one until they have agreed a time. If not, don't offer it again: answer them, then ask if there's anything else they'd like to know.";
+
+/** The lead's turn, and the note against offering twice in a row when her last reply offered (`NO_REPEAT_NOTE`; with nobody there, `NO_REPEAT_NOBODY_NOTE`). */
 export function leadTurn(who: WhoIsThere, said: string, herLastReply: string): ChatCompletionMessageParam[] {
   const turn = leadMessage(who, said);
-  return offeredToConnect(herLastReply) ? [turn, { role: 'system', content: NO_REPEAT_NOTE }] : [turn];
+  if (!offeredToConnect(herLastReply)) return [turn];
+  return [turn, { role: 'system', content: who === 'nobody' ? NO_REPEAT_NOBODY_NOTE : NO_REPEAT_NOTE }];
 }
 
 /** Given to her with her first reply after three minutes. */
@@ -366,6 +374,20 @@ export class Conversation {
     return '';
   }
 
+  /**
+   * Her reply the lead has just answered - the greeting before her first. Not
+   * an action of hers refused since: the lead never answered that.
+   */
+  private answeredReply(): string {
+    let i = this.history.length - 1;
+    while (i > 0 && this.history[i].role !== 'user') i--;
+    for (i--; i > 0; i--) {
+      const message = this.history[i];
+      if (message.role === 'assistant' && typeof message.content === 'string' && message.content) return message.content;
+    }
+    return '';
+  }
+
   private replaceLastSaid(heard: string): void {
     for (let i = this.history.length - 1; i > 0; i--) {
       const message = this.history[i];
@@ -514,7 +536,10 @@ export class Conversation {
     const words = spokenWords(said);
     const now = this.now();
     reply.action = tool.name;
-    const result = toHandoff({ name: tool.name, arguments: tool.arguments }, { whoIsThere: reply.who, hours: this.setup.hours, now, said: words });
+    const result = toHandoff(
+      { name: tool.name, arguments: tool.arguments },
+      { whoIsThere: reply.who, hours: this.setup.hours, now, said: words, before: spokenWords(this.answeredReply()) }
+    );
 
     if (result.ok) {
       const line = lineToAdd(result.handoff, words, { stopLine: this.setup.stopLine, now });

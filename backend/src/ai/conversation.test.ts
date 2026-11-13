@@ -16,6 +16,7 @@ import {
   leadMessage,
   leadTurn,
   LIMITS,
+  NO_REPEAT_NOBODY_NOTE,
   NO_REPEAT_NOTE,
   offeredToConnect,
   STILL_THERE_LINE,
@@ -401,7 +402,10 @@ describe('her actions', () => {
     ]);
   });
 
-  it('a call back at a time inside the hours: booked as checked', async () => {
+  it('a call back at a time she said back and they agreed: booked as checked', async () => {
+    model.replies.push([text("So that's tomorrow at 3 PM your time?")]);
+    conversation.heard('Can someone call me tomorrow at 3?');
+    await until(() => tokens().length === 2, 'her question');
     model.replies.push([
       text('Perfect, someone will call you tomorrow at 3 PM your time. Have a great day!'),
       tool('book_callback', { time: '2026-11-13T15:00', time_zone: 'America/Phoenix', reason: 'Wants to order' }),
@@ -409,6 +413,29 @@ describe('her actions', () => {
     conversation.heard('Yes, that works');
     await until(() => ends().length === 1, 'the end');
     expect(ended).toEqual([{ action: 'book_callback', at: '2026-11-13T22:00:00.000Z', timeZone: 'America/Phoenix', reason: 'Wants to order' }]);
+  });
+
+  it('a call back at a time she never said back: refused back to her, and she asks when instead (call 92)', async () => {
+    who = 'nobody';
+    model.replies.push([text('Would you like me to connect you with someone now?')]);
+    conversation.heard('Yes.');
+    await until(() => tokens().length === 2, 'her question');
+    model.replies.push(
+      [tool('book_callback', { time: '2026-11-13T11:00', time_zone: 'America/Phoenix', reason: 'Wants to order' })],
+      [text('Everyone on our team is busy right now. When would be a good time for a call back?')]
+    );
+    conversation.heard('Yes.');
+    await until(() => tokens().length === 5, 'her next question');
+    expect(ended).toEqual([]);
+    expect(ends()).toEqual([]);
+    expect(tokens().slice(2)).toEqual([
+      ['Everyone on our team is busy right now. ', false],
+      ['When would be a good time for a call back? ', false],
+      ['', true],
+    ]);
+    expect(model.asked[2].at(-1)).toMatchObject({ role: 'tool', content: expect.stringMatching(/^Not booked: they have not agreed this time/) });
+    expect(kept.slice(1).map((t) => t.who)).toEqual(['system', 'seri']);
+    expect(kept[1].text).toMatch(/^Not done: book_callback\. Not booked: they have not agreed/);
   });
 
   it('with nobody there, a transfer is refused back to her, and she speaks again at once', async () => {
@@ -525,6 +552,15 @@ describe('offering to connect, not twice in a row (A21)', () => {
     expect(leadTurn('free', 'Yes', 'Is that something you would be interested in?')).toEqual([
       { role: 'user', content: '[Who is there: someone free] Yes' },
     ]);
+  });
+
+  it('with nobody there, the note says to ask when instead of going ahead (call 92)', () => {
+    expect(leadTurn('nobody', 'Yes', 'Would you like me to connect you with someone now?')).toEqual([
+      { role: 'user', content: '[Who is there: nobody] Yes' },
+      { role: 'system', content: NO_REPEAT_NOBODY_NOTE },
+    ]);
+    expect(leadTurn('coming', 'Yes', 'Would you like me to connect you with someone now?')[1]).toEqual({ role: 'system', content: NO_REPEAT_NOTE });
+    expect(NO_REPEAT_NOBODY_NOTE).toMatch(/ask when would be a good time for a call back - don't book one until they have agreed a time/);
   });
 });
 

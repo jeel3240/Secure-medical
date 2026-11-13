@@ -15,6 +15,7 @@ import {
   FALLBACK_ZONE,
   leadTimeZone,
   MAX_AHEAD_DAYS,
+  saysClock,
   spokenTime,
   toLocalTime,
 } from './callback-time';
@@ -224,5 +225,41 @@ describe('how Seri says a time', () => {
     expect(say('2026-11-12T16:30:00Z')).toBe('tomorrow at 11:30 AM your time');
     expect(say('2026-11-12T17:05:00Z')).toBe('tomorrow at 12:05 PM your time');
     expect(say('2026-11-12T05:00:00Z')).toBe('tomorrow at 12 AM your time');
+  });
+});
+
+describe('whether a reply said a call back\'s time back (saysClock, A21 call 92)', () => {
+  const said = (text: string, local: string, zone = NY) => saysClock(text, atLocalTime(local, zone)!, zone);
+
+  it('the time as she says it, and the usual ways of writing it', () => {
+    for (const text of ['So that is tomorrow at 3 PM your time?', '3pm?', 'at 3 p.m.', 'At 3:00 PM', 'Thursday at 3 P.M. your time']) {
+      expect(said(text, '2026-11-12T15:00')).toBe(true);
+    }
+  });
+
+  it('on the lead\'s own clock, not ours', () => {
+    expect(said('So 3 PM your time?', '2026-11-12T15:00', 'America/Los_Angeles')).toBe(true);
+    expect(said('So 5 PM?', '2026-11-12T15:00', 'America/Los_Angeles')).toBe(false);
+  });
+
+  it('another hour, the other half of the day, or a number that only ends in it: no', () => {
+    expect(said('So 4 PM your time?', '2026-11-12T15:00')).toBe(false);
+    expect(said('So 3 AM your time?', '2026-11-12T15:00')).toBe(false);
+    expect(said('So 13 PM?', '2026-11-12T15:00')).toBe(false);
+    expect(said('Would you like me to connect you with someone now?', '2026-11-12T15:00')).toBe(false);
+    expect(said('', '2026-11-12T15:00')).toBe(false);
+  });
+
+  it('minutes past the hour must be said', () => {
+    expect(said('So 2:15 PM?', '2026-11-12T14:15')).toBe(true);
+    expect(said('So 2 PM?', '2026-11-12T14:15')).toBe(false);
+    expect(said('So 2:30 PM?', '2026-11-12T14:15')).toBe(false);
+  });
+
+  it('noon and midnight', () => {
+    expect(said('Tomorrow at noon?', '2026-11-12T12:00')).toBe(true);
+    expect(said('Tomorrow at 12 PM?', '2026-11-12T12:00')).toBe(true);
+    expect(said('Tomorrow at 12 AM?', '2026-11-12T12:00')).toBe(false);
+    expect(said('Tomorrow at noon?', '2026-11-12T12:30')).toBe(false);
   });
 });
