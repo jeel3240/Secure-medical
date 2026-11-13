@@ -11,6 +11,7 @@
 import twilio from 'twilio';
 import { handoffData, type Handoff } from './actions';
 import type { SafetyReason } from './safety';
+import { spokenWords } from './tone';
 
 /** Where Twilio opens the relay's WebSocket. Under `/api`, so Caddy passes it on (A02). */
 export const RELAY_PATH = '/api/ai/relay';
@@ -28,7 +29,9 @@ export const CALL_PARAMETER = 'call';
  * heard together on the dev number (A02; docs/AI-AGENT.md section 1, "The
  * settings A13 starts from"), written as the test calls wrote them:
  *
- * - Rachel on ElevenLabs's `v4` model, stability 0.4, similarity 0.8 - Jeel's pick;
+ * - Aria on ElevenLabs's `v4` model, stability 0.4, similarity 0.8 - picked
+ *   on A21's real calls, 2026-11-13, over A02's Rachel, who did not sound like
+ *   a real woman on the phone; her tone is in the text she is sent (tone.ts);
  * - Deepgram's `flux`, which waits for the end of a thought - `nova-3` sent
  *   half a sentence at a pause;
  * - stopped by speech, and only clear speech; "uh huh" does not stop her;
@@ -38,7 +41,7 @@ export const CALL_PARAMETER = 'call';
  */
 export const RELAY_SETTINGS: Readonly<Record<string, string>> = {
   ttsProvider: 'ElevenLabs',
-  voice: '21m00Tcm4TlvDq8ikWAM-v4-0.4_0.8',
+  voice: '9BWtsMINqrJLrRacOk9x-v4-0.4_0.8',
   transcriptionProvider: 'Deepgram',
   speechModel: 'flux',
   interruptible: 'speech',
@@ -155,7 +158,7 @@ export const KEY_TURN_PREFIX = '(pressed ';
 export const keyTurn = (digit: string): string => `${KEY_TURN_PREFIX}${digit})`;
 
 /** The lead spoke over Seri: what she had said by then. */
-export const interruptedNote = (heard: string): string => `Cut off. Heard: "${heard}"`;
+export const interruptedNote = (heard: string): string => `Cut off. Heard: "${spokenWords(heard)}"`;
 
 /** Twilio reported an error on the relay. Kept here, not in the logs: it can quote her words. */
 export const twilioErrorNote = (description: string): string => `Twilio error: ${description}`;

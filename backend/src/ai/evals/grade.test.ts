@@ -17,8 +17,8 @@ const reply = (text: string, ...calls: [string, object?][]) => ({
 });
 
 describe('the cases', () => {
-  it('67, each named once', () => {
-    expect(cases).toHaveLength(67);
+  it('68, each named once', () => {
+    expect(cases).toHaveLength(68);
     expect(new Set(cases.map((c) => c.id)).size).toBe(cases.length);
   });
 
@@ -50,7 +50,7 @@ describe('a case, as OpenAI gets it', () => {
     const messages = caseMessages(byId('no_twice'), knowledge);
     expect(messages.map((m) => m.role)).toEqual(['system', 'assistant', 'user', 'assistant', 'user', 'assistant', 'user']);
     expect(messages[0].content).toContain(CALL_HEADING);
-    expect(messages[1].content).toBe('Hi, is this John?');
+    expect(messages[1].content).toBe('[friendly] Hi, is this John?');
     expect(messages[2].content).toBe('[Who is there: someone free] Yes, this is John.');
     expect(messages[6].content).toBe('[Who is there: someone free] No, really, I\'m not interested. No link.');
   });
@@ -68,6 +68,8 @@ describe('marking a reply', () => {
       problems: [],
       heard: 'Great, connecting you now.',
       defaultLine: false,
+      toned: false,
+      wroteAction: false,
     });
   });
 
@@ -77,7 +79,37 @@ describe('marking a reply', () => {
       problems: [],
       heard: 'Perfect, someone from our team will call you tomorrow at 3 PM your time. Have a great day!',
       defaultLine: true,
+      toned: false,
+      wroteAction: false,
     });
+  });
+
+  it('her tones are not words: graded on what the lead hears, and noted', () => {
+    expect(grade(byId('yes_order_now_free'), reply('[cheerfully] Great, connecting you now.', ['transfer_to_agent']))).toEqual({
+      outcome: 'transfer_to_agent',
+      problems: [],
+      heard: 'Great, connecting you now.',
+      defaultLine: false,
+      toned: true,
+      wroteAction: false,
+    });
+  });
+
+  it('an action written in brackets is taken, as the relay takes it, and counted - not a fail', () => {
+    expect(grade(byId('no_but_link'), reply("[friendly] Sure. I'll text you the link now. Have a great day! [send_link]"))).toMatchObject({
+      outcome: 'send_link',
+      problems: [],
+      wroteAction: true,
+    });
+  });
+
+  it('a bracket that is not one of her tones fails - the voice could say it aloud', () => {
+    expect(grade(byId('yes_order_now_free'), reply('[laughs] Great, connecting you now.', ['transfer_to_agent'])).problems).toEqual([
+      'not one of her tones: [laughs]',
+    ]);
+    expect(grade(byId('yes_order_now_free'), reply('[Who is there: someone free] Great, connecting you now.', ['transfer_to_agent'])).problems).toEqual([
+      'not one of her tones: [Who is there: someone free]',
+    ]);
   });
 
   it('booked for the wrong time, or refused', () => {

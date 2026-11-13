@@ -325,8 +325,8 @@ describe('the call connected to Seri, in Twilio\'s words (A13)', () => {
     expect(seriTwiml(SETTINGS, { callId: 42, greeting: 'Hi, is this John?' })).toBe(
       '<?xml version="1.0" encoding="UTF-8"?><Response>' +
         '<Connect action="https://calls.example.com/api/webhooks/twilio/auto/ai-after?call=42" method="POST">' +
-        '<ConversationRelay url="wss://calls.example.com/api/ai/relay" welcomeGreeting="Hi, is this John?"' +
-        ' ttsProvider="ElevenLabs" voice="21m00Tcm4TlvDq8ikWAM-v4-0.4_0.8"' +
+        '<ConversationRelay url="wss://calls.example.com/api/ai/relay" welcomeGreeting="[friendly] Hi, is this John?"' +
+        ' ttsProvider="ElevenLabs" voice="9BWtsMINqrJLrRacOk9x-v4-0.4_0.8"' +
         ' transcriptionProvider="Deepgram" speechModel="flux"' +
         ' interruptible="speech" interruptSensitivity="low" ignoreBackchannel="true"' +
         ' elevenlabsTextNormalization="on" dtmfDetection="true" events="speaker-events" applicationReconnect="true">' +
@@ -342,7 +342,7 @@ describe('the call connected to Seri, in Twilio\'s words (A13)', () => {
 
   it('a name with a character XML would break on is escaped, not cut', () => {
     expect(seriTwiml(SETTINGS, { callId: 42, greeting: 'Hi, is this Mary & Jo?' })).toContain(
-      'welcomeGreeting="Hi, is this Mary &amp; Jo?"'
+      'welcomeGreeting="[friendly] Hi, is this Mary &amp; Jo?"'
     );
   });
 });

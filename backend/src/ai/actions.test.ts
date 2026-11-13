@@ -17,6 +17,7 @@ import {
   lastLine,
   lineToAdd,
   toHandoff,
+  writtenAction,
   type ActionContext,
   type Handoff,
 } from './actions';
@@ -201,12 +202,19 @@ describe('what Twilio hands back, read safely', () => {
 });
 
 describe('an action right after a question waits for the answer (A09)', () => {
-  it.each([...ACTIONS])('%s after "...connect you?" is held back, and nothing more is said', (name) => {
+  it.each(ACTIONS.filter((a) => a !== 'opt_out'))('%s after "...connect you?" is held back, and nothing more is said', (name) => {
     const args = name === 'book_callback' ? { time: '2026-11-12T15:00', time_zone: NY, reason: 'x' } : name === 'end_call' ? { reason: 'other' } : {};
     expect(call(name, args, { said: 'You can get up to 25% off. Would you like me to connect you with someone now?' })).toEqual({
       ok: false,
       awaitLead: true,
       error: `Not done: your reply asked the lead a question. Wait for their answer, and take ${name} in a later reply if it still fits.`,
+    });
+  });
+
+  it('a stop is never held back: taken at once, whatever she said with it (A21)', () => {
+    expect(call('opt_out', {}, { said: 'Okay, we will not call you again. Goodbye. Hi, is this John?' })).toEqual({
+      ok: true,
+      handoff: { action: 'opt_out' },
     });
   });
 
@@ -260,5 +268,23 @@ describe('the line the relay adds after hers (A09)', () => {
       const line = lastLine(handoff, ctx)!;
       for (const sentence of line.split(/(?<=[.?!])\s+/)) expect(checkSentence(sentence).reason).toBeNull();
     }
+  });
+});
+
+describe('an action she wrote in brackets instead of taking it (A21)', () => {
+  it('each way it was seen written', () => {
+    expect(writtenAction('Sure. [send_link]')).toEqual({ name: 'send_link', arguments: '{}' });
+    expect(writtenAction('[opt_out] Okay, we will not call you again.')).toEqual({ name: 'opt_out', arguments: '{}' });
+    expect(writtenAction('Goodbye. [functions.opt_out()]')).toEqual({ name: 'opt_out', arguments: '{}' });
+    expect(
+      writtenAction('Have a great day! [functions.book_callback:{"time":"2026-11-12T14:00","time_zone":"America/New_York","reason":"Wants to order"}]')
+    ).toEqual({ name: 'book_callback', arguments: '{"time":"2026-11-12T14:00","time_zone":"America/New_York","reason":"Wants to order"}' });
+  });
+
+  it('nothing for a tone, our note, a word that is not an action, or no bracket', () => {
+    expect(writtenAction('[friendly] Hi.')).toBeNull();
+    expect(writtenAction('[Who is there: nobody] Sure.')).toBeNull();
+    expect(writtenAction('[pay_now] Sure.')).toBeNull();
+    expect(writtenAction('I can send_link you.')).toBeNull();
   });
 });

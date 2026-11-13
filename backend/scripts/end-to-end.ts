@@ -842,18 +842,18 @@ async function main(): Promise<void> {
   // ------------------------------------------------ 15. a call back
   step('15. Dana talks to Seri, and books a call back');
   const d = await answerSeri(dana);
-  check('Twilio is told to connect the call to Seri, greeting Dana by name', [
+  check('Twilio is told to connect the call to Seri, greeting Dana by name, friendly', [
     d.answered.twiml.includes('<ConversationRelay'),
     attribute(d.answered.twiml, 'ConversationRelay', 'welcomeGreeting'),
-  ], [true, 'Hi, is this Dana?']);
+  ], [true, '[friendly] Hi, is this Dana?']);
   openAiReplies.push({ say: "It's Seri from eDrugstore. We have up to 25% off antibiotics today. Is now a good time?" });
   await d.relay.says('Who is this?');
   const firstAsk = openAiAsked.filter((a) => a.stream)[0];
-  check('OpenAI is asked with her instructions, her greeting, and what Dana said', [
+  check('OpenAI is asked with her instructions, her greeting with its tone, and what Dana said', [
     firstAsk?.messages[0]?.role,
     firstAsk?.messages[1]?.content,
     String(firstAsk?.messages[2]?.content).endsWith('Who is this?'),
-  ], ['system', 'Hi, is this Dana?', true]);
+  ], ['system', '[friendly] Hi, is this Dana?', true]);
   check('she answers, a sentence at a time', d.relay.said(), "It's Seri from eDrugstore. We have up to 25% off antibiotics today. Is now a good time? ");
   openAiReplies.push({
     say: 'No problem, someone will call you tomorrow at 3 PM your time. Have a great day!',

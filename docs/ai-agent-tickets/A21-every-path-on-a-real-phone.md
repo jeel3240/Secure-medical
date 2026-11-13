@@ -64,9 +64,26 @@
     gets the script.
   - **What the agent sees:** the lead's timeline - the call's line, **Answers**,
     and **Seri** with her conversation and how it ended.
-- Wording to watch: numbers and times as Rachel says them ("Monday at 3 PM
+- Wording to watch: numbers and times as Aria says them ("Monday at 3 PM
   your time"), the call-back number read digit by digit, anything she says
   that sounds like a promise we do not make.
+
+## Progress
+
+**2026-11-13, the setup and the first calls** - the dev number, a tunnel, `AUTO_CALLS=on`, Jeel's phone the only test number, Seri switched on, the api alone (no worker); calls placed with `dev:auto-call --again`.
+
+| Call | What happened | Found |
+|---|---|---|
+| 86, 87 | Picked up, then 8-9 seconds of nothing, "are you still there?" | Jeel's earbuds were still connecting - not the app: she was connected and greeting 0.5 s after the pick-up both times |
+| 88 | The greeting, "Yes", the offer, a question about what we sell, "Yes" - put through, the laptop rang | Every step right. The ring ended `busy` - declined in the browser - so `transfer_missed`. Her voice, Rachel, did not sound like a real woman |
+| - | A comparison call, eight voices on a key menu (a throwaway server, never merged) | Aria picked; `v3_conversational` would not play (Twilio 64112) |
+| - | Aria plain, with tones, and with tones more freely | Tones at stability 0.4 picked |
+| 89 | Aria with tones: busy, "is it a scam?", "No" | Her opening said "You signed up on one of our partner sites" - not wanted. After the "No" she texted the link in the same reply as asking why - not asked for (below) |
+| 90 | The new opening; "Who is this?"; "How did you get my number?" | The partner sites only when asked how we got the number - right. "No worries, Jeel" and "let me know when you're ready, Jeel" sounded personal - the soft tones; seven of nine replies offered to connect |
+
+All changed on `feat/seri-voice-aria-tone` - `docs/AI-AGENT.md` section 1, "Her voice and tone": Aria; seven businesslike tones; the opening and "Who is this?" without the partner sites; no "no worries" or "when you're ready"; a note against offering to connect twice in a row; an action written in brackets taken; and a stop never held back by a question.
+
+Still open from these calls: **the link texted without a yes** (call 89) - `toHandoff` holds an action back only when her reply *ends* on a question, and hers asked one mid-reply, then offered the link and sent it.
 
 ## Done when
 

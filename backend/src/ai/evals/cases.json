@@ -15,12 +15,15 @@
       "i do not know",
       "i can't answer",
       "i cannot answer",
-      "[who is there"
+      "[who is there",
+      "no worries",
+      "when you're ready",
+      "take your time"
     ]
   },
   "opening": {
     "lead": "Yes, this is John.",
-    "seri": "This is Seri from eDrugstore. You signed up on one of our partner sites, and I'm calling about our offer of up to 25% off your first order. Is that something you'd be interested in?"
+    "seri": "[friendly, upbeat] This is Seri from eDrugstore, and I'm calling about our offer of up to 25% off your first order. [curious] Is that something you'd be interested in?"
   },
   "cases": [
     {
@@ -84,7 +87,7 @@
           "lead": "Yes, I'm interested."
         },
         {
-          "seri": "Great! Would you like to talk to someone now, or is there a better time?"
+          "seri": "[cheerfully] Great! [curious] Would you like to talk to someone now, or is there a better time?"
         },
         {
           "lead": "Now is good."
@@ -102,7 +105,7 @@
           "lead": "Yes, I'm interested."
         },
         {
-          "seri": "Great! Would you like to talk to someone now, or is there a better time?"
+          "seri": "[cheerfully] Great! [curious] Would you like to talk to someone now, or is there a better time?"
         },
         {
           "lead": "Now is good."
@@ -138,7 +141,7 @@
           "lead": "Yes, but can someone call me tomorrow at 3?"
         },
         {
-          "seri": "Of course. So that's tomorrow, Thursday, at 3 PM your time?"
+          "seri": "[friendly] Of course. So that's tomorrow, Thursday, at 3 PM your time?"
         },
         {
           "lead": "Yes, that works."
@@ -157,13 +160,13 @@
           "lead": "Yes, I want to order."
         },
         {
-          "seri": "Great! Everyone on our team is busy right now. Could someone call you back later today or tomorrow?"
+          "seri": "[cheerfully] Great! [understanding] Everyone on our team is busy right now. Could someone call you back later today or tomorrow?"
         },
         {
           "lead": "Tomorrow at 2 is fine."
         },
         {
-          "seri": "So that's tomorrow, Thursday, at 2 PM your time?"
+          "seri": "[curious] So that's tomorrow, Thursday, at 2 PM your time?"
         },
         {
           "lead": "Yep."
@@ -277,7 +280,7 @@
           "lead": "No, I'm not interested."
         },
         {
-          "seri": "No problem. Is it more the timing, or just not something you need right now? I can also text you a link to browse later."
+          "seri": "[understanding] No problem. Is it more the timing, or just not something you need right now? I can also text you a link to browse later."
         },
         {
           "lead": "No, really, I'm not interested. No link."
@@ -321,7 +324,7 @@
           "lead": "I need to think about it."
         },
         {
-          "seri": "Of course. Can I text you the link so you have it when you're ready?"
+          "seri": "[friendly] Of course. Can I text you the link so you can look later?"
         },
         {
           "lead": "Sure, text it to me."
@@ -476,7 +479,7 @@
           "lead": "How much does it cost?"
         },
         {
-          "seri": "Prices depend on the medication and quantity. I can connect you with a representative, or text you a link where you can see the prices."
+          "seri": "[reassuring, calm] Prices depend on the medication and quantity. I can connect you with a representative, or text you a link where you can see the prices."
         },
         {
           "lead": "Just give me a rough number, ballpark."
@@ -976,7 +979,7 @@
           "lead": "I never signed up for anything."
         },
         {
-          "seri": "You signed up on one of our partner sites. If you'd rather not hear from us, I can remove your number."
+          "seri": "[reassuring, calm] You signed up on one of our partner sites. If you'd rather not hear from us, I can remove your number."
         },
         {
           "lead": "Yes, remove it."
@@ -1072,6 +1075,34 @@
       "must_say_any": [
         "up to 25",
         "up to twenty-five"
+      ]
+    },
+    {
+      "id": "no_repeat_connect",
+      "turns": [
+        {
+          "lead": "What do you have?"
+        },
+        {
+          "seri": "[friendly, upbeat] We mainly help with antibiotics, STI treatments and at-home health test kits. [curious] Would you like me to connect you with someone now to place your order?"
+        },
+        {
+          "lead": "How long does shipping take?"
+        }
+      ],
+      "expect": [
+        "none"
+      ],
+      "must_say_any": [
+        "day",
+        "days"
+      ],
+      "must_not_say": [
+        "connect",
+        "talk to someone",
+        "speak with someone",
+        "someone now",
+        "place your order"
       ]
     }
   ]

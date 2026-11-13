@@ -101,7 +101,7 @@ went a different way:
 | Frontend | React 18, Vite 4, React Router 6, zustand, plain CSS with design tokens. |
 | Production web server | The `caddy` service is built from `frontend/Dockerfile`: the React build copied into a `caddy:2` image. |
 | Calling | Built 2026-10-01: the `twilio` library on the server, `@twilio/voice-sdk` in the browser. Outgoing calls, and incoming calls to one agent's browser; voicemail detection, recordings and transcripts, 2026-10-02; a recording notice, 2026-10-05. `docs/TWILIO.md`. With automated calls on, a call back nobody owns rings everyone free (T19). Automated outbound calls, placed by the server, 2026-10-18 on - `docs/AUTO-CALLS.md`. |
-| AI agent | Phase 7, built through A20 on `dev` (2026-11-12) - A21, the real-phone test, and A22, the deploy, remain: Twilio ConversationRelay with an ElevenLabs voice (Rachel, `v4`) and an OpenAI text model - `gpt-4.1-mini`, chosen by the answer test set (A09) - `openai` 6.x and `ws` on the server - `openai` 7 needs Node 22, and the app runs Node 20. `docs/AI-AGENT.md`. |
+| AI agent | Phase 7, built through A20 on `dev` (2026-11-12) - A21, the real-phone test, and A22, the deploy, remain: Twilio ConversationRelay with an ElevenLabs voice (Aria, `v4`, since A21's first real calls - Rachel before - and a tone given line by line, `ai/tone.ts`) and an OpenAI text model - `gpt-4.1-mini`, chosen by the answer test set (A09) - `openai` 6.x and `ws` on the server - `openai` 7 needs Node 22, and the app runs Node 20. `docs/AI-AGENT.md`. |
 
 **EZ Texting API notes**
 - Quick start: https://developers.eztexting.com/docs/quick-start-guide

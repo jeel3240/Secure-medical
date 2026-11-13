@@ -429,7 +429,7 @@ describe('Seri talks (A11)', () => {
     expect(system.content).toContain(CALL_HEADING);
     expect(system.content).toContain('John');
     expect(system.content).toContain(STOP);
-    expect(greeting).toEqual({ role: 'assistant', content: 'Hi, is this John?' });
+    expect(greeting).toEqual({ role: 'assistant', content: '[friendly] Hi, is this John?' });
     expect(lead).toEqual({ role: 'user', content: '[Who is there: someone coming] Who is this?' });
     expect(c.received).toEqual([
       { type: 'text', token: 'This is Seri from eDrugstore. ', last: false },
