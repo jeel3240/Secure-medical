@@ -263,7 +263,9 @@ on the callback, never in the log.
 **Whose callback it is.** An agent sees and changes only their own; a superadmin
 may list another agent's and may change one, which is how a callback left by
 someone off sick gets moved. A refusal names the owner so the screen can say who
-rather than just no.
+rather than just no. A call back Seri booked that nobody has taken has no
+owner to name: the refusal says "Nobody has this callback yet: pick up the
+lead to take it" (2026-11-13), and only a superadmin may change it until then.
 
 **The list row carries what the screen shows** - lead name, phone, source,
 tier, the newest note, who holds the lead now (`holder`, for Pick up / Resume

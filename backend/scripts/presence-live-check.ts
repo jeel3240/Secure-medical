@@ -356,6 +356,26 @@ async function main(): Promise<void> {
     check('on hold, it rings nobody', await someoneOnOrJustOffCall(pool, null), false);
     await pool.query(`UPDATE calls SET held_at = NULL, script_result = 'transfer_missed' WHERE id = $1`, [yesCall]);
     check('over, nobody took it: rings nobody', await someoneOnOrJustOffCall(pool, null), false);
+
+    // Seri's transfer (Phase 7): no answer row on the script - her part ended
+    // with `transfer_to_agent` (ai_ended_with), and it rings the same way.
+    const seriLead = (
+      await pool.query(`INSERT INTO leads (phone, first_name, ezt_added_at) VALUES ('+15550000913', 'Pat', now()) RETURNING id`)
+    ).rows[0].id as number;
+    const seriCall = (
+      await pool.query(
+        `INSERT INTO calls (lead_id, twilio_call_sid, direction, started_at, ai_started_at, ai_knowledge_version)
+         VALUES ($1, 'CA-RING-3', 'automated', now(), now(), 'v') RETURNING id`,
+        [seriLead]
+      )
+    ).rows[0].id as number;
+    check('Seri still talking: rings nobody', await someoneOnOrJustOffCall(pool, null), false);
+    await pool.query(`UPDATE calls SET ai_ended_with = 'transfer_to_agent' WHERE id = $1`, [seriCall]);
+    check('Seri\'s transfer ringing: someone coming, as the script\'s', await someoneOnOrJustOffCall(pool, null), true);
+    check('never the call asking itself', await someoneOnOrJustOffCall(pool, seriCall), false);
+    await pool.query(`UPDATE calls SET script_result = 'transferred', agent_id = $2 WHERE id = $1`, [seriCall, zoe]);
+    check('taken: no longer ringing - its person is on it', await someoneOnOrJustOffCall(pool, seriCall), true);
+    await pool.query(`UPDATE calls SET ended_at = now() - interval '3 minutes', outcome = 'answered' WHERE id = $1`, [seriCall]);
   }
 
   console.log(failures === 0 ? '\nall checks passed' : `\n${failures} check(s) FAILED`);

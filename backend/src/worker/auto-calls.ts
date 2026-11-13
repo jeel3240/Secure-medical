@@ -140,6 +140,25 @@ export async function dialDueLeads(deps: DialDeps, now = new Date()): Promise<Di
   return look;
 }
 
+/**
+ * Why the robot is stopped after this look, when that has changed since the
+ * last - `was` - or null when nothing changed: the worker logs each stop once
+ * when it starts and once when it ends, not every half minute (T20 review).
+ * Waiting on hold is the robot working as it should, not a stop. Seri is
+ * asked about only when there is room to place calls (A17): a look with no
+ * room says nothing about her, so a stop for her stands until she is asked
+ * again, rather than reading as dialling again each time nobody is free.
+ */
+export function stopChange(
+  was: DialLook['stopped'],
+  look: Pick<DialLook, 'stopped' | 'room'>
+): { now: DialLook['stopped'] } | null {
+  const now = look.stopped === 'on_hold' ? null : look.stopped;
+  if (now === was) return null;
+  if (now === null && look.room === 0 && (was === 'openai_down' || was === 'ai_fallbacks')) return null;
+  return { now };
+}
+
 /** Whether a look is worth a log line: something was closed, due, or another worker held the lock. */
 export function worthLogging(look: DialLook): boolean {
   return look.closed > 0 || look.due > 0 || look.locked;

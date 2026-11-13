@@ -281,6 +281,15 @@ describe('changing a callback', () => {
     expect(res.body.message).toContain('Sam');
   });
 
+  it('a call back Seri booked that nobody has: says to pick up the lead, never "belongs to ." (A16)', async () => {
+    const { agent } = await setup();
+    updateCallback.mockResolvedValue({ ok: false, reason: 'not_yours', ownerName: '' });
+
+    const res = await agent.patch('/api/callbacks/1').send({ done: true });
+    expect(res.status).toBe(403);
+    expect(res.body.message).toBe('Nobody has this callback yet: pick up the lead to take it. Only a superadmin can change it before then.');
+  });
+
   it('answers 404 for a callback that does not exist', async () => {
     const { agent } = await setup();
     updateCallback.mockResolvedValue({ ok: false, reason: 'not_found' });

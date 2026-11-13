@@ -103,7 +103,10 @@ export function callbacksRouter(deps: AppDeps): Router {
         throw new HttpError(
           403,
           'not_yours',
-          `This callback belongs to ${result.ownerName}. Only they or a superadmin can change it.`
+          result.ownerName
+            ? `This callback belongs to ${result.ownerName}. Only they or a superadmin can change it.`
+            : // One Seri booked that nobody has taken yet (A16).
+              'Nobody has this callback yet: pick up the lead to take it. Only a superadmin can change it before then.'
         );
       }
 

@@ -14,7 +14,7 @@ import {
 } from '../db/auto-dial';
 import { readCallHours } from '../db/call-script';
 import { pool } from '../db/pool';
-import { dialDueLeads, worthLogging, type DialDeps, type DialLook } from './auto-calls';
+import { dialDueLeads, stopChange, worthLogging, type DialDeps, type DialLook } from './auto-calls';
 import { expireStaleConversations } from './expiry';
 import { placeAutoCall } from './place-auto-call';
 import { pollOnce } from './poller';
@@ -76,8 +76,9 @@ const dialler = autoDialler();
  */
 let stoppedFor: DialLook['stopped'] = null;
 function noteStop(look: DialLook): void {
-  const now = look.stopped === 'on_hold' ? null : look.stopped;
-  if (now === stoppedFor) return;
+  const change = stopChange(stoppedFor, look);
+  if (!change) return;
+  const { now } = change;
   if (now === 'silent') log.error('auto_call.webhooks_silent', { calls: look.silent });
   else if (now === 'refused') log.error('auto_call.twilio_refusing', {});
   else if (now === 'no_script') log.error('auto_call.no_script', {});
@@ -176,8 +177,9 @@ async function loop(): Promise<void> {
 }
 
 log.info('worker.started', { autoCalls: dialler ? 'on' : 'off' });
-// Each switch-on starts afresh: leads that arrived while automated calls were
-// off are never called (`recordAutoCallsSwitch`). Before the first look.
+// Each switch-on is recorded (`recordAutoCallsSwitch`): leads that arrive
+// after it are called first, then those already waiting at the switch-on
+// (T27, `leadsToCall`). Before the first look.
 recordAutoCallsSwitch(dialler !== null)
   .catch((err) => log.error('auto_calls.switch_not_recorded', { err: errText(err) }))
   .finally(() => loop());

@@ -75,6 +75,10 @@ export const FREE_SQL = `(
  * on that call - but while it rings their browsers say busy and no call is
  * theirs, so they count as neither free nor on a call. A second "yes" then
  * waits on hold for them rather than hearing the busy line at once.
+ *
+ * The "yes" is a script answer whose choice ends in a transfer, or - on a
+ * call Seri took, which keeps no script answer - her part ending with
+ * `transfer_to_agent` (added 2026-11-13, found in the doc check after A20).
  */
 export const TRANSFER_RINGING_SQL = `EXISTS (
   SELECT 1 FROM calls tc
@@ -82,10 +86,13 @@ export const TRANSFER_RINGING_SQL = `EXISTS (
     AND tc.script_result IS NULL AND tc.outcome IS NULL
     AND tc.started_at > now() - interval '10 minutes'
     AND tc.id IS DISTINCT FROM $1::int
-    AND EXISTS (
-      SELECT 1 FROM call_answers ta
-      JOIN call_choices tch ON tch.step_id = ta.step_id AND tch.key = ta.choice_key
-      WHERE ta.call_id = tc.id AND tch.ending = 'transfer'
+    AND (
+      tc.ai_ended_with = 'transfer_to_agent'
+      OR EXISTS (
+        SELECT 1 FROM call_answers ta
+        JOIN call_choices tch ON tch.step_id = ta.step_id AND tch.key = ta.choice_key
+        WHERE ta.call_id = tc.id AND tch.ending = 'transfer'
+      )
     )
 )`;
 

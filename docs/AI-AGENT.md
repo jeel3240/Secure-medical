@@ -232,6 +232,8 @@ Decided by Jeel, 2026-11-11. Before each reply the server works out who could ta
 
 If it changes between her words and the transfer, the transfer's own rules decide, as today: the hold line, or the busy line and **Wants a call** in the queue (T22).
 
+"Ringing with another lead" includes her own transfers (2026-11-13, found in the doc check after A20): a call whose part ended with `transfer_to_agent` counts as ringing until it is taken, held or missed (`TRANSFER_RINGING_SQL`, `db/presence.ts`; `presence-live-check`). Before, it counted only the script's "yes", so while her transfer rang, another call's "yes" heard the busy line and she was told nobody was coming.
+
 ### The five actions
 
 Seri ends every call by choosing exactly one. She says her last line herself, in her voice; then our server ends the ConversationRelay session with the action in `handoffData`, and Twilio posts to `/auto/ai-after`, which carries it out with today's code and says nothing more of its own - only the recording notice before a transfer, and the hold or busy line when today's transfer reaches them:
