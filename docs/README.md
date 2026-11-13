@@ -157,7 +157,13 @@ is claimed, worked, closed, and finally blocked; then, with automated calls on,
 the robot calls three leads who never replied, one at a time as one agent is
 free (the five calls each of T29 set to one for it) - one says yes and the agent takes it, one says yes and nobody does (first
 in the queue), one says no, then yes to the link, which is texted (T25,
-`AUTO-CALLS.md`):
+`AUTO-CALLS.md`). Then Seri, the AI agent, is switched on (A20,
+`AI-AGENT.md`): the robot places nothing while OpenAI does not answer its
+check, then calls five leads who each talk to her through her real relay -
+one books a call back (due, first in the queue, taken by the agent who picks
+the lead up), one is put through and the agent takes it, one gets the link,
+one says stop and is blocked without OpenAI being asked, and on the last
+OpenAI fails mid-call and the script takes over:
 
 ```bash
 docker compose exec postgres psql -U app -d postgres -c 'CREATE DATABASE e2e'
@@ -166,12 +172,18 @@ docker compose exec -e DATABASE_URL=postgres://app:app@postgres:5432/e2e api   n
 docker compose exec -e DATABASE_URL=postgres://app:app@postgres:5432/e2e   -e EZT_SEND_GROUP=stub api npm run e2e
 ```
 
-Ninety-seven checks (2026-10-27) - Avery's "thanks" after the link included,
+131 checks (2026-11-12; 97 before Seri) - Avery's "thanks" after the link included,
 which goes to a person (`STATE-MACHINE.md` 2d). EZ Texting and Twilio are stubbed at their
 HTTP boundaries - `axios.post`, and the Twilio library's one request method,
-which answers only "place this call" and fails the run on anything else - so it
-proves everything up to the moment a text or a call would leave the building,
-and nothing about whether a real phone buzzes or rings. Twilio's side of each
+which answers only "place this call" and fails the run on anything else - and
+OpenAI is a local server `OPENAI_BASE_URL` points at, streaming the replies
+each step scripts (A20). So it proves everything up to the moment a text, a
+call or a question to the model would leave the building, and nothing about
+whether a real phone buzzes or rings, or what the real model would say - the
+answer test set is for that (`npm run ai:eval`, `AI-AGENT.md` section 8). Seri's
+relay is the real WebSocket on a real server, connected as ConversationRelay
+connects. The api container must be on the current image (`docker compose up
+-d --no-deps api` after a build): an older one lacks Phase 7's packages. Twilio's side of each
 call is its webhooks, posted to the real routes and signed as Twilio signs them,
 each at the address the previous answer gave. It sets its own database's calling
 hours to every hour of every day, so it passes whenever it is run. For real
