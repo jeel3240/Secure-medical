@@ -2,7 +2,11 @@
  * The whole system, end to end: a lead arrives, answers its flow's questions, is
  * scored, reaches the queue, gets worked by an agent, and shows up on the
  * timeline - and leads who never reply get the robot's call (T25,
- * docs/AUTO-CALLS.md): taken by a person, nobody taking it, and the link.
+ * docs/AUTO-CALLS.md): taken by a person, nobody taking it, and the link. Then
+ * Seri, the AI agent, switched on (A20, docs/AI-AGENT.md): the robot holding
+ * back while OpenAI is down, and her calls ending each way - a call back, a
+ * transfer, the link, a stop, and OpenAI failing mid-call, the script taking
+ * over.
  *
  * Phase 3 task 28. This is the script CLAUDE.md §10 asks for, and the closest
  * thing to a rehearsal of a real day before UAT.
@@ -21,7 +25,10 @@
  * Twilio for - the number, the webhooks, voicemail detection - is built by
  * the real code and checked here. Twilio's side of a call is its webhooks,
  * posted to the real routes and signed as Twilio signs them, each one the
- * address the previous answer gave - as Twilio follows them.
+ * address the previous answer gave - as Twilio follows them. OpenAI is a
+ * local server at its HTTP edge (`OPENAI_BASE_URL`), streaming the replies
+ * each step scripts; Seri's relay is the real WebSocket on a real server,
+ * connected as ConversationRelay connects - signed, then `setup`.
  *
  * It writes rows, so it refuses to run against a database that holds any:
  *
@@ -69,8 +76,17 @@ let twilioCalls = 0;
   throw new Error(`Twilio was asked for something this script does not answer: ${method} ${opts.uri}`);
 };
 
+import http from 'http';
+import type { AddressInfo } from 'net';
 import request from 'supertest';
 import twilio from 'twilio';
+import WebSocket from 'ws';
+import { cachedProbe, fallbackStreak, openAiProbe, seriState } from '../src/ai/health';
+import { loadKnowledge } from '../src/ai/knowledge';
+import { openAiModel } from '../src/ai/openai';
+import { attachRelay } from '../src/ai/relay';
+import { pgRelayStore } from '../src/ai/relay-store';
+import { readAiAgentOn, switchAiAgent } from '../src/ai/settings';
 import { openingQuestion, startConversation } from '../src/db/flows';
 import { sendOpener } from '../src/worker/opener';
 import { pool } from '../src/db/pool';
@@ -99,6 +115,7 @@ import {
   dialRoom,
   leadsToCall,
   recordAutoCallsSwitch,
+  REFUSED_PAUSE_MINUTES,
   stillDue,
   withDialLock,
 } from '../src/db/auto-dial';
@@ -126,6 +143,133 @@ const TWILIO: TwilioSettings = {
   identityPrefix: '',
 };
 
+/** Not a real key: OpenAI here is the local stand-in below. */
+const OPENAI_KEY = 'sk-e2e-not-a-real-key';
+
+/**
+ * OpenAI, at its HTTP edge (A20): a local server `OPENAI_BASE_URL` points at.
+ * Seri's replies are streamed as OpenAI streams them - her words a piece at a
+ * time, then her action as a tool call - in the order each step scripts them
+ * (`openAiReplies`); `fail` answers one with OpenAI's error. The one-word check
+ * the robot makes (A17) is answered up, or down while `openAiDown`.
+ */
+type ScriptedReply = 'fail' | { say?: string; tool?: { name: string; args?: Record<string, unknown> } };
+const openAiReplies: ScriptedReply[] = [];
+const openAiAsked: { stream: boolean; messages: { role: string; content?: unknown }[] }[] = [];
+let openAiDown = false;
+
+function fakeOpenAi(): http.Server {
+  return http.createServer((req, res) => {
+    let raw = '';
+    req.on('data', (chunk) => (raw += chunk));
+    req.on('end', () => {
+      const body = JSON.parse(raw || '{}');
+      openAiAsked.push({ stream: body.stream === true, messages: body.messages ?? [] });
+      const json = (status: number, payload: unknown) => {
+        res.writeHead(status, { 'content-type': 'application/json' });
+        res.end(JSON.stringify(payload));
+      };
+      const error = { error: { message: 'The server had an error.', type: 'server_error' } };
+      if (!body.stream) {
+        if (openAiDown) return json(503, error);
+        return json(200, {
+          id: 'chatcmpl-check',
+          object: 'chat.completion',
+          created: 0,
+          model: body.model,
+          choices: [{ index: 0, message: { role: 'assistant', content: 'OK' }, finish_reason: 'length' }],
+        });
+      }
+      const next = openAiReplies.shift() ?? { say: 'Sure.' };
+      if (next === 'fail') return json(500, error);
+      res.writeHead(200, { 'content-type': 'text/event-stream' });
+      const chunk = (delta: unknown, finish: string | null = null) =>
+        res.write(
+          `data: ${JSON.stringify({ id: 'chatcmpl-e2e', object: 'chat.completion.chunk', created: 0, model: body.model, choices: [{ index: 0, delta, finish_reason: finish }] })}\n\n`
+        );
+      // Her words a few at a time, as OpenAI writes them.
+      for (const piece of (next.say ?? '').match(/\S+\s*/g) ?? []) chunk({ content: piece });
+      if (next.tool) {
+        chunk({
+          tool_calls: [
+            { index: 0, id: 'call_e2e', type: 'function', function: { name: next.tool.name, arguments: JSON.stringify(next.tool.args ?? {}) } },
+          ],
+        });
+      }
+      chunk({}, next.tool ? 'tool_calls' : 'stop');
+      res.end('data: [DONE]\n\n');
+    });
+  });
+}
+
+/**
+ * ConversationRelay's side of a call to Seri: the WebSocket opened as the
+ * TwiML says - `url`, signed for it - then `setup` naming our row, and the
+ * lead's words as Twilio sends them. Everything the relay sends back is kept.
+ */
+class Relay {
+  received: { type: string; token?: string; last?: boolean; handoffData?: string }[] = [];
+  private constructor(private readonly ws: WebSocket) {
+    ws.on('message', (data) => this.received.push(JSON.parse(data.toString())));
+  }
+
+  static async open(port: number, twiml: string, callSid: string): Promise<Relay> {
+    const url = attribute(twiml, 'ConversationRelay', 'url');
+    const call = attribute(twiml, 'Parameter', 'value');
+    const ws = new WebSocket(url.replace(TWILIO.publicUrl.replace('https:', 'wss:'), `ws://127.0.0.1:${port}`), {
+      headers: { 'X-Twilio-Signature': twilio.getExpectedTwilioSignature(TWILIO.authToken, url, {}) },
+    });
+    await new Promise((resolve, reject) => ws.once('open', resolve).once('error', reject));
+    const relay = new Relay(ws);
+    relay.send({ type: 'setup', sessionId: `VX${call}`, callSid, callType: 'PSTN', customParameters: { call } });
+    return relay;
+  }
+
+  send(message: Record<string, unknown>): void {
+    this.ws.send(JSON.stringify(message));
+  }
+
+  /** What she said, in order. */
+  said(): string {
+    return this.received
+      .filter((m) => m.type === 'text')
+      .map((m) => m.token)
+      .join('');
+  }
+
+  /** The lead speaks; resolves when her reply is over - its closing `last`, or the session's end. */
+  async says(words: string): Promise<void> {
+    const before = this.received.length;
+    this.send({ type: 'prompt', voicePrompt: words, lang: 'en-US', last: true });
+    await eventually(
+      async () => this.received.slice(before),
+      (after) => after.some((m) => m.type === 'end' || (m.type === 'text' && m.last === true))
+    );
+  }
+
+  /** The `end` the relay sent - her action, as Twilio hands it to the action URL. */
+  async ended(): Promise<string> {
+    const end = await eventually(
+      async () => this.received.find((m) => m.type === 'end'),
+      (m) => m !== undefined
+    );
+    if (!end) throw new Error('the relay never ended the session');
+    return end.handoffData ?? '';
+  }
+
+  close(): void {
+    this.ws.close(1000);
+  }
+}
+
+/** Tomorrow at 3 PM on a New York clock, as Seri books it: "YYYY-MM-DDTHH:MM". */
+function tomorrowAtThreeInNewYork(): string {
+  const day = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/New_York', year: 'numeric', month: '2-digit', day: '2-digit' }).format(
+    new Date(Date.now() + 86_400_000)
+  );
+  return `${day}T15:00`;
+}
+
 /**
  * Built on first use rather than at import, so `config` is read after the
  * env is in place. A module-scope `let app` assigned inside main() looked
@@ -140,6 +284,8 @@ function api() {
     secureCookies: false,
     twilio: TWILIO,
     autoCalls: true,
+    // Seri needs a key; her switch decides whether she takes calls (A13).
+    openAiKey: OPENAI_KEY,
     activity: { record: (entry) => recordActivity(pool, entry) },
   });
   return cachedApp;
@@ -246,6 +392,12 @@ const PHONE = '+15557000001';
 const CASEY = '+15557000002';
 const RILEY = '+15557000003';
 const AVERY = '+15557000004';
+// Seri's calls (A20).
+const DANA = '+15557000005';
+const ELI = '+15557000006';
+const FRAN = '+15557000007';
+const GIL = '+15557000008';
+const HAL = '+15557000009';
 
 /**
  * A lead that came in 70 minutes ago and never answered the first question,
@@ -271,8 +423,8 @@ async function silentLead(phone: string, first: string, textedMinutesAgo: number
 async function main(): Promise<void> {
   await refuseIfNotEmpty();
 
-  console.log('End-to-end: one lead, start to finish; then the robot calls three more.');
-  console.log('EZ Texting and Twilio are stubbed - nothing is texted and nothing rings.\n');
+  console.log('End-to-end: one lead, start to finish; then the robot calls three more, and Seri five.');
+  console.log('EZ Texting, Twilio and OpenAI are stubbed - nothing is texted, nothing rings, no AI is asked.\n');
 
   // ---------------------------------------------------------------- the agent
   const agent = (
@@ -530,7 +682,8 @@ async function main(): Promise<void> {
   ], [true, true]);
 
   const taken = await twilioAsks(attribute(yes.twiml, 'Client', 'url'), {
-    CallSid: `CA${'9'.padStart(32, '0')}`,
+    // Fixed ids in letters, never one the stub hands out (CA0...1, CA0...2, ...).
+    CallSid: `CA${'c'.repeat(32)}`,
     ParentCallSid: caseyCall.sid,
     To: `client:agent-${maya}`,
     CallStatus: 'in-progress',
@@ -586,7 +739,7 @@ async function main(): Promise<void> {
 
   // Maya picks Riley up and calls them back from the browser.
   await claimLead(riley, maya);
-  const callBackSid = `CA${'8'.padStart(32, '0')}`;
+  const callBackSid = `CA${'b'.repeat(32)}`;
   check('Maya calls Riley back', (await startCall({ callSid: callBackSid, leadId: riley, agentId: maya })).ok, true);
   check('someone got back to them: no longer waiting on us', (await getLeadDetail(riley))?.flags.missedYes, false);
   await finishCall({ callSid: callBackSid, outcome: 'answered', durationSec: 60 });
@@ -625,8 +778,208 @@ async function main(): Promise<void> {
   check('the card says a call stopped the questions', (await getLeadDetail(avery))?.conversation?.phoneTookOverAt !== null, true);
   check('Twilio was asked only to place the three calls', twilioAsked.map((r) => r.method), ['POST', 'POST', 'POST']);
 
-  // ---------------------------------------------------------- 14. health
-  step('14. The system reports on itself');
+  // ------------------------------------------------ 14. Seri switched on
+  step('14. Seri switched on: the robot holds back while OpenAI is down');
+  // OpenAI at its HTTP edge, and Seri's relay on a real server, as the API runs it.
+  const openAi = fakeOpenAi();
+  await new Promise<void>((resolve) => openAi.listen(0, '127.0.0.1', resolve));
+  process.env.OPENAI_BASE_URL = `http://127.0.0.1:${(openAi.address() as AddressInfo).port}/v1`;
+  const server = http.createServer(api());
+  attachRelay(server, { twilio: TWILIO, knowledge: loadKnowledge(), store: pgRelayStore(pool), model: openAiModel(OPENAI_KEY) });
+  await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
+  const relayPort = (server.address() as AddressInfo).port;
+
+  check('switched on, as `npm run ai-agent -- on` does, and recorded', (await switchAiAgent(pool, 'on')).changed, true);
+  // The worker's look, as worker/index.ts wires it with Seri asked about first
+  // (A17) - OpenAI checked on every look here, not once a minute.
+  const seriNumbers: AutoCallNumbers = { only: new Set([DANA, ELI, FRAN, GIL, HAL]), invalid: 0 };
+  const seriOnly = [...seriNumbers.only!];
+  const seriDialler: DialDeps = {
+    ...dialler,
+    leadsToCall: (opts) => leadsToCall({ ...opts, only: seriOnly }),
+    stillDue: (opts) => stillDue({ ...opts, only: seriOnly }),
+    placeAutoCall: (id) => placeAutoCall({ leadId: id, settings: TWILIO, numbers: seriNumbers }),
+    seriReady: seriState({
+      on: () => readAiAgentOn(pool, OPENAI_KEY),
+      paused: () => fallbackStreak(pool, REFUSED_PAUSE_MINUTES),
+      probe: cachedProbe(openAiProbe(OPENAI_KEY), { ttlMs: 0 }),
+    }),
+  };
+  /** A lead due for the robot's call, Maya's browser saying it can take one, and the look that calls them. */
+  const seriCalls = async (phone: string, first: string) => {
+    const id = await silentLead(phone, first, 61);
+    await browser.post('/api/calls/ringable').send({ available: true });
+    return id;
+  };
+
+  const dana = await seriCalls(DANA, 'Dana');
+  openAiDown = true;
+  const heldBack = await dialDueLeads(seriDialler);
+  check('OpenAI not answering its one-word check: nothing placed, and why', [heldBack.stopped, heldBack.aiError, heldBack.placed], [
+    'openai_down',
+    'OpenAI 503 server_error',
+    0,
+  ]);
+  openAiDown = false;
+  check('OpenAI back: the next look calls Dana', (await dialDueLeads(seriDialler)).placed, 1);
+
+  /** One call to Seri: Twilio asks what to do, the verdict says a person, and the relay opens. */
+  const answerSeri = async (leadId: number) => {
+    const call = await robotCall(leadId);
+    const at = (path: string) => `/api/webhooks/twilio/auto/${path}?call=${call.id}`;
+    const answered = await twilioAsks(at('answer'), { CallSid: call.sid, CallStatus: 'in-progress' });
+    await twilioAsks(at('amd'), { CallSid: call.sid, AnsweredBy: 'human' });
+    const relay = await Relay.open(relayPort, answered.twiml, call.sid);
+    /** Twilio, once the session has ended: the action URL, then - when the call is over - its end. */
+    const after = (params: Record<string, string>) =>
+      twilioAsks(attribute(answered.twiml, 'Connect', 'action'), { CallSid: call.sid, CallStatus: 'in-progress', SessionId: `VX${call.id}`, ...params });
+    const over = (seconds: number) => twilioAsks(at('status'), { CallSid: call.sid, CallStatus: 'completed', CallDuration: String(seconds) });
+    return { call, at, answered, relay, after, over };
+  };
+  const seriRecord = async (leadId: number) =>
+    (await pool.query(`SELECT script_result, ai_ended_with FROM calls WHERE lead_id = $1 AND direction = 'automated'`, [leadId])).rows[0];
+
+  // ------------------------------------------------ 15. a call back
+  step('15. Dana talks to Seri, and books a call back');
+  const d = await answerSeri(dana);
+  check('Twilio is told to connect the call to Seri, greeting Dana by name', [
+    d.answered.twiml.includes('<ConversationRelay'),
+    attribute(d.answered.twiml, 'ConversationRelay', 'welcomeGreeting'),
+  ], [true, 'Hi, is this Dana?']);
+  openAiReplies.push({ say: "It's Seri from eDrugstore. We have up to 25% off antibiotics today. Is now a good time?" });
+  await d.relay.says('Who is this?');
+  const firstAsk = openAiAsked.filter((a) => a.stream)[0];
+  check('OpenAI is asked with her instructions, her greeting, and what Dana said', [
+    firstAsk?.messages[0]?.role,
+    firstAsk?.messages[1]?.content,
+    String(firstAsk?.messages[2]?.content).endsWith('Who is this?'),
+  ], ['system', 'Hi, is this Dana?', true]);
+  check('she answers, a sentence at a time', d.relay.said(), "It's Seri from eDrugstore. We have up to 25% off antibiotics today. Is now a good time? ");
+  openAiReplies.push({
+    say: 'No problem, someone will call you tomorrow at 3 PM your time. Have a great day!',
+    tool: { name: 'book_callback', args: { time: tomorrowAtThreeInNewYork(), time_zone: 'America/New_York', reason: 'Wants to order antibiotics' } },
+  });
+  await d.relay.says("I'm driving. Can someone call me tomorrow at 3?");
+  const danaHandoff = await d.relay.ended();
+  check('her action ends the session, after her last line', JSON.parse(danaHandoff).action, 'book_callback');
+  d.relay.close();
+  const danaAfter = await d.after({ SessionStatus: 'ended', HandoffData: danaHandoff });
+  check('the action URL hangs up - nothing said for her', [danaAfter.twiml.includes('<Hangup/>'), danaAfter.twiml.includes('<Say')], [true, false]);
+  await d.over(70);
+  check('saved: callback_booked, her part ended with it', await seriRecord(dana), { script_result: 'callback_booked', ai_ended_with: 'book_callback' });
+  const danaBooking = (await pool.query(`SELECT agent_id, reason, note FROM callbacks WHERE lead_id = $1`, [dana])).rows;
+  check('her call back: nobody\'s yet, with her line for whoever calls', danaBooking, [{ agent_id: null, reason: 'ai_booked', note: 'Wants to order antibiotics' }]);
+  check('on Dana\'s page', (await getLeadDetail(dana))?.aiCallback?.note, 'Wants to order antibiotics');
+  const danaSeri = ((await getTimeline(dana)) ?? []).find((e) => e.kind === 'call')?.detail.seri as { turns: unknown[]; ended: { action: string } };
+  check('on the timeline: her conversation - greeting, two each - and how it ended', [danaSeri?.turns.length, danaSeri?.ended.action], [5, 'book_callback']);
+  check('Admin > Leads: Callback booked', (await listAdminLeads({})).leads.find((l) => l.id === dana)?.call, 'callback_booked');
+  check('not due yet: not in the queue', (await listQueue({})).leads.some((l) => l.id === dana), false);
+
+  // Tomorrow comes.
+  await pool.query(`UPDATE callbacks SET scheduled_at = now() - interval '1 minute' WHERE lead_id = $1`, [dana]);
+  const dueRow = (await listQueue({})).leads[0];
+  check('due: first in the queue, a callback nobody has, due', [dueRow?.id, dueRow?.tag?.kind, dueRow?.tag?.due, dueRow?.tag?.agentName], [dana, 'callback', true, undefined]);
+  check('Maya picks Dana up', (await browser.post(`/api/leads/${dana}/claim`)).status, 200);
+  check('the call back is hers now', (await pool.query(`SELECT agent_id FROM callbacks WHERE lead_id = $1`, [dana])).rows[0].agent_id, maya);
+  const overdue = (await browser.get('/api/callbacks?when=overdue&tz=America/Phoenix')).body.callbacks as { leadId: number; reason: string }[];
+  check('on her My Callbacks', overdue.map((c) => [c.leadId, c.reason]), [[dana, 'ai_booked']]);
+  await browser.post(`/api/leads/${dana}/release`);
+
+  // ------------------------------------------------ 16. a transfer
+  step('16. Eli wants to order now: Seri puts him through to Maya');
+  const eli = await seriCalls(ELI, 'Eli');
+  check('the next look calls Eli', (await dialDueLeads(seriDialler)).placed, 1);
+  const e = await answerSeri(eli);
+  openAiReplies.push({ say: 'Great, connecting you now.', tool: { name: 'transfer_to_agent' } });
+  await e.relay.says("Yes, I'd like to order. Can I talk to someone?");
+  const eliHandoff = await e.relay.ended();
+  e.relay.close();
+  const eliAfter = await e.after({ SessionStatus: 'ended', HandoffData: eliHandoff });
+  check('Maya\'s browser rings, as a yes to the offer - and nothing she said is said again', [
+    eliAfter.twiml.includes(`<Identity>agent-${maya}</Identity>`),
+    eliAfter.twiml.includes('<Parameter name="step" value="Offer"/>'),
+    eliAfter.twiml.includes('connecting you'),
+  ], [true, true, false]);
+  const eliTaken = await twilioAsks(attribute(eliAfter.twiml, 'Client', 'url'), {
+    CallSid: `CA${'e'.repeat(32)}`,
+    ParentCallSid: e.call.sid,
+    To: `client:agent-${maya}`,
+    CallStatus: 'in-progress',
+  });
+  check('she accepts: the lead is hers', [eliTaken.status, (await getLeadDetail(eli))?.claimedBy?.name], [200, 'Maya Chen']);
+  await twilioAsks(attribute(eliAfter.twiml, 'Dial', 'action'), { CallSid: e.call.sid, CallStatus: 'in-progress', DialCallStatus: 'completed' });
+  await e.over(150);
+  check('saved: transferred, her part ended with the transfer', await seriRecord(eli), { script_result: 'transferred', ai_ended_with: 'transfer_to_agent' });
+  await browser.post(`/api/leads/${eli}/release`);
+
+  // ------------------------------------------------ 17. the link
+  step('17. Fran just wants the link');
+  const fran = await seriCalls(FRAN, 'Fran');
+  check('the next look calls Fran', (await dialDueLeads(seriDialler)).placed, 1);
+  const f = await answerSeri(fran);
+  openAiReplies.push({ say: "Sure, I'll text you the link now. Have a great day!", tool: { name: 'send_link' } });
+  await f.relay.says('Just text me the link, I will look later.');
+  const franHandoff = await f.relay.ended();
+  f.relay.close();
+  await f.after({ SessionStatus: 'ended', HandoffData: franHandoff });
+  const toFran = (t: { to: string; body: string }) => t.to === FRAN.slice(1) && t.body.includes('anti-ez');
+  await eventually(async () => sent.filter(toFran), (found) => found.length > 0);
+  check('the link is texted, once', sent.filter(toFran).length, 1);
+  await f.over(40);
+  check('saved: link_sent', await seriRecord(fran), { script_result: 'link_sent', ai_ended_with: 'send_link' });
+
+  // ------------------------------------------------ 18. a stop
+  step('18. Gil says stop: the number is blocked, whatever she would say');
+  const gil = await seriCalls(GIL, 'Gil');
+  check('the next look calls Gil', (await dialDueLeads(seriDialler)).placed, 1);
+  const g = await answerSeri(gil);
+  const askedBefore = openAiAsked.filter((a) => a.stream).length;
+  await g.relay.says('Stop calling me.');
+  const gilHandoff = await g.relay.ended();
+  check('the stop line, and the opt-out - OpenAI never asked', [g.relay.said(), JSON.parse(gilHandoff).action, openAiAsked.filter((a) => a.stream).length], [
+    'Okay, we will not call you again. Goodbye.',
+    'opt_out',
+    askedBefore,
+  ]);
+  g.relay.close();
+  await g.after({ SessionStatus: 'ended', HandoffData: gilHandoff });
+  await g.over(15);
+  check('saved: opted_out, and the number blocked', [
+    (await seriRecord(gil)).script_result,
+    (await pool.query(`SELECT reason FROM dnc_list WHERE phone = $1 AND released_at IS NULL`, [GIL])).rows[0]?.reason,
+  ], ['opted_out', 'call_opt_out']);
+
+  // ------------------------------------------------ 19. OpenAI fails
+  step('19. OpenAI fails on Hal\'s call: the script takes over');
+  const hal = await seriCalls(HAL, 'Hal');
+  check('the next look calls Hal', (await dialDueLeads(seriDialler)).placed, 1);
+  const h = await answerSeri(hal);
+  openAiReplies.push('fail');
+  await h.relay.says('What is this about?');
+  const halHandoff = await h.relay.ended();
+  check('her part ends with the fallback, and why', JSON.parse(halHandoff), { action: 'fallback', why: 'model_failed' });
+  h.relay.close();
+  const halAfter = await h.after({ SessionStatus: 'ended', HandoffData: halHandoff });
+  check('sorry, then the script\'s first question - not its greeting', [
+    halAfter.twiml.includes('Sorry about that.'),
+    halAfter.twiml.includes('Are you interested in ordering?'),
+    halAfter.twiml.includes('Hi, this is Seri'),
+  ], [true, true, false]);
+  const halParams = { CallSid: h.call.sid, CallStatus: 'in-progress' };
+  const halNo = await twilioAsks(attribute(halAfter.twiml, 'Gather', 'action'), { ...halParams, SpeechResult: 'No thanks.', Confidence: '0.95' });
+  const halNoAgain = await twilioAsks(attribute(halNo.twiml, 'Gather', 'action'), { ...halParams, SpeechResult: 'No.', Confidence: '0.95' });
+  check('the script goes on as today: no, then no to the link', halNoAgain.twiml.includes('Thank you for your time'), true);
+  await h.over(50);
+  check('saved: the script\'s result, and her part a fallback - what the robot counts', await seriRecord(hal), {
+    script_result: 'not_interested',
+    ai_ended_with: 'fallback',
+  });
+
+  server.close();
+  openAi.close();
+
+  // ---------------------------------------------------------- 20. health
+  step('20. The system reports on itself');
   const health = await getHealth();
   check('the database check passes', health.checks.find((c) => c.name === 'database')?.status, 'ok');
   // `info`, not `ok`: a webhook check is a number for a human, never an alarm,
@@ -638,7 +991,7 @@ async function main(): Promise<void> {
 
   console.log(
     failures === 0
-      ? `\nAll ${checks} checks passed.\n\nNot proved: that a real text arrives or a real phone rings. EZ Texting and Twilio were stubbed.`
+      ? `\nAll ${checks} checks passed.\n\nNot proved: that a real text arrives, a real phone rings, or the real model answers as scripted. EZ Texting, Twilio and OpenAI were stubbed.`
       : `\n${failures} of ${checks} checks FAILED.`
   );
 
