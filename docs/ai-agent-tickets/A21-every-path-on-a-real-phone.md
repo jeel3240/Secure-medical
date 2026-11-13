@@ -86,7 +86,7 @@ All changed on `feat/seri-voice-aria-tone` - `docs/AI-AGENT.md` section 1, "Her 
 
 Call 91's opening fixed on `fix/seri-opening-line` - `docs/AI-AGENT.md` section 1, "Her first reply is always the opening".
 
-Seen on every call so far, not changed: Twilio logs a warning (12200) that `applicationReconnect` is not allowed on `<ConversationRelay>` - the call goes on, but Twilio may ignore it, so a WebSocket dropped mid-call (a deploy) may not reconnect (`docs/AI-AGENT.md` section 2, the TwiML).
+Seen on every call so far, not changed: Twilio logs a warning (12200) that `applicationReconnect` is not allowed on `<ConversationRelay>`. The attribute is in Twilio's own ConversationRelay reference, so the warning is its XML check out of date, and the calls are unaffected; whether a reconnect after a dropped WebSocket (a deploy mid-call) works is not tested (`docs/AI-AGENT.md` section 2, the TwiML).
 
 Still open from these calls: **the link texted without a yes** (call 89) - `toHandoff` holds an action back only when her reply *ends* on a question, and hers asked one mid-reply, then offered the link and sent it.
 
