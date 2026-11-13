@@ -4,7 +4,7 @@
 
 **Why:** So the lead does not have to repeat themselves.
 
-**Depends on:** A10  ·  **Size:** Small (a few hours)
+**Depends on:** A10  ·  **Size:** Small (a few hours)  ·  **Status:** Done 2026-11-12
 
 ## Build
 
@@ -14,8 +14,8 @@
 
 ## Done when
 
-- [ ] Timeline live check returns the turns in order, and how Seri's part ended.
-- [ ] Frontend test renders a chat and an action line.
+- [x] Timeline live check returns the turns in order, and how Seri's part ended - a call back, a fallback of hers and of Twilio's, a choice the voicemail overtook, a call she never took (`timeline-live-check`, 36).
+- [x] Frontend test renders a chat and an action line - and every ending in words (15).
 
 ## Tests
 
@@ -28,5 +28,11 @@
 ## Not in this ticket
 
 - Admin screens (not wanted).
+
+## As built
+
+- **`seriPart`** (`db/timeline.ts`): on a call she took (`ai_started_at`), `detail.seri = { turns, ended }` - the `lead` and `seri` turns in order, her `system` notes left out; `ended` her last `action` turn when it is what `ai_ended_with` records, a bare fallback for one Twilio's side caused, and null when nothing was recorded - the lead hung up first, or the voicemail took the call (A18 keeps her choice at once, so a choice alone is not how it ended).
+- **`SeriConversation`** (`frontend/src/components/`), beside `CallAnswers` in the workspace conversation and on the Lead Timeline: a closed "Seri" fold in the transcript's own classes - no new styles - and `seriEndedText`, every ending in words. A call back's time in the viewer's own time.
+- **Tests:** 5 live checks, 15 component tests.
 
 Design: `docs/AI-AGENT.md`. All AI code in `backend/src/ai/`. One PR into `dev`.

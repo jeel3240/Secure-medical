@@ -4,6 +4,7 @@ import { DISPOSITION_LABEL, type Disposition } from '../api/workspace';
 import { CALL_RESULT_WORDS } from '../lib/call-results';
 import { dayLabel, formatDay, formatTime, isSameDay } from '../lib/format';
 import { CallAnswers } from './CallAnswers';
+import { SeriConversation } from './SeriConversation';
 import { CallTranscript } from './CallTranscript';
 
 /**
@@ -270,6 +271,7 @@ export function Timeline({
                   {failed && <span className="timeline__failed">Delivery failed</span>}
                 </p>
                 {entry.kind === 'call' && <CallAnswers detail={entry.detail} />}
+                {entry.kind === 'call' && <SeriConversation detail={entry.detail} />}
                 {entry.kind === 'call' && <CallTranscript detail={entry.detail} agentName={entry.author} />}
               </div>
 

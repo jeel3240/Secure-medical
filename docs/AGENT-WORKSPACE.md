@@ -620,6 +620,25 @@ workspace conversation and on the Lead Timeline - one `callText` for both.
 Not shown on the lead card's "What … told us", which is the text questions'
 answers.
 
+**A call Seri took carries her conversation - A19, 2026-11-12**
+(`AI-AGENT.md` section 9). Under the call, beside the answers and closed the
+same way, **Seri**: each line in the order said - "Lead" in the lead's colour,
+"Seri" - then how her part ended: "Booked a call back: Mon, Nov 16 3:00 PM",
+"Put through to a person", "Texted the link", "Asked not to be called - number
+blocked", "Ended - not interested" (or wrong person, told to call 911, no
+response, three minutes up), or "Seri stopped - the call went on with the
+script" when she failed - then the script's own answers follow under
+**Answers** (`components/SeriConversation.tsx`). It is there for the agent who
+takes the transfer or the call back, so the lead does not repeat themselves.
+`detail.seri` on the call (`seriPart`, `db/timeline.ts`): `turns`, the lead's
+and hers from `call_ai_turns` - her notes left out - and `ended`, the action
+she ended with as `calls.ai_ended_with` records it: an action she chose but
+that was never carried out - the voicemail message took the call - is not
+shown as how it ended, and nor is anything when the lead hung up first. A
+fallback Twilio's side caused has no action of hers and reads as one all the
+same. Absent on a call she did not take. Proved in
+`scripts/timeline-live-check.ts` (36 checks).
+
 **Three kinds come out of `messages`.** An inbound row is a reply; an outbound
 row with `sent_by` null is one of ours; an outbound row with an agent is their
 manual message, written by `db/agent-sms.ts` (task 9). A reply that was
