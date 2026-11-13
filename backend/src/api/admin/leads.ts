@@ -24,6 +24,7 @@ const CALLS: LeadCallFilter[] = [
   'calling',
   'transferred',
   'transfer_missed',
+  'callback_booked',
   'link_sent',
   'not_interested',
   'voicemail_left',

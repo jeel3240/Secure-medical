@@ -194,11 +194,14 @@ export const CLOSED_SQL = `(
  * Picking a lead and putting it back without doing anything leaves no trace -
  * releasing clears `assigned_to` and `assigned_at` - so that lead is not
  * worked. That is deliberate: nothing happened to it.
+ *
+ * A call back Seri booked (`ai_booked`, A15) is not a trace: no person has
+ * been near the lead yet, as with a robot call nobody took (T4).
  */
 export const WORKED_SQL = `(
   EXISTS (SELECT 1 FROM users wu WHERE wu.id = l.assigned_to AND wu.is_active)
   OR EXISTS (SELECT 1 FROM notes wn WHERE wn.lead_id = l.id)
-  OR EXISTS (SELECT 1 FROM callbacks wc WHERE wc.lead_id = l.id)
+  OR EXISTS (SELECT 1 FROM callbacks wc WHERE wc.lead_id = l.id AND wc.reason <> 'ai_booked')
   OR EXISTS (SELECT 1 FROM dispositions wd WHERE wd.lead_id = l.id)
   -- A call an agent placed or answered. A missed incoming call is the lead's
   -- doing, not an agent's work; nor is an automated call nobody took (T4) -

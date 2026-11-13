@@ -22,6 +22,7 @@ import {
 } from '../core/call-script';
 import { activityInsertSql, recordActivity } from './activity';
 import { TAKEN_BY_VERDICT_SQL } from './calls';
+import { bookAiCallback } from './callbacks';
 import { blockNumber, DNC_REASONS } from './dnc';
 import { pool } from './pool';
 
@@ -261,14 +262,31 @@ export async function keepAnswer(opts: {
  * is whether this request saved the result: false for Twilio sending the same
  * request again, so the link is texted once. `takenByVerdict` as for an
  * answer: the voicemail message has the call, and nothing is kept.
+ *
+ * `callback`: the call back she booked (A15), saved in the same transaction
+ * as `callback_booked` - only by the request that saved it, so the result and
+ * the booking never come apart. `callbackId` is the booking, or null.
  */
 export async function keepCallResult(opts: {
   callId: number;
   result: CallResult | null;
   blockNumber: boolean;
-}): Promise<{ saved: boolean; leadId: number | null; takenByVerdict: boolean }> {
-  const r = await inCallLock(opts.callId, (client, call) => saveOutcome(client, call, opts));
-  return { saved: r.done ?? false, leadId: r.leadId, takenByVerdict: r.takenByVerdict };
+  callback?: { at: Date; note: string; timeZone: string } | null;
+}): Promise<{ saved: boolean; leadId: number | null; takenByVerdict: boolean; callbackId: number | null }> {
+  const r = await inCallLock(opts.callId, async (client, call) => {
+    const saved = await saveOutcome(client, call, opts);
+    const booked =
+      saved && opts.callback
+        ? await bookAiCallback(client, { leadId: call.lead_id, callId: opts.callId, ...opts.callback })
+        : null;
+    return { saved, callbackId: booked?.callbackId ?? null };
+  });
+  return {
+    saved: r.done?.saved ?? false,
+    leadId: r.leadId,
+    takenByVerdict: r.takenByVerdict,
+    callbackId: r.done?.callbackId ?? null,
+  };
 }
 
 interface LockedCall {

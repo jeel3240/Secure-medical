@@ -60,6 +60,13 @@ export interface LeadDetail {
    */
   closed: { by: string | null; at: string } | null;
 
+  /**
+   * The call back Seri booked, while it is open - A15, AI-AGENT.md section 4:
+   * when, her one-line reason, and whose it is - null while it is open to
+   * everyone. The earliest, should there be more than one.
+   */
+  aiCallback: { at: string; note: string | null; agentName: string | null } | null;
+
   flags: {
     /** A live dnc_list row: blocks every action, not just SMS. */
     dnc: boolean;
@@ -110,7 +117,10 @@ const SQL = `
     ${MISSED_CALL_SQL} AS missed_call,
     ${MISSED_YES_SQL} AS missed_yes,
     od.created_at AS outcome_at,
-    ou.name AS outcome_by
+    ou.name AS outcome_by,
+    ac.scheduled_at AS ai_callback_at,
+    ac.note AS ai_callback_note,
+    ac.agent_name AS ai_callback_agent
   FROM leads l
   LEFT JOIN LATERAL (
     SELECT c.id, c.status, c.step, c.flow_id, c.current_question_id, c.end_outcome,
@@ -137,6 +147,13 @@ const SQL = `
     LIMIT 1
   ) od ON true
   LEFT JOIN users ou ON ou.id = od.agent_id
+  LEFT JOIN LATERAL (
+    SELECT acb.scheduled_at, acb.note, au.name AS agent_name FROM callbacks acb
+    LEFT JOIN users au ON au.id = acb.agent_id
+    WHERE acb.lead_id = l.id AND acb.reason = 'ai_booked' AND acb.done_at IS NULL
+    ORDER BY acb.scheduled_at, acb.id
+    LIMIT 1
+  ) ac ON true
   WHERE l.id = $1
 `;
 
@@ -204,6 +221,10 @@ export async function getLeadDetail(leadId: number): Promise<LeadDetail | null> 
 
     closed: r.is_closed
       ? { by: r.outcome_by ?? null, at: r.outcome_at?.toISOString() ?? '' }
+      : null,
+
+    aiCallback: r.ai_callback_at
+      ? { at: r.ai_callback_at.toISOString(), note: r.ai_callback_note ?? null, agentName: r.ai_callback_agent ?? null }
       : null,
 
     flags: {

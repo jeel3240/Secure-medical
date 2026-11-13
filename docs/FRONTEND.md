@@ -410,6 +410,7 @@ needs to know:
 | What the lead said on the robot's call, under it and above the transcript, closed the same way: `Q1 · "yeah sure" → Yes` (T21) | `components/CallAnswers.tsx` |
 | Missed: a notice with **Call back**, which takes the lead and opens it with router state `callBack`; the workspace dials once and clears the state, so a reload does not ring them again | `IncomingCall.tsx`, `WorkspacePage.tsx` |
 | The lead's page: a **Missed call** badge beside Closed and Needs review, from `flags.missedCall`; and a **Wants a call** badge for a "yes" on the automated call nobody took, from `flags.missedYes` (T22) - the queue says only Working once the lead is picked up | `WorkspacePage.tsx` |
+| A call back Seri booked (A15): on the lead's page a navy badge, "Callback booked · Thu, Nov 13 3:00 PM · Wants to order antibiotics" - the viewer's own time, whose it is once taken, her line - from `aiCallback`; on the timeline "Callback booked by Seri for ... · her line"; on Admin > Leads' Call column and filter, "Callback booked" | `WorkspacePage.tsx`, `pages/workspace/LeadHeader.tsx` (`aiCallbackLabel`), `components/Timeline.tsx`, `lib/call-results.ts` |
 
 Twilio's SDK is its own chunk, loaded once someone is signed in and calling is
 set up - a browser that can be rung has to hold a registered device - and

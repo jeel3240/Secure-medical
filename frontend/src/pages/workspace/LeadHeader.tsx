@@ -1,5 +1,5 @@
 import type { LeadDetail } from '../../api/workspace';
-import { formatAge, formatPhone } from '../../lib/format';
+import { formatAge, formatDay, formatPhone, formatTime } from '../../lib/format';
 import { CallControl } from './CallControl';
 import type { LeadCall } from './useLeadCall';
 
@@ -63,6 +63,18 @@ export function questionsLabel(conversation: LeadDetail['conversation']): string
     default:
       return conversation.status;
   }
+}
+
+/**
+ * The call back Seri booked, as the lead's page says it (A15): "Callback
+ * booked · Thu, Nov 13 3:00 PM · Wants to order antibiotics" - in the viewer's
+ * own time, with her line for whoever calls, and whose it is once taken.
+ */
+export function aiCallbackLabel(callback: NonNullable<LeadDetail['aiCallback']>): string {
+  const at = new Date(callback.at);
+  return [`Callback booked · ${formatDay(at)} ${formatTime(at)}`, callback.agentName, callback.note]
+    .filter(Boolean)
+    .join(' · ');
 }
 
 function fullName(lead: LeadDetail): string {

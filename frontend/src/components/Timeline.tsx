@@ -196,6 +196,11 @@ function entryText(entry: TimelineEntry): string {
       const when = at ? `${formatDay(at)} ${formatTime(at)}` : 'unscheduled';
       // One the system booked because their call was missed has no chosen time.
       if (d.reason === 'missed_call') return d.doneAt ? 'Missed call returned' : 'Callback added · missed call';
+      // Seri's, at a time the lead picked, with her line for whoever calls (A15).
+      if (d.reason === 'ai_booked') {
+        const note = typeof d.note === 'string' && d.note ? ` · ${d.note}` : '';
+        return d.doneAt ? `Callback completed (was ${when})` : `Callback booked by Seri for ${when}${note}`;
+      }
       return d.doneAt ? `Callback completed (was ${when})` : `Callback scheduled for ${when}`;
     }
     case 'disposition': {

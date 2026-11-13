@@ -191,6 +191,7 @@ both are true.
 | Calling now | Its call is going: ringing, asking, putting a "yes" through, or on hold |
 | Said yes · taken | Said yes, and a person took the transfer - the lead reads Working |
 | Said yes · nobody took it | Said yes, and nobody took it - first in the agents' queue as Wants a call until someone gets back to them (T22) |
+| Callback booked | Seri's call (Phase 7): the lead picked a time for a person to call them - the callback is on the lead's page (A15, `AGENT-WORKSPACE.md` "Callbacks"). Her booking alone does not make the lead Working |
 | Link sent | Said no, then yes to the link, which was texted |
 | Not interested | Said no twice |
 | Voicemail left | A machine answered; the message was left after its beep |
@@ -224,7 +225,8 @@ above in the order a call goes. `?call=` takes `none` or a value -
 with 400 `invalid_call`. It narrows the tab counts as Source and Received do,
 so with "Voicemail left" chosen the tabs say how many of those leads are
 Awaiting reply, Working and so on. Kept in the address with the other filters:
-`/admin/leads?call=voicemail_left`.
+`/admin/leads?call=voicemail_left`. Since A15 also `callback_booked`, after the
+two "yes" values.
 
 With automated calls off, every row reads "-" and the filter finds nothing but
 "Not called" - production, until `AUTO_CALLS` is on.

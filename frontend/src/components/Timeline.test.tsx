@@ -219,6 +219,18 @@ describe('callbacks and dispositions', () => {
     expect(screen.getByText(text)).toBeDefined();
   });
 
+  it('a call back Seri booked: by her, when, and her line for whoever calls (A15)', () => {
+    const detail = { scheduledAt: at('15:30:00'), doneAt: null, reason: 'ai_booked', note: 'Wants to order antibiotics' };
+    render(<Timeline entries={[entry({ kind: 'callback', author: null, detail })]} />);
+    expect(screen.getByText(/^Callback booked by Seri for .+ · Wants to order antibiotics$/)).toBeDefined();
+  });
+
+  it('a call back Seri booked, done: completed, as any other', () => {
+    const detail = { scheduledAt: at('15:30:00'), doneAt: at('15:34:00'), reason: 'ai_booked', note: 'Wants to order' };
+    render(<Timeline entries={[entry({ kind: 'callback', author: null, detail })]} />);
+    expect(screen.getByText(/Callback completed/)).toBeDefined();
+  });
+
   it('says when a callback is due', () => {
     render(
       <Timeline
