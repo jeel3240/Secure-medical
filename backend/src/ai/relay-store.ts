@@ -6,7 +6,8 @@
  * turn is then one add-only `call_ai_turns` row. The words are kept here and
  * never in the logs. Before each reply, who could take the call now - the same
  * rules the transfer itself follows - and once, how her part ended
- * (`endAiCall`).
+ * (`endAiCall`) - and, for the page that carries it out, the action she
+ * ended with (`recordedHandoff`, A14).
  */
 
 import type { Pool } from 'pg';
@@ -16,7 +17,7 @@ import { recordActivity } from '../db/activity';
 import { loadActiveCallScript, readCallHours } from '../db/call-script';
 import type { Db } from '../db/flows';
 import { freePeople, someoneOnOrJustOffCall } from '../db/presence';
-import type { Handoff } from './actions';
+import { fromHandoff, type Handoff } from './actions';
 import type { WhoIsThere } from './instructions';
 
 /** The call Seri has just taken, and what she needs to know of the lead. */
@@ -186,6 +187,20 @@ export async function endAiCall(pool: Pool, callId: number, handoff: Handoff): P
   } finally {
     client.release();
   }
+}
+
+/**
+ * The action the relay ended Seri's part with, as it kept it - her `action`
+ * turn, its `handoffData` (A14). For a lead who hung up: Twilio then sends no
+ * `HandoffData`, but a stop or a link she had already ended with is still
+ * carried out. Null when she ended with none - the lead hung up first.
+ */
+export async function recordedHandoff(q: Db, callId: number): Promise<Handoff | null> {
+  const { rows } = await q.query(
+    `SELECT text FROM call_ai_turns WHERE call_id = $1 AND who = 'action' ORDER BY id DESC LIMIT 1`,
+    [callId]
+  );
+  return rows[0] ? fromHandoff(rows[0].text) : null;
 }
 
 export function pgRelayStore(pool: Pool): RelayStore {

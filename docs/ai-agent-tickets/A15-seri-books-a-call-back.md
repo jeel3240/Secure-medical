@@ -28,6 +28,11 @@
 
 - `docs/AGENT-WORKSPACE.md` callbacks section; `docs/ADMIN-LEADS.md` "Call".
 
+## Where it hooks in (from A14)
+
+- `/auto/ai-after` already saves `callback_booked` and hangs up (`afterSeri` gives `kind: 'end'` with `callback`, her handoff - `at`, `timeZone`, `reason`). Save the call back in the same place: the `end` branch of `afterSeriTwiml` (`api/twilio-webhooks.ts`), once - only for the request that saved the result (`keepCallResult`'s `saved`), as the link is texted once; and for a lead who hung up after she booked it too, since `afterSeri` books it either way.
+- `CallResult` already has `callback_booked` (`core/call-script.ts`).
+
 ## Not in this ticket
 
 - Showing it in the queue (A16).

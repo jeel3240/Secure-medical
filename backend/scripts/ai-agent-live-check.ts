@@ -1,7 +1,8 @@
 /**
  * Proves migration 022 against a real Postgres - Phase 7, A08,
  * docs/AI-AGENT.md sections 4 and 9 - the relay's SQL on it (A10, A11), and
- * whether an answered call goes to her (A13).
+ * whether an answered call goes to her (A13), and carrying out how her part
+ * ended (A14).
  *
  * Seri's columns on a call, the turns of her conversation, and the call backs
  * she books are kept by the database's own checks and triggers, which the
@@ -14,8 +15,9 @@
  *   scripts/live-checks.sh ai-agent
  */
 import { seriGreeting } from '../src/ai/answer';
-import { endAiCall, saveTurn, startAiCall, whoIsThere } from '../src/ai/relay-store';
+import { endAiCall, recordedHandoff, saveTurn, startAiCall, whoIsThere } from '../src/ai/relay-store';
 import { switchAiAgent } from '../src/ai/settings';
+import { keepCallResult, transferContext } from '../src/db/auto-calls';
 import { pool } from '../src/db/pool';
 
 let failures = 0;
@@ -324,6 +326,79 @@ async function main(): Promise<void> {
     check('switched on, no key: the script', await seriGreeting(pool, call, ''), null);
     await switchAiAgent(pool, 'off');
     check('switched off again: the script, at once', await seriGreeting(pool, call, 'sk-test'), null);
+  }
+
+  console.log('\nafter her part (A14)');
+  {
+    const lead = await makeLead();
+    const call = await makeCall(lead, 'automated');
+    const result = async () => (await pool.query(`SELECT script_result FROM calls WHERE id = $1`, [call])).rows[0].script_result;
+
+    check('nothing she ended with yet: none recorded', await recordedHandoff(pool, call), null);
+    await saveTurn(pool, { callId: call, who: 'action', text: JSON.stringify({ action: 'send_link' }) });
+    await saveTurn(pool, { callId: call, who: 'action', text: JSON.stringify({ action: 'opt_out' }) });
+    check('what she ended with: the last action kept', await recordedHandoff(pool, call), { action: 'opt_out' });
+    const odd = await makeCall(await makeLead(), 'automated');
+    await saveTurn(pool, { callId: odd, who: 'action', text: 'not json' });
+    check('kept unreadable: a fallback, never a guess', await recordedHandoff(pool, odd), { action: 'fallback', why: 'unreadable_handoff' });
+
+    check('her result saved, the call\'s lead', await keepCallResult({ callId: call, result: 'link_sent', blockNumber: false }), {
+      saved: true,
+      leadId: lead,
+      takenByVerdict: false,
+    });
+    check('on the call', await result(), 'link_sent');
+    check('Twilio asking again: not saved again - the link texted once', await keepCallResult({ callId: call, result: 'link_sent', blockNumber: false }), {
+      saved: false,
+      leadId: lead,
+      takenByVerdict: false,
+    });
+    check('a later result never overwrites it', (await keepCallResult({ callId: call, result: 'not_interested', blockNumber: false }), await result()), 'link_sent');
+
+    const stopLead = await makeLead();
+    const stopCall = await makeCall(stopLead, 'automated');
+    const { rows: phone } = await pool.query(`SELECT phone FROM leads WHERE id = $1`, [stopLead]);
+    await keepCallResult({ callId: stopCall, result: 'opted_out', blockNumber: true });
+    check(
+      'a stop: opted_out, and the number blocked as a stop on the script blocks it',
+      (await pool.query(`SELECT reason FROM dnc_list WHERE phone = $1 AND released_at IS NULL`, [phone[0].phone])).rows.map((r) => r.reason),
+      ['call_opt_out']
+    );
+    check(
+      'blocked once, said twice',
+      (await keepCallResult({ callId: stopCall, result: 'opted_out', blockNumber: true }),
+      (await pool.query(`SELECT count(*)::int AS n FROM dnc_list WHERE phone = $1`, [phone[0].phone])).rows[0].n),
+      1
+    );
+    check('no result, for a lead who hung up: nothing saved', await keepCallResult({ callId: odd, result: null, blockNumber: false }), {
+      saved: false,
+      leadId: (await pool.query(`SELECT lead_id FROM calls WHERE id = $1`, [odd])).rows[0].lead_id,
+      takenByVerdict: false,
+    });
+    const maya = (await pool.query(`SELECT id FROM users WHERE email = 'maya@example.com'`)).rows[0].id;
+    const agentCall = await makeCall(await makeLead(), 'outbound', maya);
+    check('an agent\'s own call: not one of hers - nothing saved', await keepCallResult({ callId: agentCall, result: 'link_sent', blockNumber: false }), {
+      saved: false,
+      leadId: null,
+      takenByVerdict: false,
+    });
+    const vmLead = await makeLead();
+    const vm = await makeCall(vmLead, 'automated');
+    await pool.query(`UPDATE calls SET script_result = 'voicemail_left' WHERE id = $1`, [vm]);
+    check('the voicemail message has the call: nothing kept', await keepCallResult({ callId: vm, result: 'opted_out', blockNumber: true }), {
+      saved: false,
+      leadId: vmLead,
+      takenByVerdict: true,
+    });
+
+    const { rows: first } = await pool.query(
+      `SELECT s.id FROM call_steps s JOIN call_scripts sc ON sc.id = s.script_id WHERE sc.is_active ORDER BY s.position LIMIT 1`
+    );
+    const seriCall = await makeCall(await makeLead(), 'automated');
+    const scriptCall = await makeCall(await makeLead(), 'automated');
+    await pool.query(`UPDATE calls SET ai_started_at = now(), ai_knowledge_version = 'v' WHERE id = $1`, [seriCall]);
+    check('her transfer rings as a yes to the offer, the script\'s first step', (await transferContext(seriCall))?.yesStepId, first[0].id);
+    check('a script call with no answer yet: none, as before', (await transferContext(scriptCall))?.yesStepId, null);
   }
 
   console.log(failures === 0 ? '\nall checks passed' : `\n${failures} check(s) FAILED`);

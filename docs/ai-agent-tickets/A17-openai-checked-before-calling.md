@@ -15,7 +15,7 @@
 
 ## From A12
 
-- A fallback is `calls.ai_ended_with = 'fallback'`, written by the relay with why in `ai_agent.ended` - `model_failed`, `model_slow`, `socket_error`, `relay_failed` - and, for Twilio's own failures, by `/auto/ai-after` (A14). The relay's `end_call` for silence or the time limit is not a fallback, and does not count.
+- A fallback is `calls.ai_ended_with = 'fallback'`, written by the relay with why in `ai_agent.ended` - `model_failed`, `model_slow`, `socket_error`, `relay_failed` - and, for Twilio's own failures, by `/auto/ai-after` (A14) - built: `why` is `twilio_failed`, written only when the relay recorded nothing. The relay's `end_call` for silence or the time limit is not a fallback, and does not count.
 
 ## Done when
 

@@ -76,7 +76,8 @@ export const OPT_OUT_KEY = '9';
 
 /**
  * How an automated call's script ended - `calls.script_result`, migration 014.
- * Kept in step with that column's check.
+ * Kept in step with that column's check. `callback_booked` (022) is Seri's
+ * alone: the script never books one (A14, A15).
  */
 export type CallResult =
   | 'transferred'
@@ -87,7 +88,8 @@ export type CallResult =
   | 'no_response'
   | 'voicemail_left'
   | 'hung_up'
-  | 'unanswered';
+  | 'unanswered'
+  | 'callback_booked';
 
 /** What the call does next. `say` is spoken in order, before anything else. */
 export type CallAction =

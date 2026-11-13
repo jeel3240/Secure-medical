@@ -8,10 +8,11 @@ EZ Texting has no session.
 
 Code: `backend/src/api/webhooks.ts`. Payload shape: `docs/EZTEXTING-API.md`.
 
-**This doc is EZ Texting's webhook only.** Twilio's sixteen are documented
+**This doc is EZ Texting's webhook only.** Twilio's seventeen are documented
 elsewhere: agents' calls, a lead calling in, how each ended, who picked up,
 the recording notice and the recording in `TWILIO.md`; the automated call's
-`/auto/*` in `AUTO-CALLS.md`. They differ in one
+`/auto/*` in `AUTO-CALLS.md` - `/auto/ai-after`, the end of Seri's part, in
+`AI-AGENT.md`. They differ in one
 way that matters: Twilio signs every request, so those are checked by
 signature rather than by a secret in the path. Both kinds are kept as received
 in `webhook_events` (`AUDIT.md`).

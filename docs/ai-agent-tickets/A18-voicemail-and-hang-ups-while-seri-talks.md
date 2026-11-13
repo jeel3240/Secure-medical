@@ -14,6 +14,10 @@
 - A transfer Seri started is not cut by a late "machine" verdict (same as T18).
 - After the voicemail message has taken the call over, Twilio may still post the session's end to `/auto/ai-after`: ignored and logged as `after_takeover`, as `/auto/gather` and `/auto/after` already do.
 
+## From A14
+
+- Built in A14: `/auto/ai-after` after the voicemail's takeover does nothing and logs `after_takeover`; a hang-up (`completed`) carries out what the relay had recorded she ended with, or nothing - the call's end then saves `hung_up`. Left here: the verdict while she talks, actions waiting for it, and the relay closing cleanly.
+
 ## Done when
 
 - [ ] Route tests for each case.
