@@ -1,6 +1,7 @@
 /**
  * Proves migration 022 against a real Postgres - Phase 7, A08,
- * docs/AI-AGENT.md sections 4 and 9 - and the relay's SQL on it (A10, A11).
+ * docs/AI-AGENT.md sections 4 and 9 - the relay's SQL on it (A10, A11), and
+ * whether an answered call goes to her (A13).
  *
  * Seri's columns on a call, the turns of her conversation, and the call backs
  * she books are kept by the database's own checks and triggers, which the
@@ -12,7 +13,9 @@
  *
  *   scripts/live-checks.sh ai-agent
  */
+import { seriGreeting } from '../src/ai/answer';
 import { endAiCall, saveTurn, startAiCall, whoIsThere } from '../src/ai/relay-store';
+import { switchAiAgent } from '../src/ai/settings';
 import { pool } from '../src/db/pool';
 
 let failures = 0;
@@ -304,6 +307,23 @@ async function main(): Promise<void> {
 
     await pool.query(`UPDATE users SET taking_calls = false WHERE id = $1`, [ana]);
     check('on a call with the switch off: nobody - never rung for a transfer', await whoIsThere(pool, call), 'nobody');
+  }
+
+  console.log('\nthe call goes to her (A13)');
+  {
+    const named = await makeLead();
+    await pool.query(`UPDATE leads SET first_name = 'Dana' WHERE id = $1`, [named]);
+    const call = await makeCall(named, 'automated');
+    const nameless = await makeCall(await makeLead(), 'automated');
+
+    await switchAiAgent(pool, 'off');
+    check('switched off: the script', await seriGreeting(pool, call, 'sk-test'), null);
+    await switchAiAgent(pool, 'on');
+    check('switched on, with a key: her, greeting the lead by name', await seriGreeting(pool, call, 'sk-test'), 'Hi, is this Dana?');
+    check('a lead with no first name: "Hi there!"', await seriGreeting(pool, nameless, 'sk-test'), 'Hi there!');
+    check('switched on, no key: the script', await seriGreeting(pool, call, ''), null);
+    await switchAiAgent(pool, 'off');
+    check('switched off again: the script, at once', await seriGreeting(pool, call, 'sk-test'), null);
   }
 
   console.log(failures === 0 ? '\nall checks passed' : `\n${failures} check(s) FAILED`);

@@ -20,6 +20,36 @@ export function relayUrl(publicUrl: string): string {
   return publicUrl.replace(/^https:/, 'wss:') + RELAY_PATH;
 }
 
+/** The `<Parameter>` that names our `calls` row; it arrives in `setup` under `customParameters`. */
+export const CALL_PARAMETER = 'call';
+
+/**
+ * How ConversationRelay listens and speaks on Seri's calls - the settings
+ * heard together on the dev number (A02; docs/AI-AGENT.md section 1, "The
+ * settings A13 starts from"), written as the test calls wrote them:
+ *
+ * - Rachel on ElevenLabs's `v4` model, stability 0.4, similarity 0.8 - Jeel's pick;
+ * - Deepgram's `flux`, which waits for the end of a thought - `nova-3` sent
+ *   half a sentence at a pause;
+ * - stopped by speech, and only clear speech; "uh huh" does not stop her;
+ * - numbers and short forms read as words;
+ * - keys sent to us, and who is speaking - the silence count needs it (A12);
+ * - Twilio trying again if our WebSocket drops.
+ */
+export const RELAY_SETTINGS: Readonly<Record<string, string>> = {
+  ttsProvider: 'ElevenLabs',
+  voice: '21m00Tcm4TlvDq8ikWAM-v4-0.4_0.8',
+  transcriptionProvider: 'Deepgram',
+  speechModel: 'flux',
+  interruptible: 'speech',
+  interruptSensitivity: 'low',
+  ignoreBackchannel: 'true',
+  elevenlabsTextNormalization: 'on',
+  dtmfDetection: 'true',
+  events: 'speaker-events',
+  applicationReconnect: 'true',
+};
+
 /**
  * Whether a WebSocket request really came from Twilio. Its X-Twilio-Signature
  * is for the `wss://` address exactly as the TwiML gave it, query included,
@@ -76,7 +106,7 @@ export function parseRelayMessage(raw: string): RelayMessage | null {
   switch (msg.type) {
     case 'setup': {
       const params = typeof msg.customParameters === 'object' && msg.customParameters !== null ? msg.customParameters : {};
-      return { type: 'setup', callSid: text(msg.callSid), callId: rowId((params as Record<string, unknown>).call) };
+      return { type: 'setup', callSid: text(msg.callSid), callId: rowId((params as Record<string, unknown>)[CALL_PARAMETER]) };
     }
     case 'prompt':
       return { type: 'prompt', text: text(msg.voicePrompt).trim(), last: msg.last !== false };

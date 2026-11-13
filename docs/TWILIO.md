@@ -647,7 +647,9 @@ address (`?call=<id>`), which is part of what Twilio signs: the row cannot be
 swapped. `/auto/claim` takes the person from `To`, our own signed browser
 name, as the voice webhook does. They answer 404 while automated calls are
 off. What each does: `AUTO-CALLS.md`, "How a call is placed" and "The
-transfer".
+transfer". With Seri, the AI agent, switched on, `/auto/answer` connects the
+call to her relay (`<Connect><ConversationRelay>`) instead of asking the first
+question - `AI-AGENT.md` section 2 (A13).
 
 **`/incoming/claim`** (T19, a person accepting a call back that rang everyone
 free) is checked the same way and answers 404 while automated calls are off

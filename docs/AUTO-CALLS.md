@@ -32,7 +32,7 @@ It is built in two stages, agreed with the client on 2026-10-14:
 | Stage | What | When |
 |---|---|---|
 | **1** | A scripted call that follows the client's script word for word. The lead answers by voice ("yes", "no") or keypad (1, 2) | Now - this doc |
-| **2** | When the lead says something outside the script, an AI agent takes over **inside the same call** - no second number, no transfer | Later, its own plan |
+| **2** | When the lead says something outside the script, an AI agent takes over **inside the same call** - no second number, no transfer | Phase 7, its own plan: `AI-AGENT.md`. Changed 2026-11-11 - the AI agent, Seri, runs the whole call from the start, with this script as her backup |
 
 **Production places no automated call until `AUTO_CALLS=on` is set on the
 server.** Every calling ticket is merged and deployed with it off: the header
@@ -614,7 +614,7 @@ be trusted").
 
 | Webhook | Now | Later |
 |---|---|---|
-| `POST /api/webhooks/twilio/auto/answer` | The lead picked up: a second's quiet, the greeting with nothing listening, then the question itself inside a `<Gather>` - speech or one key, heard from its first word ("When the call listens"); silence reported too; the step's words and the stop words as hints. Anything wrong - no row, no script, the database down - ends the call quietly, never Twilio's "application error" | - |
+| `POST /api/webhooks/twilio/auto/answer` | The lead picked up: a second's quiet, the greeting with nothing listening, then the question itself inside a `<Gather>` - speech or one key, heard from its first word ("When the call listens"); silence reported too; the step's words and the stop words as hints. Anything wrong - no row, no script, the database down - ends the call quietly, never Twilio's "application error" | With Seri switched on, the call is connected to her instead, no question asked - `AI-AGENT.md` section 2, "As built (A13)" |
 | `POST /api/webhooks/twilio/auto/gather` | The answer read (`matchSpokenChoice`), what follows decided (`handleAnswer`), kept with its result and any block (`keepAnswer`), and the next line said - T13, "On a live call". The address names the step and which asking it was. A yes to the link is texted after Twilio has its answer (T14); a yes to the transfer rings the lead's own agent first, then everyone free (T15a, T15b, "The transfer") | - |
 | `POST /api/webhooks/twilio/auto/status` | How it ended, saved as every call's end is (`finishCall`): outcome, talk time, `call.ended`; then an unfinished script given its result (T13). Never a missed-call text | - |
 | `POST /api/webhooks/twilio/auto/amd` | Who picked up, kept as `answered_by`; then acted on (T18, "Voicemail"): a machine gets the voicemail message, a fax is hung up on - the beep decides. Twilio has its answer first | - |

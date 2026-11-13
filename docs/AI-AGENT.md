@@ -1,6 +1,6 @@
 # AI agent on the automated call (Phase 7)
 
-Design agreed with Jeel, 2026-11-11. The tickets are in `docs/ai-agent-tickets/` (A01-A22). Built so far: A01, the key and the switch; A03, the knowledge loader; A04, her instructions; A05, the sentence check; A06, her five actions; A07, the call-back time rules; A08, migration 022; A09, the answer test set, which chose the model (all 2026-11-11).
+Design agreed with Jeel, 2026-11-11. The tickets are in `docs/ai-agent-tickets/` (A01-A22). Built so far: A01, the key and the switch; A03, the knowledge loader; A04, her instructions; A05, the sentence check; A06, her five actions; A07, the call-back time rules; A08, migration 022; A09, the answer test set, which chose the model (all 2026-11-11); A02, the first test calls, which picked her voice; A10-A12, the relay - Seri talking on a call, with its limits and failures; A13, an answered call connected to her when she is switched on (2026-11-12). What each built is under "As built" in its section, and in its ticket.
 
 Today the automated call (`docs/AUTO-CALLS.md`) is a fixed script: it understands "yes", "no", "stop" and the keys 1, 2 and 9, and anything else is asked once more before the call ends. On day one (250 calls), 82 leads hung up and 65 ended as `no_response`.
 
@@ -111,6 +111,8 @@ elevenlabsTextNormalization="on" dtmfDetection="true" events="speaker-events"
 applicationReconnect="true"
 ```
 
+*As built (A13):* these, word for word, are `RELAY_SETTINGS` in `backend/src/ai/relay-messages.ts`, which every call to her uses (section 2).
+
 `interruptSensitivity="low"` asks for clear speech before she stops; `elevenlabsTextNormalization="on"` reads numbers and short forms as words; `applicationReconnect="true"` has Twilio try again if our WebSocket drops - for a deploy mid-call, not yet tried (A12). None of the three was tested on its own.
 
 **Confirmed** - what the relay is built on:
@@ -162,6 +164,31 @@ Decided by Jeel, 2026-11-11, reversing the earlier "keep the script, hand off wh
 | "Stop" | Seri's `opt_out` action - and a check of every lead turn, independent of the AI: the script's stop words (`call_scripts.opt_out_words`) or key 9 end the session as an opt-out even if the AI misses it. *As built (A11):* a stop phrase counts anywhere in what the lead said, a one-word stop word ("stop") only said on its own - section 1, "How a reply is made" |
 | Transfer, hold line, busy line, link text | **Unchanged.** Seri's action ends the session, and `/auto/ai-after` runs today's code |
 | Today's script | Kept, only as the backup (section 6) |
+
+### As built (A13, 2026-11-12)
+
+`/auto/answer` (`backend/src/api/twilio-webhooks.ts`), once it knows the request names our call and the script is there:
+
+- **Who takes the call** - `seriGreeting` (`backend/src/ai/answer.ts`): the switch and the key, read on every call (`readAiAgentOn`, section 7). On: the call goes to Seri. Off, never set, or on without `OPENAI_API_KEY`: today's first question, exactly as before; on without a key also logs `ai_agent.no_key`, once.
+- **The script is read first**, for her too: it is her backup (A14) and holds the stop line she says. No script: the call ends quietly, as before. The switch unreadable - the database failing - ends it quietly too, as any failure there does.
+- **What Twilio is told** - `seriTwiml` (`backend/src/integrations/twilio.ts`), in place of the script's first question:
+
+  ```xml
+  <Connect action="https://<our address>/api/webhooks/twilio/auto/ai-after?call=42" method="POST">
+    <ConversationRelay url="wss://<our address>/api/ai/relay" welcomeGreeting="Hi, is this Dana?"
+        ...section 1's settings...>
+      <Parameter name="call" value="42"/>
+    </ConversationRelay>
+  </Connect>
+  ```
+
+  The settings are section 1's, written as A02's test calls wrote them (`ignoreBackchannel`, not the library's `ignorebackchannel`). The greeting is "Hi, is this Dana?" with the lead's first name, "Hi there!" without one; the relay builds the same from the same name as her first turn (`welcomeGreeting`, A04). The relay's address carries nothing: Twilio signs it as written and the relay checks it so (A10); our row travels in the `<Parameter>`, which arrives in `setup`.
+- **No second of quiet first**, unlike the script: Twilio says the greeting as soon as the relay is connected. Whether a first word is lost to a phone still coming to the ear is for A21 to listen for.
+- **Voicemail detection unchanged:** the call is placed exactly as before (`automatedCallRequest`). Acting on a verdict while she talks is A18.
+- **Logged:** `auto_call.answered` with `to` - `seri` or `script` (`LOGGING.md`).
+- **Tested:** the TwiML word for word (`integrations/twilio.test.ts`); the route switched on with a name and without, off and never set, on without a key over two calls, with no script, with the switch unreadable (`auto-call-webhooks.test.ts`); `seriGreeting` on a real Postgres (`scripts/ai-agent-live-check.ts`, 72 checks).
+- **Seen on the real API** (2026-11-12, a scratch database, requests signed as Twilio signs them): with the switch on, `/auto/answer` replied with the TwiML above, "Hi, is this Dana?"; a client connecting to the relay exactly as that TwiML said - its address, signed for it, the `call` parameter in `setup` - started her on that call (`ai_started_at`, `ai_agent.started`, the greeting her first turn); switched off with the command while the API ran, the next call got the script with no restart; on with no key, the script on two calls and `ai_agent.no_key` logged once; a lead with no first name, "Hi there!".
+- **Not yet:** `/auto/ai-after`, where Twilio goes when her part ends, is A14's. Until it exists the switch stays off: the end of her part would reach no page, and the call would end on a Twilio error rather than her action.
 
 ---
 

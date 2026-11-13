@@ -39,6 +39,11 @@
 - `fallback` comes with why: `model_failed`, `model_slow`, `socket_error`, `relay_failed`. The relay has already recorded it (`ai_ended_with`, `ai_agent.ended`); `endAiCall` records once, so calling it again changes nothing.
 - `SessionStatus=failed` with nothing recorded - Twilio's side failing, or the relay never starting her - should record `fallback` here (`endAiCall`), so the robot counts every one (A17). `ai_ended_with` stays empty for a call she never started.
 
+## Where it hooks in (from A13)
+
+- The address is already in every call's TwiML: `AUTO_AI_AFTER_PATH` (`integrations/twilio.ts`), `/api/webhooks/twilio/auto/ai-after?call=<row>`, POST - the row in the query, as every `/auto/*` webhook has it, so `automatedCall(req)` finds it. Under `/auto/`, so the router's guard (404 with automated calls off, signature, archive) already covers it.
+- `/auto/answer` loaded the script before connecting her; a fallback loads it again here (`loadScript`) - it may have changed in three minutes, and today's script is read per request anyway.
+
 ## Not in this ticket
 
 - Saving the callback itself (A15).

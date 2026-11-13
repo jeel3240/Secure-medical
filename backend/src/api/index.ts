@@ -72,6 +72,7 @@ const app = createApp({
   secureCookies: isProduction,
   twilio: config.twilio.status === 'on' ? config.twilio.settings : null,
   autoCalls,
+  openAiKey: config.openai.apiKey,
   activity: { record: (entry) => recordActivity(pool, entry) },
 });
 

@@ -15,6 +15,12 @@ export interface AppDeps {
    */
   autoCalls: boolean;
   /**
+   * OpenAI's key, for Seri - AI-AGENT.md section 7. With automated calls on,
+   * an answered call goes to her when her switch is on and this is set; empty
+   * or missing, never (A13).
+   */
+  openAiKey?: string;
+  /**
    * Writes the activity log - AUDIT.md. Sign-ins and account changes go
    * through here; the writes on a lead record themselves in their own SQL.
    */

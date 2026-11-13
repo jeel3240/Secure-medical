@@ -17,6 +17,7 @@ import {
   recordingNoticeTwiml,
   refusalTwiml,
   ringAgentTwiml,
+  seriTwiml,
   TOKEN_TTL_SECONDS,
   transferTwiml,
   voicemailTwiml,
@@ -315,6 +316,33 @@ describe('the voicemail message, in Twilio\'s words (T18)', () => {
         "Hi, this is Seri calling from eDrugstore with a quick message - we're offering antibiotics at 25% off right now. " +
         "We'd love to connect. Please call us back at 4 8 0, 4 7 0, 8 2 5 9. Thanks, and have a great day!</Say>" +
         '<Pause length="1"/><Hangup/></Response>'
+    );
+  });
+});
+
+describe('the call connected to Seri, in Twilio\'s words (A13)', () => {
+  it('her relay, the settings heard on the dev number, her greeting, our row, and where her part ends - nothing said first', () => {
+    expect(seriTwiml(SETTINGS, { callId: 42, greeting: 'Hi, is this John?' })).toBe(
+      '<?xml version="1.0" encoding="UTF-8"?><Response>' +
+        '<Connect action="https://calls.example.com/api/webhooks/twilio/auto/ai-after?call=42" method="POST">' +
+        '<ConversationRelay url="wss://calls.example.com/api/ai/relay" welcomeGreeting="Hi, is this John?"' +
+        ' ttsProvider="ElevenLabs" voice="21m00Tcm4TlvDq8ikWAM-v4-0.4_0.8"' +
+        ' transcriptionProvider="Deepgram" speechModel="flux"' +
+        ' interruptible="speech" interruptSensitivity="low" ignoreBackchannel="true"' +
+        ' elevenlabsTextNormalization="on" dtmfDetection="true" events="speaker-events" applicationReconnect="true">' +
+        '<Parameter name="call" value="42"/></ConversationRelay></Connect></Response>'
+    );
+  });
+
+  it('the relay\'s address carries no query - Twilio signs it as written, and the relay checks exactly that (A10)', () => {
+    const xml = seriTwiml(SETTINGS, { callId: 7, greeting: 'Hi there!' });
+    expect(/<ConversationRelay url="([^"]*)"/.exec(xml)![1]).toBe('wss://calls.example.com/api/ai/relay');
+    expect(xml).toContain('<Parameter name="call" value="7"/>');
+  });
+
+  it('a name with a character XML would break on is escaped, not cut', () => {
+    expect(seriTwiml(SETTINGS, { callId: 42, greeting: 'Hi, is this Mary & Jo?' })).toContain(
+      'welcomeGreeting="Hi, is this Mary &amp; Jo?"'
     );
   });
 });
