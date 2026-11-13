@@ -605,7 +605,7 @@ covers both kinds:
 
 | Case | Queue |
 |---|---|
-| Never replied, then expired | Not shown - the queue only ever shows responders |
+| Never replied, then expired | Not shown - a lead who never replied is in the queue only for a missed call, a missed "yes" on the automated call, or a due call back Seri booked (`QUEUE.md`, "Who is in it"), and expiry takes none of those away |
 | Replied at least once, then went quiet and expired | Not shown either |
 
 Both stay visible on Admin > Leads under Expired. *(2026-09-28: there is no

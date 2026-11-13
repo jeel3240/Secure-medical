@@ -137,8 +137,14 @@ recorded, which is when the recording notice is said. `{place}` in the hold
 line shows as "2, 3…".
 
 No script active: the card says so, and the link text is not listed. Read-only
-like the rest: the script and its settings change by migration (015, 018-020
-so far).
+like the rest: the script and its settings change by migration (015, 018-021
+so far - 021 is "Calls at once", five for each person free, T29).
+
+**Seri is not on Admin (Phase 7, `AI-AGENT.md`).** Her switch is changed only
+by the server command, `npm run ai-agent -- on|off`, and recorded in the
+activity log; her knowledge files are in the repo, not the database. The Calls
+tab shows the script she falls back to, not her. What she did on each call is
+on the lead's timeline and in Admin > Leads' Call column ("Callback booked").
 
 ## Overview (6a)
 
@@ -168,7 +174,7 @@ all real":**
 | Completed | Leads who finished their flow's questions in the period, whichever way it ended - a lead who said No and then chose special offers is one. `conversations.completed_at`, migration 004. *(Called "Answered all 3" until 2026-10-06, when a flow stopped being three questions.)* |
 | Closed | **Leads** closed in the period, not presses of Closed: a lead closed, reopened by a text and closed again is one |
 | Working now | Leads the agent holds right now, whatever the period |
-| Due today | The agent's open callbacks due **by the end of today**, in the viewer's time zone, overdue ones included - one booked for next week is not. Until 2026-09-29 it counted only those already due, so a 3 PM callback showed nothing all morning; the column was called Callbacks due |
+| Due today | The agent's open callbacks due **by the end of today**, in the viewer's time zone, overdue ones included - one booked for next week is not. A call back Seri booked counts once it is theirs - booked for the lead they held, or taken on a pick-up (A16); one nobody has taken is no one's. Until 2026-09-29 it counted only those already due, so a 3 PM callback showed nothing all morning; the column was called Callbacks due |
 
 Until that day Replied and Completed counted leads that *arrived* in the
 period, Closed counted presses, and Callbacks due counted every open callback;
@@ -226,7 +232,8 @@ automated flow is already visible per lead on the timeline, and this feed
 answers "what are my agents doing". For the same reason a callback the system
 books for a missed call (`callbacks.reason = 'missed_call'`) is not in the
 feed, and neither it nor a call that only rang an agent moves their Last
-active (2026-10-01).
+active (2026-10-01). Nor does a call back Seri booked (`ai_booked`, A15): the
+feed and Last active read only `reason = 'booked'`.
 
 ## DNC list (6e)
 

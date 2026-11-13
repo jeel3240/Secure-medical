@@ -105,13 +105,13 @@ second part's SQL there once.
 *(The `004` on disk today, `004_conversation_completed_at.sql`, is a later and
 unrelated file.)*
 
-**Where the files stand - 2026-11-11.** `main` holds 001 to 021 - 021, five
+**Where the files stand - 2026-11-13.** `main` holds 001 to 021 - 021, five
 automated calls at once for each person free (T29, `AUTO-CALLS.md`
 "Traffic"), reached it through PR #29. 022 is on `dev`: Seri, the AI agent
 (Phase 7, `AI-AGENT.md`) - new columns on `calls` and `callbacks`, a new
-add-only table, `call_ai_turns`, and the `ai_agent` setting, `off`. It
-changes no existing row, and nothing writes to the new parts until later
-tickets; with the switch off, calls go on exactly as today. 023 too
+add-only table, `call_ai_turns`, and the `ai_agent` setting, seeded `off`. It
+changes no existing row; the app writes to the new parts only on a call Seri
+takes, so with her switch off, calls go on exactly as today. 023 too
 (2026-11-12, A15): `callbacks.note`, the one-line reason Seri gives with a call
 back she books, and one call back per call she booked it on - it changes no
 existing row.
@@ -164,6 +164,22 @@ docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
 docker compose exec api npm run migrate
 ```
 
+**Seri, the AI agent (Phase 7, `AI-AGENT.md`; A22).** The deploy that brings
+022 and 023 runs them as above: `npm run migrate` straight after the `up` -
+until they have run, the lead page, its timeline and My Callbacks read columns
+that are not there yet. Put `OPENAI_API_KEY` in the server's `.env` before that
+`up -d --build`, which recreates the api and the worker with it; added later,
+recreate both with the same `-f` files (`up -d api worker` - a `restart` keeps
+the old environment). She stays off: 022 seeds `ai_agent` as `off`, and calls
+go on exactly as today. To switch her on - and off again at any time, with no
+restart; recorded in the activity log; `on` is refused without the key:
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.prod.yml exec api npm run ai-agent -- on
+```
+
+A call already with her finishes; the next call follows the switch.
+
 **Calling: run `docker compose exec api npm run twilio:configure`** on the
 first deploy that has calling, and whenever `PUBLIC_URL` or a Twilio setting
 changes. **Only ever on the server.** Run from a laptop with production's
@@ -208,7 +224,10 @@ The API refuses to start in production on any of three things, logging
 `api.refused_start` with the `reason` (`api/startup-checks.ts`): `JWT_SECRET`
 a placeholder or shorter than 32 characters - generate one with
 `openssl rand -hex 32`; `EZT_WEBHOOK_TOKEN` missing or shorter than 16; or the
-seven Twilio settings only partly set - all or none.
+seven Twilio settings only partly set - all or none. And in any environment
+on a broken knowledge file of Seri's (`ai_knowledge_invalid`, `api/index.ts`,
+`AI-AGENT.md` section 5): the files are in the repo, so a broken one is a bug
+found on the first start.
 
 Production runs compiled `dist/`, not ts-node. The `caddy` service is built
 from `frontend/Dockerfile`, which compiles the React app and copies it into the

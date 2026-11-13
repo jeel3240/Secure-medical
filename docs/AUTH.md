@@ -99,9 +99,9 @@ always remains.
 **Production refuses a weak `JWT_SECRET`.** With `NODE_ENV=production` the API
 will not start if the secret is one of the placeholders in this repo or shorter
 than 32 characters, since anyone who has read the repo could forge a token
-signed with one. Generate one with `openssl rand -hex 32`. (The API has two
-more start-up refusals that are not about sign-in - the webhook token and
-partly set Twilio settings - `WORKFLOW.md`.)
+signed with one. Generate one with `openssl rand -hex 32`. (The API has three
+more start-up refusals that are not about sign-in - the webhook token, partly
+set Twilio settings, and a broken knowledge file of Seri's - `WORKFLOW.md`.)
 
 ## Frontend
 

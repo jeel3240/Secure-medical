@@ -165,6 +165,7 @@ to say. Which status wins, and why New went too, is in `QUEUE.md`, "The tag".
 | Callback – name · time | Clock | Someone has a call booked on it |
 | Missed call | Handset with an arrow turned away | The lead rang and nobody answered. Bold, like Inbound reply |
 | Wants a call | Handset | The lead said No, then asked to hear from a rep (2026-10-05); or, since T22, said yes on the automated call and nobody took it - the server ranks that one just below Missed call and sorts it first. The same handset as Missed call, without the arrow; not bold, so the two reasons look alike |
+| Callback · time, due | Clock, bold | A call back Seri booked whose time has come (A16): the Callback clock, with "– name" once someone has taken it, bold like Missed call - we owe it |
 
 Admin > Leads has two more of its own: **Offers**, a price tag, muted - a
 lead who asked for special offers and nothing else - and **Not interested**,
@@ -272,7 +273,8 @@ dropdown?". It was an unlabelled select reading "My callbacks" that listed
 other agents but had no way to see everyone's, and the title stayed "My
 callbacks" whatever it showed. Now it reads **Agent: Me · All agents · karm…**,
 the title follows it ("All callbacks", "karm's callbacks"), and All agents adds
-an Agent column. The API took `agentId=all` for it (`AGENT-WORKSPACE.md`).
+an Agent column - "-" for a call back Seri booked that nobody has taken yet
+(A16). The API took `agentId=all` for it (`AGENT-WORKSPACE.md`).
 Agents see no picker.
 
 The underline tabs were the last of their kind; their styles are gone.
@@ -411,7 +413,7 @@ needs to know:
 | A call Seri took: her conversation under it, closed the same way - "Lead" and "Seri" lines, then how her part ended ("Booked a call back: Mon, Nov 16 3:00 PM", "Seri stopped - the call went on with the script") - in the transcript's own classes (A19) | `components/SeriConversation.tsx` (`seriEndedText`, pure) |
 | Missed: a notice with **Call back**, which takes the lead and opens it with router state `callBack`; the workspace dials once and clears the state, so a reload does not ring them again | `IncomingCall.tsx`, `WorkspacePage.tsx` |
 | The lead's page: a **Missed call** badge beside Closed and Needs review, from `flags.missedCall`; and a **Wants a call** badge for a "yes" on the automated call nobody took, from `flags.missedYes` (T22) - the queue says only Working once the lead is picked up | `WorkspacePage.tsx` |
-| A call back Seri booked, in the queue (A16): "Callback · 3:00 PM" while nobody has it, "Callback – karm · 3:00 PM" once taken; bold once its time has come (`tag.due`), like a missed call. On My Callbacks her line fills the note column - "Seri: Wants to order antibiotics" - until a note of the agent's is newer. On the timeline, "Took the callback Seri booked for ..." | `components/QueueStatus.tsx`, `pages/CallbacksPage.tsx`, `components/Timeline.tsx` |
+| A call back Seri booked, in the queue (A16): "Callback · 3:00 PM" while nobody has it, "Callback – karm · 3:00 PM" once taken; bold once its time has come (`tag.due`), like a missed call. On My Callbacks her line fills the Last note column - "Seri: Wants to order antibiotics" - while the lead has no note; once there is one, the column shows the lead's newest, anyone's. On the timeline, "Took the callback Seri booked for ..." | `components/QueueStatus.tsx`, `pages/CallbacksPage.tsx`, `components/Timeline.tsx` |
 | A call back Seri booked (A15): on the lead's page a navy badge, "Callback booked · Thu, Nov 13 3:00 PM · Wants to order antibiotics" - the viewer's own time, whose it is once taken, her line - from `aiCallback`; on the timeline "Callback booked by Seri for ... · her line"; on Admin > Leads' Call column and filter, "Callback booked" | `WorkspacePage.tsx`, `pages/workspace/LeadHeader.tsx` (`aiCallbackLabel`), `components/Timeline.tsx`, `lib/call-results.ts` |
 
 Twilio's SDK is its own chunk, loaded once someone is signed in and calling is
@@ -781,7 +783,7 @@ arrives after a newer one is still dropped.
 
 ## Tests
 
-`npm test` in `frontend/`. Vitest with jsdom, 407 tests in 35 files (2026-10-27).
+`npm test` in `frontend/`. Vitest with jsdom, 432 tests in 36 files (2026-11-13).
 
 Logic first, by agreement - a screen is easy to judge by eye, and a dropped
 response or an off-by-one age threshold is not:
@@ -798,12 +800,13 @@ response or an off-by-one age threshold is not:
 | `pages/workspace/Conversation.test.ts` | The answer shown beside a reply: the server's, and nothing when it would repeat the reply |
 | `pages/QueuePage.test.ts` | The queue's Answers cell and its tooltip |
 | `pages/workspace/Conversation.render.test.tsx` | The sent ticks and the red "!" on a refused message; a call as one line, the robot's call with its answers folded under it; a label where the day changes |
-| `components/QueueStatus.test.tsx` | The queue's six statuses, their icons, a callback's time, and the tier bars |
+| `components/QueueStatus.test.tsx` | The queue's six statuses, their icons, a callback's time - one of Seri's with no name yet, bold once due (A16) - and the tier bars |
 | `components/DateTimeField.test.tsx` | The date and time picker: the month grid, quarter hours, past days off, Clear, Escape |
-| `pages/workspace/LeadHeader.test.ts` | The header's source and Questions wording, a sub-question, "Q1-a", included |
+| `pages/workspace/LeadHeader.test.ts` | The header's source and Questions wording, a sub-question, "Q1-a", included; a phone call stopping the questions (2d); the badge of a call back Seri booked (A15) |
 | `pages/workspace/LeadNotes.test.tsx` | The Notes card: newest first, three then Show all, the author, the empty state |
 | `components/CallTranscript.test.tsx` | A call's transcript: closed until asked for, speakers joined, nothing for an unrecorded call |
 | `components/CallAnswers.test.tsx` | The robot call's answers in words - said, pressed, asked again, not understood, stop, nothing said - and the fold (T21) |
+| `components/SeriConversation.test.tsx` | A call Seri took: her lines and the lead's in order, how her part ended in words, nothing for a call she did not take (A19) |
 | `pages/workspace/LeadAnswers.test.ts` | The score breakdown's light-blue-to-navy shades, and each line's words |
 | `components/SyncStatus.test.tsx` | The EZ Texting sync line, quiet and amber |
 | `components/Segmented.test.tsx` | The sliding switcher |

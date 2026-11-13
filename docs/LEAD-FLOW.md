@@ -14,6 +14,7 @@ that doc wins if the two ever disagree:
 | Who is in the queue, the order, the STATUS column | `QUEUE.md` |
 | Picking, Wrap up, Closed and DNC | `AGENT-WORKSPACE.md` |
 | The automated call: who it rings, when, and what each answer does | `AUTO-CALLS.md` |
+| Seri, the AI agent who runs that call when switched on | `AI-AGENT.md` |
 | Calls with a person, both ways, and a missed call | `TWILIO.md` |
 
 ## The main path
@@ -83,14 +84,14 @@ highest in this list wins.
 |---|---|---|
 | **Opted out** | Texted STOP, an agent pressed DNC, the lead said stop on the automated call (T13), or the number was already blocked, or opted out at EZ Texting, when the lead arrived. The number is blocked. (A lead who later texted START still reads Opted out here, though unblocked - "Ways back") | No |
 | **Closed** | An agent pressed Closed | No, until something reopens it - "Ways back", below |
-| **Working** | An agent holds it, or has left a note, a callback, a call they placed or answered, an SMS or an outcome on it. An automated call counts only once a person took it | Yes |
+| **Working** | An agent holds it, or has left a note, a callback, a call they placed or answered, an SMS or an outcome on it. An automated call counts only once a person took it, and a call back Seri booked not at all | Yes |
 | **Needs review** | Two replies we could not understand | Yes |
 | **Ready** | Finished the questions, or asked to hear from a rep; nobody has touched it | Yes |
 | **Offers** | Said No to the first question, then Yes to special offers. Nothing for an agent to do | No, unless they text or ring us |
 | **Not interested** | Said No to the first question, then No thanks to the offers and to a rep | No, unless they text or ring us |
 | **Expired** | Went quiet during the questions | No, unless they text or ring us |
-| **Answering** | Partway through the questions | No, unless they ring us and nobody answers, they said yes on the automated call and nobody took it (T22), our text to them did not go out, or they text us after a phone call stopped the questions (`STATE-MACHINE.md` 2d) |
-| **Awaiting reply** | Has not answered question 1 | No, with the same four exceptions |
+| **Answering** | Partway through the questions | No, unless they ring us and nobody answers, they said yes on the automated call and nobody took it (T22), a call back they booked with Seri is due (A16), our text to them did not go out, or they text us after a phone call stopped the questions (`STATE-MACHINE.md` 2d) |
+| **Awaiting reply** | Has not answered question 1 | No, with the same five exceptions |
 
 Working outranks the SMS statuses: an expired or needs-review lead that an
 agent is handling reads Working.
@@ -102,6 +103,22 @@ once (T23, `ADMIN-LEADS.md`, "Call"). Once a lead has answered that call - yes,
 no, the link - or rung us, the text questions stop: anything they text goes
 to a person as Inbound reply, never an automated "sorry" (`STATE-MACHINE.md`
 2d, 2026-10-27).
+
+**Seri, the AI agent** (Phase 7, `AI-AGENT.md`) - built, not yet deployed
+(2026-11-13). Off by default: her switch, `settings.ai_agent`, is seeded `off`,
+changed only by `npm run ai-agent -- on|off`, and off whatever it says while
+`OPENAI_API_KEY` is empty. On, an answered automated call goes to her instead
+of the script's first question. She answers questions and ends the call one
+of five ways: put through to a person (the script's own transfer and hold
+line), a call back at a time the lead picks, the link texted, an opt-out (the
+number blocked, as a stop on the script) or a goodbye; if she fails, the
+script takes over from its first question. Anything the lead says to her
+stops the text questions (2d). A call back she books belongs to the lead's
+holder when an active agent holds the lead, otherwise to nobody, and does not
+make the lead Working; once due, it puts the lead first in the queue as
+**Callback · 3:00 PM**, bold, and the first agent to pick the lead up takes it.
+Admin > Leads' Call column reads "Callback booked", and her conversation is on
+the timeline under the call.
 
 ## What agents see in the queue
 

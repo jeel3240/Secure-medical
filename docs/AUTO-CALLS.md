@@ -32,7 +32,7 @@ It is built in two stages, agreed with the client on 2026-10-14:
 | Stage | What | When |
 |---|---|---|
 | **1** | A scripted call that follows the client's script word for word. The lead answers by voice ("yes", "no") or keypad (1, 2) | Now - this doc |
-| **2** | When the lead says something outside the script, an AI agent takes over **inside the same call** - no second number, no transfer | Phase 7, its own plan: `AI-AGENT.md`. Changed 2026-11-11 - the AI agent, Seri, runs the whole call from the start, with this script as her backup |
+| **2** | As agreed then: when the lead says something outside the script, an AI agent takes over **inside the same call**. Changed 2026-11-11: the AI agent, Seri, runs the whole call from the start when switched on, with this script as her backup | Phase 7, its own plan: `AI-AGENT.md` - built on `dev` (A01-A20, 2026-11-12), not yet heard on a real phone (A21) nor deployed (A22) |
 
 **Production places no automated call until `AUTO_CALLS=on` is set on the
 server.** Every calling ticket is merged and deployed with it off: the header
@@ -105,7 +105,7 @@ LEAD ARRIVES
            never called by the robot before
          no answer  -> No answer
          voicemail  -> the voicemail message -> Voicemail left
-         picks up   -> the script above
+         picks up   -> the script above - or Seri, when she is switched on (Phase 7, `AI-AGENT.md`)
   -> day 7 -> expires, as today
 
 TRANSFER ("Great, connecting you with a live agent now. Please hold." + recording notice)
@@ -622,7 +622,7 @@ be trusted").
 
 | Webhook | Now | Later |
 |---|---|---|
-| `POST /api/webhooks/twilio/auto/answer` | The lead picked up: a second's quiet, the greeting with nothing listening, then the question itself inside a `<Gather>` - speech or one key, heard from its first word ("When the call listens"); silence reported too; the step's words and the stop words as hints. Anything wrong - no row, no script, the database down - ends the call quietly, never Twilio's "application error" | With Seri switched on, the call is connected to her instead, no question asked - `AI-AGENT.md` section 2, "As built (A13)" |
+| `POST /api/webhooks/twilio/auto/answer` | The lead picked up: a second's quiet, the greeting with nothing listening, then the question itself inside a `<Gather>` - speech or one key, heard from its first word ("When the call listens"); silence reported too; the step's words and the stop words as hints. Anything wrong - no row, no script, the database down - ends the call quietly, never Twilio's "application error". With Seri switched on, the call is connected to her instead, no question asked - `AI-AGENT.md` section 2, "As built (A13)" | - |
 | `POST /api/webhooks/twilio/auto/gather` | The answer read (`matchSpokenChoice`), what follows decided (`handleAnswer`), kept with its result and any block (`keepAnswer`), and the next line said - T13, "On a live call". The address names the step and which asking it was. A yes to the link is texted after Twilio has its answer (T14); a yes to the transfer rings the lead's own agent first, then everyone free (T15a, T15b, "The transfer") | - |
 | `POST /api/webhooks/twilio/auto/status` | How it ended, saved as every call's end is (`finishCall`): outcome, talk time, `call.ended`; then an unfinished script given its result (T13). Never a missed-call text | - |
 | `POST /api/webhooks/twilio/auto/amd` | Who picked up, kept as `answered_by`; then acted on (T18, "Voicemail"): a machine gets the voicemail message, a fax is hung up on - the beep decides. Twilio has its answer first | - |
@@ -665,7 +665,10 @@ the one held.
 
 Built in T15a and T15b (2026-10-20). A "yes" to a step whose choice ends in
 `transfer` (Q1) is put through to a person, in `/auto/gather`; the rules are
-pure, `planTransfer` and `planAfterHolder` in `core/call-script.ts`.
+pure, `planTransfer` and `planAfterHolder` in `core/call-script.ts`. Seri's
+transfer, from `/auto/ai-after`, goes through the same code (`planYes`,
+`yesTwiml`), its ring shown as a yes to the script's first step (A14,
+`AI-AGENT.md` section 3).
 
 1. **Who can take it is read at that moment**: everyone free (`freePeople`,
    "Who is free") and who holds the lead (`transferContext`). Until T18 a
@@ -1002,6 +1005,8 @@ it is the page the message replaced:
   recording, you may...", calls 58 and 59): not kept, nothing follows.
 - `/auto/after`, when a transfer was ringing - reported `no-answer`, exactly
   as a ring let run out (call 62). Nobody is switched off, nothing more said.
+- `/auto/ai-after`, the end of Seri's session the message replaced (A14,
+  A18): her action is not carried out.
 
 Each is logged as `auto_call.after_takeover` and nothing else - never as an
 answer or a transfer.
@@ -1072,10 +1077,10 @@ Nothing is overwritten (`AUDIT.md`).
 
 | What | Where |
 |---|---|
-| The call | `calls`, with `direction = 'automated'`; `agent_id` empty until someone takes a transfer. `script_result`: `transferred`, `transfer_missed`, `link_sent`, `not_interested`, `opted_out`, `no_response`, `voicemail_left`, `hung_up`, `unanswered`; and `not_placed`, a call Twilio never placed, for our account's reasons - not the lead's call ("When Twilio refuses"). `held_at`: when it went on hold (019). `outcome` is `voicemail` only when Twilio's verdict took the call over (T18) |
+| The call | `calls`, with `direction = 'automated'`; `agent_id` empty until someone takes a transfer. `script_result`: `transferred`, `transfer_missed`, `link_sent`, `not_interested`, `opted_out`, `no_response`, `voicemail_left`, `hung_up`, `unanswered`; `not_placed`, a call Twilio never placed, for our account's reasons - not the lead's call ("When Twilio refuses"); and `callback_booked`, Seri's alone (022, `AI-AGENT.md`). `held_at`: when it went on hold (019). `outcome` is `voicemail` only when Twilio's verdict took the call over (T18) |
 | What the lead said | `call_answers`, one add-only row per answer: what Twilio heard, how sure, keys pressed, the choice it matched |
 | The script | `call_scripts`, `call_steps`, `call_choices` - rows, changed by migration, like the SMS flow (015). The script's own words - stop, no response, voicemail, busy, hold and the place on hold (019), the link text - are on its `call_scripts` row, so another script brings its own |
-| When it calls | `settings`: `auto_call_hours_start` 11:00, `auto_call_hours_end` 17:00, `auto_call_time_zone` America/Phoenix, `auto_call_days` mon,tue,wed,thu,fri, `auto_call_wait_minutes` 60, `auto_call_ring_seconds` 25, `auto_call_hold_max_minutes` 10, `auto_call_min_confidence` 0.4, `auto_call_offer_ring_seconds` 20 (020); and, written by the worker, `auto_calls_on` and `auto_calls_since` - whether it last started with automated calls on, and when they were last switched on ("When a lead is called") |
+| When it calls | `settings`: `auto_call_hours_start` 11:00, `auto_call_hours_end` 17:00, `auto_call_time_zone` America/Phoenix, `auto_call_days` mon,tue,wed,thu,fri, `auto_call_wait_minutes` 60, `auto_call_ring_seconds` 25, `auto_call_hold_max_minutes` 10, `auto_call_min_confidence` 0.4, `auto_call_offer_ring_seconds` 20 (020), `auto_call_calls_per_person` 5 (021, "Traffic"); `ai_agent` `off` (022), Seri's switch (`AI-AGENT.md` section 7); and, written by the worker, `auto_calls_on` and `auto_calls_since` - whether it last started with automated calls on, and when they were last switched on ("When a lead is called") |
 | The link text | `messages`, like every text |
 | Who is free | `users.taking_calls`, `taking_calls_at`, `taking_calls_why`, `users.ringable_until` |
 | Each ring from hold | `call_offers` (020): the call, who was rung, when, and how it ended - written once, ended once, never removed |
@@ -1093,8 +1098,8 @@ does not answer a missed call - until an agent takes the transfer.
 
 | Screen | What |
 |---|---|
-| Lead timeline and workspace | "Automated call · voicemail left", "· said yes · Maya Chen took it · 2:14", "· said yes · nobody took it", "· link sent", "· not interested", "· opted out", "· no response", "· hung up", "· no answer" - with what the lead said underneath, under **Answers** (T21, `AGENT-WORKSPACE.md` "The timeline"); and "Phone call - automated questions stopped" once the lead has answered (W2, `STATE-MACHINE.md` "2d") |
-| Agents' queue | Only a "yes" nobody took: first, the longest waiting on top, "Wants a call" - and a Wants a call badge on the lead's card - until an agent calls or texts them, answers when they ring, or saves an outcome (T22, `QUEUE.md` "Who is in it", "The order", "The tag") |
+| Lead timeline and workspace | "Automated call · voicemail left", "· said yes · Maya Chen took it · 2:14", "· said yes · nobody took it", "· link sent", "· not interested", "· opted out", "· no response", "· hung up", "· no answer" - with what the lead said underneath, under **Answers** (T21, `AGENT-WORKSPACE.md` "The timeline"); and "Phone call - automated questions stopped" once the lead has answered (W2, `STATE-MACHINE.md` "2d"). A call Seri took also reads "· callback booked", with her conversation under **Seri** (A15, A19) |
+| Agents' queue | A "yes" nobody took: first, the longest waiting on top, "Wants a call" - and a Wants a call badge on the lead's card - until an agent calls or texts them, answers when they ring, or saves an outcome (T22, `QUEUE.md` "Who is in it", "The order", "The tag"). And, since A16, a call back Seri booked once it is due: beside it at the top, "Callback · 3:00 PM" in bold |
 | Admin > Leads | A **Call** column with the robot call's result - "Voicemail left", "Said yes · nobody took it", "Calling now" - and a filter on it. No new status or tab - a lead is on two tracks at once ("Awaiting reply" and "Voicemail left") (T23, `ADMIN-LEADS.md` "Call") |
 | Admin > Configuration | On its Calls tab, the call script line by line, with what picks each answer, and the settings the robot reads - on or off, hours, time zone, days, the wait, ring times, the hold stop, the confidence a spoken answer needs, the call-back number; the link text with the other texts, on Texts. Read-only (T24, `ADMIN.md` "The automated call") |
 | App bar | The "Taking calls" switch |
@@ -3155,7 +3160,7 @@ before asking, and the voice is a more natural one.
 
 ## Not in Stage 1
 
-- The AI agent (Stage 2), from the "not understood" branch.
+- The AI agent (Stage 2), from the "not understood" branch. *(2026-11-11: its own phase instead - Seri runs the whole call from the start, `AI-AGENT.md`.)*
 - A day-3 reminder text for leads still silent - a separate task once calling
   is stable, if the client agrees (Jeel, 2026-10-15).
 - Sending email.

@@ -9,6 +9,7 @@ how to run it, and its table says which doc covers what.
 - [Poller](docs/POLLER.md) · [Webhooks](docs/WEBHOOKS.md) · [EZ Texting API behaviour](docs/EZTEXTING-API.md)
 - [Priority queue](docs/QUEUE.md) · [Agent workspace](docs/AGENT-WORKSPACE.md)
 - [Calling, outgoing and incoming (Twilio)](docs/TWILIO.md) · [Automated calls: the robot's call, and its tracker](docs/AUTO-CALLS.md)
+- [AI agent (Seri): the design](docs/AI-AGENT.md) · [its tickets](docs/ai-agent-tickets/README.md)
 - [Admin](docs/ADMIN.md) · [Admin: Leads](docs/ADMIN-LEADS.md)
 - [Auth: sign-in, sessions, roles](docs/AUTH.md)
 - [The activity log: nothing is lost](docs/AUDIT.md) · [Logging and health](docs/LOGGING.md)
