@@ -10,6 +10,7 @@
  * AGENT-WORKSPACE.md, "The timeline"; DESIGN-PROMPT.md section 3.
  */
 
+import { fallbackHandoff, fromHandoff, type Handoff } from '../ai/actions';
 import type { CallDirection } from '../core/calls';
 import type { ActivityAction } from '../core/activity';
 import { questionShort } from '../core/questions';
@@ -80,7 +81,8 @@ const QUERIES: { kind: TimelineKind; sql: string }[] = [
              u.name AS author,
              c.outcome, c.duration_sec, c.direction, c.script_result,
              t.status AS transcript_status, t.sentences AS transcript_lines,
-             ans.answers
+             ans.answers,
+             c.ai_started_at IS NOT NULL AS seri, c.ai_ended_with, seri.turns AS seri_turns
       FROM calls c
       LEFT JOIN users u ON u.id = c.agent_id
       -- Its transcript, if the call was recorded - TWILIO.md, "Recordings and
@@ -100,6 +102,13 @@ const QUERIES: { kind: TimelineKind; sql: string }[] = [
         LEFT JOIN call_steps s ON s.id = a.step_id
         WHERE a.call_id = c.id
       ) ans ON true
+      -- A call Seri took: her conversation, in the order it was said, and the
+      -- action she ended with (A19, AI-AGENT.md section 9). Empty otherwise.
+      LEFT JOIN LATERAL (
+        SELECT json_agg(json_build_object('who', at.who, 'text', at.text) ORDER BY at.id) AS turns
+        FROM call_ai_turns at
+        WHERE at.call_id = c.id AND at.who IN ('lead', 'seri', 'action')
+      ) seri ON true
       -- Not a robot call Twilio never placed (not_placed): it never reached
       -- the lead - AUTO-CALLS.md, "When Twilio refuses".
       WHERE c.lead_id = $1 AND c.script_result IS DISTINCT FROM 'not_placed'
@@ -277,6 +286,10 @@ interface TimelineRow {
   /** The robot's call: how its script ended, and what the lead said (T21). */
   script_result?: string | null;
   answers?: CallAnswerRow[] | null;
+  /** A call Seri took (A19): her conversation, and how her part ended. */
+  seri?: boolean;
+  ai_ended_with?: string | null;
+  seri_turns?: { who: 'lead' | 'seri' | 'action'; text: string }[] | null;
   done_at?: Date | null;
   value?: string;
   action?: string;
@@ -313,6 +326,30 @@ function callAnswers(rows: CallAnswerRow[]) {
   }));
 }
 
+/**
+ * Seri's part of a call, for the screen (A19): the lead's words and hers in
+ * the order said, and how her part ended - the action she ended with, as she
+ * chose it (a call back with its time), or null when she ended with none: the
+ * lead hung up, or the voicemail message took the call. `ai_ended_with` is the
+ * record: an action she chose but never carried out is not shown as how it
+ * ended. A fallback Twilio's side caused has no action turn of hers.
+ */
+function seriPart(turns: { who: string; text: string }[], endedWith: string | null) {
+  const actions = turns.filter((t) => t.who === 'action').map((t) => fromHandoff(t.text));
+  const chosen = actions.at(-1);
+  const ended: Handoff | null = endedWith
+    ? chosen?.action === endedWith
+      ? chosen
+      : endedWith === 'fallback'
+        ? fallbackHandoff('twilio_failed')
+        : ({ action: endedWith } as Handoff)
+    : null;
+  return {
+    turns: turns.filter((t) => t.who === 'lead' || t.who === 'seri').map((t) => ({ who: t.who, text: t.text })),
+    ended,
+  };
+}
+
 function toEntry(kind: TimelineKind, row: TimelineRow): TimelineEntry {
   const at: string = row.at.toISOString();
 
@@ -344,6 +381,8 @@ function toEntry(kind: TimelineKind, row: TimelineRow): TimelineEntry {
           ...(row.direction === 'automated'
             ? { scriptResult: row.script_result ?? null, answers: callAnswers(row.answers ?? []) }
             : {}),
+          // A call Seri took (A19): what was said, and how her part ended.
+          ...(row.seri ? { seri: seriPart(row.seri_turns ?? [], row.ai_ended_with ?? null) } : {}),
           // Absent when the call was not recorded.
           ...(row.transcript_status
             ? { transcript: { status: row.transcript_status, lines: row.transcript_lines ?? [] } }

@@ -21,6 +21,7 @@ import { addNote } from '../src/db/notes';
 import { getTimeline } from '../src/db/timeline';
 import { startConversation } from '../src/db/flows';
 import { failAutomatedCall, keepAnswer, linkAutomatedCall, startAutomatedCall, takeTransfer } from '../src/db/auto-calls';
+import { endAiCall, saveTurn, startAiCall } from '../src/ai/relay-store';
 import { replyAs } from './live-flow';
 
 let failures = 0;
@@ -328,6 +329,62 @@ async function main(): Promise<void> {
       [agentsCalls.length > 0, agentsCalls.every((e) => !('scriptResult' in e.detail) && !('answers' in e.detail))],
       [true, true]
     );
+  }
+
+  console.log('\na call Seri took: what was said, and how her part ended (A19)');
+  {
+    const seriCall = async (phone: string, sid: string) => {
+      const lead = await makeLead(phone, '20 minutes');
+      const started = await startAutomatedCall({ leadId: lead, mayRing: () => true });
+      const callId = started.ok ? started.callId : 0;
+      await linkAutomatedCall(callId, sid);
+      await startAiCall(pool, { callId, callSid: sid, knowledgeVersion: 'v' });
+      return { lead, callId };
+    };
+    const seriOf = async (lead: number) => (await getTimeline(lead))!.find((e) => e.kind === 'call')!.detail.seri;
+
+    const booked = await seriCall('+15550000331', 'CA-A19-1');
+    const callback = { action: 'book_callback', at: '2026-11-16T20:00:00.000Z', timeZone: 'America/New_York', reason: 'Wants to order' };
+    for (const turn of [
+      { who: 'seri' as const, text: 'Hi, is this John?' },
+      { who: 'lead' as const, text: 'Yes, who is this?' },
+      { who: 'seri' as const, text: "It's Seri from eDrugstore. We have 25% off antibiotics today." },
+      { who: 'system' as const, text: 'Cut off. Heard: "It\'s Seri"' },
+      { who: 'lead' as const, text: "I'm driving, call me Monday at 3." },
+      { who: 'seri' as const, text: 'Sure, someone will call you Monday at 3 PM your time.' },
+      { who: 'action' as const, text: JSON.stringify(callback) },
+    ]) {
+      await saveTurn(pool, { callId: booked.callId, ...turn });
+    }
+    await endAiCall(pool, booked.callId, callback as never);
+    check('her conversation in order - the lead and her, no notes - and the call back she ended with', await seriOf(booked.lead), {
+      turns: [
+        { who: 'seri', text: 'Hi, is this John?' },
+        { who: 'lead', text: 'Yes, who is this?' },
+        { who: 'seri', text: "It's Seri from eDrugstore. We have 25% off antibiotics today." },
+        { who: 'lead', text: "I'm driving, call me Monday at 3." },
+        { who: 'seri', text: 'Sure, someone will call you Monday at 3 PM your time.' },
+      ],
+      ended: callback,
+    });
+
+    const failed = await seriCall('+15550000332', 'CA-A19-2');
+    await saveTurn(pool, { callId: failed.callId, who: 'seri', text: 'Hi there!' });
+    await saveTurn(pool, { callId: failed.callId, who: 'action', text: JSON.stringify({ action: 'fallback', why: 'model_slow' }) });
+    await endAiCall(pool, failed.callId, { action: 'fallback', why: 'model_slow' });
+    check('a fallback: her part ended, why', (await seriOf(failed.lead)).ended, { action: 'fallback', why: 'model_slow' });
+
+    const twilioFailed = await seriCall('+15550000333', 'CA-A19-3');
+    await endAiCall(pool, twilioFailed.callId, { action: 'fallback', why: 'twilio_failed' });
+    check('Twilio\'s side failed - no action of hers: a fallback all the same', (await seriOf(twilioFailed.lead)).ended, { action: 'fallback', why: 'twilio_failed' });
+
+    const voicemail = await seriCall('+15550000334', 'CA-A19-4');
+    await saveTurn(pool, { callId: voicemail.callId, who: 'lead', text: "John isn't available." });
+    await saveTurn(pool, { callId: voicemail.callId, who: 'action', text: JSON.stringify({ action: 'end_call', reason: 'wrong_person' }) });
+    check('her choice never carried out - the voicemail message took the call: not shown as how it ended', (await seriOf(voicemail.lead)).ended, null);
+
+    const script = (await getTimeline((await pool.query(`SELECT lead_id FROM calls WHERE twilio_call_sid = 'CA-T21-1'`)).rows[0].lead_id))!.find((e) => e.kind === 'call')!;
+    check('a robot call she never took: none', 'seri' in script.detail, false);
   }
 
   console.log('\na lead with no history');
