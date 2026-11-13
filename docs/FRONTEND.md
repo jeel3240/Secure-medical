@@ -524,7 +524,7 @@ Timeline page a refused text reads "Delivery failed" - an agent's own as well
 as ours since 2026-10-27; before, an agent's read as sent there.
 
 *(2026-10-27: a phone call stops the automated questions too - the lead
-answered the robot's call, or rang us (`STATE-MACHINE.md` 2d): "Phone call -
+answered the robot's call (or talked to Seri on it, 2026-11-13), or rang us (`STATE-MACHINE.md` 2d): "Phone call -
 questions stopped" beside the badges, "Stopped at Q1 by a call" for
 Questions, "Phone call - automated questions stopped" on the timeline, and no
 compose warning, since the questions are already stopped.)*

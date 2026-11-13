@@ -464,8 +464,9 @@ row: a choice with its key and label as they are now, or what else it was.
   answer to the SMS question they were on (always Q1: the robot calls only
   leads who never replied). It is kept for a person, Inbound reply in the
   queue; nothing is scored or sent. Silence or an unclear answer stops
-  nothing; a stop has already ended the conversation. `STATE-MACHINE.md`,
-  "2d".
+  nothing; a stop has already ended the conversation. On a call Seri took,
+  anything the lead said to her counts as the answer (2026-11-13).
+  `STATE-MACHINE.md`, "2d".
 - **The call's end gives an unfinished script its result** (`/auto/status`,
   `settleAutomatedCall`): `unanswered` if it was never picked up, `hung_up` if
   it was and the script never reached its own end. A call Twilio would not

@@ -55,6 +55,7 @@ import { getLeadDetail } from '../src/db/lead-detail';
 import { keepAnswer, startAutomatedCall } from '../src/db/auto-calls';
 import { startIncomingCall } from '../src/db/calls';
 import { startConversation } from '../src/db/flows';
+import { saveTurn } from '../src/ai/relay-store';
 
 let failures = 0;
 
@@ -309,6 +310,36 @@ async function main(): Promise<void> {
       (await getLeadDetail(finished))?.conversation?.phoneTookOverAt,
       ((await getTimeline(finished)) ?? []).some((e) => e.detail.event === 'phone_took_over'),
     ], [null, false]);
+
+    // A call Seri took (Phase 7): the lead talking to her is answering the call.
+    /** The robot's call, taken by Seri, with what the lead said to her - kept as the relay keeps it. */
+    const seriHeard = async (leadId: number, leadSaid: string[], scriptResult: string | null = null) => {
+      const started = await startAutomatedCall({ leadId, mayRing: () => true });
+      if (!started.ok) throw new Error(`the robot's call was refused: ${started.reason}`);
+      await pool.query(`UPDATE calls SET ai_started_at = now(), ai_knowledge_version = 'v', script_result = $2 WHERE id = $1`, [started.callId, scriptResult]);
+      await saveTurn(pool, { callId: started.callId, who: 'seri', text: 'Hi, is this Avery?' });
+      for (const text of leadSaid) await saveTurn(pool, { callId: started.callId, who: 'lead', text });
+    };
+
+    const talked = await waitingOnQ1('+15550000695');
+    await seriHeard(talked, ['Yes, who is this?']);
+    const seriThanks = await replyAs(talked, 'thanks', { stored: true });
+    check('talked to Seri, then "thanks": for a person, nothing sent - as after the script\'s call', [seriThanks?.result.needsPerson, seriThanks?.result.send], [true, []]);
+    check('the card says the call stopped them', (await getLeadDetail(talked))?.conversation?.phoneTookOverAt !== null, true);
+
+    const pressedOnly = await waitingOnQ1('+15550000696');
+    await seriHeard(pressedOnly, ['(pressed 1)']);
+    check('a key pressed to her counts too', (await replyAs(pressedOnly, 'ok', { stored: true }))?.result.needsPerson, true);
+
+    const silentToHer = await waitingOnQ1('+15550000697');
+    await seriHeard(silentToHer, []);
+    const silentOne = await replyAs(silentToHer, '1', { stored: true });
+    check('she spoke and the lead said nothing: the questions go on, "1" answers Q1', [silentOne?.result.needsPerson, (await conversationOf(silentToHer)).step], [false, 20]);
+
+    const machine = await waitingOnQ1('+15550000698');
+    await seriHeard(machine, ["Avery isn't available. Leave a message after the tone."], 'voicemail_left');
+    const machineOne = await replyAs(machine, '1', { stored: true });
+    check('the voicemail message took her call: the greeting was not the lead - "1" answers Q1', [machineOne?.result.needsPerson, (await conversationOf(machine)).step], [false, 20]);
   }
 
   console.log(failures === 0 ? '\nall checks passed' : `\n${failures} check(s) FAILED`);

@@ -227,7 +227,8 @@ Opt-out is checked before it and is unaffected either way. Added in `003`; set b
 still open, and read by the reply flow and the lead card.
 
 Rule 2d, a phone call taking the questions over, has no column: it is worked
-out from `call_answers` and `calls` (`phoneTookOverAtSql`, `db/lead-state.ts`).
+out from `call_answers`, `calls` and - for a call Seri took - the lead's turns
+in `call_ai_turns` (`phoneTookOverAtSql`, `db/lead-state.ts`).
 
 **`conversations.completed_at`** - migration `004`, 2026-09-28 - is when the
 lead finished the questions, whichever way their flow ended (until 012: when

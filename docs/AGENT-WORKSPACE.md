@@ -104,7 +104,8 @@ scored. STOP and START still work. The rule and the reason are in
 authority, not this file.
 
 **So does a phone call** - 2026-10-27, `STATE-MACHINE.md` rule 2d: the lead
-answered the robot's call (yes, no, the link), or rang us. Nothing is stored
+answered the robot's call (yes, no, the link) - or, on a call Seri took, said
+anything to her (2026-11-13) - or rang us. Nothing is stored
 for it; the card's conversation carries `phoneTookOverAt`, worked out from the
 answer or the call, while the questions would otherwise still run. The page
 shows "Phone call - questions stopped" beside the other badges, and Questions
@@ -578,7 +579,7 @@ timestamp that actually exists:
 | `lead_received` | `ezt_added_at` | Its own timestamp. Carries the source. |
 | `scored` | `completed_at` once the flow has finished; before that, the last inbound reply | `updated_at` moves on every change, so it cannot be used. Until 2026-09-29 it was always the last reply, so a lead texting "Hi" after finishing moved "Scored · completed" down under the "Hi" - found testing with a real lead. `completed_at` (migration 004) is when the flow actually finished |
 | `agent_took_over` | `agent_took_over_at` | Migration 003. |
-| `phone_took_over` | The lead's first answer on the robot's call, or call to us, since the conversation began - only while it was still open, and not when an agent's text came first | Rule 2d, 2026-10-27. "Phone call - automated questions stopped" |
+| `phone_took_over` | The lead's first answer on the robot's call - or first words to Seri on a call she took, unless the voicemail message took it - or call to us, since the conversation began - only while it was still open, and not when an agent's text came first | Rule 2d, 2026-10-27. "Phone call - automated questions stopped" |
 | `conversation_expired` | `expires_at`, only when the status is `expired` | `expires_at` is set on every send, so a live conversation always has a future one that has not happened. |
 
 An event with no timestamp to stand on is left out rather than guessed at.
