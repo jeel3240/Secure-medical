@@ -1084,3 +1084,93 @@ describe('waiting for Twilio\'s verdict before ending (A18)', () => {
     expect(ended).toEqual([{ action: 'end_call', reason: 'not_interested' }]);
   });
 });
+
+describe('a call picked back up after the line dropped', () => {
+  const said = (content: string): ChatCompletionMessageParam => ({ role: 'assistant', content });
+  const SO_FAR: ChatCompletionMessageParam[] = [leadMessage('free', 'Yes.'), said('This is Seri from eDrugstore.')];
+
+  /** The conversation as the relay builds it on a reconnect (resume.ts). */
+  const pickedUp = (earlier: { messages?: ChatCompletionMessageParam[]; pending?: string[]; agoMs: number }) =>
+    new Conversation(
+      {
+        callId: 7,
+        instructions: 'THE INSTRUCTIONS',
+        greeting: 'Hi, is this John?',
+        hours: DEFAULT_CALL_HOURS,
+        stopLine: STOP,
+        optOutWords: ANTIBIOTICS_CALL.optOutWords,
+        earlier: {
+          messages: earlier.messages ?? SO_FAR,
+          pending: earlier.pending ?? [],
+          startedAt: new Date(NOW.getTime() - earlier.agoMs),
+        },
+      },
+      {
+        model,
+        whoIsThere: async () => who,
+        keep: (turn) => kept.push(turn),
+        ended: (handoff) => ended.push(handoff),
+        send: (message) => sent.push(JSON.parse(message)),
+        now: () => NOW,
+        timers: clock,
+      }
+    );
+
+  it('OpenAI is sent the call so far, and what the lead says next follows it - no greeting again', async () => {
+    const seri = pickedUp({ agoMs: 30_000 });
+    seri.start();
+    await settle();
+    expect(model.asked).toHaveLength(0);
+    expect(sent).toEqual([]);
+    seri.heard('How much is it?');
+    await until(() => model.asked.length === 1, 'the request');
+    expect(model.asked[0]).toEqual([
+      { role: 'system', content: 'THE INSTRUCTIONS' },
+      { role: 'assistant', content: '[friendly] Hi, is this John?' },
+      ...SO_FAR,
+      leadMessage('free', 'How much is it?'),
+    ]);
+  });
+
+  it('what the lead said that she never answered is answered as soon as it starts', async () => {
+    who = 'coming';
+    const seri = pickedUp({ pending: ['Who is this?'], agoMs: 30_000 });
+    model.replies.push([text('This is Seri from eDrugstore.')]);
+    seri.start();
+    await until(() => tokens().length === 2, 'her reply');
+    expect(model.asked[0].at(-1)).toEqual(leadMessage('coming', 'Who is this?'));
+    expect(tokens()).toEqual([
+      ['This is Seri from eDrugstore. ', false],
+      ['', true],
+    ]);
+    expect(kept).toEqual([{ who: 'seri', text: 'This is Seri from eDrugstore.', latencyMs: expect.any(Number) }]);
+  });
+
+  it('the three minutes count from when she took the call, not from the reconnect', async () => {
+    const seri = pickedUp({ agoMs: LIMITS.callMs - 10_000 });
+    seri.start();
+    clock.advance(10_000);
+    seri.heard('What else?');
+    await until(() => model.asked.length === 1, 'the request');
+    expect(model.asked[0].at(-1)).toEqual({ role: 'system', content: WRAP_UP_NOTE });
+  });
+
+  it('already past three minutes: the wrap-up note goes with her first reply, and 20 seconds on the call ends', async () => {
+    const seri = pickedUp({ pending: ['Hello?'], agoMs: LIMITS.callMs + 30_000 });
+    seri.start();
+    await until(() => tokens().length === 2, 'her reply');
+    expect(model.asked[0].at(-1)).toEqual({ role: 'system', content: WRAP_UP_NOTE });
+    // The lead talking, so the silence does not end it first.
+    seri.speaking('client', true);
+    clock.advance(LIMITS.wrapUpMs);
+    await until(() => ends().length === 1, 'the end');
+    expect(ended).toEqual([{ action: 'end_call', reason: 'time_limit' }]);
+  });
+
+  it('nothing to answer: the silence counts from the start, as on any call', async () => {
+    const seri = pickedUp({ agoMs: 30_000 });
+    seri.start();
+    clock.advance(LIMITS.silenceMs);
+    expect(tokens()).toEqual([[STILL_THERE_LINE, true]]);
+  });
+});

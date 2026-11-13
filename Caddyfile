@@ -1,6 +1,15 @@
 dailyleadhub.com {
 	handle /api/* {
-		reverse_proxy api:3000
+		reverse_proxy api:3000 {
+			# While the api restarts - a deploy, about 3-5 seconds - a request
+			# waits here for it rather than getting a 502: Twilio's webhooks,
+			# and above all the reconnect of a call with Seri, which Twilio
+			# tries only three times in a few seconds (docs/AI-AGENT.md
+			# section 2, "When the line drops"). Only a request the api never
+			# got is tried again: one it was answering when it stopped is not.
+			lb_try_duration 10s
+			lb_try_interval 250ms
+		}
 	}
 	# Built JS and CSS. A missing file here must 404, not fall back to
 	# index.html: right after a deploy, a browser still holding the old page

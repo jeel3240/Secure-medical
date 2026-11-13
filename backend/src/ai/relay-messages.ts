@@ -37,7 +37,10 @@ export const CALL_PARAMETER = 'call';
  * - stopped by speech, and only clear speech; "uh huh" does not stop her;
  * - numbers and short forms read as words;
  * - keys sent to us, and who is speaking - the silence count needs it (A12);
- * - Twilio trying again if our WebSocket drops.
+ * - Twilio trying again if our WebSocket drops - a restart of the api: the
+ *   relay picks the call back up (`reconnect` in `setup`, relay.ts). Twilio's
+ *   XML check warns the attribute is not allowed (12200, every A21 call); it
+ *   is in Twilio's ConversationRelay reference all the same.
  */
 export const RELAY_SETTINGS: Readonly<Record<string, string>> = {
   ttsProvider: 'ElevenLabs',
@@ -75,8 +78,11 @@ export type RelayMessage =
   /**
    * The first message. `callId` is our `calls` row, from the TwiML's
    * `<Parameter name="call">`; null when it is missing or not a row id.
+   * `reconnect`: Twilio opened this connection again after ours dropped
+   * (`connectionType: "reconnect"`, `applicationReconnect`), its `attempt`-th
+   * time on this call - the call is picked back up, not started.
    */
-  | { type: 'setup'; callSid: string; callId: number | null }
+  | { type: 'setup'; callSid: string; callId: number | null; reconnect: boolean; attempt: number | null }
   /** What the lead said. `last` false is a partial, only sent if asked for. */
   | { type: 'prompt'; text: string; last: boolean }
   | { type: 'dtmf'; digit: string }
@@ -109,7 +115,15 @@ export function parseRelayMessage(raw: string): RelayMessage | null {
   switch (msg.type) {
     case 'setup': {
       const params = typeof msg.customParameters === 'object' && msg.customParameters !== null ? msg.customParameters : {};
-      return { type: 'setup', callSid: text(msg.callSid), callId: rowId((params as Record<string, unknown>)[CALL_PARAMETER]) };
+      const reconnect = msg.connectionType === 'reconnect';
+      const attempt = Number(msg.reconnectAttempt);
+      return {
+        type: 'setup',
+        callSid: text(msg.callSid),
+        callId: rowId((params as Record<string, unknown>)[CALL_PARAMETER]),
+        reconnect,
+        attempt: reconnect && Number.isInteger(attempt) && attempt > 0 ? attempt : null,
+      };
     }
     case 'prompt':
       return { type: 'prompt', text: text(msg.voicePrompt).trim(), last: msg.last !== false };
@@ -157,8 +171,15 @@ export const KEY_TURN_PREFIX = '(pressed ';
 
 export const keyTurn = (digit: string): string => `${KEY_TURN_PREFIX}${digit})`;
 
+/** How a note of being talked over begins - read back when a call is picked up again (resume.ts). */
+export const INTERRUPTED_PREFIX = 'Cut off. Heard: "';
+
 /** The lead spoke over Seri: what she had said by then. */
-export const interruptedNote = (heard: string): string => `Cut off. Heard: "${spokenWords(heard)}"`;
+export const interruptedNote = (heard: string): string => `${INTERRUPTED_PREFIX}${spokenWords(heard)}"`;
+
+/** Twilio opened the relay again after the connection dropped, and the call was picked back up. */
+export const reconnectedNote = (attempt: number | null): string =>
+  `Reconnected: the line to our server dropped, and the call was picked back up${attempt ? ` (attempt ${attempt})` : ''}.`;
 
 /** Twilio reported an error on the relay. Kept here, not in the logs: it can quote her words. */
 export const twilioErrorNote = (description: string): string => `Twilio error: ${description}`;

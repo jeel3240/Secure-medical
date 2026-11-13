@@ -89,6 +89,15 @@ export const ACTIVITY_ACTIONS = [
    * section 9). The system's doing. Once per call, with `calls.ai_ended_with`.
    */
   'ai_agent.ended',
+  /**
+   * The line to our server dropped on a call of Seri's - a restart of the api,
+   * or the network - and Twilio opened the relay again: the call was picked
+   * back up where it was - `detail.callId`, `attempt` (Twilio's count on this
+   * call, null when it gave none), and `ended`: she had already chosen her
+   * action, which was then carried out (AI-AGENT.md section 2, "When the line
+   * drops"). The system's doing. Up to five per call.
+   */
+  'ai_agent.reconnected',
   // Sign-in.
   'auth.signed_in',
   'auth.sign_in_failed',

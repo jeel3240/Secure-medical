@@ -2,7 +2,9 @@
  * The relay's database - A10 and A11, docs/AI-AGENT.md sections 3 and 9.
  *
  * Seri takes a call once: `startAiCall` marks the row and records it in one
- * transaction, and only for the automated call Twilio's `setup` names. Every
+ * transaction, and only for the automated call Twilio's `setup` names. When the
+ * line drops and Twilio opens the relay again, `resumeAiCall` gives back the
+ * call so far - her turns, and the action she ended with if she had. Every
  * turn is then one add-only `call_ai_turns` row. The words are kept here and
  * never in the logs. Before each reply, who could take the call now - the same
  * rules the transfer itself follows - and once, how her part ended
@@ -18,7 +20,7 @@ import { recordActivity } from '../db/activity';
 import { loadActiveCallScript, readCallHours } from '../db/call-script';
 import type { Db } from '../db/flows';
 import { freePeople, someoneOnOrJustOffCall } from '../db/presence';
-import { fromHandoff, type Handoff } from './actions';
+import { fallbackHandoff, fromHandoff, type Handoff } from './actions';
 import type { VerdictState } from './conversation';
 import type { WhoIsThere } from './instructions';
 
@@ -44,6 +46,20 @@ export type StartRefusal =
 
 export type StartResult = { ok: true; call: AiCall } | { ok: false; reason: StartRefusal };
 
+/** Why a reconnect does not pick a call back up. `not_started`: she never took it - the relay starts it instead. */
+export type ResumeRefusal = 'no_such_call' | 'not_automated' | 'other_call' | 'not_started' | 'over';
+
+/** A call picked back up: when she took it, and every turn kept so far, in order. */
+export interface Resumed {
+  call: AiCall;
+  startedAt: Date;
+  turns: { who: TurnWho; text: string }[];
+  /** The action she had ended with before the line dropped - it is carried out, not talked over again. Null while she was still talking. */
+  ended: Handoff | null;
+}
+
+export type ResumeResult = ({ ok: true } & Resumed) | { ok: false; reason: ResumeRefusal };
+
 export type TurnWho = 'lead' | 'seri' | 'action' | 'system';
 
 export interface Turn {
@@ -63,6 +79,7 @@ export interface CallSettings {
 /** What the relay needs of the database - faked in its tests. */
 export interface RelayStore {
   startAiCall(input: { callId: number; callSid: string; knowledgeVersion: string }): Promise<StartResult>;
+  resumeAiCall(input: { callId: number; callSid: string; attempt: number | null }): Promise<ResumeResult>;
   saveTurn(turn: Turn): Promise<void>;
   callSettings(): Promise<CallSettings>;
   whoIsThere(callId: number): Promise<WhoIsThere>;
@@ -129,6 +146,75 @@ async function whyNotStarted(q: Db, input: { callId: number; callSid: string }):
   if (c.twilio_call_sid !== input.callSid) return 'other_call';
   if (c.ai_started_at !== null) return 'already_started';
   return 'over';
+}
+
+/**
+ * A call of hers Twilio opened the relay for again, after the line dropped:
+ * the call as `startAiCall` left it - the same Twilio call, hers, not over -
+ * with its turns, and `ai_agent.reconnected` recorded, together. Any number of
+ * times: Twilio reconnects a call up to five times. The row is locked, so a
+ * reconnect reads the turns of a call nobody else is ending.
+ */
+export async function resumeAiCall(
+  pool: Pool,
+  input: { callId: number; callSid: string; attempt: number | null }
+): Promise<ResumeResult> {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const { rows } = await client.query(
+      `SELECT c.id AS "callId", c.lead_id AS "leadId", l.first_name AS "firstName", l.phone,
+              c.direction, c.twilio_call_sid AS "callSid", c.ai_started_at AS "startedAt",
+              c.ai_ended_with AS "endedWith", c.ended_at IS NOT NULL OR c.script_result IS NOT NULL AS over
+         FROM calls c
+         JOIN leads l ON l.id = c.lead_id
+        WHERE c.id = $1
+          FOR UPDATE OF c`,
+      [input.callId]
+    );
+    const c = rows[0];
+    const refused: ResumeRefusal | null = !c
+      ? 'no_such_call'
+      : c.direction !== 'automated'
+        ? 'not_automated'
+        : c.callSid !== input.callSid
+          ? 'other_call'
+          : c.startedAt === null
+            ? 'not_started'
+            : c.over
+              ? 'over'
+              : null;
+    if (refused) {
+      await client.query('ROLLBACK');
+      return { ok: false, reason: refused };
+    }
+    const turns = await client.query(`SELECT who, text FROM call_ai_turns WHERE call_id = $1 ORDER BY id`, [input.callId]);
+    const lastAction = [...turns.rows].reverse().find((t) => t.who === 'action');
+    const ended: Handoff | null = lastAction
+      ? fromHandoff(lastAction.text)
+      : c.endedWith !== null
+        ? fallbackHandoff('ended_before_drop')
+        : null;
+    await recordActivity(client, {
+      action: 'ai_agent.reconnected',
+      actorId: null,
+      leadId: c.leadId,
+      detail: { callId: input.callId, attempt: input.attempt, ended: ended !== null },
+    });
+    await client.query('COMMIT');
+    return {
+      ok: true,
+      call: { callId: c.callId, leadId: c.leadId, firstName: c.firstName, phone: c.phone },
+      startedAt: c.startedAt,
+      turns: turns.rows,
+      ended,
+    };
+  } catch (err) {
+    await client.query('ROLLBACK');
+    throw err;
+  } finally {
+    client.release();
+  }
 }
 
 export async function saveTurn(q: Db, turn: Turn): Promise<void> {
@@ -224,6 +310,7 @@ export async function recordedHandoff(q: Db, callId: number): Promise<Handoff | 
 export function pgRelayStore(pool: Pool): RelayStore {
   return {
     startAiCall: (input) => startAiCall(pool, input),
+    resumeAiCall: (input) => resumeAiCall(pool, input),
     saveTurn: (turn) => saveTurn(pool, turn),
     callSettings: async () => {
       const [script, hours] = await Promise.all([loadActiveCallScript(pool), readCallHours(pool)]);

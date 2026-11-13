@@ -180,6 +180,19 @@ docker compose -f docker-compose.yml -f docker-compose.prod.yml exec api npm run
 
 A call already with her finishes; the next call follows the switch.
 
+**A call with Seri during a deploy is picked back up** (2026-11-13,
+`AI-AGENT.md` section 2, "When the line drops"): the api hands her line back
+to Twilio as it stops, Caddy holds Twilio's reconnect until the new api is up -
+a few seconds - and she goes on where she was. Still deploy after 5 PM Arizona:
+Caddy itself restarting is untested. **The deploy that brings this also changes
+the `Caddyfile`, which Caddy reads only when its container starts** - the file
+is mounted on its own, and `git pull` replaces it, so a running Caddy keeps the
+old one. After the `up`, recreate Caddy (the site is down a second or two):
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --force-recreate caddy
+```
+
 **Calling: run `docker compose exec api npm run twilio:configure`** on the
 first deploy that has calling, and whenever `PUBLIC_URL` or a Twilio setting
 changes. **Only ever on the server.** Run from a laptop with production's

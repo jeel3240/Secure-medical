@@ -1,6 +1,6 @@
 import { KnowledgeError, loadKnowledge, type Knowledge } from '../ai/knowledge';
 import { openAiModel } from '../ai/openai';
-import { attachRelay } from '../ai/relay';
+import { attachRelay, type Relay } from '../ai/relay';
 import { pgRelayStore } from '../ai/relay-store';
 import { readAutoCalls } from '../auto-calls-settings';
 import { config } from '../config';
@@ -89,14 +89,15 @@ const server = app.listen(port, () => {
 // Seri's relay - the WebSocket Twilio opens when a call goes to her (A10,
 // A11, AI-AGENT.md). Only with automated calls on, like their webhooks: she
 // only ever takes an automated call. OpenAI is reached only when a call does.
-if (autoCalls && config.twilio.status === 'on') {
-  attachRelay(server, {
-    twilio: config.twilio.settings,
-    knowledge,
-    store: pgRelayStore(pool),
-    model: openAiModel(config.openai.apiKey),
-  });
-}
+const relay: Relay | null =
+  autoCalls && config.twilio.status === 'on'
+    ? attachRelay(server, {
+        twilio: config.twilio.settings,
+        knowledge,
+        store: pgRelayStore(pool),
+        model: openAiModel(config.openai.apiKey),
+      })
+    : null;
 
 // A lead on hold is looked at every 30 seconds, not only when a track of hold
 // music ends, and offered to whoever is free - AUTO-CALLS.md "The hold line".
@@ -123,3 +124,27 @@ if (autoCalls && config.twilio.status === 'on') {
     },
   });
 }
+
+/**
+ * Stopping - a deploy, `docker compose up -d`, or a restart: Docker sends
+ * SIGTERM and waits 10 seconds. No new connections; each call with Seri has
+ * its turns written and its connection closed with 1012, so Twilio keeps the
+ * call and reconnects to the api that starts next - Caddy holds the reconnect
+ * while it does (AI-AGENT.md section 2, "When the line drops"); then the
+ * requests under way are let finish, two seconds at most.
+ */
+let stopping = false;
+function stop(signal: string): void {
+  if (stopping) return;
+  stopping = true;
+  log.info('api.stopping', { signal, seriCalls: relay?.liveCalls() ?? 0 });
+  const exit = () => process.exit(0);
+  setTimeout(exit, 4_000).unref();
+  // Not listening first, so a reconnect waits at Caddy for the next api rather than reaching this one.
+  const closed = new Promise<void>((resolve) => server.close(() => resolve()));
+  void (relay?.stop() ?? Promise.resolve())
+    .then(() => Promise.race([closed, new Promise<void>((resolve) => setTimeout(resolve, 2_000).unref())]))
+    .then(exit, exit);
+}
+process.on('SIGTERM', () => stop('SIGTERM'));
+process.on('SIGINT', () => stop('SIGINT'));

@@ -52,6 +52,7 @@ import { whoIsThereNote, type WhoIsThere } from './instructions';
 import type { ModelToolCall, SeriModel } from './openai';
 import { endMessage, refusedNote, replacedNote, stopNote, textMessage } from './relay-messages';
 import type { Turn } from './relay-store';
+import type { Earlier } from './resume';
 import { checkSentence } from './safety';
 import { SentenceSplitter } from './sentences';
 import { greetingWithTone, spokenWords, withTone } from './tone';
@@ -163,6 +164,12 @@ export interface ConversationSetup {
   /** The script's stop line, and its stop words. */
   stopLine: string;
   optOutWords: readonly string[];
+  /**
+   * A call picked back up after the line dropped (resume.ts): the
+   * conversation so far, what the lead said that she never answered, and when
+   * she took the call. Absent on a call she has just taken.
+   */
+  earlier?: Earlier;
 }
 
 export interface ConversationDeps {
@@ -229,6 +236,8 @@ export class Conversation {
   private closed = false;
   /** The wait for Twilio's verdict before an ending action (A18). */
   private verdictTimer: unknown = null;
+  /** `end` was reached: her action, or a fallback. */
+  private endedPart = false;
 
   constructor(
     private readonly setup: ConversationSetup,
@@ -238,7 +247,9 @@ export class Conversation {
       { role: 'system', content: setup.instructions },
       // As the voice was sent it, warmly: she reads back her own tone, and keeps to it.
       { role: 'assistant', content: greetingWithTone(setup.greeting) },
+      ...(setup.earlier?.messages ?? []),
     ];
+    this.pending = [...(setup.earlier?.pending ?? [])];
     this.now = deps.now ?? (() => new Date());
     this.timers = deps.timers ?? realTimers;
   }
@@ -248,16 +259,33 @@ export class Conversation {
     return this.over;
   }
 
+  /** Her part ended - her action, or a fallback - rather than the socket closing first. */
+  get ended(): boolean {
+    return this.endedPart;
+  }
+
   /** What OpenAI would be sent now - for tests. */
   get messages(): readonly ChatCompletionMessageParam[] {
     return this.history;
   }
 
-  /** Twilio is saying her greeting: the limits start counting (A12). */
+  /**
+   * Twilio is saying her greeting: the limits start counting (A12). Or, on a
+   * call picked back up (`earlier`), the call goes on: the three minutes count
+   * from when she took it, and what the lead said that she never answered is
+   * answered now.
+   */
   start(): void {
     if (this.started || this.over) return;
     this.started = true;
-    this.callTimer = this.timers.set(() => this.callTimeUp(), LIMITS.callMs);
+    const earlier = this.setup.earlier;
+    const leftMs = earlier ? LIMITS.callMs - (this.now().getTime() - earlier.startedAt.getTime()) : LIMITS.callMs;
+    if (leftMs > 0) this.callTimer = this.timers.set(() => this.callTimeUp(), leftMs);
+    else this.callTimeUp();
+    if (this.pending.length > 0) {
+      void this.respond({ heardAt: Date.now(), attempt: 0 });
+      return;
+    }
     this.watchSilence();
   }
 
@@ -637,6 +665,7 @@ export class Conversation {
 
   private end(handoff: Handoff): void {
     this.over = true;
+    this.endedPart = true;
     this.stopClocks();
     // Her choice is kept at once, waiting or not: a lead who hangs up in the
     // wait still gets what needs no line - the action URL reads it (A14).

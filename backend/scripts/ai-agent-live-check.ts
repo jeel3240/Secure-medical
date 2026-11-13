@@ -17,7 +17,7 @@
  */
 import { seriGreeting } from '../src/ai/answer';
 import { fallbackStreak } from '../src/ai/health';
-import { endAiCall, recordedHandoff, saveTurn, startAiCall, verdictState, whoIsThere } from '../src/ai/relay-store';
+import { endAiCall, recordedHandoff, resumeAiCall, saveTurn, startAiCall, verdictState, whoIsThere } from '../src/ai/relay-store';
 import { switchAiAgent } from '../src/ai/settings';
 import { actOnVerdict, keepCallResult, transferContext } from '../src/db/auto-calls';
 import { recordAnsweredBy } from '../src/db/calls';
@@ -291,6 +291,82 @@ async function main(): Promise<void> {
       (await pool.query(`SELECT c.ai_ended_with, a.detail FROM calls c JOIN activity_log a ON a.action = 'ai_agent.ended' AND (a.detail->>'callId')::int = c.id WHERE c.id = $1`, [silent])).rows[0],
       { ai_ended_with: 'end_call', detail: { action: 'end_call', callId: silent, reason: 'no_response' } }
     );
+  }
+
+  console.log('\npicked back up after the line dropped - a reconnect');
+  {
+    const lead = await makeLead();
+    await pool.query(`UPDATE leads SET first_name = 'Ivy' WHERE id = $1`, [lead]);
+    const call = await makeCall(lead, 'automated');
+    const sid = `CA-check-${lead}-automated`;
+    const resume = (callId: number, callSid = sid, attempt: number | null = 1) => resumeAiCall(pool, { callId, callSid, attempt });
+    const records = (callId: number) =>
+      pool
+        .query(`SELECT actor_id, lead_id, detail FROM activity_log WHERE action = 'ai_agent.reconnected' AND (detail->>'callId')::int = $1 ORDER BY id`, [callId])
+        .then((r) => r.rows);
+    const { rows: phoneRows } = await pool.query(`SELECT phone FROM leads WHERE id = $1`, [lead]);
+
+    check('a call she never took: not picked up - the relay takes it from her greeting', await resume(call), { ok: false, reason: 'not_started' });
+    check('nothing recorded for it', (await records(call)).length, 0);
+
+    await startAiCall(pool, { callId: call, callSid: sid, knowledgeVersion: 'approved-test' });
+    const { rows: startedRows } = await pool.query(`SELECT ai_started_at FROM calls WHERE id = $1`, [call]);
+    await saveTurn(pool, { callId: call, who: 'seri', text: 'Hi, is this Ivy?' });
+    await saveTurn(pool, { callId: call, who: 'lead', text: 'Yes.' });
+    await saveTurn(pool, { callId: call, who: 'seri', text: 'This is Seri from eDrugstore.', latencyMs: 700 });
+    await saveTurn(pool, { callId: call, who: 'lead', text: 'Who?' });
+    check('picked up: the call, when she took it, every turn in order, and no action yet', await resume(call), {
+      ok: true,
+      call: { callId: call, leadId: lead, firstName: 'Ivy', phone: phoneRows[0].phone },
+      startedAt: startedRows[0].ai_started_at,
+      turns: [
+        { who: 'seri', text: 'Hi, is this Ivy?' },
+        { who: 'lead', text: 'Yes.' },
+        { who: 'seri', text: 'This is Seri from eDrugstore.' },
+        { who: 'lead', text: 'Who?' },
+      ],
+      ended: null,
+    });
+    check('recorded, by the system, with the attempt', await records(call), [
+      { actor_id: null, lead_id: lead, detail: { ended: false, callId: call, attempt: 1 } },
+    ]);
+    check('again - Twilio reconnects a call up to five times: picked up each time', (await resume(call, sid, 2)).ok, true);
+    check('and each recorded', (await records(call)).map((r) => r.detail.attempt), [1, 2]);
+    await resume(call, sid, null);
+    check('no attempt given: recorded as null', (await records(call)).at(-1)?.detail.attempt, null);
+    check('her start left as it was', (await pool.query(`SELECT ai_started_at FROM calls WHERE id = $1`, [call])).rows[0].ai_started_at, startedRows[0].ai_started_at);
+
+    await saveTurn(pool, { callId: call, who: 'action', text: '{"action":"send_link"}' });
+    const decided = await resume(call);
+    check('her action already chosen: given back, to be carried out', decided.ok ? decided.ended : decided, { action: 'send_link' });
+    check('recorded as ended', (await records(call)).at(-1)?.detail.ended, true);
+
+    const endedLead = await makeLead();
+    const endedCall = await makeCall(endedLead, 'automated');
+    await startAiCall(pool, { callId: endedCall, callSid: `CA-check-${endedLead}-automated`, knowledgeVersion: 'approved-test' });
+    await endAiCall(pool, endedCall, { action: 'transfer_to_agent' });
+    const noTurn = await resume(endedCall, `CA-check-${endedLead}-automated`);
+    check('her part recorded as over with no action kept: given back as a fallback', noTurn.ok ? noTurn.ended : noTurn, {
+      action: 'fallback',
+      why: 'ended_before_drop',
+    });
+
+    check('another Twilio call naming this row: refused', await resume(call, 'CA-someone-else'), { ok: false, reason: 'other_call' });
+    const agentLead = await makeLead();
+    const agentCall = await makeCall(agentLead, 'outbound', maya);
+    check('an agent\'s own call: refused', await resume(agentCall, `CA-check-${agentLead}-outbound`), { ok: false, reason: 'not_automated' });
+    check('no such call: refused', await resume(999999), { ok: false, reason: 'no_such_call' });
+    const overLead = await makeLead();
+    const over = await makeCall(overLead, 'automated');
+    await startAiCall(pool, { callId: over, callSid: `CA-check-${overLead}-automated`, knowledgeVersion: 'approved-test' });
+    await pool.query(`UPDATE calls SET ended_at = now(), outcome = 'completed' WHERE id = $1`, [over]);
+    check('a call already over: refused', await resume(over, `CA-check-${overLead}-automated`), { ok: false, reason: 'over' });
+    const resultLead = await makeLead();
+    const withResult = await makeCall(resultLead, 'automated');
+    await startAiCall(pool, { callId: withResult, callSid: `CA-check-${resultLead}-automated`, knowledgeVersion: 'approved-test' });
+    await pool.query(`UPDATE calls SET script_result = 'link_sent' WHERE id = $1`, [withResult]);
+    check('a call the script has a result for: refused', await resume(withResult, `CA-check-${resultLead}-automated`), { ok: false, reason: 'over' });
+    check('nothing recorded for a refusal', (await records(over)).length + (await records(withResult)).length + (await records(agentCall)).length, 0);
   }
 
   console.log('\nwho is there, before each reply (A11)');

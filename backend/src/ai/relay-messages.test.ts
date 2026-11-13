@@ -63,6 +63,7 @@ describe('a connection signed by Twilio', () => {
 
 describe('reading what Twilio sends', () => {
   const read = (m: unknown) => parseRelayMessage(JSON.stringify(m));
+  const setup = (callSid: string, callId: number | null) => ({ type: 'setup', callSid, callId, reconnect: false, attempt: null });
 
   it('setup: Twilio\'s call, and our row from the <Parameter>', () => {
     expect(
@@ -78,15 +79,32 @@ describe('reading what Twilio sends', () => {
         callStatus: 'IN_PROGRESS',
         customParameters: { call: '52' },
       })
-    ).toEqual({ type: 'setup', callSid: 'CA1', callId: 52 });
+    ).toEqual({ type: 'setup', callSid: 'CA1', callId: 52, reconnect: false, attempt: null });
+  });
+
+  it('setup after a drop: a reconnect, and which attempt - Twilio\'s `connectionType` and `reconnectAttempt`', () => {
+    const base = { type: 'setup', callSid: 'CA1', customParameters: { call: '52' } };
+    expect(read({ ...base, connectionType: 'reconnect', reconnectAttempt: 2 })).toEqual({
+      type: 'setup',
+      callSid: 'CA1',
+      callId: 52,
+      reconnect: true,
+      attempt: 2,
+    });
+    expect(read({ ...base, connectionType: 'reconnect' })).toMatchObject({ reconnect: true, attempt: null });
+    expect(read({ ...base, connectionType: 'reconnect', reconnectAttempt: 'x' })).toMatchObject({ reconnect: true, attempt: null });
+    expect(read({ ...base, connectionType: 'reconnect', reconnectAttempt: 0 })).toMatchObject({ reconnect: true, attempt: null });
+    // The first connection, said or not.
+    expect(read({ ...base, connectionType: 'initial' })).toMatchObject({ reconnect: false, attempt: null });
+    expect(read({ ...base, connectionType: 'initial', reconnectAttempt: 1 })).toMatchObject({ reconnect: false, attempt: null });
   });
 
   it('setup with no row, or one that is not a row id: no call', () => {
     for (const call of [undefined, '', '0', '-3', '5.5', 'abc', '52x', '99999999999', 52]) {
-      expect(read({ type: 'setup', callSid: 'CA1', customParameters: { call } })).toEqual({ type: 'setup', callSid: 'CA1', callId: null });
+      expect(read({ type: 'setup', callSid: 'CA1', customParameters: { call } })).toEqual(setup('CA1', null));
     }
-    expect(read({ type: 'setup', callSid: 'CA1' })).toEqual({ type: 'setup', callSid: 'CA1', callId: null });
-    expect(read({ type: 'setup' })).toEqual({ type: 'setup', callSid: '', callId: null });
+    expect(read({ type: 'setup', callSid: 'CA1' })).toEqual(setup('CA1', null));
+    expect(read({ type: 'setup' })).toEqual(setup('', null));
   });
 
   it('a prompt: the words, trimmed, and whether they are the last', () => {

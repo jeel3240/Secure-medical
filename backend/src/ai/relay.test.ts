@@ -11,7 +11,7 @@ import http from 'http';
 import type { AddressInfo } from 'net';
 import type { ChatCompletionMessageParam } from 'openai/resources/chat/completions';
 import twilio from 'twilio';
-import WebSocket, { type WebSocketServer } from 'ws';
+import WebSocket from 'ws';
 import { DEFAULT_CALL_HOURS } from '../core/auto-dial';
 import { ANTIBIOTICS_CALL } from '../core/call-script-fixtures';
 import * as logModule from '../lib/log';
@@ -21,9 +21,9 @@ import { FakeClock } from './fake-clock';
 import { CALL_HEADING, type WhoIsThere } from './instructions';
 import { loadKnowledge } from './knowledge';
 import type { ModelEvent, SeriModel } from './openai';
-import { attachRelay } from './relay';
-import { RELAY_PATH } from './relay-messages';
-import type { AiCall, CallSettings, RelayStore, StartResult, Turn } from './relay-store';
+import { attachRelay, type Relay } from './relay';
+import { reconnectedNote, RELAY_PATH } from './relay-messages';
+import type { AiCall, CallSettings, RelayStore, ResumeResult, StartResult, Turn } from './relay-store';
 
 const KNOWLEDGE = loadKnowledge();
 const STOP = ANTIBIOTICS_CALL.optOutBody;
@@ -48,7 +48,18 @@ class FakeStore implements RelayStore {
     return this.result;
   }
 
+  /** A reconnect: the call so far, unless a test says otherwise. */
+  resumed: ResumeResult = { ok: false, reason: 'not_started' };
+  resumes: { callId: number; callSid: string; attempt: number | null }[] = [];
+  async resumeAiCall(input: { callId: number; callSid: string; attempt: number | null }): Promise<ResumeResult> {
+    this.resumes.push(input);
+    return this.resumed;
+  }
+
+  /** How long each turn takes to save - a slow database. */
+  saveDelayMs = 0;
   async saveTurn(turn: Turn): Promise<void> {
+    if (this.saveDelayMs) await new Promise((r) => setTimeout(r, this.saveDelayMs));
     if (this.saveFails) throw new Error('database down');
     this.turns.push(turn);
   }
@@ -103,7 +114,7 @@ class FakeModel implements SeriModel {
 let model: FakeModel;
 
 let server: http.Server;
-let relay: WebSocketServer;
+let relay: Relay;
 let port: number;
 let store: FakeStore;
 let clock: FakeClock;
@@ -140,7 +151,7 @@ beforeEach(async () => {
 /** Until the relay's side of every connection has closed, so no test sees another's. */
 async function stop(): Promise<void> {
   for (const ws of sockets.splice(0)) ws.terminate();
-  await until(() => relay.clients.size === 0, 'the relay\'s connections to close');
+  await until(() => relay.wss.clients.size === 0, 'the relay\'s connections to close');
   await new Promise((r) => server.close(r));
 }
 
@@ -687,5 +698,171 @@ describe('Twilio\'s verdict before an ending action (A18)', () => {
     await new Promise((r) => setTimeout(r, 30));
     expect(gotEnd(c0)).toBe(false);
     expect(store.endedWith).toEqual([]);
+  });
+});
+
+describe('when the line drops: Twilio reconnects, and the call is picked back up', () => {
+  const RECONNECT = { ...SETUP, connectionType: 'reconnect', reconnectAttempt: 1 };
+  const SO_FAR: { who: 'seri' | 'lead'; text: string }[] = [
+    { who: 'seri', text: 'Hi, is this John?' },
+    { who: 'lead', text: 'Yes.' },
+    { who: 'seri', text: 'This is Seri from eDrugstore.' },
+  ];
+  const pickedUp = (over: { turns?: typeof SO_FAR; ended?: Handoff | null } = {}): ResumeResult => ({
+    ok: true,
+    call: JOHN,
+    startedAt: new Date(Date.now() - 30_000),
+    turns: over.turns ?? SO_FAR,
+    ended: over.ended ?? null,
+  });
+  const kept = () => store.turns.map(({ who, text }) => ({ who, text }));
+
+  it('picked up where it was: nothing started again, a note, and her next reply follows the call so far', async () => {
+    store.resumed = pickedUp();
+    const c = await connected();
+    c.send(RECONNECT);
+    await until(() => store.turns.length === 1, 'the note');
+    expect(store.resumes).toEqual([{ callId: 7, callSid: 'CA1', attempt: 1 }]);
+    expect(store.started).toEqual([]);
+    expect(kept()).toEqual([{ who: 'system', text: reconnectedNote(1) }]);
+    expect(c.received).toEqual([]);
+    expect(events('ai_relay.resumed')).toEqual([{ callId: 7, leadId: 3, attempt: 1, turns: 3, answering: false }]);
+
+    c.send({ type: 'prompt', voicePrompt: 'How much is it?', last: true });
+    await until(() => c.received.length === 2, 'her reply');
+    const asked = model.asked[0];
+    expect(asked.slice(1)).toEqual([
+      { role: 'assistant', content: '[friendly] Hi, is this John?' },
+      { role: 'user', content: '[Who is there: someone free] Yes.' },
+      { role: 'assistant', content: 'This is Seri from eDrugstore.' },
+      { role: 'user', content: '[Who is there: someone free] How much is it?' },
+    ]);
+  });
+
+  it('what the lead said that she never answered is answered at once', async () => {
+    store.resumed = pickedUp({ turns: [...SO_FAR, { who: 'lead', text: 'Who is this?' }] });
+    const c = await connected();
+    c.send(RECONNECT);
+    await until(() => c.received.length === 2, 'her reply');
+    expect(model.asked[0].at(-1)).toEqual({ role: 'user', content: '[Who is there: someone free] Who is this?' });
+    expect(events('ai_relay.resumed')).toEqual([{ callId: 7, leadId: 3, attempt: 1, turns: 4, answering: true }]);
+  });
+
+  it('her action already chosen before it dropped: carried out - the end sent, recorded - and OpenAI never asked', async () => {
+    store.resumed = pickedUp({ ended: { action: 'send_link' } });
+    const c = await connected();
+    c.send(RECONNECT);
+    c.send({ type: 'prompt', voicePrompt: 'Hello?', last: true });
+    await until(() => gotEnd(c) && store.endedWith.length === 1, 'the end');
+    expect(c.received).toEqual([{ type: 'end', handoffData: '{"action":"send_link"}' }]);
+    expect(store.endedWith).toEqual([{ callId: 7, handoff: { action: 'send_link' } }]);
+    await new Promise((r) => setTimeout(r, 30));
+    expect(model.asked).toHaveLength(0);
+    expect(kept()).toEqual([{ who: 'system', text: reconnectedNote(1) }]);
+    expect(events('ai_relay.resumed')).toEqual([{ callId: 7, leadId: 3, attempt: 1, turns: 3, ended: 'send_link' }]);
+    c.ws.close(1000);
+    await until(() => events('ai_relay.closed').length === 1, 'the close');
+    expect(events('ai_relay.closed')).toEqual([{ callId: 7, code: 1000, turns: 1, ended: true }]);
+  });
+
+  it('a call she never took - the line dropped before her first connection got that far: taken now, from her greeting', async () => {
+    store.resumed = { ok: false, reason: 'not_started' };
+    const c = await connected();
+    c.send(RECONNECT);
+    await until(() => store.turns.length === 1, 'the greeting');
+    expect(store.started).toEqual([{ callId: 7, callSid: 'CA1', knowledgeVersion: KNOWLEDGE.version }]);
+    expect(kept()).toEqual([{ who: 'seri', text: 'Hi, is this John?' }]);
+  });
+
+  it('a reconnect for a call that is over, or not this call: closed, nothing kept or said', async () => {
+    for (const reason of ['over', 'other_call', 'not_automated', 'no_such_call'] as const) {
+      store.resumed = { ok: false, reason };
+      const c = await connected();
+      c.send(RECONNECT);
+      expect(await c.closed).toBe(1008);
+      expect(c.received).toEqual([]);
+    }
+    expect(store.turns).toEqual([]);
+    expect(store.started).toEqual([]);
+    expect(events('ai_relay.refused').map((f) => (f as { reason: string }).reason)).toEqual(['over', 'other_call', 'not_automated', 'no_such_call']);
+  });
+
+  it('a first connection for a call already hers is still refused: only a reconnect picks one up', async () => {
+    store.result = { ok: false, reason: 'already_started' };
+    store.resumed = pickedUp();
+    const c = await connected();
+    c.send(SETUP);
+    expect(await c.closed).toBe(1008);
+    expect(store.resumes).toEqual([]);
+  });
+
+  it('a reconnect while this api still holds the dropped line: that one is cut, its turns written first, and says nothing more', async () => {
+    const first = await connected();
+    first.send(SETUP);
+    first.send({ type: 'prompt', voicePrompt: 'Yes.', last: true });
+    await until(() => store.turns.length === 3, 'the first connection\'s turns');
+    const before = first.received.length;
+
+    store.resumed = pickedUp();
+    const second = await connected();
+    second.send(RECONNECT);
+    expect(await first.closed).toBe(1006);
+    await until(() => store.resumes.length === 1 && events('ai_relay.resumed').length === 1, 'the pick-up');
+    expect(events('ai_relay.replaced')).toEqual([{ callId: 7 }]);
+
+    second.send({ type: 'prompt', voicePrompt: 'Go on.', last: true });
+    await until(() => second.received.length === 2, 'her reply on the new line');
+    expect(first.received.length).toBe(before);
+  });
+
+  it('a reconnect for another Twilio call never cuts the line this api holds', async () => {
+    const first = await connected();
+    first.send(SETUP);
+    await until(() => store.turns.length === 1, 'the greeting');
+    store.resumed = { ok: false, reason: 'other_call' };
+    const other = await connected();
+    other.send({ ...RECONNECT, callSid: 'CA2' });
+    expect(await other.closed).toBe(1008);
+    first.send({ type: 'prompt', voicePrompt: 'Hello?', last: true });
+    await until(() => first.received.length === 2, 'her reply on the first line');
+    expect(events('ai_relay.replaced')).toEqual([]);
+  });
+});
+
+describe('the api stopping - a deploy or a restart', () => {
+  it('each call closed with 1012 for Twilio to reconnect, its turns written first; a connection meanwhile is told to try again', async () => {
+    store.saveDelayMs = 20;
+    const c = await connected();
+    c.send(SETUP);
+    c.send({ type: 'prompt', voicePrompt: 'Who is this?', last: true });
+    await until(() => store.turns.length >= 1, 'the greeting');
+    expect(relay.liveCalls()).toBe(1);
+
+    await relay.stop();
+    expect(await c.closed).toBe(1012);
+    expect(store.turns.map((t) => t.text)).toContain('Who is this?');
+    // Her part did not end: the call is picked back up after the restart.
+    expect(store.endedWith).toEqual([]);
+    expect(await connect()).toBe(503);
+    expect(relay.liveCalls()).toBe(0);
+  });
+
+  it('what the lead says as the line closes is still kept, for the call picked back up to answer', async () => {
+    model.hang = true;
+    const c = await connected();
+    c.send(SETUP);
+    await until(() => store.turns.length === 1, 'the greeting');
+    const stopping = relay.stop();
+    c.send({ type: 'prompt', voicePrompt: 'Are you there?', last: true });
+    await stopping;
+    expect(await c.closed).toBe(1012);
+    await until(() => store.turns.length === 2, 'the lead\'s words');
+    expect(store.turns[1]).toMatchObject({ who: 'lead', text: 'Are you there?' });
+    expect(model.asked).toHaveLength(0);
+  });
+
+  it('nothing open: stops at once', async () => {
+    await relay.stop();
+    expect(await connect()).toBe(503);
   });
 });

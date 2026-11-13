@@ -6,7 +6,7 @@
  * Seri, the AI agent, switched on (A20, docs/AI-AGENT.md): the robot holding
  * back while OpenAI is down, and her calls ending each way - a call back, a
  * transfer, the link, a stop, and OpenAI failing mid-call, the script taking
- * over.
+ * over - and the api restarting mid-call, the call picked back up where it was.
  *
  * Phase 3 task 28. This is the script CLAUDE.md §10 asks for, and the closest
  * thing to a rehearsal of a real day before UAT.
@@ -209,11 +209,15 @@ function fakeOpenAi(): http.Server {
  */
 class Relay {
   received: { type: string; token?: string; last?: boolean; handoffData?: string }[] = [];
+  /** The close code, once the relay closed the connection. */
+  readonly closed: Promise<number>;
   private constructor(private readonly ws: WebSocket) {
     ws.on('message', (data) => this.received.push(JSON.parse(data.toString())));
+    this.closed = new Promise((resolve) => ws.on('close', (code) => resolve(code)));
   }
 
-  static async open(port: number, twiml: string, callSid: string): Promise<Relay> {
+  /** `reconnect`: Twilio opening it again after the line dropped, its nth time on the call. */
+  static async open(port: number, twiml: string, callSid: string, reconnect?: number): Promise<Relay> {
     const url = attribute(twiml, 'ConversationRelay', 'url');
     const call = attribute(twiml, 'Parameter', 'value');
     const ws = new WebSocket(url.replace(TWILIO.publicUrl.replace('https:', 'wss:'), `ws://127.0.0.1:${port}`), {
@@ -221,7 +225,14 @@ class Relay {
     });
     await new Promise((resolve, reject) => ws.once('open', resolve).once('error', reject));
     const relay = new Relay(ws);
-    relay.send({ type: 'setup', sessionId: `VX${call}`, callSid, callType: 'PSTN', customParameters: { call } });
+    relay.send({
+      type: 'setup',
+      sessionId: `VX${call}`,
+      callSid,
+      callType: 'PSTN',
+      customParameters: { call },
+      ...(reconnect ? { connectionType: 'reconnect', reconnectAttempt: reconnect } : { connectionType: 'initial' }),
+    });
     return relay;
   }
 
@@ -398,6 +409,7 @@ const ELI = '+15557000006';
 const FRAN = '+15557000007';
 const GIL = '+15557000008';
 const HAL = '+15557000009';
+const IVY = '+15557000010';
 
 /**
  * A lead that came in 70 minutes ago and never answered the first question,
@@ -423,7 +435,7 @@ async function silentLead(phone: string, first: string, textedMinutesAgo: number
 async function main(): Promise<void> {
   await refuseIfNotEmpty();
 
-  console.log('End-to-end: one lead, start to finish; then the robot calls three more, and Seri five.');
+  console.log('End-to-end: one lead, start to finish; then the robot calls three more, and Seri six.');
   console.log('EZ Texting, Twilio and OpenAI are stubbed - nothing is texted, nothing rings, no AI is asked.\n');
 
   // ---------------------------------------------------------------- the agent
@@ -784,15 +796,19 @@ async function main(): Promise<void> {
   const openAi = fakeOpenAi();
   await new Promise<void>((resolve) => openAi.listen(0, '127.0.0.1', resolve));
   process.env.OPENAI_BASE_URL = `http://127.0.0.1:${(openAi.address() as AddressInfo).port}/v1`;
-  const server = http.createServer(api());
-  attachRelay(server, { twilio: TWILIO, knowledge: loadKnowledge(), store: pgRelayStore(pool), model: openAiModel(OPENAI_KEY) });
-  await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
-  const relayPort = (server.address() as AddressInfo).port;
+  /** The api's relay on a server of its own: a fresh one is the api after a restart, with nothing in memory. */
+  const startApi = async () => {
+    const server = http.createServer(api());
+    const relay = attachRelay(server, { twilio: TWILIO, knowledge: loadKnowledge(), store: pgRelayStore(pool), model: openAiModel(OPENAI_KEY) });
+    await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
+    return { server, relay, port: (server.address() as AddressInfo).port };
+  };
+  const { server, relay: seriRelay, port: relayPort } = await startApi();
 
   check('switched on, as `npm run ai-agent -- on` does, and recorded', (await switchAiAgent(pool, 'on')).changed, true);
   // The worker's look, as worker/index.ts wires it with Seri asked about first
   // (A17) - OpenAI checked on every look here, not once a minute.
-  const seriNumbers: AutoCallNumbers = { only: new Set([DANA, ELI, FRAN, GIL, HAL]), invalid: 0 };
+  const seriNumbers: AutoCallNumbers = { only: new Set([DANA, ELI, FRAN, GIL, HAL, IVY]), invalid: 0 };
   const seriOnly = [...seriNumbers.only!];
   const seriDialler: DialDeps = {
     ...dialler,
@@ -975,11 +991,61 @@ async function main(): Promise<void> {
     ai_ended_with: 'fallback',
   });
 
+  // ------------------------------------------------ 20. the api restarts mid-call
+  step('20. The api restarts while Ivy talks to Seri: her call is picked back up where it was');
+  const ivy = await seriCalls(IVY, 'Ivy');
+  check('the next look calls Ivy', (await dialDueLeads(seriDialler)).placed, 1);
+  const v = await answerSeri(ivy);
+  openAiReplies.push({ say: "This is Seri from eDrugstore, calling about up to 25% off your first order. Is that something you'd be interested in?" });
+  await v.relay.says('Who is this?');
+  // A deploy: Docker stops the api, which hands each call back to Twilio to reconnect.
+  await seriRelay.stop();
+  check('the api stopping closes her line with 1012 - Twilio keeps the call and reconnects', await v.relay.closed, 1012);
   server.close();
+  const restarted = await startApi();
+  // Twilio reconnects to the api that started, then replays what Ivy said meanwhile.
+  const v2 = await Relay.open(restarted.port, v.answered.twiml, v.call.sid, 1);
+  openAiReplies.push({
+    say: 'Perfect, someone will call you tomorrow at 3 PM your time. Have a great day!',
+    tool: { name: 'book_callback', args: { time: tomorrowAtThreeInNewYork(), time_zone: 'America/New_York', reason: 'Wants to hear about the offer' } },
+  });
+  await v2.says('Yes. Can someone call me tomorrow at 3?');
+  const ivyHandoff = await v2.ended();
+  const afterRestart = openAiAsked.filter((a) => a.stream).at(-1);
+  check('OpenAI is asked with the call so far - her greeting, Ivy\'s question, her answer - then what Ivy said after the restart', [
+    afterRestart?.messages[1]?.content,
+    String(afterRestart?.messages[2]?.content).endsWith('Who is this?'),
+    String(afterRestart?.messages[3]?.content).startsWith('This is Seri from eDrugstore'),
+    String(afterRestart?.messages.at(-1)?.content).endsWith('Can someone call me tomorrow at 3?'),
+  ], ['[friendly] Hi, is this Ivy?', true, true, true]);
+  check('no second greeting: the restarted api never said one', v2.said().includes('Hi, is this Ivy?'), false);
+  check('her action ends the session, on the new line', JSON.parse(ivyHandoff).action, 'book_callback');
+  v2.close();
+  const ivyAfter = await v.after({ SessionStatus: 'ended', HandoffData: ivyHandoff });
+  check('the action URL hangs up, as on any call', ivyAfter.twiml.includes('<Hangup/>'), true);
+  await v.over(95);
+  check('saved once: callback_booked, her part ended with it', await seriRecord(ivy), { script_result: 'callback_booked', ai_ended_with: 'book_callback' });
+  const ivyActivity = (
+    await pool.query(
+      `SELECT action, detail FROM activity_log WHERE action LIKE 'ai_agent.%' AND action <> 'ai_agent.switched' AND (detail->>'callId')::int = $1 ORDER BY id`,
+      [v.call.id]
+    )
+  ).rows.map((r) => [r.action, r.detail.attempt ?? r.detail.action ?? null]);
+  check('recorded: started once, picked back up once - attempt 1 - and ended once', ivyActivity, [
+    ['ai_agent.started', null],
+    ['ai_agent.reconnected', 1],
+    ['ai_agent.ended', 'book_callback'],
+  ]);
+  const ivyTurns = (await pool.query(`SELECT who FROM call_ai_turns WHERE call_id = $1 ORDER BY id`, [v.call.id])).rows.map((r) => r.who);
+  check('every turn kept, in order, with a note where the line dropped', ivyTurns, ['seri', 'lead', 'seri', 'system', 'lead', 'seri', 'action']);
+  const ivySeri = ((await getTimeline(ivy)) ?? []).find((e) => e.kind === 'call')?.detail.seri as { turns: unknown[]; ended: { action: string } };
+  check('on the timeline: one conversation, as if nothing happened', [ivySeri?.turns.length, ivySeri?.ended.action], [5, 'book_callback']);
+
+  restarted.server.close();
   openAi.close();
 
-  // ---------------------------------------------------------- 20. health
-  step('20. The system reports on itself');
+  // ---------------------------------------------------------- 21. health
+  step('21. The system reports on itself');
   const health = await getHealth();
   check('the database check passes', health.checks.find((c) => c.name === 'database')?.status, 'ok');
   // `info`, not `ok`: a webhook check is a number for a human, never an alarm,
