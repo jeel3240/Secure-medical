@@ -16,9 +16,11 @@ import {
   leadMessage,
   leadTurn,
   LIMITS,
+  endingQuestion,
   NO_REPEAT_NOBODY_NOTE,
   NO_REPEAT_NOTE,
   NOBODY_NOTE,
+  openQuestionNote,
   offeredToConnect,
   STILL_THERE_LINE,
   VERDICT_POLL_MS,
@@ -590,6 +592,46 @@ describe('offering to connect, not twice in a row (A21)', () => {
     ]);
     expect(leadTurn('coming', 'Yes', 'Is that something you would be interested in?')).toHaveLength(1);
     expect(NO_REPEAT_NOBODY_NOTE).toMatch(/ask when would be a good time for a call back - don't book one until they have agreed a time/);
+  });
+});
+
+describe('a question of hers the lead answers with one of theirs (A21, call 94)', () => {
+  const ASKED = "Tomorrow is Saturday, and our team isn't available then. Would Monday at 2 PM your time work for a call back instead?";
+
+  it('her question, as she asked it, goes with their turn: answer them, and do not ask it again in the same words', () => {
+    expect(leadTurn('free', 'Who is the person I will talk to?', `[understanding] ${ASKED}`)).toEqual([
+      { role: 'user', content: '[Who is there: someone free] Who is the person I will talk to?' },
+      { role: 'system', content: openQuestionNote('Would Monday at 2 PM your time work for a call back instead?') },
+    ]);
+    expect(openQuestionNote('Would Monday at 2 PM work?')).toMatch(/don't repeat it in the same words - come back to it briefly and differently/);
+  });
+
+  it('with nobody there too: both notes', () => {
+    expect(leadTurn('nobody', 'Do you know my time?', ASKED).map((m) => m.content)).toEqual([
+      '[Who is there: nobody] Do you know my time?',
+      NOBODY_NOTE,
+      openQuestionNote('Would Monday at 2 PM your time work for a call back instead?'),
+    ]);
+  });
+
+  it('no note when they answered it, when hers invited their question, after the greeting, or after an offer to connect', () => {
+    expect(leadTurn('free', 'Yes, that works.', ASKED)).toHaveLength(1);
+    // Answered first, then asked: not left open.
+    expect(leadTurn('free', 'Yes. Can someone call me tomorrow at 3?', ASKED)).toHaveLength(1);
+    expect(leadTurn('free', "Uh, no. I'm saying can you call me tomorrow at two?", ASKED)).toHaveLength(1);
+    expect(leadTurn('free', 'Okay, but who will call me?', ASKED)).toHaveLength(1);
+    expect(leadTurn('free', 'Do you take Visa?', "We ship in one to three days. Anything else you'd like to know?")).toHaveLength(1);
+    expect(leadTurn('free', 'Who is this?', '')).toHaveLength(1);
+    expect(leadTurn('free', 'What is it?', 'Would you like me to connect you with someone now?')).toEqual([
+      { role: 'user', content: '[Who is there: someone free] What is it?' },
+      { role: 'system', content: NO_REPEAT_NOTE },
+    ]);
+  });
+
+  it('the question is the last sentence, her words alone', () => {
+    expect(endingQuestion('[friendly] Sure. [curious] Does Monday work?')).toBe('Does Monday work?');
+    expect(endingQuestion('Sure. We ship fast.')).toBeNull();
+    expect(endingQuestion('Do you have any other questions?')).toBeNull();
   });
 });
 

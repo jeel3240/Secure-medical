@@ -2,7 +2,7 @@
  * Picking a call back up after the line dropped - the conversation so far,
  * rebuilt from the turns kept on the call, as the call itself built it.
  */
-import { FILLER_LINE, leadMessage, NO_REPEAT_NOTE, NOBODY_NOTE, STILL_THERE_LINE } from './conversation';
+import { FILLER_LINE, leadMessage, NO_REPEAT_NOTE, NOBODY_NOTE, openQuestionNote, STILL_THERE_LINE } from './conversation';
 import { interruptedNote, keyTurn, reconnectedNote, refusedNote, replacedNote, stopNote, twilioErrorNote } from './relay-messages';
 import { earlierConversation, type KeptTurn } from './resume';
 
@@ -21,6 +21,8 @@ describe('the conversation so far, from the kept turns', () => {
         leadMessage('coming', 'Yes.'),
         said('This is Seri from eDrugstore. Is that something you would be interested in?'),
         leadMessage('coming', 'What is it?'),
+        // A question for her question: the note that hers is still open (call 94).
+        { role: 'system', content: openQuestionNote('Is that something you would be interested in?') },
         said('Up to 25% off your first order.'),
       ],
       pending: [],

@@ -125,6 +125,8 @@ function sharedPart({ knowledge, callbackNumber, stopLine }: InstructionsInput):
     '- This is a phone call. Write only words to be said: no lists, no symbols, no emojis, no web addresses - only the tones under "How you sound".',
     ...playbook.style.map((line) => `- ${line}`),
     '- Whenever you mention the offer, say "up to 25% off your first order", exactly so.',
+    '- Never say the same sentence twice in a call. A question of yours they have not answered yet: answer what they asked, then come back to it briefly and in new words, or leave it open for a moment - not at the end of every reply.',
+    '- When you can\'t do what they ask - a weekend, an evening, a person right now - say why first, plainly, then offer what you can.',
     '- Never say you don\'t know, or that you can\'t answer. When the approved answers don\'t cover a question, say: "That\'s a great question. Let me connect you with one of our specialists who can help with that."',
     '- If asked whether you are a real person, say honestly that you\'re eDrugstore\'s virtual assistant, and offer to connect them with a person.',
     '',
@@ -248,7 +250,10 @@ function nextDays(now: Date, close: Date, hours: CallHours): string {
     if (hours.days.has(weekdayIn(day, zone))) open.push(`${d === 1 ? 'tomorrow, ' : ''}${longDay(day, zone)}`);
   }
   const tomorrow = new Date(now.getTime() + DAY);
-  const closedTomorrow = hours.days.has(weekdayIn(tomorrow, zone)) ? '' : ` Tomorrow, ${longDay(tomorrow, zone)}, has none: never agree a call back then.`;
+  const weekend = ['sat', 'sun'].includes(weekdayIn(tomorrow, zone));
+  const closedTomorrow = hours.days.has(weekdayIn(tomorrow, zone))
+    ? ''
+    : ` Tomorrow, ${longDay(tomorrow, zone)}, has none${weekend ? ' - a weekend, when our team does not work' : ''}: never agree a call back then.`;
   return `- The next days with agent hours: ${open.length ? open.join('; ') : 'none in the next two weeks'}.${closedTomorrow}`;
 }
 
