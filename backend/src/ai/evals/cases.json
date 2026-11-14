@@ -248,6 +248,111 @@
       ]
     },
     {
+      "id": "friday_tomorrow_first_ask",
+      "lead": {
+        "firstName": "Jeel",
+        "phone": "+16026203572"
+      },
+      "now": "2026-11-13T23:48:50Z",
+      "who": "nobody",
+      "opened": false,
+      "turns": [
+        {
+          "lead": "Yes."
+        },
+        {
+          "seri": "[friendly, upbeat] This is Seri from eDrugstore, and I'm calling about our offer of up to 25% off your first order. [curious] Is that something you'd be interested in?"
+        },
+        {
+          "lead": "Yes, interesting. But can you call me tomorrow?"
+        }
+      ],
+      "expect": [
+        "none"
+      ],
+      "must_say_any": [
+        "saturday",
+        "weekend",
+        "weekends"
+      ]
+    },
+    {
+      "id": "side_question_once",
+      "lead": {
+        "firstName": "Jeel",
+        "phone": "+16026203572"
+      },
+      "now": "2026-11-13T23:48:50Z",
+      "who": "nobody",
+      "opened": false,
+      "turns": [
+        {
+          "lead": "Yes."
+        },
+        {
+          "seri": "[friendly, upbeat] This is Seri from eDrugstore, and I'm calling about our offer of up to 25% off your first order. [curious] Is that something you'd be interested in?"
+        },
+        {
+          "lead": "Can you call me tomorrow at two?"
+        },
+        {
+          "seri": "[understanding] Tomorrow is Saturday, and our team isn't available then. [curious] Would Monday at 2 PM your time work for a call back instead?"
+        },
+        {
+          "lead": "Who is the person I'll talk to on Monday?"
+        }
+      ],
+      "expect": [
+        "none"
+      ],
+      "must_not_say": [
+        "would monday at 2 pm your time work",
+        "does monday at 2 pm your time work",
+        "monday at 2 pm your time work for"
+      ]
+    },
+    {
+      "id": "side_question_twice",
+      "lead": {
+        "firstName": "Jeel",
+        "phone": "+16026203572"
+      },
+      "now": "2026-11-13T23:48:50Z",
+      "who": "nobody",
+      "opened": false,
+      "turns": [
+        {
+          "lead": "Yes."
+        },
+        {
+          "seri": "[friendly, upbeat] This is Seri from eDrugstore, and I'm calling about our offer of up to 25% off your first order. [curious] Is that something you'd be interested in?"
+        },
+        {
+          "lead": "Can you call me tomorrow at two?"
+        },
+        {
+          "seri": "[understanding] Tomorrow is Saturday, and our team isn't available then. [curious] Would Monday at 2 PM your time work for a call back instead?"
+        },
+        {
+          "lead": "Who is the person I'll talk to on Monday?"
+        },
+        {
+          "seri": "[friendly] It will be one of our representatives from eDrugstore, who can help you place your order and answer any questions. [curious] Does Monday at 2 PM your time work for you?"
+        },
+        {
+          "lead": "What's the person's name?"
+        }
+      ],
+      "expect": [
+        "none"
+      ],
+      "must_not_say": [
+        "would monday at 2 pm your time work",
+        "does monday at 2 pm your time work",
+        "monday at 2 pm your time work for"
+      ]
+    },
+    {
       "id": "yes_later",
       "turns": [
         {

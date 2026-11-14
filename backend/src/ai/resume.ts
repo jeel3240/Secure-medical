@@ -68,7 +68,8 @@ export function earlierConversation(
 ): Omit<Earlier, 'startedAt'> {
   const messages: ChatCompletionMessageParam[] = [];
   let pending: string[] = [];
-  let herLast = greeting;
+  // Empty until her first reply: the greeting has no notes (`leadTurn`).
+  let herLast = '';
   let lastSaid = -1;
 
   const rest = turns[0]?.who === 'seri' && turns[0].text === greeting ? turns.slice(1) : turns;
@@ -97,7 +98,7 @@ export function earlierConversation(
         if (heard) messages[lastSaid] = { role: 'assistant', content: heard };
         else messages.splice(lastSaid, 1);
         lastSaid = heard ? lastSaid : -1;
-        herLast = lastAssistant(messages) ?? greeting;
+        herLast = lastAssistant(messages) ?? '';
       } else if (turn.text.startsWith(REFUSED_PREFIX)) {
         messages.push({ role: 'system', content: turn.text });
       }

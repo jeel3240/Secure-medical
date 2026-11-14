@@ -150,14 +150,56 @@ export const NOBODY_NOTE =
   "Nobody can take a call now: don't offer to connect them now, or ask if they want to talk to someone now. If they want to talk to someone, say everyone on our team is busy right now and ask when would be a good time for a call back.";
 
 /**
- * The lead's turn, and a note after it when one is due: her last reply offered
+ * The lead answered her question before asking their own - "Yes. Can someone
+ * call me tomorrow at 3?", "Uh, no. I'm saying...": the question is not left
+ * open.
+ */
+const ANSWERED_FIRST =
+  /^(?:(?:uh|um|oh|well|so|hmm|ah)[,.!]?\s+)*(?:yes|yeah|yep|yup|sure|okay|ok|no|nope|nah|not really|maybe|correct|right|absolutely|of course|definitely|i guess)\b/i;
+
+/** "Anything else you'd like to know?" - a question the lead answers by asking one. */
+const INVITES_QUESTIONS = /\b(anything else|any (other |more )?questions?|what else)\b/i;
+
+/**
+ * The question her reply ended on that a question from the lead leaves open -
+ * its last sentence, her words - or null: no question, or one that invites
+ * theirs.
+ */
+export function endingQuestion(reply: string): string | null {
+  const words = spokenWords(reply);
+  if (!words.endsWith('?')) return null;
+  const sentences = words.match(/[^.!?]+[.!?]+/g) ?? [words];
+  const question = sentences[sentences.length - 1].trim();
+  return INVITES_QUESTIONS.test(question) ? null : question;
+}
+
+/**
+ * Given when the lead answers her question with one of their own: on call 94
+ * she answered each of three side questions and then asked "Does Monday at 2
+ * PM your time work...?" again, near word for word, every time (A21). Her
+ * question, as she asked it, is the fact she needs; the words are hers.
+ */
+export function openQuestionNote(question: string): string {
+  return `Your last reply asked them: "${question}" They asked you something instead. Answer them first. Your question is still open: don't repeat it in the same words - come back to it briefly and differently, or leave it for a moment.`;
+}
+
+/**
+ * The lead's turn, and a note after it when one is due - `herLastReply` empty
+ * before her first reply, after the greeting. Her last reply offered
  * to connect them - not twice in a row (`NO_REPEAT_NOTE`; with nobody there,
- * `NO_REPEAT_NOBODY_NOTE`); or nobody can take a call (`NOBODY_NOTE`).
+ * `NO_REPEAT_NOBODY_NOTE`); or nobody can take a call (`NOBODY_NOTE`); and
+ * the lead asked something instead of answering her question
+ * (`openQuestionNote`).
  */
 export function leadTurn(who: WhoIsThere, said: string, herLastReply: string): ChatCompletionMessageParam[] {
-  const turn = leadMessage(who, said);
-  if (offeredToConnect(herLastReply)) return [turn, { role: 'system', content: who === 'nobody' ? NO_REPEAT_NOBODY_NOTE : NO_REPEAT_NOTE }];
-  return who === 'nobody' ? [turn, { role: 'system', content: NOBODY_NOTE }] : [turn];
+  const notes: string[] = [];
+  const offered = offeredToConnect(herLastReply);
+  if (offered) notes.push(who === 'nobody' ? NO_REPEAT_NOBODY_NOTE : NO_REPEAT_NOTE);
+  else if (who === 'nobody') notes.push(NOBODY_NOTE);
+  // An offer to connect is not to be asked again at all (above), not even in new words.
+  const open = offered ? null : endingQuestion(herLastReply);
+  if (open && said.includes('?') && !ANSWERED_FIRST.test(said.trim())) notes.push(openQuestionNote(open));
+  return [leadMessage(who, said), ...notes.map((content): ChatCompletionMessageParam => ({ role: 'system', content }))];
 }
 
 /** Given to her with her first reply after three minutes. */
@@ -378,9 +420,13 @@ export class Conversation {
     }
   }
 
-  /** What she said last, as OpenAI reads it back - the greeting before her first reply. */
+  /**
+   * What she said last, as OpenAI reads it back - empty before her first
+   * reply: the greeting is Twilio's, and its question has the opening's own
+   * rule, not `leadTurn`'s notes.
+   */
   private lastReply(): string {
-    for (let i = this.history.length - 1; i > 0; i--) {
+    for (let i = this.history.length - 1; i > 1; i--) {
       const message = this.history[i];
       if (message.role === 'assistant') return typeof message.content === 'string' ? message.content : '';
     }

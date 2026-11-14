@@ -95,7 +95,8 @@ export function caseMessages(c: EvalCase, knowledge: Knowledge): ChatCompletionM
   });
   const turns: Turn[] = [...(c.opened ? [{ lead: casesFile.opening.lead }, { seri: casesFile.opening.seri }] : []), ...c.turns];
   const greeting = greetingWithTone(welcomeGreeting(c.lead.firstName));
-  let herLast = greeting;
+  // Empty until her first reply, as on a call (`lastReply`, conversation.ts).
+  let herLast = '';
   return [
     { role: 'system', content: instructions },
     { role: 'assistant', content: greeting },

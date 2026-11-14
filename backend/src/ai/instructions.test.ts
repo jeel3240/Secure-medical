@@ -128,13 +128,13 @@ describe('this call\'s details', () => {
 
     it('a Friday afternoon: today until 5, then Monday on - and tomorrow, a Saturday, never', () => {
       expect(next('2026-11-13T23:39:50Z')).toBe(
-        '- The next days with agent hours: today, until 5 PM; Monday, November 16; Tuesday, November 17; Wednesday, November 18. Tomorrow, Saturday, November 14, has none: never agree a call back then.'
+        '- The next days with agent hours: today, until 5 PM; Monday, November 16; Tuesday, November 17; Wednesday, November 18. Tomorrow, Saturday, November 14, has none - a weekend, when our team does not work: never agree a call back then.'
       );
     });
 
     it('a Friday evening, the hours over: from Monday', () => {
       expect(next('2026-11-14T01:00:00Z')).toBe(
-        '- The next days with agent hours: Monday, November 16; Tuesday, November 17; Wednesday, November 18; Thursday, November 19. Tomorrow, Saturday, November 14, has none: never agree a call back then.'
+        '- The next days with agent hours: Monday, November 16; Tuesday, November 17; Wednesday, November 18; Thursday, November 19. Tomorrow, Saturday, November 14, has none - a weekend, when our team does not work: never agree a call back then.'
       );
     });
 
