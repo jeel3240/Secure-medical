@@ -18,6 +18,7 @@ import {
   lineToAdd,
   NOT_AGREED,
   toHandoff,
+  waitsForAnswer,
   writtenAction,
   type ActionContext,
   type Handoff,
@@ -276,6 +277,12 @@ describe('an action right after a question waits for the answer (A09)', () => {
 
   it('an action that does not exist is still named as such', () => {
     expect(error(call('take_payment', {}, { said: 'Shall I?' }))).toMatch(/^There is no action called take_payment/);
+  });
+
+  it('which actions wait for the answer: all but a stop - and the rest of her reply waits with them (call 95)', () => {
+    expect(ACTIONS.filter(waitsForAnswer)).toEqual(ACTIONS.filter((a) => a !== 'opt_out'));
+    expect(waitsForAnswer('opt_out')).toBe(false);
+    expect(waitsForAnswer('take_payment')).toBe(false);
   });
 });
 

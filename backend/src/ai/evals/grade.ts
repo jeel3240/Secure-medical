@@ -20,6 +20,7 @@ import { leadTurn } from '../conversation';
 import { buildInstructions, welcomeGreeting, type WhoIsThere } from '../instructions';
 import type { Knowledge } from '../knowledge';
 import { checkSentence } from '../safety';
+import { upToQuestion } from '../sentences';
 import { greetingWithTone, hasTone, spokenWords, strayBrackets } from '../tone';
 import casesFile from './cases.json';
 
@@ -163,7 +164,11 @@ export function grade(c: EvalCase, reply: Reply): Grade {
   const result = action ? toHandoff(action, { whoIsThere: c.who, hours: DEFAULT_CALL_HOURS, now: c.now, said, before: answeredReply(c) }) : null;
   // An action after a question is held back, as the relay does: the call goes
   // on with the lead's answer - no action yet.
-  const outcome = !action || (result && !result.ok && result.awaitLead) ? 'none' : action.name;
+  const heldBack = Boolean(result && !result.ok && result.awaitLead);
+  const outcome = !action || heldBack ? 'none' : action.name;
+  // Held back, the lead hears her reply up to its first question - the relay
+  // says nothing after it (conversation.ts, A21's call 95).
+  if (heldBack) text = upToQuestion(said);
 
   if (more.length > 0) problems.push(`more than one action: ${reply.toolCalls.map((t) => t.name).join(', ')}`);
   if (!(c.expect as string[]).includes(outcome)) problems.push(`${outcome}, expected ${c.expect.join(' or ')}`);

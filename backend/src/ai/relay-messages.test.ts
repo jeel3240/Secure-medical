@@ -15,6 +15,7 @@ import {
   stopNote,
   textMessage,
   twilioErrorNote,
+  unsaidNote,
 } from './relay-messages';
 
 const TOKEN = 'test-auth-token';
@@ -171,5 +172,6 @@ describe('what the relay sends, and keeps', () => {
     expect(refusedNote('transfer_to_agent', 'Nobody can take a call.')).toBe('Not done: transfer_to_agent. Nobody can take a call.');
     expect(stopNote('words')).toBe('Stop words heard: opted out.');
     expect(stopNote('key')).toBe('Stop key 9 pressed: opted out.');
+    expect(unsaidNote("[cheerfully] Great, I'll book it. Goodbye.")).toBe('Not said, waiting for the answer: "Great, I\'ll book it. Goodbye."');
   });
 });

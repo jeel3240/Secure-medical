@@ -23,8 +23,8 @@ describe('the cases', () => {
     expect(byId('busy').now.toISOString()).toBe('2026-11-11T19:00:00.000Z');
   });
 
-  it('79, each named once', () => {
-    expect(cases).toHaveLength(79);
+  it('80, each named once', () => {
+    expect(cases).toHaveLength(80);
     expect(new Set(cases.map((c) => c.id)).size).toBe(cases.length);
   });
 
@@ -139,6 +139,15 @@ describe('marking a reply', () => {
     expect(grade(byId('yes_order_now_free'), reply('Shall I connect you?', ['transfer_to_agent'])).problems).toEqual([
       'none, expected transfer_to_agent',
     ]);
+  });
+
+  it('held back, what she wrote after her question is not heard, nor graded (A21, call 95)', () => {
+    const c = byId('callback_time_given');
+    const r = reply("So that's Tuesday at 12 PM your time? Great, I'll schedule that call back now. Goodbye, Jeel.", [
+      'book_callback',
+      { time: '2026-11-17T12:00', time_zone: 'America/Phoenix', reason: 'x' },
+    ]);
+    expect(grade(c, r)).toMatchObject({ outcome: 'none', problems: [], heard: "So that's Tuesday at 12 PM your time?" });
   });
 
   it('the wrong outcome, the wrong reason, two actions', () => {

@@ -9,7 +9,9 @@
  *                      9, end the call as an opt-out whatever she would say;
  *                      then who is there now, and OpenAI with the whole call
  *   each sentence      checked (safety.ts) and sent the moment it is whole; a
- *                      replaced one is the last of that reply
+ *                      replaced one is the last of that reply; after her
+ *                      first question, the rest waits for the reply's end -
+ *                      never said if her action waits for the lead's answer
  *   an action          checked (`toHandoff`); taken: her last line, then
  *                      `end` straight after it (A02 - Twilio says the whole
  *                      line first); refused: she is told why, and speaks
@@ -47,14 +49,14 @@ import type { ChatCompletionMessageParam } from 'openai/resources/chat/completio
 import type { CallHours } from '../core/auto-dial';
 import { saysStop } from '../core/answers';
 import { errText, log } from '../lib/log';
-import { fallbackHandoff, handoffData, lastLine, lineToAdd, toHandoff, writtenAction, type Handoff } from './actions';
+import { fallbackHandoff, handoffData, lastLine, lineToAdd, toHandoff, waitsForAnswer, writtenAction, type Handoff } from './actions';
 import { whoIsThereNote, type WhoIsThere } from './instructions';
 import type { ModelToolCall, SeriModel } from './openai';
-import { endMessage, refusedNote, replacedNote, stopNote, textMessage } from './relay-messages';
+import { endMessage, refusedNote, replacedNote, stopNote, textMessage, unsaidNote } from './relay-messages';
 import type { Turn } from './relay-store';
 import type { Earlier } from './resume';
 import { checkSentence } from './safety';
-import { SentenceSplitter } from './sentences';
+import { asks, SentenceSplitter } from './sentences';
 import { greetingWithTone, spokenWords, withTone } from './tone';
 
 /** The lead's turn as OpenAI gets it: who is there now, then what they said. */
@@ -271,6 +273,8 @@ interface Reply {
   timer: unknown;
   /** "One moment..." was said: OpenAI was slow. */
   filler: boolean;
+  /** Sentences written after her question and never said: her action waits for the answer. */
+  unsaid: number;
 }
 
 export class Conversation {
@@ -476,6 +480,7 @@ export class Conversation {
       done: false,
       timer: null,
       filler: false,
+      unsaid: 0,
     };
     this.reply = reply;
     reply.timer = this.timers.set(() => this.slow(reply), LIMITS.firstWordMs);
@@ -498,6 +503,22 @@ export class Conversation {
     }
 
     const splitter = new SentenceSplitter();
+    // After her first question, the rest of her reply waits for its end: if
+    // she ends it with an action that waits for the lead's answer, it is never
+    // said - she asked, and the lead answers (A21's call 95: "So that's
+    // Tuesday at 12 PM your time? Great, I'll schedule that call back now.
+    // Goodbye." and the booking, held back for the answer). Otherwise it is
+    // said then, while the question is still being spoken.
+    let asked = false;
+    const held: string[] = [];
+    const say = (sentence: string): boolean => {
+      if (asked) {
+        held.push(sentence);
+        return true;
+      }
+      if (asks(spokenWords(sentence))) asked = true;
+      return this.speak(reply, sentence);
+    };
     let tool: ModelToolCall | null = null;
     // Everything she wrote, brackets and all: an action written instead of taken is in it.
     let written = '';
@@ -514,14 +535,14 @@ export class Conversation {
         }
         written += event.text;
         for (const sentence of splitter.push(event.text)) {
-          if (!this.speak(reply, sentence)) break;
+          if (!say(sentence)) break;
         }
         if (reply.replaced) break;
       }
       if (reply.done) return;
       if (!reply.replaced) {
         for (const sentence of splitter.flush()) {
-          if (!this.speak(reply, sentence)) break;
+          if (!say(sentence)) break;
         }
       }
     } catch (err) {
@@ -538,6 +559,15 @@ export class Conversation {
       if (action) {
         tool = { id: '', ...action };
         log.warn('ai_relay.written_action', { callId: this.setup.callId, action: action.name });
+      }
+    }
+
+    if (held.length > 0 && !reply.replaced) {
+      if (tool && waitsForAnswer(tool.name)) {
+        reply.unsaid = held.length;
+        reply.notes.push({ who: 'system', text: unsaidNote(held.join(' ')) });
+      } else {
+        for (const sentence of held) if (!this.speak(reply, sentence)) break;
       }
     }
 
@@ -666,6 +696,7 @@ export class Conversation {
       action: reply.action,
       stopped: how.heard !== undefined ? 'talked_over' : how.cut ? 'lead_said_more' : null,
       filler: reply.filler,
+      unsaid: reply.unsaid,
     });
   }
 

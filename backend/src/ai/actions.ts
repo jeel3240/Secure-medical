@@ -20,6 +20,7 @@ import type { CallHours } from '../core/auto-dial';
 import { isTimeZone } from '../db/sql';
 import { atLocalTime, checkCallbackTime, MAX_AHEAD_DAYS, MIN_AHEAD_MINUTES, saysClock, spokenTime, toLocalTime, type CallbackRefusal } from './callback-time';
 import type { WhoIsThere } from './instructions';
+import { asks } from './sentences';
 
 export const ACTIONS = ['transfer_to_agent', 'book_callback', 'send_link', 'opt_out', 'end_call'] as const;
 export type ActionName = (typeof ACTIONS)[number];
@@ -172,6 +173,15 @@ const REFUSED: Record<CallbackRefusal, string> = {
   outside_hours: 'That is outside the agent hours.',
 };
 
+/**
+ * Whether this action waits for the lead's answer when her reply asked them
+ * something: every action but a stop (`toHandoff`). The relay then does not
+ * say the rest of her reply either (conversation.ts, `upToQuestion`).
+ */
+export function waitsForAnswer(name: string): boolean {
+  return name !== 'opt_out' && (ACTIONS as readonly string[]).includes(name);
+}
+
 export function toHandoff(call: ToolCall, context: ActionContext): ActionResult {
   // Found by the answer test set (A09): the model asks "Would you like me to
   // connect you?" and transfers in the same reply. A question is answered
@@ -181,7 +191,8 @@ export function toHandoff(call: ToolCall, context: ActionContext): ActionResult 
   // could answer. Except a stop, taken at once every time: on A21's test runs
   // she opted a lead out and then said her greeting again, and the question
   // held the stop back.
-  if (call.name !== 'opt_out' && context.said.includes('?') && (ACTIONS as readonly string[]).includes(call.name)) {
+  // What she said after the question is not said either (conversation.ts).
+  if (waitsForAnswer(call.name) && asks(context.said)) {
     return {
       ok: false,
       awaitLead: true,

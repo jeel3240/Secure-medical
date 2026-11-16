@@ -230,6 +230,7 @@ describe('her reply', () => {
       action: null,
       stopped: null,
       filler: false,
+      unsaid: 0,
     });
   });
 
@@ -501,8 +502,14 @@ describe('a question anywhere in her reply: the action waits for the answer (A21
       tool('send_link'),
     ]);
     conversation.heard('No.');
-    await until(() => tokens().length === 4, 'her reply');
+    await until(() => tokens().length === 3, 'her reply');
     await settle();
+    // Up to her question: the offer after it waits too (call 95, below).
+    expect(tokens()).toEqual([
+      ['Got it. ', false],
+      ['Is it more the timing, or just not something you need right now? ', false],
+      ['', true],
+    ]);
     expect(ended).toEqual([]);
     expect(ends()).toEqual([]);
     expect(kept.at(-1)).toEqual({ who: 'system', text: expect.stringMatching(/^Not done: send_link\. Not done: your reply asked the lead a question/) });
@@ -511,6 +518,86 @@ describe('a question anywhere in her reply: the action waits for the answer (A21
     conversation.heard('Just the timing. Sure, text me the link.');
     await until(() => ends().length === 1, 'the end');
     expect(ended).toEqual([{ action: 'send_link' }]);
+  });
+});
+
+describe('after her question, nothing more is said when her action waits for the answer (A21, call 95)', () => {
+  it('said the time back, then a goodbye and the booking in the same reply: only the question is said, nothing booked, and the lead\'s "yes" books it', async () => {
+    model.replies.push([text('Sure. What time tomorrow works best?')]);
+    conversation.heard('Call me tomorrow.');
+    await until(() => tokens().length === 3, 'her question');
+    model.replies.push([
+      text("So that's tomorrow at 3 PM your time? Great, I'll schedule that call back now. Goodbye, John."),
+      tool('book_callback', { time: '2026-11-13T15:00', time_zone: 'America/Phoenix', reason: 'Wants to order' }),
+    ]);
+    conversation.heard('Three PM.');
+    await until(() => replyEvents().length === 2, 'her reply');
+    await settle();
+
+    expect(tokens().slice(3)).toEqual([
+      ["So that's tomorrow at 3 PM your time? ", false],
+      ['', true],
+    ]);
+    expect(ended).toEqual([]);
+    expect(ends()).toEqual([]);
+    expect(kept.slice(-3)).toEqual([
+      { who: 'seri', text: "So that's tomorrow at 3 PM your time?", latencyMs: expect.any(Number) },
+      { who: 'system', text: 'Not said, waiting for the answer: "Great, I\'ll schedule that call back now. Goodbye, John."' },
+      { who: 'system', text: expect.stringMatching(/^Not done: book_callback\. Not done: your reply asked the lead a question/) },
+    ]);
+    expect(replyEvents()[1]).toMatchObject({ action: 'book_callback', sentences: 1, unsaid: 2 });
+
+    model.replies.push([
+      text('Perfect, someone will call you tomorrow at 3 PM your time. Have a great day!'),
+      tool('book_callback', { time: '2026-11-13T15:00', time_zone: 'America/Phoenix', reason: 'Wants to order' }),
+    ]);
+    conversation.heard('Yes.');
+    await until(() => ends().length === 1, 'the end');
+    // She reads back what the lead heard - the question alone - with the booking refused.
+    const history = model.asked[2];
+    const asked = history.find((m) => m.role === 'assistant' && 'tool_calls' in m && m.tool_calls);
+    expect(asked).toMatchObject({ content: "So that's tomorrow at 3 PM your time?" });
+    expect(ended).toEqual([{ action: 'book_callback', at: '2026-11-13T22:00:00.000Z', timeZone: 'America/Phoenix', reason: 'Wants to order' }]);
+  });
+
+  it('no action: what she says after the question is said, in order, once her reply is written', async () => {
+    model.replies.push([text('Is that something you would like? We also have at-home test kits. ')]);
+    conversation.heard('What else do you have?');
+    await until(() => replyEvents().length === 1, 'her reply');
+    expect(tokens()).toEqual([
+      ['Is that something you would like? ', false],
+      ['We also have at-home test kits. ', false],
+      ['', true],
+    ]);
+    expect(replyEvents()[0]).toMatchObject({ sentences: 2, unsaid: 0 });
+    expect(kept.filter((t) => t.who === 'system')).toEqual([]);
+  });
+
+  it('a stop is taken at once, after her question too: everything she wrote is said', async () => {
+    model.replies.push([text('Did you want us to stop calling? Understood, we will take you off our list.'), tool('opt_out')]);
+    conversation.heard('I just want you to leave me be.');
+    await until(() => ends().length === 1, 'the end');
+    expect(tokens()).toEqual([
+      ['Did you want us to stop calling? ', false],
+      ['Understood, we will take you off our list. ', false],
+      [`${STOP} `, false],
+      ['', true],
+    ]);
+    expect(ended).toEqual([{ action: 'opt_out' }]);
+  });
+
+  it('a question as her last sentence: nothing is held back but the action', async () => {
+    model.replies.push([text('Great! Would you like me to connect you with someone now?'), tool('transfer_to_agent')]);
+    conversation.heard('Yes.');
+    await until(() => replyEvents().length === 1, 'her reply');
+    await settle();
+    expect(tokens()).toEqual([
+      ['Great! ', false],
+      ['Would you like me to connect you with someone now? ', false],
+      ['', true],
+    ]);
+    expect(replyEvents()[0]).toMatchObject({ unsaid: 0 });
+    expect(ended).toEqual([]);
   });
 });
 
