@@ -28,6 +28,7 @@ The build of `docs/AI-AGENT.md`, split into small tickets. Each is one PR into `
 | A20 | [End-to-end and live checks](A20-end-to-end-and-live-checks.md) | A13, A14, A15, A16, A17, A18, A19 | M | Done 2026-11-12 |
 | A21 | [Every path on a real phone](A21-every-path-on-a-real-phone.md) | A20 | M | In progress - first calls 2026-11-13: her voice and tone changed |
 | A22 | [Deploy, then switch on](A22-deploy-then-switch-on.md) | A21 | S | To do |
+| A23 | [A voicemail menu is never put through](A23-a-voicemail-menu-is-never-put-through.md) | A22 | M | Later - after the main AI agent work (Jeel, 2026-11-16). Seen on production twice on the script |
 
 Sizes: S a few hours, M about a day, L two days or more.
 
@@ -41,3 +42,4 @@ Tickets with nothing in *Depends on* can start any time. A suggested path:
 4. **Into the call:** A13, A14, A15, A16, A17, A18, A19
 5. **Prove it:** A20, A21
 6. **Live:** A22
+7. **Later:** A23
