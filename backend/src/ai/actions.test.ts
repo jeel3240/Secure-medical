@@ -141,7 +141,12 @@ describe('a call back at a time that cannot be booked: refused, with what to off
 describe('a call back only for the time she said back, and they agreed (A21, call 92)', () => {
   it('never said back - a "yes" to being put through, with nobody free: refused, and she asks when instead', () => {
     expect(error(book('2026-11-11T14:15', { before: 'Would you like me to connect you with someone now to place your order?', whoIsThere: 'nobody' }))).toBe(NOT_AGREED);
-    expect(NOT_AGREED).toMatch(/Ask when suits them/);
+    expect(NOT_AGREED).toMatch(/ask when suits them/);
+  });
+
+  it('a time the lead already named is said back, not asked for again (call 96)', () => {
+    expect(error(book('2026-11-12T12:00', { before: 'What time works best for a call?' }, 'America/Phoenix'))).toBe(NOT_AGREED);
+    expect(NOT_AGREED).toMatch(/If they have already named a time, do not ask for one again: say that day and time back/);
   });
 
   it('another time said back: refused', () => {

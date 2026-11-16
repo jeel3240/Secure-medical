@@ -314,6 +314,109 @@
       ]
     },
     {
+      "id": "callback_time_named_as_question",
+      "lead": {
+        "firstName": "Jeel",
+        "phone": "+16026203572"
+      },
+      "now": "2026-11-16T19:14:16Z",
+      "who": "nobody",
+      "opened": false,
+      "turns": [
+        {
+          "lead": "Yes."
+        },
+        {
+          "seri": "[friendly, upbeat] This is Seri from eDrugstore, and I'm calling about our offer of up to 25% off your first order. [curious] Is that something you'd be interested in?"
+        },
+        {
+          "lead": "Uh, just call me tomorrow."
+        },
+        {
+          "seri": "[understanding] No problem, Jeel. Everyone on our team is busy right now, but I can arrange a call back for you tomorrow. [curious] What time works best for a call?"
+        },
+        {
+          "lead": "So twelve PM?"
+        }
+      ],
+      "expect": [
+        "none"
+      ],
+      "must_say_any": [
+        "12",
+        "noon",
+        "twelve"
+      ],
+      "must_not_say": [
+        "goodbye",
+        "bye",
+        "actually",
+        "which time",
+        "what time",
+        "what day",
+        "suit you best",
+        "suits you best",
+        "midnight"
+      ]
+    },
+    {
+      "id": "callback_time_named_refused",
+      "lead": {
+        "firstName": "Jeel",
+        "phone": "+16026203572"
+      },
+      "now": "2026-11-16T19:14:17Z",
+      "who": "nobody",
+      "opened": false,
+      "turns": [
+        {
+          "lead": "Yes."
+        },
+        {
+          "seri": "[friendly, upbeat] This is Seri from eDrugstore, and I'm calling about our offer of up to 25% off your first order. [curious] Is that something you'd be interested in?"
+        },
+        {
+          "lead": "Uh, just call me tomorrow."
+        },
+        {
+          "seri": "[understanding] No problem, Jeel. Everyone on our team is busy right now, but I can arrange a call back for you tomorrow. [curious] What time works best for a call?"
+        },
+        {
+          "lead": "So twelve PM?"
+        },
+        {
+          "seri": "[friendly] Twelve PM is within our hours, so that works well. I'll set that up for you.",
+          "refused": {
+            "name": "book_callback",
+            "arguments": {
+              "time": "2026-11-17T12:00",
+              "time_zone": "America/Phoenix",
+              "reason": "Wants a call back to discuss order"
+            }
+          }
+        }
+      ],
+      "expect": [
+        "none"
+      ],
+      "must_say_any": [
+        "12",
+        "noon",
+        "twelve"
+      ],
+      "must_not_say": [
+        "goodbye",
+        "bye",
+        "actually",
+        "which time",
+        "what time",
+        "what day",
+        "suit you best",
+        "suits you best",
+        "midnight"
+      ]
+    },
+    {
       "id": "side_question_once",
       "lead": {
         "firstName": "Jeel",

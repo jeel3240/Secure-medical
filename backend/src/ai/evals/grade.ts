@@ -30,7 +30,12 @@ const CALLBACK_NUMBER = '+14804708259';
 export type Outcome = 'none' | (typeof ACTIONS)[number];
 export const OUTCOMES: readonly Outcome[] = ['none', ...ACTIONS];
 
-type Turn = { lead: string } | { seri: string };
+/**
+ * A turn of the call so far. Hers may end with an action that was refused: the
+ * call went on with her told why, as the relay tells her (`act`,
+ * conversation.ts) - so a case can ask what she says next (A21, call 96).
+ */
+type Turn = { lead: string } | { seri: string; refused?: { name: string; arguments: Record<string, unknown> } };
 
 export interface EvalCase {
   id: string;
@@ -98,13 +103,28 @@ export function caseMessages(c: EvalCase, knowledge: Knowledge): ChatCompletionM
   const greeting = greetingWithTone(welcomeGreeting(c.lead.firstName));
   // Empty until her first reply, as on a call (`lastReply`, conversation.ts).
   let herLast = '';
+  // Her words the lead answered last - what an action of hers is checked against.
+  let last = welcomeGreeting(c.lead.firstName);
+  let answered = last;
   return [
     { role: 'system', content: instructions },
     { role: 'assistant', content: greeting },
-    ...turns.flatMap((t): ChatCompletionMessageParam[] => {
-      if ('lead' in t) return leadTurn(c.who, t.lead, herLast);
+    ...turns.flatMap((t, i): ChatCompletionMessageParam[] => {
+      if ('lead' in t) {
+        answered = last;
+        return leadTurn(c.who, t.lead, herLast);
+      }
       herLast = t.seri;
-      return [{ role: 'assistant', content: t.seri }];
+      last = t.seri;
+      if (!t.refused) return [{ role: 'assistant', content: t.seri }];
+      const call = { name: t.refused.name, arguments: JSON.stringify(t.refused.arguments) };
+      const result = toHandoff(call, { whoIsThere: c.who, hours: DEFAULT_CALL_HOURS, now: c.now, said: spokenWords(t.seri), before: spokenWords(answered) });
+      if (result.ok) throw new Error(`case ${c.id}: the ${t.refused.name} in turn ${i + 1} is taken, not refused`);
+      const id = `call_${i}`;
+      return [
+        { role: 'assistant', content: t.seri || null, tool_calls: [{ id, type: 'function', function: call }] },
+        { role: 'tool', tool_call_id: id, content: result.error },
+      ];
     }),
   ];
 }

@@ -444,6 +444,28 @@ describe('her actions', () => {
     expect(kept[1].text).toMatch(/^Not done: book_callback\. Not booked: they have not agreed/);
   });
 
+  it('a time the lead named, booked before she said it back: refused, she says it back in words, and their yes books it (call 96)', async () => {
+    who = 'nobody';
+    model.replies.push([text('What time works best for a call?')]);
+    conversation.heard('Just call me tomorrow.');
+    await until(() => tokens().length === 2, 'her question');
+    model.replies.push(
+      [text("I'll set that up for you."), tool('book_callback', { time: '2026-11-13T12:00', time_zone: 'America/Phoenix', reason: 'Wants a call back' })],
+      [text("So that's twelve PM tomorrow, your time?")]
+    );
+    conversation.heard('So twelve PM?');
+    await until(() => model.asked.length === 3 && tokens().length === 6, 'her time said back');
+    expect(model.asked[2].at(-1)).toMatchObject({ role: 'tool', content: expect.stringMatching(/If they have already named a time, do not ask for one again/) });
+    expect(ends()).toEqual([]);
+    model.replies.push([
+      text('Perfect, someone will call you tomorrow at 12 PM your time. Goodbye!'),
+      tool('book_callback', { time: '2026-11-13T12:00', time_zone: 'America/Phoenix', reason: 'Wants a call back' }),
+    ]);
+    conversation.heard('Yes.');
+    await until(() => ends().length === 1, 'the end');
+    expect(ended).toEqual([{ action: 'book_callback', at: '2026-11-13T19:00:00.000Z', timeZone: 'America/Phoenix', reason: 'Wants a call back' }]);
+  });
+
   it('with nobody there, a transfer is refused back to her, and she speaks again at once', async () => {
     who = 'nobody';
     model.replies.push([tool('transfer_to_agent')], [text('Everyone is busy right now. What time works for a call back?')]);
