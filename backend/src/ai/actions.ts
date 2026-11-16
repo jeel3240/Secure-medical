@@ -240,9 +240,14 @@ export function toHandoff(call: ToolCall, context: ActionContext): ActionResult 
   }
 }
 
-/** A call back she never said back to the lead - told to her instead of booking it. */
+/**
+ * A call back she never said back to the lead - told to her instead of booking
+ * it. A lead may already have named the time: she says it back rather than
+ * asking for one again - on A21's call 96 she asked "Which time do you
+ * prefer?" of a lead who had just said 12 PM.
+ */
 export const NOT_AGREED =
-  'Not booked: they have not agreed this time with you. Ask when suits them, inside the agent hours, then say the day and time back to them in their time zone and ask them to confirm. Book it once they say yes.';
+  'Not booked: they have not agreed this time with you. If they have already named a time, do not ask for one again: say that day and time back to them in their time zone and ask them to confirm. If they have not, ask when suits them, inside the agent hours, then say it back the same way. Book it once they say yes.';
 
 function bookCallback(args: Record<string, unknown>, { hours, now, before }: ActionContext): ActionResult {
   const zone = typeof args.time_zone === 'string' ? args.time_zone.trim() : '';

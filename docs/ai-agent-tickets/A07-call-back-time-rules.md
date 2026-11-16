@@ -13,7 +13,7 @@
 - `checkCallbackTime(when, leadZone, hours)`: inside agent hours (the `auto_call_*` hours and days, read by `readCallHours`), in the future, within 14 days. Returns ok, or the nearest allowed time to offer.
 - `spokenTime(when, leadZone)`: "Thursday at 3 PM your time".
 
-**Added after A21's call 92 (2026-11-13):** `saysClock` - whether a reply named a call back's time on the lead's clock ("3 PM", "3:00 p.m.", "noon"), which the booking now requires (A06). `docs/AI-AGENT.md` section 4.
+**Added after A21's call 92 (2026-11-13):** `saysClock` - whether a reply named a call back's time on the lead's clock ("3 PM", "3:00 p.m.", "noon"), which the booking now requires (A06). `docs/AI-AGENT.md` section 4. *(After call 96, 2026-11-16: in words too - "twelve PM", "three thirty PM" - as the voice says them like the digits.)*
 
 ## Done when
 

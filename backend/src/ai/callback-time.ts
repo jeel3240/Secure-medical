@@ -336,19 +336,35 @@ export function spokenTime(when: Date, leadZone: string, now: Date): string {
   return `${day} at ${spokenClock(when, leadZone)} your time`;
 }
 
+const ONES = ['', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine'];
+const TEENS = ['ten', 'eleven', 'twelve', 'thirteen', 'fourteen', 'fifteen', 'sixteen', 'seventeen', 'eighteen', 'nineteen'];
+const TENS = ['', '', 'twenty', 'thirty', 'forty', 'fifty'];
+
+/** 1-59 in words, as a pattern: "twelve", "forty-five" or "forty five", "oh five". */
+function numberWords(n: number): string {
+  if (n < 10) return `oh[\\s-]${ONES[n]}`;
+  if (n < 20) return TEENS[n - 10];
+  const ones = n % 10;
+  return ones === 0 ? TENS[Math.floor(n / 10)] : `${TENS[Math.floor(n / 10)]}[\\s-]${ONES[ones]}`;
+}
+
 /**
  * Whether `text` names the time a clock in `zone` reads at `when` - "3 PM",
  * "3:00 p.m.", "3pm", "11:30 AM", "noon" - as Seri says a call back's time back
  * to the lead to confirm it (A21, call 92). The minutes must be said unless
- * on the hour; "13 PM" is not "3 PM".
+ * on the hour; "13 PM" is not "3 PM". In words too - "twelve PM", "three
+ * thirty PM": the voice says them as it says the digits, and she writes them
+ * so after a lead's "twelve PM" (call 96).
  */
 export function saysClock(text: string, when: Date, zone: string): boolean {
   const minuteOfDay = localTime(when.getTime(), zone).minute;
   const hour24 = Math.floor(minuteOfDay / 60);
   const minute = minuteOfDay % 60;
   const hour = hour24 % 12 === 0 ? 12 : hour24 % 12;
-  const minutes = minute === 0 ? '(?::00)?' : `:${String(minute).padStart(2, '0')}`;
-  const clock = new RegExp(`(?<![\\d:])${hour}${minutes}\\s*${hour24 < 12 ? 'a' : 'p'}\\.?\\s*m\\b`, 'i');
+  const hourSaid = `(?:${hour}|${hour < 10 ? ONES[hour] : TEENS[hour - 10]})`;
+  const minutes =
+    minute === 0 ? '(?::00)?' : `(?::${String(minute).padStart(2, '0')}|\\s+${numberWords(minute)})`;
+  const clock = new RegExp(`(?<![\\w:-])${hourSaid}${minutes}\\s*${hour24 < 12 ? 'a' : 'p'}\\.?\\s*m\\b`, 'i');
   return clock.test(text) || (hour24 === 12 && minute === 0 && /\bnoon\b/i.test(text));
 }
 

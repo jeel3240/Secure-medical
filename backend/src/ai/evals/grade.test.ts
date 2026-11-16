@@ -3,7 +3,7 @@
  * here: `npm run ai:eval` asks it; this proves the cases are well formed and
  * the marking is right.
  */
-import { ACTIONS } from '../actions';
+import { ACTIONS, NOT_AGREED } from '../actions';
 import { NOBODY_NOTE } from '../conversation';
 import { CALL_HEADING } from '../instructions';
 import { loadKnowledge } from '../knowledge';
@@ -23,16 +23,17 @@ describe('the cases', () => {
     expect(byId('busy').now.toISOString()).toBe('2026-11-11T19:00:00.000Z');
   });
 
-  it('80, each named once', () => {
-    expect(cases).toHaveLength(80);
+  it('82, each named once', () => {
+    expect(cases).toHaveLength(82);
     expect(new Set(cases.map((c) => c.id)).size).toBe(cases.length);
   });
 
-  it('each expects outcomes that exist, ends on the lead, and checks against the defaults too', () => {
+  it('each expects outcomes that exist, ends on the lead or an action of hers refused, and checks against the defaults too', () => {
     for (const c of cases) {
       expect(c.expect.length).toBeGreaterThan(0);
       for (const outcome of c.expect) expect(OUTCOMES).toContain(outcome);
-      expect('lead' in c.turns[c.turns.length - 1]).toBe(true);
+      const last = c.turns[c.turns.length - 1];
+      expect('lead' in last || Boolean(last.refused)).toBe(true);
       expect(c.mustNotSay).toEqual(expect.arrayContaining(['$', 'dollars', 'i don\'t know']));
     }
   });
@@ -68,6 +69,29 @@ describe('a case, as OpenAI gets it', () => {
       { role: 'user', content: '[Who is there: nobody] Yes, I\'d like to order now.' },
       { role: 'system', content: NOBODY_NOTE },
     ]);
+  });
+
+  it('an action of hers refused: her words with it, then why, as the relay tells her (A21, call 96)', () => {
+    const messages = caseMessages(byId('callback_time_named_refused'), knowledge);
+    const args = { time: '2026-11-17T12:00', time_zone: 'America/Phoenix', reason: 'Wants a call back to discuss order' };
+    expect(messages.slice(-2)).toEqual([
+      {
+        role: 'assistant',
+        content: "[friendly] Twelve PM is within our hours, so that works well. I'll set that up for you.",
+        tool_calls: [{ id: 'call_5', type: 'function', function: { name: 'book_callback', arguments: JSON.stringify(args) } }],
+      },
+      // Checked against the reply the lead answered - "What time works best for a call?" - so never agreed.
+      { role: 'tool', tool_call_id: 'call_5', content: NOT_AGREED },
+    ]);
+  });
+
+  it('an action a case says was refused, but would be taken: the case is wrong', () => {
+    const wrong: EvalCase = {
+      ...byId('callback_time_named_refused'),
+      who: 'free',
+      turns: [{ lead: 'Put me through.' }, { seri: 'Sure.', refused: { name: 'transfer_to_agent', arguments: {} } }],
+    };
+    expect(() => caseMessages(wrong, knowledge)).toThrow('the transfer_to_agent in turn 2 is taken, not refused');
   });
 });
 

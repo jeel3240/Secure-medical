@@ -17,6 +17,8 @@
 
 **Changed after A21's call 92 (2026-11-13):** `book_callback` is refused unless her reply the lead has just answered named the time - she said it back and they agreed (`NOT_AGREED`; the context gains `before`); and the refused transfer with nobody there now says to ask when, not to book. `docs/AI-AGENT.md` section 4.
 
+**Changed after A21's call 96 (2026-11-16):** `NOT_AGREED` says that a time the lead has already named is said back for them to confirm, not asked for again; only with no time named does she ask when suits them. `docs/AI-AGENT.md` section 4.
+
 ## Done when
 
 - [x] Round trip: tool call to `handoffData` to `fromHandoff` gives the same action - each of the five, every `end_call` reason, and the relay's `fallback`.

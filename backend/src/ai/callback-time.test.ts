@@ -262,4 +262,25 @@ describe('whether a reply said a call back\'s time back (saysClock, A21 call 92)
     expect(said('Tomorrow at 12 AM?', '2026-11-12T12:00')).toBe(false);
     expect(said('Tomorrow at noon?', '2026-11-12T12:30')).toBe(false);
   });
+
+  it('in words, as the voice says the digits (call 96)', () => {
+    expect(said("So that's twelve PM tomorrow, your time?", '2026-11-12T12:00')).toBe(true);
+    expect(said('So three p.m.?', '2026-11-12T15:00')).toBe(true);
+    expect(said('Eleven AM on Friday?', '2026-11-13T11:00')).toBe(true);
+    expect(said('So three thirty PM?', '2026-11-12T15:30')).toBe(true);
+    expect(said('So two forty-five PM?', '2026-11-12T14:45')).toBe(true);
+    expect(said('So two forty five PM?', '2026-11-12T14:45')).toBe(true);
+    expect(said('So three oh five PM?', '2026-11-12T15:05')).toBe(true);
+    expect(said('So 3 thirty PM?', '2026-11-12T15:30')).toBe(true);
+  });
+
+  it('in words: another hour, the other half of the day, minutes left out, or a number that only ends in it - no', () => {
+    expect(said('So four PM?', '2026-11-12T15:00')).toBe(false);
+    expect(said('So three AM?', '2026-11-12T15:00')).toBe(false);
+    expect(said('So twelve PM?', '2026-11-12T12:30')).toBe(false);
+    expect(said('So three fifteen PM?', '2026-11-12T15:30')).toBe(false);
+    expect(said('So thirteen PM?', '2026-11-12T15:00')).toBe(false);
+    expect(said('So twenty-three PM?', '2026-11-12T15:00')).toBe(false);
+    expect(said('Someone PM?', '2026-11-12T13:00')).toBe(false);
+  });
 });
