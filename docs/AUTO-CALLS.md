@@ -1029,6 +1029,10 @@ no beep (`machine_end_silence`, `machine_end_other`) is put through, as call
 24's person was: the rule cannot tell the two apart, and a person who said yes
 is the one not to lose. The agent who takes it hears a recording and hangs up.
 A beep after such a yes still stops the ring and leaves the message.
+*(Seen on production on 2026-11-13 and 2026-11-16: the voicemail's own menu,
+"To review your message, press 1", heard as "One" and "1." - a yes - and put
+through, with no voicemail message left. A later ticket, after Phase 7's
+deploy: `docs/ai-agent-tickets/A23-a-voicemail-menu-is-never-put-through.md`.)*
 
 **The real calls** (2026-10-23 and 24, Jeel's phone, the dev number):
 

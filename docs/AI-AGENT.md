@@ -175,7 +175,7 @@ Decided by Jeel, 2026-11-11, reversing the earlier "keep the script, hand off wh
 | | With the AI on |
 |---|---|
 | Lead picks up | `/auto/answer` connects the call to Seri (`<Connect action="/auto/ai-after"><ConversationRelay welcomeGreeting="Hi, is this John?"/></Connect>`) instead of asking the script's Q1 |
-| Voicemail | **Unchanged.** Twilio's machine detection runs as today; a beep replaces the call with the voicemail message (`onVerdict`, T18). Until the verdict has come, a goodbye, the link or a call back waits - up to 15 seconds (A18) - so a greeting such as "he's not available" is not taken for the lead saying no; a transfer and a stop do not wait. *As built (A18):* below |
+| Voicemail | **Unchanged.** Twilio's machine detection runs as today; a beep replaces the call with the voicemail message (`onVerdict`, T18). Until the verdict has come, a goodbye, the link or a call back waits - up to 15 seconds (A18) - so a greeting such as "he's not available" is not taken for the lead saying no; a transfer and a stop do not wait. *As built (A18):* below. *Not covered:* a voicemail's menu heard as an answer, seen on production on the script - A23, after A22 |
 | "Stop" | Seri's `opt_out` action - and a check of every lead turn, independent of the AI: the script's stop words (`call_scripts.opt_out_words`) or key 9 end the session as an opt-out even if the AI misses it. *As built (A11):* a stop phrase counts anywhere in what the lead said, a one-word stop word ("stop") only said on its own - section 1, "How a reply is made" |
 | Transfer, hold line, busy line, link text | **Unchanged.** Seri's action ends the session, and `/auto/ai-after` runs today's code |
 | Today's script | Kept, only as the backup (section 6) |
