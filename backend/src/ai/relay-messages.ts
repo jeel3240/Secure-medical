@@ -188,6 +188,13 @@ export const twilioErrorNote = (description: string): string => `Twilio error: $
 export const replacedNote = (reason: SafetyReason, found: string | null, sentence: string): string =>
   `Replaced (${reason}${found ? `, "${found}"` : ''}): ${sentence}`;
 
+/**
+ * What she wrote after a question, not said: the action she ended with waits
+ * for the lead's answer, and so do these words (conversation.ts, call 95).
+ * Kept for the record only - she reads back what was said.
+ */
+export const unsaidNote = (words: string): string => `Not said, waiting for the answer: "${spokenWords(words)}"`;
+
 /** An action refused, and what she was told (A06). */
 export const refusedNote = (action: string, error: string): string => `Not done: ${action}. ${error}`;
 

@@ -277,6 +277,43 @@
       ]
     },
     {
+      "id": "callback_time_given",
+      "lead": {
+        "firstName": "Jeel",
+        "phone": "+16026203572"
+      },
+      "now": "2026-11-16T17:49:23Z",
+      "who": "nobody",
+      "opened": false,
+      "turns": [
+        {
+          "lead": "Yes."
+        },
+        {
+          "seri": "[friendly, upbeat] This is Seri from eDrugstore, and I'm calling about our offer of up to 25% off your first order. [curious] Is that something you'd be interested in?"
+        },
+        {
+          "lead": "Yes. Call me tomorrow."
+        },
+        {
+          "seri": "[understanding] Everyone on our team is busy right now, Jeel. [curious] What time tomorrow would work best for us to call you back?"
+        },
+        {
+          "lead": "Twelve PM."
+        }
+      ],
+      "expect": [
+        "none"
+      ],
+      "must_say_any": [
+        "12"
+      ],
+      "must_not_say": [
+        "goodbye",
+        "bye"
+      ]
+    },
+    {
       "id": "side_question_once",
       "lead": {
         "firstName": "Jeel",

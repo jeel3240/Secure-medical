@@ -3,7 +3,7 @@
  * rebuilt from the turns kept on the call, as the call itself built it.
  */
 import { FILLER_LINE, leadMessage, NO_REPEAT_NOTE, NOBODY_NOTE, openQuestionNote, STILL_THERE_LINE } from './conversation';
-import { interruptedNote, keyTurn, reconnectedNote, refusedNote, replacedNote, stopNote, twilioErrorNote } from './relay-messages';
+import { interruptedNote, keyTurn, reconnectedNote, refusedNote, replacedNote, stopNote, twilioErrorNote, unsaidNote } from './relay-messages';
 import { earlierConversation, type KeptTurn } from './resume';
 
 const GREETING = 'Hi, is this John?';
@@ -85,6 +85,7 @@ describe('the conversation so far, from the kept turns', () => {
       note(twilioErrorNote('Something broke')),
       note(reconnectedNote(1)),
       note(stopNote('words')),
+      note(unsaidNote('Goodbye.')),
     ];
     expect(earlierConversation(turns, GREETING, 'free').messages).toEqual([
       leadMessage('free', 'Yes.'),
