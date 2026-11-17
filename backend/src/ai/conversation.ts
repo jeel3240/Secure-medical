@@ -586,7 +586,9 @@ export class Conversation {
         }
       }
     } catch (err) {
-      if (reply.done) return; // stopped on purpose: talked over, the lead said more, too slow
+      // Stopped on purpose: talked over, the lead said more, too slow - or the call closed: a voicemail's beep took it,
+      // the lead hung up (A34's call 117 logged that as OpenAI failing).
+      if (reply.done || this.over) return;
       log.error('ai_relay.model_failed', { callId: this.setup.callId, err: errText(err) });
       this.fail('model_failed');
       return;

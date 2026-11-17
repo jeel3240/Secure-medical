@@ -258,6 +258,19 @@ describe('what the lead heard', () => {
   });
 });
 
+describe('the call closing while she thinks', () => {
+  it('is not OpenAI failing - nothing logged as a failure, no fallback (A34 call 117: the voicemail took the call)', async () => {
+    understand.understand = (_messages, _format, signal: AbortSignal) =>
+      new Promise<string>((_, reject) => signal.addEventListener('abort', () => reject(new Error('Request was aborted.'))));
+    conversation.heard('Hi, you have reached John. At the tone, please record your message.');
+    await new Promise((r) => setTimeout(r, 20));
+    conversation.close();
+    await new Promise((r) => setTimeout(r, 20));
+    expect(logged.some((l) => l.event === 'ai_relay.model_failed')).toBe(false);
+    expect(ended).toEqual([]);
+  });
+});
+
 describe('when OpenAI fails', () => {
   it('the understand step failing: the script takes the call, as when OpenAI fails today (A12)', async () => {
     speak.replies.push('[friendly, upbeat] This is Seri. [curious] Interested?');
