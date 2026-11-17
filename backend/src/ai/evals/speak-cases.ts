@@ -1,0 +1,229 @@
+/**
+ * The speak step's cases (A29): a reply's moves, who is there and the turns
+ * before it, and what her words must and must not hold. Run with `npm run
+ * ai:eval:speak`; marked by `speak-grade.ts`.
+ */
+
+import type { WhoIsThere } from '../instructions';
+import type { Move } from '../policy';
+
+export interface SpeakCase {
+  id: string;
+  who: WhoIsThere;
+  recent: { who: 'lead' | 'seri'; text: string }[];
+  moves: Move[];
+  /** Each group: at least one of these is said. */
+  mustSay?: string[][];
+  mustNotSay?: string[];
+  /** Her reply ends the call: no question in it. Otherwise it may ask one, last. */
+  ending?: boolean;
+  /** Her reply must ask a question. */
+  asks?: boolean;
+}
+
+const GREETED = [{ who: 'seri' as const, text: 'Hi, is this John?' }, { who: 'lead' as const, text: 'Yes.' }];
+const OPENED = [
+  ...GREETED,
+  { who: 'seri' as const, text: "This is Seri from eDrugstore, and I'm calling about our offer of up to 25% off your first order. Is that something you'd be interested in?" },
+];
+const PRICE = 'Prices depend on the medication and quantity.';
+const SHIPPING = 'Free USPS shipping is our most popular option, and many customers get their order in 1 to 3 business days.';
+
+export const SPEAK_CASES: SpeakCase[] = [
+  {
+    id: 'opening',
+    who: 'free',
+    recent: GREETED,
+    moves: [{ move: 'opening' }],
+    mustSay: [['25% off', '25 percent off'], ['interested']],
+    mustNotSay: ['partner', 'signed up'],
+    asks: true,
+  },
+  {
+    id: 'offer_connect',
+    who: 'free',
+    recent: [...OPENED, { who: 'lead', text: "Yes, I'm interested." }],
+    moves: [{ move: 'offer', kind: 'connect' }],
+    mustSay: [['connect', 'talk to someone', 'speak with someone', 'put you through']],
+    asks: true,
+  },
+  {
+    id: 'busy_ask_time',
+    who: 'nobody',
+    recent: [...OPENED, { who: 'lead', text: "Yes, I'm interested." }],
+    moves: [{ move: 'busy' }, { move: 'ask_time', day: null }],
+    mustSay: [['busy', 'tied up', 'on other calls', 'with other calls', 'available'], ['time', 'when']],
+    mustNotSay: ['connect you', 'transfer'],
+    asks: true,
+  },
+  {
+    id: 'specialist_nobody',
+    who: 'nobody',
+    recent: [...OPENED, { who: 'lead', text: 'Who is your CEO?' }],
+    moves: [{ move: 'specialist', again: false }, { move: 'return_to', open: 'interest' }],
+    mustSay: [['specialist', 'specialists', 'team']],
+    mustNotSay: ['connect', "don't have that", "don't have the", "don't have it", "don't have this", "can't", 'cannot', "i don't know", 'not able'],
+    asks: true,
+  },
+  {
+    id: 'specialist_again_callback',
+    who: 'nobody',
+    recent: [
+      ...OPENED,
+      { who: 'lead', text: 'Who is your CEO?' },
+      { who: 'seri', text: "That's a question our specialists can answer for you. Would the offer be something you'd like to hear more about?" },
+      { who: 'lead', text: "I'm asking you who is your CEO." },
+    ],
+    moves: [{ move: 'specialist', again: true }, { move: 'offer', kind: 'callback' }],
+    mustSay: [['specialist', 'specialists', 'team'], ['call back', 'call you back', 'callback', 'give you a call']],
+    mustNotSay: ['connect', "don't have that", "don't have the", "don't have it", "don't have this", "can't", 'cannot', "i don't know", 'not able'],
+    asks: true,
+  },
+  {
+    id: 'price_then_callback',
+    who: 'nobody',
+    recent: [...OPENED, { who: 'lead', text: 'Okay.' }, { who: 'seri', text: 'So, would that be something you might want?' }, { who: 'lead', text: 'How much is it?' }],
+    moves: [{ move: 'answer', id: 'price', text: PRICE, again: false }, { move: 'offer', kind: 'callback' }],
+    mustSay: [['call back', 'call you back', 'callback', 'give you a call']],
+    mustNotSay: ['connect', 'depend on the medication'],
+    asks: true,
+  },
+  {
+    id: 'ask_why',
+    who: 'free',
+    recent: [...OPENED, { who: 'lead', text: "No, I'm not interested." }],
+    moves: [{ move: 'ask_why' }],
+    mustSay: [['timing', 'time', 'right now']],
+    mustNotSay: ['link', 'text you', 'connect'],
+    asks: true,
+  },
+  {
+    id: 'offer_products',
+    who: 'free',
+    recent: [...OPENED, { who: 'lead', text: "I don't need antibiotics right now." }],
+    moves: [{ move: 'offer', kind: 'products' }],
+    mustSay: [['test kit', 'test kits'], ['sti', 'std']],
+    asks: true,
+  },
+  {
+    id: 'confirm_time',
+    who: 'nobody',
+    recent: [...OPENED, { who: 'lead', text: 'Call me tomorrow.' }, { who: 'seri', text: 'Sure, what time tomorrow works for you?' }, { who: 'lead', text: 'Two.' }],
+    moves: [{ move: 'confirm_time', at: '2026-11-12T21:00:00.000Z', zone: 'America/Phoenix', spoken: 'tomorrow at 2 PM your time', instead: null, asked: null }],
+    mustSay: [['2 pm']],
+    mustNotSay: ['booked', 'goodbye', 'have a great day'],
+    asks: true,
+  },
+  {
+    id: 'confirm_time_instead_weekend',
+    who: 'nobody',
+    recent: [...OPENED, { who: 'lead', text: 'Can you call me tomorrow at two?' }],
+    moves: [
+      {
+        move: 'confirm_time',
+        at: '2026-11-16T21:00:00.000Z',
+        zone: 'America/Phoenix',
+        spoken: 'Monday at 2 PM your time',
+        instead: 'outside_hours',
+        asked: 'tomorrow at 2 PM your time',
+      },
+    ],
+    mustSay: [['monday at 2 pm'], ['monday to friday', 'weekend', 'weekdays', "isn't available", 'not available', 'works', 'only']],
+    mustNotSay: ['booked', 'goodbye'],
+    asks: true,
+  },
+  {
+    id: 'ask_repeat',
+    who: 'free',
+    recent: [...OPENED, { who: 'lead', text: 'Please do so scan.' }],
+    moves: [{ move: 'ask_repeat' }],
+    mustSay: [['catch', 'say that again', 'repeat', 'say it again', 'missed']],
+    asks: true,
+  },
+  {
+    id: 'still_here',
+    who: 'free',
+    recent: [...OPENED, { who: 'lead', text: 'How long does shipping take?' }, { who: 'seri', text: SHIPPING }, { who: 'lead', text: 'Hello. Hello.' }],
+    moves: [{ move: 'still_here' }, { move: 'return_to', open: 'interest' }],
+    mustSay: [["i'm here", 'i am here', 'still here', 'yes']],
+    mustNotSay: ['this is seri', 'calling about our offer'],
+    asks: true,
+  },
+  {
+    id: 'anything_else',
+    who: 'free',
+    recent: [...OPENED, { who: 'lead', text: 'Do you ship to Texas?' }, { who: 'seri', text: 'Yes, we serve all 50 states.' }],
+    moves: [{ move: 'anything_else' }],
+    mustSay: [['anything else']],
+    asks: true,
+  },
+  {
+    id: 'answer_again',
+    who: 'free',
+    recent: [...OPENED, { who: 'lead', text: 'How long does shipping take?' }, { who: 'seri', text: SHIPPING }, { who: 'lead', text: 'Sorry, how long did you say shipping takes?' }],
+    moves: [{ move: 'answer', id: 'shipping', text: SHIPPING, again: true }],
+    mustSay: [['1 to 3', 'one to three', '1 and 3', 'one and three', '1-3']],
+    mustNotSay: ['free usps shipping is our most popular option'],
+  },
+  {
+    id: 'virtual_then_connect',
+    who: 'free',
+    recent: [...OPENED, { who: 'lead', text: 'Wait, am I talking to a real person?' }],
+    moves: [{ move: 'virtual' }, { move: 'offer', kind: 'connect' }],
+    mustSay: [['virtual assistant'], ['connect', 'talk to someone', 'speak with', 'put you through']],
+    asks: true,
+  },
+  {
+    id: 'have_doctor',
+    who: 'free',
+    recent: [...OPENED, { who: 'lead', text: 'I already have a doctor.' }],
+    moves: [{ move: 'objection', id: 'have_doctor' }, { move: 'return_to', open: 'interest' }],
+    mustSay: [['alongside', 'along with', 'together with', 'as well as']],
+    asks: true,
+  },
+  {
+    id: 'end_transfer',
+    who: 'free',
+    recent: [...OPENED, { who: 'lead', text: 'Yes, put me through.' }],
+    moves: [{ move: 'end', handoff: { action: 'transfer_to_agent' } }],
+    mustSay: [['connect', 'connecting']],
+    ending: true,
+  },
+  {
+    id: 'end_booked',
+    who: 'nobody',
+    recent: [...OPENED, { who: 'lead', text: 'Call me tomorrow at two.' }, { who: 'seri', text: "So that's tomorrow at 2 PM your time?" }, { who: 'lead', text: 'Yes.' }],
+    moves: [{ move: 'end', handoff: { action: 'book_callback', at: '2026-11-12T21:00:00.000Z', timeZone: 'America/Phoenix', reason: 'Asked for a call back.' } }],
+    mustSay: [['booked', 'scheduled', 'set', 'all set', 'call you', 'talk to you', 'give you a call', 'got you down', 'call back', 'tomorrow at 2']],
+    ending: true,
+  },
+  {
+    id: 'end_link',
+    who: 'free',
+    recent: [...OPENED, { who: 'lead', text: 'Just text me the link.' }],
+    moves: [{ move: 'end', handoff: { action: 'send_link' } }],
+    mustSay: [['link', 'text']],
+    ending: true,
+  },
+  {
+    id: 'end_not_interested',
+    who: 'free',
+    recent: [
+      ...OPENED,
+      { who: 'lead', text: 'No.' },
+      { who: 'seri', text: 'No problem. Is it more the timing, or just not something you need right now?' },
+      { who: 'lead', text: "I just don't need it." },
+    ],
+    moves: [{ move: 'end', handoff: { action: 'end_call', reason: 'not_interested' } }],
+    mustNotSay: ['link', 'sti', 'test kit', 'call back', 'connect'],
+    ending: true,
+  },
+  {
+    id: 'end_wrong_person',
+    who: 'free',
+    recent: [{ who: 'seri', text: 'Hi, is this John?' }, { who: 'lead', text: 'No, sorry, wrong number.' }],
+    moves: [{ move: 'end', handoff: { action: 'end_call', reason: 'wrong_person' } }],
+    mustSay: [['sorry', 'apolog']],
+    ending: true,
+  },
+];
