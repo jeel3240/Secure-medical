@@ -36,9 +36,9 @@ The build of `docs/AI-AGENT.md`, split into small tickets. Each is one PR into `
 | A29 | [Speak: her words for each move](A29-speak.md) | A27 | M | Done 2026-11-17 - 97.6% over 21 kinds of reply |
 | A30 | [The new brain on the call](A30-wired-into-the-call.md) | A25, A27, A28, A29 | L | Done 2026-11-17 - every call uses it; today's brain kept for a rollback |
 | A31 | [What the new brain keeps, and picking a call back up](A31-storage-and-resume.md) | A30 | M | Done 2026-11-17 - migration 024 |
-| A32 | [Whole-call replays](A32-whole-call-replays.md) | A30, A31 | M | To do |
-| A33 | [Listening](A33-listening.md) | A30 | S | To do |
-| A34 | [A21 walked again, on the new brain](A34-a21-walked-again.md) | A30-A33 | M | To do |
+| A32 | [Whole-call replays](A32-whole-call-replays.md) | A30, A31 | M | Done 2026-11-17 - 238 of 240 replays held every rule |
+| A33 | [Listening](A33-listening.md) | A30 | S | Measured during A34's calls |
+| A34 | [A21 walked again, on the new brain](A34-a21-walked-again.md) | A30-A32 | M | Ready - Jeel's real-phone test |
 | A22 | [Deploy, then switch on](A22-deploy-then-switch-on.md) | A34 | S | To do |
 | A23 | [A voicemail menu is never put through](A23-a-voicemail-menu-is-never-put-through.md) | A22 | M | Later - after the main AI agent work (Jeel, 2026-11-16). Seen on production twice on the script |
 

@@ -116,11 +116,11 @@ function endLine(handoff: Handoff, firstName: string | null): string {
 export function moveBrief(move: Move, who: WhoIsThere, firstName: string | null): string {
   switch (move.move) {
     case 'opening':
-      return "Say who you are - Seri from eDrugstore - and that you're calling about our offer of up to 25% off their first order, then ask if it's something they'd be interested in. Don't say how we got their details.";
+      return "Say who you are - Seri from eDrugstore - and that you're calling about our offer of up to 25% off their first order, then ask if it's something they'd be interested in. The greeting is already said: don't say hello or their name again. Don't say how we got their details.";
     case 'answer':
       return move.again
         ? `They asked again about something you already answered. Say it again briefly, in new words: "${move.text}"`
-        : `You have just said: "${move.text}" - don't say it again.`;
+        : `You have just said: "${move.text}" - don't say it again, or any part of it, or add to it: go straight on to what follows.`;
     case 'specialist':
       return `${
         move.again
@@ -186,7 +186,9 @@ export function replyBrief(moves: readonly Move[], state: CallState, who: WhoIsT
   return [
     'Your reply now - do these, in order, and nothing else:',
     ...steps,
-    ...(who === 'nobody' ? ["Nobody on our team is free right now: never offer to connect them, put them through or have them talk to someone now."] : []),
+    ...(who === 'nobody'
+      ? ["Nobody on our team is free right now: never offer to connect them, put them through or have them talk to someone now - and don't mention who is free unless a step above says to (call 103)."]
+      : []),
     ...(ending ? ['This is your last line: no question in it.'] : ['At most one question, and only as the last thing you say.']),
     ...ledger(state),
   ].join('\n');
