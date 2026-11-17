@@ -21,7 +21,7 @@
 
 import OpenAI from 'openai';
 import type { Db } from '../db/flows';
-import { SERI_MODEL } from './model';
+import { SERI_MODEL, UNDERSTAND_EFFORT, UNDERSTAND_MODEL } from './model';
 import { plainError } from './openai';
 
 /** What the robot is told before it places calls. */
@@ -43,19 +43,24 @@ export const FALLBACK_STREAK = 3;
 export type Probe = { ok: true } | { ok: false; err: string };
 
 /**
- * The smallest request that proves what a call needs: her model, answering,
- * for this key - one word, no retries.
+ * The smallest requests that prove what a call needs: both her models - speak's
+ * and the understand step's (A30) - answering, for this key; no retries.
  */
 export function openAiProbe(apiKey: string): () => Promise<Probe> {
   let client: OpenAI | null = null;
   return async () => {
     client ??= new OpenAI({ apiKey, timeout: PROBE_TIMEOUT_MS, maxRetries: 0 });
     try {
-      await client.chat.completions.create({
-        model: SERI_MODEL,
-        messages: [{ role: 'user', content: 'Say OK.' }],
-        max_completion_tokens: 1,
-      });
+      // Both models a reply needs since A30: the understand step's and speak's, asked together.
+      await Promise.all([
+        client.chat.completions.create({ model: SERI_MODEL, messages: [{ role: 'user', content: 'Say OK.' }], max_completion_tokens: 1 }),
+        client.chat.completions.create({
+          model: UNDERSTAND_MODEL,
+          reasoning_effort: UNDERSTAND_EFFORT,
+          messages: [{ role: 'user', content: 'Say OK.' }],
+          max_completion_tokens: 16,
+        }),
+      ]);
       return { ok: true };
     } catch (err) {
       const plain = plainError(err);

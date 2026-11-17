@@ -11,7 +11,7 @@
 import OpenAI from 'openai';
 import type { ChatCompletionMessageParam } from 'openai/resources/chat/completions';
 import { ACTION_TOOLS } from './actions';
-import { PROMPT_CACHE_KEY, SERI_MODEL, UNDERSTAND_CACHE_KEY, UNDERSTAND_EFFORT, UNDERSTAND_MODEL } from './model';
+import { PROMPT_CACHE_KEY, SERI_MODEL, SPEAK_CACHE_KEY, UNDERSTAND_CACHE_KEY, UNDERSTAND_EFFORT, UNDERSTAND_MODEL } from './model';
 
 /** A tool call, whole: its id, which action, and the arguments as OpenAI wrote them. */
 export interface ModelToolCall {
@@ -111,6 +111,33 @@ export function openAiUnderstand(apiKey: string): UnderstandModel {
           { signal }
         );
         return reply.choices[0]?.message?.content ?? '';
+      } catch (err) {
+        throw plainError(err);
+      }
+    },
+  };
+}
+
+/** The speak step's request (A29, A30): her words for a reply's moves, streamed - no tools, she decides nothing. */
+export interface SpeakModel {
+  /** Her words as they are written. Stops - it may throw - when `signal` aborts. */
+  stream(messages: ChatCompletionMessageParam[], signal: AbortSignal): AsyncIterable<string>;
+}
+
+export function openAiSpeak(apiKey: string): SpeakModel {
+  let client: OpenAI | null = null;
+  return {
+    async *stream(messages, signal) {
+      client ??= new OpenAI({ apiKey, timeout: 15_000, maxRetries: 0 });
+      try {
+        const stream = await client.chat.completions.create(
+          { model: SERI_MODEL, messages, stream: true, max_completion_tokens: MAX_REPLY_TOKENS, prompt_cache_key: SPEAK_CACHE_KEY },
+          { signal }
+        );
+        for await (const chunk of stream) {
+          const text = chunk.choices[0]?.delta?.content;
+          if (text) yield text;
+        }
       } catch (err) {
         throw plainError(err);
       }

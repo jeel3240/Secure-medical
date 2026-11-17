@@ -21,3 +21,6 @@ export const PROMPT_CACHE_KEY = 'seri-instructions';
 export const UNDERSTAND_MODEL = 'gpt-5.4-mini';
 export const UNDERSTAND_EFFORT = 'none' as const;
 export const UNDERSTAND_CACHE_KEY = 'seri-understand';
+
+/** Her persona for the speak step (A29) - the same on every call, kept read. */
+export const SPEAK_CACHE_KEY = 'seri-speak';
