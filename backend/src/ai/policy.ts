@@ -273,7 +273,8 @@ export function decide(previous: CallState, acts: readonly Act[], context: Polic
   // A time for a call back, or a yes to the one she said back.
   const time = has('wants_callback')?.time ?? null;
   if (time && (time.hour !== null || time.day !== null)) return done([...answersFor(s, acts, context), ...timeMoves(s, time, context)]);
-  if (open === 'confirm' && has('agrees') && s.callback.proposed) return done([book(s, context)]);
+  // A yes to the time she said back - read as asking for the call back again counts the same (call 93: "Yes.").
+  if (open === 'confirm' && (has('agrees') || has('wants_callback')) && s.callback.proposed) return done([book(s, context)]);
   if (open === 'confirm' && has('declines')) {
     s.callback.proposed = null;
     return done([{ move: 'ask_time', day: s.callback.day }]);

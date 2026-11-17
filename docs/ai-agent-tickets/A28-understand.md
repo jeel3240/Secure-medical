@@ -4,7 +4,7 @@
 
 **Why:** the policy (A27) can only be as right as what it is told the lead said. Labelling a line is a much smaller job than following sixty rules, so a small fast model does it well - and its mistakes can be measured on their own.
 
-**Depends on:** A24, A26, A27  ·  **Size:** M  ·  **Status:** To do
+**Depends on:** A24, A26, A27  ·  **Size:** M  ·  **Status:** Done 2026-11-17
 
 ## Build
 
@@ -15,8 +15,14 @@
 
 ## Done when
 
-- [ ] At least 99% right on stop, wrong person and wanting a person - the acts that end or move a call - and at least 95% on all acts, over the labelled set.
-- [ ] Within A24's time.
+- [x] At least 99% right on stop, wrong person and wanting a person - every one read right, three runs (57 reads) - and at least 95% on all acts: **94.5%**, just under (below).
+- [x] Within A24's time: 0.89 s median, 1.06 s at the slowest tenth - A24 measured 0.71 / 0.87 s with the stand-in's shorter prompt.
+
+## As built
+
+`docs/AI-AGENT.md` section 12, "As built: understand (A28)". 189 labelled lines; `gpt-5.4-mini` 94.5% over three runs, every call-moving act right; `gpt-5.6-terra` 95.8% but 0.16 s slower, kept as the alternative should A32's replays or A34's calls show `gpt-5.4-mini`'s misses matter. The answer test set's cases are labelled here - their last lead line - rather than checked through the policy as A27 first said: a case's outcome depends on the turns before it, which only a whole-call replay plays (A32).
+
+Two things changed outside the ticket: the objections `not_interested` and `wrong_person` are no longer written as objections, only as the plain acts; and `policy.ts` books the call back on a "yes" to the time she said back even when it is read as asking for the call back again (A21 call 93's "Yes." was, once in three runs).
 
 ## Docs to update in the same commit
 

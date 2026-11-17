@@ -348,6 +348,12 @@ describe('a call back - the time worked out by code, said back, booked only afte
     expect(moves[0]).toMatchObject({ move: 'confirm_time', instead: 'outside_hours', spoken: 'tomorrow at 11 AM your time' });
   });
 
+  it('a yes to the time said back read as asking for the call back again: booked all the same', () => {
+    const ctx = lead();
+    const { state } = turn(opened(ctx), [{ act: 'wants_callback', time: { day: 'tomorrow', hour: 3, minute: null, ampm: 'pm' } }], ctx);
+    expect(turn(state, [{ act: 'wants_callback', time: null }], ctx).moves).toMatchObject([{ move: 'end', handoff: { action: 'book_callback', at: '2026-11-12T22:00:00.000Z' } }]);
+  });
+
   it('a no to the time said back: when would suit, asked again', () => {
     const ctx = lead();
     const { state } = turn(opened(ctx), [{ act: 'wants_callback', time: { day: 'tomorrow', hour: 3, minute: null, ampm: 'pm' } }], ctx);
