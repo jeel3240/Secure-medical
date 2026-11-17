@@ -37,7 +37,7 @@ describe('the brief for each move', () => {
   });
 
   it('an approved answer already said is not said again; asked again, said in new words', () => {
-    expect(brief({ move: 'answer', id: 'price', text: 'Prices vary.', again: false })).toBe('You have just said: "Prices vary." - don\'t say it again.');
+    expect(brief({ move: 'answer', id: 'price', text: 'Prices vary.', again: false })).toMatch(/^You have just said: "Prices vary." - don't say it again, or any part of it/);
     expect(brief({ move: 'answer', id: 'price', text: 'Prices vary.', again: true })).toMatch(/in new words: "Prices vary."/);
   });
 

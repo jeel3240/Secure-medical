@@ -131,7 +131,7 @@ describe('questions', () => {
     speak.replies.push('[curious] Would you like me to connect you with someone now?');
     const reply = await says('How much is it?');
     expect(reply).toBe('Prices depend on the medication and quantity. Would you like me to connect you with someone now?');
-    expect(speak.briefs[1]).toContain('You have just said: "Prices depend on the medication and quantity." - don\'t say it again.');
+    expect(speak.briefs[1]).toContain('You have just said: "Prices depend on the medication and quantity." - don\'t say it again');
   });
 
   it('with nobody free the answer leads to a call back, never a person', async () => {
