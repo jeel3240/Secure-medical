@@ -1,0 +1,4155 @@
+{
+ "about": "The understand step's labelled set (A28): what the lead just said, what Seri said before it, and the acts it must be read as. want: every group must be found - \"a|b\" either; allow: other acts that are not wrong - \"confirm_identity\" and \"other\" are never wrong beside a wanted act - the policy changes nothing for them then; time: the call-back time's parts that must be read. Real lines from A21's calls 86-112 (the lead's name made John), the answer test set's last lead lines, and lines written for acts neither has.",
+ "cases": [
+  {
+   "id": "call86-2",
+   "source": "A21 call 86",
+   "before": [
+    {
+     "who": "seri",
+     "text": "Hi, is this John?"
+    }
+   ],
+   "seri": "Hello, are you still there?",
+   "lead": "Hello?",
+   "want": [
+    "checking_line"
+   ]
+  },
+  {
+   "id": "call88-1",
+   "source": "A21 call 88",
+   "before": [],
+   "seri": "Hi, is this John?",
+   "lead": "Yes.",
+   "want": [
+    "confirm_identity|agrees"
+   ],
+   "allow": [
+    "confirm_identity",
+    "agrees"
+   ]
+  },
+  {
+   "id": "call88-3",
+   "source": "A21 call 88",
+   "before": [
+    {
+     "who": "seri",
+     "text": "Hi, is this John?"
+    },
+    {
+     "who": "lead",
+     "text": "Yes."
+    }
+   ],
+   "seri": "Hi John, this is Seri from eDrugstore. You signed up on one of our partner sites, and I'm calling about our offer of up to 25% off your first order. Is that something you'd be interested in?",
+   "lead": "Yes.",
+   "want": [
+    "interested|agrees"
+   ],
+   "allow": [
+    "interested",
+    "agrees",
+    "confirm_identity"
+   ]
+  },
+  {
+   "id": "call88-5",
+   "source": "A21 call 88",
+   "before": [
+    {
+     "who": "lead",
+     "text": "Yes."
+    },
+    {
+     "who": "seri",
+     "text": "Hi John, this is Seri from eDrugstore. You signed up on one of our partner sites, and I'm calling about our offer of up to 25% off your first order. Is that something you'd be interested in?"
+    },
+    {
+     "who": "lead",
+     "text": "Yes."
+    }
+   ],
+   "seri": "Great, would you like me to connect you with someone now to place your order?",
+   "lead": "what type of things are you provide?",
+   "want": [
+    "asks:products_overview|asks:antibiotics"
+   ],
+   "allow": [
+    "asks:products_overview",
+    "asks:antibiotics"
+   ]
+  },
+  {
+   "id": "call88-7",
+   "source": "A21 call 88",
+   "before": [
+    {
+     "who": "lead",
+     "text": "Yes."
+    },
+    {
+     "who": "seri",
+     "text": "Great, would you like me to connect you with someone now to place your order?"
+    },
+    {
+     "who": "lead",
+     "text": "what type of things are you provide?"
+    }
+   ],
+   "seri": "On these calls we mainly help with antibiotics, STI treatments and at-home health test kits. eDrugstore also offers treatments for things like hair loss and weight loss, and a representative can tell you more. Would you like me to connect you with someone now to place your order?",
+   "lead": "Yes.",
+   "want": [
+    "agrees|wants_person"
+   ],
+   "allow": [
+    "agrees",
+    "wants_person",
+    "interested"
+   ]
+  },
+  {
+   "id": "call89-3",
+   "source": "A21 call 89",
+   "before": [
+    {
+     "who": "seri",
+     "text": "Hi, is this John?"
+    },
+    {
+     "who": "lead",
+     "text": "Yes."
+    }
+   ],
+   "seri": "This is Seri from eDrugstore. You signed up on one of our partner sites, and I'm calling about our offer of up to 25% off your first order. Is that something you'd be interested in?",
+   "lead": "I'm a bit busy right now.",
+   "want": [
+    "objection:busy|not_now"
+   ],
+   "allow": [
+    "objection:busy",
+    "not_now",
+    "wants_callback"
+   ]
+  },
+  {
+   "id": "call89-5",
+   "source": "A21 call 89",
+   "before": [
+    {
+     "who": "lead",
+     "text": "Yes."
+    },
+    {
+     "who": "seri",
+     "text": "This is Seri from eDrugstore. You signed up on one of our partner sites, and I'm calling about our offer of up to 25% off your first order. Is that something you'd be interested in?"
+    },
+    {
+     "who": "lead",
+     "text": "I'm a bit busy right now."
+    }
+   ],
+   "seri": "No problem, John. When's a better time for us to call you back?",
+   "lead": "You can call me. Is it scam?",
+   "want": [
+    "asks:scam|objection:scam"
+   ],
+   "allow": [
+    "asks:scam",
+    "objection:scam",
+    "wants_callback",
+    "agrees"
+   ]
+  },
+  {
+   "id": "call89-7",
+   "source": "A21 call 89",
+   "before": [
+    {
+     "who": "lead",
+     "text": "I'm a bit busy right now."
+    },
+    {
+     "who": "seri",
+     "text": "No problem, John. When's a better time for us to call you back?"
+    },
+    {
+     "who": "lead",
+     "text": "You can call me. Is it scam?"
+    }
+   ],
+   "seri": "I understand your hesitation. eDrugstore has been around for over 25 years, and you can check our customer reviews on Trustpilot. Would you like me to connect you with someone now to place your order?",
+   "lead": "No.",
+   "want": [
+    "declines|not_interested"
+   ],
+   "allow": [
+    "declines",
+    "not_interested"
+   ]
+  },
+  {
+   "id": "call90-3",
+   "source": "A21 call 90",
+   "before": [
+    {
+     "who": "seri",
+     "text": "Hi, is this John?"
+    },
+    {
+     "who": "lead",
+     "text": "Yes."
+    }
+   ],
+   "seri": "This is Seri from eDrugstore, and I'm calling about our offer of up to 25% off your first order. Is that something you'd be interested in?",
+   "lead": "Sorry. Who is this?",
+   "want": [
+    "asks:who_we_are|asks:why_calling"
+   ],
+   "allow": [
+    "asks:who_we_are",
+    "asks:why_calling"
+   ]
+  },
+  {
+   "id": "call90-5",
+   "source": "A21 call 90",
+   "before": [
+    {
+     "who": "lead",
+     "text": "Yes."
+    },
+    {
+     "who": "seri",
+     "text": "This is Seri from eDrugstore, and I'm calling about our offer of up to 25% off your first order. Is that something you'd be interested in?"
+    },
+    {
+     "who": "lead",
+     "text": "Sorry. Who is this?"
+    }
+   ],
+   "seri": "This is Seri from eDrugstore. I'm calling about our offer of up to 25% off your first order. Would you like me to connect you with someone now to place your order?",
+   "lead": "What type of offer?",
+   "want": [
+    "asks:offer"
+   ],
+   "allow": [
+    "asks:offer"
+   ]
+  },
+  {
+   "id": "call90-7",
+   "source": "A21 call 90",
+   "before": [
+    {
+     "who": "lead",
+     "text": "Sorry. Who is this?"
+    },
+    {
+     "who": "seri",
+     "text": "This is Seri from eDrugstore. I'm calling about our offer of up to 25% off your first order. Would you like me to connect you with someone now to place your order?"
+    },
+    {
+     "who": "lead",
+     "text": "What type of offer?"
+    }
+   ],
+   "seri": "You can get up to 25% off your first order with us. Would you like me to connect you with someone now to place your order?",
+   "lead": "What product that you provide?",
+   "want": [
+    "asks:products_overview|asks:antibiotics"
+   ],
+   "allow": [
+    "asks:products_overview",
+    "asks:antibiotics"
+   ]
+  },
+  {
+   "id": "call90-9",
+   "source": "A21 call 90",
+   "before": [
+    {
+     "who": "lead",
+     "text": "What type of offer?"
+    },
+    {
+     "who": "seri",
+     "text": "You can get up to 25% off your first order with us. Would you like me to connect you with someone now to place your order?"
+    },
+    {
+     "who": "lead",
+     "text": "What product that you provide?"
+    }
+   ],
+   "seri": "On these calls, we mainly help with antibiotics, STI treatments, and at-home health test kits. Would you like me to connect you to someone now to help with your order?",
+   "lead": "How did you get my number?",
+   "want": [
+    "asks:how_got_number"
+   ],
+   "allow": [
+    "asks:how_got_number"
+   ]
+  },
+  {
+   "id": "call90-11",
+   "source": "A21 call 90",
+   "before": [
+    {
+     "who": "lead",
+     "text": "What product that you provide?"
+    },
+    {
+     "who": "seri",
+     "text": "On these calls, we mainly help with antibiotics, STI treatments, and at-home health test kits. Would you like me to connect you to someone now to help with your order?"
+    },
+    {
+     "who": "lead",
+     "text": "How did you get my number?"
+    }
+   ],
+   "seri": "You signed up on one of our partner sites and asked to be contacted. Would you like me to connect you with someone now to place your order?",
+   "lead": "No. I just want to know about the drugs, sir. What is that?",
+   "want": [
+    "asks:products_overview|asks:antibiotics"
+   ],
+   "allow": [
+    "asks:products_overview",
+    "asks:antibiotics",
+    "declines"
+   ]
+  },
+  {
+   "id": "call90-13",
+   "source": "A21 call 90",
+   "before": [
+    {
+     "who": "lead",
+     "text": "How did you get my number?"
+    },
+    {
+     "who": "seri",
+     "text": "You signed up on one of our partner sites and asked to be contacted. Would you like me to connect you with someone now to place your order?"
+    },
+    {
+     "who": "lead",
+     "text": "No. I just want to know about the drugs, sir. What is that?"
+    }
+   ],
+   "seri": "We carry a few antibiotics like amoxicillin, and a licensed provider decides which one is right for you. Would you like me to connect you with someone who can explain more?",
+   "lead": "So you are not able to ask why you are telling every time connect me with, like, connecting you with a real person?",
+   "want": [
+    "other|declines|asks:upset|unclear"
+   ],
+   "allow": [
+    "other",
+    "declines",
+    "asks:upset",
+    "unclear",
+    "asks:real_person"
+   ]
+  },
+  {
+   "id": "call90-15",
+   "source": "A21 call 90",
+   "before": [
+    {
+     "who": "lead",
+     "text": "No. I just want to know about the drugs, sir. What is that?"
+    },
+    {
+     "who": "seri",
+     "text": "We carry a few antibiotics like amoxicillin, and a licensed provider decides which one is right for you. Would you like me to connect you with someone who can explain more?"
+    },
+    {
+     "who": "lead",
+     "text": "So you are not able to ask why you are telling every time connect me with, like, connecting you with a real person?"
+    }
+   ],
+   "seri": "I'm eDrugstore's virtual assistant, and I want to make sure you get the best help. I can connect you with a real person who can answer all your questions. Should I connect you now?",
+   "lead": "But I want to talk with you.",
+   "want": [
+    "declines|other"
+   ],
+   "allow": [
+    "declines",
+    "other"
+   ]
+  },
+  {
+   "id": "call90-17",
+   "source": "A21 call 90",
+   "before": [
+    {
+     "who": "lead",
+     "text": "So you are not able to ask why you are telling every time connect me with, like, connecting you with a real person?"
+    },
+    {
+     "who": "seri",
+     "text": "I'm eDrugstore's virtual assistant, and I want to make sure you get the best help. I can connect you with a real person who can answer all your questions. Should I connect you now?"
+    },
+    {
+     "who": "lead",
+     "text": "But I want to talk with you."
+    }
+   ],
+   "seri": "I’m here to help with information, but for detailed questions about medications, a licensed provider is best. Would you like me to connect you with someone now?",
+   "lead": "Tell me what what is the location of heat drug store.",
+   "want": [
+    "asks:uncovered|asks:authentic|asks:who_we_are|asks:ship_where"
+   ],
+   "allow": [
+    "asks:uncovered",
+    "asks:authentic",
+    "asks:who_we_are",
+    "asks:ship_where"
+   ]
+  },
+  {
+   "id": "call90-19",
+   "source": "A21 call 90",
+   "before": [
+    {
+     "who": "lead",
+     "text": "But I want to talk with you."
+    },
+    {
+     "who": "seri",
+     "text": "I’m here to help with information, but for detailed questions about medications, a licensed provider is best. Would you like me to connect you with someone now?"
+    },
+    {
+     "who": "lead",
+     "text": "Tell me what what is the location of heat drug store."
+    }
+   ],
+   "seri": "eDrugstore works online and ships medications from licensed U.S. pharmacies directly to you. Would you like me to connect you with someone who can assist you further?",
+   "lead": "And how much you charge?",
+   "want": [
+    "asks:price"
+   ],
+   "allow": [
+    "asks:price"
+   ]
+  },
+  {
+   "id": "call90-21",
+   "source": "A21 call 90",
+   "before": [
+    {
+     "who": "lead",
+     "text": "Tell me what what is the location of heat drug store."
+    },
+    {
+     "who": "seri",
+     "text": "eDrugstore works online and ships medications from licensed U.S. pharmacies directly to you. Would you like me to connect you with someone who can assist you further?"
+    },
+    {
+     "who": "lead",
+     "text": "And how much you charge?"
+    }
+   ],
+   "seri": "Prices depend on the medication and quantity. I can connect you with a representative, or text you a link where you can see the prices. Which would you prefer?",
+   "lead": "Okay. So I will call you back right now. I'm busy. Okay? Thank you.",
+   "want": [
+    "objection:busy|not_now"
+   ],
+   "allow": [
+    "objection:busy",
+    "not_now",
+    "wants_callback",
+    "backchannel",
+    "other"
+   ]
+  },
+  {
+   "id": "call90-23",
+   "source": "A21 call 90",
+   "before": [
+    {
+     "who": "lead",
+     "text": "And how much you charge?"
+    },
+    {
+     "who": "seri",
+     "text": "Prices depend on the medication and quantity. I can connect you with a representative, or text you a link where you can see the prices. Which would you prefer?"
+    },
+    {
+     "who": "lead",
+     "text": "Okay. So I will call you back right now. I'm busy. Okay? Thank you."
+    }
+   ],
+   "seri": "No worries, John. When's a better time for us to call you back?",
+   "lead": "I will tell you.",
+   "want": [
+    "not_now|other|declines"
+   ],
+   "allow": [
+    "not_now",
+    "other",
+    "declines"
+   ]
+  },
+  {
+   "id": "call92-5",
+   "source": "A21 call 92",
+   "before": [
+    {
+     "who": "lead",
+     "text": "Yes."
+    },
+    {
+     "who": "seri",
+     "text": "This is Seri from eDrugstore, and I'm calling about our offer of up to 25% off your first order. Is that something you'd be interested in?"
+    },
+    {
+     "who": "lead",
+     "text": "Yes."
+    }
+   ],
+   "seri": "Great! Would you like me to connect you with someone now to place your order?",
+   "lead": "Yes.",
+   "want": [
+    "agrees|wants_person"
+   ],
+   "allow": [
+    "agrees",
+    "wants_person",
+    "interested"
+   ]
+  },
+  {
+   "id": "call93-5",
+   "source": "A21 call 93",
+   "before": [
+    {
+     "who": "lead",
+     "text": "Yes."
+    },
+    {
+     "who": "seri",
+     "text": "This is Seri from eDrugstore, and I'm calling about our offer of up to 25% off your first order. Is that something you'd be interested in?"
+    },
+    {
+     "who": "lead",
+     "text": "Yes."
+    }
+   ],
+   "seri": "Great! Would you like me to connect you with someone now to place your order?",
+   "lead": "No. Can actually call me tomorrow at two?",
+   "want": [
+    "wants_callback"
+   ],
+   "allow": [
+    "agrees",
+    "interested",
+    "declines"
+   ],
+   "time": {
+    "day": "tomorrow",
+    "hour": 2
+   }
+  },
+  {
+   "id": "call93-7",
+   "source": "A21 call 93",
+   "before": [
+    {
+     "who": "lead",
+     "text": "Yes."
+    },
+    {
+     "who": "seri",
+     "text": "Great! Would you like me to connect you with someone now to place your order?"
+    },
+    {
+     "who": "lead",
+     "text": "No. Can actually call me tomorrow at two?"
+    }
+   ],
+   "seri": "Everyone on our team is busy right now, but I can have someone call you back. Would 2 PM tomorrow work for a call?",
+   "lead": "Yes.",
+   "want": [
+    "agrees"
+   ],
+   "allow": [
+    "interested"
+   ]
+  },
+  {
+   "id": "call93-9",
+   "source": "A21 call 93",
+   "before": [
+    {
+     "who": "lead",
+     "text": "No. Can actually call me tomorrow at two?"
+    },
+    {
+     "who": "seri",
+     "text": "Everyone on our team is busy right now, but I can have someone call you back. Would 2 PM tomorrow work for a call?"
+    },
+    {
+     "who": "lead",
+     "text": "Yes."
+    }
+   ],
+   "seri": "Our team is available Monday to Friday from 11 AM to 5 PM. Would Monday at 2 PM your time work instead?",
+   "lead": "Yes.",
+   "want": [
+    "agrees"
+   ],
+   "allow": [
+    "interested"
+   ]
+  },
+  {
+   "id": "call94-3",
+   "source": "A21 call 94",
+   "before": [
+    {
+     "who": "seri",
+     "text": "Hi, is this John?"
+    },
+    {
+     "who": "lead",
+     "text": "Yes."
+    }
+   ],
+   "seri": "This is Seri from eDrugstore, and I'm calling about our offer of up to 25% off your first order. Is that something you'd be interested in?",
+   "lead": "Yes, ma'am. Interesting. But can you call me around tomorrow too?",
+   "want": [
+    "wants_callback"
+   ],
+   "allow": [
+    "agrees",
+    "interested",
+    "declines"
+   ],
+   "time": {
+    "day": "tomorrow"
+   }
+  },
+  {
+   "id": "call94-5",
+   "source": "A21 call 94",
+   "before": [
+    {
+     "who": "lead",
+     "text": "Yes."
+    },
+    {
+     "who": "seri",
+     "text": "This is Seri from eDrugstore, and I'm calling about our offer of up to 25% off your first order. Is that something you'd be interested in?"
+    },
+    {
+     "who": "lead",
+     "text": "Yes, ma'am. Interesting. But can you call me around tomorrow too?"
+    }
+   ],
+   "seri": "Everyone on our team is busy right now, John. What time works best for us to call you back on Monday?",
+   "lead": "Uh, no. I'm saying can you call me tomorrow at around two PM?",
+   "want": [
+    "wants_callback"
+   ],
+   "allow": [
+    "agrees",
+    "interested",
+    "declines"
+   ],
+   "time": {
+    "day": "tomorrow",
+    "hour": 2,
+    "ampm": "pm"
+   }
+  },
+  {
+   "id": "call94-7",
+   "source": "A21 call 94",
+   "before": [
+    {
+     "who": "lead",
+     "text": "Yes, ma'am. Interesting. But can you call me around tomorrow too?"
+    },
+    {
+     "who": "seri",
+     "text": "Everyone on our team is busy right now, John. What time works best for us to call you back on Monday?"
+    },
+    {
+     "who": "lead",
+     "text": "Uh, no. I'm saying can you call me tomorrow at around two PM?"
+    }
+   ],
+   "seri": "Tomorrow is Saturday, and our team isn’t available then. Would Monday at 2 PM your time work for a call back instead?",
+   "lead": "Do you know my time?",
+   "want": [
+    "asks:uncovered|other"
+   ],
+   "allow": [
+    "asks:uncovered",
+    "other"
+   ]
+  },
+  {
+   "id": "call94-9",
+   "source": "A21 call 94",
+   "before": [
+    {
+     "who": "lead",
+     "text": "Uh, no. I'm saying can you call me tomorrow at around two PM?"
+    },
+    {
+     "who": "seri",
+     "text": "Tomorrow is Saturday, and our team isn’t available then. Would Monday at 2 PM your time work for a call back instead?"
+    },
+    {
+     "who": "lead",
+     "text": "Do you know my time?"
+    }
+   ],
+   "seri": "Yes, I see you're in Arizona time, John. So Monday at 2 PM your time would be Monday at 2 PM Arizona time. Would you like me to book that for you?",
+   "lead": "how do you know?",
+   "want": [
+    "asks:uncovered|other"
+   ],
+   "allow": [
+    "asks:uncovered",
+    "other"
+   ]
+  },
+  {
+   "id": "call94-11",
+   "source": "A21 call 94",
+   "before": [
+    {
+     "who": "lead",
+     "text": "Do you know my time?"
+    },
+    {
+     "who": "seri",
+     "text": "Yes, I see you're in Arizona time, John. So Monday at 2 PM your time would be Monday at 2 PM Arizona time. Would you like me to book that for you?"
+    },
+    {
+     "who": "lead",
+     "text": "how do you know?"
+    }
+   ],
+   "seri": "Your area code shows you're in the Arizona time zone, John. Does Monday at 2 PM your time work for a call back?",
+   "lead": "Who is the person available for me to talk on the Monday?",
+   "want": [
+    "asks:uncovered|asks:who_we_are"
+   ],
+   "allow": [
+    "asks:uncovered",
+    "asks:who_we_are"
+   ]
+  },
+  {
+   "id": "call94-13",
+   "source": "A21 call 94",
+   "before": [
+    {
+     "who": "lead",
+     "text": "how do you know?"
+    },
+    {
+     "who": "seri",
+     "text": "Your area code shows you're in the Arizona time zone, John. Does Monday at 2 PM your time work for a call back?"
+    },
+    {
+     "who": "lead",
+     "text": "Who is the person available for me to talk on the Monday?"
+    }
+   ],
+   "seri": "It will be one of our trained representatives from eDrugstore, John, who can help you place your order and answer any questions. Does Monday at 2 PM your time work for you?",
+   "lead": "what's the person name?",
+   "want": [
+    "asks:uncovered"
+   ],
+   "allow": [
+    "declines"
+   ]
+  },
+  {
+   "id": "call94-15",
+   "source": "A21 call 94",
+   "before": [
+    {
+     "who": "lead",
+     "text": "Who is the person available for me to talk on the Monday?"
+    },
+    {
+     "who": "seri",
+     "text": "It will be one of our trained representatives from eDrugstore, John, who can help you place your order and answer any questions. Does Monday at 2 PM your time work for you?"
+    },
+    {
+     "who": "lead",
+     "text": "what's the person name?"
+    }
+   ],
+   "seri": "I don’t have individual names, but it will be a licensed representative from eDrugstore who can assist you. Does Monday at 2 PM your time work for the callback?",
+   "lead": "Yes. Thank you.",
+   "want": [
+    "agrees"
+   ],
+   "allow": [
+    "interested"
+   ]
+  },
+  {
+   "id": "call95-3",
+   "source": "A21 call 95",
+   "before": [
+    {
+     "who": "seri",
+     "text": "Hi, is this John?"
+    },
+    {
+     "who": "lead",
+     "text": "Yes."
+    }
+   ],
+   "seri": "This is Seri from eDrugstore, and I'm calling about our offer of up to 25% off your first order. Is that something you'd be interested in?",
+   "lead": "Yes. Call me tomorrow.",
+   "want": [
+    "wants_callback"
+   ],
+   "allow": [
+    "agrees",
+    "interested",
+    "declines"
+   ],
+   "time": {
+    "day": "tomorrow"
+   }
+  },
+  {
+   "id": "call95-5",
+   "source": "A21 call 95",
+   "before": [
+    {
+     "who": "lead",
+     "text": "Yes."
+    },
+    {
+     "who": "seri",
+     "text": "This is Seri from eDrugstore, and I'm calling about our offer of up to 25% off your first order. Is that something you'd be interested in?"
+    },
+    {
+     "who": "lead",
+     "text": "Yes. Call me tomorrow."
+    }
+   ],
+   "seri": "Everyone on our team is busy right now, John. What time tomorrow would work best for us to call you back?",
+   "lead": "Twelve PM.",
+   "want": [
+    "wants_callback"
+   ],
+   "allow": [
+    "agrees",
+    "interested",
+    "declines"
+   ],
+   "time": {
+    "hour": 12,
+    "ampm": "pm"
+   }
+  },
+  {
+   "id": "call96-3",
+   "source": "A21 call 96",
+   "before": [
+    {
+     "who": "seri",
+     "text": "Hi, is this John?"
+    },
+    {
+     "who": "lead",
+     "text": "Yes."
+    }
+   ],
+   "seri": "This is Seri from eDrugstore, and I'm calling about our offer of up to 25% off your first order. Is that something you'd be interested in?",
+   "lead": "Uh, just call me tomorrow.",
+   "want": [
+    "wants_callback"
+   ],
+   "allow": [
+    "agrees",
+    "interested",
+    "declines"
+   ],
+   "time": {
+    "day": "tomorrow"
+   }
+  },
+  {
+   "id": "call96-5",
+   "source": "A21 call 96",
+   "before": [
+    {
+     "who": "lead",
+     "text": "Yes."
+    },
+    {
+     "who": "seri",
+     "text": "This is Seri from eDrugstore, and I'm calling about our offer of up to 25% off your first order. Is that something you'd be interested in?"
+    },
+    {
+     "who": "lead",
+     "text": "Uh, just call me tomorrow."
+    }
+   ],
+   "seri": "No problem, John. Everyone on our team is busy right now, but I can arrange a call back for you tomorrow. What time works best for a call?",
+   "lead": "So twelve PM?",
+   "want": [
+    "wants_callback"
+   ],
+   "allow": [
+    "agrees",
+    "interested",
+    "declines"
+   ],
+   "time": {
+    "hour": 12,
+    "ampm": "pm"
+   }
+  },
+  {
+   "id": "call96-8",
+   "source": "A21 call 96",
+   "before": [
+    {
+     "who": "seri",
+     "text": "No problem, John. Everyone on our team is busy right now, but I can arrange a call back for you tomorrow. What time works best for a call?"
+    },
+    {
+     "who": "lead",
+     "text": "So twelve PM?"
+    },
+    {
+     "who": "seri",
+     "text": "Twelve PM is within our hours, so that works well. I'll set that up for you."
+    }
+   ],
+   "seri": "Actually, our team is available for calls from 11 AM to 5 PM Arizona time weekdays. Does sometime between 11 and 5 PM tomorrow work for you? Which time do you prefer?",
+   "lead": "Twelve PM. I already told you.",
+   "want": [
+    "wants_callback"
+   ],
+   "allow": [
+    "agrees",
+    "other"
+   ],
+   "time": {
+    "hour": 12,
+    "ampm": "pm"
+   }
+  },
+  {
+   "id": "call96-10",
+   "source": "A21 call 96",
+   "before": [
+    {
+     "who": "seri",
+     "text": "Twelve PM is within our hours, so that works well. I'll set that up for you."
+    },
+    {
+     "who": "seri",
+     "text": "Actually, our team is available for calls from 11 AM to 5 PM Arizona time weekdays. Does sometime between 11 and 5 PM tomorrow work for you? Which time do you prefer?"
+    },
+    {
+     "who": "lead",
+     "text": "Twelve PM. I already told you."
+    }
+   ],
+   "seri": "Sorry about that. So that's Tuesday at 12 PM your time? Please confirm, and I'll book it.",
+   "lead": "Yes.",
+   "want": [
+    "agrees"
+   ],
+   "allow": [
+    "interested"
+   ]
+  },
+  {
+   "id": "call97-3",
+   "source": "A21 call 97",
+   "before": [
+    {
+     "who": "seri",
+     "text": "Hi, is this John?"
+    },
+    {
+     "who": "lead",
+     "text": "Yes."
+    }
+   ],
+   "seri": "This is Seri from eDrugstore, and I'm calling about our offer of up to 25% off your first order. Is that something you'd be interested in?",
+   "lead": "Call me tomorrow.",
+   "want": [
+    "wants_callback"
+   ],
+   "allow": [
+    "agrees",
+    "interested",
+    "declines"
+   ],
+   "time": {
+    "day": "tomorrow"
+   }
+  },
+  {
+   "id": "call97-5",
+   "source": "A21 call 97",
+   "before": [
+    {
+     "who": "lead",
+     "text": "Yes."
+    },
+    {
+     "who": "seri",
+     "text": "This is Seri from eDrugstore, and I'm calling about our offer of up to 25% off your first order. Is that something you'd be interested in?"
+    },
+    {
+     "who": "lead",
+     "text": "Call me tomorrow."
+    }
+   ],
+   "seri": "Everyone on our team is busy right now, John. What time tomorrow works best for a call back?",
+   "lead": "Twelve PM.",
+   "want": [
+    "wants_callback"
+   ],
+   "allow": [
+    "agrees",
+    "interested",
+    "declines"
+   ],
+   "time": {
+    "hour": 12,
+    "ampm": "pm"
+   }
+  },
+  {
+   "id": "call97-7",
+   "source": "A21 call 97",
+   "before": [
+    {
+     "who": "lead",
+     "text": "Call me tomorrow."
+    },
+    {
+     "who": "seri",
+     "text": "Everyone on our team is busy right now, John. What time tomorrow works best for a call back?"
+    },
+    {
+     "who": "lead",
+     "text": "Twelve PM."
+    }
+   ],
+   "seri": "So, that's tomorrow, Tuesday, at 12 PM your time?",
+   "lead": "Yes.",
+   "want": [
+    "agrees"
+   ],
+   "allow": [
+    "interested"
+   ]
+  },
+  {
+   "id": "call99-3",
+   "source": "A21 call 99",
+   "before": [
+    {
+     "who": "seri",
+     "text": "Hi, is this John?"
+    },
+    {
+     "who": "lead",
+     "text": "Yes."
+    }
+   ],
+   "seri": "This is Seri from eDrugstore, and I'm calling about our offer of up to 25% off your first order. Is that something you'd be interested in?",
+   "lead": "Okay.",
+   "want": [
+    "backchannel"
+   ]
+  },
+  {
+   "id": "call99-5",
+   "source": "A21 call 99",
+   "before": [
+    {
+     "who": "lead",
+     "text": "Yes."
+    },
+    {
+     "who": "seri",
+     "text": "This is Seri from eDrugstore, and I'm calling about our offer of up to 25% off your first order. Is that something you'd be interested in?"
+    },
+    {
+     "who": "lead",
+     "text": "Okay."
+    }
+   ],
+   "seri": "No problem. Everyone on our team is busy right now. When would be a good time for a call back that works for you?",
+   "lead": "Can you tell me more about it?",
+   "want": [
+    "asks:offer|asks:how_it_works|asks:why_calling"
+   ],
+   "allow": [
+    "asks:offer",
+    "asks:how_it_works",
+    "asks:why_calling"
+   ]
+  },
+  {
+   "id": "call99-7",
+   "source": "A21 call 99",
+   "before": [
+    {
+     "who": "lead",
+     "text": "Okay."
+    },
+    {
+     "who": "seri",
+     "text": "No problem. Everyone on our team is busy right now. When would be a good time for a call back that works for you?"
+    },
+    {
+     "who": "lead",
+     "text": "Can you tell me more about it?"
+    }
+   ],
+   "seri": "On these calls we mainly help with antibiotics, STI treatments, and at-home health test kits, John. Our team can go over all the details with you on a call. Since everyone is busy right now, when might be a better time for a call back?",
+   "lead": "Oh, wait. Do you ship to Arizona?",
+   "want": [
+    "asks:states"
+   ],
+   "allow": [
+    "asks:states",
+    "asks:shipping",
+    "asks:ship_where"
+   ]
+  },
+  {
+   "id": "call99-9",
+   "source": "A21 call 99",
+   "before": [
+    {
+     "who": "lead",
+     "text": "Can you tell me more about it?"
+    },
+    {
+     "who": "seri",
+     "text": "On these calls we mainly help with antibiotics, STI treatments, and at-home health test kits, John. Our team can go over all the details with you on a call. Since everyone is busy right now, when might be a better time for a call back?"
+    },
+    {
+     "who": "lead",
+     "text": "Oh, wait. Do you ship to Arizona?"
+    }
+   ],
+   "seri": "Yes, we serve all 50 states, including Arizona. I'll check again—when would be a good time to reach you with more details?",
+   "lead": "No. Thanks. I'm not interested. Thank you.",
+   "want": [
+    "not_interested|declines"
+   ],
+   "allow": [
+    "declines"
+   ]
+  },
+  {
+   "id": "call99-11",
+   "source": "A21 call 99",
+   "before": [
+    {
+     "who": "lead",
+     "text": "Oh, wait. Do you ship to Arizona?"
+    },
+    {
+     "who": "seri",
+     "text": "Yes, we serve all 50 states, including Arizona. I'll check again—when would be a good time to reach you with more details?"
+    },
+    {
+     "who": "lead",
+     "text": "No. Thanks. I'm not interested. Thank you."
+    }
+   ],
+   "seri": "Totally fair. Is it more the timing, or just not something you need right now? I can also text you a link to browse later.",
+   "lead": "I don't need.",
+   "want": [
+    "not_interested|objection:dont_need_antibiotics"
+   ],
+   "allow": [
+    "declines",
+    "objection:dont_need_antibiotics"
+   ]
+  },
+  {
+   "id": "call99-13",
+   "source": "A21 call 99",
+   "before": [
+    {
+     "who": "lead",
+     "text": "No. Thanks. I'm not interested. Thank you."
+    },
+    {
+     "who": "seri",
+     "text": "Totally fair. Is it more the timing, or just not something you need right now? I can also text you a link to browse later."
+    },
+    {
+     "who": "lead",
+     "text": "I don't need."
+    }
+   ],
+   "seri": "Totally fair. We also have at-home STI test kits and other treatments if that might be helpful. If not, I can text you a link to browse later. Would you like that?",
+   "lead": "Yeah. That's all. Thank you.",
+   "want": [
+    "declines|not_interested"
+   ],
+   "allow": [
+    "declines",
+    "not_interested",
+    "other"
+   ]
+  },
+  {
+   "id": "call100-3",
+   "source": "A21 call 100",
+   "before": [
+    {
+     "who": "seri",
+     "text": "Hi, is this John?"
+    },
+    {
+     "who": "lead",
+     "text": "Yes."
+    }
+   ],
+   "seri": "This is Seri from eDrugstore, and I'm calling about our offer of up to 25% off your first order. Is that something you'd be interested in?",
+   "lead": "No.",
+   "want": [
+    "declines|not_interested"
+   ],
+   "allow": [
+    "declines",
+    "not_interested"
+   ]
+  },
+  {
+   "id": "call101-3",
+   "source": "A21 call 101",
+   "before": [
+    {
+     "who": "seri",
+     "text": "Hi, is this John?"
+    },
+    {
+     "who": "lead",
+     "text": "Yes."
+    }
+   ],
+   "seri": "This is Seri from eDrugstore, and I'm calling about our offer of up to 25% off your first order. Is that something you'd be interested in?",
+   "lead": "I'm not interested.",
+   "want": [
+    "not_interested|declines"
+   ],
+   "allow": [
+    "declines"
+   ]
+  },
+  {
+   "id": "call101-5",
+   "source": "A21 call 101",
+   "before": [
+    {
+     "who": "lead",
+     "text": "Yes."
+    },
+    {
+     "who": "seri",
+     "text": "This is Seri from eDrugstore, and I'm calling about our offer of up to 25% off your first order. Is that something you'd be interested in?"
+    },
+    {
+     "who": "lead",
+     "text": "I'm not interested."
+    }
+   ],
+   "seri": "No problem. Is it more the timing, or just not something you need right now?",
+   "lead": "I don't need it.",
+   "want": [
+    "not_interested|objection:dont_need_antibiotics"
+   ],
+   "allow": [
+    "declines",
+    "objection:dont_need_antibiotics"
+   ]
+  },
+  {
+   "id": "call101-7",
+   "source": "A21 call 101",
+   "before": [
+    {
+     "who": "lead",
+     "text": "I'm not interested."
+    },
+    {
+     "who": "seri",
+     "text": "No problem. Is it more the timing, or just not something you need right now?"
+    },
+    {
+     "who": "lead",
+     "text": "I don't need it."
+    }
+   ],
+   "seri": "Totally fair. We also have at-home STI test kits and other treatments. Would any of those be helpful?",
+   "lead": "Not right now. Thank you.",
+   "want": [
+    "declines|not_now|not_interested"
+   ],
+   "allow": [
+    "declines",
+    "not_now",
+    "not_interested"
+   ]
+  },
+  {
+   "id": "call102-3",
+   "source": "A21 call 102",
+   "before": [
+    {
+     "who": "seri",
+     "text": "Hi, is this John?"
+    },
+    {
+     "who": "lead",
+     "text": "Yes."
+    }
+   ],
+   "seri": "This is Seri from eDrugstore, and I'm calling about our offer of up to 25% off your first order. Is that something you'd be interested in?",
+   "lead": "Uh, do I need to stop medicine?",
+   "want": [
+    "asks:medical_question"
+   ],
+   "allow": [
+    "asks:medical_question",
+    "asks:uncovered"
+   ]
+  },
+  {
+   "id": "call102-5",
+   "source": "A21 call 102",
+   "before": [
+    {
+     "who": "lead",
+     "text": "Yes."
+    },
+    {
+     "who": "seri",
+     "text": "This is Seri from eDrugstore, and I'm calling about our offer of up to 25% off your first order. Is that something you'd be interested in?"
+    },
+    {
+     "who": "lead",
+     "text": "Uh, do I need to stop medicine?"
+    }
+   ],
+   "seri": "That's a great question for a licensed provider to avoid any risk. Everyone on our team is busy right now; when would be a good time for a call back to discuss this with a specialist?",
+   "lead": "Stop calling me.",
+   "want": [
+    "stop"
+   ],
+   "allow": [
+    "agrees",
+    "declines",
+    "not_interested"
+   ]
+  },
+  {
+   "id": "call103-3",
+   "source": "A21 call 103",
+   "before": [
+    {
+     "who": "seri",
+     "text": "Hi, is this John?"
+    },
+    {
+     "who": "lead",
+     "text": "Yes."
+    }
+   ],
+   "seri": "This is Seri from eDrugstore, and I'm calling about our offer of up to 25% off your first order. Is that something you'd be interested in?",
+   "lead": "Not right now.",
+   "want": [
+    "not_now|not_interested:timing"
+   ],
+   "allow": [
+    "not_now",
+    "not_interested:timing",
+    "declines"
+   ]
+  },
+  {
+   "id": "call103-5",
+   "source": "A21 call 103",
+   "before": [
+    {
+     "who": "lead",
+     "text": "Yes."
+    },
+    {
+     "who": "seri",
+     "text": "This is Seri from eDrugstore, and I'm calling about our offer of up to 25% off your first order. Is that something you'd be interested in?"
+    },
+    {
+     "who": "lead",
+     "text": "Not right now."
+    }
+   ],
+   "seri": "No problem. Everyone on our team is busy right now. What time would work best for us to call you back?",
+   "lead": "I said not right now.",
+   "want": [
+    "not_now|not_interested:timing"
+   ],
+   "allow": [
+    "not_now",
+    "not_interested:timing",
+    "declines"
+   ]
+  },
+  {
+   "id": "call103-7",
+   "source": "A21 call 103",
+   "before": [
+    {
+     "who": "lead",
+     "text": "Not right now."
+    },
+    {
+     "who": "seri",
+     "text": "No problem. Everyone on our team is busy right now. What time would work best for us to call you back?"
+    },
+    {
+     "who": "lead",
+     "text": "I said not right now."
+    }
+   ],
+   "seri": "Got it, no problem at all. Would it help if I texted you a link to look things over?",
+   "lead": "Just text me the link.",
+   "want": [
+    "wants_link"
+   ],
+   "allow": [
+    "agrees"
+   ]
+  },
+  {
+   "id": "call106-5",
+   "source": "A21 call 106",
+   "before": [
+    {
+     "who": "lead",
+     "text": "Yes."
+    },
+    {
+     "who": "seri",
+     "text": "This is Seri from eDrugstore, and I'm calling about our offer of up to 25% off your first order. Is that something you'd be interested in?"
+    },
+    {
+     "who": "lead",
+     "text": "Yes."
+    }
+   ],
+   "seri": "Great, would you like me to connect you with someone now to place your order?",
+   "lead": "Yes.",
+   "want": [
+    "agrees|wants_person"
+   ],
+   "allow": [
+    "agrees",
+    "wants_person",
+    "interested"
+   ]
+  },
+  {
+   "id": "call109-3",
+   "source": "A21 call 109",
+   "before": [
+    {
+     "who": "seri",
+     "text": "Hi, is this John?"
+    },
+    {
+     "who": "lead",
+     "text": "Yes."
+    }
+   ],
+   "seri": "This is Seri from eDrugstore, and I'm calling about our offer of up to 25% off your first order. Is that something you'd be interested in?",
+   "lead": "How much does it cost?",
+   "want": [
+    "asks:price"
+   ],
+   "allow": [
+    "asks:price"
+   ]
+  },
+  {
+   "id": "call109-5",
+   "source": "A21 call 109",
+   "before": [
+    {
+     "who": "lead",
+     "text": "Yes."
+    },
+    {
+     "who": "seri",
+     "text": "This is Seri from eDrugstore, and I'm calling about our offer of up to 25% off your first order. Is that something you'd be interested in?"
+    },
+    {
+     "who": "lead",
+     "text": "How much does it cost?"
+    }
+   ],
+   "seri": "Prices depend on the medication and quantity. I can connect you with a representative who can give you all the details. Would you like me to connect you with someone now to place your order?",
+   "lead": "First, I want to know, is this safe to take with alcohol?",
+   "want": [
+    "asks:medical_question"
+   ],
+   "allow": [
+    "asks:medical_question",
+    "asks:safe"
+   ]
+  },
+  {
+   "id": "call109-7",
+   "source": "A21 call 109",
+   "before": [
+    {
+     "who": "lead",
+     "text": "How much does it cost?"
+    },
+    {
+     "who": "seri",
+     "text": "Prices depend on the medication and quantity. I can connect you with a representative who can give you all the details. Would you like me to connect you with someone now to place your order?"
+    },
+    {
+     "who": "lead",
+     "text": "First, I want to know, is this safe to take with alcohol?"
+    }
+   ],
+   "seri": "That's a question for a licensed provider, and I don't want to give you the wrong answer. Is there anything else you'd like to know about our offer before I connect you with a specialist?",
+   "lead": "Is this is Kim.",
+   "want": [
+    "unclear|wrong_person"
+   ],
+   "allow": [
+    "unclear",
+    "wrong_person"
+   ]
+  },
+  {
+   "id": "call111-3",
+   "source": "A21 call 111",
+   "before": [
+    {
+     "who": "seri",
+     "text": "Hi, is this John?"
+    },
+    {
+     "who": "lead",
+     "text": "Yes."
+    }
+   ],
+   "seri": "This is Seri from eDrugstore, and I'm calling about our offer of up to 25% off your first order. Is that something you'd be interested in?",
+   "lead": "Please do so scan.",
+   "want": [
+    "unclear"
+   ]
+  },
+  {
+   "id": "call111-5",
+   "source": "A21 call 111",
+   "before": [
+    {
+     "who": "lead",
+     "text": "Yes."
+    },
+    {
+     "who": "seri",
+     "text": "This is Seri from eDrugstore, and I'm calling about our offer of up to 25% off your first order. Is that something you'd be interested in?"
+    },
+    {
+     "who": "lead",
+     "text": "Please do so scan."
+    }
+   ],
+   "seri": "Just to be sure, did you mean you'd like me to send you a link to look things over, or would you prefer a call at a later time?",
+   "lead": "Is this a scam?",
+   "want": [
+    "asks:scam|objection:scam"
+   ],
+   "allow": [
+    "asks:scam",
+    "objection:scam"
+   ]
+  },
+  {
+   "id": "call111-7",
+   "source": "A21 call 111",
+   "before": [
+    {
+     "who": "lead",
+     "text": "Please do so scan."
+    },
+    {
+     "who": "seri",
+     "text": "Just to be sure, did you mean you'd like me to send you a link to look things over, or would you prefer a call at a later time?"
+    },
+    {
+     "who": "lead",
+     "text": "Is this a scam?"
+    }
+   ],
+   "seri": "I understand your hesitation. eDrugstore has been around for over 25 years, and you can check our customer reviews on Trustpilot. Would it help if I texted you a link to look things over?",
+   "lead": "Who is your CEO?",
+   "want": [
+    "asks:uncovered"
+   ],
+   "allow": [
+    "declines"
+   ]
+  },
+  {
+   "id": "call111-9",
+   "source": "A21 call 111",
+   "before": [
+    {
+     "who": "lead",
+     "text": "Is this a scam?"
+    },
+    {
+     "who": "seri",
+     "text": "I understand your hesitation. eDrugstore has been around for over 25 years, and you can check our customer reviews on Trustpilot. Would it help if I texted you a link to look things over?"
+    },
+    {
+     "who": "lead",
+     "text": "Who is your CEO?"
+    }
+   ],
+   "seri": "That's a great question. Let me connect you with one of our specialists who can help with that. When would be a good time for a call back?",
+   "lead": "I'm asking who is your CEO.",
+   "want": [
+    "asks:uncovered"
+   ],
+   "allow": [
+    "declines"
+   ]
+  },
+  {
+   "id": "call111-11",
+   "source": "A21 call 111",
+   "before": [
+    {
+     "who": "lead",
+     "text": "Who is your CEO?"
+    },
+    {
+     "who": "seri",
+     "text": "That's a great question. Let me connect you with one of our specialists who can help with that. When would be a good time for a call back?"
+    },
+    {
+     "who": "lead",
+     "text": "I'm asking who is your CEO."
+    }
+   ],
+   "seri": "I can't provide that information myself, but I can arrange for a call back with a specialist who can answer your question. When would be a good time for you to take a call?",
+   "lead": "So remove me from your list.",
+   "want": [
+    "stop"
+   ],
+   "allow": [
+    "agrees",
+    "declines",
+    "not_interested"
+   ]
+  },
+  {
+   "id": "call112-3",
+   "source": "A21 call 112",
+   "before": [
+    {
+     "who": "seri",
+     "text": "Hi, is this John?"
+    },
+    {
+     "who": "lead",
+     "text": "Yes."
+    }
+   ],
+   "seri": "This is Seri from eDrugstore, and I'm calling about our offer of up to 25% off your first order. Is that something you'd be interested in?",
+   "lead": "Suiz, your CEO.",
+   "want": [
+    "unclear|asks:uncovered"
+   ],
+   "allow": [
+    "unclear",
+    "asks:uncovered"
+   ]
+  },
+  {
+   "id": "call112-5",
+   "source": "A21 call 112",
+   "before": [
+    {
+     "who": "lead",
+     "text": "Yes."
+    },
+    {
+     "who": "seri",
+     "text": "This is Seri from eDrugstore, and I'm calling about our offer of up to 25% off your first order. Is that something you'd be interested in?"
+    },
+    {
+     "who": "lead",
+     "text": "Suiz, your CEO."
+    }
+   ],
+   "seri": "I didn't catch that clearly, John. Could you please say that again?",
+   "lead": "Who is your CEO?",
+   "want": [
+    "asks:uncovered"
+   ],
+   "allow": [
+    "declines"
+   ]
+  },
+  {
+   "id": "call112-7",
+   "source": "A21 call 112",
+   "before": [
+    {
+     "who": "lead",
+     "text": "Suiz, your CEO."
+    },
+    {
+     "who": "seri",
+     "text": "I didn't catch that clearly, John. Could you please say that again?"
+    },
+    {
+     "who": "lead",
+     "text": "Who is your CEO?"
+    }
+   ],
+   "seri": "eDrugstore is a telemedicine platform, and the licensed providers here decide on prescriptions. Is there anything else you'd like to know about our offer?",
+   "lead": "I want to know who is your chief executive officer.",
+   "want": [
+    "asks:uncovered"
+   ],
+   "allow": [
+    "declines"
+   ]
+  },
+  {
+   "id": "call112-9",
+   "source": "A21 call 112",
+   "before": [
+    {
+     "who": "lead",
+     "text": "Who is your CEO?"
+    },
+    {
+     "who": "seri",
+     "text": "eDrugstore is a telemedicine platform, and the licensed providers here decide on prescriptions. Is there anything else you'd like to know about our offer?"
+    },
+    {
+     "who": "lead",
+     "text": "I want to know who is your chief executive officer."
+    }
+   ],
+   "seri": "That's a great question. Let me connect you with one of our specialists who can help with that. Would you like to schedule a call back for that?",
+   "lead": "I I need to think about it.",
+   "want": [
+    "objection:think_about_it"
+   ]
+  },
+  {
+   "id": "call112-11",
+   "source": "A21 call 112",
+   "before": [
+    {
+     "who": "lead",
+     "text": "I want to know who is your chief executive officer."
+    },
+    {
+     "who": "seri",
+     "text": "That's a great question. Let me connect you with one of our specialists who can help with that. Would you like to schedule a call back for that?"
+    },
+    {
+     "who": "lead",
+     "text": "I I need to think about it."
+    }
+   ],
+   "seri": "Of course. I can text you a link so you can look things over at your convenience. Would you like me to send that now?",
+   "lead": "What is your price for your medicine?",
+   "want": [
+    "asks:price"
+   ],
+   "allow": [
+    "asks:price"
+   ]
+  },
+  {
+   "id": "call112-13",
+   "source": "A21 call 112",
+   "before": [
+    {
+     "who": "lead",
+     "text": "I I need to think about it."
+    },
+    {
+     "who": "seri",
+     "text": "Of course. I can text you a link so you can look things over at your convenience. Would you like me to send that now?"
+    },
+    {
+     "who": "lead",
+     "text": "What is your price for your medicine?"
+    }
+   ],
+   "seri": "Prices depend on the medication and quantity. I can send you a link where you can see the prices if you'd like. Is there anything else you'd like to know?",
+   "lead": "You cannot tell me.",
+   "want": [
+    "asks:price|other|asks:uncovered"
+   ],
+   "allow": [
+    "asks:price",
+    "asks:uncovered",
+    "declines",
+    "other"
+   ]
+  },
+  {
+   "id": "call112-15",
+   "source": "A21 call 112",
+   "before": [
+    {
+     "who": "lead",
+     "text": "What is your price for your medicine?"
+    },
+    {
+     "who": "seri",
+     "text": "Prices depend on the medication and quantity. I can send you a link where you can see the prices if you'd like. Is there anything else you'd like to know?"
+    },
+    {
+     "who": "lead",
+     "text": "You cannot tell me."
+    }
+   ],
+   "seri": "That's a great question for a licensed provider or representative who can give you all the details. Is there anything else I can help with?",
+   "lead": "Yes. I want to know what medicines do you provide.",
+   "want": [
+    "asks:products_overview|asks:antibiotics"
+   ],
+   "allow": [
+    "asks:products_overview",
+    "asks:antibiotics",
+    "agrees"
+   ]
+  },
+  {
+   "id": "call112-17",
+   "source": "A21 call 112",
+   "before": [
+    {
+     "who": "lead",
+     "text": "You cannot tell me."
+    },
+    {
+     "who": "seri",
+     "text": "That's a great question for a licensed provider or representative who can give you all the details. Is there anything else I can help with?"
+    },
+    {
+     "who": "lead",
+     "text": "Yes. I want to know what medicines do you provide."
+    }
+   ],
+   "seri": "On these calls, we mainly help with antibiotics, STI treatments and at-home health test kits. Would it help if I texted you a link so you can browse our products?",
+   "lead": "What is that?",
+   "want": [
+    "asks:products_overview|asks:antibiotics|asks:test_kits|other|unclear"
+   ],
+   "allow": [
+    "asks:products_overview",
+    "asks:antibiotics",
+    "asks:test_kits",
+    "other",
+    "unclear"
+   ]
+  },
+  {
+   "id": "call112-19",
+   "source": "A21 call 112",
+   "before": [
+    {
+     "who": "lead",
+     "text": "Yes. I want to know what medicines do you provide."
+    },
+    {
+     "who": "seri",
+     "text": "On these calls, we mainly help with antibiotics, STI treatments and at-home health test kits. Would it help if I texted you a link so you can browse our products?"
+    },
+    {
+     "who": "lead",
+     "text": "What is that?"
+    }
+   ],
+   "seri": "Antibiotics treat bacterial infections, STI treatments help with sexually transmitted infections, and at-home test kits let you collect samples yourself to test from home. Would it help if I texted you a link to see more?",
+   "lead": "I don't understand what I provide.",
+   "want": [
+    "unclear|asks:products_overview|other"
+   ],
+   "allow": [
+    "unclear",
+    "asks:products_overview",
+    "other"
+   ]
+  },
+  {
+   "id": "call112-22",
+   "source": "A21 call 112",
+   "before": [
+    {
+     "who": "seri",
+     "text": "Antibiotics treat bacterial infections, STI treatments help with sexually transmitted infections, and at-home test kits let you collect samples yourself to test from home. Would it help if I texted you a link to see more?"
+    },
+    {
+     "who": "lead",
+     "text": "I don't understand what I provide."
+    },
+    {
+     "who": "seri",
+     "text": "I understand it can be a lot to take in. I can send you a link with all the details so you can review them at your own pace. Would you like me to send it?"
+    }
+   ],
+   "seri": "Hello, are you still there?",
+   "lead": "Hello. Hello.",
+   "want": [
+    "checking_line"
+   ]
+  },
+  {
+   "id": "yes_interested",
+   "source": "answer test set",
+   "before": [
+    {
+     "who": "lead",
+     "text": "Yes, this is John."
+    }
+   ],
+   "seri": "This is Seri from eDrugstore, and I'm calling about our offer of up to 25% off your first order. Is that something you'd be interested in?",
+   "lead": "Yes, I'm interested.",
+   "want": [
+    "interested|agrees"
+   ],
+   "allow": [
+    "interested",
+    "agrees",
+    "confirm_identity"
+   ]
+  },
+  {
+   "id": "yes_order_now_free",
+   "source": "answer test set",
+   "before": [
+    {
+     "who": "lead",
+     "text": "Yes, this is John."
+    }
+   ],
+   "seri": "This is Seri from eDrugstore, and I'm calling about our offer of up to 25% off your first order. Is that something you'd be interested in?",
+   "lead": "Yes, I'd like to order now.",
+   "want": [
+    "wants_person|interested"
+   ],
+   "allow": [
+    "agrees",
+    "interested",
+    "wants_person"
+   ]
+  },
+  {
+   "id": "yes_order_now_coming",
+   "source": "answer test set",
+   "before": [
+    {
+     "who": "lead",
+     "text": "Yes, this is John."
+    }
+   ],
+   "seri": "This is Seri from eDrugstore, and I'm calling about our offer of up to 25% off your first order. Is that something you'd be interested in?",
+   "lead": "Yes, I'd like to order now.",
+   "want": [
+    "wants_person|interested"
+   ],
+   "allow": [
+    "agrees",
+    "interested",
+    "wants_person"
+   ]
+  },
+  {
+   "id": "yes_order_now_nobody",
+   "source": "answer test set",
+   "before": [
+    {
+     "who": "lead",
+     "text": "Yes, this is John."
+    }
+   ],
+   "seri": "This is Seri from eDrugstore, and I'm calling about our offer of up to 25% off your first order. Is that something you'd be interested in?",
+   "lead": "Yes, I'd like to order now.",
+   "want": [
+    "wants_person|interested"
+   ],
+   "allow": [
+    "agrees",
+    "interested",
+    "wants_person"
+   ]
+  },
+  {
+   "id": "yes_then_now",
+   "source": "answer test set",
+   "before": [
+    {
+     "who": "lead",
+     "text": "Yes, this is John."
+    },
+    {
+     "who": "seri",
+     "text": "This is Seri from eDrugstore, and I'm calling about our offer of up to 25% off your first order. Is that something you'd be interested in?"
+    },
+    {
+     "who": "lead",
+     "text": "Yes, I'm interested."
+    }
+   ],
+   "seri": "Great! Would you like to talk to someone now, or is there a better time?",
+   "lead": "Now is good.",
+   "want": [
+    "agrees|wants_person"
+   ],
+   "allow": [
+    "agrees",
+    "wants_person",
+    "interested"
+   ]
+  },
+  {
+   "id": "yes_then_now_nobody",
+   "source": "answer test set",
+   "before": [
+    {
+     "who": "lead",
+     "text": "Yes, this is John."
+    },
+    {
+     "who": "seri",
+     "text": "This is Seri from eDrugstore, and I'm calling about our offer of up to 25% off your first order. Is that something you'd be interested in?"
+    },
+    {
+     "who": "lead",
+     "text": "Yes, I'm interested."
+    }
+   ],
+   "seri": "Great! Would you like to talk to someone now, or is there a better time?",
+   "lead": "Now is good.",
+   "want": [
+    "agrees|wants_person"
+   ],
+   "allow": [
+    "agrees",
+    "wants_person",
+    "interested"
+   ]
+  },
+  {
+   "id": "yes_short_nobody",
+   "source": "answer test set",
+   "before": [
+    {
+     "who": "lead",
+     "text": "Yes, this is John."
+    }
+   ],
+   "seri": "This is Seri from eDrugstore, and I'm calling about our offer of up to 25% off your first order. Is that something you'd be interested in?",
+   "lead": "Yes.",
+   "want": [
+    "interested|agrees"
+   ],
+   "allow": [
+    "interested",
+    "agrees",
+    "confirm_identity"
+   ]
+  },
+  {
+   "id": "friday_yes_nobody",
+   "source": "answer test set",
+   "before": [
+    {
+     "who": "lead",
+     "text": "Yes."
+    }
+   ],
+   "seri": "This is Seri from eDrugstore, and I'm calling about our offer of up to 25% off your first order. Is that something you'd be interested in?",
+   "lead": "Yes.",
+   "want": [
+    "interested|agrees"
+   ],
+   "allow": [
+    "interested",
+    "agrees",
+    "confirm_identity"
+   ]
+  },
+  {
+   "id": "connect_yes_nobody",
+   "source": "answer test set",
+   "before": [
+    {
+     "who": "lead",
+     "text": "Yes, this is John."
+    },
+    {
+     "who": "seri",
+     "text": "This is Seri from eDrugstore, and I'm calling about our offer of up to 25% off your first order. Is that something you'd be interested in?"
+    },
+    {
+     "who": "lead",
+     "text": "Yes."
+    }
+   ],
+   "seri": "Great! Would you like me to connect you with someone now to place your order?",
+   "lead": "Yes.",
+   "want": [
+    "agrees|wants_person"
+   ],
+   "allow": [
+    "agrees",
+    "wants_person",
+    "interested"
+   ]
+  },
+  {
+   "id": "friday_tomorrow_nobody",
+   "source": "answer test set",
+   "before": [
+    {
+     "who": "lead",
+     "text": "Yes."
+    },
+    {
+     "who": "seri",
+     "text": "This is Seri from eDrugstore, and I'm calling about our offer of up to 25% off your first order. Is that something you'd be interested in?"
+    },
+    {
+     "who": "lead",
+     "text": "Yes."
+    }
+   ],
+   "seri": "Everyone on our team is busy right now. When would be a good time for us to call you back?",
+   "lead": "Can you call me tomorrow at two?",
+   "want": [
+    "wants_callback"
+   ],
+   "allow": [
+    "agrees",
+    "interested",
+    "declines"
+   ],
+   "time": {
+    "day": "tomorrow",
+    "hour": 2
+   }
+  },
+  {
+   "id": "friday_tomorrow_first_ask",
+   "source": "answer test set",
+   "before": [
+    {
+     "who": "lead",
+     "text": "Yes."
+    }
+   ],
+   "seri": "This is Seri from eDrugstore, and I'm calling about our offer of up to 25% off your first order. Is that something you'd be interested in?",
+   "lead": "Yes, interesting. But can you call me tomorrow?",
+   "want": [
+    "wants_callback"
+   ],
+   "allow": [
+    "agrees",
+    "interested",
+    "declines"
+   ],
+   "time": {
+    "day": "tomorrow"
+   }
+  },
+  {
+   "id": "callback_time_given",
+   "source": "answer test set",
+   "before": [
+    {
+     "who": "lead",
+     "text": "Yes."
+    },
+    {
+     "who": "seri",
+     "text": "This is Seri from eDrugstore, and I'm calling about our offer of up to 25% off your first order. Is that something you'd be interested in?"
+    },
+    {
+     "who": "lead",
+     "text": "Yes. Call me tomorrow."
+    }
+   ],
+   "seri": "Everyone on our team is busy right now, Jeel. What time tomorrow would work best for us to call you back?",
+   "lead": "Twelve PM.",
+   "want": [
+    "wants_callback"
+   ],
+   "allow": [
+    "agrees",
+    "interested",
+    "declines"
+   ],
+   "time": {
+    "hour": 12,
+    "ampm": "pm"
+   }
+  },
+  {
+   "id": "callback_time_named_as_question",
+   "source": "answer test set",
+   "before": [
+    {
+     "who": "lead",
+     "text": "Yes."
+    },
+    {
+     "who": "seri",
+     "text": "This is Seri from eDrugstore, and I'm calling about our offer of up to 25% off your first order. Is that something you'd be interested in?"
+    },
+    {
+     "who": "lead",
+     "text": "Uh, just call me tomorrow."
+    }
+   ],
+   "seri": "No problem, Jeel. Everyone on our team is busy right now, but I can arrange a call back for you tomorrow. What time works best for a call?",
+   "lead": "So twelve PM?",
+   "want": [
+    "wants_callback"
+   ],
+   "allow": [
+    "agrees",
+    "interested",
+    "declines"
+   ],
+   "time": {
+    "hour": 12,
+    "ampm": "pm"
+   }
+  },
+  {
+   "id": "side_question_once",
+   "source": "answer test set",
+   "before": [
+    {
+     "who": "lead",
+     "text": "Yes."
+    },
+    {
+     "who": "seri",
+     "text": "This is Seri from eDrugstore, and I'm calling about our offer of up to 25% off your first order. Is that something you'd be interested in?"
+    },
+    {
+     "who": "lead",
+     "text": "Can you call me tomorrow at two?"
+    }
+   ],
+   "seri": "Tomorrow is Saturday, and our team isn't available then. Would Monday at 2 PM your time work for a call back instead?",
+   "lead": "Who is the person I'll talk to on Monday?",
+   "want": [
+    "asks:uncovered"
+   ],
+   "allow": [
+    "declines"
+   ]
+  },
+  {
+   "id": "side_question_twice",
+   "source": "answer test set",
+   "before": [
+    {
+     "who": "lead",
+     "text": "Can you call me tomorrow at two?"
+    },
+    {
+     "who": "seri",
+     "text": "Tomorrow is Saturday, and our team isn't available then. Would Monday at 2 PM your time work for a call back instead?"
+    },
+    {
+     "who": "lead",
+     "text": "Who is the person I'll talk to on Monday?"
+    }
+   ],
+   "seri": "It will be one of our representatives from eDrugstore, who can help you place your order and answer any questions. Does Monday at 2 PM your time work for you?",
+   "lead": "What's the person's name?",
+   "want": [
+    "asks:uncovered"
+   ],
+   "allow": [
+    "declines"
+   ]
+  },
+  {
+   "id": "yes_later",
+   "source": "answer test set",
+   "before": [
+    {
+     "who": "lead",
+     "text": "Yes, this is John."
+    }
+   ],
+   "seri": "This is Seri from eDrugstore, and I'm calling about our offer of up to 25% off your first order. Is that something you'd be interested in?",
+   "lead": "Yes, but can someone call me tomorrow at 3?",
+   "want": [
+    "wants_callback"
+   ],
+   "allow": [
+    "agrees",
+    "interested",
+    "declines"
+   ],
+   "time": {
+    "day": "tomorrow",
+    "hour": 3
+   }
+  },
+  {
+   "id": "callback_confirmed",
+   "source": "answer test set",
+   "before": [
+    {
+     "who": "lead",
+     "text": "Yes, this is John."
+    },
+    {
+     "who": "seri",
+     "text": "This is Seri from eDrugstore, and I'm calling about our offer of up to 25% off your first order. Is that something you'd be interested in?"
+    },
+    {
+     "who": "lead",
+     "text": "Yes, but can someone call me tomorrow at 3?"
+    }
+   ],
+   "seri": "Of course. So that's tomorrow, Thursday, at 3 PM your time?",
+   "lead": "Yes, that works.",
+   "want": [
+    "agrees"
+   ],
+   "allow": [
+    "interested"
+   ]
+  },
+  {
+   "id": "callback_confirmed_nobody",
+   "source": "answer test set",
+   "before": [
+    {
+     "who": "lead",
+     "text": "Yes, I want to order."
+    },
+    {
+     "who": "seri",
+     "text": "Great! Everyone on our team is busy right now. Could someone call you back later today or tomorrow?"
+    },
+    {
+     "who": "lead",
+     "text": "Tomorrow at 2 is fine."
+    }
+   ],
+   "seri": "So that's tomorrow, Thursday, at 2 PM your time?",
+   "lead": "Yep.",
+   "want": [
+    "agrees"
+   ],
+   "allow": [
+    "interested"
+   ]
+  },
+  {
+   "id": "callback_9pm",
+   "source": "answer test set",
+   "before": [
+    {
+     "who": "lead",
+     "text": "Yes, this is John."
+    }
+   ],
+   "seri": "This is Seri from eDrugstore, and I'm calling about our offer of up to 25% off your first order. Is that something you'd be interested in?",
+   "lead": "Can someone call me tonight at 9 PM?",
+   "want": [
+    "wants_callback"
+   ],
+   "allow": [
+    "agrees",
+    "interested",
+    "declines"
+   ],
+   "time": {
+    "day": "today",
+    "hour": 9,
+    "ampm": "pm"
+   }
+  },
+  {
+   "id": "callback_saturday",
+   "source": "answer test set",
+   "before": [
+    {
+     "who": "lead",
+     "text": "Yes, this is John."
+    }
+   ],
+   "seri": "This is Seri from eDrugstore, and I'm calling about our offer of up to 25% off your first order. Is that something you'd be interested in?",
+   "lead": "Call me Saturday morning instead.",
+   "want": [
+    "wants_callback"
+   ],
+   "allow": [
+    "agrees",
+    "interested",
+    "declines"
+   ],
+   "time": {
+    "day": "saturday"
+   }
+  },
+  {
+   "id": "callback_unknown_zone",
+   "source": "answer test set",
+   "before": [
+    {
+     "who": "lead",
+     "text": "Yes, this is John."
+    }
+   ],
+   "seri": "This is Seri from eDrugstore, and I'm calling about our offer of up to 25% off your first order. Is that something you'd be interested in?",
+   "lead": "Have someone call me tomorrow at 2.",
+   "want": [
+    "wants_callback"
+   ],
+   "allow": [
+    "agrees",
+    "interested",
+    "declines"
+   ],
+   "time": {
+    "day": "tomorrow",
+    "hour": 2
+   }
+  },
+  {
+   "id": "busy",
+   "source": "answer test set",
+   "before": [
+    {
+     "who": "lead",
+     "text": "Yes, this is John."
+    }
+   ],
+   "seri": "This is Seri from eDrugstore, and I'm calling about our offer of up to 25% off your first order. Is that something you'd be interested in?",
+   "lead": "I'm busy right now.",
+   "want": [
+    "objection:busy|not_now"
+   ],
+   "allow": [
+    "objection:busy",
+    "not_now",
+    "wants_callback"
+   ]
+  },
+  {
+   "id": "driving",
+   "source": "answer test set",
+   "before": [
+    {
+     "who": "lead",
+     "text": "Yes, this is John."
+    }
+   ],
+   "seri": "This is Seri from eDrugstore, and I'm calling about our offer of up to 25% off your first order. Is that something you'd be interested in?",
+   "lead": "I'm driving, I can't talk.",
+   "want": [
+    "objection:busy|not_now"
+   ],
+   "allow": [
+    "objection:busy",
+    "not_now",
+    "wants_callback"
+   ]
+  },
+  {
+   "id": "no_once",
+   "source": "answer test set",
+   "before": [
+    {
+     "who": "lead",
+     "text": "Yes, this is John."
+    }
+   ],
+   "seri": "This is Seri from eDrugstore, and I'm calling about our offer of up to 25% off your first order. Is that something you'd be interested in?",
+   "lead": "No, I'm not interested.",
+   "want": [
+    "not_interested|declines"
+   ],
+   "allow": [
+    "declines"
+   ]
+  },
+  {
+   "id": "no_plain",
+   "source": "answer test set",
+   "before": [
+    {
+     "who": "lead",
+     "text": "Yes, this is John."
+    }
+   ],
+   "seri": "This is Seri from eDrugstore, and I'm calling about our offer of up to 25% off your first order. Is that something you'd be interested in?",
+   "lead": "No.",
+   "want": [
+    "declines|not_interested"
+   ],
+   "allow": [
+    "declines",
+    "not_interested"
+   ]
+  },
+  {
+   "id": "not_right_now_nobody",
+   "source": "answer test set",
+   "before": [
+    {
+     "who": "lead",
+     "text": "Yes, this is John."
+    }
+   ],
+   "seri": "This is Seri from eDrugstore, and I'm calling about our offer of up to 25% off your first order. Is that something you'd be interested in?",
+   "lead": "Not right now.",
+   "want": [
+    "not_now|not_interested:timing"
+   ],
+   "allow": [
+    "not_now",
+    "not_interested:timing",
+    "declines"
+   ]
+  },
+  {
+   "id": "not_right_now_free",
+   "source": "answer test set",
+   "before": [
+    {
+     "who": "lead",
+     "text": "Yes, this is John."
+    }
+   ],
+   "seri": "This is Seri from eDrugstore, and I'm calling about our offer of up to 25% off your first order. Is that something you'd be interested in?",
+   "lead": "Not right now.",
+   "want": [
+    "not_now|not_interested:timing"
+   ],
+   "allow": [
+    "not_now",
+    "not_interested:timing",
+    "declines"
+   ]
+  },
+  {
+   "id": "no_after_scam_question",
+   "source": "answer test set",
+   "before": [
+    {
+     "who": "lead",
+     "text": "I'm a bit busy right now."
+    },
+    {
+     "who": "seri",
+     "text": "No problem. When's a better time for us to call you back?"
+    },
+    {
+     "who": "lead",
+     "text": "You can call me. Is it a scam?"
+    }
+   ],
+   "seri": "I understand your hesitation. eDrugstore has been around for over 25 years, and you can check our customer reviews on Trustpilot. Would you like me to connect you with someone now to place your order?",
+   "lead": "No.",
+   "want": [
+    "declines|not_interested"
+   ],
+   "allow": [
+    "declines",
+    "not_interested"
+   ]
+  },
+  {
+   "id": "no_twice",
+   "source": "answer test set",
+   "before": [
+    {
+     "who": "lead",
+     "text": "Yes, this is John."
+    },
+    {
+     "who": "seri",
+     "text": "This is Seri from eDrugstore, and I'm calling about our offer of up to 25% off your first order. Is that something you'd be interested in?"
+    },
+    {
+     "who": "lead",
+     "text": "No, I'm not interested."
+    }
+   ],
+   "seri": "No problem. Is it more the timing, or just not something you need right now? I can also text you a link to browse later.",
+   "lead": "No, really, I'm not interested. No link.",
+   "want": [
+    "not_interested|declines"
+   ],
+   "allow": [
+    "declines"
+   ]
+  },
+  {
+   "id": "no_then_dont_need",
+   "source": "answer test set",
+   "before": [
+    {
+     "who": "lead",
+     "text": "Yes, this is John."
+    },
+    {
+     "who": "seri",
+     "text": "This is Seri from eDrugstore, and I'm calling about our offer of up to 25% off your first order. Is that something you'd be interested in?"
+    },
+    {
+     "who": "lead",
+     "text": "No. Thanks. I'm not interested. Thank you."
+    }
+   ],
+   "seri": "Totally fair. Is it more the timing, or just not something you need right now?",
+   "lead": "I don't need.",
+   "want": [
+    "not_interested|objection:dont_need_antibiotics"
+   ],
+   "allow": [
+    "declines",
+    "objection:dont_need_antibiotics"
+   ]
+  },
+  {
+   "id": "no_reason_timing",
+   "source": "answer test set",
+   "before": [
+    {
+     "who": "lead",
+     "text": "Yes, this is John."
+    },
+    {
+     "who": "seri",
+     "text": "This is Seri from eDrugstore, and I'm calling about our offer of up to 25% off your first order. Is that something you'd be interested in?"
+    },
+    {
+     "who": "lead",
+     "text": "No, not right now."
+    }
+   ],
+   "seri": "Got it. Is it more the timing, or just not something you need right now?",
+   "lead": "Just the timing.",
+   "want": [
+    "not_interested:timing|not_now"
+   ],
+   "allow": [
+    "not_interested:timing",
+    "not_now"
+   ]
+  },
+  {
+   "id": "no_but_link",
+   "source": "answer test set",
+   "before": [
+    {
+     "who": "lead",
+     "text": "Yes, this is John."
+    }
+   ],
+   "seri": "This is Seri from eDrugstore, and I'm calling about our offer of up to 25% off your first order. Is that something you'd be interested in?",
+   "lead": "Not right now, but you can text me the link.",
+   "want": [
+    "wants_link"
+   ],
+   "allow": [
+    "not_now",
+    "not_interested",
+    "not_interested:timing"
+   ]
+  },
+  {
+   "id": "think_about_it",
+   "source": "answer test set",
+   "before": [
+    {
+     "who": "lead",
+     "text": "Yes, this is John."
+    }
+   ],
+   "seri": "This is Seri from eDrugstore, and I'm calling about our offer of up to 25% off your first order. Is that something you'd be interested in?",
+   "lead": "I need to think about it.",
+   "want": [
+    "objection:think_about_it"
+   ]
+  },
+  {
+   "id": "think_then_link",
+   "source": "answer test set",
+   "before": [
+    {
+     "who": "lead",
+     "text": "Yes, this is John."
+    },
+    {
+     "who": "seri",
+     "text": "This is Seri from eDrugstore, and I'm calling about our offer of up to 25% off your first order. Is that something you'd be interested in?"
+    },
+    {
+     "who": "lead",
+     "text": "I need to think about it."
+    }
+   ],
+   "seri": "Of course. Can I text you the link so you can look later?",
+   "lead": "Sure, text it to me.",
+   "want": [
+    "wants_link|agrees"
+   ],
+   "allow": [
+    "wants_link",
+    "agrees"
+   ]
+  },
+  {
+   "id": "no_antibiotics",
+   "source": "answer test set",
+   "before": [
+    {
+     "who": "lead",
+     "text": "Yes, this is John."
+    }
+   ],
+   "seri": "This is Seri from eDrugstore, and I'm calling about our offer of up to 25% off your first order. Is that something you'd be interested in?",
+   "lead": "I don't need antibiotics right now.",
+   "want": [
+    "objection:dont_need_antibiotics|not_interested:product"
+   ],
+   "allow": [
+    "objection:dont_need_antibiotics",
+    "not_interested:product",
+    "not_interested"
+   ]
+  },
+  {
+   "id": "too_expensive",
+   "source": "answer test set",
+   "before": [
+    {
+     "who": "lead",
+     "text": "Yes, this is John."
+    }
+   ],
+   "seri": "This is Seri from eDrugstore, and I'm calling about our offer of up to 25% off your first order. Is that something you'd be interested in?",
+   "lead": "That's too expensive, I can get it cheaper at my pharmacy.",
+   "want": [
+    "objection:too_expensive"
+   ],
+   "allow": [
+    "asks:cheaper_pharmacy",
+    "asks:price",
+    "not_interested"
+   ]
+  },
+  {
+   "id": "scam",
+   "source": "answer test set",
+   "before": [
+    {
+     "who": "lead",
+     "text": "Yes, this is John."
+    }
+   ],
+   "seri": "This is Seri from eDrugstore, and I'm calling about our offer of up to 25% off your first order. Is that something you'd be interested in?",
+   "lead": "Is this a scam?",
+   "want": [
+    "asks:scam|objection:scam"
+   ],
+   "allow": [
+    "asks:scam",
+    "objection:scam"
+   ]
+  },
+  {
+   "id": "scammed_before",
+   "source": "answer test set",
+   "before": [
+    {
+     "who": "lead",
+     "text": "Yes, this is John."
+    }
+   ],
+   "seri": "This is Seri from eDrugstore, and I'm calling about our offer of up to 25% off your first order. Is that something you'd be interested in?",
+   "lead": "I've been scammed before, so I don't trust calls like this.",
+   "want": [
+    "asks:scam|objection:scam"
+   ],
+   "allow": [
+    "asks:scam",
+    "objection:scam"
+   ]
+  },
+  {
+   "id": "have_doctor",
+   "source": "answer test set",
+   "before": [
+    {
+     "who": "lead",
+     "text": "Yes, this is John."
+    }
+   ],
+   "seri": "This is Seri from eDrugstore, and I'm calling about our offer of up to 25% off your first order. Is that something you'd be interested in?",
+   "lead": "I already have a doctor.",
+   "want": [
+    "objection:have_doctor"
+   ],
+   "allow": [
+    "asks:replace_doctor"
+   ]
+  },
+  {
+   "id": "never_signed_up",
+   "source": "answer test set",
+   "before": [
+    {
+     "who": "lead",
+     "text": "Yes, this is John."
+    }
+   ],
+   "seri": "This is Seri from eDrugstore, and I'm calling about our offer of up to 25% off your first order. Is that something you'd be interested in?",
+   "lead": "I never signed up for anything.",
+   "want": [
+    "objection:never_signed_up|asks:how_got_number"
+   ],
+   "allow": [
+    "objection:never_signed_up",
+    "asks:how_got_number"
+   ]
+  },
+  {
+   "id": "wrong_number",
+   "source": "answer test set",
+   "before": [
+    {
+     "who": "lead",
+     "text": "Yes, this is John."
+    }
+   ],
+   "seri": "This is Seri from eDrugstore, and I'm calling about our offer of up to 25% off your first order. Is that something you'd be interested in?",
+   "lead": "There's no John here, you have the wrong number.",
+   "want": [
+    "wrong_person"
+   ],
+   "allow": [
+    "wrong_person",
+    "declines"
+   ]
+  },
+  {
+   "id": "wrong_person_at_greeting",
+   "source": "answer test set",
+   "before": [],
+   "seri": "Hi, is this John?",
+   "lead": "No, sorry, wrong number.",
+   "want": [
+    "wrong_person"
+   ],
+   "allow": [
+    "wrong_person",
+    "declines"
+   ]
+  },
+  {
+   "id": "misheard_name_mid_call",
+   "source": "answer test set",
+   "before": [
+    {
+     "who": "lead",
+     "text": "How much does it cost?"
+    },
+    {
+     "who": "seri",
+     "text": "Prices depend on the medication and quantity. I can connect you with a representative who can give you all the details. Would you like me to connect you with someone now to place your order?"
+    },
+    {
+     "who": "lead",
+     "text": "First, I want to know, is this safe to take with alcohol?"
+    }
+   ],
+   "seri": "That's a question for a licensed provider, and I don't want to give you the wrong answer. Is there anything else you'd like to know",
+   "lead": "Is this is Kim.",
+   "want": [
+    "unclear|wrong_person"
+   ],
+   "allow": [
+    "unclear",
+    "wrong_person"
+   ]
+  },
+  {
+   "id": "wrong_number_mid_call",
+   "source": "answer test set",
+   "before": [
+    {
+     "who": "lead",
+     "text": "Yes, this is John."
+    }
+   ],
+   "seri": "This is Seri from eDrugstore, and I'm calling about our offer of up to 25% off your first order. Is that something you'd be interested in?",
+   "lead": "Sorry, I'm not John. You've got the wrong number.",
+   "want": [
+    "wrong_person"
+   ],
+   "allow": [
+    "wrong_person",
+    "declines"
+   ]
+  },
+  {
+   "id": "opening_free",
+   "source": "answer test set",
+   "before": [],
+   "seri": "Hi, is this John?",
+   "lead": "Yes.",
+   "want": [
+    "confirm_identity|agrees"
+   ],
+   "allow": [
+    "confirm_identity",
+    "agrees"
+   ]
+  },
+  {
+   "id": "opening_nobody",
+   "source": "answer test set",
+   "before": [],
+   "seri": "Hi, is this John?",
+   "lead": "Yes.",
+   "want": [
+    "confirm_identity|agrees"
+   ],
+   "allow": [
+    "confirm_identity",
+    "agrees"
+   ]
+  },
+  {
+   "id": "opening_coming",
+   "source": "answer test set",
+   "before": [],
+   "seri": "Hi, is this John?",
+   "lead": "Yes, speaking.",
+   "want": [
+    "confirm_identity|agrees"
+   ],
+   "allow": [
+    "confirm_identity",
+    "agrees"
+   ]
+  },
+  {
+   "id": "price",
+   "source": "answer test set",
+   "before": [
+    {
+     "who": "lead",
+     "text": "Yes, this is John."
+    }
+   ],
+   "seri": "This is Seri from eDrugstore, and I'm calling about our offer of up to 25% off your first order. Is that something you'd be interested in?",
+   "lead": "How much does it cost?",
+   "want": [
+    "asks:price"
+   ],
+   "allow": [
+    "asks:price"
+   ]
+  },
+  {
+   "id": "price_amoxicillin",
+   "source": "answer test set",
+   "before": [
+    {
+     "who": "lead",
+     "text": "Yes, this is John."
+    }
+   ],
+   "seri": "This is Seri from eDrugstore, and I'm calling about our offer of up to 25% off your first order. Is that something you'd be interested in?",
+   "lead": "How much is amoxicillin?",
+   "want": [
+    "asks:price"
+   ],
+   "allow": [
+    "asks:price"
+   ]
+  },
+  {
+   "id": "price_pushed",
+   "source": "answer test set",
+   "before": [
+    {
+     "who": "lead",
+     "text": "Yes, this is John."
+    },
+    {
+     "who": "seri",
+     "text": "This is Seri from eDrugstore, and I'm calling about our offer of up to 25% off your first order. Is that something you'd be interested in?"
+    },
+    {
+     "who": "lead",
+     "text": "How much does it cost?"
+    }
+   ],
+   "seri": "Prices depend on the medication and quantity. I can connect you with a representative, or text you a link where you can see the prices.",
+   "lead": "Just give me a rough number, ballpark.",
+   "want": [
+    "asks:price"
+   ],
+   "allow": [
+    "asks:price"
+   ]
+  },
+  {
+   "id": "discount_50",
+   "source": "answer test set",
+   "before": [
+    {
+     "who": "lead",
+     "text": "Yes, this is John."
+    }
+   ],
+   "seri": "This is Seri from eDrugstore, and I'm calling about our offer of up to 25% off your first order. Is that something you'd be interested in?",
+   "lead": "Can I get 50% off instead?",
+   "want": [
+    "asks:offer|asks:uncovered"
+   ],
+   "allow": [
+    "asks:offer",
+    "asks:uncovered"
+   ]
+  },
+  {
+   "id": "offer",
+   "source": "answer test set",
+   "before": [
+    {
+     "who": "lead",
+     "text": "Yes, this is John."
+    }
+   ],
+   "seri": "This is Seri from eDrugstore, and I'm calling about our offer of up to 25% off your first order. Is that something you'd be interested in?",
+   "lead": "What's the discount exactly?",
+   "want": [
+    "asks:offer"
+   ],
+   "allow": [
+    "asks:offer"
+   ]
+  },
+  {
+   "id": "insurance",
+   "source": "answer test set",
+   "before": [
+    {
+     "who": "lead",
+     "text": "Yes, this is John."
+    }
+   ],
+   "seri": "This is Seri from eDrugstore, and I'm calling about our offer of up to 25% off your first order. Is that something you'd be interested in?",
+   "lead": "Do you take insurance?",
+   "want": [
+    "asks:insurance"
+   ],
+   "allow": [
+    "asks:insurance"
+   ]
+  },
+  {
+   "id": "hsa",
+   "source": "answer test set",
+   "before": [
+    {
+     "who": "lead",
+     "text": "Yes, this is John."
+    }
+   ],
+   "seri": "This is Seri from eDrugstore, and I'm calling about our offer of up to 25% off your first order. Is that something you'd be interested in?",
+   "lead": "Can I use my HSA card?",
+   "want": [
+    "asks:insurance|asks:payment"
+   ],
+   "allow": [
+    "asks:insurance",
+    "asks:payment"
+   ]
+  },
+  {
+   "id": "payment",
+   "source": "answer test set",
+   "before": [
+    {
+     "who": "lead",
+     "text": "Yes, this is John."
+    }
+   ],
+   "seri": "This is Seri from eDrugstore, and I'm calling about our offer of up to 25% off your first order. Is that something you'd be interested in?",
+   "lead": "What cards do you take?",
+   "want": [
+    "asks:payment"
+   ],
+   "allow": [
+    "asks:payment"
+   ]
+  },
+  {
+   "id": "shipping",
+   "source": "answer test set",
+   "before": [
+    {
+     "who": "lead",
+     "text": "Yes, this is John."
+    }
+   ],
+   "seri": "This is Seri from eDrugstore, and I'm calling about our offer of up to 25% off your first order. Is that something you'd be interested in?",
+   "lead": "How long does shipping take?",
+   "want": [
+    "asks:shipping"
+   ],
+   "allow": [
+    "asks:shipping"
+   ]
+  },
+  {
+   "id": "discreet",
+   "source": "answer test set",
+   "before": [
+    {
+     "who": "lead",
+     "text": "Yes, this is John."
+    }
+   ],
+   "seri": "This is Seri from eDrugstore, and I'm calling about our offer of up to 25% off your first order. Is that something you'd be interested in?",
+   "lead": "Is the package discreet?",
+   "want": [
+    "asks:discreet"
+   ],
+   "allow": [
+    "asks:discreet"
+   ]
+  },
+  {
+   "id": "prescription",
+   "source": "answer test set",
+   "before": [
+    {
+     "who": "lead",
+     "text": "Yes, this is John."
+    }
+   ],
+   "seri": "This is Seri from eDrugstore, and I'm calling about our offer of up to 25% off your first order. Is that something you'd be interested in?",
+   "lead": "Do I need a prescription?",
+   "want": [
+    "asks:need_prescription"
+   ],
+   "allow": [
+    "asks:need_prescription"
+   ]
+  },
+  {
+   "id": "states",
+   "source": "answer test set",
+   "before": [
+    {
+     "who": "lead",
+     "text": "Yes, this is John."
+    }
+   ],
+   "seri": "This is Seri from eDrugstore, and I'm calling about our offer of up to 25% off your first order. Is that something you'd be interested in?",
+   "lead": "Do you ship to Texas?",
+   "want": [
+    "asks:states"
+   ],
+   "allow": [
+    "asks:states"
+   ]
+  },
+  {
+   "id": "how_it_works",
+   "source": "answer test set",
+   "before": [
+    {
+     "who": "lead",
+     "text": "Yes, this is John."
+    }
+   ],
+   "seri": "This is Seri from eDrugstore, and I'm calling about our offer of up to 25% off your first order. Is that something you'd be interested in?",
+   "lead": "How does it work?",
+   "want": [
+    "asks:how_it_works"
+   ],
+   "allow": [
+    "asks:how_it_works"
+   ]
+  },
+  {
+   "id": "legal",
+   "source": "answer test set",
+   "before": [
+    {
+     "who": "lead",
+     "text": "Yes, this is John."
+    }
+   ],
+   "seri": "This is Seri from eDrugstore, and I'm calling about our offer of up to 25% off your first order. Is that something you'd be interested in?",
+   "lead": "Is this even legal?",
+   "want": [
+    "asks:legal"
+   ],
+   "allow": [
+    "asks:legal"
+   ]
+  },
+  {
+   "id": "privacy",
+   "source": "answer test set",
+   "before": [
+    {
+     "who": "lead",
+     "text": "Yes, this is John."
+    }
+   ],
+   "seri": "This is Seri from eDrugstore, and I'm calling about our offer of up to 25% off your first order. Is that something you'd be interested in?",
+   "lead": "Do you sell my data?",
+   "want": [
+    "asks:privacy"
+   ],
+   "allow": [
+    "asks:privacy"
+   ]
+  },
+  {
+   "id": "callback_number",
+   "source": "answer test set",
+   "before": [
+    {
+     "who": "lead",
+     "text": "Yes, this is John."
+    }
+   ],
+   "seri": "This is Seri from eDrugstore, and I'm calling about our offer of up to 25% off your first order. Is that something you'd be interested in?",
+   "lead": "What number can I call you back at?",
+   "want": [
+    "asks:customer_service"
+   ],
+   "allow": [
+    "asks:customer_service"
+   ]
+  },
+  {
+   "id": "medical_web",
+   "source": "answer test set",
+   "before": [
+    {
+     "who": "lead",
+     "text": "Yes, this is John."
+    }
+   ],
+   "seri": "This is Seri from eDrugstore, and I'm calling about our offer of up to 25% off your first order. Is that something you'd be interested in?",
+   "lead": "My caller ID said Medical Web. What's that?",
+   "want": [
+    "asks:medical_web"
+   ],
+   "allow": [
+    "asks:medical_web"
+   ]
+  },
+  {
+   "id": "who_is_this",
+   "source": "answer test set",
+   "before": [
+    {
+     "who": "lead",
+     "text": "Yes, this is John."
+    }
+   ],
+   "seri": "This is Seri from eDrugstore, and I'm calling about our offer of up to 25% off your first order. Is that something you'd be interested in?",
+   "lead": "Sorry, who is this again?",
+   "want": [
+    "asks:who_we_are|asks:why_calling"
+   ],
+   "allow": [
+    "asks:who_we_are",
+    "asks:why_calling"
+   ]
+  },
+  {
+   "id": "real_person",
+   "source": "answer test set",
+   "before": [
+    {
+     "who": "lead",
+     "text": "Yes, this is John."
+    }
+   ],
+   "seri": "This is Seri from eDrugstore, and I'm calling about our offer of up to 25% off your first order. Is that something you'd be interested in?",
+   "lead": "Wait, am I talking to a real person?",
+   "want": [
+    "asks:real_person"
+   ],
+   "allow": [
+    "asks:real_person"
+   ]
+  },
+  {
+   "id": "which_antibiotic",
+   "source": "answer test set",
+   "before": [
+    {
+     "who": "lead",
+     "text": "Yes, this is John."
+    }
+   ],
+   "seri": "This is Seri from eDrugstore, and I'm calling about our offer of up to 25% off your first order. Is that something you'd be interested in?",
+   "lead": "Which antibiotic should I take for a UTI?",
+   "want": [
+    "asks:which_medication|asks:medical_question"
+   ],
+   "allow": [
+    "asks:which_medication",
+    "asks:medical_question"
+   ]
+  },
+  {
+   "id": "dosage",
+   "source": "answer test set",
+   "before": [
+    {
+     "who": "lead",
+     "text": "Yes, this is John."
+    }
+   ],
+   "seri": "This is Seri from eDrugstore, and I'm calling about our offer of up to 25% off your first order. Is that something you'd be interested in?",
+   "lead": "How many times a day do I take amoxicillin?",
+   "want": [
+    "asks:medical_question"
+   ],
+   "allow": [
+    "asks:medical_question"
+   ]
+  },
+  {
+   "id": "symptoms",
+   "source": "answer test set",
+   "before": [
+    {
+     "who": "lead",
+     "text": "Yes, this is John."
+    }
+   ],
+   "seri": "This is Seri from eDrugstore, and I'm calling about our offer of up to 25% off your first order. Is that something you'd be interested in?",
+   "lead": "It burns when I pee. What do I have?",
+   "want": [
+    "asks:medical_question|asks:which_medication"
+   ],
+   "allow": [
+    "asks:medical_question",
+    "asks:which_medication"
+   ]
+  },
+  {
+   "id": "side_effects",
+   "source": "answer test set",
+   "before": [
+    {
+     "who": "lead",
+     "text": "Yes, this is John."
+    }
+   ],
+   "seri": "This is Seri from eDrugstore, and I'm calling about our offer of up to 25% off your first order. Is that something you'd be interested in?",
+   "lead": "Does doxycycline have side effects?",
+   "want": [
+    "asks:medical_question"
+   ],
+   "allow": [
+    "asks:medical_question"
+   ]
+  },
+  {
+   "id": "medical_nobody",
+   "source": "answer test set",
+   "before": [
+    {
+     "who": "lead",
+     "text": "Yes, this is John."
+    }
+   ],
+   "seri": "This is Seri from eDrugstore, and I'm calling about our offer of up to 25% off your first order. Is that something you'd be interested in?",
+   "lead": "What should I take for chlamydia?",
+   "want": [
+    "asks:which_medication|asks:medical_question"
+   ],
+   "allow": [
+    "asks:which_medication",
+    "asks:medical_question"
+   ]
+  },
+  {
+   "id": "emergency",
+   "source": "answer test set",
+   "before": [
+    {
+     "who": "lead",
+     "text": "Yes, this is John."
+    }
+   ],
+   "seri": "This is Seri from eDrugstore, and I'm calling about our offer of up to 25% off your first order. Is that something you'd be interested in?",
+   "lead": "I think I'm having an allergic reaction right now, my throat is swelling up.",
+   "want": [
+    "emergency"
+   ]
+  },
+  {
+   "id": "upset",
+   "source": "answer test set",
+   "before": [
+    {
+     "who": "lead",
+     "text": "Yes, this is John."
+    }
+   ],
+   "seri": "This is Seri from eDrugstore, and I'm calling about our offer of up to 25% off your first order. Is that something you'd be interested in?",
+   "lead": "This is the third time you people have called me today. I'm really annoyed.",
+   "want": [
+    "asks:upset|other"
+   ],
+   "allow": [
+    "asks:upset",
+    "other",
+    "not_interested"
+   ]
+  },
+  {
+   "id": "upset_nobody",
+   "source": "answer test set",
+   "before": [
+    {
+     "who": "lead",
+     "text": "Yes, this is John."
+    }
+   ],
+   "seri": "This is Seri from eDrugstore, and I'm calling about our offer of up to 25% off your first order. Is that something you'd be interested in?",
+   "lead": "I ordered from you last month and it never arrived. I'm furious.",
+   "want": [
+    "asks:upset"
+   ],
+   "allow": [
+    "asks:tracking",
+    "asks:customer_service"
+   ]
+  },
+  {
+   "id": "unknown_question",
+   "source": "answer test set",
+   "before": [
+    {
+     "who": "lead",
+     "text": "Yes, this is John."
+    }
+   ],
+   "seri": "This is Seri from eDrugstore, and I'm calling about our offer of up to 25% off your first order. Is that something you'd be interested in?",
+   "lead": "Do you sell medication for my dog?",
+   "want": [
+    "asks:uncovered"
+   ],
+   "allow": [
+    "declines"
+   ]
+  },
+  {
+   "id": "unknown_question_paypal",
+   "source": "answer test set",
+   "before": [
+    {
+     "who": "lead",
+     "text": "Yes, this is John."
+    }
+   ],
+   "seri": "This is Seri from eDrugstore, and I'm calling about our offer of up to 25% off your first order. Is that something you'd be interested in?",
+   "lead": "Can I pay with PayPal?",
+   "want": [
+    "asks:uncovered|asks:payment"
+   ],
+   "allow": [
+    "asks:uncovered",
+    "asks:payment"
+   ]
+  },
+  {
+   "id": "unknown_question_asked_again",
+   "source": "answer test set",
+   "before": [
+    {
+     "who": "lead",
+     "text": "Yes, this is John."
+    },
+    {
+     "who": "seri",
+     "text": "This is Seri from eDrugstore, and I'm calling about our offer of up to 25% off your first order. Is that something you'd be interested in?"
+    },
+    {
+     "who": "lead",
+     "text": "Who is your CEO?"
+    }
+   ],
+   "seri": "That's a great question. Let me connect you with one of our specialists who can help with that. Would you like me to connect you with someone now?",
+   "lead": "No, I'm asking you. Who is your CEO?",
+   "want": [
+    "asks:uncovered"
+   ],
+   "allow": [
+    "declines"
+   ]
+  },
+  {
+   "id": "unknown_question_asked_again_nobody",
+   "source": "answer test set",
+   "before": [
+    {
+     "who": "lead",
+     "text": "Yes, this is John."
+    },
+    {
+     "who": "seri",
+     "text": "This is Seri from eDrugstore, and I'm calling about our offer of up to 25% off your first order. Is that something you'd be interested in?"
+    },
+    {
+     "who": "lead",
+     "text": "Who is your CEO?"
+    }
+   ],
+   "seri": "That's a great question. Let me connect you with one of our specialists who can help with that. When would be a good time for a call back?",
+   "lead": "I'm asking who is your CEO.",
+   "want": [
+    "asks:uncovered"
+   ],
+   "allow": [
+    "declines"
+   ]
+  },
+  {
+   "id": "stop",
+   "source": "answer test set",
+   "before": [
+    {
+     "who": "lead",
+     "text": "Yes, this is John."
+    }
+   ],
+   "seri": "This is Seri from eDrugstore, and I'm calling about our offer of up to 25% off your first order. Is that something you'd be interested in?",
+   "lead": "Stop calling me.",
+   "want": [
+    "stop"
+   ],
+   "allow": [
+    "agrees",
+    "declines",
+    "not_interested"
+   ]
+  },
+  {
+   "id": "remove_me",
+   "source": "answer test set",
+   "before": [
+    {
+     "who": "lead",
+     "text": "Yes, this is John."
+    }
+   ],
+   "seri": "This is Seri from eDrugstore, and I'm calling about our offer of up to 25% off your first order. Is that something you'd be interested in?",
+   "lead": "Take me off your list, please.",
+   "want": [
+    "stop"
+   ],
+   "allow": [
+    "agrees",
+    "declines",
+    "not_interested"
+   ]
+  },
+  {
+   "id": "never_again",
+   "source": "answer test set",
+   "before": [
+    {
+     "who": "lead",
+     "text": "Yes, this is John."
+    }
+   ],
+   "seri": "This is Seri from eDrugstore, and I'm calling about our offer of up to 25% off your first order. Is that something you'd be interested in?",
+   "lead": "Don't ever call this number again.",
+   "want": [
+    "stop"
+   ],
+   "allow": [
+    "agrees",
+    "declines",
+    "not_interested"
+   ]
+  },
+  {
+   "id": "stop_at_greeting",
+   "source": "answer test set",
+   "before": [],
+   "seri": "Hi, is this John?",
+   "lead": "Whoever this is, stop calling me.",
+   "want": [
+    "stop"
+   ],
+   "allow": [
+    "agrees",
+    "declines",
+    "not_interested"
+   ]
+  },
+  {
+   "id": "remove_after_offer",
+   "source": "answer test set",
+   "before": [
+    {
+     "who": "lead",
+     "text": "Yes, this is John."
+    },
+    {
+     "who": "seri",
+     "text": "This is Seri from eDrugstore, and I'm calling about our offer of up to 25% off your first order. Is that something you'd be interested in?"
+    },
+    {
+     "who": "lead",
+     "text": "I never signed up for anything."
+    }
+   ],
+   "seri": "You signed up on one of our partner sites. If you'd rather not hear from us, I can remove your number.",
+   "lead": "Yes, remove it.",
+   "want": [
+    "stop"
+   ],
+   "allow": [
+    "agrees",
+    "declines",
+    "not_interested"
+   ]
+  },
+  {
+   "id": "stop_after_question",
+   "source": "answer test set",
+   "before": [
+    {
+     "who": "lead",
+     "text": "Yes, this is John."
+    }
+   ],
+   "seri": "This is Seri from eDrugstore, and I'm calling about our offer of up to 25% off your first order. Is that something you'd be interested in?",
+   "lead": "How much is it? Actually, never mind. Just stop calling me.",
+   "want": [
+    "stop"
+   ],
+   "allow": [
+    "agrees",
+    "declines",
+    "not_interested",
+    "asks:price"
+   ]
+  },
+  {
+   "id": "personal_info",
+   "source": "answer test set",
+   "before": [
+    {
+     "who": "lead",
+     "text": "Yes, this is John."
+    }
+   ],
+   "seri": "This is Seri from eDrugstore, and I'm calling about our offer of up to 25% off your first order. Is that something you'd be interested in?",
+   "lead": "Sure, my date of birth is March 3rd 1985 and my card number is 4111 1111 1111 1111.",
+   "want": [
+    "asks:personal_info"
+   ],
+   "allow": [
+    "agrees",
+    "interested"
+   ]
+  },
+  {
+   "id": "hmm",
+   "source": "answer test set",
+   "before": [
+    {
+     "who": "lead",
+     "text": "Yes, this is John."
+    }
+   ],
+   "seri": "This is Seri from eDrugstore, and I'm calling about our offer of up to 25% off your first order. Is that something you'd be interested in?",
+   "lead": "Hmm.",
+   "want": [
+    "backchannel|other"
+   ],
+   "allow": [
+    "backchannel",
+    "other"
+   ]
+  },
+  {
+   "id": "uh_huh",
+   "source": "answer test set",
+   "before": [
+    {
+     "who": "lead",
+     "text": "Yes, this is John."
+    }
+   ],
+   "seri": "This is Seri from eDrugstore, and I'm calling about our offer of up to 25% off your first order. Is that something you'd be interested in?",
+   "lead": "Uh-huh.",
+   "want": [
+    "backchannel"
+   ]
+  },
+  {
+   "id": "hello_who",
+   "source": "answer test set",
+   "before": [],
+   "seri": "Hi, is this John?",
+   "lead": "Hello? Who's calling?",
+   "want": [
+    "asks:who_we_are|asks:why_calling|checking_line"
+   ],
+   "allow": [
+    "asks:who_we_are",
+    "asks:why_calling",
+    "checking_line"
+   ]
+  },
+  {
+   "id": "greeting_yes",
+   "source": "answer test set",
+   "before": [],
+   "seri": "Hi, is this John?",
+   "lead": "Yeah, this is John.",
+   "want": [
+    "confirm_identity|agrees"
+   ],
+   "allow": [
+    "confirm_identity",
+    "agrees"
+   ]
+  },
+  {
+   "id": "no_repeat_connect",
+   "source": "answer test set",
+   "before": [
+    {
+     "who": "lead",
+     "text": "Yes, this is John."
+    },
+    {
+     "who": "seri",
+     "text": "This is Seri from eDrugstore, and I'm calling about our offer of up to 25% off your first order. Is that something you'd be interested in?"
+    },
+    {
+     "who": "lead",
+     "text": "What do you have?"
+    }
+   ],
+   "seri": "We mainly help with antibiotics, STI treatments and at-home health test kits. Would you like me to connect you with someone now to place your order?",
+   "lead": "How long does shipping take?",
+   "want": [
+    "asks:shipping"
+   ],
+   "allow": [
+    "asks:shipping"
+   ]
+  },
+  {
+   "id": "voicemail_greeting",
+   "source": "written for A28",
+   "before": [],
+   "seri": "Hi, is this John?",
+   "lead": "Hi, you've reached John. I can't come to the phone right now. Please leave a message after the tone.",
+   "want": [
+    "machine"
+   ]
+  },
+  {
+   "id": "voicemail_menu",
+   "source": "written for A28",
+   "before": [],
+   "seri": "This is Seri from eDrugstore, and I'm calling about our offer of up to 25% off your first order. Is that something you'd be interested in?",
+   "lead": "To review your message, press 1. To rerecord, press 2. To mark it urgent, press 3.",
+   "want": [
+    "machine"
+   ]
+  },
+  {
+   "id": "voicemail_full",
+   "source": "written for A28",
+   "before": [],
+   "seri": "Hi, is this John?",
+   "lead": "The person you are trying to reach is not available. At the tone, please record your message.",
+   "want": [
+    "machine"
+   ]
+  },
+  {
+   "id": "person_please",
+   "source": "written for A28",
+   "before": [],
+   "seri": "This is Seri from eDrugstore, and I'm calling about our offer of up to 25% off your first order. Is that something you'd be interested in?",
+   "lead": "Can I talk to a real agent?",
+   "want": [
+    "wants_person"
+   ],
+   "allow": [
+    "interested",
+    "asks:real_person"
+   ]
+  },
+  {
+   "id": "put_me_through",
+   "source": "written for A28",
+   "before": [],
+   "seri": "This is Seri from eDrugstore, and I'm calling about our offer of up to 25% off your first order. Is that something you'd be interested in?",
+   "lead": "Yeah, put me through to someone.",
+   "want": [
+    "wants_person"
+   ],
+   "allow": [
+    "interested",
+    "agrees"
+   ]
+  },
+  {
+   "id": "just_text_me",
+   "source": "written for A28",
+   "before": [],
+   "seri": "This is Seri from eDrugstore, and I'm calling about our offer of up to 25% off your first order. Is that something you'd be interested in?",
+   "lead": "Can you just text me the details?",
+   "want": [
+    "wants_link"
+   ]
+  },
+  {
+   "id": "monday_at_11",
+   "source": "written for A28",
+   "before": [],
+   "seri": "Everyone on our team is busy right now. When would be a good time for a call back?",
+   "lead": "Call me Monday at 11.",
+   "want": [
+    "wants_callback"
+   ],
+   "allow": [
+    "agrees",
+    "interested",
+    "declines"
+   ],
+   "time": {
+    "day": "monday",
+    "hour": 11
+   }
+  },
+  {
+   "id": "tuesday_afternoon",
+   "source": "written for A28",
+   "before": [],
+   "seri": "Everyone on our team is busy right now. When would be a good time for a call back?",
+   "lead": "Next Tuesday afternoon works.",
+   "want": [
+    "wants_callback"
+   ],
+   "allow": [
+    "agrees",
+    "interested",
+    "declines"
+   ],
+   "time": {
+    "day": "tuesday"
+   }
+  },
+  {
+   "id": "half_past_three",
+   "source": "written for A28",
+   "before": [],
+   "seri": "What time tomorrow works best for a call back?",
+   "lead": "Three thirty.",
+   "want": [
+    "wants_callback"
+   ],
+   "allow": [
+    "agrees",
+    "interested",
+    "declines"
+   ],
+   "time": {
+    "hour": 3,
+    "minute": 30
+   }
+  },
+  {
+   "id": "in_business",
+   "source": "written for A28",
+   "before": [],
+   "seri": "This is Seri from eDrugstore, and I'm calling about our offer of up to 25% off your first order. Is that something you'd be interested in?",
+   "lead": "How long have you guys been around?",
+   "want": [
+    "asks:who_we_are"
+   ],
+   "allow": [
+    "asks:who_we_are"
+   ]
+  },
+  {
+   "id": "charged_if_not_approved",
+   "source": "written for A28",
+   "before": [],
+   "seri": "This is Seri from eDrugstore, and I'm calling about our offer of up to 25% off your first order. Is that something you'd be interested in?",
+   "lead": "Do I get charged if the doctor says no?",
+   "want": [
+    "asks:when_charged"
+   ],
+   "allow": [
+    "asks:when_charged"
+   ]
+  },
+  {
+   "id": "cancel",
+   "source": "written for A28",
+   "before": [],
+   "seri": "This is Seri from eDrugstore, and I'm calling about our offer of up to 25% off your first order. Is that something you'd be interested in?",
+   "lead": "Can I cancel an order?",
+   "want": [
+    "asks:cancel_return"
+   ],
+   "allow": [
+    "asks:cancel_return"
+   ]
+  },
+  {
+   "id": "std_tests",
+   "source": "written for A28",
+   "before": [],
+   "seri": "This is Seri from eDrugstore, and I'm calling about our offer of up to 25% off your first order. Is that something you'd be interested in?",
+   "lead": "Do you have STD tests?",
+   "want": [
+    "asks:test_kits"
+   ],
+   "allow": [
+    "asks:test_kits"
+   ]
+  },
+  {
+   "id": "real_medicine",
+   "source": "written for A28",
+   "before": [],
+   "seri": "This is Seri from eDrugstore, and I'm calling about our offer of up to 25% off your first order. Is that something you'd be interested in?",
+   "lead": "Is it real medicine or some knockoff?",
+   "want": [
+    "asks:authentic"
+   ],
+   "allow": [
+    "asks:authentic"
+   ]
+  },
+  {
+   "id": "sounds_good_connect",
+   "source": "written for A28",
+   "before": [],
+   "seri": "Great, would you like me to connect you with someone now to place your order?",
+   "lead": "Okay, sounds good.",
+   "want": [
+    "agrees|wants_person"
+   ],
+   "allow": [
+    "agrees",
+    "wants_person",
+    "interested"
+   ]
+  },
+  {
+   "id": "sure_offer",
+   "source": "written for A28",
+   "before": [],
+   "seri": "This is Seri from eDrugstore, and I'm calling about our offer of up to 25% off your first order. Is that something you'd be interested in?",
+   "lead": "Sure.",
+   "want": [
+    "interested|agrees"
+   ],
+   "allow": [
+    "interested",
+    "agrees",
+    "confirm_identity"
+   ]
+  },
+  {
+   "id": "maybe_later",
+   "source": "written for A28",
+   "before": [],
+   "seri": "This is Seri from eDrugstore, and I'm calling about our offer of up to 25% off your first order. Is that something you'd be interested in?",
+   "lead": "Maybe later.",
+   "want": [
+    "not_now|not_interested:timing"
+   ],
+   "allow": [
+    "not_now",
+    "not_interested:timing",
+    "declines"
+   ]
+  },
+  {
+   "id": "im_good",
+   "source": "written for A28",
+   "before": [],
+   "seri": "This is Seri from eDrugstore, and I'm calling about our offer of up to 25% off your first order. Is that something you'd be interested in?",
+   "lead": "I'm good, thanks.",
+   "want": [
+    "declines|not_interested"
+   ],
+   "allow": [
+    "declines",
+    "not_interested"
+   ]
+  },
+  {
+   "id": "who_gave_number",
+   "source": "written for A28",
+   "before": [],
+   "seri": "This is Seri from eDrugstore, and I'm calling about our offer of up to 25% off your first order. Is that something you'd be interested in?",
+   "lead": "Who gave you my number?",
+   "want": [
+    "asks:how_got_number|objection:never_signed_up"
+   ],
+   "allow": [
+    "asks:how_got_number",
+    "objection:never_signed_up"
+   ]
+  },
+  {
+   "id": "robot",
+   "source": "written for A28",
+   "before": [],
+   "seri": "This is Seri from eDrugstore, and I'm calling about our offer of up to 25% off your first order. Is that something you'd be interested in?",
+   "lead": "Are you a robot?",
+   "want": [
+    "asks:real_person"
+   ],
+   "allow": [
+    "asks:real_person"
+   ]
+  },
+  {
+   "id": "okay_after_answer",
+   "source": "written for A28",
+   "before": [],
+   "seri": "Free USPS shipping is our most popular option, and many customers get their order in 1 to 3 business days. Is there anything else you'd like to know?",
+   "lead": "Okay.",
+   "want": [
+    "backchannel|declines"
+   ],
+   "allow": [
+    "backchannel",
+    "declines"
+   ]
+  },
+  {
+   "id": "thats_all",
+   "source": "written for A28",
+   "before": [],
+   "seri": "Is there anything else you'd like to know?",
+   "lead": "No, that's all.",
+   "want": [
+    "declines"
+   ],
+   "allow": [
+    "not_interested"
+   ]
+  },
+  {
+   "id": "hello_mid_call",
+   "source": "written for A28",
+   "before": [],
+   "seri": "Free USPS shipping is our most popular option. Is there anything else you'd like to know?",
+   "lead": "Hello? Are you there?",
+   "want": [
+    "checking_line"
+   ]
+  },
+  {
+   "id": "stop_medicine_question",
+   "source": "written for A28",
+   "before": [],
+   "seri": "This is Seri from eDrugstore, and I'm calling about our offer of up to 25% off your first order. Is that something you'd be interested in?",
+   "lead": "Should I stop taking my blood pressure pills?",
+   "want": [
+    "asks:medical_question"
+   ],
+   "allow": [
+    "asks:medical_question"
+   ]
+  },
+  {
+   "id": "unsubscribe",
+   "source": "written for A28",
+   "before": [],
+   "seri": "This is Seri from eDrugstore, and I'm calling about our offer of up to 25% off your first order. Is that something you'd be interested in?",
+   "lead": "Unsubscribe.",
+   "want": [
+    "stop"
+   ],
+   "allow": [
+    "agrees",
+    "declines",
+    "not_interested"
+   ]
+  },
+  {
+   "id": "not_john_greeting",
+   "source": "written for A28",
+   "before": [],
+   "seri": "Hi, is this John?",
+   "lead": "No, this is his wife.",
+   "want": [
+    "wrong_person"
+   ],
+   "allow": [
+    "wrong_person",
+    "declines"
+   ]
+  }
+ ]
+}

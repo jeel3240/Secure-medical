@@ -11,7 +11,7 @@
 import OpenAI from 'openai';
 import type { ChatCompletionMessageParam } from 'openai/resources/chat/completions';
 import { ACTION_TOOLS } from './actions';
-import { PROMPT_CACHE_KEY, SERI_MODEL } from './model';
+import { PROMPT_CACHE_KEY, SERI_MODEL, UNDERSTAND_CACHE_KEY, UNDERSTAND_EFFORT, UNDERSTAND_MODEL } from './model';
 
 /** A tool call, whole: its id, which action, and the arguments as OpenAI wrote them. */
 export interface ModelToolCall {
@@ -80,6 +80,40 @@ export function openAiModel(apiKey: string): SeriModel {
         throw plainError(err);
       }
       for (const call of calls) if (call) yield { type: 'tool', call };
+    },
+  };
+}
+
+/** The understand step's request (A28): the acts in a lead's words, as JSON. */
+export interface UnderstandModel {
+  /** OpenAI's answer, whole. Throws - `plainError` - when it fails, or when `signal` aborts. */
+  understand(messages: ChatCompletionMessageParam[], format: object, signal: AbortSignal): Promise<string>;
+}
+
+/** Labels are a few words; this only stops a runaway answer. */
+const MAX_UNDERSTAND_TOKENS = 200;
+
+export function openAiUnderstand(apiKey: string): UnderstandModel {
+  let client: OpenAI | null = null;
+  return {
+    async understand(messages, format, signal) {
+      client ??= new OpenAI({ apiKey, timeout: 15_000, maxRetries: 0 });
+      try {
+        const reply = await client.chat.completions.create(
+          {
+            model: UNDERSTAND_MODEL,
+            reasoning_effort: UNDERSTAND_EFFORT,
+            messages,
+            response_format: format as never,
+            max_completion_tokens: MAX_UNDERSTAND_TOKENS,
+            prompt_cache_key: UNDERSTAND_CACHE_KEY,
+          },
+          { signal }
+        );
+        return reply.choices[0]?.message?.content ?? '';
+      } catch (err) {
+        throw plainError(err);
+      }
     },
   };
 }
