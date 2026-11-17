@@ -23,8 +23,8 @@ describe('the cases', () => {
     expect(byId('busy').now.toISOString()).toBe('2026-11-11T19:00:00.000Z');
   });
 
-  it('89, each named once', () => {
-    expect(cases).toHaveLength(89);
+  it('91, each named once', () => {
+    expect(cases).toHaveLength(91);
     expect(new Set(cases.map((c) => c.id)).size).toBe(cases.length);
   });
 

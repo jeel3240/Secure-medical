@@ -1560,6 +1560,92 @@
       ]
     },
     {
+      "id": "unknown_question_asked_again",
+      "turns": [
+        {
+          "lead": "Who is your CEO?"
+        },
+        {
+          "seri": "[friendly] That's a great question. Let me connect you with one of our specialists who can help with that. [curious] Would you like me to connect you with someone now?"
+        },
+        {
+          "lead": "No, I'm asking you. Who is your CEO?"
+        }
+      ],
+      "expect": [
+        "none",
+        "transfer_to_agent"
+      ],
+      "must_say_any": [
+        "specialist",
+        "specialists",
+        "team",
+        "someone",
+        "person",
+        "representative",
+        "representatives"
+      ],
+      "must_not_say": [
+        "can't provide",
+        "cannot provide",
+        "don't have that information",
+        "do not have that information",
+        "not able to",
+        "unable to",
+        "can't share",
+        "cannot share",
+        "can't tell you",
+        "can't give you that",
+        "i don't have",
+        "i do not have",
+        "isn't something i",
+        "is not something i"
+      ]
+    },
+    {
+      "id": "unknown_question_asked_again_nobody",
+      "who": "nobody",
+      "turns": [
+        {
+          "lead": "Who is your CEO?"
+        },
+        {
+          "seri": "[friendly] That's a great question. Let me connect you with one of our specialists who can help with that. [curious] When would be a good time for a call back?"
+        },
+        {
+          "lead": "I'm asking who is your CEO."
+        }
+      ],
+      "expect": [
+        "none"
+      ],
+      "must_say_any": [
+        "specialist",
+        "specialists",
+        "team",
+        "someone",
+        "person",
+        "representative",
+        "representatives"
+      ],
+      "must_not_say": [
+        "can't provide",
+        "cannot provide",
+        "don't have that information",
+        "do not have that information",
+        "not able to",
+        "unable to",
+        "can't share",
+        "cannot share",
+        "can't tell you",
+        "can't give you that",
+        "i don't have",
+        "i do not have",
+        "isn't something i",
+        "is not something i"
+      ]
+    },
+    {
       "id": "stop",
       "turns": [
         {

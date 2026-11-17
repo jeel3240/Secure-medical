@@ -117,6 +117,8 @@ Call 103's "Not right now" fixed on `fix/seri-not-right-now` - with nobody free,
 
 Call 109's "Is this is Kim." fixed on `fix/seri-misheard-not-wrong-person` - a line that makes no sense where it comes is taken as misheard, and the wrong person is only one said plainly: `docs/AI-AGENT.md` section 3, "Changed after A21's call 109".
 
+Call 111's "I can't provide that information myself" fixed on `fix/seri-never-cant-answer-in-any-words` - asked again, a question the answers don't cover is still the specialists' to answer, in new words; less often, not never (9 of 12): `docs/AI-AGENT.md` section 3, "Changed after A21's call 111".
+
 Nothing found on calls 86-111 is still open but two small things on call 94, left as they are for now (above), and the "okay" said over her on call 100, which cannot be told apart (`docs/AI-AGENT.md` section 1, "Listening"). The rest of the list above is still to walk.
 
 ## Done when

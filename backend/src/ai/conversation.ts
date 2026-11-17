@@ -133,14 +133,14 @@ export function offeredToConnect(said: string): boolean {
  * all the same - a note at the moment is what she follows (A21).
  */
 export const NO_REPEAT_NOTE =
-  "Your last reply already offered to connect them with someone. If they said yes, go ahead. If not, don't offer it again in this reply: answer them, then ask if there's anything else they'd like to know.";
+  "Your last reply already offered to connect them with someone. If they said yes, go ahead. If not, don't offer it again in this reply: answer them - a question the approved answers don't cover is answered by saying our specialists can tell them, never that you don't have it - then ask if there's anything else they'd like to know.";
 
 /**
  * The same with nobody to take the call: "go ahead" on a yes made her book a
  * call back at a time she chose herself (A21, call 92) - so a yes is asked when.
  */
 export const NO_REPEAT_NOBODY_NOTE =
-  "Your last reply offered to connect them with someone, but nobody can take a call now. If they said yes, tell them everyone on our team is busy right now and ask when would be a good time for a call back - don't book one until they have agreed a time. If not, don't offer it again: answer them, then ask if there's anything else they'd like to know.";
+  "Your last reply offered to connect them with someone, but nobody can take a call now. If they said yes, tell them everyone on our team is busy right now and ask when would be a good time for a call back - don't book one until they have agreed a time. If not, don't offer it again: answer them - a question the approved answers don't cover is answered by saying our specialists can tell them, never that you don't have it - then ask if there's anything else they'd like to know.";
 
 /**
  * With every lead turn while nobody can take a call: her instructions say not
