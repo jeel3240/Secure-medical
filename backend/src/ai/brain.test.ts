@@ -217,8 +217,36 @@ describe('what the lead heard', () => {
     conversation.interrupted("That's one for our specialists.");
     understand.answers.push(acts(['asks:price']));
     await says('How much is it?');
-    // The person was never offered: the price leads to the offer to connect.
-    expect(speak.briefs[2]).toContain('Offer to connect them with someone on our team now.');
+    // The person was never offered: her open question is still the offer itself, not "connect you now?".
+    expect(speak.briefs[2]).toContain('to your question: whether the offer is something they would be interested in');
+    expect(speak.briefs[2]).not.toContain('whether they would like you to connect them');
+  });
+
+  it('the opening talked over is still said - never again (call 114: three times)', async () => {
+    speak.replies.push("[friendly, upbeat] This is Seri from eDrugstore calling about our offer of up to 25% off your first order. [curious] Is that something you'd be interested in hearing more about?");
+    await says('Yes.');
+    conversation.interrupted("This is Seri from eDrugstore calling about our offer of up to 25% off your first order. Is that something you'd");
+    understand.answers.push(acts(['asks:shipping']));
+    await says('Wait. How long does shipping take?');
+    expect(speak.briefs[1]).not.toContain('Say who you are');
+    understand.answers.push(JSON.stringify({ acts: ['not_interested'], reason: 'closed', time: null }));
+    await says('I am not interested.');
+    expect(speak.briefs[2]).toContain('Ask, alone and kindly');
+  });
+
+  it('a question cut off near its end, and answered, counts as asked (call 114)', async () => {
+    speak.replies.push('[friendly, upbeat] This is Seri. [curious] Interested?');
+    await says('Yes.');
+    understand.answers.push(JSON.stringify({ acts: ['not_interested'], reason: null, time: null }));
+    speak.replies.push('[understanding] Totally fair, John. [curious] Is it more about the timing, or just not something you need right now?');
+    await says("I'm not interested.");
+    conversation.interrupted('Totally fair, John. Is it more about the timing, or just');
+    understand.answers.push(JSON.stringify({ acts: ['not_interested'], reason: 'closed', time: null }));
+    speak.replies.push('[friendly] Thanks for your time. Goodbye.');
+    await says("I just don't need it.");
+    await until(() => ended.length === 1, 'the goodbye');
+    // The why was asked: this is the second no, the end - not the why again.
+    expect(ended).toEqual([{ action: 'end_call', reason: 'not_interested' }]);
   });
 
   it('a voicemail greeting: nothing said - the beep decides', async () => {
