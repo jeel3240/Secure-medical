@@ -53,6 +53,13 @@ describe('what is never said', () => {
     ['It\'s half off this week.', 'discount'],
     ['Up to 25% off, but only today.', 'discount'],
     ['This offer ends tonight, so act now.', 'discount'],
+    // Saying she can't answer (A29).
+    ["I don't have that information handy, but one of our team members can help.", 'cant_answer'],
+    ["I'm not able to provide that info myself.", 'cant_answer'],
+    ["I can't share the CEO's name.", 'cant_answer'],
+    ["Honestly, I don't know.", 'cant_answer'],
+    ["That's not information I have on hand.", 'cant_answer'],
+    ["I don't have the CEO's name.", 'cant_answer'],
   ])('%j - %s', (sentence, reason) => {
     expect(checkSentence(sentence)).toEqual({ say: SPECIALIST_LINE, reason, found: expect.any(String) });
   });
@@ -92,6 +99,9 @@ describe('what is said as written', () => {
     'You should use the link I text you.',
     'Once it ships, you get a tracking number.',
     'I can take you off our list right now.',
+    "We don't have a physical store - everything ships to your home.",
+    "I can't wait to help you get started.",
+    "That's exactly what our specialists can tell you.",
   ])('%j', (sentence) => {
     expect(checkSentence(sentence)).toEqual({ say: sentence, reason: null, found: null });
   });

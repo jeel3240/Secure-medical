@@ -30,7 +30,8 @@ export type SafetyReason =
   | 'price' // an amount of money
   | 'advice' // how to take a medicine, or whether it is safe for them
   | 'diagnosis' // what the lead has
-  | 'discount'; // an offer other than "up to 25%", or made-up urgency
+  | 'discount' // an offer other than "up to 25%", or made-up urgency
+  | 'cant_answer'; // "I don't know", "I can't provide that" - the specialists can (A29)
 
 export interface SentenceCheck {
   /** What Seri says: the sentence, or `SPECIALIST_LINE` - the relay says `specialistLine(who)` for who is there. */
@@ -84,6 +85,13 @@ const RULES: readonly Rule[] = [
   // An offer we do not make.
   { reason: 'discount', pattern: /\b(today only|only today|just today|limited time|act now|hurry|last chance|this week only|while supplies last|ends (today|tonight|soon|this week)|expires? (today|tonight|soon))\b/ },
   { reason: 'discount', pattern: /\b(half off|half price|buy one,? get one|bogo)\b/ },
+
+  // Saying she can't answer - never: the specialists can (the playbook's never list; A21 calls 111, 112 - "less often, not never" by her
+  // instructions alone, A29).
+  { reason: 'cant_answer', pattern: /\bi (don't|do not) know\b/ },
+  { reason: 'cant_answer', pattern: /\b(i )?(don't|do not) have (that|this|the|those|any|their|his|her)? ?([\w-]+'s )?(information|info|details?|answer|name)\b/ },
+  { reason: 'cant_answer', pattern: /\b(i )?(can't|cannot|can not|am not able to|i'm not able to|am unable to|i'm unable to) (provide|share|give you|tell you|answer)\b/ },
+  { reason: 'cant_answer', pattern: /\bnot (something|information|info) i (have|can share|can provide)\b/ },
 ];
 
 const NUMBER_WORDS: Record<string, number> = {

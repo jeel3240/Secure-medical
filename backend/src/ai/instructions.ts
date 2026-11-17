@@ -218,8 +218,8 @@ function productLine(p: KnowledgeProduct): string {
   return `- ${p.name}: "${p.spokenLine}"`;
 }
 
-/** The call's own details: the greeting, the name, the time, the lead's zone, the hours. */
-function callPart({ lead, now, hours }: InstructionsInput): string {
+/** The call's own details: the greeting, the name, the time, the lead's zone, the hours - also the speak step's (A29). */
+export function callPart({ lead, now, hours }: Pick<InstructionsInput, 'lead' | 'now' | 'hours'>): string {
   const name = cleanFirstName(lead.firstName);
   const { zone, known } = leadTimeZone(lead.phone);
   const today = dateIn(now, hours.timeZone);

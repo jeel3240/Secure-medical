@@ -26,6 +26,7 @@
     "speed": "ts-node --transpile-only scripts/speed-check.ts",
     "ai:eval": "ts-node --transpile-only src/ai/evals/run.ts",
     "ai:eval:understand": "ts-node --transpile-only src/ai/evals/understand-run.ts",
+    "ai:eval:speak": "ts-node --transpile-only src/ai/evals/speak-run.ts",
     "ai:bakeoff": "ts-node --transpile-only scripts/ai-bakeoff.ts",
     "lint": "eslint src scripts"
   },
