@@ -16,7 +16,7 @@
 import type { CallHours, Weekday } from '../core/auto-dial';
 import { spokenNumber } from '../core/call-script';
 import { atLocalTime, leadTimeZone, spokenClock } from './callback-time';
-import type { Knowledge, KnowledgeProduct, ProductType } from './knowledge';
+import type { AnswerOffer, Knowledge, KnowledgeProduct, ProductType } from './knowledge';
 import { TONES } from './tone';
 
 export interface InstructionsInput {
@@ -101,7 +101,7 @@ function sharedPart({ knowledge, callbackNumber, stopLine }: InstructionsInput):
     `${topic}:`,
     ...knowledge.answers
       .filter((a) => a.topic === topic)
-      .map((a) => `- ${asked(a.questions)} → ${quote(a.spoken.split('{callback_number}').join(number))}`),
+      .map((a) => `- ${asked(a.questions)} → ${quote(a.spoken.split('{callback_number}').join(number))}${offersLine(a.offers)}`),
   ]);
 
   const productTypes = [...new Set(knowledge.products.map((p) => p.type))];
@@ -182,13 +182,29 @@ function sharedPart({ knowledge, callbackNumber, stopLine }: InstructionsInput):
     ...playbook.closing.map((c) => `- ${c.situation}: ${quote(c.ask)}`),
     '',
     '## Approved answers',
-    'What the lead might ask, or the situation, then what you say. Say it in these words, or very close to them. Never add to them.',
+    'What the lead might ask, or the situation, then what you say. Say it in these words, or very close to them. Never add to them - except the offer an answer names after it, in your own words.',
     ...answers,
     '',
     '## Products you may name',
     'Never say a price. Name products only when the lead asks what we have, with these lines.',
     ...products,
   ].join('\n');
+}
+
+const OFFER_WORDS: Record<AnswerOffer, string> = {
+  connect: 'to connect them with a person',
+  callback: 'a call back',
+  link: 'to text them the link',
+};
+
+/**
+ * What an answer leads to, kept out of its words (A26) - offered by who is
+ * there: a person now only when someone is free or coming.
+ */
+function offersLine(offers: readonly AnswerOffer[]): string {
+  if (offers.length === 0) return '';
+  const words = offers.map((o) => OFFER_WORDS[o]).join(', or ');
+  return ` Then offer ${words}${offers.includes('connect') ? ' - a person now only if someone is free or coming; with nobody, a call back' : ''}.`;
 }
 
 const PRODUCT_HEADINGS: Record<ProductType, string> = {

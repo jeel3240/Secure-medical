@@ -1,5 +1,5 @@
 {
- "version": "approved-2026-11-16b",
+ "version": "approved-2026-11-17",
  "rules": [
   "Never guarantee a prescription or approval.",
   "Never diagnose, or recommend a specific medication or dose.",
@@ -81,10 +81,14 @@
     "How much does it cost?",
     "What's the price of amoxicillin?"
    ],
-   "answer": "Prices depend on the medication and quantity. I can connect you with a representative, or text you a link where you can see the prices.",
+   "answer": "Prices depend on the medication and quantity.",
+   "offers": [
+    "connect",
+    "link"
+   ],
    "source": "Client email, Nov 5 2026",
    "status": "approved",
-   "note": "Never quote prices, even though they are on the site."
+   "note": "Never quote prices, even though they are on the site. Until 2026-11-17 the answer went on \"I can connect you with a representative, or text you a link where you can see the prices.\" - that offer is now `offers`, made by who can take the call and what was already offered (A26)."
   },
   {
    "id": "cheaper_pharmacy",
@@ -188,9 +192,14 @@
     "Which antibiotic should I take?",
     "What's best for my infection?"
    ],
-   "answer": "That's a great question for a licensed provider. They'll review your health information and decide what's right for you. I can connect you with a representative, or have someone call you back.",
+   "answer": "That's a great question for a licensed provider. They'll review your health information and decide what's right for you.",
+   "offers": [
+    "connect",
+    "callback"
+   ],
    "source": "Client email, Nov 5 2026",
-   "status": "approved"
+   "status": "approved",
+   "note": "Until 2026-11-17 the answer went on \"I can connect you with a representative, or have someone call you back.\" - that offer is now `offers`, made by who can take the call and what was already offered (A26)."
   },
   {
    "id": "need_prescription",
@@ -406,10 +415,14 @@
    "questions": [
     "Any symptom, dosage, side effect or drug interaction question"
    ],
-   "answer": "That's a question for a licensed provider, and I don't want to give you the wrong answer. I can connect you with a representative now, or have someone call you back.",
+   "answer": "That's a question for a licensed provider, and I don't want to give you the wrong answer.",
+   "offers": [
+    "connect",
+    "callback"
+   ],
    "source": "Client email, Nov 5 2026",
    "status": "approved",
-   "note": "Action: transfer to agent, or add to callback queue."
+   "note": "Action: transfer to agent, or add to callback queue. Until 2026-11-17 the answer went on \"I can connect you with a representative now, or have someone call you back.\" - that offer is now `offers`, made by who can take the call and what was already offered (A26)."
   },
   {
    "id": "upset",
@@ -417,10 +430,14 @@
    "questions": [
     "Caller is upset or has a complaint"
    ],
-   "answer": "I'm sorry about that. Let me get you to someone who can help right away.",
+   "answer": "I'm sorry about that.",
+   "offers": [
+    "connect",
+    "callback"
+   ],
    "source": "Client email, Nov 5 2026",
    "status": "approved",
-   "note": "Action: transfer immediately; if no agent is free, promise a callback and add to callback queue."
+   "note": "Action: transfer immediately; if no agent is free, promise a callback and add to callback queue. Until 2026-11-17 the answer went on \"Let me get you to someone who can help right away.\" - that offer is now `offers`, made by who can take the call and what was already offered (A26)."
   },
   {
    "id": "personal_info",
@@ -428,10 +445,13 @@
    "questions": [
     "Caller tries to give date of birth, address or card number"
    ],
-   "answer": "Please don't share that over the phone with me. You can sign up securely on our website, and I can text you the link.",
+   "answer": "Please don't share that over the phone with me. You can sign up securely on our website.",
+   "offers": [
+    "link"
+   ],
    "source": "Client email, Nov 5 2026",
    "status": "approved",
-   "note": "Never collect personal or payment details. Signup: https://www.edrugstore.com/account/register"
+   "note": "Never collect personal or payment details. Signup: https://www.edrugstore.com/account/register Until 2026-11-17 the answer went on \"and I can text you the link.\" - that offer is now `offers`, made by who can take the call and what was already offered (A26)."
   },
   {
    "id": "emergency",
