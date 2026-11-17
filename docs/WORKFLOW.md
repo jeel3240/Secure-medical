@@ -114,7 +114,9 @@ changes no existing row; the app writes to the new parts only on a call Seri
 takes, so with her switch off, calls go on exactly as today. 023 too
 (2026-11-12, A15): `callbacks.note`, the one-line reason Seri gives with a call
 back she books, and one call back per call she booked it on - it changes no
-existing row.
+existing row. 024 too (2026-11-17, A31): `call_ai_turns.data`, the new brain's
+record of each reply, only on the relay's own notes - a new column, no row
+changed.
 
 *(How 014 to 020 went out, on `main` from 2026-10-30 - automated calls, T4,
 T6, T9, T10, T12, T13, T15c, T16 and T17, `AUTO-CALLS.md`.)* None
@@ -165,7 +167,7 @@ docker compose exec api npm run migrate
 ```
 
 **Seri, the AI agent (Phase 7, `AI-AGENT.md`; A22).** The deploy that brings
-022 and 023 runs them as above: `npm run migrate` straight after the `up` -
+022, 023 and 024 runs them as above: `npm run migrate` straight after the `up` -
 until they have run, the lead page, its timeline and My Callbacks read columns
 that are not there yet. Put `OPENAI_API_KEY` in the server's `.env` before that
 `up -d --build`, which recreates the api and the worker with it; added later,

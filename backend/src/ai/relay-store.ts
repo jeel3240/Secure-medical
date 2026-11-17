@@ -68,6 +68,8 @@ export interface Turn {
   text: string;
   /** Seri's turns only: how long she took to start. */
   latencyMs?: number | null;
+  /** The relay's own notes only: the new brain's record of a reply (A31, migration 024). */
+  data?: unknown;
 }
 
 /** What a call of hers reads once, at the start: the script's stop line and words, and the agents' hours. */
@@ -188,7 +190,7 @@ export async function resumeAiCall(
       await client.query('ROLLBACK');
       return { ok: false, reason: refused };
     }
-    const turns = await client.query(`SELECT who, text FROM call_ai_turns WHERE call_id = $1 ORDER BY id`, [input.callId]);
+    const turns = await client.query(`SELECT who, text, data FROM call_ai_turns WHERE call_id = $1 ORDER BY id`, [input.callId]);
     const lastAction = [...turns.rows].reverse().find((t) => t.who === 'action');
     const ended: Handoff | null = lastAction
       ? fromHandoff(lastAction.text)
@@ -206,7 +208,8 @@ export async function resumeAiCall(
       ok: true,
       call: { callId: c.callId, leadId: c.leadId, firstName: c.firstName, phone: c.phone },
       startedAt: c.startedAt,
-      turns: turns.rows,
+      // A record only where one was kept (A31): the lead's turns and hers carry words alone.
+      turns: turns.rows.map((t) => (t.data === null ? { who: t.who, text: t.text } : t)),
       ended,
     };
   } catch (err) {
@@ -218,11 +221,12 @@ export async function resumeAiCall(
 }
 
 export async function saveTurn(q: Db, turn: Turn): Promise<void> {
-  await q.query(`INSERT INTO call_ai_turns (call_id, who, text, latency_ms) VALUES ($1, $2, $3, $4)`, [
+  await q.query(`INSERT INTO call_ai_turns (call_id, who, text, latency_ms, data) VALUES ($1, $2, $3, $4, $5)`, [
     turn.callId,
     turn.who,
     turn.text,
     turn.latencyMs ?? null,
+    turn.data === undefined ? null : JSON.stringify(turn.data),
   ]);
 }
 

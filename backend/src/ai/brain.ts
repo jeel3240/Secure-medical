@@ -29,11 +29,12 @@ import { STILL_THERE_LINE, WRAP_UP_NOTE } from './conversation';
 import type { WhoIsThere } from './instructions';
 import type { Knowledge } from './knowledge';
 import type { ModelEvent, SeriModel, SpeakModel, UnderstandModel } from './openai';
-import { asks, decide, markOpening, markSaid, startState, wrapUpDue, type Act, type CallState, type Move } from './policy';
+import { asks, decide, markOpening, markSaid, POLICY_VERSION, startState, wrapUpDue, type Act, type CallState, type Move } from './policy';
+import type { KeptTurn } from './resume';
 import { SentenceSplitter } from './sentences';
 import { answerLine, needsSpeak, replyBrief, speakMessages, speakSystem } from './speak';
 import { spokenWords } from './tone';
-import { fastPath, parseActs, understandFormat, understandMessages, UnderstandError } from './understand';
+import { actLabel, fastPath, parseActs, understandFormat, understandMessages, UnderstandError } from './understand';
 
 export interface BrainSetup {
   callId: number;
@@ -47,6 +48,42 @@ export interface BrainSetup {
   record?: CallState | null;
   /** Picked back up with no record kept: past the opening, they said it is them, no question open. */
   resumed?: boolean;
+  /** Keeps each reply's record (A31) - as a `system` turn with its data. */
+  keep?: (record: BrainRecord) => void;
+}
+
+/** What is kept of each reply (A31): never a word said - the lead's acts and her moves by kind, and the call's record. */
+export interface BrainRecord {
+  version: number;
+  /** How the lead's words were read: `fast`, `openai`, or `refused` - after an action the call refused. */
+  understood: 'fast' | 'openai' | 'refused';
+  acts: string[];
+  moves: Move[];
+  /** The record before this reply, and once it is heard whole. */
+  record: CallState;
+  decided: CallState;
+}
+
+/** The note the record is kept under - a `system` turn, which the timeline and resume pass over. */
+export const RECORD_NOTE = 'Record of the reply (the brain)';
+
+/**
+ * The record a call picked back up starts from: the last one kept - with its
+ * reply said, when her turn followed it. Null when
+ * none was kept, or one from another version of the policy (A31).
+ */
+export function recordFromTurns(turns: readonly KeptTurn[]): CallState | null {
+  const at = turns.reduce((found, t, i) => (t.who === 'system' && isRecord(t.data) ? i : found), -1);
+  if (at < 0) return null;
+  const kept = turns[at].data as BrainRecord;
+  if (kept.version !== POLICY_VERSION) return null;
+  // `decided` already holds the reply as said whole.
+  const heard = turns.slice(at + 1).some((t) => t.who === 'seri');
+  return heard ? kept.decided : kept.record;
+}
+
+function isRecord(data: unknown): data is BrainRecord {
+  return typeof data === 'object' && data !== null && 'decided' in data && 'record' in data && 'moves' in data && 'version' in data;
 }
 
 export interface BrainModels {
@@ -105,10 +142,12 @@ export class Brain implements SeriModel {
     const decision = decide(this.state, acts, context);
     const moves = turn.refused ? decision.moves.filter((m) => m.move !== 'end') : decision.moves;
     const ending = moves.find((m): m is Extract<Move, { move: 'end' }> => m.move === 'end');
+    const understood = turn.refused ? 'refused' : fast ? 'fast' : 'openai';
+    this.setup.keep?.({ version: POLICY_VERSION, understood, acts: acts.map(actLabel), moves, record: this.state, decided: markSaid(decision.state, moves) });
     // Never a word said: what kind of turn it was, and how long understanding took.
     log.info('ai_brain.turn', {
       callId: this.setup.callId,
-      understood: turn.refused ? 'refused' : fast ? 'fast' : 'openai',
+      understood,
       understandMs: fast || turn.refused ? 0 : Date.now() - started,
       acts: acts.length,
       moves: moves.map((m) => m.move).join(','),

@@ -49,7 +49,8 @@ import { Conversation, type Timers } from './conversation';
 import { buildInstructions, welcomeGreeting, type WhoIsThere } from './instructions';
 import type { Knowledge } from './knowledge';
 import type { SeriModel } from './openai';
-import type { BrainSetup } from './brain';
+import { RECORD_NOTE, recordFromTurns, type BrainSetup } from './brain';
+import type { CallState } from './policy';
 import {
   endMessage,
   interruptedNote,
@@ -264,7 +265,7 @@ function runSession(ws: WebSocket, deps: RelayDeps, sessions: Sessions): void {
     listedAs = callId;
   };
 
-  const begin = (aiCall: AiCall, script: CallScript, settings: CallSettings, earlier?: Earlier): Conversation => {
+  const begin = (aiCall: AiCall, script: CallScript, settings: CallSettings, earlier?: Earlier, record?: CallState | null): Conversation => {
     const now = deps.now?.() ?? new Date();
     return new Conversation(
       {
@@ -295,6 +296,8 @@ function runSession(ws: WebSocket, deps: RelayDeps, sessions: Sessions): void {
               hours: settings.hours,
               callbackNumber: deps.twilio.callerId,
               resumed: earlier !== undefined,
+              record,
+              keep: (kept) => keep({ who: 'system', text: RECORD_NOTE, data: kept }),
             })
           : deps.model,
         whoIsThere: () => deps.store.whoIsThere(aiCall.callId),
@@ -341,7 +344,7 @@ function runSession(ws: WebSocket, deps: RelayDeps, sessions: Sessions): void {
       startedAt: resumed.startedAt,
     };
     if (dropped) return;
-    conversation = begin(aiCall, script, settings, earlier);
+    conversation = begin(aiCall, script, settings, earlier, recordFromTurns(resumed.turns));
     log.info('ai_relay.resumed', { ...fields, answering: earlier.pending.length > 0 });
     conversation.start();
   };

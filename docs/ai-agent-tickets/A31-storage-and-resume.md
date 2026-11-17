@@ -4,7 +4,7 @@
 
 **Why:** "Nothing may be lost" (`docs/AUDIT.md`), and "why did she say that?" must be answerable from the database. Today's resume rebuilds the conversation from the turns (`resume.ts`); the record must come back with it - and a deploy is exactly when the code that rebuilds it may have changed, so the record is kept, not replayed.
 
-**Depends on:** A30  ·  **Size:** M  ·  **Status:** To do
+**Depends on:** A30  ·  **Size:** M  ·  **Status:** Done 2026-11-17
 
 ## Build
 
@@ -14,7 +14,11 @@
 
 ## Done when
 
-- [ ] `resume.test.ts`, `npm run e2e` (its reconnect step included), `ai-agent-live-check` and every live check pass.
+- [x] `resume.test.ts` and `brain.test.ts`, `npm run e2e` (142, its reconnect step included), `ai-agent-live-check` (137) and every live check pass.
+
+## As built
+
+`docs/AI-AGENT.md` section 12, "As built: what is kept, and picking a call back up (A31)". Two changes from the ticket: the record is kept at each reply, before and after, so resume needs no replay - with its reply said when her turn followed it; and **`npm run e2e` was not moved to the new brain** - its OpenAI stand-in answers today's requests, so it still proves the call around the brain; the new brain's whole calls are A32's replays, against the real OpenAI.
 
 ## Docs to update in the same commit
 

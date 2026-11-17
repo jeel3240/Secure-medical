@@ -714,6 +714,13 @@ Measured 2026-11-17, 2:33-2:42 PM Arizona time, from the laptop: `npm run ai:bak
 - **Logged** without a word said: `ai_brain.turn` per reply - how it was understood (`fast`, `openai`, `refused`), how long, the moves and the action (`LOGGING.md`).
 - **Tests:** `brain.test.ts`, 13 - the real conversation with OpenAI faked: the opening without OpenAI; "Hello. Hello." later never the opening; an approved answer said word for word, then speak; with nobody free a call back, never a person; a yes put through; a call back said back and booked - the call's own check agreeing; a question in a last line not said; two no's ending the call; an offer cut off never counted as made; a voicemail greeting - nothing said; the understand step failing - the script; an unreadable answer - "say that again".
 
+### As built: what is kept, and picking a call back up (A31, 2026-11-17)
+
+- **Each reply's record** is kept as one add-only `system` turn, `Record of the reply (the brain)`, with its data in `call_ai_turns.data` (migration 024, only on `system` rows): the policy's version, how the lead's words were understood (`fast`, `openai`, `refused`), the acts as labels, the moves, the call's record before the reply and once said whole. Never a word said - those are the lead's and her own turns. "Why did she say that?" is the row before her turn. The timeline and resume pass over it, as over every `system` note.
+- **Picked back up after the line dropped** (section 2, "When the line drops"): the brain starts from the last record kept - with its reply said if her turn followed it, else as it was before it (`recordFromTurns`); a record from another policy version, or none, starts past the opening with no question open, as A30 did.
+- **Proved:** `brain.test.ts` - a record per reply with the acts, moves and both records; resuming from one, an offer counted once. `ai-agent-live-check` 137 - a record on a `system` row kept and read back, on the lead's or her turn refused; resumed turns carry `data` only where one was kept. Every live check passes; `npm run e2e` 142.
+- **Not covered:** `npm run e2e` still drives today's brain - its OpenAI stand-in answers today's requests; the new brain's whole calls are proved by A32's replays against the real OpenAI and `brain.test.ts` against the real conversation.
+
 ### Listening (A24, read from Twilio's documentation, 2026-11-17)
 
 - **Smart Turn Detection** (`turnDetection="true"`, generally available 2026-11-13) does not apply with Deepgram Flux, which keeps its own end of turn. Trying it means Nova-3 with it - Nova-3 without it cut sentences in half on A02's calls.
