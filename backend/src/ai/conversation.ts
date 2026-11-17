@@ -146,10 +146,11 @@ export const NO_REPEAT_NOBODY_NOTE =
  * With every lead turn while nobody can take a call: her instructions say not
  * to offer a person then, and she still asked "Would you like me to connect
  * you with someone now?" on call 93, and in 5 of 10 runs of it - a note at the
- * moment is what she follows (A21).
+ * moment is what she follows (A21). Its last sentence after call 103: to "Not
+ * right now." she said everyone was busy, as if asked for someone.
  */
 export const NOBODY_NOTE =
-  "Nobody can take a call now: don't offer to connect them now, or ask if they want to talk to someone now. If they want to talk to someone, say everyone on our team is busy right now and ask when would be a good time for a call back.";
+  "Nobody can take a call now: don't offer to connect them now, or ask if they want to talk to someone now. If they want to talk to someone, say everyone on our team is busy right now and ask when would be a good time for a call back. A no, or \"not right now\" to the offer, is not asking for anyone: say nothing about who is busy.";
 
 /**
  * The lead answered her question before asking their own - "Yes. Can someone
