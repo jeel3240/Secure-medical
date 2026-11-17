@@ -92,6 +92,7 @@
 | 100 | "okay, okay" said during the offer, then nothing | Neither stopped her. Nothing reached us while she talked: the first was dropped, the second reached her one second after the offer as "No." - Twilio holds what is said over her until she stops. Not changed - `docs/AI-AGENT.md` section 1, "Listening". Her reply asked why and offered the link, two questions - call 99's fix |
 | 101 | Nobody free, Monday 5:56 PM, after call 99's fix: "I'm not interested.", "I don't need it." said over the end of her question, "Not right now. Thank you." | The why alone - "Is it more the timing, or just not something you need right now?" - no link. "I don't need it" taken as not needing antibiotics, so one offer, one question: "We also have at-home STI test kits and other treatments. Would any of those be helpful?"; the next no ended the call - "thank you for your time today, Jeel. Have a great day." - `end_call`, `not_interested`. Replies 0.7-1.2 s. Kept as it is - Jeel, 2026-11-16: one offer of the other products, then a goodbye |
 | 102 | Nobody free, Monday 6:02 PM: "Uh, do I need to stop medicine?", then "Stop calling me." said over her answer | As it should be: the medicine question was not a stop - "That's a great question for a licensed provider to avoid any risk. Everyone on our team is busy right now; when would be a good time for a call back to discuss this with a specialist?"; "Stop calling me." cut her off and was a stop at once, OpenAI not asked - "Okay, we will not call you again. Goodbye." - `opt_out`, `opted_out`; the number blocked (`call_opt_out`), the text conversation suppressed, `dnc.blocked` in the activity log |
+| 103 | Nobody free, Monday 6:06 PM: "Not right now.", "I said not right now.", "Just text me the link.", then hung up while she said it was on its way | "Not right now." was taken as asking for someone - "No problem. Everyone on our team is busy right now. What time would work best for us to call you back?" - fixed (below). Then the link offered, one question; "Just text me the link." - "The link is on its way to you by text. Thanks for your time today, Jeel. Goodbye.", `send_link`; Jeel hung up while she said it (`completed`), and the link was still texted a second later - `link_sent`. The hang-up straight after the link: as it should be |
 
 All changed on `feat/seri-voice-aria-tone` - `docs/AI-AGENT.md` section 1, "Her voice and tone": Aria; seven businesslike tones; the opening and "Who is this?" without the partner sites; no "no worries" or "when you're ready"; a note against offering to connect twice in a row; an action written in brackets taken; and a stop never held back by a question.
 
@@ -105,7 +106,9 @@ Call 89's link fixed on `fix/seri-link-needs-a-yes` - an action waits for the an
 
 Call 99's no's fixed on `fix/seri-two-nos-one-question` - the why asked alone, a second no ends the call, one question in a reply: `docs/AI-AGENT.md` section 3, "Changed after A21's call 99".
 
-Nothing found on calls 86-102 is still open but two small things on call 94, left as they are for now (above), and the "okay" said over her on call 100, which cannot be told apart (`docs/AI-AGENT.md` section 1, "Listening"). The rest of the list above is still to walk.
+Call 103's "Not right now" fixed on `fix/seri-not-right-now` - with nobody free, a no or "not right now" is not asking for anyone, so nothing about who is busy: `docs/AI-AGENT.md` section 4, "Changed after A21's call 103".
+
+Nothing found on calls 86-103 is still open but two small things on call 94, left as they are for now (above), and the "okay" said over her on call 100, which cannot be told apart (`docs/AI-AGENT.md` section 1, "Listening"). The rest of the list above is still to walk.
 
 ## Done when
 

@@ -668,6 +668,47 @@
       ]
     },
     {
+      "id": "not_right_now_nobody",
+      "who": "nobody",
+      "lead": {
+        "firstName": "Jeel",
+        "phone": "+16026203572"
+      },
+      "turns": [
+        {
+          "lead": "Not right now."
+        }
+      ],
+      "expect": [
+        "none"
+      ],
+      "must_not_say": [
+        "busy",
+        "everyone on our team",
+        "link",
+        "text you",
+        "send you"
+      ]
+    },
+    {
+      "id": "not_right_now_free",
+      "turns": [
+        {
+          "lead": "Not right now."
+        }
+      ],
+      "expect": [
+        "none"
+      ],
+      "must_not_say": [
+        "busy",
+        "connect you",
+        "link",
+        "text you",
+        "send you"
+      ]
+    },
+    {
       "id": "no_after_scam_question",
       "turns": [
         {
