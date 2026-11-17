@@ -101,7 +101,17 @@ interface Pending {
   moves: Move[];
   /** How many of her turns the history held when it was decided: hers is the next. */
   herTurns: number;
+  /** Everything the brain gave the call for it, as written - to tell how much the lead heard. */
+  full: string;
 }
+
+/**
+ * How much of a reply the lead must have heard, talked over, for all of it to
+ * count - a question included. Call 114: the opening, cut off at "Is that
+ * something you'd", counted as never said and was said again, three times; and
+ * "Is it more about the timing, or just" - answered - counted as never asked.
+ */
+const HEARD_MOST = 0.6;
 
 export class Brain implements SeriModel {
   private state: CallState;
@@ -153,12 +163,15 @@ export class Brain implements SeriModel {
       moves: moves.map((m) => m.move).join(','),
       action: ending?.handoff.action ?? null,
     });
-    this.pending = { state: decision.state, moves, herTurns: turn.herTurns };
+    const pending: Pending = { state: decision.state, moves, herTurns: turn.herTurns, full: '' };
+    this.pending = pending;
 
     // The approved answers first, said by code - the client's words exactly.
     for (const m of moves) {
       if (m.move !== 'answer' || m.again) continue;
-      yield { type: 'text', text: `${answerLine(m.id, m.text, spokenNumber(this.setup.callbackNumber))} ` };
+      const line = `${answerLine(m.id, m.text, spokenNumber(this.setup.callbackNumber))} `;
+      pending.full += line;
+      yield { type: 'text', text: line };
     }
 
     if (needsSpeak(moves) && !(ending && ending.handoff.action === 'opt_out')) {
@@ -168,10 +181,21 @@ export class Brain implements SeriModel {
         // A last line never asks: a sentence with a question is not said (call 95).
         const splitter = new SentenceSplitter();
         const keep = (sentences: string[]) => sentences.filter((s) => !spokenWords(s).includes('?'));
-        for await (const text of stream) for (const s of keep(splitter.push(text))) yield { type: 'text', text: `${s} ` };
-        for (const s of keep(splitter.flush())) yield { type: 'text', text: `${s} ` };
+        for await (const text of stream) {
+          for (const s of keep(splitter.push(text))) {
+            pending.full += `${s} `;
+            yield { type: 'text', text: `${s} ` };
+          }
+        }
+        for (const s of keep(splitter.flush())) {
+          pending.full += `${s} `;
+          yield { type: 'text', text: `${s} ` };
+        }
       } else {
-        for await (const text of stream) yield { type: 'text', text };
+        for await (const text of stream) {
+          pending.full += text;
+          yield { type: 'text', text };
+        }
       }
     }
     if (ending) yield { type: 'tool', call: { id: `brain-${this.setup.callId}`, name: ending.handoff.action, arguments: JSON.stringify(this.toolArguments(ending.handoff)) } };
@@ -195,8 +219,11 @@ export class Brain implements SeriModel {
       const heard = hers[this.pending.herTurns];
       const text = heard ? spokenWords(String(heard.content ?? '')) : '';
       if (text && text !== STILL_THERE_LINE) {
-        const whole = /[.!?]["')\]]?$/.test(text);
-        const moves = this.pending.moves.filter((m) => (whole || !asks(m)) && !(refused && m.move === 'end'));
+        // Heard most of it: all of it counts. Cut off early: what she stated, not a question they barely heard -
+        // but the opening, once any of it was heard: they know who she is (call 114).
+        const full = spokenWords(this.pending.full);
+        const most = full.length === 0 || text.length >= HEARD_MOST * full.length;
+        const moves = this.pending.moves.filter((m) => (most || !asks(m) || m.move === 'opening') && !(refused && m.move === 'end'));
         this.state = markOpening(markSaid(this.pending.state, moves), text);
       }
       this.pending = null;
