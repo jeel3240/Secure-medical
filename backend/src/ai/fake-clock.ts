@@ -34,6 +34,10 @@ export class FakeClock implements Timers {
     this.at = to;
   }
 
+  now(): number {
+    return this.at;
+  }
+
   /** How many timers are set. */
   get waiting(): number {
     return this.pending.size;

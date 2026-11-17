@@ -33,7 +33,7 @@ import { FakeClock } from './fake-clock';
 import type { WhoIsThere } from './instructions';
 import type { ModelEvent, SeriModel } from './openai';
 import type { Turn } from './relay-store';
-import { checkSentence, SPECIALIST_LINE } from './safety';
+import { checkSentence, SPECIALIST_LINE, SPECIALIST_LINE_NOBODY } from './safety';
 
 /** Thursday 2026-11-12, noon in Arizona: inside the agents' hours. */
 const NOW = new Date('2026-11-12T19:00:00Z');
@@ -202,6 +202,15 @@ describe('her reply', () => {
       { who: 'seri', text: `Sure. ${SPECIALIST_LINE}`, latencyMs: expect.any(Number) },
       { who: 'system', text: `Replaced (advice, "${check.found}"): ${risky}` },
     ]);
+  });
+
+  it('with nobody to take a call, the line put in its place never offers to connect them (A25)', async () => {
+    who = 'nobody';
+    model.replies.push([text('You should take 500 mg twice a day.')]);
+    conversation.heard('How should I take it?');
+    await until(() => tokens().length === 2, 'the reply');
+    expect(tokens()[0]).toEqual([`${SPECIALIST_LINE_NOBODY} `, false]);
+    expect(SPECIALIST_LINE_NOBODY).not.toMatch(/connect/);
   });
 
   it('an action in a reply with a replaced sentence waits: the specialist line asked a question', async () => {
@@ -801,12 +810,12 @@ describe('limits and failures (A12)', () => {
     conversation.speaking('agent', false);
   };
   const stillThere = () => tokens().filter(([t]) => t === STILL_THERE_LINE).length;
-  /** Three minutes in, the lead having talked all the while, so no silence was counted. */
+  /** Three minutes in, Twilio saying her lines all the while, so no silence was counted. */
   const threeMinutesIn = (extraMs = 0) => {
     conversation.start();
-    conversation.speaking('client', true);
+    conversation.speaking('agent', true);
     clock.advance(LIMITS.callMs + extraMs);
-    conversation.speaking('client', false);
+    conversation.speaking('agent', false);
   };
   const GOODBYE = 'Thanks so much for your time today. Have a great day!';
 
@@ -841,19 +850,63 @@ describe('limits and failures (A12)', () => {
       ]);
     });
 
-    it('counted from when she stops talking, and not while the lead talks', () => {
+    it('counted from when she stops talking, and held while the lead talks', () => {
       conversation.start();
       conversation.speaking('agent', true);
       clock.advance(20_000);
       conversation.speaking('agent', false);
+      clock.advance(3_000);
+      conversation.speaking('client', true);
+      clock.advance(2_000);
+      expect(sent).toEqual([]);
+      // A noise, and no words: the silence counts on from where it was - 3 of its 6 seconds gone.
+      conversation.speaking('client', false);
+      clock.advance(2_999);
+      expect(sent).toEqual([]);
+      clock.advance(1);
+      expect(stillThere()).toBe(1);
+      expect(logged.filter((l) => l.event === 'ai_relay.still_there').map((l) => l.fields)).toEqual([{ callId: 7, heldMs: 2_000 }]);
+    });
+
+    it('Twilio saying the lead talks, with no words, holds it 4 seconds at most (call 112)', () => {
+      greeted();
+      clock.advance(1_000);
+      conversation.speaking('client', true);
+      // Held 4 seconds, then the 5 seconds left counted on - "on" with no "off" and no words.
+      clock.advance(LIMITS.noWordsMs + 4_999);
+      expect(sent).toEqual([]);
+      clock.advance(1);
+      expect(stillThere()).toBe(1);
+      expect(logged.filter((l) => l.event === 'ai_relay.still_there').map((l) => l.fields)).toEqual([{ callId: 7, heldMs: 4_000 }]);
+    });
+
+    it('many noises do not start it again: "are you still there?" 6 seconds of quiet after she stopped, not 6 after the last noise', () => {
+      greeted();
+      for (let i = 0; i < 4; i++) {
+        clock.advance(1_000);
+        conversation.speaking('client', true);
+        clock.advance(500);
+        conversation.speaking('client', false);
+      }
+      // 4 seconds of quiet, 2 seconds of noise: 2 seconds of quiet left.
+      clock.advance(1_999);
+      expect(sent).toEqual([]);
+      clock.advance(1);
+      expect(stillThere()).toBe(1);
+    });
+
+    it('words after the "talking" are an answer, as before: the silence counts afresh after her reply', async () => {
+      greeted();
       clock.advance(5_000);
       conversation.speaking('client', true);
-      clock.advance(20_000);
-      expect(sent).toEqual([]);
-      // A noise, and no words: counted from when it stopped.
       conversation.speaking('client', false);
-      clock.advance(5_999);
-      expect(sent).toEqual([]);
+      model.replies.push([text('Great.')]);
+      conversation.heard('Sorry, yes.');
+      await until(() => kept.some((k) => k.who === 'seri'), 'her reply');
+      conversation.speaking('agent', true);
+      conversation.speaking('agent', false);
+      clock.advance(LIMITS.silenceMs - 1);
+      expect(stillThere()).toBe(0);
       clock.advance(1);
       expect(stillThere()).toBe(1);
     });
@@ -933,7 +986,7 @@ describe('limits and failures (A12)', () => {
 
     it('20 seconds on without an ending: a goodbye, and the end', () => {
       conversation.start();
-      conversation.speaking('client', true);
+      conversation.speaking('agent', true);
       clock.advance(LIMITS.callMs + LIMITS.wrapUpMs - 1);
       expect(sent).toEqual([]);
       clock.advance(1);
@@ -1376,8 +1429,8 @@ describe('a call picked back up after the line dropped', () => {
     seri.start();
     await until(() => tokens().length === 2, 'her reply');
     expect(model.asked[0].at(-1)).toEqual({ role: 'system', content: WRAP_UP_NOTE });
-    // The lead talking, so the silence does not end it first.
-    seri.speaking('client', true);
+    // Twilio saying her line, so the silence does not end it first.
+    seri.speaking('agent', true);
     clock.advance(LIMITS.wrapUpMs);
     await until(() => ends().length === 1, 'the end');
     expect(ended).toEqual([{ action: 'end_call', reason: 'time_limit' }]);

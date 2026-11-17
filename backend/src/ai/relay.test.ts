@@ -569,7 +569,8 @@ describe('limits and failures (A12)', () => {
   it('the call\'s three minutes count from setup: 20 seconds after, a goodbye and the end', async () => {
     const c = await connected();
     c.send(SETUP);
-    c.send({ type: 'info', name: 'clientSpeaking', value: 'on' });
+    // Twilio saying her line all the while, so no silence is counted.
+    c.send({ type: 'info', name: 'agentSpeaking', value: 'on' });
     await handled(c, '1', 2);
     clock.advance(3 * 60_000 + 20_000);
     await until(() => gotEnd(c) && store.endedWith.length === 1, 'the end');
