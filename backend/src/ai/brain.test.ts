@@ -23,8 +23,11 @@ const knowledge = loadKnowledge();
 class FakeUnderstand implements UnderstandModel {
   answers: (string | Error)[] = [];
   asked: string[] = [];
-  async understand(messages: { content?: unknown }[]): Promise<string> {
+  /** Never answers - until the request is stopped. */
+  hang = false;
+  async understand(messages: { content?: unknown }[], _format?: object, signal?: AbortSignal): Promise<string> {
     this.asked.push(String(messages[messages.length - 1].content));
+    if (this.hang) return new Promise<string>((_, reject) => signal?.addEventListener('abort', () => reject(new Error('Request was aborted.'))));
     const next = this.answers.shift() ?? '{"acts":["other"],"reason":null,"time":null}';
     if (next instanceof Error) throw next;
     return next;
@@ -260,8 +263,7 @@ describe('what the lead heard', () => {
 
 describe('the call closing while she thinks', () => {
   it('is not OpenAI failing - nothing logged as a failure, no fallback (A34 call 117: the voicemail took the call)', async () => {
-    understand.understand = (_messages, _format, signal: AbortSignal) =>
-      new Promise<string>((_, reject) => signal.addEventListener('abort', () => reject(new Error('Request was aborted.'))));
+    understand.hang = true;
     conversation.heard('Hi, you have reached John. At the tone, please record your message.');
     await new Promise((r) => setTimeout(r, 20));
     conversation.close();
