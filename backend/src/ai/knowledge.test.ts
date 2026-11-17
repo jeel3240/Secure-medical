@@ -27,7 +27,7 @@ describe('the real files', () => {
   const knowledge = loadKnowledge();
 
   it('load, at one version', () => {
-    expect(knowledge.version).toBe('approved-2026-11-16b');
+    expect(knowledge.version).toBe('approved-2026-11-17');
   });
 
   it('hold what the design says: 10 rules, 37 answers, 30 products, 9 objections, 3 closing questions', () => {
@@ -93,7 +93,7 @@ describe('a broken file is refused, by file and field', () => {
     const files = copies();
     files.products.version = 'approved-2026-11-14';
     expect(problemsOf(files)).toEqual([
-      'the three files must share one version: answers.json approved-2026-11-16b, products.json approved-2026-11-14, sales-playbook.json approved-2026-11-16b',
+      'the three files must share one version: answers.json approved-2026-11-17, products.json approved-2026-11-14, sales-playbook.json approved-2026-11-17',
     ]);
   });
 
@@ -128,6 +128,29 @@ describe('a broken file is refused, by file and field', () => {
     expect(problemsOf(files)).toEqual([
       'answers.json: answers[id=price].id repeats "price"',
       'products.json: products[slug=amoxicillin-clavulanate-potass].slug repeats "amoxicillin-clavulanate-potass"',
+    ]);
+  });
+
+  it('an answer\'s offers: known ones, each once (A26)', () => {
+    const files = copies();
+    answerAt(files, 'price').offers = ['connect', 'email', 'connect'];
+    answerAt(files, 'offer').offers = 'link';
+    expect(problemsOf(files)).toEqual([
+      'answers.json: answers[id=offer].offers must be a list',
+      'answers.json: answers[id=price].offers[1] must be one of connect, callback, link',
+      'answers.json: answers[id=price].offers[2] connect is listed twice',
+    ]);
+  });
+
+  it('an objection\'s id: there, written as an id, and used once (A26)', () => {
+    const files = copies();
+    delete files.playbook.objections[0].id;
+    files.playbook.objections[1].id = 'Too Expensive';
+    files.playbook.objections[3].id = files.playbook.objections[2].id;
+    expect(problemsOf(files)).toEqual([
+      'sales-playbook.json: objections[0].id is missing',
+      'sales-playbook.json: objections[1].id must be small letters, digits and underscores',
+      'sales-playbook.json: objections[3].id repeats "scam"',
     ]);
   });
 

@@ -20,6 +20,14 @@ import playbookFile from './knowledge/sales-playbook.json';
 
 export type AnswerStatus = 'approved' | 'needs_confirmation';
 
+/**
+ * What an approved answer leads to, kept out of its words (A26): a person
+ * now, a call back, or the link. Which one Seri makes depends on who can take
+ * the call and what she already offered - an answer's own "I can connect you
+ * now" was said with nobody free.
+ */
+export type AnswerOffer = 'connect' | 'callback' | 'link';
+
 export interface KnowledgeAnswer {
   id: string;
   topic: string;
@@ -27,6 +35,8 @@ export interface KnowledgeAnswer {
   questions: string[];
   /** What Seri may say: the answer once approved, its `fallback_answer` until then. */
   spoken: string;
+  /** What it leads to, offered after it - none for most. */
+  offers: AnswerOffer[];
   status: AnswerStatus;
   source: string;
 }
@@ -43,6 +53,8 @@ export interface KnowledgeProduct {
 }
 
 export interface Objection {
+  /** How the understand step names it (A26, A28): "scam", "busy". */
+  id: string;
   leadSays: string[];
   approach: string;
   example: string;
@@ -73,6 +85,9 @@ export interface KnowledgeFiles {
 }
 
 const STATUSES: readonly AnswerStatus[] = ['approved', 'needs_confirmation'];
+const OFFERS: readonly AnswerOffer[] = ['connect', 'callback', 'link'];
+/** An id: small letters, digits and underscores - how the understand step writes it. */
+const ID = /^[a-z][a-z0-9_]*$/;
 const PRODUCT_TYPES: readonly ProductType[] = ['antibiotic', 'antiviral', 'kit', 'test_kit'];
 
 /** The only placeholder a spoken line may hold: the number the call came from, filled in by A04. */
@@ -166,11 +181,42 @@ function checkAnswers(raw: unknown): { version: string; rules: string[]; answers
       topic: c.text(a, 'topic', where),
       questions: c.texts(a, 'questions', where),
       spoken: status === 'needs_confirmation' ? fallback : answer,
+      offers: answerOffers(c, a, where),
       status,
       source: c.text(a, 'source', where),
     };
   });
   return { version, rules, answers, problems: c.problems };
+}
+
+/** An answer's `offers`: none, or each of `OFFERS` at most once. */
+function answerOffers(c: FileCheck, a: Obj, where: string): AnswerOffer[] {
+  if (a.offers === undefined) return [];
+  if (!Array.isArray(a.offers)) {
+    c.problem(`${where}.offers`, 'must be a list');
+    return [];
+  }
+  const seen = new Set<string>();
+  return a.offers.filter((offer, i): offer is AnswerOffer => {
+    if (!OFFERS.includes(offer as AnswerOffer)) {
+      c.problem(`${where}.offers[${i}]`, `must be one of ${OFFERS.join(', ')}`);
+      return false;
+    }
+    if (seen.has(offer)) {
+      c.problem(`${where}.offers[${i}]`, `${offer} is listed twice`);
+      return false;
+    }
+    seen.add(offer);
+    return true;
+  });
+}
+
+/** An objection's `id`: there, written as an id, and used once. */
+function objectionId(c: FileCheck, o: Obj, i: number, ids: Set<string>): string {
+  const id = c.text(o, 'id', `objections[${i}]`);
+  if (id && !ID.test(id)) c.problem(`objections[${i}].id`, 'must be small letters, digits and underscores');
+  c.unique(ids, id, `objections[${i}].id`);
+  return id;
 }
 
 function checkProducts(raw: unknown): { version: string; products: KnowledgeProduct[]; problems: string[] } {
@@ -201,9 +247,11 @@ function checkPlaybook(raw: unknown): { version: string; playbook: SalesPlaybook
   const empty: SalesPlaybook = { style: [], objections: [], closing: [], never: [], learning: '' };
   if (!isObj(raw)) return { version: '', playbook: empty, problems: ['sales-playbook.json: is not an object'] };
   const version = c.text(raw, 'version', '');
+  const objectionIds = new Set<string>();
   const playbook: SalesPlaybook = {
     style: c.texts(raw, 'style', ''),
     objections: c.list(raw, 'objections').map((o, i) => ({
+      id: objectionId(c, o, i, objectionIds),
       leadSays: c.texts(o, 'lead_says', `objections[${i}]`),
       approach: c.text(o, 'approach', `objections[${i}]`),
       example: c.spoken(o, 'example', `objections[${i}]`),
