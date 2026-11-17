@@ -31,7 +31,7 @@ The build of `docs/AI-AGENT.md`, split into small tickets. Each is one PR into `
 | A24 | [Measure, then decide](A24-measure-then-decide.md) | - | S | Done 2026-11-17 - two steps: understand `gpt-5.4-mini`, speak `gpt-4.1-mini` |
 | A25 | [Small fixes that carry over](A25-small-fixes-that-carry-over.md) | A24 | S | Done 2026-11-17 |
 | A26 | [Knowledge: ids and offer tags](A26-knowledge-ids-and-offer-tags.md) | A24 | S | Done 2026-11-17 |
-| A27 | [The policy: the call's record, and what Seri does next](A27-policy.md) | A26 | L | To do |
+| A27 | [The policy: the call's record, and what Seri does next](A27-policy.md) | A26 | L | Done 2026-11-17 - built and tested alone; used by the call from A30 |
 | A28 | [Understand: what the lead just said](A28-understand.md) | A24, A26, A27 | M | To do |
 | A29 | [Speak: her words for each move](A29-speak.md) | A27 | M | To do |
 | A30 | [The new brain on the call](A30-wired-into-the-call.md) | A25, A27, A28, A29 | L | To do |

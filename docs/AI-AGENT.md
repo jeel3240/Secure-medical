@@ -654,6 +654,27 @@ Measured 2026-11-17, 2:33-2:42 PM Arizona time, from the laptop: `npm run ai:bak
 
 **Seen in passing** (not measured - A28's): with a stand-in prompt, `gpt-5.4-mini` labelled most real lines sensibly - "Is this a scam?" the scam objection, "Oh, wait. Do you ship to Arizona?" the states answer, "Okay." a backchannel, "Yes. Call me tomorrow." yes and a call back - and some wrongly: "Just text me the link." as a call back (the stand-in had no act for asking for the link), "Who is your CEO?" as who we are, "Not right now. Thank you." as not interested rather than not now.
 
+### As built: decide (A27, 2026-11-17)
+
+`backend/src/ai/policy.ts`, pure - built and tested on its own; the call uses it from A30.
+
+- **What the lead did** is a list of acts (`Act`): confirm it is them, interested, not interested (closed, the timing, or not this product), not now, wants a person, wants a call back (the time as the parts they said - day, hour, minute, AM/PM), wants the link, yes or no to her question, a question (an approved answer's id, `uncovered`, or `real_person`), an objection (by its id, A26), an emergency, the wrong person, a stop, misheard, "hello?", "okay", a voicemail's greeting, or something else.
+- **The record** (`CallState`): the stage (greeting, talking, closing); whether they said it is them; interest; how many clear no's; whether she asked why; each offer - a person, a call back, the link, the other products - how often made and its answer; her open question; the call-back day named and the time said back; lines misheard in a row; how often each answer was given and the specialist line said; whether "everyone is busy" was said; whether a specialist's question was asked; whether her last reply came back to her question or asked "anything else?"; the three minutes; how her last two replies began.
+- **`decide(record, acts, who is there)`** returns her moves - opening, an approved answer (said by code word for word, or briefly in her words when asked again), the specialist line, that she is a virtual assistant, an objection worded from its approach, why, an offer, busy, when would suit, a time said back, say it again, "I'm here", her question again, anything else, or an ending with its action - and **`markSaid`** adds to the record only what she said, so an offer cut off by the lead talking over her was never made.
+- **The rules, every time:**
+  - stop, then an emergency, then a voicemail's greeting (she says nothing), before anything else;
+  - the wrong person only before they said it is them - after, the line was misheard (call 109);
+  - the opening only at the start: "Hello. Hello." later is "I'm here" and her question again (call 112);
+  - "Yes" to the greeting is not interest (call 91); "okay" is never a yes (call 99) - her question again once, then she listens;
+  - a yes: with someone free or coming, an offer to connect, and a yes to that puts them through; with nobody, busy said once and when would suit (calls 92, 93);
+  - a no: why, asked alone; another no ends the call; the timing ("not right now", call 103) gets one offer, a call back, and the product gets the other products (call 101) - a no to that offer ends it;
+  - an answer's offer only by who is there, each once (call 90); a question no answer covers is the specialists' to answer, asked again the same in new words (call 111); her open question come back to once, never two replies running (call 94);
+  - a call-back time worked out by code on the lead's clock, checked by `checkCallbackTime` - a Saturday becomes Monday at the same time, 8 PM the next opening - said back, and booked only after a yes, with a reason from the record (calls 92, 93, 96);
+  - misheard: asked again; twice: the link offered as a simpler choice; three times: goodbye;
+  - the three minutes: the closing offer with her next reply - a person if someone is free or coming, else a call back, else the link - then an ending;
+  - at most one question in a reply, and last; an ending never asks.
+- **Tests:** `policy.test.ts`, 75 - every path above and every structural failure on calls 86-112; 94.7% of branches (the one never taken is an unknown move's error). Not yet: the answer test set's 91 cases as acts with their expected moves - that needs each case's acts, which A28's labelled set gives.
+
 ### Listening (A24, read from Twilio's documentation, 2026-11-17)
 
 - **Smart Turn Detection** (`turnDetection="true"`, generally available 2026-11-13) does not apply with Deepgram Flux, which keeps its own end of turn. Trying it means Nova-3 with it - Nova-3 without it cut sentences in half on A02's calls.

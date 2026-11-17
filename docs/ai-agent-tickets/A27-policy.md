@@ -4,7 +4,7 @@
 
 **Why:** A21's structural failures - the opening said again two minutes in (call 112), an offer to connect in 7 of 9 replies (90), a time she picked herself (92), a Saturday (93), offers after two clear no's (99), "Not right now" taken as asking for a person (103), "Let me connect you" with nobody free (111, 112) - all came from her working out where the call was. Rules and notes moved each "less often, not never".
 
-**Depends on:** A26  ·  **Size:** L  ·  **Status:** To do
+**Depends on:** A26  ·  **Size:** L  ·  **Status:** Done 2026-11-17
 
 ## Build
 
@@ -17,8 +17,19 @@
 
 ## Done when
 
-- [ ] A unit test for every path in section 3's "How a call goes", every structural failure on A21's calls 86-112, and every answer test case's expected outcome.
-- [ ] Every branch of `decide` covered.
+- [x] A unit test for every path in section 3's "How a call goes" and every structural failure on A21's calls 86-112. The answer test cases' expected outcomes move to A28, which gives each case its acts.
+- [x] Every branch of `decide` covered - 94.7%; the one left is an unknown move's error.
+
+## As built
+
+`docs/AI-AGENT.md` section 12, "As built: decide (A27)". Beyond the ticket:
+
+- **Objections the client answered are said as that answer**, word for word: the scam objection as the `scam` answer, too expensive as `cheaper_pharmacy`, "I never signed up" as `how_got_number` - the playbook and the answers held two wordings of the same reply. "I'm busy" asks when would suit; "I need to think about it" offers the link; "I don't need antibiotics" is a no for the product - the other products once; "not interested" is a no.
+- **The opening also answers a first question** it does not cover itself ("How did you get my number?" - that answer, then the opening); asking for a person, a call back or the link at the greeting is answered as asked.
+- **A person turned down after a yes is not a no to the offer**: a call back is offered instead.
+- **A voicemail's greeting** (`machine`): she says nothing and listens - the beep decides, as today (A18); the hook for A23.
+- `resolveTime` reads a time with no AM or PM as people mean it: 8-11 the morning, 12 noon, 1-7 the afternoon; a weekday that is today means today if the time is still ahead.
+- `markOpening` keeps how her last two replies began, for speak (A29); `wrapUpDue` marks the three minutes up.
 
 ## Not in this ticket
 
