@@ -54,6 +54,8 @@ export const RELAY_SETTINGS: Readonly<Record<string, string>> = {
   dtmfDetection: 'true',
   events: 'speaker-events',
   applicationReconnect: 'true',
+  // The words while the lead is still speaking (A33): understanding starts on them, and is kept if the final words match.
+  partialPrompts: 'true',
 };
 
 /**

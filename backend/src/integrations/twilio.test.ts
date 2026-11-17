@@ -329,7 +329,7 @@ describe('the call connected to Seri, in Twilio\'s words (A13)', () => {
         ' ttsProvider="ElevenLabs" voice="9BWtsMINqrJLrRacOk9x-v4-0.4_0.8"' +
         ' transcriptionProvider="Deepgram" speechModel="flux"' +
         ' interruptible="speech" interruptSensitivity="low" ignoreBackchannel="true"' +
-        ' elevenlabsTextNormalization="on" dtmfDetection="true" events="speaker-events" applicationReconnect="true">' +
+        ' elevenlabsTextNormalization="on" dtmfDetection="true" events="speaker-events" applicationReconnect="true" partialPrompts="true">' +
         '<Parameter name="call" value="42"/></ConversationRelay></Connect></Response>'
     );
   });

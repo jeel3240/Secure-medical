@@ -411,7 +411,12 @@ function runSession(ws: WebSocket, deps: RelayDeps, sessions: Sessions): void {
         log.warn('ai_relay.second_setup', { callId: call.callId });
         return;
       case 'prompt':
-        if (!msg.last || msg.text === '') return;
+        if (msg.text === '') return;
+        // Words still being said (`partialPrompts`, A33): never a turn - at most a head start for understanding them.
+        if (!msg.last) {
+          conversation.partial(msg.text);
+          return;
+        }
         keep({ who: 'lead', text: msg.text });
         conversation.heard(msg.text);
         return;

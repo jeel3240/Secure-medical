@@ -18,6 +18,10 @@ Nothing to build before it is measured: the settings are Twilio's, and only real
 - **Read on every call already:** `ai_brain.turn` (`understood` - fast or OpenAI - and `understandMs`) and `ai_relay.reply` (`latencyMs`, from the lead's words reaching us to her first sentence going out).
 - **Tried, one setting per few calls:** Flux as today (`eotThreshold` 0.8, the default); `eotThreshold` 0.6 - she answers sooner, may cut in on a pause; and, only if the wait is still long, `partialPrompts` with understand started early (a code change, then) or Nova-3 with `turnDetection="true"`.
 
+## Progress
+
+- **2026-11-17, understanding started early** (Jeel: faster, with no change to the model or the instructions) - `partialPrompts="true"` and the brain's head start on words still being said; `docs/AI-AGENT.md` section 12, "As built: understanding started early (A33)". To be measured on the next calls; then `eotThreshold` 0.8 against 0.6 if it helps.
+
 ## Done when
 
 - [ ] A measured table in section 1, and the chosen settings in `RELAY_SETTINGS`.

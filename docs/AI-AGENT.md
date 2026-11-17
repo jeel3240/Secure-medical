@@ -730,6 +730,15 @@ Measured 2026-11-17, 2:33-2:42 PM Arizona time, from the laptop: `npm run ai:bak
 - **How they ended:** 30 put through (calls 88, 106, 108), 30 call backs booked (93, 96, 97), 30 opted out (102, 104, 111), 30 not interested (99, 101, 103) - each the same way on all ten runs - and 120 still talking when the real call's lines ran out.
 - **Seen, not a rule:** an answer asked for several ways is given several times, in new words but repetitive (call 112's "What is that?", "I don't understand what I provide"); the opening said "Hi John" again until the brief said not to (A32).
 
+### As built: understanding started early (A33, 2026-11-17)
+
+Jeel, after A34's calls 113-117 (replies 1-2 s after the lead stopped, most of it the understand step: 1.0-1.7 s on the line): faster, without changing the model or the instructions - quality the same.
+
+- **`partialPrompts="true"`** (`RELAY_SETTINGS`): Twilio also sends the lead's words while they are still speaking (`last` false). The relay never takes them for a turn - not kept, no reply, no effect on silence or on her talking (`Conversation.partial`).
+- **A head start** (`Brain.prefetch`): once the words have stayed the same for 150 ms (`PREFETCH_SETTLE_MS`), the understand step is asked about them - exactly as the reply would ask it. When the lead finishes and the final words match (small letters, no punctuation), the reply uses that answer, often already back (`understood: "early"` in `ai_brain.turn`, `understandMs` the wait left); when they differ, the early start is dropped and the final words asked as before. A bare yes or no starts nothing - it needs no OpenAI. Newer words drop an older start.
+- **Not known until a real call:** Twilio documents the partial prompts but not how its early end-of-turn is marked, nor whether the final words always repeat the partial ones; `ai_brain.turn` shows on each reply whether the head start was used.
+- **Tests:** `brain.test.ts` - the same words: OpenAI asked once, the early answer used; other words: asked again, the early answer never used; words still changing: nothing asked; a bare yes: nothing asked.
+
 ### Listening (A24, read from Twilio's documentation, 2026-11-17)
 
 - **Smart Turn Detection** (`turnDetection="true"`, generally available 2026-11-13) does not apply with Deepgram Flux, which keeps its own end of turn. Trying it means Nova-3 with it - Nova-3 without it cut sentences in half on A02's calls.

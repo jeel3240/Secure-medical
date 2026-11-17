@@ -55,8 +55,8 @@ export interface BrainSetup {
 /** What is kept of each reply (A31): never a word said - the lead's acts and her moves by kind, and the call's record. */
 export interface BrainRecord {
   version: number;
-  /** How the lead's words were read: `fast`, `openai`, or `refused` - after an action the call refused. */
-  understood: 'fast' | 'openai' | 'refused';
+  /** How the lead's words were read: `fast`, `openai`, `early` - started while they spoke (A33) - or `refused`, after an action the call refused. */
+  understood: 'fast' | 'openai' | 'early' | 'refused';
   acts: string[];
   moves: Move[];
   /** The record before this reply, and once it is heard whole. */
@@ -113,9 +113,32 @@ interface Pending {
  */
 const HEARD_MOST = 0.6;
 
+/**
+ * How long the lead's words must stay the same, while they speak, before
+ * understanding them starts early (A33) - a word added restarts it.
+ */
+export const PREFETCH_SETTLE_MS = 150;
+
+/** Understanding started early on words still being said. */
+interface Prefetch {
+  key: string;
+  abort: AbortController;
+  timer: ReturnType<typeof setTimeout> | null;
+  acts: Promise<Act[]> | null;
+}
+
+/** Words as compared: small letters, no punctuation, single spaces. */
+const wordsKey = (said: string) =>
+  said
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}' ]+/gu, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+
 export class Brain implements SeriModel {
   private state: CallState;
   private pending: Pending | null = null;
+  private early: Prefetch | null = null;
   private readonly system: string;
   private readonly leadZone: string;
 
@@ -133,6 +156,35 @@ export class Brain implements SeriModel {
     return this.state;
   }
 
+  /**
+   * The lead's words while they are still speaking (A33): once they have stayed
+   * the same for `PREFETCH_SETTLE_MS`, understanding them starts - asked
+   * exactly as the reply would ask it, so the answer is the same. A bare yes or
+   * no needs none. Newer words drop the older start.
+   */
+  prefetch(messages: ChatCompletionMessageParam[], said: string): void {
+    const key = wordsKey(said);
+    if (!key || fastPath(said, 'interest') || this.early?.key === key) return;
+    this.dropEarly();
+    const early: Prefetch = { key, abort: new AbortController(), timer: null, acts: null };
+    early.timer = setTimeout(() => {
+      early.timer = null;
+      const recent = this.recentTurns(messages);
+      const seri = recent.filter((t) => t.who === 'seri').pop()?.text ?? '';
+      early.acts = this.askUnderstand({ said, seri, before: recent.slice(-4) }, early.abort.signal);
+      // A start not used is never a failure.
+      early.acts.catch(() => undefined);
+    }, PREFETCH_SETTLE_MS);
+    this.early = early;
+  }
+
+  private dropEarly(): void {
+    if (!this.early) return;
+    if (this.early.timer) clearTimeout(this.early.timer);
+    this.early.abort.abort();
+    this.early = null;
+  }
+
   async *reply(messages: ChatCompletionMessageParam[], signal: AbortSignal): AsyncIterable<ModelEvent> {
     const turn = this.readHistory(messages);
     const who = turn.who;
@@ -142,23 +194,34 @@ export class Brain implements SeriModel {
     let acts: Act[];
     const started = Date.now();
     const fast = turn.refused ? null : fastPath(turn.said, this.state.open);
+    // Understanding started early on these same words, while they were said (A33).
+    const early = this.early && this.early.acts && this.early.key === wordsKey(turn.said) ? this.early.acts : null;
+    const prefetched = !fast && !turn.refused && early !== null;
+    if (!prefetched) this.dropEarly();
+    this.early = null;
     if (turn.refused) {
       // An action refused by the call's own check: the policy was wrong. Its safe move, never the action.
       log.warn('ai_policy.guard', { callId: this.setup.callId });
       acts = [];
+    } else if (fast) {
+      acts = fast;
+    } else if (early) {
+      acts = await early.catch(() => this.understand(turn, signal));
     } else {
-      acts = fast ?? (await this.understand(turn, signal));
+      acts = await this.understand(turn, signal);
     }
+    const decidedAt = Date.now();
     const decision = decide(this.state, acts, context);
     const moves = turn.refused ? decision.moves.filter((m) => m.move !== 'end') : decision.moves;
     const ending = moves.find((m): m is Extract<Move, { move: 'end' }> => m.move === 'end');
-    const understood = turn.refused ? 'refused' : fast ? 'fast' : 'openai';
+    const understood = turn.refused ? 'refused' : fast ? 'fast' : prefetched ? 'early' : 'openai';
     this.setup.keep?.({ version: POLICY_VERSION, understood, acts: acts.map(actLabel), moves, record: this.state, decided: markSaid(decision.state, moves) });
     // Never a word said: what kind of turn it was, and how long understanding took.
     log.info('ai_brain.turn', {
       callId: this.setup.callId,
       understood,
-      understandMs: fast || turn.refused ? 0 : Date.now() - started,
+      // The wait on understanding once the lead had finished - started early, often none.
+      understandMs: fast || turn.refused ? 0 : decidedAt - started,
       acts: acts.length,
       moves: moves.map((m) => m.move).join(','),
       action: ending?.handoff.action ?? null,
@@ -235,18 +298,27 @@ export class Brain implements SeriModel {
     const lastTurn = leadTurns[leadTurns.length - 1] ?? '';
     const who = WHO[LEAD_TURN.exec(lastTurn)?.[1] ?? 'nobody'];
     const said = leadTurns.map((t) => t.replace(LEAD_TURN, '')).join(' ').trim();
-    const recent = messages.flatMap((m): { who: 'lead' | 'seri'; text: string }[] => {
-      if (m.role === 'assistant' && typeof m.content === 'string' && m.content) return [{ who: 'seri', text: spokenWords(m.content) }];
-      if (m.role === 'user' && typeof m.content === 'string') return [{ who: 'lead', text: m.content.replace(LEAD_TURN, '') }];
-      return [];
-    });
+    const recent = this.recentTurns(messages);
     const seri = recent.filter((t) => t.who === 'seri').pop()?.text ?? '';
     return { said, who, refused, herTurns: hers.length, recent, seri };
   }
 
-  private async understand(turn: { said: string; seri: string; recent: { who: 'lead' | 'seri'; text: string }[] }, signal: AbortSignal): Promise<Act[]> {
-    const before = turn.recent.slice(-5, -1);
-    const messages = understandMessages(this.setup.knowledge, { said: turn.said, seri: turn.seri, before });
+  /** The call's turns as plain words: hers without tones, the lead's without the note of who is there. */
+  private recentTurns(messages: ChatCompletionMessageParam[]): { who: 'lead' | 'seri'; text: string }[] {
+    return messages.flatMap((m): { who: 'lead' | 'seri'; text: string }[] => {
+      if (m.role === 'assistant' && typeof m.content === 'string' && m.content) return [{ who: 'seri', text: spokenWords(m.content) }];
+      if (m.role === 'user' && typeof m.content === 'string') return [{ who: 'lead', text: m.content.replace(LEAD_TURN, '') }];
+      return [];
+    });
+  }
+
+  private understand(turn: { said: string; seri: string; recent: { who: 'lead' | 'seri'; text: string }[] }, signal: AbortSignal): Promise<Act[]> {
+    return this.askUnderstand({ said: turn.said, seri: turn.seri, before: turn.recent.slice(-5, -1) }, signal);
+  }
+
+  /** The understand step, asked - the same request whether started early or not. */
+  private async askUnderstand(input: { said: string; seri: string; before: { who: 'lead' | 'seri'; text: string }[] }, signal: AbortSignal): Promise<Act[]> {
+    const messages = understandMessages(this.setup.knowledge, input);
     const answer = await this.models.understand.understand(messages, understandFormat(this.setup.knowledge), signal);
     try {
       return parseActs(answer, this.setup.knowledge);
