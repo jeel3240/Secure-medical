@@ -29,7 +29,7 @@ The build of `docs/AI-AGENT.md`, split into small tickets. Each is one PR into `
 | A21 | [Every path on a real phone](A21-every-path-on-a-real-phone.md) | A20 | M | Paused 2026-11-17 after call 112 - the new brain (A24-A34) first; walked again as A34 |
 | | **The new brain - understand, decide, speak** (Jeel, 2026-11-17: section 12) | | | |
 | A24 | [Measure, then decide](A24-measure-then-decide.md) | - | S | Done 2026-11-17 - two steps: understand `gpt-5.4-mini`, speak `gpt-4.1-mini` |
-| A25 | [Small fixes that carry over](A25-small-fixes-that-carry-over.md) | A24 | S | To do |
+| A25 | [Small fixes that carry over](A25-small-fixes-that-carry-over.md) | A24 | S | Done 2026-11-17 |
 | A26 | [Knowledge: ids and offer tags](A26-knowledge-ids-and-offer-tags.md) | A24 | S | To do |
 | A27 | [The policy: the call's record, and what Seri does next](A27-policy.md) | A26 | L | To do |
 | A28 | [Understand: what the lead just said](A28-understand.md) | A24, A26, A27 | M | To do |

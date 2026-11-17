@@ -55,7 +55,7 @@ import type { ModelToolCall, SeriModel } from './openai';
 import { endMessage, refusedNote, replacedNote, stopNote, textMessage, unsaidNote } from './relay-messages';
 import type { Turn } from './relay-store';
 import type { Earlier } from './resume';
-import { checkSentence } from './safety';
+import { checkSentence, specialistLine } from './safety';
 import { asks, SentenceSplitter } from './sentences';
 import { greetingWithTone, spokenWords, withTone } from './tone';
 
@@ -77,6 +77,11 @@ const MAX_ACTION_TRIES = 2;
 export const LIMITS = {
   /** The lead silent this long after she stopped talking. */
   silenceMs: 6_000,
+  /**
+   * Twilio saying the lead is talking, with no words after it, holds the
+   * silence at most this long - then it counts on (A25, call 112).
+   */
+  noWordsMs: 4_000,
   /** How long the call goes on before she is told to wrap up. */
   callMs: 3 * 60_000,
   /** How long she then has, before the relay ends the call. */
@@ -213,11 +218,14 @@ export const WRAP_UP_NOTE =
 export interface Timers {
   set(run: () => void, ms: number): unknown;
   clear(handle: unknown): void;
+  /** Milliseconds on this clock - for how much of a wait is left. */
+  now(): number;
 }
 
 export const realTimers: Timers = {
   set: (run, ms) => setTimeout(run, ms),
   clear: (handle) => clearTimeout(handle as ReturnType<typeof setTimeout>),
+  now: () => Date.now(),
 };
 
 export interface ConversationSetup {
@@ -292,6 +300,15 @@ export class Conversation {
   private agentSpeaking = false;
   private leadSpeaking = false;
   private silenceTimer: unknown = null;
+  /** When the silence will be up, on `timers`' clock, while it counts. */
+  private silenceDue = 0;
+  /** What is left of the silence: held while the lead "talks" with no words, then counted on (A25). */
+  private silenceLeft: number = LIMITS.silenceMs;
+  /** How long this silence was held by the lead "talking" with no words - for the log. */
+  private silenceHeldMs = 0;
+  private heldSince: number | null = null;
+  /** The lead has "talked" with no words for `noWordsMs`: the silence counts on. */
+  private noWordsTimer: unknown = null;
   /** "Are you still there?" was said, and nothing has come from the lead since. */
   private askedStillThere = false;
   private callTimer: unknown = null;
@@ -357,13 +374,34 @@ export class Conversation {
     this.watchSilence();
   }
 
-  /** Twilio's speaker events: who is talking now. */
+  /**
+   * Twilio's speaker events: who is talking now. Her talking stops the
+   * silence, and it counts afresh when she stops. The lead "talking" only
+   * holds it: words that follow are `heard`; with none - a noise, an "mm"
+   * Twilio drops - the silence counts on from where it was, and after
+   * `noWordsMs` of "talking" with no words, counts on all the same. Call 112:
+   * "are you still there?" came 13 seconds after her question, not 6.
+   */
   speaking(who: 'agent' | 'client', on: boolean): void {
     if (this.over) return;
-    if (who === 'agent') this.agentSpeaking = on;
-    else this.leadSpeaking = on;
-    if (on) this.stopSilence();
-    else this.watchSilence();
+    if (who === 'agent') {
+      this.agentSpeaking = on;
+      if (on) this.stopSilence();
+      else this.watchSilence();
+      return;
+    }
+    this.leadSpeaking = on;
+    this.stopNoWords();
+    if (on) {
+      this.holdSilence();
+      this.noWordsTimer = this.timers.set(() => {
+        this.noWordsTimer = null;
+        this.leadSpeaking = false;
+        this.countSilence();
+      }, LIMITS.noWordsMs);
+    } else {
+      this.countSilence();
+    }
   }
 
   /** The lead finished saying something. */
@@ -371,6 +409,7 @@ export class Conversation {
     if (this.over) return;
     const heardAt = Date.now();
     this.askedStillThere = false;
+    this.stopNoWords();
     this.stopSilence();
     if (saysStop(said, this.setup.optOutWords)) {
       this.optOut('words');
@@ -609,7 +648,7 @@ export class Conversation {
     const words = spokenWords(sentence);
     if (!words) return true;
     const check = checkSentence(words);
-    const said = check.reason ? check.say : withTone(sentence);
+    const said = check.reason ? specialistLine(reply.who) : withTone(sentence);
     this.deps.send(textMessage(`${said} `, false));
     reply.sent.push(said);
     reply.firstSentAt ??= Date.now();
@@ -711,16 +750,45 @@ export class Conversation {
     this.watchSilence();
   }
 
-  /** Counts the silence from now, while nobody is talking and she is not answering. */
+  /** Counts the silence afresh from now, while nobody is talking and she is not answering. */
   private watchSilence(): void {
     this.stopSilence();
+    this.silenceLeft = LIMITS.silenceMs;
+    this.silenceHeldMs = 0;
+    this.heldSince = null;
+    this.countSilence();
+  }
+
+  /** Counts on what is left of the silence - nothing while someone talks or she answers. */
+  private countSilence(): void {
+    if (this.heldSince !== null) {
+      this.silenceHeldMs += this.timers.now() - this.heldSince;
+      this.heldSince = null;
+    }
+    if (this.silenceTimer !== null) this.timers.clear(this.silenceTimer);
+    this.silenceTimer = null;
     if (!this.started || this.over || this.reply || this.agentSpeaking || this.leadSpeaking) return;
-    this.silenceTimer = this.timers.set(() => this.silent(), LIMITS.silenceMs);
+    this.silenceDue = this.timers.now() + this.silenceLeft;
+    this.silenceTimer = this.timers.set(() => this.silent(), this.silenceLeft);
+  }
+
+  /** Holds the silence where it is: the lead may be talking. */
+  private holdSilence(): void {
+    if (this.silenceTimer === null) return;
+    this.timers.clear(this.silenceTimer);
+    this.silenceTimer = null;
+    this.silenceLeft = Math.max(0, this.silenceDue - this.timers.now());
+    this.heldSince = this.timers.now();
   }
 
   private stopSilence(): void {
     if (this.silenceTimer !== null) this.timers.clear(this.silenceTimer);
     this.silenceTimer = null;
+  }
+
+  private stopNoWords(): void {
+    if (this.noWordsTimer !== null) this.timers.clear(this.noWordsTimer);
+    this.noWordsTimer = null;
   }
 
   private silent(): void {
@@ -733,7 +801,7 @@ export class Conversation {
     this.askedStillThere = true;
     this.say(STILL_THERE_LINE);
     this.history.push({ role: 'assistant', content: STILL_THERE_LINE });
-    log.info('ai_relay.still_there', { callId: this.setup.callId });
+    log.info('ai_relay.still_there', { callId: this.setup.callId, heldMs: this.silenceHeldMs });
     // Counted again from now - and from the end of the line, once Twilio says it was said.
     this.watchSilence();
   }
@@ -841,6 +909,7 @@ export class Conversation {
 
   private stopClocks(): void {
     this.stopSilence();
+    this.stopNoWords();
     this.timers.clear(this.callTimer);
     this.timers.clear(this.wrapUpTimer);
     this.callTimer = null;

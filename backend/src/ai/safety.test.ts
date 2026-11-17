@@ -6,7 +6,7 @@ import { ANTIBIOTICS_CALL } from '../core/call-script-fixtures';
 import { spokenTime } from './callback-time';
 import { welcomeGreeting } from './instructions';
 import { loadKnowledge } from './knowledge';
-import { checkSentence, SPECIALIST_LINE, type SafetyReason } from './safety';
+import { checkSentence, SPECIALIST_LINE, SPECIALIST_LINE_NOBODY, specialistLine, type SafetyReason } from './safety';
 
 const knowledge = loadKnowledge();
 const sentences = (text: string) => text.split(/(?<=[.?!])\s+/).filter(Boolean);
@@ -127,7 +127,22 @@ describe('and every line her instructions give her', () => {
     welcomeGreeting(null),
     spokenTime(new Date('2026-11-12T20:00:00Z'), 'America/New_York', new Date('2026-11-11T19:00:00Z')),
     SPECIALIST_LINE,
+    SPECIALIST_LINE_NOBODY,
   ])('%j', (line) => {
     for (const sentence of sentences(line)) expect(checkSentence(sentence).reason).toBeNull();
+  });
+});
+
+describe('the specialist line, for who is there (A25)', () => {
+  it('offers to connect them when someone is free or coming', () => {
+    expect(specialistLine('free')).toBe(SPECIALIST_LINE);
+    expect(specialistLine('coming')).toBe(SPECIALIST_LINE);
+    expect(SPECIALIST_LINE).toMatch(/connect you/);
+  });
+
+  it('with nobody there, never "connect" - a call back instead', () => {
+    expect(specialistLine('nobody')).toBe(SPECIALIST_LINE_NOBODY);
+    expect(SPECIALIST_LINE_NOBODY).not.toMatch(/connect|transfer|talk to|speak (to|with)/i);
+    expect(SPECIALIST_LINE_NOBODY).toMatch(/call you back/);
   });
 });

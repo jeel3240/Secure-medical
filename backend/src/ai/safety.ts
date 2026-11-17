@@ -11,8 +11,20 @@
  * and every line in the knowledge files passes unchanged (safety.test.ts).
  */
 
-/** What Seri says in place of a sentence that cannot be said. */
+/** What Seri says in place of a sentence that cannot be said, with someone to take the call. */
 export const SPECIALIST_LINE = "That's a great question for one of our specialists. Would you like me to connect you?";
+
+/**
+ * The same with nobody to take a call: never "connect you" - a call back
+ * instead (A25; the fault call 111's specialist line showed).
+ */
+export const SPECIALIST_LINE_NOBODY =
+  "That's a great question for one of our specialists. Everyone on our team is busy right now - when would be a good time for one of them to call you back?";
+
+/** The specialist line for who is there now: someone free or coming is offered; nobody, a call back. */
+export function specialistLine(who: 'free' | 'coming' | 'nobody'): string {
+  return who === 'nobody' ? SPECIALIST_LINE_NOBODY : SPECIALIST_LINE;
+}
 
 export type SafetyReason =
   | 'price' // an amount of money
@@ -21,7 +33,7 @@ export type SafetyReason =
   | 'discount'; // an offer other than "up to 25%", or made-up urgency
 
 export interface SentenceCheck {
-  /** What Seri says: the sentence, or `SPECIALIST_LINE`. */
+  /** What Seri says: the sentence, or `SPECIALIST_LINE` - the relay says `specialistLine(who)` for who is there. */
   say: string;
   /** Why it was replaced; null when it is said as written. */
   reason: SafetyReason | null;
