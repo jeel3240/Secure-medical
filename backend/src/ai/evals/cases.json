@@ -644,6 +644,27 @@
       ],
       "expect": [
         "none"
+      ],
+      "must_not_say": [
+        "link",
+        "text you",
+        "send you"
+      ]
+    },
+    {
+      "id": "no_plain",
+      "turns": [
+        {
+          "lead": "No."
+        }
+      ],
+      "expect": [
+        "none"
+      ],
+      "must_not_say": [
+        "link",
+        "text you",
+        "send you"
       ]
     },
     {
@@ -686,6 +707,54 @@
         "end_call"
       ],
       "end_reason": "not_interested"
+    },
+    {
+      "id": "no_then_dont_need",
+      "turns": [
+        {
+          "lead": "No. Thanks. I'm not interested. Thank you."
+        },
+        {
+          "seri": "[understanding] Totally fair. [curious] Is it more the timing, or just not something you need right now?"
+        },
+        {
+          "lead": "I don't need."
+        }
+      ],
+      "expect": [
+        "end_call"
+      ],
+      "end_reason": "not_interested",
+      "must_not_say": [
+        "totally fair",
+        "sti",
+        "test kit",
+        "test kits",
+        "link"
+      ]
+    },
+    {
+      "id": "no_reason_timing",
+      "turns": [
+        {
+          "lead": "No, not right now."
+        },
+        {
+          "seri": "[understanding] Got it. [curious] Is it more the timing, or just not something you need right now?"
+        },
+        {
+          "lead": "Just the timing."
+        }
+      ],
+      "expect": [
+        "none"
+      ],
+      "must_say_any": [
+        "link",
+        "call",
+        "later",
+        "text"
+      ]
     },
     {
       "id": "no_but_link",

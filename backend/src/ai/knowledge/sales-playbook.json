@@ -1,7 +1,7 @@
 {
- "version": "approved-2026-11-13",
+ "version": "approved-2026-11-16",
  "style": [
-  "Short: 1 to 2 sentences, then a question.",
+  "Short: 1 to 2 sentences, then one question - never two in a reply.",
   "Use the lead's first name once or twice per call, not every sentence.",
   "Listen first: acknowledge what they said before moving on.",
   "Natural, friendly words: 'Sure', 'Got it', 'No problem', 'Totally fair'.",
@@ -18,8 +18,8 @@
     "No",
     "Not interested"
    ],
-   "approach": "Ask why once, then offer the link.",
-   "example": "No problem. Is it more the timing, or just not something you need right now? I can also text you a link to browse later."
+   "approach": "Ask why once, and wait for the answer.",
+   "example": "No problem. Is it more the timing, or just not something you need right now?"
   },
   {
    "lead_says": [
