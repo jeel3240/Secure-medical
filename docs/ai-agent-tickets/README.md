@@ -26,8 +26,20 @@ The build of `docs/AI-AGENT.md`, split into small tickets. Each is one PR into `
 | A18 | [Voicemail and hang-ups while Seri talks](A18-voicemail-and-hang-ups-while-seri-talks.md) | A14 | S | Done 2026-11-12 |
 | A19 | [Seri's conversation on the timeline](A19-seri-s-conversation-on-the-timeline.md) | A10 | S | Done 2026-11-12 |
 | A20 | [End-to-end and live checks](A20-end-to-end-and-live-checks.md) | A13, A14, A15, A16, A17, A18, A19 | M | Done 2026-11-12 |
-| A21 | [Every path on a real phone](A21-every-path-on-a-real-phone.md) | A20 | M | In progress - first calls 2026-11-13: her voice and tone changed |
-| A22 | [Deploy, then switch on](A22-deploy-then-switch-on.md) | A21 | S | To do |
+| A21 | [Every path on a real phone](A21-every-path-on-a-real-phone.md) | A20 | M | Paused 2026-11-17 after call 112 - the new brain (A24-A34) first; walked again as A34 |
+| | **The new brain - understand, decide, speak** (Jeel, 2026-11-17: section 12) | | | |
+| A24 | [Measure, then decide](A24-measure-then-decide.md) | - | S | Done 2026-11-17 - two steps: understand `gpt-5.4-mini`, speak `gpt-4.1-mini` |
+| A25 | [Small fixes that carry over](A25-small-fixes-that-carry-over.md) | A24 | S | To do |
+| A26 | [Knowledge: ids and offer tags](A26-knowledge-ids-and-offer-tags.md) | A24 | S | To do |
+| A27 | [The policy: the call's record, and what Seri does next](A27-policy.md) | A26 | L | To do |
+| A28 | [Understand: what the lead just said](A28-understand.md) | A24, A26, A27 | M | To do |
+| A29 | [Speak: her words for each move](A29-speak.md) | A27 | M | To do |
+| A30 | [The new brain on the call](A30-wired-into-the-call.md) | A25, A27, A28, A29 | L | To do |
+| A31 | [What the new brain keeps, and picking a call back up](A31-storage-and-resume.md) | A30 | M | To do |
+| A32 | [Whole-call replays](A32-whole-call-replays.md) | A30, A31 | M | To do |
+| A33 | [Listening](A33-listening.md) | A30 | S | To do |
+| A34 | [A21 walked again, on the new brain](A34-a21-walked-again.md) | A30-A33 | M | To do |
+| A22 | [Deploy, then switch on](A22-deploy-then-switch-on.md) | A34 | S | To do |
 | A23 | [A voicemail menu is never put through](A23-a-voicemail-menu-is-never-put-through.md) | A22 | M | Later - after the main AI agent work (Jeel, 2026-11-16). Seen on production twice on the script |
 
 Sizes: S a few hours, M about a day, L two days or more.
@@ -40,6 +52,7 @@ Tickets with nothing in *Depends on* can start any time. A suggested path:
 2. **Seri's brain, pure and tested:** A04, A05, A07, A06, then A09 (test set, choose the model)
 3. **The relay:** A10, A11, A12
 4. **Into the call:** A13, A14, A15, A16, A17, A18, A19
-5. **Prove it:** A20, A21
-6. **Live:** A22
-7. **Later:** A23
+5. **Prove it:** A20, A21 (paused after call 112)
+6. **The new brain:** A24 (measure), A25, A26, A27, A28, A29, A30, A31, A32, A33, then A34 - A21's checklist again
+7. **Live:** A22
+8. **Later:** A23

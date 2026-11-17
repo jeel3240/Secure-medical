@@ -19,6 +19,7 @@ Phase 7 puts an AI agent, **Seri from eDrugstore**, on the call **from the start
 | 5 | What Seri knows is three JSON files in `backend/src/ai/knowledge/`, not database tables | 5 |
 | 6 | 3-minute limit; OpenAI checked before calling; any failure falls back to the script | 6 |
 | 7 | Tested on the dev number, deployed off, then switched on for every call with a server command | 7 |
+| 8 | *(2026-11-17, after A21's call 112)* Each reply in three steps: OpenAI **understands** what the lead said, tested code **decides** what she does next from a record of the call, and OpenAI **speaks** it in her own words | 12 |
 
 ---
 
@@ -536,6 +537,7 @@ Analysis of how calls went is done by hand when wanted: every turn is in the dat
 | WebSocket | The relay against a fake ConversationRelay and a fake OpenAI: setup, turns, each action, an interruption, a stop word, a timeout, a failure |
 | **Answer test set** | About 60 things leads say ("is this a scam", "how much", "I'm driving", "call me tomorrow at 3", "what should I take for a UTI", "stop calling"), each with the action that must follow and words that must not appear. Run against the real model before every change to the knowledge or the instructions: `npm run ai:eval`. The model is chosen by it (speed and answers). *As built (A09):* 67 cases in `backend/src/ai/evals/cases.json`, marked by `grade.ts` - the outcome checked as a call checks it, the words she must and must not say, and the sentence check. `cd backend && OPENAI_API_KEY=... npm run ai:eval` runs Seri's model; `-- --model gpt-5.4-mini:none --runs 2` compares. `gpt-4.1-mini`: 133 of 134, first word 0.55 s. The results and what each run changed: `ai-agent-tickets/A09-answer-test-set.md`. *(A21, 2026-11-13: 68 cases, `no_repeat_connect` added; her words graded without her tones; a bracket that is not one of her tones fails; an action written in brackets is taken as the relay takes it, and counted; the summary counts the replies with a tone - section 1, "Her voice and tone". After A21's call 99, 2026-11-16: 85 cases, 166 of 170 - section 3, "Changed after A21's call 99"; after call 103: 87, 169 of 174 - section 4; after call 109: 89, 170 of 178 - section 3; after call 111: 91, 174 of 182 - section 3.)* |
 | End to end | `npm run e2e` gains robot calls that go to Seri, with Twilio and OpenAI stubbed at their edge. *As built (A20, 2026-11-12):* steps 14-19 of `backend/scripts/end-to-end.ts` - Seri switched on with the command's own function; the robot placing nothing while OpenAI does not answer its check, then calling again; five calls through her real relay on a real server, OpenAI a local server streaming scripted replies and tool calls: a call back (booked with her line, due, first in the queue, taken on pick-up, on My Callbacks), a transfer taken, the link texted once, a stop blocking the number without OpenAI asked, OpenAI failing mid-call and the script taking over to its own result. 131 checks, 34 of them hers; passes on the host and inside the api container. `docs/README.md`, "How to test" |
+| Speed | `npm run ai:bakeoff` (A24, 2026-11-17): every lead line - the answer test set's and A21's real ones (`--real`, exported from `call_ai_turns`) - asked each way and with each model, shuffled together; OpenAI's time to the first word, median and slowest tenth (section 12) |
 | Real phone | Every action, talking over Seri, silence, a voicemail, a hang-up, OpenAI switched off mid-call, on the dev number |
 
 ---
@@ -583,8 +585,85 @@ The words are never written to the logs, the same rule as `auto_call.answer` tod
 
 - "What is Medical Web?" (the caller ID name): until confirmed, Seri says only `medical_web`'s `fallback_answer`, "We're calling on behalf of eDrugstore."
 
+## 12. The brain: understand, decide, speak (2026-11-17, A24-A34)
+
+Decided by Jeel, 2026-11-17, after A21's call 112: "properly design our AI so it can talk correctly".
+
+### Why
+
+Until now one OpenAI request made each reply. Given one long prompt - every rule, objection, approved answer and product - and the call so far, it had to work out four things at once: what the lead meant, where the call was (had she introduced herself? how many no's? what had she offered?), what to do next, and what to say.
+
+On A21's real calls (86-112) that went wrong in the same few ways, all from her working out where the call was:
+
+- the opening said again, word for word, two and a half minutes in (call 112);
+- an offer to connect in 7 of 9 replies (90);
+- a call back at a time she picked herself (92), and on a Saturday (93);
+- offers after two clear no's (99);
+- "Not right now" taken as asking for a person (103);
+- "Let me connect you" with nobody free (111, 112).
+
+Each fix was a rule in her instructions or a note with the lead's turn (`NO_REPEAT_NOTE`, `NOBODY_NOTE`, `openQuestionNote`, section 3), and each moved its failure "less often, not never" - 9 of 12, 11 of 12 - while the notes piled up and began to pull against each other.
+
+### The shape
+
+```
+the lead's words (Twilio)
+  ├─ a stop, or key 9 ─────────────────► opt out at once, no OpenAI (as today)
+  ├─ a bare "yes" or "no" to her open yes-or-no question ─► no OpenAI needed
+  └─ UNDERSTAND (OpenAI, short JSON)  ║  who is there (database) - side by side
+                 ↓ what the lead did: "asks:shipping", "not_interested (timing)", "checking_line"...
+        DECIDE (code, tested): the call's record → what she does next, with its facts
+                 ↓
+   an approved answer → said by code, word for word, at once
+   SPEAK (OpenAI, streamed) → her own words for the rest → the safety check → Twilio
+   an ending (transfer, call back, link, goodbye) → the same end, checks and voicemail wait as today
+```
+
+- **Understand** labels what the lead just said - a question and which approved answer it is, interest, a no and why, a call-back time as the words they used, "hello?", "okay", something misheard, a voicemail's greeting. A small job, so a small fast model does it, and its mistakes are measured on their own (A28).
+- **Decide** is plain code with a record of the call: the opening said, every offer made and its answer, how many clear no's, her open question, a call-back time said back and agreed, who is there. It picks the next move by rules that hold every time: the opening only at the start; an offer to connect only when someone is free or coming, and not twice; two clear no's end the call; a time booked only after it was said back and agreed; "okay" never taken as a yes; a wrong person after they said it is them taken as misheard (A27).
+- **Speak** words that move in her voice, from only the facts it needs and a reminder of what she already said - never a fixed line (A29). The client's approved answers are said exactly as written, by code, which is also the fastest.
+- **What stays:** Twilio, Deepgram, the Aria voice and its tones; the stop check; the safety check on every sentence; "One moment...", the fallback to the script, the three minutes, silence; being talked over; the voicemail verdict; how her part ends (`/auto/ai-after`). The relay's own lines stay fixed: "One moment...", "are you still there?", the stop line, the last lines (`lastLine`), the safety line.
+- **Kept on every reply** (A31): what was understood, what was decided and the record, as one add-only `system` row, so "why did she say that?" is answered from the database, and a dropped call picks up from the record.
+
+**Not chosen:**
+
+- One request writing the labels, the move and the words together: the words start only after the rest is written, the long prompt comes back, and a move the code overrides wastes the request. It is kept as the fallback if the two steps are too slow.
+- OpenAI's voice-to-voice models: no check of each sentence before it is said, and not Aria (section 1).
+- Hosted voice-agent platforms: a second vendor, and the transfer, hold line and audit trail rebuilt.
+
+### How fast (A24)
+
+Measured 2026-11-17, 2:33-2:42 PM Arizona time, from the laptop: `npm run ai:bakeoff` (`backend/scripts/ai-bakeoff.ts`) over 194 lines - the answer test set's 91 last lead turns and A21's 103 real lead lines - every way of asking shuffled together, 3,298 requests, none failed. These are OpenAI's times alone; on a real call our server, the first sentence being whole and Twilio come on top - today's 0.61 s here was 1.09 s median on calls 86-112 (`call_ai_turns.latency_ms`), 2.15 s at the slowest tenth.
+
+| Step | Model | Median | Slowest tenth |
+|---|---|---|---|
+| **Today: one request** (first word or action) | `gpt-4.1-mini` | 0.61 s | 0.81 s |
+| **Understand** (the whole answer) | `gpt-5.4-mini`, no reasoning | **0.71 s** | **0.87 s** |
+| | `gpt-5.4-nano` / `gpt-4.1-mini` / `gpt-5.6-luna` / `gpt-5-nano` (minimal) | 0.76 / 0.77 / 0.78 / 0.80 s | 0.99 / 1.02 / 0.96 / 1.00 s |
+| | `gpt-4o-mini` / `gpt-5.6-terra` / `gpt-6-luna` | 0.86 / 1.05 / 1.05 s | 1.07 / 1.30 / 1.43 s |
+| **Speak** (first word) | `gpt-4.1-mini` | **0.52 s** | **0.61 s** |
+| | `gpt-5.6-luna` / `gpt-6-luna` / `gpt-5.4-mini` / `gpt-5.5` / `gpt-5.6-terra` | 0.55 / 0.61 / 0.63 / 0.70 / 0.78 s | 0.74 / 0.86 / 0.84 / 0.89 / 1.01 s |
+| **Both, one after the other** (first word) | `gpt-5.4-mini` + `gpt-4.1-mini` | 1.21 s | 1.44 s |
+| **One request writing labels, move and words** (the words' first character) | `gpt-4.1-mini` | 0.83 s | 1.09 s |
+
+**Not every turn needs both steps.** Of the 103 real lead lines, 39 are a bare "yes" or "no" to her question - no understand step, speak alone - and 20 are a question with an approved answer - understand alone, the answer said by code. Only 44 need both. Timed that way, line by line, from the same run: **0.75 s median and 1.36 s at the slowest tenth**, against today's 0.61 s and 0.80 s.
+
+**Decided (A24):** two steps - understand with `gpt-5.4-mini` (reasoning `none`), speak with `gpt-4.1-mini`, today's model, whose voice and tones A21's calls already shaped. Both stay to be confirmed on quality in A28 and A29, among the models fast enough here (`gpt-5.4-nano`, `gpt-5.6-luna`, `gpt-4.1-mini` for understand; `gpt-5.6-luna` for speak). Against the gate: the median about 0.15 s more than today - on a call about 1.25 s - inside it; the slowest tenth about half a second more, on the turns that need both steps - about 1.9 s on a call, inside 2.2 s but noticeably slower. Accepted for what it buys: what she does next decided right every time. Flux's early end of turn (`partialPrompts`, A33) starts understand about 0.15-0.25 s sooner on those turns. The one-request way is kept as the fallback: faster (0.83 s), but the model still decides the move.
+
+**Seen in passing** (not measured - A28's): with a stand-in prompt, `gpt-5.4-mini` labelled most real lines sensibly - "Is this a scam?" the scam objection, "Oh, wait. Do you ship to Arizona?" the states answer, "Okay." a backchannel, "Yes. Call me tomorrow." yes and a call back - and some wrongly: "Just text me the link." as a call back (the stand-in had no act for asking for the link), "Who is your CEO?" as who we are, "Not right now. Thank you." as not interested rather than not now.
+
+### Listening (A24, read from Twilio's documentation, 2026-11-17)
+
+- **Smart Turn Detection** (`turnDetection="true"`, generally available 2026-11-13) does not apply with Deepgram Flux, which keeps its own end of turn. Trying it means Nova-3 with it - Nova-3 without it cut sentences in half on A02's calls.
+- **Flux's own settings:** `eotThreshold`, 0.5 to 0.9 (default 0.8) - lower answers sooner, higher gives the lead more time; and `partialPrompts`, which also sends an early end of turn about 150-250 ms before the final one - understand can start on it and be kept when the final words match.
+- Both are measured on dev calls in A33.
+
+### The tickets
+
+A24-A34 in `docs/ai-agent-tickets/README.md`: measure (A24); two small fixes the new brain keeps - silence while Twilio says the lead talks with no words, and a safety line that never offers a person when nobody is free (A25); the knowledge files given ids and offer tags (A26); decide (A27); understand (A28); speak (A29); the call (A30); what is kept, and picking a call back up (A31); every real call played again (A32); listening (A33); then A21's checklist on a real phone again (A34), before A22.
+
 ---
 
 ## Build tracker
 
-The build is split into 22 small tickets, A01 to A22, one PR into `dev` each: **`docs/ai-agent-tickets/README.md`** has the list, the order and each ticket's status. As of 2026-11-13, A01-A20 are built and on `dev`; A21 (every path on a real phone) and A22 (deploy with her off, then switch her on) are Jeel's. The counts in the "As built" notes are as they stood that day: 1,634 backend and 432 frontend tests, 23 live checks (`ai-agent-live-check` 116), `npm run e2e` 131 checks as of 2026-11-13. Each ticket says what to build, which files, what done means, the tests and the docs to update.
+The build is split into 22 small tickets, A01 to A22, one PR into `dev` each: **`docs/ai-agent-tickets/README.md`** has the list, the order and each ticket's status. As of 2026-11-13, A01-A20 are built and on `dev`; A21 (every path on a real phone) and A22 (deploy with her off, then switch her on) are Jeel's. The counts in the "As built" notes are as they stood that day: 1,634 backend and 432 frontend tests, 23 live checks (`ai-agent-live-check` 116), `npm run e2e` 131 checks as of 2026-11-13. Each ticket says what to build, which files, what done means, the tests and the docs to update. *Since 2026-11-17:* A21 paused after call 112, and A24-A34 rebuild how she decides (section 12); A34 walks A21's checklist again, then A22.
