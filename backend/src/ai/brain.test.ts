@@ -6,7 +6,8 @@ import { DEFAULT_CALL_HOURS } from '../core/auto-dial';
 import { ANTIBIOTICS_CALL } from '../core/call-script-fixtures';
 import * as logModule from '../lib/log';
 import type { Handoff } from './actions';
-import { Brain } from './brain';
+import { Brain, RECORD_NOTE, recordFromTurns } from './brain';
+import { startState } from './policy';
 import { Conversation } from './conversation';
 import type { Turn } from './relay-store';
 import { FakeClock } from './fake-clock';
@@ -246,5 +247,31 @@ describe('when OpenAI fails', () => {
     await says('Do you sell dog food?');
     expect(speak.briefs[1]).toContain("1. Say you didn't catch that, and ask them to say it again.");
     expect(logged.some((l) => l.event === 'ai_brain.unreadable')).toBe(true);
+  });
+});
+
+describe('what is kept of each reply (A31)', () => {
+  it('a record per reply, never a word said: how it was understood, the acts, the moves, the record before and after', async () => {
+    const records: unknown[] = [];
+    const brain = new Brain(
+      { callId: 8, knowledge, lead: { firstName: 'John', phone: '+14805551234' }, now: () => NOW, hours: DEFAULT_CALL_HOURS, callbackNumber: '+14804708259', keep: (r) => records.push(r) },
+      { understand, speak }
+    );
+    const events: unknown[] = [];
+    for await (const e of brain.reply([{ role: 'system', content: 'x' }, { role: 'assistant', content: 'Hi, is this John?' }, { role: 'user', content: '[Who is there: someone free] Yes.' }], new AbortController().signal)) events.push(e);
+    expect(records).toHaveLength(1);
+    expect(records[0]).toMatchObject({ version: 1, understood: 'fast', acts: ['confirm_identity'], moves: [{ move: 'opening' }], record: { stage: 'greeting' }, decided: { stage: 'talking', open: 'interest' } });
+  });
+
+  it('picked back up: from the last record - the reply after it heard when her turn followed', () => {
+    const record = { version: 1, understood: 'fast', acts: [], moves: [{ move: 'opening' }], record: startState(), decided: { ...startState(), stage: 'talking', open: 'interest' } };
+    expect(recordFromTurns([])).toBeNull();
+    expect(recordFromTurns([{ who: 'lead', text: 'Yes.' }, { who: 'system', text: RECORD_NOTE, data: record }])).toEqual(startState());
+    expect(recordFromTurns([{ who: 'system', text: RECORD_NOTE, data: record }, { who: 'seri', text: 'This is Seri.' }])).toEqual(record.decided);
+    expect(recordFromTurns([{ who: 'system', text: RECORD_NOTE, data: { ...record, version: 99 } }, { who: 'seri', text: 'x' }])).toBeNull();
+    // Kept with the reply already said: an offer counted once, not again.
+    const offered = { ...startState(), stage: 'talking' as const, offers: { ...startState().offers, connect: { made: 1, answer: 'none' as const } } };
+    const kept = { ...record, moves: [{ move: 'offer', kind: 'connect' }], decided: offered };
+    expect(recordFromTurns([{ who: 'system', text: RECORD_NOTE, data: kept }, { who: 'seri', text: 'Shall I connect you?' }])?.offers.connect.made).toBe(1);
   });
 });

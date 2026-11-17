@@ -135,6 +135,18 @@ async function main(): Promise<void> {
     ]);
     check('a turn cannot be changed', await attempt(`UPDATE call_ai_turns SET text = 'x'`), 'call_ai_turns is add-only: rows cannot be changed or deleted');
     check('or deleted', await attempt(`DELETE FROM call_ai_turns`), 'call_ai_turns is add-only: rows cannot be changed or deleted');
+
+    // Migration 024 (A31): the new brain's record, only on the relay's own notes.
+    const withData = (who: string) =>
+      attempt(`INSERT INTO call_ai_turns (call_id, who, text, data) VALUES ($1, $2, 'Record', $3)`, [call, who, JSON.stringify({ version: 1, acts: ['agrees'] })]);
+    check('a record on the relay\'s own note (024)', await withData('system'), 'allowed');
+    check('a record on the lead\'s or her turn: refused', [await withData('lead'), await withData('seri')], ['call_ai_turns_data_on_system', 'call_ai_turns_data_on_system']);
+    check(
+      'the record read back as kept',
+      (await pool.query(`SELECT data FROM call_ai_turns WHERE call_id = $1 AND data IS NOT NULL`, [call])).rows.map((r) => r.data),
+      // jsonb keeps its own key order.
+      [{ acts: ['agrees'], version: 1 }]
+    );
   }
 
   console.log('\nthe call backs she books');

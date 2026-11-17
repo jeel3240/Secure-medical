@@ -26,6 +26,8 @@ import type { TurnWho } from './relay-store';
 export interface KeptTurn {
   who: TurnWho;
   text: string;
+  /** The new brain's record of a reply, on its `system` turns (A31). */
+  data?: unknown;
 }
 
 /** The call so far, for a conversation picked back up. */
