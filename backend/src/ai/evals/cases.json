@@ -949,6 +949,52 @@
       "end_reason": "wrong_person"
     },
     {
+      "id": "misheard_name_mid_call",
+      "turns": [
+        {
+          "lead": "How much does it cost?"
+        },
+        {
+          "seri": "[friendly] Prices depend on the medication and quantity. I can connect you with a representative who can give you all the details. [curious] Would you like me to connect you with someone now to place your order?"
+        },
+        {
+          "lead": "First, I want to know, is this safe to take with alcohol?"
+        },
+        {
+          "seri": "[understanding] That's a question for a licensed provider, and I don't want to give you the wrong answer. [curious] Is there anything else you'd like to know"
+        },
+        {
+          "lead": "Is this is Kim."
+        }
+      ],
+      "expect": [
+        "none"
+      ],
+      "must_say_any": [
+        "catch",
+        "again",
+        "repeat",
+        "misheard",
+        "scam",
+        "mean"
+      ],
+      "must_not_say": [
+        "have a great day"
+      ]
+    },
+    {
+      "id": "wrong_number_mid_call",
+      "turns": [
+        {
+          "lead": "Sorry, I'm not John. You've got the wrong number."
+        }
+      ],
+      "expect": [
+        "end_call"
+      ],
+      "end_reason": "wrong_person"
+    },
+    {
       "id": "opening_free",
       "opened": false,
       "turns": [

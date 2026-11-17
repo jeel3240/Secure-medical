@@ -27,7 +27,7 @@ describe('the real files', () => {
   const knowledge = loadKnowledge();
 
   it('load, at one version', () => {
-    expect(knowledge.version).toBe('approved-2026-11-16');
+    expect(knowledge.version).toBe('approved-2026-11-16b');
   });
 
   it('hold what the design says: 10 rules, 37 answers, 30 products, 9 objections, 3 closing questions', () => {
@@ -93,7 +93,7 @@ describe('a broken file is refused, by file and field', () => {
     const files = copies();
     files.products.version = 'approved-2026-11-14';
     expect(problemsOf(files)).toEqual([
-      'the three files must share one version: answers.json approved-2026-11-16, products.json approved-2026-11-14, sales-playbook.json approved-2026-11-16',
+      'the three files must share one version: answers.json approved-2026-11-16b, products.json approved-2026-11-14, sales-playbook.json approved-2026-11-16b',
     ]);
   });
 

@@ -1,5 +1,5 @@
 {
- "version": "approved-2026-11-16",
+ "version": "approved-2026-11-16b",
  "style": [
   "Short: 1 to 2 sentences, then one question - never two in a reply.",
   "Use the lead's first name once or twice per call, not every sentence.",
@@ -78,7 +78,7 @@
     "Wrong person",
     "Wrong number"
    ],
-   "approach": "Apologize and end.",
+   "approach": "Only when they say it plainly: apologize and end.",
    "example": "Sorry about that, have a great day."
   }
  ],
