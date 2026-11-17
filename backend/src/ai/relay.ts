@@ -49,6 +49,7 @@ import { Conversation, type Timers } from './conversation';
 import { buildInstructions, welcomeGreeting, type WhoIsThere } from './instructions';
 import type { Knowledge } from './knowledge';
 import type { SeriModel } from './openai';
+import type { BrainSetup } from './brain';
 import {
   endMessage,
   interruptedNote,
@@ -72,7 +73,13 @@ export interface RelayDeps {
   /** Seri's knowledge files, checked at start-up; their version is kept on each call she takes. */
   knowledge: Knowledge;
   store: RelayStore;
+  /** Today's brain - one OpenAI request a reply. Used when `brain` is not given. */
   model: SeriModel;
+  /**
+   * The new brain (A30, section 12): understand, decide, speak - one per call,
+   * as it keeps the call's record. Given, every call uses it.
+   */
+  brain?: (setup: BrainSetup) => SeriModel;
   /** How long Twilio has, once connected, to send `setup`. */
   setupTimeoutMs?: number;
   now?: () => Date;
@@ -279,7 +286,17 @@ function runSession(ws: WebSocket, deps: RelayDeps, sessions: Sessions): void {
         earlier,
       },
       {
-        model: deps.model,
+        model: deps.brain
+          ? deps.brain({
+              callId: aiCall.callId,
+              knowledge: deps.knowledge,
+              lead: { firstName: aiCall.firstName, phone: aiCall.phone },
+              now: () => deps.now?.() ?? new Date(),
+              hours: settings.hours,
+              callbackNumber: deps.twilio.callerId,
+              resumed: earlier !== undefined,
+            })
+          : deps.model,
         whoIsThere: () => deps.store.whoIsThere(aiCall.callId),
         keep,
         ended: (handoff) =>

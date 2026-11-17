@@ -41,15 +41,22 @@ const COMPLETION = {
 };
 
 describe('asking OpenAI', () => {
-  it('answers: up - one word asked of her own model', async () => {
+  it('answers: up - one word asked of each of her two models, speak\'s and the understand step\'s (A30)', async () => {
     await withOpenAi(200, COMPLETION, async (asked) => {
       expect(await openAiProbe('sk-test')()).toEqual({ ok: true });
-      expect(asked).toEqual([
-        {
-          path: '/v1/chat/completions',
-          body: { model: 'gpt-4.1-mini', messages: [{ role: 'user', content: 'Say OK.' }], max_completion_tokens: 1 },
-        },
-      ]);
+      expect(asked).toHaveLength(2);
+      expect(asked).toEqual(
+        expect.arrayContaining([
+          {
+            path: '/v1/chat/completions',
+            body: { model: 'gpt-4.1-mini', messages: [{ role: 'user', content: 'Say OK.' }], max_completion_tokens: 1 },
+          },
+          {
+            path: '/v1/chat/completions',
+            body: { model: 'gpt-5.4-mini', reasoning_effort: 'none', messages: [{ role: 'user', content: 'Say OK.' }], max_completion_tokens: 16 },
+          },
+        ])
+      );
     });
   });
 
@@ -63,7 +70,10 @@ describe('asking OpenAI', () => {
   it('fails: down, once - no retries', async () => {
     await withOpenAi(500, { error: { message: 'boom', type: 'server_error' } }, async (asked) => {
       expect(await openAiProbe('sk-test')()).toEqual({ ok: false, err: 'OpenAI 500 server_error' });
-      expect(asked).toHaveLength(1);
+      // Down at the first failure; each model asked at most once, never again.
+      const models = asked.map((a) => (a as { body: { model: string } }).body.model);
+      expect(models.length).toBeGreaterThanOrEqual(1);
+      expect(new Set(models).size).toBe(models.length);
     });
   });
 });

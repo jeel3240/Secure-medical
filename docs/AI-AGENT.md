@@ -148,6 +148,8 @@ applicationReconnect="true"
 
 ### How a reply is made (A11, as built 2026-11-12)
 
+*Since A30 (2026-11-17), the reply is the new brain's* (section 12, "As built: the brain on the call"): everything below about the call around it - the stop check, each sentence checked and sent as it is whole, being talked over, the lead saying more, the action checked by `toHandoff`, the limits - is as it was; what changed is what answers the call's request for her reply. The paragraphs on OpenAI with the whole call and the notes are today's brain, kept for a rollback until A34 passes.
+
 `backend/src/ai/conversation.ts`, one per call, behind the relay (section 9); OpenAI through `ai/openai.ts`, asked exactly as the answer test set asks - her model, the five actions as tools, one at most, the shared prompt cached, no retries.
 
 - **At the start:** her instructions are built for the call (A04) - the lead's first name and number, the agents' hours (`readCallHours`), our number (`TWILIO_PHONE_NUMBER`), the script's stop line. OpenAI's history starts with them and the greeting Twilio said, with its tone (A21). No active script: the session is closed as a failure before she starts (`ai_relay.no_script`).
@@ -697,6 +699,20 @@ Measured 2026-11-17, 2:33-2:42 PM Arizona time, from the laptop: `npm run ai:bak
 - **Approved answers are said by code** (`answerLine`): the client's words exactly, in a tone chosen for the answer (calm for medical, safety and privacy, sorry for an upset caller, friendly otherwise), `{callback_number}` read out. Speak writes only what follows (`spokenMoves`); an answer alone needs no speak (`needsSpeak`). Asked again, an answer is hers to say briefly in new words.
 - **"I can't provide that" is now a safety-check replacement** (`cant_answer`, `safety.ts`): "I don't know", "I don't have that information", "I can't share the CEO's name", "not information I have" are replaced by the specialist line for who is there - the playbook's never list, which instructions alone made "less often, not never" (calls 111, 112). "We don't have a physical store" and "I can't wait to help" are said as written; every line of the knowledge files still passes.
 - **Measured** (`npm run ai:eval:speak`, 21 cases - every kind of move, ten runs each, 2026-11-17): **205 of 210, 97.6%**, then 210-run figures per case at or above 9 of 10 but two - the first specialist answer with nobody free (8 of 10) and the other products (8 of 10, both misses "STD" for "STI", since accepted). Every miss on the specialist cases was "I don't have that info…" - on a call the safety check replaces that sentence. First word 0.53 s median, 0.75 s at the slowest tenth.
+
+### As built: the brain on the call (A30, 2026-11-17)
+
+`backend/src/ai/brain.ts`, one `Brain` per call, behind the same `SeriModel` the call already asked - so the call around it is unchanged: the stop check first, each sentence checked as it is whole, "One moment..." at 4 seconds and the script at 8, being talked over, the lead saying more, the three minutes, silence, the voicemail verdict, and every action checked again by `toHandoff` before it is taken.
+
+- **Each time the call asks for her reply**, the brain reads the call's own history: what the lead heard of its last reply - the call keeps only what Twilio says was heard - and marks the record with it (`markSaid`): heard whole, every move; cut off mid-sentence, what she stated but not the question she never finished; not heard at all, the decision dropped. Then the three minutes if their note came, and the lead's words since her last reply, all of them.
+- **Understand**: a bare yes or no to her open yes-or-no question without OpenAI (`fastPath`); otherwise `gpt-5.4-mini` (`openAiUnderstand`). An answer it cannot read is a line not made out - she asks them to say it again (`ai_brain.unreadable`); OpenAI failing is the fallback, as today.
+- **Decide** (`policy.ts`), then **say**: the approved answers first, by code, the client's words exactly; then speak's words for the rest, streamed (`openAiSpeak`, `gpt-4.1-mini`, no tools); in a reply that ends the call, a sentence with a question is never said; then the ending's action, as the call's own tool call - so `toHandoff` checks it: a call back only for a time said back and agreed, no transfer with nobody there. An action it refuses is a policy fault (`ai_policy.guard`): the next reply is the policy's safe move, never the action.
+- **A stop said in words the stop check does not catch**, read by the understand step, is the policy's `opt_out`: no speak, the call's own stop line.
+- **The pre-call check** (`openAiProbe`, A17) asks both models now, speak's and the understand step's: the robot calls nobody while either does not answer.
+- **Wired** in `api/index.ts`: the relay's new `brain` dependency, one per call; with it, every call uses the new brain. Today's brain stays as the relay's `model` - taking out the `brain` line rolls back - until A34 passes; then it is removed with its notes and tools.
+- **Picked back up after the line dropped**, until A31 keeps the record: past the opening, they said it is them, no question open.
+- **Logged** without a word said: `ai_brain.turn` per reply - how it was understood (`fast`, `openai`, `refused`), how long, the moves and the action (`LOGGING.md`).
+- **Tests:** `brain.test.ts`, 13 - the real conversation with OpenAI faked: the opening without OpenAI; "Hello. Hello." later never the opening; an approved answer said word for word, then speak; with nobody free a call back, never a person; a yes put through; a call back said back and booked - the call's own check agreeing; a question in a last line not said; two no's ending the call; an offer cut off never counted as made; a voicemail greeting - nothing said; the understand step failing - the script; an unreadable answer - "say that again".
 
 ### Listening (A24, read from Twilio's documentation, 2026-11-17)
 
