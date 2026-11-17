@@ -25,6 +25,12 @@ export type ModelEvent = { type: 'text'; text: string } | { type: 'tool'; call: 
 export interface SeriModel {
   /** Her reply to the conversation so far, as it is written. Stops - it may throw - when `signal` aborts. */
   reply(messages: ChatCompletionMessageParam[], signal: AbortSignal): AsyncIterable<ModelEvent>;
+  /**
+   * The lead's words while they are still being said (A33): a head start the
+   * reply may use if the words it is asked about turn out the same. Never
+   * changes what the reply is.
+   */
+  prefetch?(messages: ChatCompletionMessageParam[], said: string): void;
 }
 
 /** Replies are a sentence or two; this only stops a runaway one. */

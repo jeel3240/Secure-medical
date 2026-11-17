@@ -404,6 +404,16 @@ export class Conversation {
     }
   }
 
+  /**
+   * The lead's words while they are still speaking (A33, `partialPrompts`):
+   * handed to the model for a head start, and nothing else - not a turn, not
+   * kept, no effect on silence or on her talking.
+   */
+  partial(said: string): void {
+    if (this.over || !this.deps.model.prefetch) return;
+    this.deps.model.prefetch([...this.history], said);
+  }
+
   /** The lead finished saying something. */
   heard(said: string): void {
     if (this.over) return;

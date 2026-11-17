@@ -6,7 +6,7 @@ import { DEFAULT_CALL_HOURS } from '../core/auto-dial';
 import { ANTIBIOTICS_CALL } from '../core/call-script-fixtures';
 import * as logModule from '../lib/log';
 import type { Handoff } from './actions';
-import { Brain, RECORD_NOTE, recordFromTurns } from './brain';
+import { Brain, PREFETCH_SETTLE_MS, RECORD_NOTE, recordFromTurns } from './brain';
 import { startState } from './policy';
 import { Conversation } from './conversation';
 import type { Turn } from './relay-store';
@@ -258,6 +258,53 @@ describe('what the lead heard', () => {
     await until(() => logged.some((l) => l.event === 'ai_relay.empty_reply'), 'the empty reply');
     expect(speak.briefs).toEqual([]);
     expect(sent.filter((m) => m.type === 'text' && m.token)).toEqual([]);
+  });
+});
+
+describe('understanding started while the lead still speaks (A33)', () => {
+  const opened = async () => {
+    speak.replies.push('[friendly, upbeat] This is Seri. [curious] Interested?');
+    await says('Yes.');
+  };
+  const pause = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+  it('the same words when they finish: the early answer is used - OpenAI asked once', async () => {
+    await opened();
+    understand.answers.push(acts(['asks:price']));
+    conversation.partial('How much');
+    conversation.partial('How much is it?');
+    await pause(PREFETCH_SETTLE_MS + 30);
+    expect(understand.asked).toHaveLength(1);
+    const reply = await says('How much is it?');
+    expect(reply).toMatch(/^Prices depend on the medication and quantity\./);
+    expect(understand.asked).toHaveLength(1);
+    expect(logged.find((l) => l.event === 'ai_brain.turn' && (l.fields as { understood: string }).understood === 'early')).toBeDefined();
+  });
+
+  it('other words when they finish: asked again on the final words - the early answer never used', async () => {
+    await opened();
+    understand.answers.push(acts(['asks:price']), acts(['asks:shipping']));
+    conversation.partial('How much');
+    await pause(PREFETCH_SETTLE_MS + 30);
+    const reply = await says('How long does shipping take?');
+    expect(reply).toMatch(/^Free USPS shipping/);
+    expect(understand.asked).toHaveLength(2);
+  });
+
+  it('words still changing: nothing asked until they settle', async () => {
+    await opened();
+    conversation.partial('How');
+    await pause(PREFETCH_SETTLE_MS / 2);
+    conversation.partial('How much');
+    await pause(PREFETCH_SETTLE_MS / 2);
+    expect(understand.asked).toHaveLength(0);
+  });
+
+  it('a bare yes or no starts nothing - it needs no OpenAI', async () => {
+    await opened();
+    conversation.partial('Yes.');
+    await pause(PREFETCH_SETTLE_MS + 30);
+    expect(understand.asked).toHaveLength(0);
   });
 });
 
