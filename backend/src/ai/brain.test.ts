@@ -109,49 +109,59 @@ async function says(words: string): Promise<string> {
 }
 
 describe('the opening', () => {
-  it('"Yes." to the greeting: no OpenAI to understand it - the opening, worded by speak', async () => {
-    speak.replies.push("[friendly, upbeat] This is Seri from eDrugstore, calling about our offer of up to 25% off your first order. [curious] Is that something you'd be interested in?");
-    expect(await says('Yes.')).toMatch(/^This is Seri from eDrugstore/);
+  it('"Yes." to the greeting: no OpenAI at all - her saved introduction, said by code at once', async () => {
+    expect(await says('Yes.')).toBe('This is Seri from eDrugstore, calling about our offer of up to 25% off your first order. Would you like to hear more about it?');
     expect(understand.asked).toEqual([]);
-    expect(speak.briefs[0]).toMatch(/1\. Say who you are - Seri from eDrugstore/);
+    expect(speak.briefs).toEqual([]);
+  });
+
+  it('"Yes. How much is it?": the approved answer, then the saved introduction - both by code, no speak', async () => {
+    understand.answers.push(acts(['confirm_identity', 'asks:price']));
+    const reply = await says('Yes. How much is it?');
+    expect(reply).toBe('Prices depend on the medication and quantity. This is Seri from eDrugstore, calling about our offer of up to 25% off your first order. Would you like to hear more about it?');
+    expect(speak.briefs).toEqual([]);
+  });
+
+  it('with something speak must word, speak words the introduction too - her question last', async () => {
+    understand.answers.push(acts(['confirm_identity', 'asks:uncovered']));
+    speak.replies.push("[friendly] That's one for our specialists. [friendly, upbeat] This is Seri from eDrugstore. [curious] Interested?");
+    const reply = await says('Yes. Who is your CEO?');
+    expect(reply).toBe("That's one for our specialists. This is Seri from eDrugstore. Interested?");
+    expect(speak.briefs[0]).toMatch(/\n2\. Say who you are - Seri from eDrugstore/);
   });
 
   it('"Hello. Hello." later is never the opening again (call 112): she is here, and asks her question again', async () => {
-    speak.replies.push('[friendly, upbeat] This is Seri. [curious] Interested?');
     await says('Yes.');
     understand.answers.push(acts(['checking_line']));
     speak.replies.push("[friendly] Yes, I'm here. [curious] Would that be something you'd like?");
     await says('Hello. Hello.');
-    expect(speak.briefs[1]).toMatch(/1\. Say you're here.*\n2\. Come back, briefly and in new words, to your question: whether the offer/s);
+    expect(speak.briefs[0]).toMatch(/1\. Say you're here.*\n2\. Come back, briefly and in new words, to your question: whether the offer/s);
   });
 });
 
 describe('questions', () => {
   it('an approved answer is said by code, the client\'s words exactly - then speak goes on', async () => {
-    speak.replies.push('[friendly, upbeat] This is Seri. [curious] Interested?');
     await says('Yes.');
     understand.answers.push(acts(['asks:price']));
     speak.replies.push('[curious] Would you like me to connect you with someone now?');
     const reply = await says('How much is it?');
     expect(reply).toBe('Prices depend on the medication and quantity. Would you like me to connect you with someone now?');
-    expect(speak.briefs[1]).toContain('You have just said: "Prices depend on the medication and quantity." - don\'t say it again');
+    expect(speak.briefs[0]).toContain('You have just said: "Prices depend on the medication and quantity." - don\'t say it again');
   });
 
   it('with nobody free the answer leads to a call back, never a person', async () => {
     who = 'nobody';
-    speak.replies.push('[friendly, upbeat] This is Seri. [curious] Interested?');
     await says('Yes.');
     understand.answers.push(acts(['backchannel']));
     await says('Okay.');
     understand.answers.push(acts(['asks:price']));
     await says('How much is it?');
-    expect(speak.briefs[2]).toMatch(/Offer a call back.*\nNobody on our team is free right now/s);
+    expect(speak.briefs[1]).toMatch(/Offer a call back.*\nNobody on our team is free right now/s);
   });
 });
 
 describe('the actions', () => {
   it('a yes, someone free: an offer to connect; a yes to it - put through, after her last line', async () => {
-    speak.replies.push('[friendly, upbeat] This is Seri. [curious] Interested?');
     await says('Yes.');
     understand.answers.push(acts(['interested']));
     speak.replies.push('[cheerfully] Great! [curious] Would you like me to connect you with someone now?');
@@ -164,22 +174,20 @@ describe('the actions', () => {
 
   it('a yes with nobody free: busy and when, never a transfer', async () => {
     who = 'nobody';
-    speak.replies.push('[friendly, upbeat] This is Seri. [curious] Interested?');
     await says('Yes.');
     understand.answers.push(acts(['interested']));
     await says("Yes, I'm interested.");
-    expect(speak.briefs[1]).toMatch(/1\. Say plainly that everyone on our team is busy right now\.\n2\. Ask what time/);
+    expect(speak.briefs[0]).toMatch(/1\. Say plainly that everyone on our team is busy right now\.\n2\. Ask what time/);
     expect(ended).toEqual([]);
   });
 
   it('a call back: the time worked out by code and said back; "Yes." books it for that time - the call\'s own check agrees', async () => {
     who = 'nobody';
-    speak.replies.push('[friendly, upbeat] This is Seri. [curious] Interested?');
     await says('Yes.');
     understand.answers.push(acts(['wants_callback'], { time: { day: 'tomorrow', hour: 2, minute: null, ampm: null } }));
     speak.replies.push("[curious] So that's tomorrow at 2 PM your time?");
     await says('Call me tomorrow at two.');
-    expect(speak.briefs[1]).toContain('"tomorrow at 2 PM your time"');
+    expect(speak.briefs[0]).toContain('"tomorrow at 2 PM your time"');
     speak.replies.push("[cheerfully] You're all set for tomorrow at 2 PM. [friendly] Have a great day!");
     await says('Yes.');
     await until(() => ended.length === 1, 'the booking');
@@ -187,7 +195,6 @@ describe('the actions', () => {
   });
 
   it('a last line never asks: a question speak writes in it is not said, and the action is taken (call 95)', async () => {
-    speak.replies.push('[friendly, upbeat] This is Seri. [curious] Interested?');
     await says('Yes.');
     understand.answers.push(acts(['wants_link']));
     speak.replies.push("[friendly] The link is on its way. Anything else? [friendly] Have a great day!");
@@ -198,7 +205,6 @@ describe('the actions', () => {
   });
 
   it('two clear no\'s end the call - nothing more offered', async () => {
-    speak.replies.push('[friendly, upbeat] This is Seri. [curious] Interested?');
     await says('Yes.');
     speak.replies.push("[understanding] No problem. [curious] Is it more the timing, or just not something you need?");
     await says('No.');
@@ -212,7 +218,6 @@ describe('the actions', () => {
 
 describe('what the lead heard', () => {
   it('an offer cut off when the lead talked over her was never made - it may be made again', async () => {
-    speak.replies.push('[friendly, upbeat] This is Seri. [curious] Interested?');
     await says('Yes.');
     understand.answers.push(acts(['asks:uncovered']));
     speak.replies.push("[friendly] That's one for our specialists. [curious] Would you like me to connect you with someone now?");
@@ -221,24 +226,22 @@ describe('what the lead heard', () => {
     understand.answers.push(acts(['asks:price']));
     await says('How much is it?');
     // The person was never offered: her open question is still the offer itself, not "connect you now?".
-    expect(speak.briefs[2]).toContain('to your question: whether the offer is something they would be interested in');
-    expect(speak.briefs[2]).not.toContain('whether they would like you to connect them');
+    expect(speak.briefs[1]).toContain('to your question: whether the offer is something they would be interested in');
+    expect(speak.briefs[1]).not.toContain('whether they would like you to connect them');
   });
 
   it('the opening talked over is still said - never again (call 114: three times)', async () => {
-    speak.replies.push("[friendly, upbeat] This is Seri from eDrugstore calling about our offer of up to 25% off your first order. [curious] Is that something you'd be interested in hearing more about?");
     await says('Yes.');
-    conversation.interrupted("This is Seri from eDrugstore calling about our offer of up to 25% off your first order. Is that something you'd");
+    conversation.interrupted('This is Seri from eDrugstore, calling about our offer of up to 25% off your first order. Would you like');
     understand.answers.push(acts(['asks:shipping']));
     await says('Wait. How long does shipping take?');
-    expect(speak.briefs[1]).not.toContain('Say who you are');
+    expect(speak.briefs[0]).not.toContain('Say who you are');
     understand.answers.push(JSON.stringify({ acts: ['not_interested'], reason: 'closed', time: null }));
     await says('I am not interested.');
-    expect(speak.briefs[2]).toContain('Ask, alone and kindly');
+    expect(speak.briefs[1]).toContain('Ask, alone and kindly');
   });
 
   it('a question cut off near its end, and answered, counts as asked (call 114)', async () => {
-    speak.replies.push('[friendly, upbeat] This is Seri. [curious] Interested?');
     await says('Yes.');
     understand.answers.push(JSON.stringify({ acts: ['not_interested'], reason: null, time: null }));
     speak.replies.push('[understanding] Totally fair, John. [curious] Is it more about the timing, or just not something you need right now?');
@@ -263,7 +266,6 @@ describe('what the lead heard', () => {
 
 describe('understanding started while the lead still speaks (A33)', () => {
   const opened = async () => {
-    speak.replies.push('[friendly, upbeat] This is Seri. [curious] Interested?');
     await says('Yes.');
   };
   const pause = (ms: number) => new Promise((r) => setTimeout(r, ms));
@@ -330,7 +332,6 @@ describe('the call closing while she thinks', () => {
 
 describe('when OpenAI fails', () => {
   it('the understand step failing: the script takes the call, as when OpenAI fails today (A12)', async () => {
-    speak.replies.push('[friendly, upbeat] This is Seri. [curious] Interested?');
     await says('Yes.');
     understand.answers.push(new Error('OpenAI 500'));
     conversation.heard('How much is it?');
@@ -339,11 +340,10 @@ describe('when OpenAI fails', () => {
   });
 
   it('an answer it cannot read: she asks them to say it again', async () => {
-    speak.replies.push('[friendly, upbeat] This is Seri. [curious] Interested?');
     await says('Yes.');
     understand.answers.push('{"acts":["asks:pets"]}');
     await says('Do you sell dog food?');
-    expect(speak.briefs[1]).toContain("1. Say you didn't catch that, and ask them to say it again.");
+    expect(speak.briefs[0]).toContain("1. Say you didn't catch that, and ask them to say it again.");
     expect(logged.some((l) => l.event === 'ai_brain.unreadable')).toBe(true);
   });
 });
