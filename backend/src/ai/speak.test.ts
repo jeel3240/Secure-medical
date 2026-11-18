@@ -5,8 +5,10 @@
 import { DEFAULT_CALL_HOURS } from '../core/auto-dial';
 import { loadKnowledge } from './knowledge';
 import { startState, markOpening, type Move } from './policy';
-import { answerLine, moveBrief, needsSpeak, replyBrief, speakMessages, speakSystem, spokenMoves } from './speak';
-import { TONES } from './tone';
+import { OPENING_LINE, answerLine, moveBrief, needsSpeak, openingByCode, replyBrief, speakMessages, speakSystem, spokenMoves } from './speak';
+import { checkSentence } from './safety';
+import { SentenceSplitter } from './sentences';
+import { TONES, spokenWords, strayBrackets } from './tone';
 
 const knowledge = loadKnowledge();
 const setup = { knowledge, lead: { firstName: 'John', phone: '+14805551234' }, now: new Date('2026-11-11T19:00:00Z'), hours: DEFAULT_CALL_HOURS };
@@ -119,5 +121,33 @@ describe('the approved answers, said by code', () => {
     expect(spokenMoves([answer, { move: 'anything_else' }])).toEqual([{ move: 'anything_else' }]);
     expect(needsSpeak([answer])).toBe(false);
     expect(needsSpeak([{ ...answer, again: true }])).toBe(true);
+  });
+});
+
+describe('her introduction, saved (2026-11-18)', () => {
+  const answer: Move = { move: 'answer', id: 'price', text: 'x', again: false };
+
+  it('said by code when nothing else needs her words: a bare yes, or an approved answer and then the introduction', () => {
+    expect(openingByCode([{ move: 'opening' }])).toBe(true);
+    expect(needsSpeak([{ move: 'opening' }])).toBe(false);
+    expect(openingByCode([answer, { move: 'opening' }])).toBe(true);
+    expect(needsSpeak([answer, { move: 'opening' }])).toBe(false);
+  });
+
+  it('worded by speak, with the rest, when anything else needs her words - her one question stays last', () => {
+    const moves: Move[] = [{ move: 'specialist', again: false }, { move: 'opening' }];
+    expect(openingByCode(moves)).toBe(false);
+    expect(spokenMoves(moves)).toEqual(moves);
+    expect(openingByCode([{ ...answer, again: true }, { move: 'opening' }])).toBe(false);
+    expect(openingByCode([answer])).toBe(false);
+  });
+
+  it('only her own tones, nothing the safety check would replace, one question - the last thing she says', () => {
+    expect(strayBrackets(OPENING_LINE)).toEqual([]);
+    const splitter = new SentenceSplitter();
+    const sentences = [...splitter.push(spokenWords(OPENING_LINE)), ...splitter.flush()].map((x) => x.trim()).filter(Boolean);
+    for (const sentence of sentences) expect(checkSentence(sentence).reason).toBeFalsy();
+    expect(sentences.filter((x) => x.includes('?'))).toEqual([sentences[sentences.length - 1]]);
+    expect(spokenWords(OPENING_LINE)).toMatch(/^This is Seri from eDrugstore, calling about our offer of up to 25% off your first order\./);
   });
 });

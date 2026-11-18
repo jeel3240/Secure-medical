@@ -228,9 +228,29 @@ export function answerLine(id: string, text: string, callbackNumber: string): st
   return `${ANSWER_TONES[id] ?? '[friendly]'} ${text.split('{callback_number}').join(callbackNumber)}`;
 }
 
-/** The moves speak words: all but the approved answers said by code. */
+/**
+ * Her introduction, the same on every call, saved (2026-11-18): said by code the
+ * moment the greeting is answered - after "Yes." she waited 1-2 s for speak to
+ * write much the same line each call (calls 118, 119). No name in it, nothing of
+ * the call's own.
+ */
+export const OPENING_LINE =
+  '[friendly, upbeat] This is Seri from eDrugstore, calling about our offer of up to 25% off your first order. [curious] Would you like to hear more about it?';
+
+/**
+ * Whether the introduction is said by code: when nothing else in the reply needs
+ * her words - a bare "Yes.", or an approved answer and then the introduction. With
+ * anything speak must word, speak words the introduction too, so her one question
+ * stays the last thing she says.
+ */
+export function openingByCode(moves: readonly Move[]): boolean {
+  return moves.some((m) => m.move === 'opening') && moves.every((m) => m.move === 'opening' || (m.move === 'answer' && !m.again));
+}
+
+/** The moves speak words: all but the approved answers - and the introduction - said by code. */
 export function spokenMoves(moves: readonly Move[]): Move[] {
-  return moves.filter((m) => !(m.move === 'answer' && !m.again));
+  const opening = openingByCode(moves);
+  return moves.filter((m) => !(m.move === 'answer' && !m.again) && !(opening && m.move === 'opening'));
 }
 
 /** Whether a reply needs speak at all: an approved answer alone does not. */

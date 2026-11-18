@@ -32,7 +32,7 @@ import type { ModelEvent, SeriModel, SpeakModel, UnderstandModel } from './opena
 import { asks, decide, markOpening, markSaid, POLICY_VERSION, startState, wrapUpDue, type Act, type CallState, type Move } from './policy';
 import type { KeptTurn } from './resume';
 import { SentenceSplitter } from './sentences';
-import { answerLine, needsSpeak, replyBrief, speakMessages, speakSystem } from './speak';
+import { OPENING_LINE, answerLine, needsSpeak, openingByCode, replyBrief, speakMessages, speakSystem } from './speak';
 import { spokenWords } from './tone';
 import { actLabel, fastPath, parseActs, understandFormat, understandMessages, UnderstandError } from './understand';
 
@@ -251,6 +251,12 @@ export class Brain implements SeriModel {
     for (const m of moves) {
       if (m.move !== 'answer' || m.again) continue;
       const line = `${answerLine(m.id, m.text, spokenNumber(this.setup.callbackNumber))} `;
+      pending.full += line;
+      yield { type: 'text', text: line };
+    }
+    // Her introduction, saved - said by code when nothing else in the reply needs her words, after any approved answer.
+    if (openingByCode(moves)) {
+      const line = `${OPENING_LINE} `;
       pending.full += line;
       yield { type: 'text', text: line };
     }
