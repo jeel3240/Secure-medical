@@ -278,7 +278,13 @@ describe('understanding started while the lead still speaks (A33)', () => {
     const reply = await says('How much is it?');
     expect(reply).toMatch(/^Prices depend on the medication and quantity\./);
     expect(understand.asked).toHaveLength(1);
-    expect(logged.find((l) => l.event === 'ai_brain.turn' && (l.fields as { understood: string }).understood === 'early')).toBeDefined();
+    const turn = logged.find((l) => l.event === 'ai_brain.turn' && (l.fields as { understood: string }).understood === 'early')?.fields as Record<string, number>;
+    expect(turn).toBeDefined();
+    // Measured, never the words: two partials, the last one before the final words, understanding already running.
+    expect(turn.partials).toBe(2);
+    expect(turn.lastPartialMs).toBeGreaterThanOrEqual(PREFETCH_SETTLE_MS);
+    expect(turn.headStartMs).toBeGreaterThanOrEqual(20);
+    expect(turn.headStartMs).toBeLessThan(turn.lastPartialMs);
   });
 
   it('other words when they finish: asked again on the final words - the early answer never used', async () => {
@@ -289,6 +295,8 @@ describe('understanding started while the lead still speaks (A33)', () => {
     const reply = await says('How long does shipping take?');
     expect(reply).toMatch(/^Free USPS shipping/);
     expect(understand.asked).toHaveLength(2);
+    const turn = logged.filter((l) => l.event === 'ai_brain.turn').pop()?.fields as Record<string, unknown>;
+    expect(turn).toMatchObject({ understood: 'openai', partials: 1, headStartMs: null });
   });
 
   it('words still changing: nothing asked until they settle', async () => {
