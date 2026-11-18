@@ -20,7 +20,7 @@ import type { Handoff } from './actions';
 import { callPart, cleanFirstName, type WhoIsThere } from './instructions';
 import type { Knowledge } from './knowledge';
 import type { CallState, Move, OfferKind, OpenQuestion } from './policy';
-import { TONES } from './tone';
+import { TONES, spokenWords } from './tone';
 
 export interface SpeakSetup {
   knowledge: Knowledge;
@@ -194,15 +194,25 @@ export function replyBrief(moves: readonly Move[], state: CallState, who: WhoIsT
   ].join('\n');
 }
 
-/** The messages for one reply: her persona, the recent turns, and the brief. */
+/**
+ * The messages for one reply: her persona, the recent turns, what code has
+ * already said of this reply - an approved answer, her introduction - as her
+ * own words, then the brief. Without that last turn the lead's question stood
+ * unanswered in what speak read, and it answered it again in its own words:
+ * "I can't share exact prices", "we ship nationwide, including Texas" (calls
+ * 118-120; 5 and 9 runs in 10 on the eval).
+ */
 export function speakMessages(
   system: string,
   recent: { who: 'lead' | 'seri'; text: string }[],
-  brief: string
+  brief: string,
+  saidByCode: readonly string[] = []
 ): ChatCompletionMessageParam[] {
+  const said = saidByCode.map((line) => spokenWords(line).trim()).filter(Boolean).join(' ');
   return [
     { role: 'system', content: system },
     ...recent.slice(-6).map((t): ChatCompletionMessageParam => (t.who === 'seri' ? { role: 'assistant', content: t.text } : { role: 'user', content: t.text })),
+    ...(said ? [{ role: 'assistant' as const, content: said }] : []),
     { role: 'system', content: brief },
   ];
 }
@@ -245,6 +255,13 @@ export const OPENING_LINE =
  */
 export function openingByCode(moves: readonly Move[]): boolean {
   return moves.some((m) => m.move === 'opening') && moves.every((m) => m.move === 'opening' || (m.move === 'answer' && !m.again));
+}
+
+/** What code says of a reply before speak, in order: the approved answers, then her introduction when it is by code. */
+export function codeLines(moves: readonly Move[], callbackNumber: string): string[] {
+  const lines = moves.flatMap((m) => (m.move === 'answer' && !m.again ? [answerLine(m.id, m.text, callbackNumber)] : []));
+  if (openingByCode(moves)) lines.push(OPENING_LINE);
+  return lines;
 }
 
 /** The moves speak words: all but the approved answers - and the introduction - said by code. */

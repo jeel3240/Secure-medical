@@ -32,7 +32,7 @@ import type { ModelEvent, SeriModel, SpeakModel, UnderstandModel } from './opena
 import { asks, decide, markOpening, markSaid, POLICY_VERSION, startState, wrapUpDue, type Act, type CallState, type Move } from './policy';
 import type { KeptTurn } from './resume';
 import { SentenceSplitter } from './sentences';
-import { OPENING_LINE, answerLine, needsSpeak, openingByCode, replyBrief, speakMessages, speakSystem } from './speak';
+import { codeLines, needsSpeak, replyBrief, speakMessages, speakSystem } from './speak';
 import { spokenWords } from './tone';
 import { actLabel, fastPath, parseActs, understandFormat, understandMessages, UnderstandError } from './understand';
 
@@ -247,23 +247,16 @@ export class Brain implements SeriModel {
     const pending: Pending = { state: decision.state, moves, herTurns: turn.herTurns, full: '' };
     this.pending = pending;
 
-    // The approved answers first, said by code - the client's words exactly.
-    for (const m of moves) {
-      if (m.move !== 'answer' || m.again) continue;
-      const line = `${answerLine(m.id, m.text, spokenNumber(this.setup.callbackNumber))} `;
-      pending.full += line;
-      yield { type: 'text', text: line };
-    }
-    // Her introduction, saved - said by code when nothing else in the reply needs her words, after any approved answer.
-    if (openingByCode(moves)) {
-      const line = `${OPENING_LINE} `;
-      pending.full += line;
-      yield { type: 'text', text: line };
+    // Said by code first: the approved answers - the client's words exactly - then her saved introduction, when nothing else needs her words.
+    const byCode = codeLines(moves, spokenNumber(this.setup.callbackNumber));
+    for (const line of byCode) {
+      pending.full += `${line} `;
+      yield { type: 'text', text: `${line} ` };
     }
 
     if (needsSpeak(moves) && !(ending && ending.handoff.action === 'opt_out')) {
       const brief = replyBrief(moves, decision.state, who, this.setup.lead.firstName);
-      const stream = this.models.speak.stream(speakMessages(this.system, turn.recent, brief), signal);
+      const stream = this.models.speak.stream(speakMessages(this.system, turn.recent, brief, byCode), signal);
       if (ending) {
         // A last line never asks: a sentence with a question is not said (call 95).
         const splitter = new SentenceSplitter();

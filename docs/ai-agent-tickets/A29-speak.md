@@ -22,6 +22,8 @@
 
 `docs/AI-AGENT.md` section 12, "As built: speak (A29)". 21 cases, ten runs each: 97.6%. Below 95%: the first specialist answer with nobody free (8 of 10) and the other products (8 of 10, "STD" for "STI" - accepted since). Every specialist miss began "I don't have that info…", so that phrase became a safety-check replacement (`cant_answer`) - on a call the lead hears the specialist line instead; the instructions alone had made it "less often, not never" on calls 111 and 112.
 
+*2026-11-18, after A34's calls 118-120:* what code said of a reply - an approved answer, her saved introduction - now comes before the brief as her own words (`speakMessages`); without it she answered the lead's question again after the approved answer ("I can't share those here"). Two cases added, 23 in all: 227 of 230, 98.7% - section 12.
+
 Not as planned: speak's model stays `gpt-4.1-mini` - 0.53 s to the first word, A24's fastest, and A21's calls shaped her voice on it.
 
 ## Docs to update in the same commit

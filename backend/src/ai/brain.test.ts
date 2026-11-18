@@ -38,7 +38,9 @@ class FakeUnderstand implements UnderstandModel {
 class FakeSpeak implements SpeakModel {
   replies: string[] = [];
   briefs: string[] = [];
-  async *stream(messages: { content?: unknown }[]): AsyncIterable<string> {
+  messages: { role?: unknown; content?: unknown }[][] = [];
+  async *stream(messages: { role?: unknown; content?: unknown }[]): AsyncIterable<string> {
+    this.messages.push(messages);
     this.briefs.push(String(messages[messages.length - 1].content));
     const reply = this.replies.shift() ?? '[curious] Anything else?';
     for (const word of reply.split(/(?<= )/)) yield word;
@@ -147,6 +149,12 @@ describe('questions', () => {
     const reply = await says('How much is it?');
     expect(reply).toBe('Prices depend on the medication and quantity. Would you like me to connect you with someone now?');
     expect(speak.briefs[0]).toContain('You have just said: "Prices depend on the medication and quantity." - don\'t say it again');
+    // Speak reads the answer as already said - the lead's question answered, not standing open (calls 118-120).
+    expect(speak.messages[0].slice(-3)).toEqual([
+      { role: 'user', content: expect.stringContaining('How much is it?') },
+      { role: 'assistant', content: 'Prices depend on the medication and quantity.' },
+      { role: 'system', content: expect.any(String) },
+    ]);
   });
 
   it('with nobody free the answer leads to a call back, never a person', async () => {
