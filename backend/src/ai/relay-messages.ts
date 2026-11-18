@@ -56,6 +56,8 @@ export const RELAY_SETTINGS: Readonly<Record<string, string>> = {
   applicationReconnect: 'true',
   // The words while the lead is still speaking (A33): understanding starts on them, and is kept if the final words match.
   partialPrompts: 'true',
+  // How sure Flux must be that the lead has finished before their words come (A33): 0.5-0.9, Twilio's default 0.8. Lower answers sooner - tried at 0.6 from call 119.
+  eotThreshold: '0.6',
 };
 
 /**
