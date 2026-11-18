@@ -21,6 +21,7 @@ Nothing to build before it is measured: the settings are Twilio's, and only real
 ## Progress
 
 - **2026-11-17, understanding started early** (Jeel: faster, with no change to the model or the instructions) - `partialPrompts="true"` and the brain's head start on words still being said; `docs/AI-AGENT.md` section 12, "As built: understanding started early (A33)". To be measured on the next calls; then `eotThreshold` 0.8 against 0.6 if it helps.
+- **2026-11-18, call 118, measured:** the head start works but gains little - four of the six replies that needed the understand step used it, two came before the 150 ms settle; the wait on understanding was still 0.7-2.3 s (one 3.7 s), the request itself 0.7-1.8 s from inside the api that minute. Twilio's partial words arrive only 150-250 ms before its end of turn, so that gap is all a head start can save. `ai_brain.turn` now logs `partials`, `lastPartialMs` and `headStartMs` (`feat/a33-head-start-measured`), so the next call measures the gap itself. Next: `eotThreshold` 0.6, which shortens Twilio's own wait before the final words.
 
 ## Done when
 

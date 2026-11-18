@@ -125,6 +125,8 @@ interface Prefetch {
   abort: AbortController;
   timer: ReturnType<typeof setTimeout> | null;
   acts: Promise<Act[]> | null;
+  /** When the request went to OpenAI - null while the words settle. */
+  startedAt: number | null;
 }
 
 /** Words as compared: small letters, no punctuation, single spaces. */
@@ -139,6 +141,9 @@ export class Brain implements SeriModel {
   private state: CallState;
   private pending: Pending | null = null;
   private early: Prefetch | null = null;
+  /** The lead's words still being said this turn (A33): how many came, and when the last did - measured, never their words. */
+  private partials = 0;
+  private lastPartialAt: number | null = null;
   private readonly system: string;
   private readonly leadZone: string;
 
@@ -163,12 +168,15 @@ export class Brain implements SeriModel {
    * no needs none. Newer words drop the older start.
    */
   prefetch(messages: ChatCompletionMessageParam[], said: string): void {
+    this.partials += 1;
+    this.lastPartialAt = Date.now();
     const key = wordsKey(said);
     if (!key || fastPath(said, 'interest') || this.early?.key === key) return;
     this.dropEarly();
-    const early: Prefetch = { key, abort: new AbortController(), timer: null, acts: null };
+    const early: Prefetch = { key, abort: new AbortController(), timer: null, acts: null, startedAt: null };
     early.timer = setTimeout(() => {
       early.timer = null;
+      early.startedAt = Date.now();
       const recent = this.recentTurns(messages);
       const seri = recent.filter((t) => t.who === 'seri').pop()?.text ?? '';
       early.acts = this.askUnderstand({ said, seri, before: recent.slice(-4) }, early.abort.signal);
@@ -197,6 +205,12 @@ export class Brain implements SeriModel {
     // Understanding started early on these same words, while they were said (A33).
     const early = this.early && this.early.acts && this.early.key === wordsKey(turn.said) ? this.early.acts : null;
     const prefetched = !fast && !turn.refused && early !== null;
+    // How much of a head start the words still being said gave (A33) - measured on real calls.
+    const partials = this.partials;
+    const lastPartialMs = this.lastPartialAt === null ? null : started - this.lastPartialAt;
+    const headStartMs = prefetched && this.early?.startedAt != null ? started - this.early.startedAt : null;
+    this.partials = 0;
+    this.lastPartialAt = null;
     if (!prefetched) this.dropEarly();
     this.early = null;
     if (turn.refused) {
@@ -222,6 +236,10 @@ export class Brain implements SeriModel {
       understood,
       // The wait on understanding once the lead had finished - started early, often none.
       understandMs: fast || turn.refused ? 0 : decidedAt - started,
+      // Words still being said this turn, how long before the final words the last of them came, and how long understanding had already run.
+      partials,
+      lastPartialMs,
+      headStartMs,
       acts: acts.length,
       moves: moves.map((m) => m.move).join(','),
       action: ending?.handoff.action ?? null,
