@@ -25,6 +25,10 @@
 
 *After call 119 (2026-11-18):* her introduction is a saved line said by code (`OPENING_LINE`) - after a bare "Yes." it waited 1.1-2.0 s on the speak step for much the same words every call. `docs/AI-AGENT.md` section 12, "As built: her introduction, saved". Heard from call 120.
 
+| Call | What happened | Found |
+|---|---|---|
+| 120 | Nobody free, the saved introduction: "Yes.", "How much is it?", then a line heard as "I don't know what I know. Thank you.", then hung up | **The introduction 12 ms after "Yes."** - no wait at all, against 1.1-2.3 s before. The price answer word for word; then speak, writing her question again, said "I can't share those here" - replaced by the safety check with the specialist line and "when would be a good time for one of them to call you back?", a question the record did not know it had asked; the next line, read as `other`, got "anything else?" after 4.4 s with "One moment...". Fixed on `fix/speak-after-an-answer`: speak now reads the answer as already said (section 12, "As built: speak"). `hung_up`, 42 seconds |
+
 ## Done when
 
 - [ ] Every line heard and noted with its date in `docs/AI-AGENT.md`, like T26; then A22.

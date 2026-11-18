@@ -5,7 +5,7 @@
 import { DEFAULT_CALL_HOURS } from '../core/auto-dial';
 import { loadKnowledge } from './knowledge';
 import { startState, markOpening, type Move } from './policy';
-import { OPENING_LINE, answerLine, moveBrief, needsSpeak, openingByCode, replyBrief, speakMessages, speakSystem, spokenMoves } from './speak';
+import { OPENING_LINE, answerLine, codeLines, moveBrief, needsSpeak, openingByCode, replyBrief, speakMessages, speakSystem, spokenMoves } from './speak';
 import { checkSentence } from './safety';
 import { SentenceSplitter } from './sentences';
 import { TONES, spokenWords, strayBrackets } from './tone';
@@ -107,6 +107,19 @@ describe('one reply\'s brief', () => {
     expect(messages[1]).toEqual({ role: 'assistant', content: 't2' });
     expect(messages[7]).toEqual({ role: 'system', content: 'brief' });
   });
+
+  it('what code already said of this reply comes as her own words, tones taken out, before the brief - the question shown answered (calls 118-120)', () => {
+    const recent = [{ who: 'lead' as const, text: 'How much is it?' }];
+    const said = codeLines([{ move: 'answer', id: 'price', text: 'Prices depend on the medication and quantity.', again: false }, { move: 'return_to', open: 'interest' }], 'x');
+    expect(said).toEqual(['[friendly] Prices depend on the medication and quantity.']);
+    const messages = speakMessages('persona', recent, 'brief', said);
+    expect(messages.slice(1)).toEqual([
+      { role: 'user', content: 'How much is it?' },
+      { role: 'assistant', content: 'Prices depend on the medication and quantity.' },
+      { role: 'system', content: 'brief' },
+    ]);
+    expect(speakMessages('persona', recent, 'brief', [])).toHaveLength(3);
+  });
 });
 
 describe('the approved answers, said by code', () => {
@@ -132,12 +145,14 @@ describe('her introduction, saved (2026-11-18)', () => {
     expect(needsSpeak([{ move: 'opening' }])).toBe(false);
     expect(openingByCode([answer, { move: 'opening' }])).toBe(true);
     expect(needsSpeak([answer, { move: 'opening' }])).toBe(false);
+    expect(codeLines([answer, { move: 'opening' }], 'x')).toEqual(['[friendly] x', OPENING_LINE]);
   });
 
   it('worded by speak, with the rest, when anything else needs her words - her one question stays last', () => {
     const moves: Move[] = [{ move: 'specialist', again: false }, { move: 'opening' }];
     expect(openingByCode(moves)).toBe(false);
     expect(spokenMoves(moves)).toEqual(moves);
+    expect(codeLines(moves, 'x')).toEqual([]);
     expect(openingByCode([{ ...answer, again: true }, { move: 'opening' }])).toBe(false);
     expect(openingByCode([answer])).toBe(false);
   });

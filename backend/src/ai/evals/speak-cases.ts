@@ -24,7 +24,7 @@ export interface SpeakCase {
 const GREETED = [{ who: 'seri' as const, text: 'Hi, is this John?' }, { who: 'lead' as const, text: 'Yes.' }];
 const OPENED = [
   ...GREETED,
-  { who: 'seri' as const, text: "This is Seri from eDrugstore, and I'm calling about our offer of up to 25% off your first order. Is that something you'd be interested in?" },
+  { who: 'seri' as const, text: 'This is Seri from eDrugstore, calling about our offer of up to 25% off your first order. Would you like to hear more about it?' },
 ];
 const PRICE = 'Prices depend on the medication and quantity.';
 const SHIPPING = 'Free USPS shipping is our most popular option, and many customers get their order in 1 to 3 business days.';
@@ -86,6 +86,26 @@ export const SPEAK_CASES: SpeakCase[] = [
     moves: [{ move: 'answer', id: 'price', text: PRICE, again: false }, { move: 'offer', kind: 'callback' }],
     mustSay: [['call back', 'call you back', 'callback', 'give you a call']],
     mustNotSay: ['connect', 'depend on the medication'],
+    asks: true,
+  },
+  {
+    // Calls 119, 120: after the price answer she added "I can't give exact prices" / "I can't share those here".
+    id: 'price_then_return',
+    who: 'nobody',
+    recent: [...OPENED, { who: 'lead', text: 'How much is it?' }],
+    moves: [{ move: 'answer', id: 'price', text: PRICE, again: false }, { move: 'return_to', open: 'interest' }],
+    mustSay: [['offer', '25%', 'discount', 'interested', 'hear more', 'learn more', 'know more', 'details']],
+    mustNotSay: ["can't share", "can't give", 'cannot give', 'cannot share', 'exact price', 'depend on the medication', 'connect'],
+    asks: true,
+  },
+  {
+    // Calls 118, 119: after the states answer she said it again - "we ship nationwide, including Texas".
+    id: 'states_then_return',
+    who: 'free',
+    recent: [...OPENED, { who: 'lead', text: 'Do you ship to Texas?' }],
+    moves: [{ move: 'answer', id: 'states', text: 'Yes, we serve all 50 states.', again: false }, { move: 'return_to', open: 'interest' }],
+    mustSay: [['offer', '25%', 'discount', 'interested', 'hear more', 'learn more', 'know more', 'details']],
+    mustNotSay: ['nationwide', 'texas', 'every state', 'all 50', 'across the country', 'anywhere in'],
     asks: true,
   },
   {

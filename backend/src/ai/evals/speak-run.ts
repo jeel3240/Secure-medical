@@ -16,7 +16,7 @@ import { DEFAULT_CALL_HOURS } from '../../core/auto-dial';
 import { loadKnowledge } from '../knowledge';
 import { SERI_MODEL } from '../model';
 import { startState } from '../policy';
-import { replyBrief, speakMessages, speakSystem } from '../speak';
+import { codeLines, replyBrief, speakMessages, speakSystem } from '../speak';
 import { gradeSpeak } from './speak-grade';
 import { SPEAK_CASES } from './speak-cases';
 
@@ -52,7 +52,7 @@ async function main(): Promise<void> {
             stream: true,
             max_completion_tokens: 200,
             prompt_cache_key: 'seri-speak',
-            messages: speakMessages(system, c.recent, replyBrief(c.moves, startState(), c.who, 'John')),
+            messages: speakMessages(system, c.recent, replyBrief(c.moves, startState(), c.who, 'John'), codeLines(c.moves, 'four eight zero, four seven zero, eight two five nine')),
           });
           for await (const chunk of stream) {
             const delta = chunk.choices[0]?.delta?.content;
