@@ -28,6 +28,7 @@
 | Call | What happened | Found |
 |---|---|---|
 | 120 | Nobody free, the saved introduction: "Yes.", "How much is it?", then a line heard as "I don't know what I know. Thank you.", then hung up | **The introduction 12 ms after "Yes."** - no wait at all, against 1.1-2.3 s before. The price answer word for word; then speak, writing her question again, said "I can't share those here" - replaced by the safety check with the specialist line and "when would be a good time for one of them to call you back?", a question the record did not know it had asked; the next line, read as `other`, got "anything else?" after 4.4 s with "One moment...". Fixed on `fix/speak-after-an-answer`: speak now reads the answer as already said (section 12, "As built: speak"). `hung_up`, 42 seconds |
+| 121 | Nobody free, after the fix: "Yes.", "How much is it?", "Do you ship to Texas?", "No. I'm not interested.", "I just don't need it.", "Not interested." over the offer | As it should be: the introduction 14 ms after "Yes."; the price answer, then straight back to her question - no "I can't share"; the states answer, not said again - then "anything else?", her question not asked twice running; the why once, other products once, cut off by the third no, then a goodbye: `not_interested`, 63 seconds. Softer: a short bridge before her question ("I understand you're curious about the cost.", "Got it."). Replies 1.4-3.0 s - the understand step 0.8-2.1 s, OpenAI's own time |
 
 ## Done when
 
