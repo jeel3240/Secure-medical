@@ -3,26 +3,30 @@
  * 1-3 and 6.
  *
  * The relay (relay.ts) hands this what the lead says and does; this asks
- * OpenAI, and sends Twilio what she says, a sentence at a time:
+ * the brain (brain.ts - understand, decide, speak), and sends Twilio what she
+ * says, a sentence at a time:
  *
  *   the lead speaks    the stop check first - the script's stop words, or key
  *                      9, end the call as an opt-out whatever she would say;
- *                      then who is there now, and OpenAI with the whole call
+ *                      then who is there now, and the brain with the whole call
  *   each sentence      checked (safety.ts) and sent the moment it is whole; a
  *                      replaced one is the last of that reply; after her
  *                      first question, the rest waits for the reply's end -
  *                      never said if her action waits for the lead's answer
- *   an action          checked (`toHandoff`); taken: her last line, then
- *                      `end` straight after it (A02 - Twilio says the whole
- *                      line first); refused: she is told why, and speaks
- *                      again at once - or, when her reply asked something,
- *                      waits for the lead's answer
+ *   an action          checked again (`toHandoff`); taken: her last line,
+ *                      then `end` straight after it (A02 - Twilio says the
+ *                      whole line first); refused - the brain was wrong
+ *                      (`ai_policy.guard`): she speaks again at once without
+ *                      it - or, when her reply asked something, waits for the
+ *                      lead's answer
  *   talked over        the reply stops, and the call's history keeps only
  *                      what the lead heard of it
  *
- * The history is what OpenAI is sent: the instructions, the greeting Twilio
- * said, then each turn - built as the answer test set builds it (`leadTurn`,
- * evals/grade.ts), so what is tested is what calls use.
+ * The history is what the brain is given: the greeting Twilio said, then each
+ * turn - the lead's with a note of who is there (`leadMessage`), hers as the
+ * lead heard them. Until 2026-11-19 it was sent to OpenAI whole, with today's
+ * brain's instructions and notes after the lead's turns; the new brain reads
+ * it instead, and those were removed (docs/AI-AGENT.md section 12).
  *
  * The limits (A12), counted from `start()` on `timers` - a fake clock in tests:
  *
@@ -30,11 +34,11 @@
  *                      she stopped talking (`agentSpeaking` off): "Hello, are
  *                      you still there?"; silent again, a goodbye and
  *                      `end_call` (`no_response`)
- *   3 minutes          a note to her, with her next reply, to wrap up; 20
+ *   3 minutes          a note for the brain, with her next reply, to wrap up; 20
  *                      seconds on, the call ends (`time_limit`) - after the
  *                      reply she is saying, if she has started one, given
  *                      10 seconds more at most
- *   OpenAI slow        no first word in 4 seconds: "One moment..."; none 4
+ *   OpenAI slow        no first word from the brain in 4 seconds: "One moment..."; none 4
  *                      seconds later: `fallback` - the script takes the call (A14)
  *   OpenAI failing     `fallback`; so does the socket or the relay failing (`fail`)
  *
@@ -49,7 +53,7 @@ import type { ChatCompletionMessageParam } from 'openai/resources/chat/completio
 import type { CallHours } from '../core/auto-dial';
 import { saysStop } from '../core/answers';
 import { errText, log } from '../lib/log';
-import { fallbackHandoff, handoffData, lastLine, lineToAdd, toHandoff, waitsForAnswer, writtenAction, type Handoff } from './actions';
+import { fallbackHandoff, handoffData, lastLine, lineToAdd, toHandoff, waitsForAnswer, type Handoff } from './actions';
 import { whoIsThereNote, type WhoIsThere } from './instructions';
 import type { ModelToolCall, SeriModel } from './openai';
 import { endMessage, refusedNote, replacedNote, stopNote, textMessage, unsaidNote } from './relay-messages';
@@ -59,7 +63,7 @@ import { checkSentence, specialistLine } from './safety';
 import { asks, SentenceSplitter } from './sentences';
 import { greetingWithTone, spokenWords, withTone } from './tone';
 
-/** The lead's turn as OpenAI gets it: who is there now, then what they said. */
+/** The lead's turn as the brain gets it: who is there now, then what they said. */
 export function leadMessage(who: WhoIsThere, said: string): ChatCompletionMessageParam {
   return { role: 'user', content: `${whoIsThereNote(who)} ${said}` };
 }
@@ -68,8 +72,8 @@ export function leadMessage(who: WhoIsThere, said: string): ChatCompletionMessag
 export const STOP_KEY = '9';
 
 /**
- * How many actions in a row may be refused before she waits for the lead: the
- * first refusal tells her what to do instead, and she speaks again at once.
+ * How many actions in a row may be refused before she waits for the lead: after
+ * the first, the brain decides again without it, and she speaks at once.
  */
 const MAX_ACTION_TRIES = 2;
 
@@ -122,97 +126,10 @@ export const VOICEMAIL_TOOK_NOTE = 'Not done: a machine answered, and the voicem
 const WAITS_FOR_VERDICT: ReadonlySet<Handoff['action']> = new Set(['end_call', 'send_link', 'book_callback'] as const);
 
 /**
- * Her reply offered to put the lead through - "connect you", "talk to
- * someone". Found on A21's real call 90: seven of her nine replies ended so,
- * and the lead asked why she kept saying it.
+ * Put in the history with her first reply after three minutes: the brain reads
+ * it and wraps up (`wrapUpDue`, policy.ts). Never said, never sent to OpenAI.
  */
-const OFFERED_TO_CONNECT = /\b(connect(ing)? you|transfer you|(talk|speak) (to|with) (someone|somebody|a (person|representative|specialist|real person)|one of our))\b/i;
-
-export function offeredToConnect(said: string): boolean {
-  return OFFERED_TO_CONNECT.test(said);
-}
-
-/**
- * Given to her with the lead's next turn after a reply that offered to
- * connect them: her instructions say not to offer twice in a row, and she did
- * all the same - a note at the moment is what she follows (A21).
- */
-export const NO_REPEAT_NOTE =
-  "Your last reply already offered to connect them with someone. If they said yes, go ahead. If not, don't offer it again in this reply: answer them - a question the approved answers don't cover is answered by saying our specialists can tell them, never that you don't have it - then ask if there's anything else they'd like to know.";
-
-/**
- * The same with nobody to take the call: "go ahead" on a yes made her book a
- * call back at a time she chose herself (A21, call 92) - so a yes is asked when.
- */
-export const NO_REPEAT_NOBODY_NOTE =
-  "Your last reply offered to connect them with someone, but nobody can take a call now. If they said yes, tell them everyone on our team is busy right now and ask when would be a good time for a call back - don't book one until they have agreed a time. If not, don't offer it again: answer them - a question the approved answers don't cover is answered by saying our specialists can tell them, never that you don't have it - then ask if there's anything else they'd like to know.";
-
-/**
- * With every lead turn while nobody can take a call: her instructions say not
- * to offer a person then, and she still asked "Would you like me to connect
- * you with someone now?" on call 93, and in 5 of 10 runs of it - a note at the
- * moment is what she follows (A21). Its last sentence after call 103: to "Not
- * right now." she said everyone was busy, as if asked for someone.
- */
-export const NOBODY_NOTE =
-  "Nobody can take a call now: don't offer to connect them now, or ask if they want to talk to someone now. If they want to talk to someone, say everyone on our team is busy right now and ask when would be a good time for a call back. A no, or \"not right now\" to the offer, is not asking for anyone: say nothing about who is busy.";
-
-/**
- * The lead answered her question before asking their own - "Yes. Can someone
- * call me tomorrow at 3?", "Uh, no. I'm saying...": the question is not left
- * open.
- */
-const ANSWERED_FIRST =
-  /^(?:(?:uh|um|oh|well|so|hmm|ah)[,.!]?\s+)*(?:yes|yeah|yep|yup|sure|okay|ok|no|nope|nah|not really|maybe|correct|right|absolutely|of course|definitely|i guess)\b/i;
-
-/** "Anything else you'd like to know?" - a question the lead answers by asking one. */
-const INVITES_QUESTIONS = /\b(anything else|any (other |more )?questions?|what else)\b/i;
-
-/**
- * The question her reply ended on that a question from the lead leaves open -
- * its last sentence, her words - or null: no question, or one that invites
- * theirs.
- */
-export function endingQuestion(reply: string): string | null {
-  const words = spokenWords(reply);
-  if (!words.endsWith('?')) return null;
-  const sentences = words.match(/[^.!?]+[.!?]+/g) ?? [words];
-  const question = sentences[sentences.length - 1].trim();
-  return INVITES_QUESTIONS.test(question) ? null : question;
-}
-
-/**
- * Given when the lead answers her question with one of their own: on call 94
- * she answered each of three side questions and then asked "Does Monday at 2
- * PM your time work...?" again, near word for word, every time (A21). Her
- * question, as she asked it, is the fact she needs; the words are hers.
- */
-export function openQuestionNote(question: string): string {
-  return `Your last reply asked them: "${question}" They asked you something instead. Answer them first. Your question is still open: don't repeat it in the same words - come back to it briefly and differently, or leave it for a moment.`;
-}
-
-/**
- * The lead's turn, and a note after it when one is due - `herLastReply` empty
- * before her first reply, after the greeting. Her last reply offered
- * to connect them - not twice in a row (`NO_REPEAT_NOTE`; with nobody there,
- * `NO_REPEAT_NOBODY_NOTE`); or nobody can take a call (`NOBODY_NOTE`); and
- * the lead asked something instead of answering her question
- * (`openQuestionNote`).
- */
-export function leadTurn(who: WhoIsThere, said: string, herLastReply: string): ChatCompletionMessageParam[] {
-  const notes: string[] = [];
-  const offered = offeredToConnect(herLastReply);
-  if (offered) notes.push(who === 'nobody' ? NO_REPEAT_NOBODY_NOTE : NO_REPEAT_NOTE);
-  else if (who === 'nobody') notes.push(NOBODY_NOTE);
-  // An offer to connect is not to be asked again at all (above), not even in new words.
-  const open = offered ? null : endingQuestion(herLastReply);
-  if (open && said.includes('?') && !ANSWERED_FIRST.test(said.trim())) notes.push(openQuestionNote(open));
-  return [leadMessage(who, said), ...notes.map((content): ChatCompletionMessageParam => ({ role: 'system', content }))];
-}
-
-/** Given to her with her first reply after three minutes. */
-export const WRAP_UP_NOTE =
-  'The call has gone on for three minutes. Wrap up now: answer briefly if they asked something, then offer once - to put them through to a person if someone is free or coming, a call back if nobody is, or to text them the link - and ask which they would like. When they answer, end the call with the action that fits. Do not start anything new.';
+export const WRAP_UP_NOTE = 'The call has gone on for three minutes: wrap up.';
 
 /** Where the limits are counted: the real clock, or a fake one in tests. */
 export interface Timers {
@@ -230,8 +147,6 @@ export const realTimers: Timers = {
 
 export interface ConversationSetup {
   callId: number;
-  /** `buildInstructions` for this call. */
-  instructions: string;
   /** What Twilio said when the lead picked up - `welcomeGreeting`. */
   greeting: string;
   hours: CallHours;
@@ -247,6 +162,7 @@ export interface ConversationSetup {
 }
 
 export interface ConversationDeps {
+  /** The brain (brain.ts): her reply to the call so far. */
   model: SeriModel;
   /** Who could take the call now - asked before each reply. */
   whoIsThere: () => Promise<WhoIsThere>;
@@ -329,8 +245,7 @@ export class Conversation {
     private readonly deps: ConversationDeps
   ) {
     this.history = [
-      { role: 'system', content: setup.instructions },
-      // As the voice was sent it, warmly: she reads back her own tone, and keeps to it.
+      // As the voice was sent it, warmly.
       { role: 'assistant', content: greetingWithTone(setup.greeting) },
       ...(setup.earlier?.messages ?? []),
     ];
@@ -349,7 +264,7 @@ export class Conversation {
     return this.endedPart;
   }
 
-  /** What OpenAI would be sent now - for tests. */
+  /** What the brain would be given now - for tests. */
   get messages(): readonly ChatCompletionMessageParam[] {
     return this.history;
   }
@@ -475,26 +390,13 @@ export class Conversation {
   }
 
   /**
-   * What she said last, as OpenAI reads it back - empty before her first
-   * reply: the greeting is Twilio's, and its question has the opening's own
-   * rule, not `leadTurn`'s notes.
-   */
-  private lastReply(): string {
-    for (let i = this.history.length - 1; i > 1; i--) {
-      const message = this.history[i];
-      if (message.role === 'assistant') return typeof message.content === 'string' ? message.content : '';
-    }
-    return '';
-  }
-
-  /**
    * Her reply the lead has just answered - the greeting before her first. Not
    * an action of hers refused since: the lead never answered that.
    */
   private answeredReply(): string {
     let i = this.history.length - 1;
-    while (i > 0 && this.history[i].role !== 'user') i--;
-    for (i--; i > 0; i--) {
+    while (i >= 0 && this.history[i].role !== 'user') i--;
+    for (i--; i >= 0; i--) {
       const message = this.history[i];
       if (message.role === 'assistant' && typeof message.content === 'string' && message.content) return message.content;
     }
@@ -502,7 +404,7 @@ export class Conversation {
   }
 
   private replaceLastSaid(heard: string): void {
-    for (let i = this.history.length - 1; i > 0; i--) {
+    for (let i = this.history.length - 1; i >= 0; i--) {
       const message = this.history[i];
       if (message.role === 'assistant') {
         this.history[i] = { ...message, content: heard };
@@ -543,7 +445,7 @@ export class Conversation {
         log.error('ai_relay.who_failed', { callId: this.setup.callId, err: errText(err) });
       }
       if (reply.done || this.over) return;
-      this.history.push(...leadTurn(reply.who, this.pending.join(' '), this.lastReply()));
+      this.history.push(leadMessage(reply.who, this.pending.join(' ')));
       this.pending = [];
     }
     if (this.wrapUp === 'due') {
@@ -570,8 +472,6 @@ export class Conversation {
       return this.speak(reply, sentence);
     };
     let tool: ModelToolCall | null = null;
-    // Everything she wrote, brackets and all: an action written instead of taken is in it.
-    let written = '';
     try {
       for await (const event of this.deps.model.reply([...this.history], reply.abort.signal)) {
         if (reply.done) return;
@@ -583,7 +483,6 @@ export class Conversation {
           tool ??= event.call;
           continue;
         }
-        written += event.text;
         for (const sentence of splitter.push(event.text)) {
           if (!say(sentence)) break;
         }
@@ -604,15 +503,6 @@ export class Conversation {
       return;
     }
     if (reply.done) return;
-
-    // She wrote her action instead of taking it: taken all the same (actions.ts).
-    if (!tool) {
-      const action = writtenAction(written);
-      if (action) {
-        tool = { id: '', ...action };
-        log.warn('ai_relay.written_action', { callId: this.setup.callId, action: action.name });
-      }
-    }
 
     if (held.length > 0 && !reply.replaced) {
       if (tool && waitsForAnswer(tool.name)) {
@@ -694,7 +584,7 @@ export class Conversation {
       return;
     }
 
-    // Refused: she is told why, in the history OpenAI reads.
+    // Refused: kept in the history, so the brain decides again without it (`ai_policy.guard`).
     const id = tool.id || `call_${this.history.length}`;
     this.history.push(
       { role: 'assistant', content: said || null, tool_calls: [{ id, type: 'function', function: { name: tool.name, arguments: tool.arguments } }] },
@@ -723,7 +613,7 @@ export class Conversation {
     reply.abort.abort();
     if (this.reply === reply) this.reply = null;
 
-    // With her tone: what OpenAI wrote, and reads back in its history. Kept on
+    // With her tone: what she said, and the brain reads back in its history. Kept on
     // record as her words alone - the tone is how they were said (tone.ts).
     const said = reply.sent.join(' ');
     // The filler opened her utterance too: it is closed whatever came after it.

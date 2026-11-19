@@ -34,7 +34,7 @@ The build of `docs/AI-AGENT.md`, split into small tickets. Each is one PR into `
 | A27 | [The policy: the call's record, and what Seri does next](A27-policy.md) | A26 | L | Done 2026-11-17 - built and tested alone; used by the call from A30 |
 | A28 | [Understand: what the lead just said](A28-understand.md) | A24, A26, A27 | M | Done 2026-11-17 - 94.5%, every stop, wrong person and wanting a person right |
 | A29 | [Speak: her words for each move](A29-speak.md) | A27 | M | Done 2026-11-17 - 97.6% over 21 kinds of reply |
-| A30 | [The new brain on the call](A30-wired-into-the-call.md) | A25, A27, A28, A29 | L | Done 2026-11-17 - every call uses it; today's brain kept for a rollback |
+| A30 | [The new brain on the call](A30-wired-into-the-call.md) | A25, A27, A28, A29 | L | Done 2026-11-17 - every call uses it; today's brain kept for a rollback until 2026-11-19, then removed |
 | A31 | [What the new brain keeps, and picking a call back up](A31-storage-and-resume.md) | A30 | M | Done 2026-11-17 - migration 024 |
 | A32 | [Whole-call replays](A32-whole-call-replays.md) | A30, A31 | M | Done 2026-11-17 - 238 of 240 replays held every rule |
 | A33 | [Listening](A33-listening.md) | A30 | S | Done 2026-11-18 - understanding started early, and Flux's end of turn at 0.6; chosen on A34's calls 118 and 119 |

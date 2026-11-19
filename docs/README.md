@@ -117,7 +117,7 @@ cd backend  && npm test && npm run lint    # 1,634 tests
 cd frontend && npm test && npm run lint    # 432 tests   (counts as of 2026-11-13)
 ```
 
-**Seri's answer test set** runs against OpenAI, so it is run by hand, before every change to her knowledge files or instructions, never in CI: `cd backend && OPENAI_API_KEY=... npm run ai:eval` (`AI-AGENT.md`, section 8).
+**Seri's test sets** run against OpenAI, so they are run by hand, before every change to her knowledge files or her brain's prompts, never in CI: `cd backend && OPENAI_API_KEY=... npm run ai:eval:understand`, `npm run ai:eval:speak`, and whole real calls replayed with `npm run ai:replay -- --real turns.json` (`AI-AGENT.md`, sections 8 and 12). The answer test set of today's brain, `npm run ai:eval`, was removed with it on 2026-11-19.
 
 **Unit and route tests** mock the database and cover behaviour in isolation.
 
@@ -176,11 +176,13 @@ docker compose exec -e DATABASE_URL=postgres://app:app@postgres:5432/e2e   -e EZ
 which goes to a person (`STATE-MACHINE.md` 2d). EZ Texting and Twilio are stubbed at their
 HTTP boundaries - `axios.post`, and the Twilio library's one request method,
 which answers only "place this call" and fails the run on anything else - and
-OpenAI is a local server `OPENAI_BASE_URL` points at, streaming the replies
-each step scripts (A20). So it proves everything up to the moment a text, a
-call or a question to the model would leave the building, and nothing about
-whether a real phone buzzes or rings, or what the real model would say - the
-answer test set is for that (`npm run ai:eval`, `AI-AGENT.md` section 8). Seri's
+OpenAI is a local server `OPENAI_BASE_URL` points at, answering Seri's brain
+with the acts and words each step scripts while the brain itself decides (A20;
+the new brain since 2026-11-19). So it proves everything up to the moment a
+text, a call or a question to the model would leave the building, and nothing
+about whether a real phone buzzes or rings, or what the real model would say -
+the test sets are for that (`npm run ai:eval:understand`, `ai:eval:speak`,
+`ai:replay`, `AI-AGENT.md` sections 8 and 12). Seri's
 relay is the real WebSocket on a real server, connected as ConversationRelay
 connects. The api container must be on the current image (`docker compose up
 -d --no-deps api` after a build): an older one lacks Phase 7's packages. Twilio's side of each
@@ -196,7 +198,7 @@ Things that are true today and will surprise someone who assumes otherwise.
 
 **Seri, the AI agent, is built but not yet heard on a real phone or deployed**
 (2026-11-13). She is proved end to end with Twilio and OpenAI stubbed
-(`npm run e2e`), and her answers against the real model (`npm run ai:eval`),
+(`npm run e2e`), and her brain against the real model (`npm run ai:eval:understand`, `ai:eval:speak`, `ai:replay`),
 but not on a real call (A21), and production has neither her migrations nor
 her switch on (A22). `AI-AGENT.md`; its open points are in each ticket's "Not
 covered".

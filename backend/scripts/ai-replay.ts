@@ -29,8 +29,7 @@ import { FakeClock } from '../src/ai/fake-clock';
 import type { WhoIsThere } from '../src/ai/instructions';
 import { loadKnowledge } from '../src/ai/knowledge';
 import { openAiSpeak, openAiUnderstand } from '../src/ai/openai';
-import { NEVER_SAY } from '../src/ai/evals/speak-grade';
-import { says } from '../src/ai/evals/grade';
+import { NEVER_SAY, says } from '../src/ai/evals/speak-grade';
 
 /** Who could take each call: someone free on the calls Jeel had his browser open, someone coming on call 108; else nobody. */
 const WHO: Record<number, WhoIsThere> = { 88: 'free', 105: 'free', 106: 'free', 109: 'free', 108: 'coming' };
@@ -54,7 +53,7 @@ async function replay(callId: number, lines: string[], apiKey: string): Promise<
     { understand: openAiUnderstand(apiKey), speak: openAiSpeak(apiKey) }
   );
   const conversation = new Conversation(
-    { callId, instructions: 'unused', greeting: 'Hi, is this John?', hours: DEFAULT_CALL_HOURS, stopLine: ANTIBIOTICS_CALL.optOutBody, optOutWords: ANTIBIOTICS_CALL.optOutWords },
+    { callId, greeting: 'Hi, is this John?', hours: DEFAULT_CALL_HOURS, stopLine: ANTIBIOTICS_CALL.optOutBody, optOutWords: ANTIBIOTICS_CALL.optOutWords },
     { model: brain, whoIsThere: async () => who, keep: (t) => kept.push(t), ended: (h) => ended.push(h), send: () => undefined, now: () => NOW, timers: new FakeClock() }
   );
   conversation.start();

@@ -16,9 +16,10 @@ import { DEFAULT_CALL_HOURS } from '../core/auto-dial';
 import { ANTIBIOTICS_CALL } from '../core/call-script-fixtures';
 import * as logModule from '../lib/log';
 import type { Handoff } from './actions';
+import type { BrainSetup } from './brain';
 import { Conversation, type VerdictState } from './conversation';
 import { FakeClock } from './fake-clock';
-import { CALL_HEADING, type WhoIsThere } from './instructions';
+import type { WhoIsThere } from './instructions';
 import { loadKnowledge } from './knowledge';
 import type { ModelEvent, SeriModel } from './openai';
 import { attachRelay, type Relay } from './relay';
@@ -112,6 +113,8 @@ class FakeModel implements SeriModel {
   }
 }
 let model: FakeModel;
+/** How each call's brain was set up. */
+let brains: BrainSetup[];
 
 let server: http.Server;
 let relay: Relay;
@@ -127,7 +130,10 @@ async function start(opts: { setupTimeoutMs?: number } = {}): Promise<void> {
     twilio: { authToken: TOKEN, publicUrl: PUBLIC, callerId: '+14805308582' },
     knowledge: KNOWLEDGE,
     store,
-    model,
+    brain: (setup) => {
+      brains.push(setup);
+      return model;
+    },
     setupTimeoutMs: opts.setupTimeoutMs,
     timers: clock,
   });
@@ -138,6 +144,7 @@ async function start(opts: { setupTimeoutMs?: number } = {}): Promise<void> {
 beforeEach(async () => {
   store = new FakeStore();
   model = new FakeModel();
+  brains = [];
   clock = new FakeClock();
   logged = [];
   for (const level of ['info', 'warn', 'error'] as const) {
@@ -427,7 +434,7 @@ describe('who may connect', () => {
 });
 
 describe('Seri talks (A11)', () => {
-  it('her instructions are built for this call and lead, and her reply goes out in sentences', async () => {
+  it('her brain is set up for this call and lead, and her reply goes out in sentences', async () => {
     store.who = 'coming';
     model.replies.push([text('This is Seri from eDrugstore. '), text('How are you today?')]);
     const c = await connected();
@@ -435,11 +442,10 @@ describe('Seri talks (A11)', () => {
     c.send({ type: 'prompt', voicePrompt: 'Who is this?', last: true });
     await until(() => c.received.length === 3, 'her reply');
 
-    const [system, greeting, lead] = model.asked[0];
-    expect(system.role).toBe('system');
-    expect(system.content).toContain(CALL_HEADING);
-    expect(system.content).toContain('John');
-    expect(system.content).toContain(STOP);
+    expect(brains).toHaveLength(1);
+    expect(brains[0]).toMatchObject({ callId: 7, lead: { firstName: 'john', phone: '+15550001111' }, callbackNumber: '+14805308582', resumed: false });
+    const [greeting, lead] = model.asked[0];
+    expect(model.asked[0]).toHaveLength(2);
     expect(greeting).toEqual({ role: 'assistant', content: '[friendly] Hi, is this John?' });
     expect(lead).toEqual({ role: 'user', content: '[Who is there: someone coming] Who is this?' });
     expect(c.received).toEqual([
@@ -732,7 +738,7 @@ describe('when the line drops: Twilio reconnects, and the call is picked back up
     c.send({ type: 'prompt', voicePrompt: 'How much is it?', last: true });
     await until(() => c.received.length === 2, 'her reply');
     const asked = model.asked[0];
-    expect(asked.slice(1)).toEqual([
+    expect(asked).toEqual([
       { role: 'assistant', content: '[friendly] Hi, is this John?' },
       { role: 'user', content: '[Who is there: someone free] Yes.' },
       { role: 'assistant', content: 'This is Seri from eDrugstore.' },

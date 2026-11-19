@@ -26,7 +26,7 @@
 `docs/AI-AGENT.md` section 12, "As built: the brain on the call (A30)". Built differently from the ticket, more simply:
 
 - **The brain sits behind the call's existing `SeriModel`**, rather than `conversation.ts` being rewritten: it reads the history the call already keeps - what the lead heard of each reply, trimmed by the call when she is talked over - so the commit point, late results and moves counted only when heard come from the call's own machinery, and every behaviour of A11-A21 stays as tested. `conversation.ts` is unchanged.
-- **Today's brain is kept for a rollback** - the relay's `model`; taking out the `brain` line in `api/index.ts` brings it back - until A34 passes; then it is removed with `leadTurn`'s notes, the actions as OpenAI tools, the whole-call instructions and `npm run ai:eval` (A09), whose lead lines are already in A28's labelled set.
+- **Today's brain is kept for a rollback** - the relay's `model`; taking out the `brain` line in `api/index.ts` brings it back - until A34 passes; then it is removed with `leadTurn`'s notes, the actions as OpenAI tools, the whole-call instructions and `npm run ai:eval` (A09), whose lead lines are already in A28's labelled set. *Removed 2026-11-19 with today's brain: `docs/AI-AGENT.md` section 12, "Today's brain removed".*
 - **Not done:** understand on Flux's early end of turn - A33. One deadline for both steps: the call's 4 s / 8 s already counts from the lead's words to the first word, both steps inside it.
 - **Found while testing:** a test file that does not compile is not run, and the total of tests passing does not show it - "Test Suites" must be read too (it was the health test, fixed).
 

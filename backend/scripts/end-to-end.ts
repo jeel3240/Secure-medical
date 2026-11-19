@@ -26,9 +26,11 @@
  * the real code and checked here. Twilio's side of a call is its webhooks,
  * posted to the real routes and signed as Twilio signs them, each one the
  * address the previous answer gave - as Twilio follows them. OpenAI is a
- * local server at its HTTP edge (`OPENAI_BASE_URL`), streaming the replies
- * each step scripts; Seri's relay is the real WebSocket on a real server,
- * connected as ConversationRelay connects - signed, then `setup`.
+ * local server at its HTTP edge (`OPENAI_BASE_URL`), answering Seri's brain
+ * as each step scripts - the acts it understands, the words it speaks - while
+ * the brain itself decides, as on a call; Seri's relay is the real WebSocket
+ * on a real server, connected as ConversationRelay connects - signed, then
+ * `setup`.
  *
  * It writes rows, so it refuses to run against a database that holds any:
  *
@@ -83,7 +85,8 @@ import twilio from 'twilio';
 import WebSocket from 'ws';
 import { cachedProbe, fallbackStreak, openAiProbe, seriState } from '../src/ai/health';
 import { loadKnowledge } from '../src/ai/knowledge';
-import { openAiModel } from '../src/ai/openai';
+import { Brain } from '../src/ai/brain';
+import { openAiSpeak, openAiUnderstand } from '../src/ai/openai';
 import { attachRelay } from '../src/ai/relay';
 import { pgRelayStore } from '../src/ai/relay-store';
 import { readAiAgentOn, switchAiAgent } from '../src/ai/settings';
@@ -147,16 +150,25 @@ const TWILIO: TwilioSettings = {
 const OPENAI_KEY = 'sk-e2e-not-a-real-key';
 
 /**
- * OpenAI, at its HTTP edge (A20): a local server `OPENAI_BASE_URL` points at.
- * Seri's replies are streamed as OpenAI streams them - her words a piece at a
- * time, then her action as a tool call - in the order each step scripts them
- * (`openAiReplies`); `fail` answers one with OpenAI's error. The one-word check
- * the robot makes (A17) is answered up, or down while `openAiDown`.
+ * OpenAI, at its HTTP edge (A20, A30): a local server `OPENAI_BASE_URL` points
+ * at. Seri's brain asks it two ways, answered in the order each step scripts
+ * them: understanding the lead's words - strict JSON, `response_format` - with
+ * the acts in `understood`; and her words for what the brain decided - streamed
+ * a piece at a time - from `spoken`, written from the brief when the words
+ * depend on it, like a time said back. `fail` answers one with OpenAI's error.
+ * The one-word check the robot makes (A17) - neither - is answered up, or down
+ * while `openAiDown`. Nothing here decides: the brain's policy does, as on a call.
  */
-type ScriptedReply = 'fail' | { say?: string; tool?: { name: string; args?: Record<string, unknown> } };
-const openAiReplies: ScriptedReply[] = [];
-const openAiAsked: { stream: boolean; messages: { role: string; content?: unknown }[] }[] = [];
+type Understood = 'fail' | { acts: string[]; reason?: string | null; time?: { day: string | null; hour: number | null; minute: number | null; ampm: 'am' | 'pm' | null } | null };
+type Spoken = 'fail' | string | ((brief: string) => string);
+const understood: Understood[] = [];
+const spoken: Spoken[] = [];
+const openAiAsked: { kind: 'understand' | 'speak' | 'check'; tools: boolean; messages: { role: string; content?: unknown }[] }[] = [];
 let openAiDown = false;
+const asked = (kind: 'understand' | 'speak') => openAiAsked.filter((a) => a.kind === kind);
+
+/** The time a brief says to say back - "in exactly these words for the time: "..."" - as the model says it. */
+const sayTimeBack = (brief: string) => `So that's ${/exactly these words for the time: "([^"]+)"/.exec(brief)?.[1] ?? '?'}?`;
 
 function fakeOpenAi(): http.Server {
   return http.createServer((req, res) => {
@@ -164,39 +176,39 @@ function fakeOpenAi(): http.Server {
     req.on('data', (chunk) => (raw += chunk));
     req.on('end', () => {
       const body = JSON.parse(raw || '{}');
-      openAiAsked.push({ stream: body.stream === true, messages: body.messages ?? [] });
+      const messages: { role: string; content?: unknown }[] = body.messages ?? [];
+      const kind = body.stream === true ? 'speak' : body.response_format ? 'understand' : 'check';
+      openAiAsked.push({ kind, tools: 'tools' in body, messages });
       const json = (status: number, payload: unknown) => {
         res.writeHead(status, { 'content-type': 'application/json' });
         res.end(JSON.stringify(payload));
       };
       const error = { error: { message: 'The server had an error.', type: 'server_error' } };
-      if (!body.stream) {
-        if (openAiDown) return json(503, error);
-        return json(200, {
-          id: 'chatcmpl-check',
+      const answer = (content: string) =>
+        json(200, {
+          id: 'chatcmpl-e2e',
           object: 'chat.completion',
           created: 0,
           model: body.model,
-          choices: [{ index: 0, message: { role: 'assistant', content: 'OK' }, finish_reason: 'length' }],
+          choices: [{ index: 0, message: { role: 'assistant', content }, finish_reason: 'stop' }],
         });
+      if (kind === 'check') return openAiDown ? json(503, error) : answer('OK');
+      if (kind === 'understand') {
+        const next = understood.shift() ?? { acts: ['other'] };
+        if (next === 'fail') return json(500, error);
+        return answer(JSON.stringify({ acts: next.acts, reason: next.reason ?? null, time: next.time ?? null }));
       }
-      const next = openAiReplies.shift() ?? { say: 'Sure.' };
+      const next = spoken.shift() ?? 'Sure.';
       if (next === 'fail') return json(500, error);
+      const words = typeof next === 'function' ? next(String(messages.at(-1)?.content ?? '')) : next;
       res.writeHead(200, { 'content-type': 'text/event-stream' });
       const chunk = (delta: unknown, finish: string | null = null) =>
         res.write(
           `data: ${JSON.stringify({ id: 'chatcmpl-e2e', object: 'chat.completion.chunk', created: 0, model: body.model, choices: [{ index: 0, delta, finish_reason: finish }] })}\n\n`
         );
       // Her words a few at a time, as OpenAI writes them.
-      for (const piece of (next.say ?? '').match(/\S+\s*/g) ?? []) chunk({ content: piece });
-      if (next.tool) {
-        chunk({
-          tool_calls: [
-            { index: 0, id: 'call_e2e', type: 'function', function: { name: next.tool.name, arguments: JSON.stringify(next.tool.args ?? {}) } },
-          ],
-        });
-      }
-      chunk({}, next.tool ? 'tool_calls' : 'stop');
+      for (const piece of words.match(/\S+\s*/g) ?? []) chunk({ content: piece });
+      chunk({}, 'stop');
       res.end('data: [DONE]\n\n');
     });
   });
@@ -271,14 +283,6 @@ class Relay {
   close(): void {
     this.ws.close(1000);
   }
-}
-
-/** Tomorrow at 3 PM on a New York clock, as Seri books it: "YYYY-MM-DDTHH:MM". */
-function tomorrowAtThreeInNewYork(): string {
-  const day = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/New_York', year: 'numeric', month: '2-digit', day: '2-digit' }).format(
-    new Date(Date.now() + 86_400_000)
-  );
-  return `${day}T15:00`;
 }
 
 /**
@@ -799,7 +803,13 @@ async function main(): Promise<void> {
   /** The api's relay on a server of its own: a fresh one is the api after a restart, with nothing in memory. */
   const startApi = async () => {
     const server = http.createServer(api());
-    const relay = attachRelay(server, { twilio: TWILIO, knowledge: loadKnowledge(), store: pgRelayStore(pool), model: openAiModel(OPENAI_KEY) });
+    const relay = attachRelay(server, {
+      twilio: TWILIO,
+      knowledge: loadKnowledge(),
+      store: pgRelayStore(pool),
+      // Her brain, as api/index.ts wires it: understand, decide, speak - one per call.
+      brain: (setup) => new Brain(setup, { understand: openAiUnderstand(OPENAI_KEY), speak: openAiSpeak(OPENAI_KEY) }),
+    });
     await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
     return { server, relay, port: (server.address() as AddressInfo).port };
   };
@@ -862,28 +872,28 @@ async function main(): Promise<void> {
     d.answered.twiml.includes('<ConversationRelay'),
     attribute(d.answered.twiml, 'ConversationRelay', 'welcomeGreeting'),
   ], [true, '[friendly] Hi, is this Dana?']);
-  openAiReplies.push({ say: "It's Seri from eDrugstore. We have up to 25% off antibiotics today. Is now a good time?" });
-  await d.relay.says('Who is this?');
-  const firstAsk = openAiAsked.filter((a) => a.stream)[0];
-  check('OpenAI is asked with her instructions, her greeting with its tone, and what Dana said', [
-    firstAsk?.messages[0]?.role,
-    firstAsk?.messages[1]?.content,
-    String(firstAsk?.messages[2]?.content).endsWith('Who is this?'),
-  ], ['system', '[friendly] Hi, is this Dana?', true]);
-  check('she answers, a sentence at a time', d.relay.said(), "It's Seri from eDrugstore. We have up to 25% off antibiotics today. Is now a good time? ");
-  // A call back only for a time she has said back and Dana agreed (A21, call 92).
-  openAiReplies.push({ tool: { name: 'book_callback', args: { time: tomorrowAtThreeInNewYork(), time_zone: 'America/New_York', reason: 'Wants to order antibiotics' } } });
-  openAiReplies.push({ say: "No problem. So that's tomorrow at 3 PM your time?" });
+  const askedBefore = openAiAsked.length;
+  await d.relay.says('Yes.');
+  check('"Yes." to the greeting: her introduction, said by code at once - OpenAI never asked', [
+    d.relay.said().includes('This is Seri from eDrugstore, calling about our offer of up to 25% off your first order.'),
+    openAiAsked.length,
+  ], [true, askedBefore]);
+  understood.push({ acts: ['wants_callback'], time: { day: 'tomorrow', hour: 3, minute: null, ampm: 'pm' } });
+  spoken.push(sayTimeBack);
   await d.relay.says("I'm driving. Can someone call me tomorrow at 3?");
-  check('booking before saying the time back: refused, and she confirms it instead', [
-    String(openAiAsked.filter((a) => a.stream).at(-1)?.messages.at(-1)?.content).startsWith('Not booked: they have not agreed this time'),
+  const danaUnderstood = asked('understand').at(-1);
+  check('her brain asks what Dana meant, with what she had just said - then speaks what it decided, with no tools', [
+    String(danaUnderstood?.messages.at(-1)?.content).includes('Seri just said: This is Seri from eDrugstore'),
+    String(danaUnderstood?.messages.at(-1)?.content).endsWith("The caller just said: I'm driving. Can someone call me tomorrow at 3?"),
+    asked('speak').at(-1)?.tools,
+  ], [true, true, false]);
+  // A call back only for a time she has said back and Dana agreed (A21, call 92) - decided in code.
+  check('she says the time back, as a question - and books nothing yet', [
     d.relay.said().endsWith("So that's tomorrow at 3 PM your time? "),
     d.relay.received.some((m) => m.type === 'end'),
-  ], [true, true, false]);
-  openAiReplies.push({
-    say: 'Perfect, someone will call you tomorrow at 3 PM your time. Have a great day!',
-    tool: { name: 'book_callback', args: { time: tomorrowAtThreeInNewYork(), time_zone: 'America/New_York', reason: 'Wants to order antibiotics' } },
-  });
+  ], [true, false]);
+  understood.push({ acts: ['agrees'] });
+  spoken.push('Perfect, someone will call you tomorrow at 3 PM your time. Have a great day!');
   await d.relay.says('Yes, that works.');
   const danaHandoff = await d.relay.ended();
   check('her action ends the session, after her last line', JSON.parse(danaHandoff).action, 'book_callback');
@@ -893,8 +903,8 @@ async function main(): Promise<void> {
   await d.over(70);
   check('saved: callback_booked, her part ended with it', await seriRecord(dana), { script_result: 'callback_booked', ai_ended_with: 'book_callback' });
   const danaBooking = (await pool.query(`SELECT agent_id, reason, note FROM callbacks WHERE lead_id = $1`, [dana])).rows;
-  check('her call back: nobody\'s yet, with her line for whoever calls', danaBooking, [{ agent_id: null, reason: 'ai_booked', note: 'Wants to order antibiotics' }]);
-  check('on Dana\'s page', (await getLeadDetail(dana))?.aiCallback?.note, 'Wants to order antibiotics');
+  check('her call back: nobody\'s yet, with her line for whoever calls', danaBooking, [{ agent_id: null, reason: 'ai_booked', note: 'Asked for a call back.' }]);
+  check('on Dana\'s page', (await getLeadDetail(dana))?.aiCallback?.note, 'Asked for a call back.');
   const danaSeri = ((await getTimeline(dana)) ?? []).find((e) => e.kind === 'call')?.detail.seri as { turns: unknown[]; ended: { action: string } };
   check('on the timeline: her conversation - greeting, three each - and how it ended', [danaSeri?.turns.length, danaSeri?.ended.action], [7, 'book_callback']);
   check('Admin > Leads: Callback booked', (await listAdminLeads({})).leads.find((l) => l.id === dana)?.call, 'callback_booked');
@@ -915,7 +925,8 @@ async function main(): Promise<void> {
   const eli = await seriCalls(ELI, 'Eli');
   check('the next look calls Eli', (await dialDueLeads(seriDialler)).placed, 1);
   const e = await answerSeri(eli);
-  openAiReplies.push({ say: 'Great, connecting you now.', tool: { name: 'transfer_to_agent' } });
+  understood.push({ acts: ['confirm_identity', 'interested', 'wants_person'] });
+  spoken.push('Great, connecting you now.');
   await e.relay.says("Yes, I'd like to order. Can I talk to someone?");
   const eliHandoff = await e.relay.ended();
   e.relay.close();
@@ -942,7 +953,8 @@ async function main(): Promise<void> {
   const fran = await seriCalls(FRAN, 'Fran');
   check('the next look calls Fran', (await dialDueLeads(seriDialler)).placed, 1);
   const f = await answerSeri(fran);
-  openAiReplies.push({ say: "Sure, I'll text you the link now. Have a great day!", tool: { name: 'send_link' } });
+  understood.push({ acts: ['wants_link'] });
+  spoken.push("Sure, I'll text you the link now. Have a great day!");
   await f.relay.says('Just text me the link, I will look later.');
   const franHandoff = await f.relay.ended();
   f.relay.close();
@@ -958,13 +970,13 @@ async function main(): Promise<void> {
   const gil = await seriCalls(GIL, 'Gil');
   check('the next look calls Gil', (await dialDueLeads(seriDialler)).placed, 1);
   const g = await answerSeri(gil);
-  const askedBefore = openAiAsked.filter((a) => a.stream).length;
+  const askedBeforeGil = openAiAsked.length;
   await g.relay.says('Stop calling me.');
   const gilHandoff = await g.relay.ended();
-  check('the stop line, and the opt-out - OpenAI never asked', [g.relay.said(), JSON.parse(gilHandoff).action, openAiAsked.filter((a) => a.stream).length], [
+  check('the stop line, and the opt-out - OpenAI never asked', [g.relay.said(), JSON.parse(gilHandoff).action, openAiAsked.length], [
     'Okay, we will not call you again. Goodbye.',
     'opt_out',
-    askedBefore,
+    askedBeforeGil,
   ]);
   g.relay.close();
   await g.after({ SessionStatus: 'ended', HandoffData: gilHandoff });
@@ -979,7 +991,7 @@ async function main(): Promise<void> {
   const hal = await seriCalls(HAL, 'Hal');
   check('the next look calls Hal', (await dialDueLeads(seriDialler)).placed, 1);
   const h = await answerSeri(hal);
-  openAiReplies.push('fail');
+  understood.push('fail');
   await h.relay.says('What is this about?');
   const halHandoff = await h.relay.ended();
   check('her part ends with the fallback, and why', JSON.parse(halHandoff), { action: 'fallback', why: 'model_failed' });
@@ -1005,8 +1017,7 @@ async function main(): Promise<void> {
   const ivy = await seriCalls(IVY, 'Ivy');
   check('the next look calls Ivy', (await dialDueLeads(seriDialler)).placed, 1);
   const v = await answerSeri(ivy);
-  openAiReplies.push({ say: "This is Seri from eDrugstore, calling about up to 25% off your first order. Is that something you'd be interested in?" });
-  await v.relay.says('Who is this?');
+  await v.relay.says('Yes.');
   // A deploy: Docker stops the api, which hands each call back to Twilio to reconnect.
   await seriRelay.stop();
   check('the api stopping closes her line with 1012 - Twilio keeps the call and reconnects', await v.relay.closed, 1012);
@@ -1014,22 +1025,19 @@ async function main(): Promise<void> {
   const restarted = await startApi();
   // Twilio reconnects to the api that started, then replays what Ivy said meanwhile.
   const v2 = await Relay.open(restarted.port, v.answered.twiml, v.call.sid, 1);
-  const askedBeforeRestart = openAiAsked.filter((a) => a.stream).length;
-  openAiReplies.push({ say: "Sure. So that's tomorrow at 3 PM your time?" });
+  understood.push({ acts: ['agrees', 'wants_callback'], time: { day: 'tomorrow', hour: 3, minute: null, ampm: 'pm' } });
+  spoken.push(sayTimeBack);
   await v2.says('Yes. Can someone call me tomorrow at 3?');
-  const afterRestart = openAiAsked.filter((a) => a.stream)[askedBeforeRestart];
-  openAiReplies.push({
-    say: 'Perfect, someone will call you tomorrow at 3 PM your time. Have a great day!',
-    tool: { name: 'book_callback', args: { time: tomorrowAtThreeInNewYork(), time_zone: 'America/New_York', reason: 'Wants to hear about the offer' } },
-  });
+  const afterRestart = String(asked('understand').at(-1)?.messages.at(-1)?.content);
+  // Said back, then "Yes." - read without OpenAI, from the record kept before the restart.
+  spoken.push('Perfect, someone will call you tomorrow at 3 PM your time. Have a great day!');
   await v2.says('Yes.');
   const ivyHandoff = await v2.ended();
-  check('OpenAI is asked with the call so far - her greeting, Ivy\'s question, her answer - then what Ivy said after the restart', [
-    afterRestart?.messages[1]?.content,
-    String(afterRestart?.messages[2]?.content).endsWith('Who is this?'),
-    String(afterRestart?.messages[3]?.content).startsWith('This is Seri from eDrugstore'),
-    String(afterRestart?.messages.at(-1)?.content).endsWith('Can someone call me tomorrow at 3?'),
-  ], ['[friendly] Hi, is this Ivy?', true, true, true]);
+  check('her brain is asked with the call so far - her greeting, Ivy\'s yes, her introduction - then what Ivy said after the restart', [
+    afterRestart.includes('Seri: Hi, is this Ivy?\nCaller: Yes.\nSeri: This is Seri from eDrugstore'),
+    afterRestart.endsWith('The caller just said: Yes. Can someone call me tomorrow at 3?'),
+    v2.said().includes("So that's tomorrow at 3 PM your time? "),
+  ], [true, true, true]);
   check('no second greeting: the restarted api never said one', v2.said().includes('Hi, is this Ivy?'), false);
   check('her action ends the session, on the new line', JSON.parse(ivyHandoff).action, 'book_callback');
   v2.close();
@@ -1049,7 +1057,10 @@ async function main(): Promise<void> {
     ['ai_agent.ended', 'book_callback'],
   ]);
   const ivyTurns = (await pool.query(`SELECT who FROM call_ai_turns WHERE call_id = $1 ORDER BY id`, [v.call.id])).rows.map((r) => r.who);
-  check('every turn kept, in order, with a note where the line dropped', ivyTurns, ['seri', 'lead', 'seri', 'system', 'lead', 'seri', 'lead', 'seri', 'action']);
+  // `system`: the brain's record of each reply (A31), and the note where the line dropped.
+  check('every turn kept, in order, with the brain\'s record of each reply and a note where the line dropped', ivyTurns, [
+    'seri', 'lead', 'system', 'seri', 'system', 'lead', 'system', 'seri', 'lead', 'system', 'seri', 'action',
+  ]);
   const ivySeri = ((await getTimeline(ivy)) ?? []).find((e) => e.kind === 'call')?.detail.seri as { turns: unknown[]; ended: { action: string } };
   check('on the timeline: one conversation, as if nothing happened', [ivySeri?.turns.length, ivySeri?.ended.action], [7, 'book_callback']);
 

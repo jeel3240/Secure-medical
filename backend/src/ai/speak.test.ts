@@ -2,6 +2,7 @@
  * Speak (A29): what she is told for each reply - without OpenAI. How well she
  * words it is `npm run ai:eval:speak`.
  */
+import productsFile from './knowledge/products.json';
 import { DEFAULT_CALL_HOURS } from '../core/auto-dial';
 import { loadKnowledge } from './knowledge';
 import { startState, markOpening, type Move } from './policy';
@@ -28,6 +29,21 @@ describe('her persona', () => {
     expect(system).not.toContain('Prices depend on the medication');
     expect(system).not.toContain('transfer_to_agent');
     expect(system).not.toContain('Would you like me to connect you with someone now to place your order?');
+  });
+});
+
+describe('no price, nor a product\'s web address, in anything she is told', () => {
+  // Carried over from today's brain's instructions, removed 2026-11-19.
+  it('her persona and every brief', () => {
+    const prices = productsFile.products.map((p) => p.site_price_usd).filter((p): p is string => typeof p === 'string');
+    expect(prices.length).toBeGreaterThan(0);
+    const told = [speakSystem(setup), ...knowledge.answers.map((a) => replyBrief([{ move: 'answer', id: a.id, text: a.spoken, again: true }], startState(), 'free', 'John'))].join('\n');
+    for (const price of prices) {
+      expect(told).not.toContain(price);
+      expect(told).not.toContain(price.replace(/\.00$/, ' dollars'));
+    }
+    expect(told).not.toContain('$');
+    for (const product of productsFile.products) expect(told).not.toContain(product.url);
   });
 });
 
