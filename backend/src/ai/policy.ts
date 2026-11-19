@@ -18,7 +18,7 @@
 
 import type { CallHours, Weekday } from '../core/auto-dial';
 import type { EndReason, Handoff } from './actions';
-import { atLocalTime, checkCallbackTime, spokenTime, toLocalTime, type CallbackRefusal } from './callback-time';
+import { MAX_AHEAD_DAYS, atLocalTime, bookableAt, checkCallbackTime, spokenTime, toLocalTime, type CallbackRefusal } from './callback-time';
 import type { WhoIsThere } from './instructions';
 import type { AnswerOffer, Knowledge } from './knowledge';
 
@@ -174,7 +174,12 @@ export type Move =
   /** Nobody can take a call now, said plainly. */
   | { move: 'busy' }
   /** When would suit for a call back - on `day` if they named one. */
-  | { move: 'ask_time'; day: string | null }
+  | {
+      move: 'ask_time';
+      day: string | null;
+      /** The day they asked for has no time a call back can be booked: why, and the day said - `day` is then the next that has one (call 122). */
+      instead?: { asked: string; why: DayRefusal };
+    }
   /**
    * The time said back, as a question. `instead`: the time they asked for
    * could not be booked, and why - this is the nearest that can (`asked`, theirs).
@@ -471,10 +476,60 @@ const DAY_WORDS: Readonly<Record<string, Weekday>> = {
   saturday: 'sat',
 };
 
+/** Why a day said with no time cannot have a call back: the agents do not work it, its hours are over, or it is beyond the booking window. */
+export type DayRefusal = 'closed_day' | 'none_left' | 'too_far';
+
+/** Whether any quarter hour of `date` (the lead's own, YYYY-MM-DD) can have a call back. */
+function dayHasTime(date: string, context: PolicyContext): boolean {
+  for (let minute = 0; minute < 24 * 60; minute += 15) {
+    const clock = `${String(Math.floor(minute / 60)).padStart(2, '0')}:${String(minute % 60).padStart(2, '0')}`;
+    const at = atLocalTime(`${date}T${clock}`, context.leadZone);
+    if (at && bookableAt(at, context.hours, context.now)) return true;
+  }
+  return false;
+}
+
+/**
+ * A day said with no time ("How about Sunday?"): whether it has a time a call
+ * back can be booked; if not, why, and the next day that has one - as a day word
+ * `resolveTime` reads: "tomorrow", a weekday within the week, else a date. Call
+ * 122: "Sunday" was asked "what time on Sunday?", then refused once a time came.
+ * Null when the day cannot be read.
+ */
+function dayForCallback(dayWord: string, context: PolicyContext): { ok: true } | { ok: false; asked: string; why: DayRefusal; next: string | null } | null {
+  const noon = resolveTime({ day: dayWord, hour: 12, minute: 0, ampm: 'pm' }, context.leadZone, context.now);
+  if (!noon) return null;
+  const date = toLocalTime(noon, context.leadZone).slice(0, 10);
+  if (dayHasTime(date, context)) return { ok: true };
+  const asked = spokenTime(noon, context.leadZone, context.now).replace(/ at .*$/, '');
+  const agentsDay = new Date(`${toLocalTime(noon, context.hours.timeZone).slice(0, 10)}T12:00:00Z`).getUTCDay();
+  const today = toLocalTime(context.now, context.leadZone).slice(0, 10);
+  const why: DayRefusal = !context.hours.days.has(WEEKDAYS[agentsDay])
+    ? 'closed_day'
+    : noon.getTime() > context.now.getTime() + MAX_AHEAD_DAYS * 24 * 60 * 60 * 1000
+      ? 'too_far'
+      : 'none_left';
+  if (why === 'too_far') return { ok: false, asked, why, next: null };
+  for (let d = 1; d <= MAX_AHEAD_DAYS; d++) {
+    const next = addDays(date, d);
+    if (!dayHasTime(next, context)) continue;
+    const ahead = Math.round((Date.parse(`${next}T12:00:00Z`) - Date.parse(`${today}T12:00:00Z`)) / (24 * 60 * 60 * 1000));
+    const word = ahead === 1 ? 'tomorrow' : ahead < 7 ? Object.keys(DAY_WORDS)[new Date(`${next}T12:00:00Z`).getUTCDay()] : next;
+    return { ok: false, asked, why, next: word };
+  }
+  return { ok: false, asked, why, next: null };
+}
+
 /** The time they said, worked out on their own clock, checked, and said back - or the nearest that can be booked. */
 function timeMoves(s: CallState, said: SaidTime, context: PolicyContext): Move[] {
   const day = said.day ?? s.callback.day;
   if (said.hour === null) {
+    // A day alone: asked for a time only when that day has one - else why, and the next day that does.
+    const check = said.day ? dayForCallback(said.day, context) : { ok: true as const };
+    if (check && !check.ok) {
+      s.callback.day = check.next;
+      return [{ move: 'ask_time', day: check.next, instead: { asked: check.asked, why: check.why } }];
+    }
     s.callback.day = day;
     return [{ move: 'ask_time', day }];
   }

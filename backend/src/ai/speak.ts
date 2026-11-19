@@ -83,6 +83,23 @@ const OPEN: Record<OpenQuestion, string> = {
   anything_else: 'whether there is anything else they would like to know',
 };
 
+/** Why a day said alone has no call back (call 122). */
+const DAY_REFUSED: Record<string, string> = {
+  closed_day: 'our team does not work that day - the agent hours are below',
+  none_left: "our team's hours that day are over",
+  too_far: 'that is too far ahead - a call back can be booked up to two weeks out',
+};
+
+/** A day as the brief says it: "tomorrow", "on Monday", "on Monday, November 30". */
+function dayWords(day: string): string {
+  if (day === 'today' || day === 'tomorrow') return day;
+  if (/^\d{4}-\d{2}-\d{2}$/.test(day)) {
+    const d = new Date(`${day}T12:00:00Z`);
+    return `on ${d.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', timeZone: 'UTC' })}`;
+  }
+  return `on ${day.charAt(0).toUpperCase()}${day.slice(1)}`;
+}
+
 const REFUSED: Record<string, string> = {
   outside_hours: 'our team works only during the agent hours below',
   past: 'that time has already gone',
@@ -138,7 +155,9 @@ export function moveBrief(move: Move, who: WhoIsThere, firstName: string | null)
     case 'busy':
       return 'Say plainly that everyone on our team is busy right now.';
     case 'ask_time':
-      return `Ask what time${move.day ? ` ${move.day}` : ''} would suit them for a call back.`;
+      return move.instead
+        ? `They asked for ${move.instead.asked}, but ${DAY_REFUSED[move.instead.why]}. Say why first, plainly, then ask what time${move.day ? ` ${dayWords(move.day)}` : ' in the next two weeks'} would suit them for a call back.`
+        : `Ask what time${move.day ? ` ${dayWords(move.day)}` : ''} would suit them for a call back.`;
     case 'confirm_time':
       return move.instead
         ? `They asked for ${move.asked}, but ${REFUSED[move.instead] ?? 'that time is not possible'}. Say why first, plainly, then offer this time instead, as a question, in exactly these words for the time: "${move.spoken}".`

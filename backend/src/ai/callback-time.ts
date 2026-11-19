@@ -239,11 +239,17 @@ export type CallbackCheck =
  * - past, or too soon - the first quarter hour far enough ahead;
  * - too far ahead - the same time on the last day with hours in reach.
  */
+/** Whether a call back may be booked at `when` - the one rule `checkCallbackTime` holds a time to, without the offer. */
+export function bookableAt(when: Date, hours: CallHours, now: Date): boolean {
+  const t = when.getTime();
+  return t >= now.getTime() + MIN_AHEAD_MINUTES * MINUTE && t <= now.getTime() + MAX_AHEAD_DAYS * DAY && insideCallHours(when, hours);
+}
+
 export function checkCallbackTime(when: Date, leadZone: string, hours: CallHours, now: Date): CallbackCheck {
   const at = when.getTime();
   const earliest = now.getTime() + MIN_AHEAD_MINUTES * MINUTE;
   const latest = now.getTime() + MAX_AHEAD_DAYS * DAY;
-  const allowed = (t: number) => t >= earliest && t <= latest && insideCallHours(new Date(t), hours);
+  const allowed = (t: number) => bookableAt(new Date(t), hours, now);
 
   let why: CallbackRefusal;
   if (at < now.getTime()) why = 'past';
