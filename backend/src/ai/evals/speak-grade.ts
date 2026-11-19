@@ -10,8 +10,15 @@
 import { checkSentence } from '../safety';
 import { SentenceSplitter } from '../sentences';
 import { spokenWords, strayBrackets } from '../tone';
-import { says } from './grade';
 import type { SpeakCase } from './speak-cases';
+
+/** Whether `phrase` is in `text`: as whole words when it starts and ends with one, else anywhere. Any case. */
+export function says(text: string, phrase: string): boolean {
+  const t = text.toLowerCase().replace(/[‘’]/g, "'");
+  const p = phrase.toLowerCase();
+  if (!/^\w/.test(p) || !/\w$/.test(p)) return t.includes(p);
+  return new RegExp(`\\b${p.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`).test(t);
+}
 
 /** Never, in any reply. */
 export const NEVER_SAY = ["i don't know", "can't answer", "can't provide", "cannot provide", "don't have that information", 'no worries', 'take your time', '$', 'dollars'];

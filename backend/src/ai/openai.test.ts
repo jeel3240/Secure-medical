@@ -5,7 +5,7 @@
 import http from 'http';
 import type { AddressInfo } from 'net';
 import OpenAI from 'openai';
-import { openAiModel, plainError } from './openai';
+import { openAiSpeak, plainError } from './openai';
 
 describe('a failure, as the relay logs it', () => {
   it('a refused key: the status and code, never the message quoting the key', () => {
@@ -40,9 +40,9 @@ describe('a failure, as the relay logs it', () => {
     const before = process.env.OPENAI_BASE_URL;
     process.env.OPENAI_BASE_URL = `http://127.0.0.1:${(server.address() as AddressInfo).port}/v1`;
     try {
-      const model = openAiModel('sk-test-not-a-key');
+      const speak = openAiSpeak('sk-test-not-a-key');
       const read = async () => {
-        for await (const _ of model.reply([{ role: 'user', content: 'Hello?' }], new AbortController().signal)) void _;
+        for await (const _ of speak.stream([{ role: 'user', content: 'Hello?' }], new AbortController().signal)) void _;
       };
       await expect(read()).rejects.toThrow(/^OpenAI 401 invalid_api_key$/);
     } finally {

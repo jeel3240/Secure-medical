@@ -1,21 +1,25 @@
 /**
  * Seri's five actions - Phase 7, A06, docs/AI-AGENT.md section 3. Defined
- * once here: what OpenAI is offered (`ACTION_TOOLS`), what a tool call becomes
- * (`toHandoff`), and what Twilio hands back to `/auto/ai-after` (`fromHandoff`),
- * so the relay and the page that carries the action out agree. Pure.
+ * once here: what the brain's action becomes (`toHandoff`), and what Twilio
+ * hands back to `/auto/ai-after` (`fromHandoff`), so the relay and the page
+ * that carries the action out agree. Pure.
  *
  * Every call ends with exactly one: she says her last line, the relay ends the
  * ConversationRelay session with the action as `handoffData`, and Twilio posts
- * it back as `HandoffData` (A11, A14). A tool call that cannot be carried out -
- * a call back at 8 PM, a transfer with nobody there - is refused with words
- * that tell her what to offer instead, and the call goes on.
+ * it back as `HandoffData` (A11, A14). The brain decides the action in code
+ * (policy.ts); `toHandoff` checks it again, as a guard - one that cannot be
+ * carried out - a call back at 8 PM, a transfer with nobody there - is refused,
+ * logged as the brain's fault (`ai_policy.guard`), and the call goes on.
+ *
+ * Until 2026-11-19 the actions were also offered to OpenAI as tools
+ * (`ACTION_TOOLS`), and one written in brackets instead of taken was taken
+ * all the same (`writtenAction`) - today's brain's, removed with it.
  *
  * `fallback` is not hers: the relay ends with it when she fails (A12), and
  * anything unreadable handed back reads as it, so the call falls back to the
  * script rather than to nothing.
  */
 
-import type { ChatCompletionFunctionTool } from 'openai/resources/chat/completions';
 import type { CallHours } from '../core/auto-dial';
 import { isTimeZone } from '../db/sql';
 import { atLocalTime, checkCallbackTime, MAX_AHEAD_DAYS, MIN_AHEAD_MINUTES, saysClock, spokenTime, toLocalTime, type CallbackRefusal } from './callback-time';
@@ -32,7 +36,7 @@ export type EndReason = (typeof END_REASONS)[number];
 /**
  * Why the relay itself ended the call with `end_call` (A12): the lead stayed
  * silent after "are you still there?", or the call ran past its time. Never
- * offered to OpenAI - only the relay ends a call for these.
+ * the brain's - only the relay ends a call for these.
  */
 export const RELAY_END_REASONS = ['no_response', 'time_limit'] as const;
 export type RelayEndReason = (typeof RELAY_END_REASONS)[number];
@@ -57,82 +61,12 @@ export type Handoff =
   | { action: 'fallback'; why: string };
 
 // ---------------------------------------------------------------------------
-// What OpenAI is offered
-
-const noArguments = { type: 'object', properties: {}, required: [], additionalProperties: false };
-
-const tool = (name: ActionName, description: string, parameters: Record<string, unknown>): ChatCompletionFunctionTool => ({
-  type: 'function',
-  function: { name, description, parameters, strict: true },
-});
-
-/** The five actions, as OpenAI tools. Strict: the arguments always match the schema. */
-export const ACTION_TOOLS: ChatCompletionFunctionTool[] = [
-  tool(
-    'transfer_to_agent',
-    'Put the lead through to a person now. Only when the lead wants to order now or wants a person, and someone is free or coming. Say your last line first: "Great, connecting you now."',
-    noArguments
-  ),
-  tool(
-    'book_callback',
-    'Book a call from a person at a time the lead agreed, after you confirmed it out loud in their own time zone and said goodbye. The time must be inside the agent hours.',
-    {
-      type: 'object',
-      properties: {
-        time: {
-          type: 'string',
-          description: 'The date and time the lead agreed, as their own clock reads it: YYYY-MM-DDTHH:MM, for example 2026-11-12T15:00.',
-        },
-        time_zone: {
-          type: 'string',
-          description: 'The lead\'s time zone, as an IANA name, for example America/New_York.',
-        },
-        reason: {
-          type: 'string',
-          description: 'One short line for the person who calls back, for example "Wants to order antibiotics".',
-        },
-      },
-      required: ['time', 'time_zone', 'reason'],
-      additionalProperties: false,
-    }
-  ),
-  tool('send_link', 'Text the lead a link to look for themselves. Say first that it is on its way, and goodbye.', noArguments),
-  tool('opt_out', 'The lead asked not to be called again. Say the stop line first. Never ask why or try to change their mind.', noArguments),
-  tool(
-    'end_call',
-    'End the call: not interested after two clear no\'s, the wrong person, a medical emergency, or the call is done. Say goodbye first.',
-    {
-      type: 'object',
-      properties: { reason: { type: 'string', enum: [...END_REASONS] } },
-      required: ['reason'],
-      additionalProperties: false,
-    }
-  ),
-];
-
-// ---------------------------------------------------------------------------
 // A tool call, turned into a handoff - or refused, for Seri to put right
 
 export interface ToolCall {
   name: string;
-  /** As OpenAI sends them: a JSON string. */
+  /** A JSON string. */
   arguments: string;
-}
-
-const WRITTEN_ACTION = new RegExp(`\\[\\s*(?:functions\\.)?(${ACTIONS.join('|')})\\s*(?:[:(]\\s*(\\{[^\\][]*\\})?\\s*\\)?)?\\s*\\]`);
-
-/**
- * An action she wrote in square brackets instead of taking it - "[send_link]",
- * "[functions.book_callback:{...}]". Seen on the answer test set (A09) once
- * her tones put brackets in her words (A21): now and then the action went in
- * them too, and once it was not taken at all - she said a call back was
- * booked, and none was. The relay takes it as if she had, through the same
- * checks (`toHandoff`); the bracket itself is never said (tone.ts). Null when
- * there is none.
- */
-export function writtenAction(text: string): ToolCall | null {
-  const match = WRITTEN_ACTION.exec(text);
-  return match ? { name: match[1], arguments: match[2] ?? '{}' } : null;
 }
 
 /** What a tool call is checked against: this turn's view of the call. */

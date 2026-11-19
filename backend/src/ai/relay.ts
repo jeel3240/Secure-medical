@@ -9,8 +9,8 @@
  *
  *   connection  refused unless signed by Twilio for the relay's own address
  *   setup       names our `calls` row; Seri starts it once (relay-store.ts),
- *               with her instructions built for the call, and her greeting -
- *               which Twilio says itself - is her first turn
+ *               with a brain of its own for the call (brain.ts), and her
+ *               greeting - which Twilio says itself - is her first turn
  *   reconnect   a `setup` after the line dropped - the api restarting, or the
  *               network (`applicationReconnect`): the call is picked back up
  *               from its kept turns (resume.ts), and what the lead said that
@@ -46,7 +46,7 @@ import { WebSocketServer, type RawData, type WebSocket } from 'ws';
 import { errText, log } from '../lib/log';
 import type { CallScript } from '../core/call-script';
 import { Conversation, type Timers } from './conversation';
-import { buildInstructions, welcomeGreeting, type WhoIsThere } from './instructions';
+import { welcomeGreeting, type WhoIsThere } from './instructions';
 import type { Knowledge } from './knowledge';
 import type { SeriModel } from './openai';
 import { RECORD_NOTE, recordFromTurns, type BrainSetup } from './brain';
@@ -74,13 +74,12 @@ export interface RelayDeps {
   /** Seri's knowledge files, checked at start-up; their version is kept on each call she takes. */
   knowledge: Knowledge;
   store: RelayStore;
-  /** Today's brain - one OpenAI request a reply. Used when `brain` is not given. */
-  model: SeriModel;
   /**
-   * The new brain (A30, section 12): understand, decide, speak - one per call,
-   * as it keeps the call's record. Given, every call uses it.
+   * The brain (A30, section 12): understand, decide, speak - one per call, as
+   * it keeps the call's record. Today's brain, one OpenAI request a reply, was
+   * kept beside it for a rollback until 2026-11-19.
    */
-  brain?: (setup: BrainSetup) => SeriModel;
+  brain: (setup: BrainSetup) => SeriModel;
   /** How long Twilio has, once connected, to send `setup`. */
   setupTimeoutMs?: number;
   now?: () => Date;
@@ -266,18 +265,9 @@ function runSession(ws: WebSocket, deps: RelayDeps, sessions: Sessions): void {
   };
 
   const begin = (aiCall: AiCall, script: CallScript, settings: CallSettings, earlier?: Earlier, record?: CallState | null): Conversation => {
-    const now = deps.now?.() ?? new Date();
     return new Conversation(
       {
         callId: aiCall.callId,
-        instructions: buildInstructions({
-          knowledge: deps.knowledge,
-          lead: { firstName: aiCall.firstName, phone: aiCall.phone },
-          now,
-          hours: settings.hours,
-          callbackNumber: deps.twilio.callerId,
-          stopLine: script.optOutBody,
-        }),
         // Twilio says the greeting itself, the moment the lead picks up (A13),
         // from the same function: it is what she has said so far.
         greeting: welcomeGreeting(aiCall.firstName),
@@ -287,19 +277,17 @@ function runSession(ws: WebSocket, deps: RelayDeps, sessions: Sessions): void {
         earlier,
       },
       {
-        model: deps.brain
-          ? deps.brain({
-              callId: aiCall.callId,
-              knowledge: deps.knowledge,
-              lead: { firstName: aiCall.firstName, phone: aiCall.phone },
-              now: () => deps.now?.() ?? new Date(),
-              hours: settings.hours,
-              callbackNumber: deps.twilio.callerId,
-              resumed: earlier !== undefined,
-              record,
-              keep: (kept) => keep({ who: 'system', text: RECORD_NOTE, data: kept }),
-            })
-          : deps.model,
+        model: deps.brain({
+          callId: aiCall.callId,
+          knowledge: deps.knowledge,
+          lead: { firstName: aiCall.firstName, phone: aiCall.phone },
+          now: () => deps.now?.() ?? new Date(),
+          hours: settings.hours,
+          callbackNumber: deps.twilio.callerId,
+          resumed: earlier !== undefined,
+          record,
+          keep: (kept) => keep({ who: 'system', text: RECORD_NOTE, data: kept }),
+        }),
         whoIsThere: () => deps.store.whoIsThere(aiCall.callId),
         keep,
         ended: (handoff) =>

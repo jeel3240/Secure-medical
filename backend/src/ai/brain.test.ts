@@ -76,7 +76,7 @@ beforeEach(() => {
     { understand, speak }
   );
   conversation = new Conversation(
-    { callId: 7, instructions: 'unused by the brain', greeting: 'Hi, is this John?', hours: DEFAULT_CALL_HOURS, stopLine: ANTIBIOTICS_CALL.optOutBody, optOutWords: ANTIBIOTICS_CALL.optOutWords },
+    { callId: 7, greeting: 'Hi, is this John?', hours: DEFAULT_CALL_HOURS, stopLine: ANTIBIOTICS_CALL.optOutBody, optOutWords: ANTIBIOTICS_CALL.optOutWords },
     {
       model: brain,
       whoIsThere: async () => who,

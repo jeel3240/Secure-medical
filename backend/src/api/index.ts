@@ -1,6 +1,6 @@
 import { KnowledgeError, loadKnowledge, type Knowledge } from '../ai/knowledge';
 import { Brain } from '../ai/brain';
-import { openAiModel, openAiSpeak, openAiUnderstand } from '../ai/openai';
+import { openAiSpeak, openAiUnderstand } from '../ai/openai';
 import { attachRelay, type Relay } from '../ai/relay';
 import { pgRelayStore } from '../ai/relay-store';
 import { readAutoCalls } from '../auto-calls-settings';
@@ -96,8 +96,7 @@ const relay: Relay | null =
         twilio: config.twilio.settings,
         knowledge,
         store: pgRelayStore(pool),
-        model: openAiModel(config.openai.apiKey),
-        // The new brain (A30): understand, decide, speak - one per call.
+        // Her brain (A30): understand, decide, speak - one per call.
         brain: (setup) => new Brain(setup, { understand: openAiUnderstand(config.openai.apiKey), speak: openAiSpeak(config.openai.apiKey) }),
       })
     : null;

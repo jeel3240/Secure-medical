@@ -1,5 +1,5 @@
 /**
- * One call's conversation with Seri - A11, A12. A fake OpenAI that answers as
+ * One call's conversation with Seri - A11, A12. A fake brain that answers as
  * told, a clock moved by hand, and the messages the relay would send Twilio:
  * sentences as they are whole, the sentence check, being talked over, each
  * action, the stop check; and the limits - silence, three minutes, OpenAI
@@ -14,14 +14,7 @@ import {
   Conversation,
   FILLER_LINE,
   leadMessage,
-  leadTurn,
   LIMITS,
-  endingQuestion,
-  NO_REPEAT_NOBODY_NOTE,
-  NO_REPEAT_NOTE,
-  NOBODY_NOTE,
-  openQuestionNote,
-  offeredToConnect,
   STILL_THERE_LINE,
   VERDICT_POLL_MS,
   VERDICT_WAIT_MS,
@@ -100,7 +93,6 @@ beforeEach(() => {
   conversation = new Conversation(
     {
       callId: 7,
-      instructions: 'THE INSTRUCTIONS',
       greeting: 'Hi, is this John?',
       hours: DEFAULT_CALL_HOURS,
       stopLine: STOP,
@@ -135,12 +127,11 @@ const tokens = () => sent.filter((m) => m.type === 'text').map((m) => [m.token, 
 const ends = () => sent.filter((m) => m.type === 'end');
 const replyEvents = () => logged.filter((l) => l.event === 'ai_relay.reply').map((l) => l.fields as Record<string, unknown>);
 
-describe('what OpenAI is sent', () => {
-  it('the instructions, the greeting Twilio said, then the lead\'s words with who is there', async () => {
+describe('what the brain is given', () => {
+  it('the greeting Twilio said, then the lead\'s words with who is there', async () => {
     conversation.heard('Who is this?');
     await until(() => model.asked.length === 1, 'the request');
     expect(model.asked[0]).toEqual([
-      { role: 'system', content: 'THE INSTRUCTIONS' },
       { role: 'assistant', content: '[friendly] Hi, is this John?' },
       { role: 'user', content: '[Who is there: someone free] Who is this?' },
     ]);
@@ -152,16 +143,14 @@ describe('what OpenAI is sent', () => {
     who = 'nobody';
     conversation.heard('Okay');
     await until(() => model.asked.length === 2, 'the second request');
-    expect(model.asked[1].slice(-4)).toEqual([
+    expect(model.asked[1].slice(-3)).toEqual([
       { role: 'user', content: '[Who is there: someone free] Who is this?' },
       { role: 'assistant', content: 'Sure.' },
       { role: 'user', content: '[Who is there: nobody] Okay' },
-      // With nobody there, the note not to offer a person now (A21, call 93).
-      { role: 'system', content: NOBODY_NOTE },
     ]);
   });
 
-  it('the lead\'s turn is built as the answer test set builds it', () => {
+  it('the lead\'s turn: who is there, then their words', () => {
     expect(leadMessage('coming', 'Yes')).toEqual({ role: 'user', content: '[Who is there: someone coming] Yes' });
   });
 });
@@ -332,12 +321,12 @@ describe('talked over', () => {
 
   it('during the greeting: the greeting in the history is what was heard', () => {
     conversation.interrupted('Hi, is');
-    expect(conversation.messages[1]).toEqual({ role: 'assistant', content: 'Hi, is' });
+    expect(conversation.messages[0]).toEqual({ role: 'assistant', content: 'Hi, is' });
   });
 
   it('before a word was heard: the history is left as it was', () => {
     conversation.interrupted('');
-    expect(conversation.messages[1]).toEqual({ role: 'assistant', content: '[friendly] Hi, is this John?' });
+    expect(conversation.messages[0]).toEqual({ role: 'assistant', content: '[friendly] Hi, is this John?' });
   });
 
   it('the lead says more while she is still thinking: one reply, to all of it', async () => {
@@ -519,10 +508,9 @@ describe('her actions', () => {
     expect(ends()).toEqual([]);
     conversation.heard('Yes');
     await until(() => model.asked.length === 2, 'the next request');
-    // Her question offered to connect them: the note says a yes goes ahead (A21).
-    expect(model.asked[1].slice(-4).map((m) => m.role)).toEqual(['assistant', 'tool', 'user', 'system']);
-    expect(model.asked[1].at(-4)).toMatchObject({ content: 'Would you like me to connect you now?' });
-    expect(model.asked[1].at(-1)).toEqual({ role: 'system', content: NO_REPEAT_NOTE });
+    // The refused action is in the history, then the lead's answer.
+    expect(model.asked[1].slice(-3).map((m) => m.role)).toEqual(['assistant', 'tool', 'user']);
+    expect(model.asked[1].at(-3)).toMatchObject({ content: 'Would you like me to connect you now?' });
   });
 });
 
@@ -629,127 +617,6 @@ describe('after her question, nothing more is said when her action waits for the
     ]);
     expect(replyEvents()[0]).toMatchObject({ unsaid: 0 });
     expect(ended).toEqual([]);
-  });
-});
-
-describe('an action written in brackets (A21)', () => {
-  it('is taken as if she had taken it, never said, and logged', async () => {
-    model.replies.push([text("[friendly] Sure, John. I'll text you the link now. Have a great day! [send_link]")]);
-    conversation.heard('Just send me the link');
-    await until(() => ends().length === 1, 'the end');
-    expect(tokens().map(([token]) => token).join('')).toBe("[friendly] Sure, John. I'll text you the link now. Have a great day! ");
-    expect(ended).toEqual([{ action: 'send_link' }]);
-    expect(logged).toContainEqual({ event: 'ai_relay.written_action', fields: { callId: 7, action: 'send_link' } });
-  });
-
-  it('a real action wins over a written one', async () => {
-    model.replies.push([text('Great, connecting you now. [send_link]'), tool('transfer_to_agent')]);
-    conversation.heard('Put me through');
-    await until(() => ends().length === 1, 'the end');
-    expect(ended).toEqual([{ action: 'transfer_to_agent' }]);
-  });
-});
-
-describe('offering to connect, not twice in a row (A21)', () => {
-  it('after a reply that offered, the lead\'s next turn carries the note', async () => {
-    model.replies.push([text('[friendly] We ship in one to three days. [curious] Would you like me to connect you with someone now?')]);
-    conversation.heard('How long is shipping?');
-    await until(() => tokens().length === 3, 'her reply');
-    conversation.heard('Do you take Visa?');
-    await until(() => model.asked.length === 2, 'the next request');
-    expect(model.asked[1].slice(-2)).toEqual([
-      { role: 'user', content: '[Who is there: someone free] Do you take Visa?' },
-      { role: 'system', content: NO_REPEAT_NOTE },
-    ]);
-  });
-
-  it('after a reply that did not offer, no note', async () => {
-    model.replies.push([text("[friendly] We ship in one to three days. Anything else you'd like to know?")]);
-    conversation.heard('How long is shipping?');
-    await until(() => tokens().length === 3, 'her reply');
-    conversation.heard('Do you take Visa?');
-    await until(() => model.asked.length === 2, 'the next request');
-    expect(model.asked[1].at(-1)).toEqual({ role: 'user', content: '[Who is there: someone free] Do you take Visa?' });
-  });
-
-  it('what counts as an offer', () => {
-    for (const said of [
-      'Would you like me to connect you with someone now?',
-      'Ready to talk with a representative now?',
-      'Want to speak to someone on our team?',
-      'I can transfer you now.',
-      'Would you like to talk to one of our specialists?',
-    ]) {
-      expect(offeredToConnect(said)).toBe(true);
-    }
-    for (const said of ["Anything else you'd like to know?", 'We ship in one to three days.', 'Hi, is this John?']) {
-      expect(offeredToConnect(said)).toBe(false);
-    }
-  });
-
-  it('the lead\'s turn as the answer test set builds it', () => {
-    expect(leadTurn('free', 'Yes', 'Would you like me to connect you now?')).toEqual([
-      { role: 'user', content: '[Who is there: someone free] Yes' },
-      { role: 'system', content: NO_REPEAT_NOTE },
-    ]);
-    expect(leadTurn('free', 'Yes', 'Is that something you would be interested in?')).toEqual([
-      { role: 'user', content: '[Who is there: someone free] Yes' },
-    ]);
-  });
-
-  it('with nobody there, the note says to ask when instead of going ahead (call 92)', () => {
-    expect(leadTurn('nobody', 'Yes', 'Would you like me to connect you with someone now?')).toEqual([
-      { role: 'user', content: '[Who is there: nobody] Yes' },
-      { role: 'system', content: NO_REPEAT_NOBODY_NOTE },
-    ]);
-    expect(leadTurn('coming', 'Yes', 'Would you like me to connect you with someone now?')[1]).toEqual({ role: 'system', content: NO_REPEAT_NOTE });
-    // Nobody, and no offer before: the note not to offer one now (call 93).
-    expect(leadTurn('nobody', 'Yes', 'Is that something you would be interested in?')).toEqual([
-      { role: 'user', content: '[Who is there: nobody] Yes' },
-      { role: 'system', content: NOBODY_NOTE },
-    ]);
-    expect(leadTurn('coming', 'Yes', 'Is that something you would be interested in?')).toHaveLength(1);
-    expect(NO_REPEAT_NOBODY_NOTE).toMatch(/ask when would be a good time for a call back - don't book one until they have agreed a time/);
-  });
-});
-
-describe('a question of hers the lead answers with one of theirs (A21, call 94)', () => {
-  const ASKED = "Tomorrow is Saturday, and our team isn't available then. Would Monday at 2 PM your time work for a call back instead?";
-
-  it('her question, as she asked it, goes with their turn: answer them, and do not ask it again in the same words', () => {
-    expect(leadTurn('free', 'Who is the person I will talk to?', `[understanding] ${ASKED}`)).toEqual([
-      { role: 'user', content: '[Who is there: someone free] Who is the person I will talk to?' },
-      { role: 'system', content: openQuestionNote('Would Monday at 2 PM your time work for a call back instead?') },
-    ]);
-    expect(openQuestionNote('Would Monday at 2 PM work?')).toMatch(/don't repeat it in the same words - come back to it briefly and differently/);
-  });
-
-  it('with nobody there too: both notes', () => {
-    expect(leadTurn('nobody', 'Do you know my time?', ASKED).map((m) => m.content)).toEqual([
-      '[Who is there: nobody] Do you know my time?',
-      NOBODY_NOTE,
-      openQuestionNote('Would Monday at 2 PM your time work for a call back instead?'),
-    ]);
-  });
-
-  it('no note when they answered it, when hers invited their question, after the greeting, or after an offer to connect', () => {
-    expect(leadTurn('free', 'Yes, that works.', ASKED)).toHaveLength(1);
-    // Answered first, then asked: not left open.
-    expect(leadTurn('free', 'Yes. Can someone call me tomorrow at 3?', ASKED)).toHaveLength(1);
-    expect(leadTurn('free', "Uh, no. I'm saying can you call me tomorrow at two?", ASKED)).toHaveLength(1);
-    expect(leadTurn('free', 'Okay, but who will call me?', ASKED)).toHaveLength(1);
-    expect(leadTurn('free', 'Do you take Visa?', "We ship in one to three days. Anything else you'd like to know?")).toHaveLength(1);
-    expect(leadTurn('free', 'Who is this?', '')).toHaveLength(1);
-    expect(leadTurn('free', 'What is it?', 'Would you like me to connect you with someone now?')).toEqual([
-      { role: 'user', content: '[Who is there: someone free] What is it?' },
-      { role: 'system', content: NO_REPEAT_NOTE },
-    ]);
-  });
-
-  it('the question is the last sentence, her words alone', () => {
-    expect(endingQuestion('[friendly] Sure. [curious] Does Monday work?')).toBe('Does Monday work?');
-    expect(endingQuestion('Sure. We ship fast.')).toBeNull();
-    expect(endingQuestion('Do you have any other questions?')).toBeNull();
   });
 });
 
@@ -1208,8 +1075,7 @@ describe('waiting for Twilio\'s verdict before ending (A18)', () => {
     seri = new Conversation(
       {
         callId: 7,
-        instructions: 'THE INSTRUCTIONS',
-        greeting: 'Hi, is this John?',
+          greeting: 'Hi, is this John?',
         hours: DEFAULT_CALL_HOURS,
         stopLine: STOP,
         optOutWords: ANTIBIOTICS_CALL.optOutWords,
@@ -1313,7 +1179,7 @@ describe('waiting for Twilio\'s verdict before ending (A18)', () => {
 
     sent = [];
     const stopper = new Conversation(
-      { callId: 8, instructions: 'I', greeting: 'Hi there!', hours: DEFAULT_CALL_HOURS, stopLine: STOP, optOutWords: ANTIBIOTICS_CALL.optOutWords },
+      { callId: 8, greeting: 'Hi there!', hours: DEFAULT_CALL_HOURS, stopLine: STOP, optOutWords: ANTIBIOTICS_CALL.optOutWords },
       {
         model,
         whoIsThere: async () => who,
@@ -1334,7 +1200,7 @@ describe('waiting for Twilio\'s verdict before ending (A18)', () => {
 
   it('the verdict cannot be read: the call is not held', async () => {
     const failing = new Conversation(
-      { callId: 9, instructions: 'I', greeting: 'Hi there!', hours: DEFAULT_CALL_HOURS, stopLine: STOP, optOutWords: ANTIBIOTICS_CALL.optOutWords },
+      { callId: 9, greeting: 'Hi there!', hours: DEFAULT_CALL_HOURS, stopLine: STOP, optOutWords: ANTIBIOTICS_CALL.optOutWords },
       {
         model,
         whoIsThere: async () => who,
@@ -1363,8 +1229,7 @@ describe('a call picked back up after the line dropped', () => {
     new Conversation(
       {
         callId: 7,
-        instructions: 'THE INSTRUCTIONS',
-        greeting: 'Hi, is this John?',
+          greeting: 'Hi, is this John?',
         hours: DEFAULT_CALL_HOURS,
         stopLine: STOP,
         optOutWords: ANTIBIOTICS_CALL.optOutWords,
@@ -1385,7 +1250,7 @@ describe('a call picked back up after the line dropped', () => {
       }
     );
 
-  it('OpenAI is sent the call so far, and what the lead says next follows it - no greeting again', async () => {
+  it('the brain is given the call so far, and what the lead says next follows it - no greeting again', async () => {
     const seri = pickedUp({ agoMs: 30_000 });
     seri.start();
     await settle();
@@ -1394,7 +1259,6 @@ describe('a call picked back up after the line dropped', () => {
     seri.heard('How much is it?');
     await until(() => model.asked.length === 1, 'the request');
     expect(model.asked[0]).toEqual([
-      { role: 'system', content: 'THE INSTRUCTIONS' },
       { role: 'assistant', content: '[friendly] Hi, is this John?' },
       ...SO_FAR,
       leadMessage('free', 'How much is it?'),

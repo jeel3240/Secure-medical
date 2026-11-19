@@ -2,7 +2,7 @@
  * Picking a call back up after the line dropped - the conversation so far,
  * rebuilt from the turns kept on the call, as the call itself built it.
  */
-import { FILLER_LINE, leadMessage, NO_REPEAT_NOTE, NOBODY_NOTE, openQuestionNote, STILL_THERE_LINE } from './conversation';
+import { FILLER_LINE, leadMessage, STILL_THERE_LINE } from './conversation';
 import { interruptedNote, keyTurn, reconnectedNote, refusedNote, replacedNote, stopNote, twilioErrorNote, unsaidNote } from './relay-messages';
 import { earlierConversation, type KeptTurn } from './resume';
 
@@ -21,8 +21,6 @@ describe('the conversation so far, from the kept turns', () => {
         leadMessage('coming', 'Yes.'),
         said('This is Seri from eDrugstore. Is that something you would be interested in?'),
         leadMessage('coming', 'What is it?'),
-        // A question for her question: the note that hers is still open (call 94).
-        { role: 'system', content: openQuestionNote('Is that something you would be interested in?') },
         said('Up to 25% off your first order.'),
       ],
       pending: [],
@@ -65,23 +63,13 @@ describe('the conversation so far, from the kept turns', () => {
     expect(earlierConversation(unheard, GREETING, 'free')).toEqual({ messages: [leadMessage('free', 'Yes.')], pending: ['Who?'] });
   });
 
-  it('an action refused is told to her again, as its note', () => {
-    const refused = refusedNote('transfer_to_agent', 'Nobody can take the call now. Offer a call back instead.');
-    const turns = [greeting, lead('Put me through.'), seri('Sure.'), note(refused)];
-    expect(earlierConversation(turns, GREETING, 'nobody').messages).toEqual([
-      leadMessage('nobody', 'Put me through.'),
-      { role: 'system', content: NOBODY_NOTE },
-      said('Sure.'),
-      { role: 'system', content: refused },
-    ]);
-  });
-
   it('the other notes are for the record only', () => {
     const turns = [
       greeting,
       lead('Yes.'),
       seri('That is a great question for a licensed provider.'),
       note(replacedNote('advice', 'dose', 'Take two a day.')),
+      note(refusedNote('transfer_to_agent', 'Nobody can take the call now.')),
       note(twilioErrorNote('Something broke')),
       note(reconnectedNote(1)),
       note(stopNote('words')),
@@ -90,17 +78,6 @@ describe('the conversation so far, from the kept turns', () => {
     expect(earlierConversation(turns, GREETING, 'free').messages).toEqual([
       leadMessage('free', 'Yes.'),
       said('That is a great question for a licensed provider.'),
-    ]);
-  });
-
-  it('after a reply that offered to connect them, the note against offering again - as on the call', () => {
-    const turns = [greeting, lead('Yes.'), seri('Would you like me to connect you with someone now?'), lead('What do you sell?'), seri('Antibiotics.')];
-    expect(earlierConversation(turns, GREETING, 'free').messages).toEqual([
-      leadMessage('free', 'Yes.'),
-      said('Would you like me to connect you with someone now?'),
-      leadMessage('free', 'What do you sell?'),
-      { role: 'system', content: NO_REPEAT_NOTE },
-      said('Antibiotics.'),
     ]);
   });
 

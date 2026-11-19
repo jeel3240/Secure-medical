@@ -4,7 +4,7 @@
 
 **Why:** The only safe way to change instructions or knowledge without breaking something.
 
-**Depends on:** A04, A05, A06  ·  **Size:** Medium (about a day)  ·  **Status:** Done 2026-11-11
+**Depends on:** A04, A05, A06  ·  **Size:** Medium (about a day)  ·  **Status:** Done 2026-11-11 - removed 2026-11-19 with today's brain, which it tested (`AI-AGENT.md` section 12, "Today's brain removed"); the understand and speak sets took its place
 
 ## Build
 

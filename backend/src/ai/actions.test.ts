@@ -7,7 +7,6 @@
 import { DEFAULT_CALL_HOURS } from '../core/auto-dial';
 import { ANTIBIOTICS_CALL } from '../core/call-script-fixtures';
 import {
-  ACTION_TOOLS,
   ACTIONS,
   END_REASONS,
   RELAY_END_REASONS,
@@ -19,7 +18,6 @@ import {
   NOT_AGREED,
   toHandoff,
   waitsForAnswer,
-  writtenAction,
   type ActionContext,
   type Handoff,
 } from './actions';
@@ -47,26 +45,6 @@ const saidBack = (time: string) => {
 const book = (time: string, over: Partial<ActionContext> = {}, zone = NY) =>
   call('book_callback', { time, time_zone: zone, reason: 'Wants to order antibiotics' }, { before: saidBack(time), ...over });
 const error = (result: ReturnType<typeof call>) => (result.ok ? 'booked' : result.error);
-
-describe('the tools OpenAI is offered', () => {
-  it('the five actions, strict, every argument required and nothing else allowed', () => {
-    expect(ACTION_TOOLS.map((t) => t.function.name)).toEqual([...ACTIONS]);
-    for (const t of ACTION_TOOLS) {
-      const parameters = t.function.parameters as { properties: object; required: string[]; additionalProperties: boolean };
-      expect(t.type).toBe('function');
-      expect(t.function.strict).toBe(true);
-      expect(t.function.description).toBeTruthy();
-      expect(parameters.additionalProperties).toBe(false);
-      expect([...parameters.required].sort()).toEqual(Object.keys(parameters.properties).sort());
-    }
-  });
-
-  it('a call back takes the time on the lead\'s clock, their zone and a reason; an ending, its reason', () => {
-    const [, booking, , , ending] = ACTION_TOOLS.map((t) => t.function.parameters as { required: string[]; properties: Record<string, { enum?: string[] }> });
-    expect(booking.required).toEqual(['time', 'time_zone', 'reason']);
-    expect(ending.properties.reason.enum).toEqual([...END_REASONS]);
-  });
-});
 
 describe('a tool call, carried across Twilio and back', () => {
   it.each<[string, unknown, Handoff]>([
@@ -331,23 +309,5 @@ describe('the line the relay adds after hers (A09)', () => {
       const line = lastLine(handoff, ctx)!;
       for (const sentence of line.split(/(?<=[.?!])\s+/)) expect(checkSentence(sentence).reason).toBeNull();
     }
-  });
-});
-
-describe('an action she wrote in brackets instead of taking it (A21)', () => {
-  it('each way it was seen written', () => {
-    expect(writtenAction('Sure. [send_link]')).toEqual({ name: 'send_link', arguments: '{}' });
-    expect(writtenAction('[opt_out] Okay, we will not call you again.')).toEqual({ name: 'opt_out', arguments: '{}' });
-    expect(writtenAction('Goodbye. [functions.opt_out()]')).toEqual({ name: 'opt_out', arguments: '{}' });
-    expect(
-      writtenAction('Have a great day! [functions.book_callback:{"time":"2026-11-12T14:00","time_zone":"America/New_York","reason":"Wants to order"}]')
-    ).toEqual({ name: 'book_callback', arguments: '{"time":"2026-11-12T14:00","time_zone":"America/New_York","reason":"Wants to order"}' });
-  });
-
-  it('nothing for a tone, our note, a word that is not an action, or no bracket', () => {
-    expect(writtenAction('[friendly] Hi.')).toBeNull();
-    expect(writtenAction('[Who is there: nobody] Sure.')).toBeNull();
-    expect(writtenAction('[pay_now] Sure.')).toBeNull();
-    expect(writtenAction('I can send_link you.')).toBeNull();
   });
 });

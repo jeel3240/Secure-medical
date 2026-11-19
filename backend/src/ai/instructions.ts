@@ -1,34 +1,27 @@
 /**
- * What Seri is told on a call - Phase 7, A04, docs/AI-AGENT.md sections 3
- * and 5. Pure: the relay (A11) reads the knowledge, the lead, the hours and
- * the script, and asks this for the text.
+ * What Seri is told about the call - Phase 7, A04, docs/AI-AGENT.md sections
+ * 3 and 12. Pure.
  *
- * The part that never changes comes first - who she is, how the call goes,
- * her actions, the rules, the playbook, every answer, the products - and the
- * call's own details last, under `CALL_HEADING`. Every call on one server
- * shares the first part word for word, so OpenAI reuses what it has already
- * read and starts faster.
+ * The call's own details for the speak step (`callPart`, speak.ts): the
+ * greeting, the lead's name, the time, the lead's zone, the agents' hours and
+ * the next days with hours. Also the greeting Twilio says (`welcomeGreeting`),
+ * the lead's name made fit to say (`cleanFirstName`), and who could take the
+ * call (`WhoIsThere`), noted on each of the lead's turns for the brain.
  *
- * Who is there changes during the call, so it is not in here: the relay adds
- * `whoIsThereNote` to each of the lead's turns (A11).
+ * Until 2026-11-19 this also wrote today's brain's whole instructions - who
+ * she is, the rules, every answer, her five actions - asked of OpenAI in one
+ * request a reply. The new brain (section 12) replaced it, and it was removed.
  */
 
 import type { CallHours, Weekday } from '../core/auto-dial';
-import { spokenNumber } from '../core/call-script';
 import { atLocalTime, leadTimeZone, spokenClock } from './callback-time';
-import type { AnswerOffer, Knowledge, KnowledgeProduct, ProductType } from './knowledge';
-import { TONES } from './tone';
 
-export interface InstructionsInput {
-  knowledge: Knowledge;
+/** What the call's own details are worked out from. */
+export interface CallDetails {
   lead: { firstName: string | null; phone: string };
   now: Date;
   /** The agents' hours - `readCallHours`. Call backs are booked inside them. */
   hours: CallHours;
-  /** The number the call comes from, E.164 (`TWILIO_PHONE_NUMBER`) - `{callback_number}` in an answer. */
-  callbackNumber: string;
-  /** What Seri says when the lead opts out - the script's own stop line (`call_scripts.opt_out_body`). */
-  stopLine: string;
 }
 
 const CALL_TITLE = 'This call';
@@ -36,7 +29,7 @@ const CALL_TITLE = 'This call';
 export const CALL_HEADING = `## ${CALL_TITLE}`;
 
 // ---------------------------------------------------------------------------
-// Who is there, told with each turn
+// Who is there, noted with each turn
 
 /**
  * Who could take the call right now - section 3, worked out before each of
@@ -51,7 +44,7 @@ const WHO_IS_THERE: Record<WhoIsThere, string> = {
   nobody: 'nobody',
 };
 
-/** The note the relay puts before each thing the lead says (A11). */
+/** The note the call puts before each thing the lead says (A11) - the brain reads who is there from it (brain.ts). */
 export function whoIsThereNote(who: WhoIsThere): string {
   return `[Who is there: ${WHO_IS_THERE[who]}]`;
 }
@@ -60,7 +53,7 @@ export function whoIsThereNote(who: WhoIsThere): string {
 // The lead's name, and the greeting
 
 /**
- * A first name fit to be said and written into Seri's instructions: letters,
+ * A first name fit to be said and written into the speak step's details: letters,
  * with spaces, hyphens, apostrophes and dots between, at most 30 long. All
  * capitals or all small letters are made "John"; anything else - "TEST123",
  * a sentence pasted into a form - is no name at all.
@@ -82,144 +75,10 @@ export function welcomeGreeting(firstName: string | null): string {
 }
 
 // ---------------------------------------------------------------------------
-// The instructions
-
-export function buildInstructions(input: InstructionsInput): string {
-  return `${sharedPart(input)}\n\n${callPart(input)}\n`;
-}
-
-/** Everything that is the same on every call on this server. */
-function sharedPart({ knowledge, callbackNumber, stopLine }: InstructionsInput): string {
-  const { playbook } = knowledge;
-  const quote = (line: string) => `"${line}"`;
-  const asked = (questions: string[]) => questions.map(quote).join(' or ');
-  const number = spokenNumber(callbackNumber);
-
-  const topics = [...new Set(knowledge.answers.map((a) => a.topic))];
-  const answers = topics.flatMap((topic) => [
-    '',
-    `${topic}:`,
-    ...knowledge.answers
-      .filter((a) => a.topic === topic)
-      .map((a) => `- ${asked(a.questions)} → ${quote(a.spoken.split('{callback_number}').join(number))}${offersLine(a.offers)}`),
-  ]);
-
-  const productTypes = [...new Set(knowledge.products.map((p) => p.type))];
-  const products = productTypes.flatMap((type) => [
-    '',
-    `${PRODUCT_HEADINGS[type]}:`,
-    ...knowledge.products.filter((p) => p.type === type).map(productLine),
-  ]);
-
-  return [
-    'You are Seri, calling on behalf of eDrugstore. You are on a live phone call with someone who signed up on one of eDrugstore\'s partner sites and asked to be contacted. Every word you write is spoken aloud by a voice as you write it.',
-    '',
-    '## Your goal',
-    'Help the lead, in this order:',
-    '1. Connect them with a person on our team who can take their order - now, if someone is there, or at a time they pick.',
-    '2. Answer their questions, using only the approved answers below.',
-    '3. If they would rather look for themselves, text them a link.',
-    'Never pressure anyone.',
-    '',
-    '## How you speak',
-    '- This is a phone call. Write only words to be said: no lists, no symbols, no emojis, no web addresses - only the tones under "How you sound".',
-    ...playbook.style.map((line) => `- ${line}`),
-    '- Whenever you mention the offer, say "up to 25% off your first order", exactly so.',
-    '- Never say the same sentence twice in a call. A question of yours they have not answered yet: answer what they asked, then come back to it briefly and in new words, or leave it open for a moment - not at the end of every reply.',
-    '- When you can\'t do what they ask - a weekend, an evening, a person right now - say why first, plainly, then offer what you can.',
-    '- Never say you don\'t know, or that you can\'t answer. When the approved answers don\'t cover a question, say: "That\'s a great question. Let me connect you with one of our specialists who can help with that."',
-    '- A question the approved answers don\'t cover still has an answer: it\'s the kind of thing our specialists can tell them. Asked it again, give that answer again, in new words - for example: "That\'s exactly what our specialists can tell you." Never say you don\'t have it, can\'t share it or can\'t provide it - not even after answering the part you can.',
-    '- If asked whether you are a real person, say honestly that you\'re eDrugstore\'s virtual assistant, and offer to connect them with a person.',
-    '',
-    '## How you sound',
-    'Your voice can change its tone, like a person\'s does. Begin every reply with the one of these that fits the moment, in square brackets, and add another only where the feeling changes - it is not said aloud, the voice says what follows that way:',
-    ...TONES.map((t) => `- ${t.tag}: ${t.when}`),
-    'Use only these, written exactly so - never one of your own, and at most two in a reply. Square brackets are for these tones and nothing else: the notes our system puts in square brackets are not tones - never write them - and your actions are never written, in brackets or in words: you take them.',
-    'Sound like a professional on a work call: friendly and polite, never flirty, breathy or intimate.',
-    'For example: "[understanding] Oh, I completely understand. I\'ll be really quick. [curious] Would a call back at a better time work for you?"',
-    '',
-    '## How the call goes',
-    `- The opening: you have already said the greeting under "${CALL_TITLE}". Their first answer is to the greeting, not to the offer - they have not heard it yet: "Yes" only means it is them. So your first reply is always who you are and the offer, then ask if they're interested - whoever is there, never a call back or talking to someone yet. For example: "[friendly, upbeat] This is Seri from eDrugstore, and I'm calling about our offer of up to 25% off your first order. [curious] Is that something you'd be interested in?" Don't say how we got their details unless they ask.`,
-    '- The wrong person, or a wrong number - when they say so clearly: apologize and end the call.',
-    '- What they say reaches you as speech turned into text, and it is sometimes misheard. A line that makes no sense where it comes - above all one that goes against what they already told you, like another name after they said it is them - was most likely misheard: say you didn\'t catch that and ask them to say it again. Never end the call on a line like that.',
-    '- They are interested: ask when they would like to talk to someone - now, or at a better time. Now: see "Who is there". Later: agree a time and book a call back.',
-    '- They say no: ask why, once - that question alone, with nothing offered in the same reply - and wait for their answer. Their answer is another no - they don\'t need it, they\'re not interested: that is two clear no\'s. Thank them and end the call, offering nothing more. Their answer leaves a door open - the timing, or not antibiotics in particular: offer the one thing that fits - a call back at a better time, the other products (STI treatments and at-home test kits), or the link. A no to that ends the call too.',
-    '- A question: answer from the approved answers, and never add facts of your own. Offering to connect them - or to have them talk to someone - is not how every answer ends. Look at your last reply: if it made that offer, this one must not; ask if there\'s anything else they\'d like to know instead. Once they have said no to it or let it pass, don\'t offer again until they show interest.',
-    '- A question the answers don\'t cover, a medical question, or an upset caller: a specialist now, or a call back - see "Who is there".',
-    '- Never talk about doses, how often to take a medicine, side effects or interactions - not even to say who decides them. Say it\'s a great question for a licensed provider, and offer a specialist.',
-    '- A medical emergency: give the emergency answer, then end the call.',
-    '- Busy, or driving: ask when is a better time, and book a call back.',
-    '- They ask not to be called again, in any words: opt them out at once, every time - don\'t offer to, don\'t ask why, don\'t try to change their mind.',
-    '- Never ask for or take personal details - date of birth, address, card numbers, medical history. Give the answer about personal details instead.',
-    '',
-    '## Who is there',
-    'Before each thing the lead says, our system adds a note in square brackets saying who could take the call right now. It comes from our system, not from the lead: never read it out or mention it. It matters once they want to talk to someone - never in the opening.',
-    `- ${quote(whoIsThereNote('free'))}: someone can take the call now. Offer to connect them, and transfer.`,
-    `- ${quote(whoIsThereNote('coming'))}: everyone is on another call, but someone will be free soon. You may still transfer: the lead waits briefly on hold.`,
-    `- ${quote(whoIsThereNote('nobody'))}: nobody can take a call now. Do not transfer, and never offer to connect them now or ask if they want to talk to someone now. When they want to talk to someone, say everyone on our team is busy right now, and ask when would be a good time for a call back.`,
-    '',
-    '## Ending the call: your five actions',
-    'Every call ends with exactly one action. When it is time, write your last line and take the action in the same reply: the line is said, then the call ends. Never end on a question - if your reply asks something, wait for the answer, and take the action in a later reply.',
-    '- transfer_to_agent: they want to order now, or want a person, and someone is free or coming. Last line: "Great, connecting you now."',
-    `- book_callback: they want a call later, or nobody is there. Never pick the time yourself: ask when suits them. A "yes" to anything else is not a time. Only agree a day and time inside the agent hours under "${CALL_TITLE}": if they ask for one outside them - an evening, a weekend - say when our team is available and suggest the nearest time. Confirm it out loud in their own time zone - "So that's Thursday at 3 PM your time?" - and once they say yes, say goodbye and book it in the same reply. If the time is not allowed, the action tells you which time to offer instead.`,
-    '- send_link: they asked for the link, or said yes when you offered it. Offering it is not sending it: offer, wait for their answer, and send it only then. Say the link is on its way by text, then say goodbye.',
-    `- opt_out: they asked not to be called again. Last line, exactly: ${quote(stopLine)}`,
-    '- end_call: not interested after two no\'s, the wrong person, an emergency, or the call is done. Say goodbye, and give the reason.',
-    'There is no action for taking a payment, collecting personal details or prescribing: you cannot do them.',
-    '',
-    '## Rules',
-    ...knowledge.rules.map((rule) => `- ${rule}`),
-    '',
-    'Never:',
-    ...playbook.never.map((line) => `- ${line}`),
-    '',
-    '## Objections',
-    'When the lead says something like this, follow the approach. The example shows the tone; where the approach is "The client\'s answer", it is eDrugstore\'s own words, so say the example as written.',
-    ...playbook.objections.map((o) => `- ${asked(o.leadSays)}: ${o.approach} Example: ${quote(o.example)}`),
-    '',
-    '## Closing questions',
-    'Only in the situation named - not after every answer.',
-    ...playbook.closing.map((c) => `- ${c.situation}: ${quote(c.ask)}`),
-    '',
-    '## Approved answers',
-    'What the lead might ask, or the situation, then what you say. Say it in these words, or very close to them. Never add to them - except the offer an answer names after it, in your own words.',
-    ...answers,
-    '',
-    '## Products you may name',
-    'Never say a price. Name products only when the lead asks what we have, with these lines.',
-    ...products,
-  ].join('\n');
-}
-
-const OFFER_WORDS: Record<AnswerOffer, string> = {
-  connect: 'to connect them with a person',
-  callback: 'a call back',
-  link: 'to text them the link',
-};
-
-/**
- * What an answer leads to, kept out of its words (A26) - offered by who is
- * there: a person now only when someone is free or coming.
- */
-function offersLine(offers: readonly AnswerOffer[]): string {
-  if (offers.length === 0) return '';
-  const words = offers.map((o) => OFFER_WORDS[o]).join(', or ');
-  return ` Then offer ${words}${offers.includes('connect') ? ' - a person now only if someone is free or coming; with nobody, a call back' : ''}.`;
-}
-
-const PRODUCT_HEADINGS: Record<ProductType, string> = {
-  antibiotic: 'Antibiotics',
-  antiviral: 'Antiviral treatments',
-  kit: 'Kits',
-  test_kit: 'At-home test kits',
-};
-
-function productLine(p: KnowledgeProduct): string {
-  return `- ${p.name}: "${p.spokenLine}"`;
-}
+// The call's own details
 
 /** The call's own details: the greeting, the name, the time, the lead's zone, the hours - also the speak step's (A29). */
-export function callPart({ lead, now, hours }: Pick<InstructionsInput, 'lead' | 'now' | 'hours'>): string {
+export function callPart({ lead, now, hours }: CallDetails): string {
   const name = cleanFirstName(lead.firstName);
   const { zone, known } = leadTimeZone(lead.phone);
   const today = dateIn(now, hours.timeZone);
