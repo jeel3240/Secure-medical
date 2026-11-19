@@ -81,6 +81,12 @@ describe('the brief for each move', () => {
     ];
     for (const m of moves) expect(brief(m).length).toBeGreaterThan(10);
     expect(brief({ move: 'ask_time', day: 'tomorrow' })).toContain('what time tomorrow');
+    expect(brief({ move: 'ask_time', day: 'monday' })).toContain('what time on Monday');
+    // A day the team does not work, said alone (call 122): why first, then the next day - never a time on the day refused.
+    const refused = brief({ move: 'ask_time', day: 'monday', instead: { asked: 'Sunday', why: 'closed_day' } });
+    expect(refused).toContain('They asked for Sunday, but our team does not work that day');
+    expect(refused).toContain('ask what time on Monday would suit them');
+    expect(brief({ move: 'ask_time', day: '2026-11-30', instead: { asked: 'today', why: 'none_left' } })).toContain('on Monday, November 30');
   });
 });
 

@@ -329,6 +329,32 @@ describe('a call back - the time worked out by code, said back, booked only afte
     ]);
   });
 
+  it('"How about Sunday?" - a day the team does not work: refused at once, and what time on Monday asked; "noon" - Monday at 12 said back (call 122)', () => {
+    const ctx = lead();
+    const day = (d: string | null, hour: number | null = null) => ({ act: 'wants_callback' as const, time: { day: d, hour, minute: null, ampm: null } });
+    let { state, moves } = turn(opened(ctx), [day('sunday')], ctx);
+    expect(moves).toEqual([{ move: 'ask_time', day: 'monday', instead: { asked: 'Sunday', why: 'closed_day' } }]);
+    ({ state, moves } = turn(state, [day(null, 12)], ctx));
+    expect(moves).toMatchObject([{ move: 'confirm_time', at: '2026-11-16T19:00:00.000Z', spoken: 'Monday at 12 PM your time', instead: null }]);
+  });
+
+  it('"later today" after the hours are over: refused - what time tomorrow; a working day with time left is asked as before', () => {
+    const evening = lead(new Date('2026-11-12T01:00:00Z')); // Wednesday 6 PM in Arizona
+    const today = { act: 'wants_callback' as const, time: { day: 'today', hour: null, minute: null, ampm: null } };
+    expect(turn(opened(evening), [today], evening).moves).toEqual([{ move: 'ask_time', day: 'tomorrow', instead: { asked: 'today', why: 'none_left' } }]);
+    const noon = lead();
+    expect(turn(opened(noon), [today], noon).moves).toEqual([{ move: 'ask_time', day: 'today' }]);
+  });
+
+  it('Saturday asked on a Friday evening: Monday is next - a day word the next time said is read against', () => {
+    const friday = lead(new Date('2026-11-14T01:00:00Z')); // Friday 6 PM in Arizona
+    const saturday = { act: 'wants_callback' as const, time: { day: 'saturday', hour: null, minute: null, ampm: null } };
+    const { state, moves } = turn(opened(friday), [saturday], friday);
+    // Asked on a Friday, Saturday is "tomorrow" - as she would say it.
+    expect(moves).toEqual([{ move: 'ask_time', day: 'monday', instead: { asked: 'tomorrow', why: 'closed_day' } }]);
+    expect(state.callback.day).toBe('monday');
+  });
+
   it('never booked without being said back first (call 92): a time given goes to "So that\'s...?"', () => {
     const ctx = lead();
     const { moves } = turn(opened(ctx), [{ act: 'wants_callback', time: { day: 'tomorrow', hour: 12, minute: null, ampm: 'pm' } }], ctx);

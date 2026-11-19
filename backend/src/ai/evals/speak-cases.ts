@@ -153,6 +153,16 @@ export const SPEAK_CASES: SpeakCase[] = [
     asks: true,
   },
   {
+    // Call 122: "How about Sunday?" was asked "what time on Sunday?" - then refused once a time came.
+    id: 'ask_time_closed_day',
+    who: 'nobody',
+    recent: [...OPENED, { who: 'lead', text: "Yes, I'm interested." }, { who: 'seri', text: 'Everyone on our team is busy right now. When would be a good time for a call back?' }, { who: 'lead', text: 'How about Sunday?' }],
+    moves: [{ move: 'ask_time', day: 'monday', instead: { asked: 'Sunday', why: 'closed_day' } }],
+    mustSay: [['monday'], ['monday to friday', 'weekdays', "don't work", "doesn't work", 'do not work', 'does not work', "aren't available", 'not available', 'closed', "aren't open", 'not open', 'only work', 'only available', "isn't available", "isn't open"]],
+    mustNotSay: ['time on sunday', 'sunday at', 'sunday would'],
+    asks: true,
+  },
+  {
     id: 'ask_repeat',
     who: 'free',
     recent: [...OPENED, { who: 'lead', text: 'Please do so scan.' }],
