@@ -392,17 +392,24 @@ function answer(s: CallState, id: string, context: PolicyContext): Move {
 function followUp(s: CallState, said: readonly Move[], context: PolicyContext): Move[] {
   if (s.wrapUp === 'due') return [wrapUpOffer(s, context)];
   if (s.wrapUp === 'offered' && said.length === 0) return [end('end_call', 'other')];
-  if (s.open && s.open !== 'anything_else' && s.open !== 'identity' && !s.returned) return [{ move: 'return_to', open: s.open }];
   const leadsTo = new Set<AnswerOffer>();
   for (const m of said) {
     if (m.move === 'answer') for (const o of context.knowledge.answers.find((a) => a.id === m.id)?.offers ?? []) leadsTo.add(o);
     if (m.move === 'specialist' || m.move === 'virtual') leadsTo.add('connect');
   }
+  // A question about their health: the people who can take it further, offered first - a person, or with nobody
+  // there a call back - before her own question (call 130: she offered it unasked, and the record never knew).
+  const health = said.some((m) => m.move === 'answer' && HEALTH_ANSWERS.has(m.id));
   const offer = pickOffer(s, leadsTo, context);
+  if (health && offer) return [{ move: 'offer', kind: offer }];
+  if (s.open && s.open !== 'anything_else' && s.open !== 'identity' && !s.returned) return [{ move: 'return_to', open: s.open }];
   if (offer) return [{ move: 'offer', kind: offer }];
   if (s.interest === 'unknown' && !s.returned && s.offers.connect.made === 0) return [{ move: 'return_to', open: 'interest' }];
   return s.askedAnythingElse ? [] : [{ move: 'anything_else' }];
 }
+
+/** The approved answers to a question about their own health - the client's note on each: a person, or the call back queue. */
+const HEALTH_ANSWERS: ReadonlySet<string> = new Set(['medical_question', 'which_medication']);
 
 /**
  * Which offer an answer leads to, by who is there: a person only when someone

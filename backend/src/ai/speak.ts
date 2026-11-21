@@ -42,6 +42,7 @@ export function speakSystem({ knowledge, lead, now, hours }: SpeakSetup): string
     ...playbook.style.map((line) => `- ${line}`),
     '- Whenever you mention the offer, say "up to 25% off your first order", exactly so.',
     "- Never say you don't know, can't answer, can't provide or share something, or don't have that information.",
+    "- Whoever you connect them with, or who calls them back, is someone on our team - never a licensed provider, doctor or pharmacist: those review a patient's details once they order (call 130).",
     '- Never the same sentence twice in a call: anything you say again, say in new words.',
     '',
     '## How you sound',
@@ -65,7 +66,7 @@ export function speakSystem({ knowledge, lead, now, hours }: SpeakSetup): string
 
 const OFFERS: Record<OfferKind, string> = {
   connect: 'Offer to connect them with someone on our team now.',
-  callback: 'Offer a call back at a time that suits them.',
+  callback: 'Offer a call back from someone on our team, at a time that suits them.',
   link: 'Offer to text them a link so they can look things over.',
   products: 'Say we also have at-home STI test kits and other treatments, and ask if any of those would help.',
 };
