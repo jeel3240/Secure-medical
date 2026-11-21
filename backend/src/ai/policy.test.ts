@@ -380,6 +380,22 @@ describe('a call back - the time worked out by code, said back, booked only afte
     expect(turn(state, [{ act: 'wants_callback', time: null }], ctx).moves).toMatchObject([{ move: 'end', handoff: { action: 'book_callback', at: '2026-11-12T22:00:00.000Z' } }]);
   });
 
+  it('"When would suit?" - "I don\'t want to talk": a no to the call back - with a no before it, the call ends (call 127)', () => {
+    const offered = turn(opened(), [{ act: 'not_now' }]).state;
+    const asked = turn(offered, [yes]);
+    expect(names(asked.moves)).toEqual(['ask_time']);
+    expect(names(turn(asked.state, [no]).moves)).toEqual(['end:end_call:not_interested']);
+  });
+
+  it('"When would suit?" - "No" with interest shown and nobody free: the link instead, once', () => {
+    const ctx = context('nobody');
+    const asked = turn(opened(ctx), [{ act: 'interested' }], ctx);
+    expect(names(asked.moves)).toEqual(['busy', 'ask_time']);
+    const { state, moves } = turn(asked.state, [no], ctx);
+    expect(names(moves)).toEqual(['offer:link']);
+    expect(names(turn(state, [no], ctx).moves)).toEqual(['end:end_call:not_interested']);
+  });
+
   it('a no to the time said back: when would suit, asked again', () => {
     const ctx = lead();
     const { state } = turn(opened(ctx), [{ act: 'wants_callback', time: { day: 'tomorrow', hour: 3, minute: null, ampm: 'pm' } }], ctx);
@@ -410,6 +426,13 @@ describe('the link', () => {
 
   it('a yes to her offer of it: sent', () => {
     const { state } = turn(opened(), [{ act: 'objection', id: 'think_about_it' }]);
+    expect(names(turn(state, [yes]).moves)).toEqual(['end:send_link']);
+  });
+
+  it('"I want to look myself" after the why - read as not now as well: the link, not a call back; a yes sends it (call 127)', () => {
+    const why = turn(opened(), [no]).state;
+    const { state, moves } = turn(why, [{ act: 'not_now' }, { act: 'objection', id: 'think_about_it' }]);
+    expect(names(moves)).toEqual(['offer:link']);
     expect(names(turn(state, [yes]).moves)).toEqual(['end:send_link']);
   });
 

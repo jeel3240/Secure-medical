@@ -294,7 +294,8 @@ export function decide(previous: CallState, acts: readonly Act[], context: Polic
   const interested = has('interested') || ((open === 'interest' || open === 'offer_products') && agrees);
   const noAct = has('not_interested') ?? (objectionIds.includes('not_interested') ? { act: 'not_interested' as const, reason: null } : undefined);
   const notNow = has('not_now') !== undefined;
-  const offerOpen = open?.startsWith('offer_') ? (open.slice(6) as OfferKind) : null;
+  // "What time?" - "I don't want to talk": a no to the call back she offered, not a question left hanging (call 127).
+  const offerOpen = open?.startsWith('offer_') ? (open.slice(6) as OfferKind) : open === 'time' && declines ? 'callback' : null;
   const says = (kind: OfferKind, answer: OfferAnswer) => {
     s.offers[kind].answer = answer;
   };
@@ -313,6 +314,11 @@ export function decide(previous: CallState, acts: readonly Act[], context: Polic
     return done([...answersFor(s, acts, context), { move: 'offer', kind: s.offers.connect.answer === 'no' ? 'callback' : 'connect' }]);
   }
 
+  // "I need to think about it", "I want to look myself" - the door left open with the link, even read as not now as well (call 127).
+  if (objectionIds.includes('think_about_it') && !noAct && s.offers.link.answer !== 'no') {
+    return done(offerOrFollowUp(s, 'link', context, answersFor(s, acts, context)));
+  }
+
   // A no - to the offer, to an offer she made, or the reason after "why".
   const productNo = objectionIds.includes('dont_need_antibiotics');
   const isNo = noAct || notNow || productNo || (declines && (open === 'interest' || open === 'why' || offerOpen !== null));
@@ -320,7 +326,7 @@ export function decide(previous: CallState, acts: readonly Act[], context: Polic
     const reason: NoReason | null = productNo ? 'product' : notNow ? 'timing' : (noAct?.reason ?? null);
     return done(noMoves(s, reason, offerOpen, open));
   }
-  // "I need to think about it": the door left open with the link.
+  // "I need to think about it" after the link was turned down: what else they would like to know.
   if (objectionIds.includes('think_about_it')) return done(offerOrFollowUp(s, 'link', context, answersFor(s, acts, context)));
 
   // "Anything else?" - "No, that's all."
@@ -433,6 +439,11 @@ function noMoves(s: CallState, reason: NoReason | null, offerOpen: OfferKind | n
     s.offers[offerOpen].answer = 'no';
     // Turning down a person, with interest shown, is not turning down the offer: a call back instead.
     if (offerOpen === 'connect' && s.interest === 'yes' && s.offers.callback.answer !== 'no') return [{ move: 'offer', kind: 'callback' }];
+    // A call back turned down, interest shown: the link instead, once - a no all the same, so a no to the link ends the call.
+    if (offerOpen === 'callback' && s.interest === 'yes' && s.offers.link.made === 0 && s.offers.link.answer !== 'no') {
+      s.nos += 1;
+      return [{ move: 'offer', kind: 'link' }];
+    }
     s.nos += 1;
   } else if (open === 'why') {
     if (reason !== 'timing' && reason !== 'product') s.nos += 1;

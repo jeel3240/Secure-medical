@@ -41,6 +41,10 @@
 
 With 123, 124 and 126, a yes now is heard on every path: everyone free, the lead's own agent first, and the hold line.
 
+| Call | What happened | Found |
+|---|---|---|
+| 127 | Someone free, meant as "no, then the link": "Yes.", "No.", "I'm not sure. I want to look myself.", "I don't want to talk.", "I do not want to talk.", "No." | **Wrong:** "I want to look myself" read as not now - a call back offered, not the link; "I don't want to talk" to that offer read as asking for one - "When would be a good time?"; "I do not want to talk" to that, a no the policy did not take as one - "anything else?"; and the lead's name in all five replies. The goodbye on the last "No.", polite: `not_interested`, 61 seconds, no link sent. Fixed on `fix/call-127-the-link-and-a-no-to-a-time` - the two lines' labels, the link before a not now read with "I want to look myself", a no to "what time?" a no to the call back, the name once after the greeting (`docs/AI-AGENT.md` section 12, "After call 127") |
+
 ## Done when
 
 - [ ] Every line heard and noted with its date in `docs/AI-AGENT.md`, like T26; then A22.

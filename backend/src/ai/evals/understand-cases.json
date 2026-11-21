@@ -1,5 +1,5 @@
 {
- "about": "The understand step's labelled set (A28): what the lead just said, what Seri said before it, and the acts it must be read as. want: every group must be found - \"a|b\" either; allow: other acts that are not wrong - \"confirm_identity\" and \"other\" are never wrong beside a wanted act - the policy changes nothing for them then; time: the call-back time's parts that must be read. Real lines from A21's calls 86-112 (the lead's name made John), the answer test set's last lead lines, and lines written for acts neither has.",
+ "about": "The understand step's labelled set (A28): what the lead just said, what Seri said before it, and the acts it must be read as. want: every group must be found - \"a|b\" either; allow: other acts that are not wrong - \"confirm_identity\" and \"other\" are never wrong beside a wanted act - the policy changes nothing for them then; time: the call-back time's parts that must be read. Real lines from A21's calls 86-112 and A34's calls (the lead's name made John), the answer test set's last lead lines, and lines written for acts neither has.",
  "cases": [
   {
    "id": "call86-2",
@@ -4149,6 +4149,79 @@
    "allow": [
     "wrong_person",
     "declines"
+   ]
+  },
+  {
+   "id": "call127-3",
+   "source": "A34 call 127",
+   "before": [
+    {
+     "who": "seri",
+     "text": "This is Seri from eDrugstore, calling about our offer of up to 25% off your first order. Would you like to hear more about it?"
+    },
+    {
+     "who": "lead",
+     "text": "No."
+    }
+   ],
+   "seri": "Totally understand, John. Is it more about the timing or just not something you need right now?",
+   "lead": "I'm not sure. I want to look myself.",
+   "want": [
+    "objection:think_about_it"
+   ],
+   "allow": [
+    "not_now",
+    "declines"
+   ]
+  },
+  {
+   "id": "call127-4",
+   "source": "A34 call 127",
+   "before": [
+    {
+     "who": "lead",
+     "text": "No."
+    },
+    {
+     "who": "seri",
+     "text": "Totally understand, John. Is it more about the timing or just not something you need right now?"
+    },
+    {
+     "who": "lead",
+     "text": "I'm not sure. I want to look myself."
+    }
+   ],
+   "seri": "So no problem, John. I can have an agent call you back at a time that works better for you. What day and time would be best?",
+   "lead": "I don't want to talk.",
+   "want": [
+    "declines|not_interested"
+   ],
+   "allow": [
+    "declines",
+    "not_interested"
+   ]
+  },
+  {
+   "id": "call127-5",
+   "source": "A34 call 127",
+   "before": [
+    {
+     "who": "seri",
+     "text": "So no problem, John. I can have an agent call you back at a time that works better for you. What day and time would be best?"
+    },
+    {
+     "who": "lead",
+     "text": "I don't want to talk."
+    }
+   ],
+   "seri": "Got it, John. When would be a good time for us to call you back?",
+   "lead": "I do not want to talk.",
+   "want": [
+    "declines|not_interested"
+   ],
+   "allow": [
+    "declines",
+    "not_interested"
    ]
   }
  ]
