@@ -296,4 +296,23 @@ export const SPEAK_CASES: SpeakCase[] = [
     mustNotSay: ['that makes sense', 'thanks for sharing', 'call back', 'callback', 'connect', 'link', 'text you'],
     asks: true,
   },
+  // Call 130 (2026-11-21): after the medical answer, the person offered by the policy now - and never called a licensed provider.
+  {
+    id: 'after_health_answer_connect',
+    who: 'free',
+    recent: [...OPENED, { who: 'lead', text: 'Can I take amoxicillin if I have a blood pressure?' }],
+    moves: [{ move: 'answer', id: 'medical_question', text: "That's a question for a licensed provider, and I don't want to give you the wrong answer.", again: false }, { move: 'offer', kind: 'connect' }],
+    mustSay: [['connect', 'talk to someone', 'speak with someone', 'put you through']],
+    mustNotSay: ['licensed provider', 'doctor', 'pharmacist', 'thanks for sharing', 'that makes sense'],
+    asks: true,
+  },
+  {
+    id: 'after_health_answer_callback',
+    who: 'nobody',
+    recent: [...OPENED, { who: 'lead', text: 'Can I take amoxicillin if I have a blood pressure?' }],
+    moves: [{ move: 'answer', id: 'medical_question', text: "That's a question for a licensed provider, and I don't want to give you the wrong answer.", again: false }, { move: 'offer', kind: 'callback' }],
+    mustSay: [['call you back', 'call back', 'callback', 'give you a call', 'reach out']],
+    mustNotSay: ['licensed provider', 'doctor', 'pharmacist', 'connect you', 'thanks for sharing', 'that makes sense'],
+    asks: true,
+  },
 ];

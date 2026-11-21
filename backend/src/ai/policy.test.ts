@@ -410,6 +410,17 @@ describe('a call back - the time worked out by code, said back, booked only afte
     expect(moves[0]).toMatchObject({ move: 'confirm_time', at: '2026-11-12T19:00:00.000Z', zone: 'America/New_York', instead: null });
   });
 
+  it('a question about their health: the approved answer, then a person offered first - with nobody there, a call back (call 130)', () => {
+    for (const topic of ['medical_question', 'which_medication']) {
+      expect(names(turn(opened(), [asking(topic)]).moves)).toEqual([`answer:${topic}`, 'offer:connect']);
+      const ctx = context('nobody');
+      expect(names(turn(opened(ctx), [asking(topic)], ctx).moves)).toEqual([`answer:${topic}`, 'offer:callback']);
+    }
+    // A yes to it is a yes to the person - put through.
+    const { state } = turn(opened(), [asking('medical_question')]);
+    expect(names(turn(state, [yes]).moves)).toEqual(['end:transfer_to_agent']);
+  });
+
   it('the reason booked with it comes from the record: a specialist\'s question', () => {
     const ctx = lead();
     let state = turn(opened(ctx), [asking('medical_question')], ctx).state;
