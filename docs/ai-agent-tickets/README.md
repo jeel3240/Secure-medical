@@ -38,7 +38,7 @@ The build of `docs/AI-AGENT.md`, split into small tickets. Each is one PR into `
 | A31 | [What the new brain keeps, and picking a call back up](A31-storage-and-resume.md) | A30 | M | Done 2026-11-17 - migration 024 |
 | A32 | [Whole-call replays](A32-whole-call-replays.md) | A30, A31 | M | Done 2026-11-17 - 238 of 240 replays held every rule |
 | A33 | [Listening](A33-listening.md) | A30 | S | Done 2026-11-18 - understanding started early, and Flux's end of turn at 0.6; chosen on A34's calls 118 and 119 |
-| A34 | [A21 walked again, on the new brain](A34-a21-walked-again.md) | A30-A32 | M | Ready - Jeel's real-phone test |
+| A34 | [A21 walked again, on the new brain](A34-a21-walked-again.md) | A30-A32 | M | In progress - calls 113-126 (2026-11-17 to 2026-11-21): the introduction, questions, talking over, a call back and its refusals, two no's, voicemail, hang-ups, and a yes now on every path |
 | A22 | [Deploy, then switch on](A22-deploy-then-switch-on.md) | A34 | S | To do |
 | A23 | [A voicemail menu is never put through](A23-a-voicemail-menu-is-never-put-through.md) | A22 | M | Later - after the main AI agent work (Jeel, 2026-11-16). Seen on production twice on the script |
 

@@ -33,6 +33,14 @@
 
 *After call 122 (2026-11-19):* today's brain, kept beside the new one for a rollback since A30, removed at Jeel's word - every call already ran on the new brain, so nothing heard changes; a rollback is now a revert. `docs/AI-AGENT.md` section 12, "Today's brain removed".
 
+| Call | What happened | Found |
+|---|---|---|
+| 123 | Saturday 2026-11-21, someone free (one browser, "Taking calls" on), a fresh lead with no agent: "Yes.", "Yes.", "Can you please... Can I talk with someone" | As it should be: the introduction 16 ms after "Yes."; her offer to connect, decided on the second "Yes.", talked over before her first word - she listened; "Can I talk with someone" understood as wanting a person (1.2 s) - "I'll connect you with an agent right now." and the transfer, nothing asked after it; the recording notice, then everyone free rung - the one browser - taken after 12 s of ringing: `transferred`, the lead the taker's, 55 seconds. The 10 s between her line and the ring is the notice: Twilio created the ring as it ended, as on the script |
+| 124 | The lead picked up (Pick up) by the same person before the call: "Yes.", "Yes.", "Yes." | As it should be: the offer to connect once - "...Is now a good time to do that?" - 0.6 s after the words, then the transfer on the yes, 0.6 s; the lead's own agent rung alone first (`holderFirst`), taken after 5 s: `transferred`, 51 seconds. Softer: the lead's name in two replies running |
+| 126 | Nobody free, the only person on a call - call 125, a pretend `calls` row on the local database, as on T26: "Yes.", "Yes. I want to talk with someone." | As it should be: who is there `coming` on every turn, so the transfer was hers to offer; the person asked for, understood ahead of the end of turn (head start 108 ms), "Great, I'll connect you with an agent right now." 2.2 s after the words; the hold line - music and "You are next.", heard; the pretend call ended 22 s later, the lead offered to that person at the hold watcher's next look (10 s - on a real call the browser's own word does it at once), taken after 4 s: `transferred`, 61 seconds |
+
+With 123, 124 and 126, a yes now is heard on every path: everyone free, the lead's own agent first, and the hold line.
+
 ## Done when
 
 - [ ] Every line heard and noted with its date in `docs/AI-AGENT.md`, like T26; then A22.
