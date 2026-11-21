@@ -32,7 +32,8 @@ async function main(): Promise<void> {
   const runs = Math.max(1, Number(arg('--runs') ?? 3));
   const prefixes = arg('--case', true) as string[];
   const knowledge = loadKnowledge();
-  const system = speakSystem({ knowledge, lead: { firstName: 'John', phone: '+14805551234' }, now: new Date('2026-11-11T19:00:00Z'), hours: DEFAULT_CALL_HOURS });
+  // Wednesday noon in Arizona, unless a case is set on its own day (call 129: a Saturday).
+  const systemAt = (now = '2026-11-11T19:00:00Z') => speakSystem({ knowledge, lead: { firstName: 'John', phone: '+14805551234' }, now: new Date(now), hours: DEFAULT_CALL_HOURS });
   const cases = SPEAK_CASES.filter((c) => prefixes.length === 0 || prefixes.some((p) => c.id.startsWith(p)));
   const client = new OpenAI({ apiKey, timeout: 30_000, maxRetries: 0 });
   const jobs = cases.flatMap((c) => Array.from({ length: runs }, () => c));
@@ -52,7 +53,7 @@ async function main(): Promise<void> {
             stream: true,
             max_completion_tokens: 200,
             prompt_cache_key: 'seri-speak',
-            messages: speakMessages(system, c.recent, replyBrief(c.moves, startState(), c.who, 'John'), codeLines(c.moves, 'four eight zero, four seven zero, eight two five nine')),
+            messages: speakMessages(systemAt(c.now), c.recent, replyBrief(c.moves, startState(), c.who, 'John'), codeLines(c.moves, 'four eight zero, four seven zero, eight two five nine')),
           });
           for await (const chunk of stream) {
             const delta = chunk.choices[0]?.delta?.content;

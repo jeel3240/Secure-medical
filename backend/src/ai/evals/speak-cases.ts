@@ -19,6 +19,8 @@ export interface SpeakCase {
   ending?: boolean;
   /** Her reply must ask a question. */
   asks?: boolean;
+  /** When the call is - Wednesday noon in Arizona if not given. */
+  now?: string;
 }
 
 const GREETED = [{ who: 'seri' as const, text: 'Hi, is this John?' }, { who: 'lead' as const, text: 'Yes.' }];
@@ -255,5 +257,43 @@ export const SPEAK_CASES: SpeakCase[] = [
     moves: [{ move: 'end', handoff: { action: 'end_call', reason: 'wrong_person' } }],
     mustSay: [['sorry', 'apolog']],
     ending: true,
+  },
+  // Call 129 (2026-11-21): after an approved answer said by code, she offered a call back nothing decided, and
+  // began her question with a thanks or "That makes sense" for words that were her own.
+  {
+    id: 'after_answer_offers_nothing',
+    who: 'nobody',
+    now: '2026-11-21T18:47:57Z',
+    recent: [
+      ...OPENED,
+      { who: 'lead', text: 'Is this scam?' },
+      {
+        who: 'seri',
+        text: "I understand your hesitation. eDrugstore has been around for over 25 years, and you can check our customer reviews on Trustpilot. Thanks for sharing that, John. Just to check, would you like me to tell you a bit more about the up to 25% off your first order offer?",
+      },
+      { who: 'lead', text: 'Can you tell me what things you provide?' },
+    ],
+    moves: [{ move: 'answer', id: 'products_overview', text: "On these calls we mainly help with antibiotics, STI treatments and at-home health test kits. eDrugstore also offers treatments for things like hair loss and weight loss, and a representative can tell you more.", again: false }, { move: 'anything_else' }],
+    mustSay: [['anything else', 'anything specific', 'any other', 'any questions']],
+    mustNotSay: ['call back', 'callback', 'call you', 'connect', 'link', 'text you', 'that makes sense', 'thanks for sharing'],
+    asks: true,
+  },
+  {
+    id: 'after_answer_no_thanks',
+    who: 'free',
+    recent: [...OPENED, { who: 'lead', text: 'Is this scam?' }],
+    moves: [{ move: 'answer', id: 'scam', text: "I understand your hesitation. eDrugstore has been around for over 25 years, and you can check our customer reviews on Trustpilot.", again: false }, { move: 'return_to', open: 'interest' }],
+    mustSay: [['25%', '25 percent', 'offer']],
+    mustNotSay: ['thanks for sharing', 'that makes sense', 'call back', 'callback', 'link', 'text you'],
+    asks: true,
+  },
+  {
+    id: 'after_answer_how_got_number',
+    who: 'nobody',
+    recent: [...OPENED, { who: 'lead', text: 'I never signed up for your site. So how can you call me?' }],
+    moves: [{ move: 'answer', id: 'how_got_number', text: "You signed up on one of our partner sites and asked to be contacted. If you'd rather not get calls, I can take you off our list right now.", again: false }, { move: 'anything_else' }],
+    mustSay: [['anything else', 'anything specific', 'any other', 'any questions']],
+    mustNotSay: ['that makes sense', 'thanks for sharing', 'call back', 'callback', 'connect', 'link', 'text you'],
+    asks: true,
   },
 ];

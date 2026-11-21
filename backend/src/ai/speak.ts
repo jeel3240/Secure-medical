@@ -137,7 +137,7 @@ export function moveBrief(move: Move, who: WhoIsThere, firstName: string | null)
     case 'answer':
       return move.again
         ? `They asked again about something you already answered. Say it again briefly, in new words: "${move.text}"`
-        : `You have just said: "${move.text}" - don't say it again, or any part of it, or add to it: go straight on to what follows.`;
+        : `You have just said: "${move.text}" - don't say it again, or any part of it, or add to it, and offer nothing of your own. Go straight on to what follows, with no thanks or acknowledgement first: those words were yours, not theirs (call 129).`;
     case 'specialist':
       return `${
         move.again
