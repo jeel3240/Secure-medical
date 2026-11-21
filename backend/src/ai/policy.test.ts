@@ -243,16 +243,16 @@ describe('questions', () => {
     expect(moves.some((m) => m.move === 'offer')).toBe(false);
   });
 
-  it('her open question is come back to once, not after every side question (call 94)', () => {
-    let { state, moves } = turn(opened(), [asking('shipping')]);
-    expect(names(moves)).toEqual(['answer:shipping', 'return_to:interest']);
-    ({ state, moves } = turn(state, [asking('tracking')]));
-    expect(names(moves)).toEqual(['answer:tracking', 'anything_else']);
-    ({ state, moves } = turn(state, [asking('discreet')]));
-    expect(names(moves)).toEqual(['answer:discreet', 'return_to:interest']);
-    // Never the same question two replies running.
-    ({ moves } = turn(state, [asking('ship_where')]));
-    expect(names(moves)).toEqual(['answer:ship_where', 'anything_else']);
+  it('her open question is come back to once every few side questions, not after every other one (calls 94, 135)', () => {
+    let state = opened();
+    const said: string[][] = [];
+    for (const topic of ['price', 'shipping', 'ship_where', 'scam', 'need_prescription', 'how_it_works', 'payment']) {
+      const t = turn(state, [asking(topic)]);
+      state = t.state;
+      said.push(names(t.moves).slice(1));
+    }
+    // Call 135's seven questions: her question twice, not four times; "anything else?" never two replies running.
+    expect(said).toEqual([['return_to:interest'], ['anything_else'], [], ['anything_else'], ['return_to:interest'], ['anything_else'], []]);
   });
 
   it('two questions at once: both answered, then one question', () => {

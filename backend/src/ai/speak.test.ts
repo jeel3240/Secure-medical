@@ -125,6 +125,14 @@ describe('one reply\'s brief', () => {
     expect(replyBrief(goodbye, startState(), 'free', null, 1)).not.toContain('their name');
   });
 
+  it('the offer brought up only when she comes back to it - every other reply is told they have heard it (call 135)', () => {
+    const heard = "They have already heard the offer - up to 25% off their first order: don't bring it up in this reply (call 135).";
+    expect(replyBrief([{ move: 'anything_else' }], startState(), 'free', null)).toContain(heard);
+    expect(replyBrief([{ move: 'offer', kind: 'link' }], startState(), 'free', null)).toContain(heard);
+    expect(replyBrief([{ move: 'return_to', open: 'interest' }], startState(), 'free', null)).not.toContain(heard);
+    expect(replyBrief([{ move: 'opening' }], startState(), 'free', null)).not.toContain(heard);
+  });
+
   it('counts the replies that said the name, as a word - never a longer word holding it', () => {
     expect(timesNamed(['Totally understand, Jeel.', 'Got it.', 'So no problem, jeel - when?'], 'Jeel')).toBe(2);
     expect(timesNamed(['Hi Johnny, sure.', 'Sure.'], 'John')).toBe(0);

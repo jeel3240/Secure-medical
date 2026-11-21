@@ -315,4 +315,19 @@ export const SPEAK_CASES: SpeakCase[] = [
     mustNotSay: ['connect you', 'thanks for sharing', 'that makes sense'],
     asks: true,
   },
+  // Call 135 (2026-11-21): the offer in five of seven replies - after an answer and "anything else?", "Also, don't forget you get up to 25% off".
+  {
+    id: 'offer_not_again_anything_else',
+    who: 'free',
+    recent: [
+      ...OPENED,
+      { who: 'lead', text: 'Do I need a prescription?' },
+      { who: 'seri', text: "Yes, a prescription is needed, but you don't have to visit a doctor's office. You fill out a short online medical questionnaire, and a licensed provider reviews it. If they need more information, they may follow up by video or phone. If you like, we can get you set up to take advantage of up to 25% off your first order. Would you be interested in moving forward with that?" },
+      { who: 'lead', text: 'How do I order?' },
+    ],
+    moves: [{ move: 'answer', id: 'how_it_works', text: "You pick your medication on our website, create an account, and fill out a short medical questionnaire. A licensed provider reviews it, and if you're approved, a licensed U.S. pharmacy ships it to you.", again: false }, { move: 'anything_else' }],
+    mustSay: [['anything else', 'anything specific', 'any other', 'any questions']],
+    mustNotSay: ['25%', '25 percent', 'discount', 'thanks for sharing', 'that makes sense'],
+    asks: true,
+  },
 ];

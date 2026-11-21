@@ -224,6 +224,9 @@ export function replyBrief(moves: readonly Move[], state: CallState, who: WhoIsT
     ...(ending ? ['This is your last line: no question in it.'] : ['At most one question, and only as the last thing you say.']),
     ...ledger(state),
     ...(named && cleanFirstName(firstName) ? ["You have already said their name on this call: don't say it again."] : []),
+    ...(moves.some((m) => m.move === 'opening' || (m.move === 'return_to' && m.open === 'interest'))
+      ? []
+      : ["They have already heard the offer - up to 25% off their first order: don't bring it up in this reply (call 135)."]),
   ].join('\n');
 }
 
