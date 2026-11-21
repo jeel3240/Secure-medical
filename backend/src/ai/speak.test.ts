@@ -6,7 +6,7 @@ import productsFile from './knowledge/products.json';
 import { DEFAULT_CALL_HOURS } from '../core/auto-dial';
 import { loadKnowledge } from './knowledge';
 import { startState, markOpening, type Move } from './policy';
-import { OPENING_LINE, answerLine, codeLines, moveBrief, needsSpeak, openingByCode, replyBrief, speakMessages, speakSystem, spokenMoves } from './speak';
+import { OPENING_LINE, answerLine, codeLines, moveBrief, needsSpeak, openingByCode, replyBrief, speakMessages, speakSystem, spokenMoves, timesNamed } from './speak';
 import { checkSentence } from './safety';
 import { SentenceSplitter } from './sentences';
 import { TONES, spokenWords, strayBrackets } from './tone';
@@ -114,6 +114,21 @@ describe('one reply\'s brief', () => {
 
   it('an ending: no question in it', () => {
     expect(replyBrief([{ move: 'end', handoff: { action: 'send_link' } }], startState(), 'free', null)).toContain('This is your last line: no question in it.');
+  });
+
+  it('her name for the lead once after the greeting, then never again - the goodbye too (call 127: in every reply)', () => {
+    const goodbye: Move[] = [{ move: 'end', handoff: { action: 'end_call', reason: 'not_interested' } }];
+    expect(replyBrief(goodbye, startState(), 'free', 'John', 0)).not.toContain('their name');
+    const named = replyBrief(goodbye, startState(), 'free', 'John', 1);
+    expect(named).not.toContain('John');
+    expect(named).toContain("You have already said their name on this call: don't say it again.");
+    expect(replyBrief(goodbye, startState(), 'free', null, 1)).not.toContain('their name');
+  });
+
+  it('counts the replies that said the name, as a word - never a longer word holding it', () => {
+    expect(timesNamed(['Totally understand, Jeel.', 'Got it.', 'So no problem, jeel - when?'], 'Jeel')).toBe(2);
+    expect(timesNamed(['Hi Johnny, sure.', 'Sure.'], 'John')).toBe(0);
+    expect(timesNamed(['Thanks, John.'], null)).toBe(0);
   });
 
   it('how her last replies began, so this one begins otherwise', () => {

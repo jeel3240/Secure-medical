@@ -32,7 +32,7 @@ import type { ModelEvent, SeriModel, SpeakModel, UnderstandModel } from './opena
 import { asks, decide, markOpening, markSaid, POLICY_VERSION, startState, wrapUpDue, type Act, type CallState, type Move } from './policy';
 import type { KeptTurn } from './resume';
 import { SentenceSplitter } from './sentences';
-import { codeLines, needsSpeak, replyBrief, speakMessages, speakSystem } from './speak';
+import { codeLines, needsSpeak, replyBrief, speakMessages, speakSystem, timesNamed } from './speak';
 import { spokenWords } from './tone';
 import { actLabel, fastPath, parseActs, understandFormat, understandMessages, UnderstandError } from './understand';
 
@@ -255,7 +255,7 @@ export class Brain implements SeriModel {
     }
 
     if (needsSpeak(moves) && !(ending && ending.handoff.action === 'opt_out')) {
-      const brief = replyBrief(moves, decision.state, who, this.setup.lead.firstName);
+      const brief = replyBrief(moves, decision.state, who, this.setup.lead.firstName, turn.namesSaid);
       const stream = this.models.speak.stream(speakMessages(this.system, turn.recent, brief, byCode), signal);
       if (ending) {
         // A last line never asks: a sentence with a question is not said (call 95).
@@ -289,6 +289,7 @@ export class Brain implements SeriModel {
     herTurns: number;
     recent: { who: 'lead' | 'seri'; text: string }[];
     seri: string;
+    namesSaid: number;
   } {
     const hers = messages.filter((m) => m.role === 'assistant');
     const refused = messages[messages.length - 1]?.role === 'tool';
@@ -317,7 +318,9 @@ export class Brain implements SeriModel {
     const said = leadTurns.map((t) => t.replace(LEAD_TURN, '')).join(' ').trim();
     const recent = this.recentTurns(messages);
     const seri = recent.filter((t) => t.who === 'seri').pop()?.text ?? '';
-    return { said, who, refused, herTurns: hers.length, recent, seri };
+    // Her replies since the greeting that said the lead's name - once more is enough (call 127).
+    const namesSaid = timesNamed(hers.slice(1).map((m) => spokenWords(String(m.content ?? ''))), this.setup.lead.firstName);
+    return { said, who, refused, herTurns: hers.length, recent, seri, namesSaid };
   }
 
   /** The call's turns as plain words: hers without tones, the lead's without the note of who is there. */

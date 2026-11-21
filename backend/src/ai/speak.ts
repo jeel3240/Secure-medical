@@ -197,9 +197,22 @@ function ledger(state: CallState): string[] {
   return notes;
 }
 
-/** One reply's brief: what to do, in order - the reply that follows an approved answer already said, if any. */
-export function replyBrief(moves: readonly Move[], state: CallState, who: WhoIsThere, firstName: string | null): string {
+/**
+ * How many of her replies have said the lead's first name - the greeting not
+ * counted. Once or twice a call (the style), the greeting is one: after one
+ * more, she is told it is said (call 127: in every reply).
+ */
+export function timesNamed(replies: readonly string[], firstName: string | null): number {
   const name = cleanFirstName(firstName);
+  if (!name) return 0;
+  const word = new RegExp(`(^|[^\\p{L}])${name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}($|[^\\p{L}])`, 'iu');
+  return replies.filter((r) => word.test(r)).length;
+}
+
+/** One reply's brief: what to do, in order - the reply that follows an approved answer already said, if any. */
+export function replyBrief(moves: readonly Move[], state: CallState, who: WhoIsThere, firstName: string | null, namesSaid = 0): string {
+  const named = namesSaid >= 1;
+  const name = named ? null : cleanFirstName(firstName);
   const steps = moves.map((m, i) => `${i + 1}. ${moveBrief(m, who, name)}`);
   const ending = moves.some((m) => m.move === 'end');
   return [
@@ -210,6 +223,7 @@ export function replyBrief(moves: readonly Move[], state: CallState, who: WhoIsT
       : []),
     ...(ending ? ['This is your last line: no question in it.'] : ['At most one question, and only as the last thing you say.']),
     ...ledger(state),
+    ...(named && cleanFirstName(firstName) ? ["You have already said their name on this call: don't say it again."] : []),
   ].join('\n');
 }
 
