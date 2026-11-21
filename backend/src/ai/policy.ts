@@ -124,6 +124,8 @@ export interface CallState {
   wantsSpecialist: boolean;
   /** Her last reply came back to her open question, or asked if there was anything else: not twice in a row. */
   returned: boolean;
+  /** Her replies since she last came back to her open question - so she comes back to the same one once every few, not every other reply (call 135). */
+  sinceReturn?: number;
   askedAnythingElse: boolean;
   /** The three minutes: the closing offer is due, then made. */
   wrapUp: 'not_yet' | 'due' | 'offered';
@@ -149,6 +151,7 @@ export function startState(): CallState {
     busySaid: false,
     wantsSpecialist: false,
     returned: false,
+    sinceReturn: RETURN_EVERY,
     askedAnythingElse: false,
     wrapUp: 'not_yet',
     openings: [],
@@ -402,11 +405,20 @@ function followUp(s: CallState, said: readonly Move[], context: PolicyContext): 
   const health = said.some((m) => m.move === 'answer' && HEALTH_ANSWERS.has(m.id));
   const offer = pickOffer(s, leadsTo, context);
   if (health && offer) return [{ move: 'offer', kind: offer }];
-  if (s.open && s.open !== 'anything_else' && s.open !== 'identity' && !s.returned) return [{ move: 'return_to', open: s.open }];
+  // Her own question, come back to once every few replies - not after every other side question (calls 94, 135).
+  const mayReturn = !s.returned && (s.sinceReturn ?? RETURN_EVERY) >= RETURN_EVERY;
+  if (s.open && s.open !== 'anything_else' && s.open !== 'identity' && mayReturn) return [{ move: 'return_to', open: s.open }];
   if (offer) return [{ move: 'offer', kind: offer }];
-  if (s.interest === 'unknown' && !s.returned && s.offers.connect.made === 0) return [{ move: 'return_to', open: 'interest' }];
+  if (s.interest === 'unknown' && mayReturn && s.offers.connect.made === 0) return [{ move: 'return_to', open: 'interest' }];
   return s.askedAnythingElse ? [] : [{ move: 'anything_else' }];
 }
+
+/**
+ * After coming back to her open question, the replies to side questions before she may again: an answer and
+ * "anything else?", an answer alone, an answer and "anything else?" - then her question (call 135: the offer in five
+ * of seven replies).
+ */
+const RETURN_EVERY = 3;
 
 /** The approved answers to a question about their own health - the client's note on each: a person, or the call back queue. */
 const HEALTH_ANSWERS: ReadonlySet<string> = new Set(['medical_question', 'which_medication']);
@@ -652,6 +664,9 @@ export function markSaid(previous: CallState, moves: readonly Move[]): CallState
   const s = copy(previous);
   s.returned = false;
   s.askedAnythingElse = false;
+  // A question new to them may be come back to at once; the same one, once every few replies.
+  const asksAnew = moves.some((m) => ['opening', 'ask_why', 'offer', 'ask_time', 'confirm_time'].includes(m.move));
+  s.sinceReturn = moves.some((m) => m.move === 'return_to') ? 0 : asksAnew ? RETURN_EVERY : (previous.sinceReturn ?? RETURN_EVERY) + 1;
   for (const m of moves) {
     switch (m.move) {
       case 'opening':
