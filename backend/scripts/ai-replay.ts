@@ -139,6 +139,8 @@ async function main(): Promise<void> {
   }
   const failed = results.filter((r) => r.problems.length).length;
   console.log(`\n${results.length - failed}/${results.length} replays held every rule (${ids.length} calls, ${runs} run${runs > 1 ? 's' : ''} each)`);
+  // A replay that broke a rule fails the run, so it can stand in a check (review M39).
+  process.exitCode = failed > 0 ? 1 : 0;
 }
 
 /** Silences the log without jest. */

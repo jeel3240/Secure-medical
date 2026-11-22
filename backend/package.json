@@ -27,7 +27,8 @@
     "ai:eval:understand": "ts-node --transpile-only src/ai/evals/understand-run.ts",
     "ai:eval:speak": "ts-node --transpile-only src/ai/evals/speak-run.ts",
     "ai:replay": "ts-node --transpile-only scripts/ai-replay.ts",
-    "lint": "eslint src scripts"
+    "lint": "eslint src scripts",
+    "typecheck:scripts": "tsc -p tsconfig.scripts.json"
   },
   "dependencies": {
     "axios": "^1.4.0",

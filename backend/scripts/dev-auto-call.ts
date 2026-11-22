@@ -5,7 +5,8 @@
  *   docker compose exec api npm run dev:auto-call -- +16025550123 [--again] [--unblock]
  *
  * The lead must already be in the local database with that number, and the
- * number must be on `AUTO_CALL_TEST_NUMBERS` - outside production nothing else
+ * number must be on `AUTO_CALL_TEST_NUMBERS` - checked before anything is
+ * written (review M34, 2026-11-22) - and outside production nothing else
  * is ever rung. It needs what the call's webhooks need, read from the same
  * environment as the api answering them: calling set up with a public address
  * Twilio can reach (a tunnel), and `AUTO_CALLS=on`.
@@ -30,7 +31,7 @@
  * Refuses in production - `NODE_ENV`: the file is not compiled into dist/, but
  * the server's image does hold scripts/.
  */
-import { readAutoCalls, readAutoCallTestNumbers } from '../src/auto-calls-settings';
+import { mayRing, readAutoCalls, readAutoCallTestNumbers } from '../src/auto-calls-settings';
 import { config } from '../src/config';
 import { releaseNumber, RELEASE_REASONS } from '../src/db/dnc';
 import { startConversation, type Db } from '../src/db/flows';
@@ -60,6 +61,17 @@ async function main(): Promise<number> {
     return 1;
   }
 
+  // The number is checked against the test numbers before anything is written: `--unblock` lifts a block and
+  // `--again` renames a lead's number, and neither may touch a number that could never be rung (review M34).
+  const numbers = readAutoCallTestNumbers(process.env, false);
+  if (numbers.invalid > 0) {
+    console.warn(`${numbers.invalid} entr${numbers.invalid === 1 ? 'y' : 'ies'} in AUTO_CALL_TEST_NUMBERS not E.164 - ignored.`);
+  }
+  if (!mayRing(numbers, phone)) {
+    console.error('That number is not on AUTO_CALL_TEST_NUMBERS: nothing changed, nothing placed.');
+    return 1;
+  }
+
   if (args.includes('--unblock') && (await releaseNumber(pool, phone, RELEASE_REASONS.devTest)) > 0) {
     console.log('The block on the number was lifted (released: dev_test).');
   }
@@ -72,10 +84,6 @@ async function main(): Promise<number> {
     console.log(`Lead ${leadId} had no text conversation: given one, its first question marked as sent - nothing was texted.`);
   }
 
-  const numbers = readAutoCallTestNumbers(process.env, false);
-  if (numbers.invalid > 0) {
-    console.warn(`${numbers.invalid} entr${numbers.invalid === 1 ? 'y' : 'ies'} in AUTO_CALL_TEST_NUMBERS not E.164 - ignored.`);
-  }
   const result = await placeAutoCall({ leadId, settings: config.twilio.settings, numbers });
   console.log(`Lead ${leadId}: ${describe(result)}`);
   return result.kind === 'placed' ? 0 : 1;
