@@ -88,3 +88,13 @@ export function startOfTodaySql(tz = 'UTC'): string {
   if (!isTimeZone(tz)) throw new Error(`Not a time zone: ${tz}`);
   return `(date_trunc('day', now() AT TIME ZONE '${tz}') AT TIME ZONE '${tz}')`;
 }
+
+/**
+ * When the viewer's next day begins - their midnight, worked out on their own
+ * clock. Today's start plus a day was 24 hours on, an hour off it on the two
+ * days a year the clocks change (review M11, 2026-11-22).
+ */
+export function startOfTomorrowSql(tz = 'UTC'): string {
+  if (!isTimeZone(tz)) throw new Error(`Not a time zone: ${tz}`);
+  return `((date_trunc('day', now() AT TIME ZONE '${tz}') + interval '1 day') AT TIME ZONE '${tz}')`;
+}

@@ -44,11 +44,33 @@ export function parseLeadId(raw: string): number {
   return id;
 }
 
-/** A comma-separated list, `?source=API,WebInterface`. Empty means no filter. */
+/**
+ * A comma-separated list, `?source=API,WebInterface` - or the same given
+ * twice, `?source=API&source=WebInterface`, which Express hands over as an
+ * array and which was dropped without a word (review M19, 2026-11-22). Empty
+ * means no filter.
+ */
 export function parseList(raw: unknown): string[] | undefined {
-  if (typeof raw !== 'string' || !raw.trim()) return undefined;
-  const values = raw.split(',').map((s) => s.trim()).filter(Boolean);
+  const parts = Array.isArray(raw) ? raw : [raw];
+  if (!parts.every((p) => p === undefined || typeof p === 'string')) {
+    throw new HttpError(400, 'invalid_list', 'A list must be words separated by commas.');
+  }
+  const values = (parts as (string | undefined)[])
+    .flatMap((p) => (p ?? '').split(','))
+    .map((s) => s.trim())
+    .filter(Boolean);
   return values.length ? values : undefined;
+}
+
+/**
+ * `?q=`, a search: trimmed, absent when empty. Given twice it is refused -
+ * which search was meant cannot be told, and it was dropped without a word
+ * (review M19).
+ */
+export function parseSearch(raw: unknown): string | undefined {
+  if (raw === undefined) return undefined;
+  if (typeof raw !== 'string') throw new HttpError(400, 'invalid_q', 'Search for one thing at a time.');
+  return raw.trim() || undefined;
 }
 
 /**

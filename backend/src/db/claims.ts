@@ -50,7 +50,7 @@ export type ReleaseResult =
  * it, `callback.taken` records it, and from then it is on their My Callbacks.
  * One already someone's stays theirs.
  */
-export async function claimLead(leadId: number, agentId: number): Promise<ClaimResult> {
+export async function claimLead(leadId: number, agentId: number, againIfFree = true): Promise<ClaimResult> {
   // One statement, so the claim and its record cannot come apart and the race
   // rule above still holds. The row is locked first, so `prev` is the holder at
   // the moment of the claim - what the record needs, and what the UPDATE below
@@ -125,11 +125,14 @@ export async function claimLead(leadId: number, agentId: number): Promise<ClaimR
   );
 
   if (rows.length === 0) return { ok: false, reason: 'not_found' };
+  // Lost the race to someone who let it go again since: it is free now - asked once more, so the answer is never
+  // "null is already working this lead" (review M42, 2026-11-22).
+  if (rows[0].holder_id === null && againIfFree) return claimLead(leadId, agentId, false);
 
   return {
     ok: false,
     reason: 'already_claimed',
-    heldBy: { id: rows[0].holder_id, name: rows[0].holder_name },
+    heldBy: { id: rows[0].holder_id, name: rows[0].holder_name ?? 'Someone else' },
   };
 }
 
@@ -159,7 +162,9 @@ export async function releaseLead(
        SET assigned_to = NULL, assigned_at = NULL, updated_at = now()
        FROM prev
        WHERE l.id = prev.id
-         AND ($3 OR prev.assigned_to IS NULL OR prev.assigned_to = $2)
+         AND ($3 OR prev.assigned_to IS NULL OR prev.assigned_to = $2
+              -- A deactivated agent's claim does not count, here as everywhere else (review M9, 2026-11-22).
+              OR NOT EXISTS (SELECT 1 FROM users hu WHERE hu.id = prev.assigned_to AND hu.is_active))
        RETURNING prev.assigned_to AS holder, prev.assigned_at AS held_since
      ),
      logged AS (
@@ -178,7 +183,7 @@ export async function releaseLead(
   const { rows } = await pool.query(
     `SELECT l.id, u.id AS holder_id, u.name AS holder_name
      FROM leads l
-     LEFT JOIN users u ON u.id = l.assigned_to
+     LEFT JOIN users u ON u.id = l.assigned_to AND u.is_active
      WHERE l.id = $1`,
     [leadId]
   );

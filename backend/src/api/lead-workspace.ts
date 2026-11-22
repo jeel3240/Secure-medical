@@ -228,6 +228,8 @@ export function leadWorkspaceRoutes(router: Router): void {
       const result = await db.setDisposition(leadId, req.user!.id, value);
 
       if (!result.ok) {
+        // Let go of and picked up by someone else since `requireHolding` asked (review M10).
+        if (result.reason === 'not_yours') throw new HttpError(409, 'not_yours', 'This lead is no longer yours - nothing was saved.');
         throw new HttpError(404, 'not_found', 'No such lead.');
       }
 

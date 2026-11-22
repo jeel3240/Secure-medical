@@ -111,6 +111,14 @@ async function main(): Promise<void> {
     // would look free in the list and refuse to be taken.
     check('does not block another agent', taken.ok, true);
     check('the lead moves to the new holder', await holderOf(lead), maya);
+
+    // Nor releasing it, by an agent - as everywhere else (review M9).
+    const stale = await makeLead('+15550000013');
+    await claimLead(stale, sam);
+    await pool.query(`UPDATE users SET is_active = false WHERE id = $1`, [sam]);
+    check('an agent may release a deactivated agent\'s lead', (await releaseLead(stale, maya, false)).ok, true);
+    check('and it is free', await holderOf(stale), null);
+    await pool.query(`UPDATE users SET is_active = true WHERE id = $1`, [sam]);
   }
 
   console.log('\ntwo agents claiming at the same moment');

@@ -219,14 +219,17 @@ a future item, CLAUDE.md §10.
 
 | Parameter | Takes | Rejects with |
 |---|---|---|
-| `tier` | `HOT`, `WARM`, `LOW`, comma-separated, any case | 400 `invalid_tier` |
-| `source` | Partner codes, comma-separated | — |
+| `tier` | `HOT`, `WARM`, `LOW`, comma-separated or given more than once, any case | 400 `invalid_tier` |
+| `source` | Partner codes, comma-separated or given more than once | — |
 | `since` | `1h`, `24h`, `7d`, `30d`, `all` | 400 `invalid_since` |
-| `q` | Name, or phone in any punctuation | — |
+| `q` | Name, or phone in any punctuation | 400 `invalid_q` when given twice |
 | `limit` | Whole number above 0; clamped to 500, default 100 | 400 `invalid_limit` |
 
 A bad filter is refused rather than quietly ignored, so a typo in a link shows
-up as an error instead of the wrong queue.
+up as an error instead of the wrong queue. A list given twice -
+`?source=A&source=B` - is both (`parseList`), and a search given twice is
+refused (`parseSearch`): until 2026-11-22 both were dropped without a word
+(review M19). Admin > Leads and the DNC list read theirs the same way.
 
 `q` matches first and last name, or the phone with punctuation stripped, so
 `(602) 620-3572` finds `+16026203572`. What is typed is escaped before it

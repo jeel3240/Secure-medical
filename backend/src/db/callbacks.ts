@@ -5,7 +5,7 @@
  * done from either. AGENT-WORKSPACE.md, "Endpoints"; DESIGN-PROMPT.md 5.
  */
 
-import { startOfTodaySql } from './sql';
+import { startOfTodaySql, startOfTomorrowSql } from './sql';
 import { activityInsertSql, type ActivityWriter } from './activity';
 import type { Db } from './flows';
 import { pool } from './pool';
@@ -288,7 +288,7 @@ export async function updateCallback(
  */
 function whenSql(timeZone?: string): Record<Exclude<CallbackWhen, 'all'>, string> {
   const today = startOfTodaySql(timeZone);
-  const tomorrow = `${today} + interval '1 day'`;
+  const tomorrow = startOfTomorrowSql(timeZone);
   const missedToday = `(cb.reason = 'missed_call' AND cb.scheduled_at >= ${today} AND cb.scheduled_at < ${tomorrow})`;
   return {
     today: `cb.done_at IS NULL AND ((cb.scheduled_at >= now() AND cb.scheduled_at < ${tomorrow}) OR ${missedToday})`,
