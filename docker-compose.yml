@@ -29,6 +29,7 @@ services:
     build:
       context: ./backend
       dockerfile: Dockerfile
+      target: dev                      # every dependency; the server builds `production` (docker-compose.prod.yml)
     ports:
       - "3000:3000"
     environment:
@@ -73,6 +74,7 @@ services:
     build:
       context: ./backend
       dockerfile: Dockerfile
+      target: dev                      # every dependency; the server builds `production` (docker-compose.prod.yml)
     environment:
       NODE_ENV: development
       DATABASE_URL: postgres://app:app@postgres:5432/leads
