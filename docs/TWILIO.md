@@ -131,7 +131,11 @@ nothing else: no browser reports its own end, as for a transfer (T15a).
 Twilio reports a ring cut short by someone else's answer as `no-answer`,
 exactly like one let run out (T15c), and a second accept it refused and hung
 up as `completed`, like the call itself; acting on either would end a call
-someone is on. Twilio asks `/incoming/after` however it ends - taken and over,
+someone is on. So `completed` counts as taken only when the call is someone's
+(`incomingTakenBy`): one whose only accept was refused - a deactivated
+account, a call no longer ringing - is a missed call like one let run out,
+the lead hears we will call back and is texted (`call.ring_not_taken`,
+review H9, 2026-11-22); the database failing to say, taken, as before. Twilio asks `/incoming/after` however it ends - taken and over,
 run out, or the lead hanging up while it rang. Letting a call-back ring run
 out turns nobody's switch off - only a transfer does (T15c). Only with
 automated calls on; `/incoming/claim` answers 404 otherwise.
@@ -856,6 +860,29 @@ own phone.
 
 `AUDIT.md` has the whole picture.
 
+## Calls whose end never came
+
+Built 2026-11-22 (`docs/REVIEW-2026-11-22.md`, H4). Twilio reports a call's end
+to `/status` (or `/auto/status`) once; a report that never arrives - the api
+restarting at a deploy as it came, for one - left the row with no outcome for
+good: "in progress" on the timeline, "No result" on Admin > Leads, and a person
+who took it counted as on a call for two hours (`ON_A_CALL_SQL`), every "yes"
+waiting on hold meanwhile. A call on hold was already ended from Twilio's
+record by the hold watcher, and an automated call that never reached Twilio by
+the dialler (`closeUnplacedCalls`, T20).
+
+Now every call Twilio placed - an agent's, a lead's, the robot's - still open 15
+minutes after it started (`LEFT_OPEN_MINUTES`) is asked about every 5 minutes
+(`watchLeftOpen`, `api/left-open.ts`, with calling set up): Twilio's own record
+of it (`callEnd`), and a call Twilio says is over is ended as its own report
+would have ended it - `finishCall`, then `settleAutomatedCall` for the robot's
+(`closeFromTwilio`, shared with the hold watcher). `call.closed_late` (warn)
+says one was. A call still going is left alone and asked again 5 minutes on;
+Twilio not answering, the same. No text goes with a missed call found this way
+- it is minutes late; its call back is booked as for any missed call. The
+calls' query is `callsLeftOpen` (`db/calls.ts`), proved by
+`calls-live-check`; the close by `left-open.test.ts`.
+
 ## Not built
 
 - **Hold.** The call bar's design has a Hold button; it is not on the screen. A
@@ -871,10 +898,6 @@ own phone.
   calls on, everyone free at once for a lead nobody holds or has called (T19,
   "Who rings"); or nobody. The automated call's hold line (built, T16) is only
   for its own transfers.
-- **An agent's stale call is not closed.** If Twilio's end-of-call report never
-  arrives, the row keeps `ended_at` null and the timeline says "in progress".
-  Not seen in testing; Twilio retries its callbacks. The automated call's are:
-  one that never reached Twilio after 10 minutes (`closeUnplacedCalls`), and
-  one on hold whose end Twilio did not report (the hold watcher) -
-  `AUTO-CALLS.md`, T20.
+- ~~**An agent's stale call is not closed.**~~ Built 2026-11-22 - "Calls whose
+  end never came", above.
 - **Call totals on Admin > Overview.** Removed 2026-09-28, deliberately.

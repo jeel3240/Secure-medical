@@ -57,15 +57,20 @@ export const JUST_OFF_A_CALL_SQL = `(NOT ${RINGABLE_SQL} AND EXISTS (
  * - "Taking calls" switched on (T10) - the switch decides, not the role,
  * - a browser open that can be rung (`RINGABLE_SQL`) - which also means no
  *   call, ring or note box open on its screen,
- * - and no call of theirs still going (`ON_A_CALL_SQL`), checked here too,
+ * - no call of theirs still going (`ON_A_CALL_SQL`), checked here too,
  *   so a call counts the moment it starts rather than at the browser's next
- *   word.
+ *   word,
+ * - and no lead on hold ringing them now (`call_offers`, T17): a transfer or a
+ *   call back ringing them as well, in the seconds before their browser says
+ *   busy, is declined by it - and a declined offer shuts them out of that held
+ *   lead (review H10, 2026-11-22).
  */
 export const FREE_SQL = `(
   u.is_active
   AND u.taking_calls
   AND ${RINGABLE_SQL}
   AND NOT ${ON_A_CALL_SQL}
+  AND NOT EXISTS (SELECT 1 FROM call_offers fo WHERE fo.agent_id = u.id AND fo.ended_at IS NULL)
 )`;
 
 /**

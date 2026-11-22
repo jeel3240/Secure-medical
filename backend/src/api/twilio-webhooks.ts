@@ -144,6 +144,7 @@ function autoCalls() {
     settleAutomatedCall: rows.settleAutomatedCall,
     transferContext: rows.transferContext,
     takeTransfer: rows.takeTransfer,
+    transferTakenBy: rows.transferTakenBy,
     missTransfer: rows.missTransfer,
     freePeople: () => presence.freePeople(pool),
     switchOffAfterMissedRing: (agentId: number, callId: number) =>
@@ -416,19 +417,33 @@ export function twilioWebhooksRouter(deps: AppDeps): Router {
     '/incoming/after',
     asyncHandler(async (req, res) => {
       const body = (req.body ?? {}) as Record<string, unknown>;
-      const status = field(body, 'DialCallStatus');
+      let status = field(body, 'DialCallStatus');
       res.type('text/xml');
 
       if (status === 'completed' || status === 'answered') {
-        if (req.query.ring === 'group') {
-          try {
-            await recordEnd(field(body, 'CallSid'), 'completed', body.DialCallDuration);
-          } catch (err) {
-            log.error('call.end_not_recorded', { callSid: field(body, 'CallSid'), err: errText(err) });
-          }
+        if (req.query.ring !== 'group') {
+          res.send(emptyTwiml());
+          return;
         }
-        res.send(emptyTwiml());
-        return;
+        // A ring to everyone free is `completed` once someone accepted - even when that accept was refused and their
+        // leg hung up (`/incoming/claim`): taken only if the call is someone's (review H9, 2026-11-22). The
+        // database failing to say: taken, as before - the lead may be talking to them.
+        const callSid = field(body, 'CallSid');
+        const taken = await db()
+          .incomingTakenBy(callSid)
+          .then((agentId) => agentId !== null)
+          .catch(() => true);
+        if (taken) {
+          try {
+            await recordEnd(callSid, 'completed', body.DialCallDuration);
+          } catch (err) {
+            log.error('call.end_not_recorded', { callSid, err: errText(err) });
+          }
+          res.send(emptyTwiml());
+          return;
+        }
+        log.warn('call.ring_not_taken', { callSid, dialStatus: status });
+        status = 'no-answer';
       }
       try {
         await recordEnd(field(body, 'CallSid'), status, 0);
@@ -938,8 +953,16 @@ export function twilioWebhooksRouter(deps: AppDeps): Router {
       const body = (req.body ?? {}) as Record<string, unknown>;
       const status = field(body, 'DialCallStatus');
       if (status === 'completed' || status === 'answered') {
-        res.send(emptyTwiml());
-        return;
+        // `completed` once someone accepted - even when `/auto/claim` refused them and their leg hung up: taken only if
+        // the call is someone's (review H9, 2026-11-22). Not taken, it ends as any ring nobody took; the database
+        // failing to say, taken, as before.
+        const callId = autoCallId(req.query.call);
+        const taken = callId === null ? true : await autoCalls().transferTakenBy(callId).then((agentId) => agentId !== null, () => true);
+        if (taken) {
+          res.send(emptyTwiml());
+          return;
+        }
+        log.warn('auto_call.ring_not_taken', { callId, dialStatus: status });
       }
       /** Who was rung, and the call - to switch off whoever let it ring out, once Twilio has its answer. */
       let missed: { callId: number; callSid: string; rung: number[]; hungUp: boolean } | null = null;

@@ -17,7 +17,7 @@
  * Re-running needs a fresh database: DROP and re-migrate.
  */
 import { pool } from '../src/db/pool';
-import { finishCall, recordAnsweredBy, startCall, startIncomingCall, takeIncomingCall } from '../src/db/calls';
+import { callsLeftOpen, finishCall, incomingTakenBy, recordAnsweredBy, startCall, startIncomingCall, takeIncomingCall } from '../src/db/calls';
 import { saveRecording } from '../src/db/transcripts';
 import * as transcriptClient from '../src/integrations/twilio-transcripts';
 import { advanceTranscripts } from '../src/worker/transcripts';
@@ -168,6 +168,22 @@ async function main(): Promise<void> {
     check('a second report changes nothing', (await finishCall({ callSid: 'CA-7', outcome: 'failed', durationSec: 0 })).recorded, false);
     check('the first outcome stands', (await callRows(lead))[0].outcome, 'answered');
     check('a report for a call we never started is ignored', (await finishCall({ callSid: 'CA-nope', outcome: 'busy', durationSec: 0 })).recorded, false);
+  }
+
+  console.log('\ncalls left open (review H4)');
+  {
+    const lead = await makeLead('+15550000690', 'Lost', maya);
+    await startCall({ callSid: 'CA-LOST', leadId: lead, agentId: maya });
+    await pool.query(`UPDATE calls SET started_at = now() - interval '20 minutes' WHERE twilio_call_sid = 'CA-LOST'`);
+    await startCall({ callSid: 'CA-FRESH', leadId: lead, agentId: maya });
+    const open = (await callsLeftOpen(15)).map((c) => c.callSid);
+    check('open 20 minutes: asked about', open.includes('CA-LOST'), true);
+    check('open a moment: not yet', open.includes('CA-FRESH'), false);
+    check('ended: never', open.includes('CA-7'), false);
+    await finishCall({ callSid: 'CA-LOST', outcome: 'answered', durationSec: 60 });
+    check('once ended from Twilio\'s record: no longer open', (await callsLeftOpen(15)).map((c) => c.callSid).includes('CA-LOST'), false);
+    check('who took a call - the agent on it', await incomingTakenBy('CA-FRESH'), maya);
+    check('who took a call we do not have - nobody', await incomingTakenBy('CA-none'), null);
   }
 
   console.log('\nwhat a call shows up as');

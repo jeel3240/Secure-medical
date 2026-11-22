@@ -5,17 +5,17 @@ import { attachRelay, type Relay } from '../ai/relay';
 import { pgRelayStore } from '../ai/relay-store';
 import { readAutoCalls } from '../auto-calls-settings';
 import { config } from '../config';
-import { outcomeForStatus, talkSeconds } from '../core/calls';
 import { recordActivity } from '../db/activity';
 import { callsOnHold, settleAutomatedCall } from '../db/auto-calls';
 import { readHoldMaxSeconds } from '../db/call-script';
-import { finishCall } from '../db/calls';
+import { callsLeftOpen, finishCall } from '../db/calls';
 import { endOffer, endStaleOffers, someoneComing, startOffer } from '../db/hold-offers';
 import { pool } from '../db/pool';
 import { pgUserStore } from '../db/users';
 import { callEnd, recheckHold, sendToOffer } from '../integrations/twilio-calls';
 import { createApp } from './app';
 import { watchHolds } from './hold-watch';
+import { closeFromTwilio, LEFT_OPEN_MINUTES, watchLeftOpen } from './left-open';
 import { log } from '../lib/log';
 import { startupProblems } from './startup-checks';
 
@@ -101,11 +101,20 @@ const relay: Relay | null =
       })
     : null;
 
+// A call is ended from Twilio's own record of it, as `/status` would - for a
+// call on hold the watcher finds over, and for any call whose end never came
+// (`api/left-open.ts`, review H4, 2026-11-22). With calling set up.
+const twilioSettings = config.twilio.status === 'on' ? config.twilio.settings : null;
+const closeIfOver = twilioSettings
+  ? closeFromTwilio({ callEnd: (callSid) => callEnd(twilioSettings, callSid), finishCall, settleAutomatedCall })
+  : null;
+if (closeIfOver) watchLeftOpen({ callsLeftOpen: () => callsLeftOpen(LEFT_OPEN_MINUTES), closeIfOver });
+
 // A lead on hold is looked at every 30 seconds, not only when a track of hold
 // music ends, and offered to whoever is free - AUTO-CALLS.md "The hold line".
 // Only with automated calls on.
-if (autoCalls && config.twilio.status === 'on') {
-  const settings = config.twilio.settings;
+if (autoCalls && twilioSettings && closeIfOver) {
+  const settings = twilioSettings;
   watchHolds({
     endStaleOffers,
     startOffer,
@@ -115,15 +124,7 @@ if (autoCalls && config.twilio.status === 'on') {
     someoneComing,
     readHoldMaxSeconds: () => readHoldMaxSeconds(pool),
     recheckHold: (callSid, callId) => recheckHold(settings, callSid, callId),
-    // As `/auto/status` ends a call, from Twilio's own record of it.
-    closeIfOver: async (callSid, callId) => {
-      const end = await callEnd(settings, callSid);
-      const outcome = end && outcomeForStatus(end.status);
-      if (!end || !outcome) return false;
-      await finishCall({ callSid, outcome, durationSec: talkSeconds(outcome, end.durationSec) });
-      await settleAutomatedCall(callId);
-      return true;
-    },
+    closeIfOver,
   });
 }
 

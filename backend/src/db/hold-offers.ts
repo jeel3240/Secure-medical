@@ -54,12 +54,11 @@ async function waitingLeads(): Promise<(WaitingLead & { callSid: string })[]> {
   return rows.map((r) => ({ callId: r.id, callSid: r.twilio_call_sid, offeredTo: r.offered_to, offerLive: r.live }));
 }
 
-/** Everyone free who is not ringing with a lead from hold already. */
+/** Everyone free - which leaves out whoever a lead from hold is ringing already (`FREE_SQL`). */
 async function freeForOffer(): Promise<number[]> {
   const { rows } = await pool.query<{ id: number }>(
     `SELECT u.id FROM users u
      WHERE ${FREE_SQL}
-       AND NOT EXISTS (SELECT 1 FROM call_offers o WHERE o.agent_id = u.id AND o.ended_at IS NULL)
      ORDER BY u.id`
   );
   return rows.map((r) => r.id);
