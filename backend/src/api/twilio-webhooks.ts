@@ -453,7 +453,8 @@ export function twilioWebhooksRouter(deps: AppDeps): Router {
       const parentSid = field(body, 'ParentCallSid');
       const agentId = agentIdFromIdentity(body.To, deps.twilio!.identityPrefix);
       if (!parentSid || agentId === null) {
-        log.warn('call.unknown_take', { parentSid, to: field(body, 'To') });
+        // Whether Twilio's `To` was one of our browser names - never its value, which can be a phone number (review H3).
+        log.warn('call.unknown_take', { parentSid, toBrowser: String(body.To ?? '').startsWith('client:') });
         res.send(hangupTwiml());
         return;
       }

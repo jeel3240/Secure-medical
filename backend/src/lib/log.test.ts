@@ -134,6 +134,18 @@ describe('redaction', () => {
     expect(out).toEqual({ leadId: 42, conversationId: 7, score: 100, tier: 'HOT' });
   });
 
+  it('hides a phone number written inside any text - an error message above all (review H1)', () => {
+    const out = redact({ err: 'Refusing to send: +16025550123 on dnc_list', nested: { why: 'call +14805551234 failed' } });
+    expect(out.err).toBe('Refusing to send: [redacted phone] on dnc_list');
+    expect(out.nested).toEqual({ why: 'call [redacted phone] failed' });
+    expect(redact({ err: new Error('to +15551234567: refused') }).err).toBe('to [redacted phone]: refused');
+  });
+
+  it('keeps our own ids, which are digits with no "+"', () => {
+    const out = redact({ eztMessageId: '321218298003', callSid: 'CA9670cfbe518fa417adba8d6fb9511964', leadId: 12 });
+    expect(out).toEqual({ eztMessageId: '321218298003', callSid: 'CA9670cfbe518fa417adba8d6fb9511964', leadId: 12 });
+  });
+
   it('reduces an Error to its message', () => {
     // A stack can hold a message body in an interpolated string.
     const out = redact({ err: new Error('upstream 500') });
