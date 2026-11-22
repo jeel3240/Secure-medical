@@ -614,12 +614,31 @@ export type TakeTransferResult =
  * taken is refused: Twilio connects only the first to accept, so a second is
  * a mistake, not a race to settle.
  */
+/**
+ * Who took the automated call's transfer - null when nobody did. Twilio
+ * reports the ring `completed` when someone accepted, even if `takeTransfer`
+ * refused them and their leg hung up (review H9, 2026-11-22).
+ */
+export async function transferTakenBy(callId: number): Promise<number | null> {
+  const { rows } = await pool.query<{ agent_id: number | null }>(
+    `SELECT agent_id FROM calls WHERE id = $1 AND direction = 'automated'`,
+    [callId]
+  );
+  return rows[0]?.agent_id ?? null;
+}
+
 export async function takeTransfer(callId: number, agentId: number): Promise<TakeTransferResult> {
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
-    const { rows } = await client.query<{ lead_id: number; agent_id: number | null; assigned_to: number | null }>(
-      `SELECT c.lead_id, c.agent_id, l.assigned_to
+    const { rows } = await client.query<{
+      lead_id: number;
+      agent_id: number | null;
+      assigned_to: number | null;
+      over: boolean;
+    }>(
+      `SELECT c.lead_id, c.agent_id, l.assigned_to,
+              (c.ended_at IS NOT NULL OR ${TAKEN_BY_VERDICT_SQL}) AS over
        FROM calls c JOIN leads l ON l.id = c.lead_id
        WHERE c.id = $1 AND c.direction = 'automated'
        FOR UPDATE OF c, l`,
@@ -630,7 +649,10 @@ export async function takeTransfer(callId: number, agentId: number): Promise<Tak
       await client.query('ROLLBACK');
       return { ok: false as const, reason };
     };
-    if (!call) return await refuse('not_found');
+    // Over, or the voicemail message took it while the accept waited on its lock (`actOnVerdict` holds it as it
+    // asks Twilio): nobody is on the line to take (review H8, 2026-11-22) - the other order, the accept first, is
+    // `onVerdict`'s, which then carries on.
+    if (!call || call.over) return await refuse('not_found');
     if (call.agent_id !== null && call.agent_id !== agentId) return await refuse('taken');
     const agent = await client.query(`SELECT 1 FROM users WHERE id = $1 AND is_active`, [agentId]);
     if (agent.rowCount === 0) return await refuse('inactive');

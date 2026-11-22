@@ -306,7 +306,12 @@ agent counts, while a call back ringing everyone free (T19) and an automated
 call nobody has taken keep nobody busy until someone takes them - the people
 rung are kept out by their own browsers saying busy - and a call whose end
 Twilio never reported stops counting after 2 hours - the window a missed
-call's "under way" uses. A small index of the calls still going
+call's "under way" uses - and since 2026-11-22 is ended from Twilio's own record
+15 minutes on (`api/left-open.ts`, `TWILIO.md` "Calls whose end never came").
+Nor is anyone free whom a lead on hold is ringing now (a live `call_offers`
+row, T17): before, a transfer could ring them in the seconds before their
+browser said busy, the browser declined one of the two, and a declined offer
+shut them out of that held lead (review H10). A small index of the calls still going
 (`calls_under_way_by_agent`, migration 017) keeps it instant. `freePeople`
 lists them; a transfer rings them (T15a), a lead on hold rings them (T17), a
 lead calling back whom nobody owns rings them (T19, at most ten, lowest ids
@@ -709,11 +714,18 @@ transfer, from `/auto/ai-after`, goes through the same code (`planYes`,
    - `call.transferred` records taking the transfer, once per call, whoever
      held the lead.
    Refused - another person has the call, the account was deactivated while it
-   rang, no such call - their leg is hung up before it is connected. A
+   rang, no such call, or the call over or taken by the voicemail message (an
+   accept that waited on the call's lock while `actOnVerdict` replaced it -
+   review H8, 2026-11-22; the other order, the accept first, is `onVerdict`'s,
+   which carries on) - their leg is hung up before it is connected. A
    database error after they accepted still connects them: the lead is
    waiting for a person, and the error is logged (`auto_call.claim_failed`).
 3. **When the ringing is over**, Twilio asks `/auto/after` with how it went
-   (`DialCallStatus`); the address names the step and, after a ring to the
+   (`DialCallStatus`) - `completed` is taken only when the call is someone's
+   (`transferTakenBy`): Twilio says `completed` once an accept was answered,
+   even when `/auto/claim` refused it and hung that leg up, and such a ring
+   now ends as one nobody took (`auto_call.ring_not_taken`, review H9,
+   2026-11-22); the address names the step and, after a ring to the
    lead's own agent, who they were. Taken - they talked, nothing more to say.
    The lead's own agent let it ring out, or declined: **everyone else free
    rings at once** (`planAfterHolder`) - not them, with nothing said, since

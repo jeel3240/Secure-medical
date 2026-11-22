@@ -228,6 +228,23 @@ async function main(): Promise<void> {
     check('once a person takes its transfer, they are on it: not free', await freePeople(pool), [kim]);
     await end(robot);
 
+    const heldLead = (
+      await pool.query(`INSERT INTO leads (phone, first_name, ezt_added_at) VALUES ('+15550000905', 'Hal', now()) RETURNING id`)
+    ).rows[0].id as number;
+    const held = (
+      await pool.query(
+        `INSERT INTO calls (lead_id, twilio_call_sid, direction, held_at) VALUES ($1, 'CA-held-1', 'automated', now()) RETURNING id`,
+        [heldLead]
+      )
+    ).rows[0].id as number;
+    const offer = (
+      await pool.query(`INSERT INTO call_offers (call_id, agent_id) VALUES ($1, $2) RETURNING id`, [held, kim])
+    ).rows[0].id as number;
+    check('a lead on hold ringing them: not free - no transfer rings them as well (review H10)', await freePeople(pool), [boss]);
+    await pool.query(`UPDATE call_offers SET ended_at = now(), outcome = 'missed' WHERE id = $1`, [offer]);
+    check('once that ring ends: free again', await freePeople(pool), [kim, boss]);
+    await end(held);
+
     await pool.query(`UPDATE users SET is_active = false WHERE id = $1`, [kim]);
     await pool.query(`UPDATE users SET ringable_until = now() + interval '1 minute' WHERE id = $1`, [kim]);
     check('deactivated, even with the switch on and a browser open: not free', await freePeople(pool), [boss]);

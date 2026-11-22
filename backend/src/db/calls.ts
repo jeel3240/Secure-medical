@@ -414,6 +414,33 @@ export type TakeIncomingResult =
   | { ok: false; reason: 'taken' | 'inactive' | 'not_found' };
 
 /**
+ * Calls Twilio placed that are still open `olderThanMinutes` after they
+ * started - any direction: their end never reached us, or they are still
+ * going (`api/left-open.ts`, review H4). The oldest first, a look's worth.
+ */
+export async function callsLeftOpen(olderThanMinutes: number): Promise<{ callId: number; callSid: string }[]> {
+  const { rows } = await pool.query<{ callId: number; callSid: string }>(
+    `SELECT id AS "callId", twilio_call_sid AS "callSid" FROM calls
+     WHERE twilio_call_sid IS NOT NULL AND ended_at IS NULL
+       AND started_at < now() - make_interval(mins => $1)
+     ORDER BY id
+     LIMIT 50`,
+    [olderThanMinutes]
+  );
+  return rows;
+}
+
+/**
+ * Who took a lead's call - null when nobody did. Twilio reports a ring to
+ * everyone free `completed` when someone accepted, even if that accept was
+ * refused (`takeIncomingCall`) and their leg hung up (review H9, 2026-11-22).
+ */
+export async function incomingTakenBy(callSid: string): Promise<number | null> {
+  const { rows } = await pool.query<{ agent_id: number | null }>(`SELECT agent_id FROM calls WHERE twilio_call_sid = $1`, [callSid]);
+  return rows[0]?.agent_id ?? null;
+}
+
+/**
  * A person accepted a lead's call that rang everyone free (T19): the call
  * becomes theirs - `agent_id`, so they are on a call - with its `call.taken`
  * record, and so does the lead, taken over from anyone who held it, with its

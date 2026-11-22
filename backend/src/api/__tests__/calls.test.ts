@@ -27,7 +27,9 @@ jest.mock('../../db/calls', () => ({
   startIncomingCall: (...a: IncomingArgs) => startIncomingCall(...a),
   recordAnsweredBy: (...a: AnsweredArgs) => recordAnsweredBy(...a),
   takeIncomingCall: (callSid: string, agentId: number) => takeIncomingCall(callSid, agentId),
+  incomingTakenBy: (callSid: string) => incomingTakenBy(callSid),
 }));
+const incomingTakenBy = jest.fn<Promise<number | null>, [string]>();
 
 type RecordingArgs = Parameters<typeof import('../../db/transcripts').saveRecording>;
 const saveRecording = jest.fn<Promise<boolean>, RecordingArgs>();
@@ -63,6 +65,7 @@ beforeEach(() => {
   startIncomingCall.mockReset().mockResolvedValue({ kind: 'unknown' });
   recordAnsweredBy.mockReset().mockResolvedValue(true);
   takeIncomingCall.mockReset().mockResolvedValue({ ok: true, leadId: 7, tookOverFrom: null });
+  incomingTakenBy.mockReset().mockResolvedValue(19);
   saveRecording.mockReset().mockResolvedValue(true);
   sendMissedCallText.mockReset().mockResolvedValue(true);
   setRingable.mockReset().mockResolvedValue({ takingCalls: true, takingCallsWhy: 'by_hand' });
@@ -592,6 +595,17 @@ describe('a lead calling our number', () => {
         expect(finishCall).toHaveBeenCalledWith({ callSid: 'CA300', outcome: 'answered', durationSec: 42 });
         expect(res.text).not.toContain('<Say>');
         expect(sendMissedCallText).not.toHaveBeenCalled();
+      });
+
+      it('"completed", but the one accept was refused - nobody\'s call: missed, the lead hears we will call back, and is texted (review H9)', async () => {
+        incomingTakenBy.mockResolvedValue(null);
+        finishCall.mockResolvedValue({ recorded: true, missedLeadId: 7 });
+        const { app } = await buildApp({ twilio: SETTINGS, autoCalls: true });
+        const res = await fromTwilio(app, GROUP_AFTER, { CallSid: 'CA300', DialCallStatus: 'completed', DialCallDuration: '0' });
+        expect(incomingTakenBy).toHaveBeenCalledWith('CA300');
+        expect(finishCall).toHaveBeenCalledWith({ callSid: 'CA300', outcome: 'no_answer', durationSec: 0 });
+        expect(res.text).toContain('will call you back');
+        expect(sendMissedCallText).toHaveBeenCalledWith(7);
       });
 
       it('nobody took it: missed - the lead hears we will call back, and is texted', async () => {

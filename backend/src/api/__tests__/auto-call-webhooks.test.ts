@@ -38,6 +38,7 @@ jest.mock('../../db/auto-calls', () => ({
   settleAutomatedCall: (...a: unknown[]) => settleAutomatedCall(...a),
   transferContext: (callId: number) => transferContext(callId),
   takeTransfer: (callId: number, agentId: number) => takeTransfer(callId, agentId),
+  transferTakenBy: (callId: number) => transferTakenBy(callId),
   missTransfer: (...a: unknown[]) => missTransfer(...a),
   holdCall: (...a: unknown[]) => holdCall(...a),
   holdState: (...a: unknown[]) => holdState(...a),
@@ -129,8 +130,11 @@ const afterResponse = async () => {
 };
 afterEach(afterResponse);
 
+const transferTakenBy = jest.fn<Promise<number | null>, [number]>();
+
 beforeEach(() => {
   linkAutomatedCall.mockReset().mockResolvedValue(true);
+  transferTakenBy.mockReset().mockResolvedValue(16);
   keepAnswer.mockReset().mockResolvedValue({ kept: true, leadId: 7, takenByVerdict: false });
   keepCallResult.mockReset().mockResolvedValue({ saved: true, leadId: 7, takenByVerdict: false, callbackId: null });
   // Every day, all day: a call back's time is the relay's to check, not this test's.
@@ -935,6 +939,15 @@ describe('the transfer (T15a)', () => {
       expect(missTransfer).not.toHaveBeenCalled();
       expect(transferRings).not.toHaveBeenCalled();
       expect(switchOffAfterMissedRing).not.toHaveBeenCalled();
+    });
+
+    it('"completed", but the accept was refused - nobody\'s call: transfer_missed, and the busy line, not taken (review H9)', async () => {
+      transferTakenBy.mockResolvedValue(null);
+      const { app } = await on();
+      const res = await fromTwilio(app, AFTER, { CallSid: 'CA900', DialCallStatus: 'completed' });
+      expect(transferTakenBy).toHaveBeenCalledWith(42);
+      expect(missTransfer).toHaveBeenCalledWith(42);
+      expect(res.text).toContain('All our agents are busy right now. An agent will call you back shortly.</Say><Hangup/>');
     });
 
     it.each(['no-answer', 'busy', 'failed', 'canceled'])('%s - nobody took it: transfer_missed, and the busy line', async (status) => {
