@@ -218,6 +218,9 @@ async function main(): Promise<void> {
       await pool.query(`SELECT ezt_message_id FROM messages WHERE lead_id = $1`, [leadId])
     ).rows.map((r) => r.ezt_message_id), [null]);
     check('and no take-over is recorded', await tookOverAt(conversationId), null);
+    // The failed message and its record were written together, once (review M12).
+    const recorded = await pool.query(`SELECT actor_id FROM activity_log WHERE lead_id = $1 AND action = 'sms.failed'`, [leadId]);
+    check('recorded as sms.failed, by her, once', recorded.rows.map((r) => r.actor_id), [maya]);
   }
 
   console.log('\nan unknown lead');

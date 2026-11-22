@@ -13,19 +13,15 @@ import { Router } from 'express';
 import { requireAuth, requirePasswordChanged } from './auth/middleware';
 import type { AppDeps } from './deps';
 import { asyncHandler, HttpError } from './http';
-import { parseLeadId, parseList, parseSince } from './filters';
+import { parseLeadId, parseList, parseSearch, parseSince } from './filters';
 import { leadWorkspaceRoutes } from './lead-workspace';
 
 const TIERS = ['HOT', 'WARM', 'LOW'];
 
 /** Comma-separated and case-insensitive, so `tier=hot,warm` works. */
 function parseTiers(raw: unknown): string[] | undefined {
-  if (typeof raw !== 'string' || !raw.trim()) return undefined;
-
-  const asked = raw
-    .split(',')
-    .map((t) => t.trim().toUpperCase())
-    .filter(Boolean);
+  // As every list - `tier=hot,warm` or `tier=hot&tier=warm` (review M19).
+  const asked = (parseList(raw) ?? []).map((t) => t.toUpperCase());
 
   const unknown = asked.filter((t) => !TIERS.includes(t));
   if (unknown.length) {
@@ -62,7 +58,7 @@ export function queueRouter(deps: AppDeps): Router {
         tier: parseTiers(req.query.tier),
         source: parseList(req.query.source),
         since: parseSince(req.query.since),
-        q: typeof req.query.q === 'string' && req.query.q.trim() ? req.query.q.trim() : undefined,
+        q: parseSearch(req.query.q),
         limit: parseLimit(req.query.limit),
       });
 

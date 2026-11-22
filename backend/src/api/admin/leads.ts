@@ -2,7 +2,7 @@ import { Router } from 'express';
 import { requireAuth, requirePasswordChanged, requireRole } from '../auth/middleware';
 import type { AppDeps } from '../deps';
 import { asyncHandler, HttpError } from '../http';
-import { parseList, parsePage, parseSince } from '../filters';
+import { parseList, parsePage, parseSearch, parseSince } from '../filters';
 import type { LeadCallFilter, LeadStatus } from '../../db/leads';
 
 const STATUSES: LeadStatus[] = [
@@ -77,7 +77,7 @@ export function adminLeadsRouter(deps: AppDeps): Router {
         source: parseList(req.query.source),
         since: parseSince(req.query.since),
         call: parseCall(req.query.call),
-        q: typeof req.query.q === 'string' && req.query.q.trim() ? req.query.q.trim() : undefined,
+        q: parseSearch(req.query.q),
         page: parsePage(req.query.page),
       });
 

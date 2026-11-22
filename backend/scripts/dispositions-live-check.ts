@@ -257,6 +257,27 @@ async function main(): Promise<void> {
     check('the lead is out of the queue', await inQueue(lead), false);
   }
 
+  console.log('\nsomeone else holds it now (review M10), and an unread reply cleared (review M20)');
+  {
+    const sam = await makeUser('Sam');
+    const lead = await makeQueuedLead('+15550000591', 'Taken');
+    await pool.query(`UPDATE leads SET assigned_to = $2, assigned_at = now() WHERE id = $1`, [lead, sam]);
+    const res = await setDisposition(lead, maya, 'closed');
+    check('refused: not hers', res.ok === false && res.reason, 'not_yours');
+    const after = (await pool.query(`SELECT assigned_to FROM leads WHERE id = $1`, [lead])).rows[0];
+    check('Sam still holds it', after.assigned_to, sam);
+    check('and nothing is written', (await pool.query(`SELECT count(*)::int AS n FROM dispositions WHERE lead_id = $1`, [lead])).rows[0].n, 0);
+
+    const unread = await makeQueuedLead('+15550000592', 'Unread');
+    await pool.query(`UPDATE leads SET assigned_to = $2, assigned_at = now(), has_unread_inbound = true WHERE id = $1`, [unread, maya]);
+    check('an outcome on her own lead with a reply unread is saved', (await setDisposition(unread, maya, 'closed')).ok, true);
+    const read = await pool.query(
+      `SELECT actor_id, detail->>'because' AS because FROM activity_log WHERE lead_id = $1 AND action = 'reply.read'`,
+      [unread]
+    );
+    check('and the reply is recorded read, by her, because of the outcome', read.rows, [{ actor_id: maya, because: 'outcome' }]);
+  }
+
   console.log('\nan unknown lead');
   {
     const res = await setDisposition(999999, maya, 'closed');

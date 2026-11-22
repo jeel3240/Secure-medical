@@ -87,9 +87,8 @@ export async function sendAgentSms(
     // Kept as a failed message so the thread shows it with a red "!", the way
     // a phone does. It sets no take-over: nothing reached the lead.
     // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const { recordFailedSend } = require('./failed-sends') as typeof import('./failed-sends');
-    await recordFailedSend(leadId, body, agentId);
-    await recordActivity(pool, { action: 'sms.failed', actorId: agentId, leadId });
+    const { recordAgentFailedSend } = require('./failed-sends') as typeof import('./failed-sends');
+    await recordAgentFailedSend(leadId, body, agentId);
     return { ok: false, reason: 'send_failed', detail: typeof detail === 'string' ? detail : 'send failed' };
   }
 

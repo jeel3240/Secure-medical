@@ -9,7 +9,7 @@
  * numbers to a browser, which needs Jeel to say so first.
  */
 
-import { parsePage } from '../filters';
+import { parsePage, parseSearch } from '../filters';
 import { Router } from 'express';
 import { requireAuth, requirePasswordChanged, requireRole } from '../auth/middleware';
 import type { AppDeps } from '../deps';
@@ -38,7 +38,7 @@ export function adminDncRouter(deps: AppDeps): Router {
 
       res.json(
         await db.listDnc({
-          q: typeof req.query.q === 'string' ? req.query.q : undefined,
+          q: parseSearch(req.query.q),
           page: parsePage(req.query.page),
           state: parseState(req.query.state),
         })

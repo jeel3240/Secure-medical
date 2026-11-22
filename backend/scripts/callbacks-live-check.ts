@@ -14,6 +14,7 @@
  *     EZT_USERNAME=x EZT_PASSWORD=x EZT_GROUP=x npx ts-node --transpile-only scripts/callbacks-live-check.ts
  */
 import { pool } from '../src/db/pool';
+import { startOfTodaySql, startOfTomorrowSql } from '../src/db/sql';
 import { createCallback, listCallbacks, updateCallback } from '../src/db/callbacks';
 
 let failures = 0;
@@ -62,6 +63,19 @@ async function main(): Promise<void> {
   const maya = await makeUser('Maya');
   const sam = await makeUser('Sam');
   const lead = await makeLead('+15550000401');
+
+  console.log('\nthe day the clocks change (review M11)');
+  {
+    // New York, 2026-11-01: the clocks go back, so that day is 25 hours long. The day's end is worked out at noon
+    // that day - `now()` in the SQL stood in for by that moment.
+    const at = `'2026-11-01 12:00:00 America/New_York'::timestamptz`;
+    const tz = 'America/New_York';
+    const { rows } = await pool.query(
+      `SELECT EXTRACT(EPOCH FROM (${startOfTomorrowSql(tz).replace(/now\(\)/g, at)} - ${startOfTodaySql(tz).replace(/now\(\)/g, at)})) / 3600 AS hours,
+              to_char(${startOfTomorrowSql(tz).replace(/now\(\)/g, at)} AT TIME ZONE '${tz}', 'YYYY-MM-DD HH24:MI') AS ends`
+    );
+    check('that day is 25 hours, ending at its own midnight', [Number(rows[0].hours), rows[0].ends], [25, '2026-11-02 00:00']);
+  }
 
   console.log('\nthe tab windows');
   {

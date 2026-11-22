@@ -58,7 +58,11 @@ read-only and claims nothing - `QUEUE.md`, "What the button offers" - and
 Release is now there on that page.)*
 
 **A claim by a deactivated agent does not count.** The queue already ignores it
-(`QUEUE.md`); the claim endpoint treats such a lead as free.
+(`QUEUE.md`); the claim endpoint treats such a lead as free, and since
+2026-11-22 so does Release: any agent may release it (review M9 - it was a 403
+naming the deactivated person). Lost the race to someone who has let the lead
+go again since, a claim is tried once more rather than answer "null is already
+working this lead" (M42).
 
 **Every write needs the lead to be yours - Jeel, 2026-09-28.** A note, a new
 callback, an agent SMS, a disposition and marking a reply read are all refused
@@ -174,7 +178,10 @@ a runaway client cannot fill the column, not to ration what an agent can say.
 
 ## Callbacks
 
-**Today and Upcoming split at the viewer's midnight** - 2026-09-28, from review.
+**Today and Upcoming split at the viewer's midnight** - 2026-09-28, from review;
+since 2026-11-22 their real midnight on the two days a year the clocks change
+too, worked out on their own clock (`startOfTomorrowSql`) - today's start plus a
+day was 24 hours on, an hour off it (review M11; Overview's "due today" alike).
 They split at the database's (UTC), so for a call center on US time a 9 PM
 callback was already "Upcoming", and after 5 PM Pacific the Today tab showed
 tomorrow's. The browser now sends its IANA zone as `?tz=`; an invalid one is a
@@ -290,6 +297,15 @@ worked, on the lead's page and timeline, the note's rules - in
 
 `db/dispositions.ts` for the write, `core/dispositions.ts` for the list,
 `POST /api/leads/:id/dispositions`, 201 with the row.
+
+**Still yours as it is saved** (2026-11-22, review M10). The route checks the
+lead is yours, then the outcome is written in its own transaction: a release by
+a superadmin and someone else's pick-up in between let one agent's outcome
+release another's claim and close their call backs. Under the lead's lock, an
+outcome on a lead another active person now holds is refused - 409 `not_yours`,
+nothing saved. **An unread reply it clears is recorded read** (M20): saving an
+outcome clears the lead's unread flag, as opening it does, and now records
+`reply.read` by whoever saved it, `because: 'outcome'`.
 
 **Two: `closed` and `dnc` - Jeel, 2026-09-28.** Wrap up has two outcome
 buttons, Closed and DNC, then the callback and the note.

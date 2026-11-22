@@ -24,7 +24,7 @@
 
 import { CLOSING_DISPOSITIONS } from '../core/dispositions';
 import { pool } from './pool';
-import { startOfTodaySql } from './sql';
+import { startOfTodaySql, startOfTomorrowSql } from './sql';
 
 export type OverviewPeriod = 'today' | '7d' | '30d';
 
@@ -135,7 +135,7 @@ export async function getOverview(period: OverviewPeriod, timeZone?: string): Pr
         (
           SELECT count(*)::int FROM callbacks cb
           WHERE cb.agent_id = u.id AND cb.done_at IS NULL
-            AND cb.scheduled_at < (${startOfTodaySql(timeZone)} + interval '1 day')
+            AND cb.scheduled_at < ${startOfTomorrowSql(timeZone)}
         ) AS callbacks_due,
         (SELECT count(*)::int FROM leads hl WHERE hl.assigned_to = u.id) AS holding,
         (
