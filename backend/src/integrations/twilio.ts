@@ -476,9 +476,23 @@ export const HOLD_MUSIC: readonly string[] = [
   'Mellotroniac_-_Flight_Of_Young_Hearts_Flute.mp3',
 ].map((file) => `https://s3.amazonaws.com/com.twilio.music.classical/${file}`);
 
-/** The track for a lead who has waited `waitedSeconds` - the next one each time a track ends. */
-export function holdTrack(waitedSeconds: number): string {
-  return HOLD_MUSIC[Math.floor(Math.max(0, waitedSeconds) / 60) % HOLD_MUSIC.length];
+/** The `index`th track, round the list. */
+export function holdTrack(index: number): string {
+  const n = HOLD_MUSIC.length;
+  return HOLD_MUSIC[((Math.trunc(index) % n) + n) % n];
+}
+
+/**
+ * Which track a lead on hold hears now: the one after the last they heard,
+ * counted on the hold page's own address (`track`), so each track ends into the
+ * next and none plays twice running. Counted by minutes waited, a first track
+ * ending between 6:00 and 6:59 began the list again (review M21, 2026-11-22).
+ * Sent back to hold from elsewhere - an offer not taken, the watcher - there is
+ * no count, and it goes by minutes waited, as before.
+ */
+export function holdTrackIndex(played: unknown, waitedSeconds: number): number {
+  const n = typeof played === 'string' && /^\d+$/.test(played) ? Number(played) : NaN;
+  return Number.isInteger(n) ? n : Math.floor(Math.max(0, waitedSeconds) / 60);
 }
 
 /**
@@ -494,6 +508,8 @@ export function holdTwiml(
     script: CallScript;
     say: readonly string[];
     track: string | null;
+    /** The count the hold page reads back after `track` ends - `holdTrackIndex` (review M21). */
+    nextTrack?: number;
     /**
      * Say the recording notice after the lines: a "yes" put on hold before
      * any ring - whoever takes them later is recorded from the moment they
@@ -507,7 +523,8 @@ export function holdTwiml(
   for (const line of opts.say) response.say(voice, line);
   if (opts.notice && settings.transcriptionServiceSid) response.say(voice, RECORDING_NOTICE);
   if (opts.track) response.play(opts.track);
-  response.redirect({ method: 'POST' }, autoCallUrl(settings, AUTO_HOLD_PATH, opts.callId));
+  const after: Record<string, number> = opts.track && opts.nextTrack !== undefined ? { track: opts.nextTrack } : {};
+  response.redirect({ method: 'POST' }, autoCallUrl(settings, AUTO_HOLD_PATH, opts.callId, after));
   return response.toString();
 }
 

@@ -1238,8 +1238,21 @@ describe('the hold line (T16)', () => {
       const { app } = await on();
       const res = await fromTwilio(app, HOLD, live);
       expect(res.text).toContain('>You are next.</Say><Play>https://s3.amazonaws.com/com.twilio.music.classical/');
-      expect(res.text).toMatch(new RegExp(`</Play><Redirect method="POST">${toHold.replace(/[?]/g, '\\?')}</Redirect></Response>$`));
+      // The track after it comes next, counted on the address (review M21).
+      expect(res.text).toMatch(new RegExp(`</Play><Redirect method="POST">${toHold.replace(/[?]/g, '\\?')}&amp;track=\\d+</Redirect></Response>$`));
       expect(missTransfer).not.toHaveBeenCalled();
+    });
+
+    it('a track ended: the next one, never the same twice running (review M21)', async () => {
+      someoneComing.mockResolvedValue(true);
+      holdState.mockResolvedValue({ waitedSeconds: 5, place: 1 });
+      const { app } = await on();
+      const first = await fromTwilio(app, HOLD, live);
+      const [, played, next] = /<Play>([^<]+)<\/Play><Redirect method="POST">[^<]*track=(\d+)</.exec(first.text) ?? [];
+      const second = await fromTwilio(app, `${HOLD}&track=${next}`, live);
+      const [, playedNext, after] = /<Play>([^<]+)<\/Play><Redirect method="POST">[^<]*track=(\d+)</.exec(second.text) ?? [];
+      expect(playedNext).not.toBe(played);
+      expect(Number(after)).toBe(Number(next) + 1);
     });
 
     it('further back: "You are number 2 in line."', async () => {

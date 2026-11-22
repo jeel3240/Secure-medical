@@ -608,8 +608,10 @@ command and the dialler (T20):
 
 **Outside production, only our own phones are rung** - `AUTO_CALL_TEST_NUMBERS`
 (`auto-calls-settings.ts`), comma-separated E.164 numbers. Empty, nothing is;
-an entry that is not E.164 is ignored and counted. Production does not read
-it. It is checked in step 1, so the dev command and the dialler both obey it.
+an entry that is not E.164 is ignored and counted - and the worker says so
+once as it starts (`auto_calls.test_numbers_invalid`, with the `count`; review
+M25), since a mistyped number means that phone is never rung. Production does
+not read it. It is checked in step 1, so the dev command and the dialler both obey it.
 
 **What Twilio is asked for** (`automatedCallRequest`): our number as caller
 ID; the phone rings up to 60 seconds, long enough for a voicemail to answer;
@@ -815,7 +817,12 @@ otherwise the busy line at once, as before. The rules are pure, in
    them alone.
 4. **Each time** `/auto/hold` is asked: someone is still coming for the lead
    (`someoneComing`, below) and the lead has waited less than
-   `auto_call_hold_max_minutes` (10) - the place again and the next track.
+   `auto_call_hold_max_minutes` (10) - the place again and the next track:
+   the hold page's address counts the tracks (`track`, `holdTrackIndex`), so
+   each ends into the next and none plays twice running; counted by minutes
+   waited until 2026-11-22, a first track ending between 6:00 and 6:59 began the
+   list again (review M21). Sent back to hold from elsewhere - an offer not
+   taken, the watcher - there is no count, and minutes waited choose it.
    Otherwise the busy line, `transfer_missed`, so an agent calls them back
    (first in the queue, T22).
 5. **The hold watcher** (`api/hold-watch.ts`), every 30 seconds in the api
@@ -835,6 +842,9 @@ otherwise the busy line at once, as before. The rules are pure, in
 (`db/presence.ts`): an active account with the switch on, and a call of
 theirs going - or one that ended in the last two minutes while their browser
 has not said it is free since (`JUST_OFF_A_CALL_SQL`): its note box is open.
+A lead's call that rang them and they never answered is not one (review M24,
+2026-11-22): someone away with the switch on kept every "yes" waiting on hold
+for two minutes.
 Two minutes, as a browser's word holds ("Who is free"): a note box left open
 longer, or a browser closed on it, stops counting by itself. Someone free who
 did not take the ring does not count - they had their chance. **Another of the
@@ -889,8 +899,10 @@ not done.
   for any transfer ("Who is free"); declined: it stays on. Either way that
   person is never offered that lead again.
 - **Ended once, never removed**: `taken`, `declined`, `missed`, `failed`, `hung_up`
-  (the lead hung up while it rang), `expired` (open a minute and never heard
-  back - the watcher ends it), `unsent` (Twilio would not take the redirect,
+  (the lead hung up while it rang), `expired` (open its longest ring and 30
+  seconds more - 90 seconds - and never heard back: the watcher ends it; it was
+  a minute until 2026-11-22, the longest ring the setting allows, so an offer
+  set to ring 60 seconds expired as it rang - review M22), `unsent` (Twilio would not take the redirect,
   or the call was not ours to ring). The database holds one live offer per
   lead and per person, so two triggers at once - a browser saying it is free
   and the watcher's look - can never both ring (`call_offers_one_live_per_call`,

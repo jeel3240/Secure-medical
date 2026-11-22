@@ -46,6 +46,9 @@ export const ON_A_CALL_SQL = `EXISTS (
 export const JUST_OFF_A_CALL_SQL = `(NOT ${RINGABLE_SQL} AND EXISTS (
   SELECT 1 FROM calls jc
   WHERE jc.agent_id = u.id AND jc.ended_at > now() - interval '${RINGABLE_SECONDS} seconds'
+    -- A lead's call they never answered is no call to write a note on: someone away, switch on, kept every "yes"
+    -- waiting on hold for two minutes (review M24, 2026-11-22).
+    AND NOT (jc.direction = 'inbound' AND jc.outcome = 'missed')
 ))`;
 
 /**

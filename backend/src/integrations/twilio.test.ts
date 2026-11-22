@@ -10,6 +10,7 @@ import {
   hangupTwiml,
   HOLD_MUSIC,
   holdTrack,
+  holdTrackIndex,
   holdTwiml,
   isFromTwilio,
   mintCallToken,
@@ -299,13 +300,27 @@ describe('on hold, in Twilio\'s words (T16)', () => {
     expect(xml).toContain(`You are next.</Say><Play>${HOLD_MUSIC[0]}</Play><Redirect method="POST">`);
   });
 
-  it('Twilio\'s classical tracks, over https, the next one each time a track ends', () => {
+  it('Twilio\'s classical tracks, over https, each ending into the next - none twice running (review M21)', () => {
     expect(HOLD_MUSIC.length).toBeGreaterThan(1);
     for (const track of HOLD_MUSIC) expect(track).toMatch(/^https:\/\/s3\.amazonaws\.com\/com\.twilio\.music\.classical\/.+\.mp3$/);
     expect(holdTrack(0)).toBe(HOLD_MUSIC[0]);
-    // Tracks run 5 to 10 minutes, so the next request is minutes on: another track.
-    expect(holdTrack(5 * 60)).not.toBe(holdTrack(0));
-    expect(holdTrack(-3)).toBe(HOLD_MUSIC[0]);
+    expect(holdTrack(1)).toBe(HOLD_MUSIC[1]);
+    expect(holdTrack(HOLD_MUSIC.length)).toBe(HOLD_MUSIC[0]);
+    expect(holdTrack(-1)).toBe(HOLD_MUSIC[HOLD_MUSIC.length - 1]);
+    // The count the hold page reads back decides; minutes waited only without one.
+    expect(holdTrackIndex('3', 400)).toBe(3);
+    expect(holdTrackIndex(undefined, 5 * 60)).toBe(5);
+    expect(holdTrackIndex('x', 0)).toBe(0);
+    // Counted by minutes, a first track ending 6 minutes and some in began the list again; counted, the second.
+    const minutesBack = holdTrackIndex(undefined, HOLD_MUSIC.length * 60 + 30);
+    expect(holdTrack(minutesBack)).toBe(HOLD_MUSIC[0]);
+    expect(holdTrack(holdTrackIndex('1', HOLD_MUSIC.length * 60 + 30))).toBe(HOLD_MUSIC[1]);
+  });
+
+  it('the count goes with the music: back to the hold page, told which track comes next', () => {
+    const xml = holdTwiml(SETTINGS, { callId: 42, script: SCRIPT, say: ['You are next.'], track: HOLD_MUSIC[2], nextTrack: 3 });
+    expect(xml).toContain('/auto/hold?call=42&amp;track=3</Redirect>');
+    expect(holdTwiml(SETTINGS, { callId: 42, script: SCRIPT, say: [], track: null, nextTrack: 3 })).toContain('/auto/hold?call=42</Redirect>');
   });
 });
 
