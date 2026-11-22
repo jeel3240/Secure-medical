@@ -5,7 +5,7 @@
  */
 
 import type { WhoIsThere } from '../instructions';
-import type { Move } from '../policy';
+import type { CallState, Move } from '../policy';
 
 export interface SpeakCase {
   id: string;
@@ -21,6 +21,8 @@ export interface SpeakCase {
   asks?: boolean;
   /** When the call is - Wednesday noon in Arizona if not given. */
   now?: string;
+  /** The call's record, where it differs from a call just started (call 137: the team said to be busy already). */
+  state?: Partial<CallState>;
 }
 
 const GREETED = [{ who: 'seri' as const, text: 'Hi, is this John?' }, { who: 'lead' as const, text: 'Yes.' }];
@@ -328,6 +330,51 @@ export const SPEAK_CASES: SpeakCase[] = [
     moves: [{ move: 'answer', id: 'how_it_works', text: "You pick your medication on our website, create an account, and fill out a short medical questionnaire. A licensed provider reviews it, and if you're approved, a licensed U.S. pharmacy ships it to you.", again: false }, { move: 'anything_else' }],
     mustSay: [['anything else', 'anything specific', 'any other', 'any questions']],
     mustNotSay: ['25%', '25 percent', 'discount', 'thanks for sharing', 'that makes sense'],
+    asks: true,
+  },
+  // Calls 136 and 137 (2026-11-22): a confused lead - asked to say it again, asked six things at once, and told the team is busy every reply.
+  {
+    id: 'say_again_simply',
+    who: 'free',
+    recent: [
+      ...OPENED,
+      { who: 'lead', text: 'What things do you provide?' },
+      { who: 'seri', text: "On these calls we mainly help with antibiotics, STI treatments and at-home health test kits. eDrugstore also offers treatments for things like hair loss and weight loss, and a representative can tell you more. Is there anything else you'd like to know?" },
+      { who: 'lead', text: 'Can you repeat your answer? I not understand.' },
+    ],
+    moves: [{ move: 'say_again' }],
+    mustSay: [['antibiotics'], ['test', 'tests']],
+    mustNotSay: ['25%', '25 percent', 'connect', 'call back', 'callback', 'link', 'thanks for sharing', 'that makes sense'],
+  },
+  {
+    id: 'which_next_after_two',
+    who: 'free',
+    recent: [
+      ...OPENED,
+      { who: 'lead', text: 'Tell me what things you provide. Tell me what is your company name. Tell me which companies do you use to deliver the parcel. Tell me which medicines do you provide.' },
+    ],
+    moves: [
+      { move: 'answer', id: 'who_we_are', text: "eDrugstore has been helping people get treatment online for over 25 years. The telemedicine platform is run by Secure Medical, and licensed U.S. healthcare providers make every prescribing decision.", again: false },
+      { move: 'answer', id: 'products_overview', text: "On these calls we mainly help with antibiotics, STI treatments and at-home health test kits. eDrugstore also offers treatments for things like hair loss and weight loss, and a representative can tell you more.", again: false },
+      { move: 'which_next' },
+    ],
+    mustSay: [['one at a time', 'first', 'next']],
+    mustNotSay: ['USPS', 'FedEx', 'deliver', 'amoxicillin', 'trusted', '25%'],
+    asks: true,
+  },
+  {
+    id: 'busy_not_again',
+    who: 'nobody',
+    state: { busySaid: true, open: 'time' },
+    recent: [
+      ...OPENED,
+      { who: 'lead', text: 'Yes. What are you saying?' },
+      { who: 'seri', text: "eDrugstore has been helping people get treatment online for over 25 years. The telemedicine platform is run by Secure Medical, and licensed U.S. healthcare providers make every prescribing decision. At the moment, everyone on our team is busy. When would be a good time for us to call you back?" },
+      { who: 'lead', text: 'So what is antibiotic?' },
+    ],
+    moves: [{ move: 'answer', id: 'antibiotics', text: 'We carry a few antibiotics, like amoxicillin, and amoxicillin is the most commonly purchased. A licensed provider decides which one is right for you.', again: false }, { move: 'return_to', open: 'time' }],
+    mustSay: [['time', 'when']],
+    mustNotSay: ['busy', 'no one is available', 'nobody is available', 'unavailable', 'not available'],
     asks: true,
   },
 ];

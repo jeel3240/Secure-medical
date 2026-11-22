@@ -207,9 +207,11 @@ describe('questions', () => {
   it('with her question answered, the answer\'s own offer follows - and with nobody free, never a person (calls 111, 112)', () => {
     const ctx = context('nobody');
     const { state } = turn(opened(ctx), [{ act: 'not_now' }], ctx);
-    // The call back declined is not offered again; nor a person, with nobody there: the link.
+    // The call back declined is not offered again, nor a person with nobody there; the price asked with the no is
+    // answered and the call goes on - a no said with a question is not a clear one (call 137) - and "no" to "anything else?" ends it.
     const declined = turn(state, [{ act: 'declines' }, asking('price')], ctx);
-    expect(names(declined.moves)).toEqual(['end:end_call:not_interested']);
+    expect(names(declined.moves)).toEqual(['answer:price', 'anything_else']);
+    expect(names(turn(declined.state, [no], ctx).moves)).toEqual(['end:end_call:other']);
     const answered = turn(turn(opened(ctx), [{ act: 'backchannel' }], ctx).state, [asking('price')], ctx);
     expect(names(answered.moves)).toEqual(['answer:price', 'offer:callback']);
   });
@@ -450,6 +452,36 @@ describe('the link', () => {
   it('offering it is not sending it: no action until they say yes (call 89)', () => {
     const { moves } = turn(opened(), [{ act: 'objection', id: 'think_about_it' }]);
     expect(moves.some((m) => m.move === 'end')).toBe(false);
+  });
+});
+
+describe('a confused lead (calls 136, 137)', () => {
+  it('"Can you repeat your answer?", "I don\'t understand": what she said, again, more simply', () => {
+    const { state } = turn(opened(), [asking('products_overview')]);
+    expect(names(turn(state, [{ act: 'repeat' }]).moves)).toEqual(['say_again']);
+  });
+
+  it('a question beside it is answered - that is what they want to hear', () => {
+    const { state } = turn(opened(), [asking('products_overview')]);
+    expect(names(turn(state, [{ act: 'repeat' }, asking('antibiotics')]).moves)).toEqual(['answer:antibiotics', 'anything_else']);
+  });
+
+  it('six questions at once: two answered, then which next - the rest never answered unasked (call 136)', () => {
+    const acts = ['who_we_are', 'products_overview', 'shipping', 'antibiotics'].map(asking);
+    const { state, moves } = turn(opened(), acts);
+    expect(names(moves)).toEqual(['answer:who_we_are', 'answer:products_overview', 'which_next']);
+    expect(state.open).toBe('anything_else');
+  });
+
+  it('a no said with a question is not a clear no: the question answered, the call goes on (call 137)', () => {
+    const ctx = context('nobody');
+    // Interest shown, nobody free: a call back, turned down - the link instead; then "No. First... do you ship outside the USA?"
+    let state = turn(opened(ctx), [{ act: 'interested' }], ctx).state;
+    state = turn(state, [no], ctx).state;
+    const { state: after, moves } = turn(state, [no, asking('ship_where')], ctx);
+    expect(names(moves)).toEqual(['answer:ship_where', 'anything_else']);
+    // The no is on the record: one more ends the call.
+    expect(names(turn(after, [{ act: 'not_interested', reason: 'closed' }], ctx).moves)).toEqual(['end:end_call:not_interested']);
   });
 });
 

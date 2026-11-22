@@ -1905,7 +1905,8 @@
    "allow": [
     "unclear",
     "asks:products_overview",
-    "other"
+    "other",
+    "repeat"
    ]
   },
   {
@@ -4223,6 +4224,75 @@
     "declines",
     "not_interested"
    ]
+  },
+  {
+   "id": "call136-8",
+   "source": "A34 call 136",
+   "before": [
+    {
+     "who": "lead",
+     "text": "tell me how much do you charge? Tell me how many representative working in your company"
+    }
+   ],
+   "seri": "Prices depend on the medication and quantity. eDrugstore has been helping people get treatment online for over 25 years. The telemedicine platform is run by Secure Medical, and licensed U.S. healthcare providers make every prescribing decision. Many common prescription antibiotics and test kits are available through our service. John, would you be interested in taking advantage of up to 25% off your first order?",
+   "lead": "Can you repeat your answer",
+   "want": [
+    "repeat"
+   ],
+   "allow": []
+  },
+  {
+   "id": "call136-9",
+   "source": "A34 call 136",
+   "before": [
+    {
+     "who": "seri",
+     "text": "Prices depend on the medication and quantity. eDrugstore has been helping people get treatment online for over 25 years. The telemedicine platform is run by Secure Medical, and licensed U.S. healthcare providers make every prescribing decision. Many common prescription antibiotics and test kits are available through our service. John, would you be interested in taking advantage of up to 25% off your first order?"
+    },
+    {
+     "who": "lead",
+     "text": "Can you repeat your answer"
+    }
+   ],
+   "seri": "Prices depend on the medication and quantity. eDrugstore has been helping people get treatment online for over 25 years. The telemedicine platform is run by Secure Medical, and licensed U.S. healthcare providers make every prescribing decision. Many common prescription antibiotics and test kits are available through our service. John, would you be interested in taking advantage of up to 25% off your first order?",
+   "lead": "I not understand.",
+   "want": [
+    "repeat"
+   ],
+   "allow": [
+    "unclear"
+   ]
+  },
+  {
+   "id": "call137-24",
+   "source": "A34 call 137",
+   "before": [
+    {
+     "who": "lead",
+     "text": "So you cannot help. Right?"
+    }
+   ],
+   "seri": "I can send you a text with a link that explains everything in detail so you can look it over when you have time. Would you like me to send that to your phone?",
+   "lead": "Uh, no. First, I want to understand that. Like, um, do you ship to the out of USA?",
+   "want": [
+    "declines|not_interested",
+    "asks:ship_where|asks:states|asks:uncovered"
+   ],
+   "allow": [
+    "declines",
+    "not_interested"
+   ]
+  },
+  {
+   "id": "repeat_say_again",
+   "source": "written after A34 call 136",
+   "before": [],
+   "seri": "Free USPS shipping is our most popular option, and many customers get their order in 1 to 3 business days. Is there anything else you'd like to know?",
+   "lead": "Sorry, can you say that again?",
+   "want": [
+    "repeat"
+   ],
+   "allow": []
   }
  ]
 }

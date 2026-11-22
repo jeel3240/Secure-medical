@@ -76,6 +76,8 @@ export const STOP_KEY = '9';
  * the first, the brain decides again without it, and she speaks at once.
  */
 const MAX_ACTION_TRIES = 2;
+/** Talked over with nothing heard, this long after her first sentence was sent: that sentence was (`heardAnyway`). */
+export const HEARD_ANYWAY_MS = 2_000;
 
 /** The limits - section 6, decided by Jeel, 2026-11-11. */
 export const LIMITS = {
@@ -189,6 +191,8 @@ interface Reply {
   /** When OpenAI's first word - or action - arrived. */
   firstWordAt: number | null;
   firstSentAt: number | null;
+  /** The same, on the call's clock - how long Twilio has been saying it when the lead talks over her. */
+  firstSpokenAt: number | null;
   /** Notes kept after her turn: a sentence replaced, an action refused. */
   notes: Omit<Turn, 'callId'>[];
   replaced: boolean;
@@ -360,10 +364,25 @@ export class Conversation {
   /** The lead spoke over her: `heard` is what she had said by then. */
   interrupted(heard: string): void {
     if (this.over) return;
-    if (this.reply) this.finish(this.reply, { heard });
+    if (this.reply) this.finish(this.reply, { heard: heard || this.heardAnyway(this.reply) });
     // Her reply was all written - Twilio was still saying it.
     else if (heard) this.replaceLastSaid(heard);
     this.afterReply();
+  }
+
+  /**
+   * Twilio sometimes says nothing was heard when she had been speaking for
+   * seconds (calls 136, 137 - an empty "heard"): taken at its word, what she
+   * said counted as never said, and she said it all again. With her first
+   * sentence sent `HEARD_ANYWAY_MS` or more before, that sentence was heard.
+   */
+  private heardAnyway(reply: Reply): string {
+    if (reply.firstSpokenAt === null || reply.sent.length === 0) return '';
+    const sinceMs = this.timers.now() - reply.firstSpokenAt;
+    if (sinceMs < HEARD_ANYWAY_MS) return '';
+    const first = spokenWords(reply.sent[0]);
+    log.info('ai_relay.heard_anyway', { callId: this.setup.callId, sinceMs });
+    return /^.*?[.!?](?=\s|$)/.exec(first)?.[0] ?? first;
   }
 
   /**
@@ -426,6 +445,7 @@ export class Conversation {
       sent: [],
       firstWordAt: null,
       firstSentAt: null,
+      firstSpokenAt: null,
       notes: [],
       replaced: false,
       action: null,
@@ -554,6 +574,7 @@ export class Conversation {
     this.deps.send(textMessage(`${said} `, false));
     reply.sent.push(said);
     reply.firstSentAt ??= Date.now();
+    reply.firstSpokenAt ??= this.timers.now();
     if (!check.reason) return true;
     reply.replaced = true;
     reply.notes.push({ who: 'system', text: replacedNote(check.reason, check.found, words) });
@@ -578,6 +599,7 @@ export class Conversation {
         this.deps.send(textMessage(`${line} `, false));
         reply.sent.push(line);
         reply.firstSentAt ??= Date.now();
+        reply.firstSpokenAt ??= this.timers.now();
       }
       this.finish(reply);
       this.end(result.handoff);

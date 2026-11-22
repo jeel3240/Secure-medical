@@ -166,6 +166,10 @@ export function moveBrief(move: Move, who: WhoIsThere, firstName: string | null)
       return "Say you didn't catch that, and ask them to say it again.";
     case 'still_here':
       return "Say you're here - briefly.";
+    case 'say_again':
+      return "They didn't catch or understand what you just said. Say it again more simply - the same facts in short, plain words, nothing new and no offer - and if it ended with a question, end with that question.";
+    case 'which_next':
+      return "They asked several things at once. Say you'll take them one at a time, and ask which they'd like to hear about first - don't answer the others yourself.";
     case 'return_to':
       return `Come back, briefly and in new words, to your question: ${OPEN[move.open]}.`;
     case 'anything_else':
@@ -224,6 +228,9 @@ export function replyBrief(moves: readonly Move[], state: CallState, who: WhoIsT
     ...(ending ? ['This is your last line: no question in it.'] : ['At most one question, and only as the last thing you say.']),
     ...ledger(state),
     ...(named && cleanFirstName(firstName) ? ["You have already said their name on this call: don't say it again."] : []),
+    ...(state.busySaid && !moves.some((m) => m.move === 'busy')
+      ? ["You have already told them everyone on our team is busy: don't say it again (call 137)."]
+      : []),
     ...(moves.some((m) => m.move === 'opening' || (m.move === 'return_to' && m.open === 'interest'))
       ? []
       : ["They have already heard the offer - up to 25% off their first order: don't bring it up in this reply (call 135)."]),

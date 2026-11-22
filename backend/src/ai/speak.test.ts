@@ -133,6 +133,18 @@ describe('one reply\'s brief', () => {
     expect(replyBrief([{ move: 'opening' }], startState(), 'free', null)).not.toContain(heard);
   });
 
+  it('that the team is busy, said once: every later reply is told so (call 137)', () => {
+    const told = "You have already told them everyone on our team is busy: don't say it again (call 137).";
+    const busy = { ...startState(), busySaid: true };
+    expect(replyBrief([{ move: 'return_to', open: 'time' }], busy, 'nobody', null)).toContain(told);
+    expect(replyBrief([{ move: 'busy' }, { move: 'ask_time', day: null }], startState(), 'nobody', null)).not.toContain(told);
+  });
+
+  it('said again more simply, and several questions taken one at a time (calls 136, 137)', () => {
+    expect(moveBrief({ move: 'say_again' }, 'free', null)).toContain('Say it again more simply');
+    expect(moveBrief({ move: 'which_next' }, 'free', null)).toContain("don't answer the others yourself");
+  });
+
   it('counts the replies that said the name, as a word - never a longer word holding it', () => {
     expect(timesNamed(['Totally understand, Jeel.', 'Got it.', 'So no problem, jeel - when?'], 'Jeel')).toBe(2);
     expect(timesNamed(['Hi Johnny, sure.', 'Sure.'], 'John')).toBe(0);
