@@ -343,6 +343,15 @@ async function main(): Promise<void> {
     await pool.query(`UPDATE calls SET ended_at = now() - interval '3 minutes' WHERE id = $1`, [busy]);
     check('the note box open three minutes after the call: no longer counted', await someoneOnOrJustOffCall(pool, null), false);
 
+    // A lead's call that rang them and they never answered is no call to write a note on (review M24).
+    await setRingable(pool, zoe, false);
+    await pool.query(
+      `INSERT INTO calls (lead_id, agent_id, twilio_call_sid, direction, started_at, ended_at, outcome)
+       VALUES ($1, $2, 'CA-hold-missed', 'inbound', now() - interval '30 seconds', now(), 'missed')`,
+      [lead, zoe]
+    );
+    check('a lead\'s call they missed, the browser quiet: not "just off a call"', await someoneOnOrJustOffCall(pool, null), false);
+
     // Another of the robot's calls ringing its transfer (T20 review): whoever
     // it rings is free again in seconds, or on it.
     const step = (await pool.query(`SELECT id, key FROM call_steps WHERE key = 'q1'`)).rows[0];

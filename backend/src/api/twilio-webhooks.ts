@@ -67,6 +67,7 @@ import {
   emptyTwiml,
   hangupTwiml,
   holdTrack,
+  holdTrackIndex,
   holdTwiml,
   isFromTwilio,
   missedCallTwiml,
@@ -1115,11 +1116,13 @@ export function twilioWebhooksRouter(deps: AppDeps): Router {
         } else if (state && live) {
           reply = (await offerTwiml(call, live, script)) ?? reply;
         } else if (state && holdGoesOn({ waitedSeconds: state.waitedSeconds, maxSeconds, someoneComing: coming })) {
+          const track = holdTrackIndex(req.query.track, state.waitedSeconds);
           reply = holdTwiml(deps.twilio!, {
             callId: call.callId,
             script,
             say: [placeLine(script, state.place)],
-            track: holdTrack(state.waitedSeconds),
+            track: holdTrack(track),
+            nextTrack: track + 1,
           });
         } else {
           // Not waiting any more - or no longer on hold at all, when the

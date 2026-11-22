@@ -13,12 +13,18 @@
  */
 
 import { pickOffer, type WaitingLead } from '../core/call-script';
+import { MAX_OFFER_RING_SECONDS } from './call-script';
 import { ON_HOLD_SQL } from './auto-calls';
 import { pool } from './pool';
 import { FREE_SQL, JUST_OFF_A_CALL_SQL, ON_A_CALL_SQL, RINGABLE_SQL, TRANSFER_RINGING_SQL } from './presence';
 
-/** An offer still open after this long never heard back - Twilio's ring is 20 seconds. */
-export const OFFER_STALE_SECONDS = 60;
+/**
+ * An offer still open after this long never heard back: longer than its
+ * longest ring, with room for Twilio's report. It was 60 - the longest ring
+ * the setting allows - so an offer set to ring 60 seconds expired as it rang,
+ * and whoever let it ring out was never switched off (review M22, 2026-11-22).
+ */
+export const OFFER_STALE_SECONDS = MAX_OFFER_RING_SECONDS + 30;
 
 /** How an offer ended. */
 export type OfferOutcome = 'taken' | 'declined' | 'missed' | 'failed' | 'hung_up' | 'expired' | 'unsent';

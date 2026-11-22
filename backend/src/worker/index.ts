@@ -47,6 +47,8 @@ function autoDialler(): DialDeps | null {
   if (!readAutoCalls(process.env).on || config.twilio.status !== 'on') return null;
   const settings = config.twilio.settings;
   const numbers = readAutoCallTestNumbers(process.env, process.env.NODE_ENV === 'production');
+  // A mistyped entry is left out - so nobody it meant is ever rung: said once, here (review M25, 2026-11-22).
+  if (numbers.invalid > 0) log.warn('auto_calls.test_numbers_invalid', { count: numbers.invalid });
   const only = numbers.only === null ? null : [...numbers.only];
   return {
     closeUnplacedCalls,
