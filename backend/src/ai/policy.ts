@@ -112,8 +112,11 @@ export interface CallState {
   whyAsked: boolean;
   offers: Record<OfferKind, { made: number; answer: OfferAnswer }>;
   open: OpenQuestion | null;
-  /** A call back: the day they named with no hour yet, and the time she said back. */
-  callback: { day: string | null; proposed: string | null };
+  /**
+   * A call back: the day they named with no hour yet, and the time she said back - `unheard` when they cut in before
+   * the time itself: a yes to it then has her say it again, never books it (review M4, 2026-11-22).
+   */
+  callback: { day: string | null; proposed: string | null; unheard?: true };
   /** Lines in a row she could not make out. */
   misheard: number;
   /** How often each approved answer was given. */
@@ -279,7 +282,9 @@ export function decide(previous: CallState, acts: readonly Act[], context: Polic
 
   // The greeting answered - however: the opening, once (call 112: said again two and a half minutes in).
   // Asking for a person, a call back or the link straight away is answered as asked.
-  const asksForSomething = has('wants_person') || has('wants_callback') || has('wants_link');
+  // "I'm busy", "I'm driving" too: a call back, later in the call, so at the greeting the same - not the whole
+  // opening to someone who has just said they have no time (review M5, 2026-11-22).
+  const asksForSomething = has('wants_person') || has('wants_callback') || has('wants_link') || objectionIds.includes('busy');
   if (s.stage === 'greeting' && asksForSomething) s.stage = 'talking';
   if (s.stage === 'greeting') {
     const question = acts.find((a): a is Extract<Act, { act: 'asks' }> => a.act === 'asks' && !OPENING_TOPICS.has(a.topic));
@@ -290,9 +295,12 @@ export function decide(previous: CallState, acts: readonly Act[], context: Polic
   const time = has('wants_callback')?.time ?? null;
   if (time && (time.hour !== null || time.day !== null)) return done([...answersFor(s, acts, context), ...timeMoves(s, time, context)]);
   // A yes to the time she said back - read as asking for the call back again counts the same (call 93: "Yes.").
-  if (open === 'confirm' && (has('agrees') || has('wants_callback')) && s.callback.proposed) return done([book(s, context)]);
+  if (open === 'confirm' && (has('agrees') || has('wants_callback')) && s.callback.proposed) {
+    return done([s.callback.unheard ? sayTimeAgain(s.callback.proposed, context) : book(s, context)]);
+  }
   if (open === 'confirm' && has('declines')) {
     s.callback.proposed = null;
+    delete s.callback.unheard;
     return done([{ move: 'ask_time', day: s.callback.day }]);
   }
 
@@ -656,6 +664,12 @@ function addDays(date: string, days: number): string {
 }
 
 /** The call back, booked: at the time she said back and they agreed, with a reason from the record. */
+/** The time she said back, said again - they cut in before it, and a yes to it booked a time they never heard. */
+function sayTimeAgain(at: string, context: PolicyContext): Move {
+  const when = new Date(at);
+  return { move: 'confirm_time', at, zone: context.leadZone, spoken: spokenTime(when, context.leadZone, context.now, context.leadZoneKnown), instead: null, asked: null };
+}
+
 function book(s: CallState, context: PolicyContext): Move {
   const reason = s.wantsSpecialist
     ? 'Has a question for a specialist.'
@@ -723,6 +737,7 @@ export function markSaid(previous: CallState, moves: readonly Move[]): CallState
         break;
       case 'confirm_time':
         s.callback.proposed = m.at;
+        delete s.callback.unheard;
         s.open = 'confirm';
         break;
       case 'return_to':

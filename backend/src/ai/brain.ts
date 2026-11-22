@@ -24,12 +24,13 @@ import type { CallHours } from '../core/auto-dial';
 import { spokenNumber } from '../core/call-script';
 import { log } from '../lib/log';
 import type { Handoff } from './actions';
-import { leadTimeZone, toLocalTime } from './callback-time';
-import { STILL_THERE_LINE, WRAP_UP_NOTE } from './conversation';
+import { leadTimeZone, saysClock, toLocalTime } from './callback-time';
+import { FILLER_LINE, REPLACED_NOTE, STILL_THERE_LINE, WRAP_UP_NOTE } from './conversation';
 import type { WhoIsThere } from './instructions';
 import type { Knowledge } from './knowledge';
 import type { ModelEvent, SeriModel, SpeakModel, UnderstandModel } from './openai';
 import { asks, decide, markOpening, markSaid, POLICY_VERSION, startState, wrapUpDue, type Act, type CallState, type Move } from './policy';
+import { INTERRUPTED_PREFIX } from './relay-messages';
 import type { KeptTurn } from './resume';
 import { SentenceSplitter } from './sentences';
 import { codeLines, needsSpeak, replyBrief, speakMessages, speakSystem, timesNamed } from './speak';
@@ -77,9 +78,27 @@ export function recordFromTurns(turns: readonly KeptTurn[]): CallState | null {
   if (at < 0) return null;
   const kept = turns[at].data as BrainRecord;
   if (kept.version !== POLICY_VERSION) return null;
-  // `decided` already holds the reply as said whole.
-  const heard = turns.slice(at + 1).some((t) => t.who === 'seri');
-  return heard ? kept.decided : kept.record;
+  // `decided` already holds the reply as said whole - when her turn after it is that reply: not "One moment..." nor
+  // "are you still there?", the relay's own lines, and not one Twilio said nothing of (review M8, 2026-11-22).
+  const after = turns.slice(at + 1);
+  const said = after.findIndex((t) => t.who === 'seri' && t.text !== FILLER_LINE && t.text !== STILL_THERE_LINE);
+  const nothingHeard = said >= 0 && after.slice(said + 1).find((t) => t.who !== 'seri')?.text === `${INTERRUPTED_PREFIX}"`;
+  return said >= 0 && !nothingHeard ? kept.decided : kept.record;
+}
+
+/**
+ * The moves a reply counts as said when the safety check replaced one of its sentences with the specialist line
+ * (`specialistLine`, safety.ts): what it stated before - an approved answer said by code - and the line itself, with
+ * its question - a person offered with someone there, or with nobody a call back asked for. Before, every move it
+ * decided counted, an ending included, and a "yes" to the line's question got "anything else?" (review M2, 2026-11-22).
+ */
+export function saidWithSpecialistLine(moves: readonly Move[], who: WhoIsThere): Move[] {
+  const stated = moves.filter((m) => m.move === 'answer' && !m.again);
+  const line: Move[] =
+    who === 'nobody'
+      ? [{ move: 'specialist', again: false }, { move: 'busy' }, { move: 'ask_time', day: null }]
+      : [{ move: 'specialist', again: false }, { move: 'offer', kind: 'connect' }];
+  return [...stated, ...line];
 }
 
 function isRecord(data: unknown): data is BrainRecord {
@@ -99,6 +118,8 @@ const WHO: Record<string, WhoIsThere> = { 'someone free': 'free', 'someone comin
 interface Pending {
   state: CallState;
   moves: Move[];
+  /** Who was there when it was decided - the specialist line, should one of its sentences be replaced, says for whom. */
+  who: WhoIsThere;
   /** How many of her turns the history held when it was decided: hers is the next. */
   herTurns: number;
   /** Everything the brain gave the call for it, as written - to tell how much the lead heard. */
@@ -261,7 +282,7 @@ export class Brain implements SeriModel {
       moves: moves.map((m) => m.move).join(','),
       action: ending?.handoff.action ?? null,
     });
-    const pending: Pending = { state: decision.state, moves, herTurns: turn.herTurns, full: '' };
+    const pending: Pending = { state: decision.state, moves, who, herTurns: turn.herTurns, full: '' };
     this.pending = pending;
 
     // Said by code first: the approved answers - the client's words exactly - then her saved introduction, when nothing else needs her words.
@@ -309,7 +330,12 @@ export class Brain implements SeriModel {
     namesSaid: number;
   } {
     const hers = messages.filter((m) => m.role === 'assistant');
-    const refused = messages[messages.length - 1]?.role === 'tool';
+    const lastHers = messages.reduce((at, m, i) => (m.role === 'assistant' ? i : at), -1);
+    const since = messages.slice(lastHers + 1);
+    // An action the call refused: its note follows her reply - before the wrap-up note, or after it. It was read off
+    // the last message alone, and missed with the wrap-up note after it (review M3, 2026-11-22).
+    const refused = since.some((m) => m.role === 'tool');
+    const replaced = since.some((m) => m.role === 'system' && m.content === REPLACED_NOTE);
     // Her last reply, as the lead heard it - the call keeps only what Twilio says was heard when she is talked over.
     // Heard whole, every move counts; cut off, only what she stated, not the question she never finished; not heard
     // at all, the decision is dropped. An action the call refused was never taken.
@@ -321,17 +347,28 @@ export class Brain implements SeriModel {
         // but the opening, once any of it was heard: they know who she is (call 114).
         const full = spokenWords(this.pending.full);
         const most = full.length === 0 || text.length >= HEARD_MOST * full.length;
-        const moves = this.pending.moves.filter((m) => (most || !asks(m) || m.move === 'opening') && !(refused && m.move === 'end'));
-        this.state = markOpening(markSaid(this.pending.state, moves), text);
+        const moves = replaced
+          ? saidWithSpecialistLine(this.pending.moves, this.pending.who)
+          : this.pending.moves.filter(
+              (m) => (most || !asks(m) || m.move === 'opening' || m.move === 'confirm_time') && !(refused && m.move === 'end')
+            );
+        let state = markOpening(markSaid(this.pending.state, moves), text);
+        // The time said back, talked over before the time itself: asked, so their "yes" answers it - but unheard, so
+        // the yes has her say it again. Before, it counted as heard from 60% on, and the yes booked a time the action's
+        // own check refused as never said back (`saysClock`); cut off sooner, the yes went to her question before it
+        // (review M4, 2026-11-22).
+        const told = moves.find((m): m is Extract<Move, { move: 'confirm_time' }> => m.move === 'confirm_time');
+        if (told && !saysClock(text, new Date(told.at), told.zone)) state = { ...state, callback: { ...state.callback, unheard: true } };
+        this.state = state;
       }
       this.pending = null;
     }
-    const lastHers = messages.reduce((at, m, i) => (m.role === 'assistant' ? i : at), -1);
-    const since = messages.slice(lastHers + 1);
     if (since.some((m) => m.role === 'system' && m.content === WRAP_UP_NOTE)) this.state = wrapUpDue(this.state);
     const leadTurns = since.filter((m) => m.role === 'user').map((m) => String(m.content ?? ''));
-    const lastTurn = leadTurns[leadTurns.length - 1] ?? '';
-    const who = WHO[LEAD_TURN.exec(lastTurn)?.[1] ?? 'nobody'];
+    // Who is there, from the lead's last turn wherever it is: the retry after a refused action has none since her
+    // reply, and read nobody - the brief then forbade offering a person someone free could take (review M3).
+    const lastLead = [...messages].reverse().find((m) => m.role === 'user');
+    const who = WHO[LEAD_TURN.exec(String(lastLead?.content ?? ''))?.[1] ?? 'nobody'];
     const said = leadTurns.map((t) => t.replace(LEAD_TURN, '')).join(' ').trim();
     const recent = this.recentTurns(messages);
     const seri = recent.filter((t) => t.who === 'seri').pop()?.text ?? '';
