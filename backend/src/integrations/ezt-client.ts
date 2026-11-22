@@ -108,10 +108,15 @@ export function fromE164(phone: string): string {
   return phone.replace(/^\+/, '');
 }
 
-/** Raised when a send is refused because the number has opted out. */
+/**
+ * Raised when a send is refused because the number has opted out. The numbers
+ * are on `phones`, never in the message: every `sms.failed` line logs the
+ * message (`errText`), and a number there reached the logs (review H1,
+ * 2026-11-22).
+ */
 export class BlockedNumberError extends Error {
   constructor(readonly phones: string[]) {
-    super(`Refusing to send: ${phones.join(', ')} on dnc_list`);
+    super(`Refusing to send: ${phones.length === 1 ? 'the number is' : `${phones.length} numbers are`} on dnc_list`);
     this.name = 'BlockedNumberError';
   }
 }

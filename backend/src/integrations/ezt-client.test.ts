@@ -48,6 +48,15 @@ describe('sendMessage', () => {
     expect(post).not.toHaveBeenCalled();
   });
 
+  it('keeps the blocked numbers off the message, which is logged - on `phones` only (review H1)', async () => {
+    poolQuery.mockResolvedValue({ rows: [{ phone: '+16026203572' }], rowCount: 1 });
+
+    const err = await sendMessage(['+16026203572'], 'hello').catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(BlockedNumberError);
+    expect((err as Error).message).toBe('Refusing to send: the number is on dnc_list');
+    expect((err as BlockedNumberError).phones).toEqual(['+16026203572']);
+  });
+
   it('refuses the whole send when any recipient is blocked', async () => {
     poolQuery.mockResolvedValue({ rows: [{ phone: '+15550000002' }], rowCount: 1 });
 

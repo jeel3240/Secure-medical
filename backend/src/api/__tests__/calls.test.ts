@@ -4,6 +4,7 @@
  * signature check and the refusals are what is under test. The SQL is proved by
  * scripts/calls-live-check.ts.
  */
+import * as logModule from '../../lib/log';
 import request from 'supertest';
 import twilio from 'twilio';
 import type { TwilioSettings } from '../../twilio-settings';
@@ -554,6 +555,19 @@ describe('a lead calling our number', () => {
         await fromTwilio(app, CLAIM, { ...accept, To: 'client:dev-agent-19' });
         await fromTwilio(app, CLAIM, { CallSid: 'CA301', To: 'client:agent-19' });
         expect(takeIncomingCall).not.toHaveBeenCalled();
+      });
+
+      it('logs whether Twilio\'s To was a browser name - never its value, which can be a phone (review H3)', async () => {
+        const warned: Record<string, unknown>[] = [];
+        const spy = jest.spyOn(logModule.log, 'warn').mockImplementation((event, fields) => {
+          warned.push({ event, ...fields });
+        });
+        const { app } = await buildApp({ twilio: SETTINGS, autoCalls: true });
+        await fromTwilio(app, CLAIM, { CallSid: 'CA301', To: '+16025550123' });
+        spy.mockRestore();
+        const line = warned.find((w) => w.event === 'call.unknown_take');
+        expect(line).toEqual(expect.objectContaining({ toBrowser: false }));
+        expect(JSON.stringify(warned)).not.toContain('6025550123');
       });
 
       it('the database failing as they accept: connected anyway - the lead is waiting', async () => {
