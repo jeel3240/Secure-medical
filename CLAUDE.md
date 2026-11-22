@@ -311,7 +311,7 @@ you change something the docs describe, update the doc in the same commit.
     src/components/DateTimeField.tsx the date and time picker, in the app's style
     src/components/          also the shared pieces: Button, TextField, Modal, Drawer, Banner, Badge, Spinner, OneTimeSecret (a temporary password, shown once), AuthLayout and BrandMark (the sign-in pages), useDismiss (Escape to close)
     src/pages/QueuePage.tsx          the priority queue
-    src/pages/WorkspacePage.tsx      the agent workspace shell
+    src/pages/WorkspacePage.tsx      the agent workspace shell; LeadWorkspaceRoute.tsx makes it afresh for each lead (review H6)
     src/pages/workspace/             header card, Call button and call bar, answers and score, notes, conversation, SMS compose, Wrap up
     src/pages/LeadTimelinePage.tsx   read-only history with a summary sidebar
     src/pages/CallbacksPage.tsx      My Callbacks

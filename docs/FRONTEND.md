@@ -17,7 +17,7 @@ the brief now exists except calling, which is Phase 4. *(Calling was built on
 |---|---|---|
 | `/login`, `/change-password` | Sign in, and the forced first password change | `AUTH.md` |
 | `/queue` | Priority queue | `QUEUE.md`, `DESIGN-PROMPT.md` 2 |
-| `/leads/:id` | Agent workspace, with the Call button and the call bar | `AGENT-WORKSPACE.md`, `TWILIO.md` ("The screen"), `DESIGN-PROMPT.md` 3 |
+| `/leads/:id` | Agent workspace, with the Call button and the call bar - made afresh for each lead (`LeadWorkspaceRoute`, keyed by the id): going from one lead's page to another kept the first's after-call note box, and saved its note to the second (review H6, 2026-11-22) | `AGENT-WORKSPACE.md`, `TWILIO.md` ("The screen"), `DESIGN-PROMPT.md` 3 |
 | `/leads/:id/timeline` | Lead timeline, read-only | `DESIGN-PROMPT.md` 4 |
 | `/callbacks` | My callbacks | `AGENT-WORKSPACE.md`, `DESIGN-PROMPT.md` 5 |
 | `/admin/overview` | Overview | `ADMIN.md`, `DESIGN-PROMPT.md` 6a |

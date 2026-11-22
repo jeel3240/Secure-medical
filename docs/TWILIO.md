@@ -157,7 +157,11 @@ activity log with the number, and Twilio's request in `webhook_events`.
 
 **The agent's browser must be open and signed in.** The app registers with
 Twilio as soon as someone signs in (`lib/calling.ts`, `listenForCalls`) and
-checks every 30 seconds that it still is. A closed laptop is a missed call.
+checks every 30 seconds that it still is - but never while a call is on it:
+a registration lapsing mid-call (a token not renewed) had the check destroy
+the device, and the live call with it; the next check once the call is over
+registers it again (`keepRegistered`, review H7, 2026-11-22). A closed laptop
+is a missed call.
 There is no ringing of a mobile phone.
 
 Each check also tells the server whether this browser can take a call now -
