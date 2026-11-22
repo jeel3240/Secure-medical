@@ -212,25 +212,43 @@ export function ringKind(params: Map<string, string>): RingKind {
 
 function announce(call: Call, handlers: IncomingHandlers): void {
   let answered = false;
+  let over = false;
+  const ringOver = () => {
+    if (answered || over) return;
+    over = true;
+    window.clearTimeout(safety);
+    handlers.onRingOver(ring);
+  };
   const ring: IncomingRing = {
     lead: incomingLead(call.customParameters, call.parameters.From),
     kind: ringKind(call.customParameters),
     answer: (callHandlers) => {
       answered = true;
+      window.clearTimeout(safety);
       const handle = wire(call, callHandlers);
       call.accept();
       return handle;
     },
     decline: () => {
       answered = true;
+      window.clearTimeout(safety);
       call.reject();
     },
   };
-  // Before it is answered, the ring ending is a missed call. Once it is, the
-  // call's own handlers report how it ended.
-  call.on('cancel', () => !answered && handlers.onRingOver(ring));
+  // Before it is answered, the ring ending is a missed call. Once it is, the call's own handlers report how it
+  // ended. Not only Twilio's `cancel`: a connection dropped or an error ended it too, and left it ringing - the
+  // ringtone looping, the browser busy - until Decline; and a ring no event ever ends is cleared after the longest
+  // any ring can last (review M29, 2026-11-22).
+  call.on('cancel', ringOver);
+  call.on('disconnect', ringOver);
+  call.on('error', ringOver);
+  // Set before any event can fire: the closures above read it only when one does.
+  const safety = window.setTimeout(ringOver, RING_SAFETY_MS);
   handlers.onRing(ring);
 }
+
+/** Longer than any ring we place: an offer from hold rings at most 60 seconds, the others less. */
+export const RING_SAFETY_MS = 90_000;
 
 /** Joins a call's events to the handlers, and returns its controls. */
 function wire(call: Call, handlers: CallHandlers): CallHandle {

@@ -12,7 +12,7 @@ import { formatRelative } from './format';
  * automated call, 2h ago". Null when we never called them: the card then says
  * nothing rather than guessing.
  */
-export function callerContext(entries: TimelineEntry[], myName: string, now: Date): string | null {
+export function callerContext(entries: TimelineEntry[], me: { id: number }, now: Date): string | null {
   const placed = entries.filter((e) => e.kind === 'call' && e.detail.direction === 'outbound');
   if (placed.length === 0) {
     const robot = entries.filter((e) => e.kind === 'call' && e.detail.direction === 'automated');
@@ -22,7 +22,8 @@ export function callerContext(entries: TimelineEntry[], myName: string, now: Dat
   }
 
   const today = placed.filter((e) => new Date(e.at).toDateString() === now.toDateString());
-  const mine = today.filter((e) => e.author === myName).length;
+  // By id, not by name: two agents who share a name both read "you" (review M32, 2026-11-22).
+  const mine = today.filter((e) => e.detail.agentId === me.id).length;
   if (mine > 0) return `Calling back · you tried ${mine}× today`;
 
   if (today.length > 0) {

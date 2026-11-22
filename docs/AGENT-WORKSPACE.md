@@ -38,7 +38,10 @@ purpose - Jeel, 2026-10-08.** Two things release it:
   you · since 3:04 PM". The holder sees it on their own lead. A **superadmin
   sees it on anyone's** - "Held by Maya Chen · since 3:04 PM · Release" - which
   is the way out of a lead locked to an agent who is not there; the release is
-  recorded as forced. It is switched off while a call is under way.
+  recorded as forced. It is switched off while a call is under way - a lead's
+  call taken on that page included, since 2026-11-22 (review M27: it stayed
+  live during an answered incoming call, and the note after it was then
+  refused).
 
 **Back to queue only goes back.** Until 2026-10-08 it also released the lead.
 On the first day of real use an agent called a lead twice, reached voicemail,

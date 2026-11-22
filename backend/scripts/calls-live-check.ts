@@ -195,7 +195,7 @@ async function main(): Promise<void> {
     const entry = (await getTimeline(lead))!.find((e) => e.kind === 'call');
     check('on the timeline, with who called and how it went', entry && { author: entry.author, detail: entry.detail }, {
       author: 'Maya',
-      detail: { outcome: 'no_answer', durationSec: 0, direction: 'outbound' },
+      detail: { outcome: 'no_answer', durationSec: 0, direction: 'outbound', agentId: maya },
     });
 
     // A lead that has been called has been worked, even once it is let go.

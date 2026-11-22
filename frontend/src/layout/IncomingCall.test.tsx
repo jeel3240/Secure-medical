@@ -46,7 +46,14 @@ const LEAD = {
   ],
   claimedBy: null,
 };
-const aCall = (author: string) => ({ kind: 'call', at: new Date().toISOString(), author, detail: { direction: 'outbound', outcome: 'no_answer' } });
+// Who was on a call, by id as well (review M32): 21 is the signed-in Maya Chen.
+const IDS: Record<string, number> = { 'Maya Chen': 21 };
+const aCall = (author: string) => ({
+  kind: 'call',
+  at: new Date().toISOString(),
+  author,
+  detail: { direction: 'outbound', outcome: 'no_answer', agentId: IDS[author] ?? null },
+});
 vi.mock('../lib/calling', () => ({
   describeCallError: () => 'It broke.',
   listenForCalls: (handlers: IncomingHandlers) => {

@@ -20,6 +20,7 @@ import { useLeadCall } from './workspace/useLeadCall';
 import { formatTime, leadName } from '../lib/format';
 import { mayRelease } from '../lib/lock';
 import { useIncomingCall } from '../lib/incoming-call';
+import { isBusy } from '../lib/incoming-state';
 import { useSecond } from '../lib/useSecond';
 
 /**
@@ -85,6 +86,8 @@ export function WorkspacePage() {
   const call = useLeadCall(leadId, reloadAfterCall);
   // An answered incoming call's bar sits in the same place; the page leaves it room too.
   const incomingBar = useIncomingCall((s) => s.state.phase === 'call');
+  // A lead's call taken here is a call under way too: Release waits for it (review M27, 2026-11-22).
+  const incomingLive = useIncomingCall((s) => isBusy(s.state));
 
   /**
    * "Lead 3 of 12" - where this one sits in the queue an agent is working
@@ -237,7 +240,7 @@ export function WorkspacePage() {
                 variant="ghost"
                 onClick={() => void release()}
                 loading={releasing}
-                disabled={call.state.phase !== 'idle'}
+                disabled={call.state.phase !== 'idle' || incomingLive}
               >
                 Release
               </Button>
@@ -348,6 +351,7 @@ export function WorkspacePage() {
         call={call}
         now={now}
         onNoteSaved={reloadAfterCall}
+        raised={incomingBar}
       />
     </section>
   );

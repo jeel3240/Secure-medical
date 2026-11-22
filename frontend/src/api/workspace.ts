@@ -108,7 +108,7 @@ export type CallDirection = 'outbound' | 'inbound' | 'automated';
 export interface TimelineEntry {
   kind: TimelineKind;
   at: string;
-  /** The agent, where one acted. Null for automated and inbound entries. */
+  /** The agent, where one acted - by name; a call carries their id too, `detail.agentId`. Null where nobody did. */
   author: string | null;
   /** Free-form per kind - the screen knows what to read. */
   detail: Record<string, unknown>;

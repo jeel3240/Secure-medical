@@ -89,7 +89,7 @@ export function LeadsPage() {
   // What is typed, ahead of the search that has been sent.
   const [search, setSearch] = useState(query);
 
-  // Ids seen on the previous load, so genuinely new rows can be highlighted
+  // Ids seen in this view so far, so genuinely new rows can be highlighted
   // rather than every row flashing on each refresh.
   const seen = useRef<Set<number>>(new Set());
   const [fresh, setFresh] = useState<Set<number>>(new Set());
@@ -118,16 +118,28 @@ export function LeadsPage() {
 
   // Highlight rows that were not in the previous response. Driven off `data`
   // rather than the fetch, so it works the same whichever tick delivered them.
+  // Another view - a tab, a filter, a page, a search - is another list, not new
+  // rows: it starts the record over, as a first load does. Until 2026-11-22
+  // the record kept every id ever shown, and every switch flashed all of the
+  // new view's rows (review M30).
+  const seenFor = useRef<typeof fetcher | null>(null);
+  const flashing = useRef<number | undefined>(undefined);
   useEffect(() => {
-    if (!data) return;
+    if (!data || switching) return;
+    if (seenFor.current !== fetcher) {
+      seenFor.current = fetcher;
+      seen.current = new Set(data.leads.map((l) => l.id));
+      return;
+    }
     const newIds = new Set(data.leads.filter((l) => !seen.current.has(l.id)).map((l) => l.id));
-    // Everything is new on the first load; highlighting all of it is noise.
-    if (seen.current.size > 0 && newIds.size > 0) {
+    if (newIds.size > 0) {
       setFresh(newIds);
-      setTimeout(() => setFresh(new Set()), 600);
+      window.clearTimeout(flashing.current);
+      flashing.current = window.setTimeout(() => setFresh(new Set()), 600);
     }
     data.leads.forEach((l) => seen.current.add(l.id));
-  }, [data]);
+  }, [data, switching, fetcher]);
+  useEffect(() => () => window.clearTimeout(flashing.current), []);
 
   // Sent once the typing pauses. Only when it differs from what is showing:
   // run on every mount, this used to put the list back on page one.

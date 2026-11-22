@@ -125,7 +125,7 @@ export function LeadTimelinePage() {
   const { data: lead, loading } = usePolling<LeadDetail>(leadFetcher, { enabled: valid });
 
   const timelineFetcher = useCallback(() => getTimeline(leadId), [leadId]);
-  const { data: entries } = usePolling<TimelineEntry[]>(timelineFetcher, { enabled: valid });
+  const { data: entries, error: timelineError } = usePolling<TimelineEntry[]>(timelineFetcher, { enabled: valid });
 
   const summary = useMemo(() => summarise(entries ?? []), [entries]);
 
@@ -197,11 +197,13 @@ export function LeadTimelinePage() {
 
       <div className="timeline-page">
         <div className="card timeline-page__main">
+          {/* A failed load says so - it spun for ever (review M31, 2026-11-22). */}
+          {timelineError && <Banner tone={entries ? 'warning' : 'error'}>{timelineError}{entries ? ' Showing the last update.' : ''}</Banner>}
           {entries ? (
             // No auto-scroll here, unlike the workspace: this page is read from
             // the top.
             <Timeline entries={entries} emptyText="Nothing has happened on this lead yet." />
-          ) : (
+          ) : timelineError ? null : (
             <Spinner />
           )}
         </div>

@@ -20,6 +20,13 @@
   animation: call-bar-in 220ms ease-out;
 }
 
+/* Two bars at once - this lead's call over, its note box open, and a lead's
+   call taken meanwhile: this lead's bar sits above the incoming one, never on
+   top of it (review M26, 2026-11-22). */
+.call-bar--raised {
+  bottom: calc(var(--space-5) + var(--call-bar-raise));
+}
+
 /* Slides up into place, so it reads as arriving rather than appearing. */
 @keyframes call-bar-in {
   from {
