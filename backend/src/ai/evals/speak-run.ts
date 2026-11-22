@@ -53,7 +53,7 @@ async function main(): Promise<void> {
             stream: true,
             max_completion_tokens: 200,
             prompt_cache_key: 'seri-speak',
-            messages: speakMessages(systemAt(c.now), c.recent, replyBrief(c.moves, startState(), c.who, 'John'), codeLines(c.moves, 'four eight zero, four seven zero, eight two five nine')),
+            messages: speakMessages(systemAt(c.now), c.recent, replyBrief(c.moves, { ...startState(), ...c.state }, c.who, 'John'), codeLines(c.moves, 'four eight zero, four seven zero, eight two five nine')),
           });
           for await (const chunk of stream) {
             const delta = chunk.choices[0]?.delta?.content;

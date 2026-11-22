@@ -14,6 +14,7 @@ import {
   Conversation,
   FILLER_LINE,
   leadMessage,
+  HEARD_ANYWAY_MS,
   LIMITS,
   STILL_THERE_LINE,
   VERDICT_POLL_MS,
@@ -322,6 +323,31 @@ describe('talked over', () => {
   it('during the greeting: the greeting in the history is what was heard', () => {
     conversation.interrupted('Hi, is');
     expect(conversation.messages[0]).toEqual({ role: 'assistant', content: 'Hi, is' });
+  });
+
+  it('Twilio says nothing was heard, seconds after she began: her first sentence was - not all of it taken as unsaid (calls 136, 137)', async () => {
+    const g = gate();
+    model.replies.push({ events: [text('eDrugstore has been around for 25 years. It is run by Secure Medical. '), text('Anything else?')], waitBefore: (i) => (i === 1 ? g.wait() : Promise.resolve()) });
+    conversation.heard('Who are you?');
+    await until(() => tokens().length === 2, 'the first sentences');
+    clock.advance(HEARD_ANYWAY_MS);
+    conversation.interrupted('');
+    g.open();
+    await settle();
+    expect(conversation.messages.at(-1)).toEqual({ role: 'assistant', content: 'eDrugstore has been around for 25 years.' });
+    expect(logged.filter((l) => l.event === 'ai_relay.heard_anyway')).toHaveLength(1);
+  });
+
+  it('Twilio says nothing was heard, at once: nothing was - the reply not in the history', async () => {
+    const g = gate();
+    model.replies.push({ events: [text('This is Seri from eDrugstore. '), text('We are calling about our offer.')], waitBefore: (i) => (i === 1 ? g.wait() : Promise.resolve()) });
+    conversation.heard('Who is this?');
+    await until(() => tokens().length === 1, 'the first sentence');
+    clock.advance(HEARD_ANYWAY_MS - 1);
+    conversation.interrupted('');
+    g.open();
+    await settle();
+    expect(conversation.messages.at(-1)?.role).toBe('user');
   });
 
   it('before a word was heard: the history is left as it was', () => {

@@ -58,6 +58,8 @@ export type Act =
   | { act: 'stop' }
   | { act: 'unclear' }
   | { act: 'checking_line' }
+  /** They ask her to say it again, or did not understand her (calls 136, 137). */
+  | { act: 'repeat' }
   | { act: 'backchannel' }
   | { act: 'machine' }
   | { act: 'other' };
@@ -191,6 +193,10 @@ export type Move =
   | { move: 'ask_repeat' }
   /** "Yes, I'm here." */
   | { move: 'still_here' }
+  /** What she just said, again - more simply (calls 136, 137: "Can you repeat your answer?", "I don't understand"). */
+  | { move: 'say_again' }
+  /** They asked more at once than one reply answers: the rest one at a time, which first (call 136). */
+  | { move: 'which_next' }
   /** Her open question again, briefly and in new words. */
   | { move: 'return_to'; open: OpenQuestion }
   | { move: 'anything_else' }
@@ -199,7 +205,7 @@ export type Move =
 
 /** The moves that ask the lead something: at most one in a reply, and it comes last. */
 export function asks(move: Move): boolean {
-  return ['opening', 'ask_why', 'offer', 'ask_time', 'confirm_time', 'ask_repeat', 'return_to', 'anything_else'].includes(move.move);
+  return ['opening', 'ask_why', 'offer', 'ask_time', 'confirm_time', 'ask_repeat', 'return_to', 'anything_else', 'which_next'].includes(move.move);
 }
 
 export interface PolicyContext {
@@ -327,7 +333,15 @@ export function decide(previous: CallState, acts: readonly Act[], context: Polic
   const isNo = noAct || notNow || productNo || (declines && (open === 'interest' || open === 'why' || offerOpen !== null));
   if (isNo) {
     const reason: NoReason | null = productNo ? 'product' : notNow ? 'timing' : (noAct?.reason ?? null);
-    return done(noMoves(s, reason, offerOpen, open));
+    const no = noMoves(s, reason, offerOpen, open);
+    // A no said with a question is not a clear no (call 137: "Uh, no. First, I want to understand that... do you ship
+    // outside the USA?" - the call ended on it): the question answered, the no kept on the record, the call goes on.
+    const asked = answersFor(s, acts, context);
+    if (asked.length > 0) {
+      const next = no.some((m) => m.move === 'end') ? (s.askedAnythingElse ? [] : [{ move: 'anything_else' as const }]) : no;
+      return done([...asked, ...next]);
+    }
+    return done(no);
   }
   // "I need to think about it" after the link was turned down: what else they would like to know.
   if (objectionIds.includes('think_about_it')) return done(offerOrFollowUp(s, 'link', context, answersFor(s, acts, context)));
@@ -339,9 +353,15 @@ export function decide(previous: CallState, acts: readonly Act[], context: Polic
     return done([end('end_call', 'other')]);
   }
 
-  // Questions and objections, then one question to go on with.
+  // Questions and objections, then one question to go on with - or, asked more than one reply answers, which next.
   const statements = answersFor(s, acts, context);
-  if (statements.length > 0) return done([...statements, ...followUp(s, statements, context)]);
+  if (statements.length > 0) {
+    if (askedCount(acts) > statements.length) return done([...statements, { move: 'which_next' }]);
+    return done([...statements, ...followUp(s, statements, context)]);
+  }
+
+  // "Can you repeat that?", "I don't understand" - what she just said, again, more simply.
+  if (has('repeat')) return done([{ move: 'say_again' }]);
 
   // "Hello?" - she is here, and her question still stands.
   if (has('checking_line')) return done([{ move: 'still_here' }, ...(open ? [{ move: 'return_to' as const, open }] : [])]);
@@ -351,6 +371,11 @@ export function decide(previous: CallState, acts: readonly Act[], context: Polic
   }
   if (has('unclear') && acts.every((a) => UNDERSTOOD_NOTHING.has(a.act))) return done(misheard(s));
   return done(followUp(s, [], context));
+}
+
+/** How many different questions and objections were said - more than `answersFor` answers in one reply, and the rest wait. */
+function askedCount(acts: readonly Act[]): number {
+  return new Set(acts.filter((a) => a.act === 'asks' || a.act === 'objection').map((a) => (a.act === 'asks' ? `asks:${a.topic}` : `objection:${a.id}`))).size;
 }
 
 /** The moves for each question and objection said - at most two, each once. */
@@ -710,10 +735,15 @@ export function markSaid(previous: CallState, moves: readonly Move[]): CallState
         s.stage = 'closing';
         s.open = null;
         break;
+      case 'which_next':
+        s.askedAnythingElse = true;
+        s.open = 'anything_else';
+        break;
       case 'virtual':
       case 'objection':
       case 'ask_repeat':
       case 'still_here':
+      case 'say_again':
         break;
       default: {
         const never: never = m;
