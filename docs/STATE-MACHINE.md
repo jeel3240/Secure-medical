@@ -696,7 +696,13 @@ left it `expired`, set `has_unread_inbound`, and sent nothing.
 - **A send that timed out is not treated as refused** - calls to EZ Texting
   give up after 30 seconds, and a text cut off that way may still have gone
   out. Its row stays `sending`, so it is never sent a second time;
-  `db/outbound.ts`.
+  `db/outbound.ts`. **The first question is then taken as sent** (2026-11-22,
+  `docs/REVIEW-2026-11-22.md` H12): its reply window starts and
+  `question_sent_at` is set, so a reply counts as an answer and the robot can
+  call a lead who never answers. Taken as unsent, a reply in the next two
+  minutes was dropped - not scored, not flagged - and, the retry never sending
+  twice, the lead sat until it expired. A later text of the flow that timed out
+  flags the lead for a person, as any it could not send.
 - The database changes commit first, then the send happens. A failed send is
   logged and leaves the conversation where it is; it does not roll the answer
   back. The lead has answered, and losing that would be worse than a missing

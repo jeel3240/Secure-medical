@@ -25,8 +25,10 @@
  * left and no answer came back in time, so the text may have reached the lead.
  * Its row is left as `sending` too, for the same reason as step 3: marked
  * failed, the opener retry would send it again. It is reported as not sent,
- * and as `unconfirmed`, so the caller neither counts it as delivered nor
- * starts a reply window on it.
+ * and as `unconfirmed`, so the caller does not count it as delivered. The
+ * first question's caller takes it as sent all the same - its reply window
+ * starts, a reply counts, the robot can call (`worker/opener.ts`, review H12,
+ * 2026-11-22); the reply flow's sends a person sees (`sendFlowMessage`).
  *
  * An agent's own SMS does not use this: it sends first on purpose, and marks
  * the take-over in the same transaction - `db/agent-sms.ts`.

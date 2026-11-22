@@ -58,6 +58,7 @@ jest.mock('../db/pool', () => ({
   },
 }));
 
+import * as logModule from '../lib/log';
 import { pollOnce } from './poller';
 
 function contact(over: Record<string, unknown> = {}) {
@@ -191,6 +192,21 @@ describe('when the opener cannot be sent', () => {
     expect(failed).toBeDefined();
     // The rendered opener, not the template - it is what the agent would read.
     expect(String(failed?.[1]?.[1])).not.toContain('{first_name}');
+  });
+
+  it('a send that timed out may have gone: its reply window starts, so a reply counts - and it is not logged as failed (review H12, M15)', async () => {
+    sendMessage.mockRejectedValue(Object.assign(new Error('timeout of 30000ms exceeded'), { code: 'ECONNABORTED' }));
+    const errors: string[] = [];
+    const spy = jest.spyOn(logModule.log, 'error').mockImplementation((event: string) => {
+      errors.push(event);
+    });
+
+    await pollOnce();
+    spy.mockRestore();
+
+    expect(sqlOf()).toMatch(/SET expires_at = now\(\) \+ \(\$2 \|\| ' days'\)::interval, question_sent_at = now\(\)/i);
+    expect(errors).not.toContain('sms.failed');
+    expect(sqlOf()).not.toMatch(/'failed'/);
   });
 
   it('keeps nothing when the number is blocked - that send was never attempted', async () => {

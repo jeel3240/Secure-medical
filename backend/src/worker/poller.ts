@@ -192,7 +192,8 @@ async function openLead(leadId: number, phone: string, firstName: string | null)
 
     const result = await sendOpener({ id: leadId, phone, firstName }, template);
     if (!result.sent) {
-      log.error('sms.failed', { leadId, key: 'question_1', blocked: result.blocked, err: errText(result.err) });
+      // Timed out, it may have gone - `sms.unconfirmed` said so (db/outbound.ts); not a failure (review M15).
+      if (!result.unconfirmed) log.error('sms.failed', { leadId, key: 'question_1', blocked: result.blocked, err: errText(result.err) });
       return false;
     }
 

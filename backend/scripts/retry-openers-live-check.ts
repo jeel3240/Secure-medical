@@ -310,6 +310,26 @@ async function main(): Promise<void> {
     check('and the attempt is remembered', attempts, 2);
   }
 
+  console.log('\nwhen the send times out - it may have gone (review H12, M15)');
+  {
+    sent = [];
+    const lead = await leadWithFailedOpener('+15550000909', { minutesAgo: 60, attempts: 1 });
+    failNext = Object.assign(new Error('timeout of 30000ms exceeded'), { code: 'ECONNABORTED' });
+
+    const stats = await retryFailedOpeners();
+
+    check('counted as unconfirmed, never failed', [stats.unconfirmed, stats.failed], [1, 0]);
+    const conversation = (
+      await pool.query(
+        `SELECT question_sent_at IS NOT NULL AS asked, expires_at IS NOT NULL AS "windowRuns" FROM conversations WHERE lead_id = $1`,
+        [lead]
+      )
+    ).rows[0];
+    check('its reply window runs: a reply counts as an answer, and the robot can call', conversation, { asked: true, windowRuns: true });
+    await retryFailedOpeners();
+    check('and it is never sent again', sent.some((s) => s.to[0] === '15550000909'), false);
+  }
+
   console.log('\nthe oldest lead goes first');
   {
     sent = [];

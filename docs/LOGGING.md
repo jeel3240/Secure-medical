@@ -102,13 +102,13 @@ firing a real webhook: the number appears nowhere in the output.
 | | The text after a missed call logs the same events with `key: message_missed_call`, and the link a lead said yes to on the automated call with `key: call_link_text` (T14) - both `db/lead-texts.ts`. Its `sms.failed` is at `warn`, a real refusal by EZ Texting included, so an alarm on `level=error` alone does not catch it |
 | `transcript.tick`, `transcript.tick_failed`, `transcript.request_failed`, `transcript.read_failed` | `worker/index.ts` (`tick`, `tick_failed`), `worker/transcripts.ts` (`request_failed`, `read_failed`) - a call's transcript, `TWILIO.md`, "Recordings and transcripts". `tick` only when something moved |
 | `webhook.rejected`, `webhook.ignored`, `webhook.failed` | `api/webhooks.ts` |
-| | `sms.unconfirmed` (warn, `db/outbound.ts`): a send to EZ Texting timed out, so the text may or may not have gone. It is not retried |
+| | `sms.unconfirmed` (warn, `db/outbound.ts`): a send to EZ Texting timed out, so the text may or may not have gone. It is not retried, and since 2026-11-22 it is the only line for it - no `sms.failed` beside it, nor `opener.gave_up` on the last try (review M15) |
 | `conversation.advanced` | `api/webhooks.ts` - only when the reply produced a text to send; `parts` is how many pieces it had, `sent` whether it went |
 | `conversation.expiry_not_moved` | `api/reply-flow.ts` - a text went out but its reply window could not be saved |
 | `reply.before_our_text` | `api/reply-flow.ts` - a reply arrived before the text it would be answering had gone out, and was not counted. `forPerson: true` when that text has been unsent for over two minutes and the lead was flagged instead |
 | `dnc.blocked`, `dnc.released` | `api/webhooks.ts` |
 | `http.unhandled` | `api/http.ts` - an error no route handled: `method`, `path` (the EZ Texting webhook as `/api/webhooks/eztexting/:token`, never its token) and `err` |
-| `opener.retry`, `opener.retry_failed` | `worker/index.ts` - one line per pass that had something due, with `due`, `sent`, `failed`, `abandoned`, `tooOld`. `POLLER.md`, "Retrying a failed opener" |
+| `opener.retry`, `opener.retry_failed` | `worker/index.ts` - one line per pass that had something due, with `due`, `sent`, `failed`, `unconfirmed` (timed out, perhaps delivered - taken as sent; 2026-11-22), `abandoned`, `tooOld`. `POLLER.md`, "Retrying a failed opener" |
 | `opener.gave_up` | `worker/retry-openers.ts` - once, at the failed attempt that reaches the limit. A warning: that lead will never get its first question |
 
 A new event belongs in this table as well as in the code, or whoever is querying
