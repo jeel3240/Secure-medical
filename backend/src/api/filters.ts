@@ -50,3 +50,21 @@ export function parseList(raw: unknown): string[] | undefined {
   const values = raw.split(',').map((s) => s.trim()).filter(Boolean);
   return values.length ? values : undefined;
 }
+
+/**
+ * A list's `?page=`: 1 when absent, else a whole number from 1 to `MAX_PAGE`.
+ * It goes into the statement as an offset, so anything else - `2.5`, `1e30` -
+ * is refused here rather than turned into an error there. Shared by Admin >
+ * Leads and the DNC list, which had no upper bound: `?page=1e20` was a 500
+ * (review M17, 2026-11-22).
+ */
+export const MAX_PAGE = 100_000;
+
+export function parsePage(raw: unknown): number {
+  if (raw === undefined || raw === '') return 1;
+  const page = Number(raw);
+  if (!Number.isInteger(page) || page < 1 || page > MAX_PAGE) {
+    throw new HttpError(400, 'invalid_page', 'Page must be a whole number from 1.');
+  }
+  return page;
+}

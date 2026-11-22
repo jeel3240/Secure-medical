@@ -576,6 +576,12 @@ One merged, ordered list assembled from `messages`, `calls`, `notes`,
 author where there is one, and its own fields. The screen decides the icons and
 wording, the way it does for queue tags.
 
+**Read one table at a time** (2026-11-22, review M18): the seven tables it
+merges were read all at once, seven of the pool's ten connections on a screen
+polled every 5 seconds - a few people looking, and every other request waited.
+Each is quick: with 50,000 leads the whole timeline reads in 3 ms
+(`npm run speed`).
+
 System events are not a table. They are derived from the lead and its
 conversation rather than logged rows, so the timeline synthesises them.
 

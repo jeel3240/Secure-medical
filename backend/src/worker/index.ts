@@ -15,6 +15,7 @@ import {
 import { readCallHours } from '../db/call-script';
 import { withTryLock } from '../db/locks';
 import { pool } from '../db/pool';
+import { DEFAULT_POLL_INTERVAL_SECONDS, pollIntervalSeconds } from '../db/sql';
 import { dialDueLeads, stopChange, worthLogging, type DialDeps, type DialLook } from './auto-calls';
 import { expireStaleConversations } from './expiry';
 import { placeAutoCall } from './place-auto-call';
@@ -23,17 +24,11 @@ import { errText, log } from '../lib/log';
 import { retryFailedOpeners } from './retry-openers';
 import { advanceTranscripts } from './transcripts';
 
-// The same as migration 005 sets; used only if the setting is missing.
-const DEFAULT_POLL_INTERVAL_SECONDS = 30;
-
-// Re-read each tick so an admin changing the setting takes effect without a
-// worker restart.
+// Re-read each tick, so a migration changing the setting takes effect without
+// a worker restart; the default, migration 005's, is in db/sql.ts.
 async function pollIntervalMs(): Promise<number> {
-  const { rows } = await pool.query('SELECT value FROM settings WHERE key = $1', [
-    'poll_interval_seconds',
-  ]);
-  const seconds = rows.length > 0 ? Number(rows[0].value) : DEFAULT_POLL_INTERVAL_SECONDS;
-  return (Number.isFinite(seconds) && seconds > 0 ? seconds : DEFAULT_POLL_INTERVAL_SECONDS) * 1000;
+  const { rows } = await pool.query('SELECT value FROM settings WHERE key = $1', ['poll_interval_seconds']);
+  return pollIntervalSeconds(rows[0]?.value) * 1000;
 }
 
 /**

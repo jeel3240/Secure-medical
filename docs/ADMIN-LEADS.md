@@ -331,7 +331,9 @@ existing).
 
 **The EZ Texting sync line - Jeel, 2026-09-28.** Under "Live · updated just
 now" sits "Synced with EZ Texting 1m ago": the last time the worker polled for
-new leads. After three poll intervals without a poll - the spec's signal that
+new leads. The interval is read as the worker reads it (`pollIntervalSeconds`,
+`db/sql.ts`): 30 seconds unless the setting is above 0 - until 2026-11-22 this
+page fell back to 60 and took 0 at its word (review M17). After three poll intervals without a poll - the spec's signal that
 the worker has stopped - it turns amber and reads "Last synced with EZ Texting
 2h ago - check the worker". Hovering shows the exact time.
 `components/SyncStatus.tsx`.

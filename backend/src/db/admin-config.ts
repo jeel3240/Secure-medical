@@ -16,6 +16,7 @@
  * migration and a PR. There is no writer here and there should not be one.
  */
 
+import { expiryDays } from './sql';
 import { loadFlow } from './flows';
 import { RECORDING_NOTICE } from '../core/calls';
 import type { CallScript } from '../core/call-script';
@@ -236,14 +237,13 @@ function callLines(script: CallScript, recorded: boolean): CallLine[] {
 
 /** The settings an automated call reads, as the robot reads them - fallbacks included. */
 async function callSettings(calling: CallingContext): Promise<CallSettings> {
-  const [hours, ringSeconds, offerRingSeconds, holdMaxSeconds, minConfidence, callsPerPerson] = await Promise.all([
-    readCallHours(pool),
-    readRingSeconds(pool),
-    readOfferRingSeconds(pool),
-    readHoldMaxSeconds(pool),
-    readMinConfidence(pool),
-    readCallsPerPerson(pool),
-  ]);
+  // One at a time, as the page's other reads (review M18): eleven at once took more connections than the pool has.
+  const hours = await readCallHours(pool);
+  const ringSeconds = await readRingSeconds(pool);
+  const offerRingSeconds = await readOfferRingSeconds(pool);
+  const holdMaxSeconds = await readHoldMaxSeconds(pool);
+  const minConfidence = await readMinConfidence(pool);
+  const callsPerPerson = await readCallsPerPerson(pool);
   return {
     on: calling.autoCalls,
     startMinute: hours.startMinute,
@@ -266,14 +266,14 @@ async function callSettings(calling: CallingContext): Promise<CallSettings> {
  * recorded.
  */
 export async function getAdminConfig(calling: CallingContext = NO_CALLING): Promise<AdminConfig> {
-  const [settingsRows, activeFlow, tierRows, name, script, call] = await Promise.all([
-    pool.query(`SELECT key, value FROM settings`),
-    pool.query(`SELECT id, key, name FROM flows WHERE is_active`),
-    pool.query(`SELECT name, min_score, max_score FROM tiers ORDER BY sort_order`),
-    longestFirstName(),
-    loadActiveCallScript(pool),
-    callSettings(calling),
-  ]);
+  // One read at a time: eleven at once, with the call settings', took more than the pool's ten connections on a page
+  // polled every 5 seconds (review M18, 2026-11-22). Each is quick.
+  const settingsRows = await pool.query(`SELECT key, value FROM settings`);
+  const activeFlow = await pool.query(`SELECT id, key, name FROM flows WHERE is_active`);
+  const tierRows = await pool.query(`SELECT name, min_score, max_score FROM tiers ORDER BY sort_order`);
+  const name = await longestFirstName();
+  const script = await loadActiveCallScript(pool);
+  const call = await callSettings(calling);
 
   const settings = new Map<string, string>(settingsRows.rows.map((r) => [r.key, r.value]));
   // The page describes the flow new leads get - docs/FLOWS.md.
@@ -384,7 +384,7 @@ export async function getAdminConfig(calling: CallingContext = NO_CALLING): Prom
       maxScore: r.max_score,
     })),
     settings: {
-      expiryDays: number('expiry_days', 7),
+      expiryDays: expiryDays(settings.get('expiry_days')),
       maxInvalidBeforeReview: number('max_invalid_before_review', 1),
       segmentLimit: SEGMENT_LIMIT,
     },
