@@ -341,7 +341,9 @@ async function main(): Promise<void> {
       await startAiCall(pool, { callId, callSid: sid, knowledgeVersion: 'v' });
       return { lead, callId };
     };
-    const seriOf = async (lead: number) => (await getTimeline(lead))!.find((e) => e.kind === 'call')!.detail.seri;
+    // A call's detail is typed loosely (`Record<string, unknown>`): her part as the timeline builds it.
+    const seriOf = async (lead: number) =>
+      (await getTimeline(lead))!.find((e) => e.kind === 'call')!.detail.seri as { ended: unknown } & Record<string, unknown>;
 
     const booked = await seriCall('+15550000331', 'CA-A19-1');
     const callback = { action: 'book_callback', at: '2026-11-16T20:00:00.000Z', timeZone: 'America/New_York', reason: 'Wants to order' };

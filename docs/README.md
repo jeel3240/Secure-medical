@@ -33,7 +33,9 @@ cd frontend && npm run dev
 ```
 
 The frontend dev server forwards `/api` to the API on port 3000. Local Docker
-runs postgres, redis, api and worker only; Caddy is used in production.
+runs postgres, redis, api and worker only; Caddy is used in production. Their
+ports - 5433, 6379, 3000 - are open on the laptop only (`127.0.0.1`), not to its
+network (2026-11-22).
 
 **Stopping for the day.** `docker compose stop` keeps all data. Stop the
 frontend with Ctrl+C. On Colima, `colima stop` frees the VM's memory. Next time:
@@ -117,7 +119,7 @@ cd backend  && npm test && npm run lint    # 1,634 tests
 cd frontend && npm test && npm run lint    # 432 tests   (counts as of 2026-11-13)
 ```
 
-**Seri's test sets** run against OpenAI, so they are run by hand, before every change to her knowledge files or her brain's prompts, never in CI: `cd backend && OPENAI_API_KEY=... npm run ai:eval:understand`, `npm run ai:eval:speak`, and whole real calls replayed with `npm run ai:replay -- --real turns.json` (`AI-AGENT.md`, sections 8 and 12). The answer test set of today's brain, `npm run ai:eval`, was removed with it on 2026-11-19.
+**Seri's test sets** run against OpenAI, so they are run by hand, before every change to her knowledge files or her brain's prompts, never in CI: `cd backend && OPENAI_API_KEY=... npm run ai:eval:understand`, `npm run ai:eval:speak`, and whole real calls replayed with `npm run ai:replay -- --real turns.json` (`AI-AGENT.md`, sections 8 and 12) - which exits 1 when a replay breaks a rule, since 2026-11-22. The answer test set of today's brain, `npm run ai:eval`, was removed with it on 2026-11-19.
 
 **Unit and route tests** mock the database and cover behaviour in isolation.
 
@@ -132,6 +134,10 @@ cd backend
 scripts/live-checks.sh              # all of them
 scripts/live-checks.sh flows queue  # just these
 ```
+
+It uses this project's own postgres (`docker compose ps -q postgres`), and a
+migration that fails stops that check with the migration's own error (both
+2026-11-22).
 
 There are twenty-three live checks, covering Seri (`ai-agent-live-check`: migration 022 - her part of a call, the turns of her conversation, add-only, and the call backs she books, the only kind that may have no agent - and 023; the relay's SQL; whether a call goes to her; carrying out how her part ended; her call backs; her fallbacks pausing the robot; the voicemail rule with what the lead said to her), the robot placing calls by itself (who is due, when, at what pace, never twice, calls that never reached Twilio), the texts a call leads to (the link, and the text after a missed call - EZ Texting stubbed), the automated call (its row, every refusal, linking it to Twilio's call, two placements racing; each answer kept once, a result never overwritten, a stop blocking once and ending the text questions, the end settling an unfinished script; a transfer taken - from the lead's holder, once, never by a second person - or missed; a lead on hold, its place in line, and hanging up on hold; Twilio's voicemail verdict acted on - the beep decides, under the call's lock, never twice), a lead on hold rung to whoever comes free (migration 020: longest waiting first, one ring at a time per lead and per person, never the same person twice, and who is still coming for a lead), who can take a call (migrations 016 and 017: the browser's word, the "Taking calls" switch and why it is so, who is free, the switch turned off after a ring let run out, and who counts as on a call, or just off one, while a lead is on hold), the automated call's script (migrations 015, 018 and 019, and 020's ring time), the SMS flows (a second flow added as
 rows only), the queue, claims, the read flag, the lead card,

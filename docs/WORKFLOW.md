@@ -32,6 +32,7 @@ commit message.
 
 ```bash
 cd backend && npx tsc --noEmit    # must be clean
+npm run typecheck:scripts         # scripts/ and the tests, with the app - must be clean (2026-11-22)
 npm test                          # must pass
 npm run lint                      # must pass - ESLint for the backend
 scripts/live-checks.sh            # when the change touches SQL - README.md, "How to test"
@@ -74,6 +75,14 @@ no other route: no ALTER typed into psql, no change made by hand in a GUI, no
 edit to a file that has already shipped. A schema change that exists only on
 someone's laptop is a schema change that will be missing in production, and the
 code that depends on it will fail there and nowhere else.
+
+**One runner at a time** (2026-11-22, `docs/REVIEW-2026-11-22.md` M36). The
+runner takes a Postgres advisory lock for its whole run, so two
+`npm run migrate` at once cannot both apply the same file: the second waits,
+then finds nothing pending. It still remembers a file by its name only - an
+edited file that already ran is not noticed, which is why the rule below holds;
+a checksum would need a column on `schema_migrations`, a change to make by
+migration if it is ever wanted.
 
 **Never edit a migration that has already run.** Add a new numbered file that
 changes what the old one did. Assume every file already in `dev` has run in
