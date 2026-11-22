@@ -98,6 +98,8 @@ describe('sendAndRecord', () => {
 
     expect(result).toMatchObject({ sent: false, blocked: true });
     expect(db.sql[1]).toMatch(/DELETE FROM messages/);
+    // With no message row, the activity log is the record that we tried - in the same statement, no actor (review M41).
+    expect(db.sql[1]).toMatch(/INSERT INTO activity_log[\s\S]*'sms\.blocked'/);
   });
 
   it('reports a delivered text as sent even when recording its id fails - so it is never sent again', async () => {

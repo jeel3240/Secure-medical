@@ -34,6 +34,7 @@
  * the take-over in the same transaction - `db/agent-sms.ts`.
  */
 
+import { activityInsertSql } from './activity';
 import type { Querier } from './sql';
 import { errText, log } from '../lib/log';
 
@@ -81,9 +82,13 @@ export async function sendAndRecord(
 
     const blocked = isBlocked(err);
     try {
+      // Refused for a blocked number: no message row is kept - nothing was attempted - so the activity log is the only
+      // record that we tried, as for an agent's own text (`sms.blocked`, no actor: the system; review M41, 2026-11-22).
       await q.query(
         blocked
-          ? `DELETE FROM messages WHERE id = $1`
+          ? `WITH removed AS (DELETE FROM messages WHERE id = $1 RETURNING lead_id)
+             ${activityInsertSql}
+             SELECT NULL, 'sms.blocked', lead_id, NULL, '{}'::jsonb FROM removed`
           : `UPDATE messages SET delivery_status = 'failed' WHERE id = $1`,
         [rowId]
       );

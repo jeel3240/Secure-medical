@@ -10,6 +10,7 @@ import { activityInsertSql, recordActivity } from './activity';
 import { automatedCallUsedSql, ON_HOLD_SQL } from './auto-calls';
 import { readCallsPerPerson, readHoldMaxSeconds } from './call-script';
 import { WORKED_SQL } from './lead-state';
+import { withTryLock } from './locks';
 import { pool } from './pool';
 import { FREE_SQL } from './presence';
 
@@ -280,30 +281,5 @@ const DIAL_LOCK = 'auto_dial';
  * it, and the database allows one automated call per lead.)
  */
 export async function withDialLock<T>(look: () => Promise<T>): Promise<T | null> {
-  const client = await pool.connect();
-  let locked: boolean;
-  try {
-    locked = (await client.query(`SELECT pg_try_advisory_lock(hashtext($1)) AS locked`, [DIAL_LOCK])).rows[0].locked;
-  } catch (err) {
-    client.release(err as Error);
-    throw err;
-  }
-  if (!locked) {
-    client.release();
-    return null;
-  }
-  try {
-    return await look();
-  } finally {
-    // A connection whose lock could not be let go is thrown away, never handed
-    // back to the pool still holding it - every later look would find it
-    // held; and the look's own error, if any, is the one that is thrown.
-    let stuck: Error | undefined;
-    try {
-      await client.query(`SELECT pg_advisory_unlock(hashtext($1))`, [DIAL_LOCK]);
-    } catch (err) {
-      stuck = err as Error;
-    }
-    client.release(stuck);
-  }
+  return withTryLock(DIAL_LOCK, look);
 }

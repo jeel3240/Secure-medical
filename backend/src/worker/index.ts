@@ -13,6 +13,7 @@ import {
   withDialLock,
 } from '../db/auto-dial';
 import { readCallHours } from '../db/call-script';
+import { withTryLock } from '../db/locks';
 import { pool } from '../db/pool';
 import { dialDueLeads, stopChange, worthLogging, type DialDeps, type DialLook } from './auto-calls';
 import { expireStaleConversations } from './expiry';
@@ -90,82 +91,107 @@ function noteStop(look: DialLook): void {
   stoppedFor = now;
 }
 
-// Serialised on purpose: one poller instance, one cycle at a time, so the
-// checkpoint can't be advanced by two overlapping runs.
+/** The advisory lock that keeps the worker to one cycle at a time, however many run. */
+const WORKER_LOCK = 'worker_cycle';
+
+/**
+ * One cycle: the poll, the expiry sweep, the opener retry, transcripts and the
+ * robot's calls - each apart, so one failing never stops the rest.
+ */
+async function cycle(): Promise<void> {
+  try {
+    const stats = await pollOnce();
+    log.info('poll.tick', {
+      fetched: stats.fetched,
+      inserted: stats.inserted,
+      skipped: stats.skipped,
+      suppressed: stats.suppressed,
+      openers: stats.openersSent,
+      ms: stats.durationMs,
+    });
+  } catch (err) {
+    // Checkpoint is left where it was, so the next tick retries this ground.
+    log.error('poll.failed', { err: errText(err) });
+  }
+
+  // Separate from the poll, and after it, so a failure on either side does
+  // not stop the other: expiring is local work that must keep happening even
+  // while EZ Texting is unreachable.
+  try {
+    const sweep = await expireStaleConversations();
+    if (sweep.expired > 0) {
+      log.info('conversation.expired', { expired: sweep.expired, ms: sweep.durationMs });
+    }
+  } catch (err) {
+    log.error('expiry.failed', { err: errText(err) });
+  }
+
+  // Separate again, for the same reason: retrying an opener must not be
+  // skipped because the poll threw, and a failure here must not stop the
+  // next poll. A lead whose opener never went out is the worst state in the
+  // system - paid for, in the database, and silent.
+  try {
+    const retry = await retryFailedOpeners();
+    // Only when something was due. A lead past its last attempt or its age
+    // limit stays a candidate until its conversation expires - up to seven
+    // days - and logging it every minute would bury real events. The moment
+    // of giving up is logged once, as opener.gave_up, by the retry itself.
+    if (retry.due > 0) {
+      log.info('opener.retry', {
+        due: retry.due,
+        sent: retry.sent,
+        failed: retry.failed,
+        unconfirmed: retry.unconfirmed,
+        abandoned: retry.abandoned,
+        tooOld: retry.tooOld,
+        ms: retry.durationMs,
+      });
+    }
+  } catch (err) {
+    log.error('opener.retry_failed', { err: errText(err) });
+  }
+
+  // Call transcripts - TWILIO.md, "Recordings and transcripts". Apart from
+  // the rest for the same reason: Twilio being slow must not hold up leads.
+  try {
+    const t = await advanceTranscripts();
+    if (t.requested + t.completed + t.failed > 0) log.info('transcript.tick', { ...t });
+  } catch (err) {
+    log.error('transcript.tick_failed', { err: errText(err) });
+  }
+
+  // The robot's calls - AUTO-CALLS.md "When a lead is called". Apart from
+  // the rest, and last: a failure here never stops the poll, nor the poll's
+  // the calls - though a slow poll delays them, in the same tick.
+  if (dialler) {
+    try {
+      const look = await dialDueLeads(dialler);
+      if (worthLogging(look)) log.info('auto_call.dial', { ...look });
+      if (look.inside && !look.locked) noteStop(look);
+    } catch (err) {
+      log.error('auto_call.dial_failed', { err: errText(err) });
+    }
+  }
+}
+
+// Serialised on purpose: one cycle at a time, so the checkpoint can't be
+// advanced by two overlapping runs - and, since 2026-11-22, one cycle at a time
+// whatever runs it (review M14): a second worker on the same database, by
+// mistake, polled and retried alongside the first, and sent a retried first
+// question twice. A cycle another worker holds is skipped, said once.
 async function loop(): Promise<void> {
+  let skipping = false;
   for (;;) {
     try {
-      const stats = await pollOnce();
-      log.info('poll.tick', {
-        fetched: stats.fetched,
-        inserted: stats.inserted,
-        skipped: stats.skipped,
-        suppressed: stats.suppressed,
-        openers: stats.openersSent,
-        ms: stats.durationMs,
+      const ran = await withTryLock(WORKER_LOCK, async () => {
+        await cycle();
+        return true;
       });
+      if (ran === null && !skipping) log.warn('worker.another_running', {});
+      skipping = ran === null;
     } catch (err) {
-      // Checkpoint is left where it was, so the next tick retries this ground.
-      log.error('poll.failed', { err: errText(err) });
-    }
-
-    // Separate from the poll, and after it, so a failure on either side does
-    // not stop the other: expiring is local work that must keep happening even
-    // while EZ Texting is unreachable.
-    try {
-      const sweep = await expireStaleConversations();
-      if (sweep.expired > 0) {
-        log.info('conversation.expired', { expired: sweep.expired, ms: sweep.durationMs });
-      }
-    } catch (err) {
-      log.error('expiry.failed', { err: errText(err) });
-    }
-
-    // Separate again, for the same reason: retrying an opener must not be
-    // skipped because the poll threw, and a failure here must not stop the
-    // next poll. A lead whose opener never went out is the worst state in the
-    // system - paid for, in the database, and silent.
-    try {
-      const retry = await retryFailedOpeners();
-      // Only when something was due. A lead past its last attempt or its age
-      // limit stays a candidate until its conversation expires - up to seven
-      // days - and logging it every minute would bury real events. The moment
-      // of giving up is logged once, as opener.gave_up, by the retry itself.
-      if (retry.due > 0) {
-        log.info('opener.retry', {
-          due: retry.due,
-          sent: retry.sent,
-          failed: retry.failed,
-          unconfirmed: retry.unconfirmed,
-          abandoned: retry.abandoned,
-          tooOld: retry.tooOld,
-          ms: retry.durationMs,
-        });
-      }
-    } catch (err) {
-      log.error('opener.retry_failed', { err: errText(err) });
-    }
-
-    // Call transcripts - TWILIO.md, "Recordings and transcripts". Apart from
-    // the rest for the same reason: Twilio being slow must not hold up leads.
-    try {
-      const t = await advanceTranscripts();
-      if (t.requested + t.completed + t.failed > 0) log.info('transcript.tick', { ...t });
-    } catch (err) {
-      log.error('transcript.tick_failed', { err: errText(err) });
-    }
-
-    // The robot's calls - AUTO-CALLS.md "When a lead is called". Apart from
-    // the rest, and last: a failure here never stops the poll, nor the poll's
-    // the calls - though a slow poll delays them, in the same tick.
-    if (dialler) {
-      try {
-        const look = await dialDueLeads(dialler);
-        if (worthLogging(look)) log.info('auto_call.dial', { ...look });
-        if (look.inside && !look.locked) noteStop(look);
-      } catch (err) {
-        log.error('auto_call.dial_failed', { err: errText(err) });
-      }
+      // The database not answering for the lock: nothing in the cycle could work either. The next tick tries again.
+      log.error('worker.cycle_failed', { err: errText(err) });
     }
 
     let waitMs = DEFAULT_POLL_INTERVAL_SECONDS * 1000;

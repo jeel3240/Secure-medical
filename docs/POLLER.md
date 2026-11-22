@@ -50,7 +50,10 @@ filter would have done server-side.
 ## A cycle
 
 1. Read `ezt_poll_checkpoint` from `settings`. Absent means look back one hour.
-2. Subtract `poll_overlap_minutes` (5) to get the cutoff.
+2. Subtract `poll_overlap_minutes` (5) to get the cutoff - 5 too when the
+   setting is missing, not a number, or not above 0 (`overlapMinutes`,
+   2026-11-22, review M16): none, and a contact listed a moment late was never
+   taken in.
 3. Request page 0 of the group, `sort=createdAt,desc`, 50 per page.
 4. Walk the page. Stop the whole cycle at the first contact at or older than the
    cutoff - everything below it is older still.
@@ -180,7 +183,16 @@ steady state `inserted=0` with a small `skipped` is normal and correct.
 | `EZT_SOURCE` | Defaults to `API`, how partner leads arrive. `WebInterface` for contacts added by hand. |
 | `EZT_SEND_GROUP` | Unset means `sendMessage` throws, so no opener goes out. |
 | `poll_interval_seconds` | In `settings`, read each tick, so it changes without a restart. 30 since migration 005; 60 before. |
-| `poll_overlap_minutes` | In `settings`. |
+| `poll_overlap_minutes` | In `settings`. 5 when missing, not a number, or not above 0. |
+
+**One cycle at a time, however many workers run** (2026-11-22, review M14).
+Each cycle - the poll, the expiry sweep, the opener retry, transcripts and the
+robot's calls - runs holding a Postgres advisory lock (`withTryLock`,
+`db/locks.ts`, the dialler's own lock built on it). A second worker on the same
+database, started by mistake, skips its cycle and says so once
+(`worker.another_running`) rather than polling and retrying alongside the first
+- which sent a retried first question twice. The lock is the session's, so a
+worker that dies lets it go with its connection.
 
 ## Retrying a failed opener
 
