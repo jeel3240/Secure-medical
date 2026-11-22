@@ -14,7 +14,7 @@
  *   - the opening, said once at most;
  *   - an offer to connect never with nobody free, never two replies running;
  *   - a call back booked only after the reply that said its time back;
- *   - after two clear no's, the call ended;
+ *   - after two clear no's, the call ended - a question asked with them answered first (call 140);
  *   - never "I don't know", "I can't provide that", or "connect you" with nobody free.
  */
 
@@ -90,7 +90,10 @@ async function replay(callId: number, lines: string[], apiKey: string): Promise<
   records.forEach((r, i) => {
     const booked = r.moves.some((m) => m.move === 'end' && m.handoff.action === 'book_callback');
     if (booked && !records[i - 1]?.moves.some((m) => m.move === 'confirm_time')) problems.push('a call back booked with no time said back first');
-    if (r.record.nos >= 2 && !r.moves.some((m) => m.move === 'end')) problems.push(`two no's and the call went on (reply ${i + 1})`);
+    // A question asked with the second no is answered before the goodbye - call 140, heard in A34 and as it should be:
+    // a reply that answers the lead is not the call going on (review, 2026-11-22: the rule failed every run of it).
+    const answers = r.moves.some((m) => m.move === 'answer' || m.move === 'specialist' || m.move === 'say_again' || m.move === 'which_next');
+    if (r.record.nos >= 2 && !r.moves.some((m) => m.move === 'end') && !answers) problems.push(`two no's and the call went on (reply ${i + 1})`);
   });
   for (const k of kept.filter((t) => t.who === 'seri')) {
     for (const w of NEVER_SAY) if (says(k.text, w)) problems.push(`said "${w}": ${k.text}`);

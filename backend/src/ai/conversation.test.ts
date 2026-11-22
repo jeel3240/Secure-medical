@@ -351,6 +351,37 @@ describe('talked over', () => {
     expect(conversation.messages.at(-1)?.role).toBe('user');
   });
 
+  it('her reply all sent, then Twilio says nothing was heard, seconds after she began: her first sentence was (review M1)', async () => {
+    model.replies.push([text('This is Seri from eDrugstore. We are calling about our offer. Is now a good time?')]);
+    conversation.heard('Who is this?');
+    await until(() => tokens().length === 4, 'the reply');
+    clock.advance(HEARD_ANYWAY_MS);
+    conversation.interrupted('');
+    expect(conversation.messages.at(-1)).toEqual({ role: 'assistant', content: 'This is Seri from eDrugstore.' });
+    expect(logged.filter((l) => l.event === 'ai_relay.heard_anyway')).toHaveLength(1);
+  });
+
+  it('her reply all sent, then Twilio says nothing was heard, at once: none of it was - not all of it taken as said (review M1)', async () => {
+    model.replies.push([text('This is Seri from eDrugstore. We are calling about our offer. Is now a good time?')]);
+    conversation.heard('Who is this?');
+    await until(() => tokens().length === 4, 'the reply');
+    conversation.interrupted('');
+    expect(conversation.messages.at(-1)).toEqual({ role: 'user', content: '[Who is there: someone free] Who is this?' });
+  });
+
+  it('two replies all sent: "nothing heard" is of the last one only - the one before stays (review M1)', async () => {
+    model.replies.push([text('This is Seri from eDrugstore.')], [text('Sure.')]);
+    conversation.heard('Who is this?');
+    await until(() => tokens().length === 2, 'the reply');
+    conversation.heard('Okay.');
+    await until(() => tokens().length === 4, 'the second reply');
+    conversation.interrupted('');
+    expect(conversation.messages.slice(-2)).toEqual([
+      { role: 'assistant', content: 'This is Seri from eDrugstore.' },
+      { role: 'user', content: '[Who is there: someone free] Okay.' },
+    ]);
+  });
+
   it('before a word was heard: the history is left as it was', () => {
     conversation.interrupted('');
     expect(conversation.messages[0]).toEqual({ role: 'assistant', content: '[friendly] Hi, is this John?' });
@@ -1085,6 +1116,21 @@ describe('limits and failures (A12)', () => {
       expect(ended).toEqual([]);
       expect(kept.some((k) => k.who === 'action')).toBe(false);
       expect(sent).toEqual([]);
+    });
+
+    it('the lead hanging up mid-reply: what she had said is kept, and nothing more is sent (review M6)', async () => {
+      const g = gate();
+      model.replies.push({ events: [text('This is Seri from eDrugstore. '), text('We are calling about our offer.')], waitBefore: (i) => (i === 1 ? g.wait() : Promise.resolve()) });
+      greeted();
+      conversation.heard('Who is this?');
+      await until(() => tokens().length === 1, 'the first sentence');
+      const before = sent.length;
+      conversation.close();
+      g.open();
+      await settle();
+      expect(sent.length).toBe(before);
+      expect(kept.filter((k) => k.who === 'seri')).toEqual([{ who: 'seri', text: 'This is Seri from eDrugstore.', latencyMs: expect.any(Number) }]);
+      expect(replyEvents().at(-1)?.stopped).toBe('call_closed');
     });
 
     it('closing stops every clock', async () => {

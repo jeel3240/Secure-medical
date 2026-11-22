@@ -105,6 +105,12 @@ export const STILL_THERE_LINE = 'Hello, are you still there?';
 
 /** Said while OpenAI is slow. Not in the history: she would start saying it herself. */
 export const FILLER_LINE = 'One moment...';
+/**
+ * A marker after her reply in the call's history: a sentence of it was replaced
+ * by the specialist line (the safety check). Never said, never sent to OpenAI;
+ * the brain reads it (review M2).
+ */
+export const REPLACED_NOTE = 'A sentence of her reply was replaced with the specialist line.';
 
 /**
  * How long an action that ends the call waits, after her last line, for
@@ -216,6 +222,8 @@ export class Conversation {
   private over = false;
   private readonly now: () => Date;
   private readonly timers: Timers;
+  /** Her last reply heard whole, while it is the last she said - review M1. */
+  private lastReply: { index: number; firstSpokenAt: number | null; first: string } | null = null;
   /** The limits are counting. */
   private started = false;
   /** Twilio's speaker events (`events="speaker-events"`, A13): the silence counts only while nobody talks. */
@@ -369,7 +377,27 @@ export class Conversation {
     if (this.reply) this.finish(this.reply, { heard: heard || this.heardAnyway(this.reply) });
     // Her reply was all written - Twilio was still saying it.
     else if (heard) this.replaceLastSaid(heard);
+    // And Twilio says nothing was heard: the same rule as while she writes - her first sentence, two seconds or more
+    // after it went; sooner, none of it, so none of it is taken as said. It counted all of it, offers and questions
+    // too (review M1, 2026-11-22).
+    else this.nothingHeardOfLast();
     this.afterReply();
+  }
+
+  /** `interrupted` with nothing heard of a reply all written: her first sentence, or none of it (review M1). */
+  private nothingHeardOfLast(): void {
+    const last = this.lastReply;
+    // Only the reply it was about: anything said since - "are you still there?" - is not it.
+    if (!last || this.history.length - 1 < last.index || this.history[last.index]?.role !== 'assistant') return;
+    if (this.history.slice(last.index + 1).some((m) => m.role === 'assistant')) return;
+    const sinceMs = last.firstSpokenAt === null ? 0 : this.timers.now() - last.firstSpokenAt;
+    if (sinceMs >= HEARD_ANYWAY_MS && last.first) {
+      log.info('ai_relay.heard_anyway', { callId: this.setup.callId, sinceMs });
+      this.history[last.index] = { role: 'assistant', content: /^.*?[.!?](?=\s|$)/.exec(last.first)?.[0] ?? last.first };
+    } else {
+      this.history.splice(last.index, 1);
+    }
+    this.lastReply = null;
   }
 
   /**
@@ -404,6 +432,9 @@ export class Conversation {
     this.closed = true;
     this.timers.clear(this.verdictTimer);
     this.stopClocks();
+    // What she had said of a reply still going is kept: the lead hanging up mid-sentence lost it from the record
+    // (review M6, 2026-11-22). Nothing is sent - the line is gone.
+    if (this.reply) this.finish(this.reply, { closed: true });
     if (this.reply) {
       this.timers.clear(this.reply.timer);
       this.reply.abort.abort();
@@ -631,7 +662,7 @@ export class Conversation {
    * - `cut`: the lead said more before she finished - what was sent stands;
    * - `inHistory`: already there, with the action that was refused.
    */
-  private finish(reply: Reply, how: { heard?: string; cut?: true; inHistory?: true } = {}): void {
+  private finish(reply: Reply, how: { heard?: string; cut?: true; inHistory?: true; closed?: true } = {}): void {
     if (reply.done) return;
     reply.done = true;
     this.timers.clear(reply.timer);
@@ -641,13 +672,20 @@ export class Conversation {
     // With her tone: what she said, and the brain reads back in its history. Kept on
     // record as her words alone - the tone is how they were said (tone.ts).
     const said = reply.sent.join(' ');
-    // The filler opened her utterance too: it is closed whatever came after it.
-    if ((said || reply.filler) && how.heard === undefined) this.deps.send(textMessage('', true));
+    // The filler opened her utterance too: it is closed whatever came after it - unless the line is gone.
+    if ((said || reply.filler) && how.heard === undefined && !how.closed) this.deps.send(textMessage('', true));
     if (said) {
       this.deps.keep({ who: 'seri', text: spokenWords(said), latencyMs: Math.max(0, (reply.firstSentAt ?? Date.now()) - reply.heardAt) });
       if (!how.inHistory) {
         const heard = how.heard === undefined ? said : how.heard;
-        if (heard) this.history.push({ role: 'assistant', content: heard });
+        if (heard) {
+          this.history.push({ role: 'assistant', content: heard });
+          // A reply the lead heard all of - not talked over - for M1 below: when it began, and its first sentence.
+          this.lastReply = { index: this.history.length - 1, firstSpokenAt: reply.firstSpokenAt, first: spokenWords(reply.sent[0] ?? '') };
+          // A sentence of it the safety check replaced with the specialist line: the brain records that line, and
+          // its question, not the moves it decided (review M2, 2026-11-22).
+          if (reply.replaced) this.history.push({ role: 'system', content: REPLACED_NOTE });
+        }
       }
     }
     for (const note of reply.notes) this.deps.keep(note);
@@ -661,7 +699,7 @@ export class Conversation {
       sentences: reply.sent.length,
       replaced: reply.replaced,
       action: reply.action,
-      stopped: how.heard !== undefined ? 'talked_over' : how.cut ? 'lead_said_more' : null,
+      stopped: how.heard !== undefined ? 'talked_over' : how.cut ? 'lead_said_more' : how.closed ? 'call_closed' : null,
       filler: reply.filler,
       unsaid: reply.unsaid,
     });

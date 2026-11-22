@@ -6,9 +6,10 @@ import { DEFAULT_CALL_HOURS } from '../core/auto-dial';
 import { ANTIBIOTICS_CALL } from '../core/call-script-fixtures';
 import * as logModule from '../lib/log';
 import type { Handoff } from './actions';
-import { Brain, PREFETCH_SETTLE_MS, RECORD_NOTE, recordFromTurns } from './brain';
-import { startState } from './policy';
+import { Brain, PREFETCH_SETTLE_MS, RECORD_NOTE, recordFromTurns, saidWithSpecialistLine } from './brain';
+import { startState, type Move } from './policy';
 import { Conversation } from './conversation';
+import { SPECIALIST_LINE } from './safety';
 import type { Turn } from './relay-store';
 import { FakeClock } from './fake-clock';
 import type { WhoIsThere } from './instructions';
@@ -237,6 +238,67 @@ describe('the actions', () => {
   });
 });
 
+describe('review fixes, 2026-11-22', () => {
+  it('a sentence replaced by the specialist line: a "yes" to its question puts them through (M2)', async () => {
+    await says('Yes.');
+    understand.answers.push(acts(['asks:shipping']));
+    speak.replies.push("[friendly] It's about 40 dollars a box. [curious] Would you like to hear more?");
+    const reply = await says('How long does shipping take?');
+    expect(reply).toContain(SPECIALIST_LINE);
+    await says('Yes.');
+    await until(() => ended.length === 1, 'the transfer');
+    expect(ended).toEqual([{ action: 'transfer_to_agent' }]);
+  });
+
+  it('the time said back, talked over after most of it but before the time: a "yes" books nothing (M4)', async () => {
+    who = 'nobody';
+    await says('Yes.');
+    understand.answers.push(acts(['wants_callback'], { time: { day: 'tomorrow', hour: 2, minute: null, ampm: null } }));
+    speak.replies.push('[curious] Okay, so just to be sure, that would be tomorrow at 2 PM your time?');
+    await says('Call me tomorrow at two.');
+    conversation.interrupted('Okay, so just to be sure, that would be tomorrow');
+    // The yes to a time they never heard: she says it again - not booked, not back to the offer.
+    speak.replies.push("[curious] So that's tomorrow at 2 PM your time?");
+    await says('Yes.');
+    await new Promise((r) => setTimeout(r, 20));
+    expect(ended).toEqual([]);
+    expect(speak.briefs[1]).toContain('"tomorrow at 2 PM your time"');
+    // Heard this time: the yes books it.
+    speak.replies.push("[cheerfully] You're all set. [friendly] Have a great day!");
+    await says('Yes.');
+    await until(() => ended.length === 1, 'the booking');
+    expect(ended).toEqual([{ action: 'book_callback', at: '2026-11-13T21:00:00.000Z', timeZone: 'America/Phoenix', reason: 'Asked for a call back.' }]);
+    expect(logged.some((l) => l.event === 'ai_policy.guard')).toBe(false);
+  });
+
+  it('the time said back, cut off at its first words: a "yes" still has her say the time, not her question before it (M4)', async () => {
+    who = 'nobody';
+    await says('Yes.');
+    understand.answers.push(acts(['wants_callback'], { time: { day: 'tomorrow', hour: 2, minute: null, ampm: null } }));
+    speak.replies.push("[curious] So that's tomorrow at 2 PM your time?");
+    await says('Call me tomorrow at two.');
+    conversation.interrupted('So that');
+    await says('Yes.');
+    expect(ended).toEqual([]);
+    expect(speak.briefs[1]).toContain('"tomorrow at 2 PM your time"');
+  });
+
+  it('the retry after a refused action reads who is there from the lead\'s last turn, not nobody (M3)', () => {
+    const brain = new Brain(
+      { callId: 7, knowledge, lead: { firstName: 'John', phone: '+14805551234' }, now: () => NOW, hours: DEFAULT_CALL_HOURS, callbackNumber: '+14804708259' },
+      { understand, speak }
+    );
+    const read = (brain as unknown as { readHistory: (m: { role: string; content: string }[]) => { who: WhoIsThere } }).readHistory.bind(brain);
+    const history = [
+      { role: 'assistant', content: 'Hi, is this John?' },
+      { role: 'user', content: '[Who is there: someone free] Yes.' },
+      { role: 'assistant', content: 'Great, connecting you now.' },
+      { role: 'tool', content: 'Refused.' },
+    ];
+    expect(read(history).who).toBe('free');
+  });
+});
+
 describe('what the lead heard', () => {
   it('an offer cut off when the lead talked over her was never made - it may be made again', async () => {
     await says('Yes.');
@@ -408,5 +470,24 @@ describe('what is kept of each reply (A31)', () => {
     const offered = { ...startState(), stage: 'talking' as const, offers: { ...startState().offers, connect: { made: 1, answer: 'none' as const } } };
     const kept = { ...record, moves: [{ move: 'offer', kind: 'connect' }], decided: offered };
     expect(recordFromTurns([{ who: 'system', text: RECORD_NOTE, data: kept }, { who: 'seri', text: 'Shall I connect you?' }])?.offers.connect.made).toBe(1);
+  });
+
+  it('picked back up: "One moment..." or "are you still there?" is not her reply, nor one Twilio said nothing of (review M8)', () => {
+    const record = { version: 1, understood: 'fast', acts: [], moves: [{ move: 'opening' }], record: startState(), decided: { ...startState(), stage: 'talking', open: 'interest' } };
+    const at = { who: 'system' as const, text: RECORD_NOTE, data: record };
+    expect(recordFromTurns([at, { who: 'seri', text: 'One moment...' }])).toEqual(startState());
+    expect(recordFromTurns([at, { who: 'seri', text: 'Hello, are you still there?' }])).toEqual(startState());
+    expect(recordFromTurns([at, { who: 'seri', text: 'This is Seri.' }, { who: 'system', text: 'Cut off. Heard: ""' }])).toEqual(startState());
+    // Heard in part: said.
+    expect(recordFromTurns([at, { who: 'seri', text: 'This is Seri.' }, { who: 'system', text: 'Cut off. Heard: "This is"' }])).toEqual(record.decided);
+    // "One moment..." first, then the reply: said.
+    expect(recordFromTurns([at, { who: 'seri', text: 'One moment...' }, { who: 'seri', text: 'This is Seri.' }])).toEqual(record.decided);
+  });
+
+  it('a sentence replaced by the specialist line: its question is what was asked - an answer before it kept (review M2)', () => {
+    const answer: Move = { move: 'answer', id: 'price', text: 'Prices depend on the medication and quantity.', again: false };
+    const ending: Move = { move: 'end', handoff: { action: 'end_call', reason: 'other' } };
+    expect(saidWithSpecialistLine([answer, { move: 'anything_else' }, ending], 'free')).toEqual([answer, { move: 'specialist', again: false }, { move: 'offer', kind: 'connect' }]);
+    expect(saidWithSpecialistLine([answer], 'nobody')).toEqual([answer, { move: 'specialist', again: false }, { move: 'busy' }, { move: 'ask_time', day: null }]);
   });
 });

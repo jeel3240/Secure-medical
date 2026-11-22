@@ -16,6 +16,11 @@ describe('what is never said', () => {
     // A price, in any form.
     ['It\'s $39 for a month\'s supply.', 'price'],
     ['That one is 39 dollars.', 'price'],
+    // Other currencies (review M7).
+    ['It comes to about 40 USD.', 'price'],
+    ['Around 30 euros for a box.', 'price'],
+    ['It is £20 a month.', 'price'],
+    ['Roughly €25.', 'price'],
     ['It\'s about forty bucks.', 'price'],
     ['It costs 39.99.', 'price'],
     ['The kit costs about 89, shipping included.', 'price'],

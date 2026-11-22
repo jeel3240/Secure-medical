@@ -62,6 +62,32 @@ const names = (moves: Move[]) =>
     return m.move;
   });
 
+describe('the time said back, cut off before the time (review M4)', () => {
+  it('a yes says it again - never books a time they did not hear; said again, it is heard', () => {
+    const asked = turn(opened(), [{ act: 'wants_callback', time: { day: 'tomorrow', hour: 2, minute: null, ampm: null } }]).state;
+    const unheard: CallState = { ...asked, callback: { ...asked.callback, unheard: true } };
+    const again = turn(unheard, [{ act: 'agrees' }]);
+    expect(names(again.moves)).toEqual(['confirm_time']);
+    expect(again.moves[0]).toMatchObject({ at: asked.callback.proposed });
+    expect(again.state.callback.unheard).toBeUndefined();
+    expect(names(turn(again.state, [{ act: 'agrees' }]).moves)).toEqual(['end:book_callback:Asked for a call back.']);
+  });
+
+  it('a no to it: the time is dropped, and asked for afresh', () => {
+    const asked = turn(opened(), [{ act: 'wants_callback', time: { day: 'tomorrow', hour: 2, minute: null, ampm: null } }]).state;
+    const no = turn({ ...asked, callback: { ...asked.callback, unheard: true } }, [{ act: 'declines' }]);
+    expect(names(no.moves)).toEqual(['ask_time']);
+    expect(no.state.callback).toEqual({ day: null, proposed: null });
+  });
+});
+
+describe('"I\'m busy" to the greeting (review M5)', () => {
+  it('a call back asked for - never the whole opening to someone who has no time', () => {
+    const { moves } = turn(startState(), [{ act: 'confirm_identity' }, { act: 'objection', id: 'busy' }]);
+    expect(names(moves)).toEqual(['ask_time']);
+  });
+});
+
 describe('the opening - once, at the start', () => {
   it.each<[string, Act[]]>([
     ['"Yes."', [{ act: 'confirm_identity' }]],

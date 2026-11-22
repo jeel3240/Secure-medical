@@ -57,6 +57,9 @@ const RULES: readonly Rule[] = [
   // An amount of money, in any form.
   { reason: 'price', pattern: /\$/ },
   { reason: 'price', pattern: /\b(dollars?|bucks|cents)\b/ },
+  // Other currencies, by name or sign (review M7, 2026-11-22). Not "pounds": a weight as often as money.
+  { reason: 'price', pattern: /\b(usd|euros?)\b/ },
+  { reason: 'price', pattern: /[€£]/ },
   { reason: 'price', pattern: /\b\d+\.\d\d\b/ },
   { reason: 'price', pattern: /\bcosts?\b[^.?!]*\d/ },
   { reason: 'price', pattern: /\b(priced|price is|prices? (start|begin)s?)\b[^.?!]*\d/ },
