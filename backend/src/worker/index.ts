@@ -134,6 +134,7 @@ async function loop(): Promise<void> {
           due: retry.due,
           sent: retry.sent,
           failed: retry.failed,
+          unconfirmed: retry.unconfirmed,
           abandoned: retry.abandoned,
           tooOld: retry.tooOld,
           ms: retry.durationMs,

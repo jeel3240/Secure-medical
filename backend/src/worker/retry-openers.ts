@@ -81,6 +81,8 @@ export interface RetryStats {
   due: number;
   sent: number;
   failed: number;
+  /** EZ Texting did not answer in time: it may have gone out, and is taken as sent (review H12, M15). */
+  unconfirmed: number;
   /** Past the last attempt: left alone, counted so the number is visible. */
   abandoned: number;
   /** Older than MAX_AGE_HOURS with no opener: too late to send one. */
@@ -110,7 +112,7 @@ export function retryGaveUp(
  */
 export async function retryFailedOpeners(): Promise<RetryStats> {
   const startedAt = Date.now();
-  const stats: RetryStats = { due: 0, sent: 0, failed: 0, abandoned: 0, tooOld: 0, durationMs: 0 };
+  const stats: RetryStats = { due: 0, sent: 0, failed: 0, unconfirmed: 0, abandoned: 0, tooOld: 0, durationMs: 0 };
 
   const leads = await findOpenersNeverSent(pool);
   const now = Date.now();
@@ -142,6 +144,11 @@ export async function retryFailedOpeners(): Promise<RetryStats> {
         lead.template
       );
 
+      if (!result.sent && result.unconfirmed) {
+        // It may have gone out: never a failure, nor the last one - and never tried again (`sendOpener` took it as sent).
+        stats.unconfirmed++;
+        continue;
+      }
       if (!result.sent) {
         stats.failed++;
         log.error('sms.failed', {
