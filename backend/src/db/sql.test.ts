@@ -1,4 +1,4 @@
-import { DEFAULT_EXPIRY_DAYS, isTimeZone, likeLiteral, readExpiryDays, startOfTodaySql } from './sql';
+import { DEFAULT_EXPIRY_DAYS, DEFAULT_POLL_INTERVAL_SECONDS, expiryDays, isTimeZone, likeLiteral, pollIntervalSeconds, readExpiryDays, startOfTodaySql } from './sql';
 
 describe('likeLiteral', () => {
   it('escapes the LIKE wildcards and the escape character itself', () => {
@@ -43,5 +43,30 @@ describe('time zones', () => {
 
   it('refuses to build SQL from anything that is not a zone', () => {
     expect(() => startOfTodaySql("x' OR '1'='1")).toThrow();
+  });
+});
+
+describe('the settings every reader takes alike (review M17)', () => {
+  it.each([
+    ['7', 7],
+    ['3.5', 3.5],
+    [undefined, DEFAULT_EXPIRY_DAYS],
+    [null, DEFAULT_EXPIRY_DAYS],
+    ['0', DEFAULT_EXPIRY_DAYS],
+    ['-2', DEFAULT_EXPIRY_DAYS],
+    ['week', DEFAULT_EXPIRY_DAYS],
+  ] as const)('expiry_days %p: %p days', (raw, days) => {
+    expect(expiryDays(raw)).toBe(days);
+  });
+
+  it.each([
+    ['30', 30],
+    ['45', 45],
+    [undefined, DEFAULT_POLL_INTERVAL_SECONDS],
+    ['0', DEFAULT_POLL_INTERVAL_SECONDS],
+    ['-5', DEFAULT_POLL_INTERVAL_SECONDS],
+    ['soon', DEFAULT_POLL_INTERVAL_SECONDS],
+  ] as const)('poll_interval_seconds %p: %p seconds - the worker\'s and Admin > Leads\' alike', (raw, seconds) => {
+    expect(pollIntervalSeconds(raw)).toBe(seconds);
   });
 });

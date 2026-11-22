@@ -190,7 +190,7 @@ describe('the DNC list', () => {
     expect(listDnc.mock.calls[0][0].page).toBe(3);
   });
 
-  it.each(['0', '-1', 'two'])('rejects page=%s', async (page) => {
+  it.each(['0', '-1', 'two', '1e20', '100001', '2.5'])('rejects page=%s - a 400, never a 500 from the offset (review M17)', async (page) => {
     const { boss } = await setup();
     expect((await boss.get(`/api/admin/dnc?page=${page}`)).status).toBe(400);
     expect(listDnc).not.toHaveBeenCalled();

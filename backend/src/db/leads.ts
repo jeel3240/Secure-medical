@@ -1,7 +1,7 @@
 import type { CallResult } from '../core/call-script';
 import { questionShort } from '../core/questions';
 import { CLOSED_SQL, WORKED_SQL } from './lead-state';
-import { likeLiteral } from './sql';
+import { likeLiteral, pollIntervalSeconds } from './sql';
 import { pool } from './pool';
 
 /**
@@ -363,6 +363,6 @@ export async function lastPollAt(): Promise<{ at: string | null; intervalSeconds
 
   return {
     at: checkpoint?.updated_at?.toISOString() ?? null,
-    intervalSeconds: Number(interval?.value ?? 60),
+    intervalSeconds: pollIntervalSeconds(interval?.value),
   };
 }

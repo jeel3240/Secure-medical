@@ -27,9 +27,16 @@ here is what we ask, here is what each answer is worth.
 - The scoring table: response, completion, and the points for each choice of
   each question, with the maximum possible.
 - The tier bands.
-- Conversation expiry, read from `settings.expiry_days` - 7.
+- Conversation expiry, read from `settings.expiry_days` - 7 - as every other
+  reader takes it (`expiryDays`, `db/sql.ts`): 7 unless the setting is above 0.
+  Until 2026-11-22 the page parsed it on its own and could show 0 while the
+  system used 7 (review M17).
 - The automated call's script and settings (T24) - "The automated call",
   below.
+- Its reads run one at a time, not all at once (2026-11-22, review M18): eleven
+  together - with the automated call's settings - took more than the pool's
+  ten connections on a page polled every 5 seconds. With 50,000 leads the page
+  reads in 8 ms (`npm run speed`).
 
 `GET /api/admin/config` returns all of it from the flow new leads get
 (`flows`, `flow_questions`, `flow_choices` - `FLOWS.md`), `settings` and
@@ -237,7 +244,9 @@ feed and Last active read only `reason = 'booked'`.
 
 ## DNC list (6e)
 
-`GET /api/admin/dnc?q=&page=&state=` - phone, reason, when it was added, the
+`GET /api/admin/dnc?q=&page=&state=` - `page` a whole number from 1 to 100,000,
+as on Admin > Leads (`parsePage`, `api/filters.ts`; until 2026-11-22 it had no
+upper bound, and `?page=1e20` was a 500 - review M17) - phone, reason, when it was added, the
 lead if we hold one, and whether and why it was released. There is no "who
 added it": `dnc_list` has no such column; the agent behind a DNC outcome is in
 the activity log (`AUDIT.md`).

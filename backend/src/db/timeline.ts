@@ -432,13 +432,14 @@ export async function getTimeline(leadId: number): Promise<TimelineEntry[] | nul
 }
 
 async function buildTimeline(leadId: number): Promise<TimelineEntry[]> {
-  const [system, ...tables] = await Promise.all([
-    systemEvents(leadId),
-    ...QUERIES.map(async ({ kind, sql }) => {
-      const { rows } = await pool.query<TimelineRow>(sql, [leadId]);
-      return rows.map((r) => toEntry(kind, r));
-    }),
-  ]);
+  // One query at a time: each is quick, and seven at once took seven of the pool's ten connections on a screen
+  // polled every 5 seconds - a few people on it, and everything else waited (review M18, 2026-11-22).
+  const system = await systemEvents(leadId);
+  const tables: TimelineEntry[][] = [];
+  for (const { kind, sql } of QUERIES) {
+    const { rows } = await pool.query<TimelineRow>(sql, [leadId]);
+    tables.push(rows.map((r) => toEntry(kind, r)));
+  }
 
   const all = [...system, ...tables.flat()];
 

@@ -36,8 +36,26 @@ export const DEFAULT_EXPIRY_DAYS = 7;
  */
 export async function readExpiryDays(q: Querier): Promise<number> {
   const { rows } = await q.query(`SELECT value FROM settings WHERE key = 'expiry_days'`);
-  const days = Number(rows[0]?.value);
-  return Number.isFinite(days) && days > 0 ? days : DEFAULT_EXPIRY_DAYS;
+  return expiryDays(rows[0]?.value);
+}
+
+/** `expiry_days` as every reader takes it - Configuration's page too (review M17): `DEFAULT_EXPIRY_DAYS` unless above 0. */
+export function expiryDays(raw: unknown): number {
+  const days = Number(raw);
+  return raw !== undefined && raw !== null && Number.isFinite(days) && days > 0 ? days : DEFAULT_EXPIRY_DAYS;
+}
+
+/** How often the worker polls when `poll_interval_seconds` says nothing usable - migration 005. */
+export const DEFAULT_POLL_INTERVAL_SECONDS = 30;
+
+/**
+ * `poll_interval_seconds` as the worker takes it, and so as Admin > Leads says
+ * it (review M17, 2026-11-22: that page read 60 by default, and took 0 at its
+ * word): `DEFAULT_POLL_INTERVAL_SECONDS` unless above 0.
+ */
+export function pollIntervalSeconds(raw: unknown): number {
+  const seconds = Number(raw);
+  return raw !== undefined && raw !== null && Number.isFinite(seconds) && seconds > 0 ? seconds : DEFAULT_POLL_INTERVAL_SECONDS;
 }
 
 /**
