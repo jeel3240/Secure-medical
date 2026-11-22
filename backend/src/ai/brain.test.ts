@@ -25,9 +25,22 @@ class FakeUnderstand implements UnderstandModel {
   asked: string[] = [];
   /** Never answers - until the request is stopped. */
   hang = false;
+  /** The next answer this late - sooner if the request is stopped. */
+  slowMs = 0;
   async understand(messages: { content?: unknown }[], _format?: object, signal?: AbortSignal): Promise<string> {
     this.asked.push(String(messages[messages.length - 1].content));
     if (this.hang) return new Promise<string>((_, reject) => signal?.addEventListener('abort', () => reject(new Error('Request was aborted.'))));
+    if (this.slowMs > 0) {
+      const ms = this.slowMs;
+      this.slowMs = 0;
+      await new Promise<void>((resolve, reject) => {
+        const timer = setTimeout(resolve, ms);
+        signal?.addEventListener('abort', () => {
+          clearTimeout(timer);
+          reject(new Error('Request was aborted.'));
+        });
+      });
+    }
     const next = this.answers.shift() ?? '{"acts":["other"],"reason":null,"time":null}';
     if (next instanceof Error) throw next;
     return next;
@@ -316,6 +329,22 @@ describe('understanding started while the lead still speaks (A33)', () => {
     conversation.partial('How much');
     await pause(PREFETCH_SETTLE_MS / 2);
     expect(understand.asked).toHaveLength(0);
+  });
+
+  it('the lead hanging up while it still runs: stopped with the reply - nothing decided, kept or carried out after the call closed (review H5)', async () => {
+    await opened();
+    understand.slowMs = 150;
+    understand.answers.push(acts(['wants_link']));
+    conversation.partial('Just text me the link');
+    await pause(PREFETCH_SETTLE_MS + 20);
+    const turnsBefore = logged.filter((l) => l.event === 'ai_brain.turn').length;
+    conversation.heard('Just text me the link');
+    await pause(10);
+    conversation.close();
+    await pause(250);
+    expect(ended).toEqual([]);
+    expect(kept.some((k) => k.who === 'action')).toBe(false);
+    expect(logged.filter((l) => l.event === 'ai_brain.turn')).toHaveLength(turnsBefore);
   });
 
   it('a bare yes or no starts nothing - it needs no OpenAI', async () => {

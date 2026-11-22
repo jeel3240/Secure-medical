@@ -14,7 +14,7 @@
  */
 
 import type { CallHours, Weekday } from '../core/auto-dial';
-import { atLocalTime, leadTimeZone, spokenClock } from './callback-time';
+import { atLocalTime, FALLBACK_ZONE_SAID, leadTimeZone, spokenClock } from './callback-time';
 
 /** What the call's own details are worked out from. */
 export interface CallDetails {
@@ -98,7 +98,7 @@ export function callPart({ lead, now, hours }: CallDetails): string {
     `- Now: ${longDate(now, hours.timeZone)} ${zoneName(hours.timeZone)} (${today}); tomorrow is ${longDay(tomorrow, hours.timeZone)} (${dateIn(tomorrow, hours.timeZone)}).`,
     known
       ? `- The lead's time zone, from their area code: ${zoneName(zone)} (${zone}). For them it is ${longDate(now, zone)} (${dateIn(now, zone)}); tomorrow is ${longDay(tomorrow, zone)} (${dateIn(tomorrow, zone)}).`
-      : `- We can't tell the lead's time zone from their number. Before agreeing a call back time, ask where they are. Until then, take it as ${zoneName(zone)} (${zone}).`,
+      : `- We can't tell the lead's time zone from their number: every call back time is ${zoneName(zone)} (${zone}), and said so - "${FALLBACK_ZONE_SAID}", never "your time".`,
     `- Agent hours, for call backs: ${dayList(hours.days)}${closedDays(hours.days)}, ${spokenClock(open, hours.timeZone)} to ${spokenClock(close, hours.timeZone)} ${zoneName(hours.timeZone)}${
       !openToday
         ? '. Today has none.'

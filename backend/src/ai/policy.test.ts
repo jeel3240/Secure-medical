@@ -307,6 +307,12 @@ describe('objections', () => {
 describe('a call back - the time worked out by code, said back, booked only after a yes', () => {
   const lead = (now = WEDNESDAY_NOON) => context('nobody', now);
 
+  it('a lead whose area code tells nothing: said back and booked as Arizona time, never "your time" (review H11)', () => {
+    const ctx = { ...lead(), leadZoneKnown: false };
+    const { moves } = turn(opened(ctx), [{ act: 'wants_callback', time: { day: 'tomorrow', hour: 2, minute: null, ampm: 'pm' } }], ctx);
+    expect(moves).toEqual([expect.objectContaining({ move: 'confirm_time', zone: 'America/Phoenix', spoken: 'tomorrow at 2 PM Arizona time' })]);
+  });
+
   it('"Call me tomorrow" - what time tomorrow; "two" - said back; "yes" - booked for that time', () => {
     const ctx = lead();
     let { state, moves } = turn(opened(ctx), [{ act: 'wants_callback', time: { day: 'tomorrow', hour: null, minute: null, ampm: null } }], ctx);

@@ -323,7 +323,7 @@ const MONTH_NAMES = [
  * week, and with the date beyond it - "Thursday, November 19 at 3 PM your
  * time" - so two Thursdays are never mixed up.
  */
-export function spokenTime(when: Date, leadZone: string, now: Date): string {
+export function spokenTime(when: Date, leadZone: string, now: Date, zoneKnown = true): string {
   const t = localTime(when.getTime(), leadZone);
   const today = localTime(now.getTime(), leadZone);
   const daysAway = Math.round(
@@ -339,8 +339,16 @@ export function spokenTime(when: Date, leadZone: string, now: Date): string {
           ? name
           : `${name}, ${MONTH_NAMES[t.month - 1]} ${t.day}`;
 
-  return `${day} at ${spokenClock(when, leadZone)} your time`;
+  return `${day} at ${spokenClock(when, leadZone)} ${zoneKnown ? 'your time' : FALLBACK_ZONE_SAID}`;
 }
+
+/**
+ * The words for the zone a time is in when the lead's area code does not tell
+ * theirs (`known: false`): the time is Arizona's, so she says so - "your time"
+ * would tell a lead in New York that 2 PM Arizona is their 2 PM (review H11,
+ * 2026-11-22). They hear the zone, and can say another time.
+ */
+export const FALLBACK_ZONE_SAID = 'Arizona time';
 
 const ONES = ['', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine'];
 const TEENS = ['ten', 'eleven', 'twelve', 'thirteen', 'fourteen', 'fifteen', 'sixteen', 'seventeen', 'eighteen', 'nineteen'];

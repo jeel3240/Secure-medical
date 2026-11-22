@@ -155,6 +155,8 @@ export interface ConversationSetup {
   /** The script's stop line, and its stop words. */
   stopLine: string;
   optOutWords: readonly string[];
+  /** False when the lead's area code does not tell their zone: a call back's time is then said as Arizona time (review H11). */
+  zoneKnown?: boolean;
   /**
    * A call picked back up after the line dropped (resume.ts): the
    * conversation so far, what the lead said that she never answered, and when
@@ -494,7 +496,8 @@ export class Conversation {
     let tool: ModelToolCall | null = null;
     try {
       for await (const event of this.deps.model.reply([...this.history], reply.abort.signal)) {
-        if (reply.done) return;
+        // The call closed - a hang-up, the beep - is over for her reply too: nothing more said or carried out (review H5).
+        if (reply.done || this.over) return;
         if (reply.firstWordAt === null) {
           reply.firstWordAt = Date.now();
           this.timers.clear(reply.timer);
@@ -508,7 +511,7 @@ export class Conversation {
         }
         if (reply.replaced) break;
       }
-      if (reply.done) return;
+      if (reply.done || this.over) return;
       if (!reply.replaced) {
         for (const sentence of splitter.flush()) {
           if (!say(sentence)) break;
@@ -522,7 +525,7 @@ export class Conversation {
       this.fail('model_failed');
       return;
     }
-    if (reply.done) return;
+    if (reply.done || this.over) return;
 
     if (held.length > 0 && !reply.replaced) {
       if (tool && waitsForAnswer(tool.name)) {
@@ -594,7 +597,7 @@ export class Conversation {
     );
 
     if (result.ok) {
-      const line = lineToAdd(result.handoff, words, { stopLine: this.setup.stopLine, now });
+      const line = lineToAdd(result.handoff, words, { stopLine: this.setup.stopLine, now, zoneKnown: this.setup.zoneKnown });
       if (line) {
         this.deps.send(textMessage(`${line} `, false));
         reply.sent.push(line);
@@ -752,7 +755,7 @@ export class Conversation {
   private endBy(handoff: Handoff): void {
     if (this.over) return;
     if (this.reply) this.finish(this.reply, { cut: true });
-    const line = lastLine(handoff, { stopLine: this.setup.stopLine, now: this.now() });
+    const line = lastLine(handoff, { stopLine: this.setup.stopLine, now: this.now(), zoneKnown: this.setup.zoneKnown });
     if (line) this.say(line);
     this.end(handoff);
   }

@@ -40,7 +40,8 @@ const tool = (name: string, args: Record<string, unknown> = {}): ModelEvent => (
 });
 
 /** A reply OpenAI gives: its events, and optionally a moment to wait before each. */
-type Reply = ModelEvent[] | { events: ModelEvent[]; waitBefore: (i: number) => Promise<void> };
+/** `deaf`: a model that goes on after its request was stopped - the brain's early start did (review H5). */
+type Reply = ModelEvent[] | { events: ModelEvent[]; waitBefore: (i: number) => Promise<void>; deaf?: boolean };
 
 class FakeModel implements SeriModel {
   /** The messages of each request, as sent. */
@@ -52,11 +53,11 @@ class FakeModel implements SeriModel {
     this.asked.push(messages.map((m) => ({ ...m })));
     if (this.fail) throw this.fail;
     const next = this.replies.shift() ?? [text('Sure.')];
-    const { events, waitBefore } = Array.isArray(next) ? { events: next, waitBefore: null } : next;
+    const { events, waitBefore, deaf } = Array.isArray(next) ? { events: next, waitBefore: null, deaf: false } : next;
     for (const [i, event] of events.entries()) {
       if (waitBefore) await waitBefore(i);
       await Promise.resolve();
-      if (signal.aborted) throw new Error('aborted');
+      if (signal.aborted && !deaf) throw new Error('aborted');
       yield event;
     }
   }
@@ -1070,6 +1071,20 @@ describe('limits and failures (A12)', () => {
       expect(sent).toEqual([{ type: 'end', handoffData: '{"action":"fallback","why":"socket_error"}' }]);
       expect(ended).toEqual([{ action: 'fallback', why: 'socket_error' }]);
       expect(clock.waiting).toBe(0);
+    });
+
+    it('an action that arrives after the call closed is never carried out (review H5)', async () => {
+      const g = gate();
+      model.replies.push({ events: [tool('opt_out')], waitBefore: () => g.wait(), deaf: true });
+      greeted();
+      conversation.heard('Hello?');
+      await until(() => model.asked.length === 1, 'the request');
+      conversation.close();
+      g.open();
+      await settle();
+      expect(ended).toEqual([]);
+      expect(kept.some((k) => k.who === 'action')).toBe(false);
+      expect(sent).toEqual([]);
     });
 
     it('closing stops every clock', async () => {
