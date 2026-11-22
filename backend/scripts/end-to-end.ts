@@ -888,12 +888,13 @@ async function main(): Promise<void> {
     asked('speak').at(-1)?.tools,
   ], [true, true, false]);
   // A call back only for a time she has said back and Dana agreed (A21, call 92) - decided in code.
+  // The test leads' 555 area code tells no zone: the time is Arizona's, and said so - never "your time" (review H11).
   check('she says the time back, as a question - and books nothing yet', [
-    d.relay.said().endsWith("So that's tomorrow at 3 PM your time? "),
+    d.relay.said().endsWith("So that's tomorrow at 3 PM Arizona time? "),
     d.relay.received.some((m) => m.type === 'end'),
   ], [true, false]);
   understood.push({ acts: ['agrees'] });
-  spoken.push('Perfect, someone will call you tomorrow at 3 PM your time. Have a great day!');
+  spoken.push('Perfect, someone will call you tomorrow at 3 PM Arizona time. Have a great day!');
   await d.relay.says('Yes, that works.');
   const danaHandoff = await d.relay.ended();
   check('her action ends the session, after her last line', JSON.parse(danaHandoff).action, 'book_callback');
@@ -1030,13 +1031,13 @@ async function main(): Promise<void> {
   await v2.says('Yes. Can someone call me tomorrow at 3?');
   const afterRestart = String(asked('understand').at(-1)?.messages.at(-1)?.content);
   // Said back, then "Yes." - read without OpenAI, from the record kept before the restart.
-  spoken.push('Perfect, someone will call you tomorrow at 3 PM your time. Have a great day!');
+  spoken.push('Perfect, someone will call you tomorrow at 3 PM Arizona time. Have a great day!');
   await v2.says('Yes.');
   const ivyHandoff = await v2.ended();
   check('her brain is asked with the call so far - her greeting, Ivy\'s yes, her introduction - then what Ivy said after the restart', [
     afterRestart.includes('Seri: Hi, is this Ivy?\nCaller: Yes.\nSeri: This is Seri from eDrugstore'),
     afterRestart.endsWith('The caller just said: Yes. Can someone call me tomorrow at 3?'),
-    v2.said().includes("So that's tomorrow at 3 PM your time? "),
+    v2.said().includes("So that's tomorrow at 3 PM Arizona time? "),
   ], [true, true, true]);
   check('no second greeting: the restarted api never said one', v2.said().includes('Hi, is this Ivy?'), false);
   check('her action ends the session, on the new line', JSON.parse(ivyHandoff).action, 'book_callback');

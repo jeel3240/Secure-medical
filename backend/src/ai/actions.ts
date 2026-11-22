@@ -217,7 +217,7 @@ function bookCallback(args: Record<string, unknown>, { hours, now, before }: Act
  * - she opted out without the stop line: the stop line;
  * - otherwise nothing - her words were the last line.
  */
-export function lineToAdd(handoff: Handoff, said: string, context: { stopLine: string; now: Date }): string | null {
+export function lineToAdd(handoff: Handoff, said: string, context: { stopLine: string; now: Date; zoneKnown?: boolean }): string | null {
   if (!said.trim()) return lastLine(handoff, context);
   if (handoff.action === 'opt_out' && !normalised(said).includes(normalised(context.stopLine))) return context.stopLine;
   return null;
@@ -230,12 +230,15 @@ const normalised = (text: string) => text.toLowerCase().replace(/[‘’]/g, "'"
  * time it was booked for, as checked. Null for `fallback`, which says nothing
  * of its own.
  */
-export function lastLine(handoff: Handoff, { stopLine, now }: { stopLine: string; now: Date }): string | null {
+export function lastLine(
+  handoff: Handoff,
+  { stopLine, now, zoneKnown = true }: { stopLine: string; now: Date; zoneKnown?: boolean }
+): string | null {
   switch (handoff.action) {
     case 'transfer_to_agent':
       return 'Great, connecting you now.';
     case 'book_callback':
-      return `Perfect, someone from our team will call you ${spokenTime(new Date(handoff.at), handoff.timeZone, now)}. Have a great day!`;
+      return `Perfect, someone from our team will call you ${spokenTime(new Date(handoff.at), handoff.timeZone, now, zoneKnown)}. Have a great day!`;
     case 'send_link':
       return "I'll text you the link now. Have a great day!";
     case 'opt_out':

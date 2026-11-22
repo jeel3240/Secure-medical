@@ -128,6 +128,11 @@ describe('when a call back may be booked', () => {
     expect(spokenTime(offered(ny), NY, NOW)).toBe('tomorrow at 1 PM your time');
   });
 
+  it('a lead whose area code tells nothing: the time is Arizona\'s, and said so - never "your time" (review H11)', () => {
+    const az = check('2026-11-12T03:00:00Z', AZ);
+    expect(spokenTime(offered(az), AZ, NOW, false)).toBe('tomorrow at 11 AM Arizona time');
+  });
+
   it('5 PM in Arizona is closed: the hours end before it', () => {
     expect(offer(check('2026-11-13T00:00:00Z', AZ))).toBe('outside_hours 2026-11-13T18:00:00.000Z');
   });

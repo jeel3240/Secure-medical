@@ -146,12 +146,16 @@ export class Brain implements SeriModel {
   private lastPartialAt: number | null = null;
   private readonly system: string;
   private readonly leadZone: string;
+  /** Whether the area code told the lead's zone - unknown, times are said as Arizona time (review H11). */
+  private readonly leadZoneKnown: boolean;
 
   constructor(
     private readonly setup: BrainSetup,
     private readonly models: BrainModels
   ) {
-    this.leadZone = leadTimeZone(setup.lead.phone).zone;
+    const zone = leadTimeZone(setup.lead.phone);
+    this.leadZone = zone.zone;
+    this.leadZoneKnown = zone.known;
     this.system = speakSystem({ knowledge: setup.knowledge, lead: setup.lead, now: setup.now(), hours: setup.hours });
     this.state = setup.record ?? (setup.resumed ? { ...startState(), stage: 'talking', identity: true, open: null } : startState());
   }
@@ -197,7 +201,7 @@ export class Brain implements SeriModel {
     const turn = this.readHistory(messages);
     const who = turn.who;
     const now = this.setup.now();
-    const context = { who, now, hours: this.setup.hours, leadZone: this.leadZone, knowledge: this.setup.knowledge };
+    const context = { who, now, hours: this.setup.hours, leadZone: this.leadZone, leadZoneKnown: this.leadZoneKnown, knowledge: this.setup.knowledge };
 
     let acts: Act[];
     const started = Date.now();
@@ -212,6 +216,7 @@ export class Brain implements SeriModel {
     this.partials = 0;
     this.lastPartialAt = null;
     if (!prefetched) this.dropEarly();
+    const earlyStart = this.early;
     this.early = null;
     if (turn.refused) {
       // An action refused by the call's own check: the policy was wrong. Its safe move, never the action.
@@ -220,7 +225,19 @@ export class Brain implements SeriModel {
     } else if (fast) {
       acts = fast;
     } else if (early) {
-      acts = await early.catch(() => this.understand(turn, signal));
+      // The reply stopped - talked over, too slow, the call closed - stops the early start with it, and nothing more
+      // is decided: before, an answer arriving after the lead hung up was still acted on (review H5, 2026-11-22).
+      const stop = () => earlyStart?.abort.abort();
+      if (signal.aborted) stop();
+      signal.addEventListener('abort', stop, { once: true });
+      try {
+        acts = await early.catch((err: unknown) => {
+          if (signal.aborted) throw err;
+          return this.understand(turn, signal);
+        });
+      } finally {
+        signal.removeEventListener('abort', stop);
+      }
     } else {
       acts = await this.understand(turn, signal);
     }

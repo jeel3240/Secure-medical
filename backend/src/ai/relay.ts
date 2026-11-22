@@ -40,6 +40,7 @@
  * on - the lead is talking to her.
  */
 
+import { leadTimeZone } from './callback-time';
 import type { Server } from 'http';
 import type { Duplex } from 'stream';
 import { WebSocketServer, type RawData, type WebSocket } from 'ws';
@@ -274,6 +275,7 @@ function runSession(ws: WebSocket, deps: RelayDeps, sessions: Sessions): void {
         hours: settings.hours,
         stopLine: script.optOutBody,
         optOutWords: script.optOutWords,
+        zoneKnown: leadTimeZone(aiCall.phone).known,
         earlier,
       },
       {

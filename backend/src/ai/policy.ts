@@ -214,6 +214,8 @@ export interface PolicyContext {
   hours: CallHours;
   /** The lead's zone - from the area code (`leadTimeZone`). */
   leadZone: string;
+  /** False when the area code does not tell it: `leadZone` is then Arizona's, and every time is said as Arizona time (review H11). */
+  leadZoneKnown?: boolean;
   knowledge: Knowledge;
 }
 
@@ -556,7 +558,7 @@ function dayForCallback(dayWord: string, context: PolicyContext): { ok: true } |
   if (!noon) return null;
   const date = toLocalTime(noon, context.leadZone).slice(0, 10);
   if (dayHasTime(date, context)) return { ok: true };
-  const asked = spokenTime(noon, context.leadZone, context.now).replace(/ at .*$/, '');
+  const asked = spokenTime(noon, context.leadZone, context.now, context.leadZoneKnown).replace(/ at .*$/, '');
   const agentsDay = new Date(`${toLocalTime(noon, context.hours.timeZone).slice(0, 10)}T12:00:00Z`).getUTCDay();
   const today = toLocalTime(context.now, context.leadZone).slice(0, 10);
   const why: DayRefusal = !context.hours.days.has(WEEKDAYS[agentsDay])
@@ -596,7 +598,7 @@ function timeMoves(s: CallState, said: SaidTime, context: PolicyContext): Move[]
   const check = checkCallbackTime(when, context.leadZone, context.hours, context.now);
   const zone = context.leadZone;
   if (check.ok) {
-    return [{ move: 'confirm_time', at: when.toISOString(), zone, spoken: spokenTime(when, zone, context.now), instead: null, asked: null }];
+    return [{ move: 'confirm_time', at: when.toISOString(), zone, spoken: spokenTime(when, zone, context.now, context.leadZoneKnown), instead: null, asked: null }];
   }
   if (!check.offer) return s.offers.link.answer === 'no' ? [end('end_call', 'other')] : [{ move: 'offer', kind: 'link' }];
   return [
@@ -604,9 +606,9 @@ function timeMoves(s: CallState, said: SaidTime, context: PolicyContext): Move[]
       move: 'confirm_time',
       at: check.offer.toISOString(),
       zone,
-      spoken: spokenTime(check.offer, zone, context.now),
+      spoken: spokenTime(check.offer, zone, context.now, context.leadZoneKnown),
       instead: check.why,
-      asked: spokenTime(when, zone, context.now),
+      asked: spokenTime(when, zone, context.now, context.leadZoneKnown),
     },
   ];
 }

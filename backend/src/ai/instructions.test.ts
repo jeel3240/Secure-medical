@@ -61,9 +61,10 @@ describe('this call\'s details', () => {
     expect(text).toContain('We don\'t have the lead\'s name. Don\'t guess one.');
   });
 
-  it('an area code that tells us nothing: Seri asks, and takes Arizona\'s time until then', () => {
+  it('an area code that tells us nothing: every time Arizona\'s, and said so - nothing she is told to do herself (review H11)', () => {
     const text = details({ lead: { firstName: 'John', phone: '+18005551234' } });
-    expect(text).toContain('We can\'t tell the lead\'s time zone from their number. Before agreeing a call back time, ask where they are. Until then, take it as Arizona time (America/Phoenix).');
+    expect(text).toContain('We can\'t tell the lead\'s time zone from their number: every call back time is Arizona time (America/Phoenix), and said so - "Arizona time", never "your time".');
+    expect(text).not.toContain('ask where they are');
     expect(text).toContain('11 AM to 5 PM Arizona time.');
   });
 

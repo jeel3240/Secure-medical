@@ -297,6 +297,12 @@ describe('the line the relay adds after hers (A09)', () => {
     expect(lineToAdd({ action: 'opt_out' }, "I'll remove your number right now.", ctx)).toBe('Okay, we will not call you again. Goodbye.');
   });
 
+  it('a call back for a lead whose area code tells nothing: its time said as Arizona time (review H11)', () => {
+    const inArizona: Handoff = { ...booked, timeZone: 'America/Phoenix' };
+    expect(lastLine(inArizona, { ...ctx, zoneKnown: false })).toContain('Arizona time');
+    expect(lastLine(inArizona, { ...ctx, zoneKnown: false })).not.toContain('your time');
+  });
+
   it('every one passes the sentence check', () => {
     const handoffs: Handoff[] = [
       { action: 'transfer_to_agent' },
