@@ -333,7 +333,7 @@ robot's timing and pace, call and disposition rules, and the queue's tags.
 `docker-compose.yml`
 is local only; production layers `docker-compose.prod.yml` on top of it.
 
-`api` and `worker` build from the same Dockerfile; only the start command differs.
+`api` and `worker` build from the same Dockerfile; only the start command differs. *(2026-11-22: two stages - local compose builds `dev`, the server `production`: `dist/` and production dependencies only, as the `node` user. `docs/WORKFLOW.md`, "The images".)*
 
 ---
 

@@ -17,6 +17,8 @@ services:
     restart: always
 
   api:
+    build:
+      target: production                 # dist/ and production dependencies only, as `node`
     ports: !reset []                     # only Caddy talks to it
     volumes: !reset []                   # no hot reload; use built image
     command: npm run api                 # compiled dist/, not ts-node
@@ -42,6 +44,8 @@ services:
       - redis
 
   worker:
+    build:
+      target: production
     volumes: !reset []
     command: npm run worker              # compiled dist/, not ts-node
     restart: always

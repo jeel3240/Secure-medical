@@ -244,7 +244,34 @@ on a broken knowledge file of Seri's (`ai_knowledge_invalid`, `api/index.ts`,
 `AI-AGENT.md` section 5): the files are in the repo, so a broken one is a bug
 found on the first start.
 
-Production runs compiled `dist/`, not ts-node. The `caddy` service is built
+Production runs compiled `dist/`, not ts-node.
+
+### The images
+
+`backend/Dockerfile` has two stages (2026-11-22, `docs/REVIEW-2026-11-22.md`
+H13); the deploy command above is unchanged.
+
+- **`dev`** - every dependency (`npm ci`), the source, the scripts, and the
+  build. Local `docker compose` builds this stage (`target: dev`): the api and
+  the worker run under ts-node with `src/` mounted, and `npm run dev:*`,
+  `dev:auto-call` and the live checks work as before.
+- **`production`** - what the server builds (`docker-compose.prod.yml`,
+  `target: production`): the compiled `dist/` from the stage above, production
+  dependencies only (`npm ci --omit=dev`), and what `npm run migrate` reads
+  (`scripts/migrate.js`, `src/db/migrations/`); run as the unprivileged `node`
+  user. No ts-node, no tests, no dev scripts: `npm run migrate`, `ai-agent`,
+  `twilio:configure`, `openers:send-waiting` and `create-superadmin` run as
+  before; anything `dev:` cannot run there at all (`ts-node: not found`).
+  Before, the server's image carried every dev dependency, the tests and the
+  dev scripts - guarded only by `NODE_ENV` - installed without the lockfile,
+  and ran as root.
+
+Proved before the change: the production image migrated a scratch database
+(24 files), ran `ai-agent`, and started the api with `NODE_ENV=production` -
+health 200, Seri's knowledge loaded; a dev script in it, refused; the local
+`dev` image as before.
+
+The `caddy` service is built
 from `frontend/Dockerfile`, which compiles the React app and copies it into the
 Caddy image, so the same `--build` rebuilds the frontend and the server needs no
 Node install. Real credentials live in `.env`
