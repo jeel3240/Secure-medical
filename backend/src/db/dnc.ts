@@ -96,6 +96,12 @@ export async function blockNumber(
   );
 }
 
+/** Whether the number is blocked now - a live row on `dnc_list`. */
+export async function isBlockedNow(client: Queryable, phone: string): Promise<boolean> {
+  const { rows } = await client.query(`SELECT 1 FROM dnc_list WHERE phone = $1 AND released_at IS NULL`, [phone]);
+  return rows.length > 0;
+}
+
 /**
  * Lifts every live block on the number, keeping the row as the record.
  *

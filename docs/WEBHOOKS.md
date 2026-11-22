@@ -24,8 +24,10 @@ in `webhook_events` (`AUDIT.md`).
    ignored or fails is still on record. A request with the wrong path token is
    not kept. `AUDIT.md`, "The raw webhook archive".
 1. Ignore anything whose `type` is not `inbound_text.received`, and any payload
-   missing `fromNumber`, `received` or `message`. Both return 200 so EZ Texting
-   stops retrying.
+   missing `fromNumber`, `received` or `message` - or with one of the wrong
+   kind: a sender or a text that is not a string, a `received` that is no time
+   (`bad_fields`, 2026-11-22, review M13; before, a 500 EZ Texting retried for
+   ever). All return 200 so EZ Texting stops retrying.
 2. Normalise `fromNumber` to E.164.
 3. Find the lead by phone. **If there is none, stop**: log it, opt the number
    out if the reply was a STOP - or release its block if it was a START -
@@ -37,7 +39,9 @@ in `webhook_events` (`AUDIT.md`).
    reply and an opt-out are not flagged by the reply itself; the lead is
    flagged if our text back fails to send, or if they reply while our text
    has been unsent for over two minutes - 2026-10-06.)*
-6. If it is an opt-out, add to `dnc_list` and suppress any open conversation. A
+6. If it is an opt-out, add to `dnc_list` - unless the number is blocked
+   already: its block, its reason and its one record stand (2026-11-22, review
+   M40; the poller and the automated call already did so) - and suppress any open conversation. A
    lead can opt out with no open conversation - already completed, for instance -
    and the `dnc_list` row is what blocks future contact either way.
 7. If it is an opt-in - START, UNSTOP, YES, SUBSCRIBE, or the payload's `optIn`
@@ -45,7 +49,13 @@ in `webhook_events` (`AUDIT.md`).
    as it is. See STATE-MACHINE.md, "Opting back in".
 8. Return 200.
 
-All of it runs in one transaction.
+All of it runs in one transaction. The text a reply leads to - the next
+question, a "sorry" - is sent after the commit, and EZ Texting waits for its
+200 at most 2 seconds while it goes (`ANSWER_WITHIN_MS`, 2026-11-22, review
+M13): most sends are done well within that, and are answered after, as before;
+a slow one - EZ Texting itself slow, up to its 30 seconds - finishes after the
+answer, since EZ Texting's callback is meant to be answered fast
+(`EZTEXTING-API.md`).
 
 ## Why dedupe on (from_number, received_at)
 

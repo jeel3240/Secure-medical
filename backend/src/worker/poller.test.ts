@@ -59,7 +59,7 @@ jest.mock('../db/pool', () => ({
 }));
 
 import * as logModule from '../lib/log';
-import { pollOnce } from './poller';
+import { overlapMinutes, pollOnce } from './poller';
 
 function contact(over: Record<string, unknown> = {}) {
   return {
@@ -235,5 +235,18 @@ describe('the checkpoint', () => {
     await pollOnce();
 
     expect(sqlOf()).toMatch(/INSERT INTO settings/i);
+  });
+});
+
+describe('the overlap window (review M16)', () => {
+  it.each([
+    ['5', 5],
+    ['2.5', 2.5],
+    [null, 5],
+    ['soon', 5],
+    ['0', 5],
+    ['-3', 5],
+  ] as const)('poll_overlap_minutes %p: %p minutes - never none, or less', (raw, minutes) => {
+    expect(overlapMinutes(raw)).toBe(minutes);
   });
 });

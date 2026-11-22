@@ -50,9 +50,17 @@ async function readSetting(key: string): Promise<string | null> {
 }
 
 async function readOverlapMs(): Promise<number> {
-  const raw = await readSetting('poll_overlap_minutes');
-  const minutes = raw !== null ? Number(raw) : 5;
-  return (Number.isFinite(minutes) ? minutes : 5) * 60 * 1000;
+  return overlapMinutes(await readSetting('poll_overlap_minutes')) * 60 * 1000;
+}
+
+/**
+ * `poll_overlap_minutes` as used: 5 when missing, not a number, or not above
+ * 0 - none, or less, and a contact listed a moment late was never ingested
+ * (review M16, 2026-11-22), as the interval and expiry readers already refuse.
+ */
+export function overlapMinutes(raw: string | null): number {
+  const minutes = raw === null ? NaN : Number(raw);
+  return Number.isFinite(minutes) && minutes > 0 ? minutes : 5;
 }
 
 function assertNewestFirst(contacts: EztContact[]): void {

@@ -104,6 +104,12 @@ async function main(): Promise<void> {
     check('no missed-call text', await sendMissedCallText(lee), false);
     check('nothing reached EZ Texting', sent, []);
     check('and nothing on the thread', await thread(lee), []);
+    // No message row: the activity log is the record that each was tried - the system's, no actor (review M41).
+    const tried = await pool.query(
+      `SELECT actor_id FROM activity_log WHERE lead_id = $1 AND action = 'sms.blocked' ORDER BY id`,
+      [lee]
+    );
+    check('each refused text recorded, by nobody', tried.rows.map((r) => r.actor_id), [null, null]);
   }
 
   console.log('\nmissing words send nothing');
