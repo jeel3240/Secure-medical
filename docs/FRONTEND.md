@@ -840,6 +840,32 @@ Production serves `dist/` from the `caddy` service, built by
 `frontend/Dockerfile`. Caddy forwards only `/api/*` to the API, which is why
 every route lives under `/api`.
 
+## After the review, 2026-11-22
+
+The website's medium findings of `docs/REVIEW-2026-11-22.md`, each with its test where it is logic:
+
+- **Two call bars, one above the other** (M26). The lead's Call stays off while
+  an incoming call's note box is open - "Save or skip the last call's note
+  first." - and should both bars show at once (this lead's call over, its note
+  open, and a lead's call taken meanwhile), this lead's sits above the incoming
+  one, never on top (`CallBar`'s `raised`, `--call-bar-raise`).
+- **Release waits for a lead's call taken on the page** (M27).
+- **Calling's settings asked again until they answer** (M28): a page opened
+  while the API restarted was never ringable, and had no "Taking calls"
+  switch, until a reload. Both ask again every 15 seconds (`CONFIG_RETRY_MS`).
+- **A ring ends however it ends** (M29): not only Twilio's `cancel` - a dropped
+  connection (`disconnect`) or an `error` before it was answered ends it too,
+  and a ring no event ever ends is cleared after 90 seconds
+  (`RING_SAFETY_MS`), longer than any ring we place. Before, the card stayed
+  ringing, the ringtone looping and the browser busy, until Decline.
+- **Admin > Leads flashes only new rows** (M30) - "Admin > Leads", above.
+- **A failed load says so** (M31): the lead timeline page and Overview's
+  System card spun for ever; now a banner, and "Showing the last update" when
+  there is one.
+- **"You tried" by id** (M32), `lib/caller-context.ts`.
+- **A failed Reactivate says so** (M33), on its own - it showed "Could not load
+  agents" with a Retry that loaded them.
+
 ## Not built
 
 - ~~**Calling.**~~ Built 2026-10-01, Phase 4 - `TWILIO.md`. Outgoing, and

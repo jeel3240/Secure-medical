@@ -260,7 +260,7 @@ Accepting opens Leo's workspace and assigns the lead to you.
 | Name, number | Sent with the call, so they show the instant it rings |
 | How long it has rung | Counted in the browser |
 | Tier, score, the lead's last answer (under that question's heading), flow | The lead card, `GET /api/leads/:id`, fetched as it starts to ring. The same words as the lead's page |
-| "Calling back · you tried 2× today" | The lead's timeline: calls agents placed today, by this agent or - named - by another; otherwise when one last called. The server's automated call is not counted among them - "you tried" is about people (T5, 2026-10-18). With no agent's call, the automated call is what they are returning - its voicemail asks them to: "Calling back · automated call, 28m ago" (T19). Nothing when we never called them. A transfer shows "Transfer · said yes to the offer" instead (T11). `lib/caller-context.ts` |
+| "Calling back · you tried 2× today" | The lead's timeline: calls agents placed today, by this agent - matched by id, each call carrying its agent's (`detail.agentId`), since 2026-11-22: by name, two agents sharing one both read "you" (review M32) - or - named - by another; otherwise when one last called. The server's automated call is not counted among them - "you tried" is about people (T5, 2026-10-18). With no agent's call, the automated call is what they are returning - its voicemail asks them to: "Calling back · automated call, 28m ago" (T19). Nothing when we never called them. A transfer shows "Transfer · said yes to the offer" instead (T11). `lib/caller-context.ts` |
 | The last line | Drops "and assigns the lead to you" when the agent already holds it |
 
 The card is up at once and the details fill in a moment later; if they cannot

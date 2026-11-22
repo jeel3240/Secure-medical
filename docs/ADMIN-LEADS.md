@@ -324,7 +324,10 @@ the new ones land.
 
 Rows that are new since the previous fetch get a 600ms highlight. Everything is
 new on the first load, so that case is deliberately excluded - otherwise the
-whole table flashes on arrival.
+whole table flashes on arrival - and so is the first load of another view: a
+tab, a filter, a page or a search is another list, not new rows. Until
+2026-11-22 the record of rows seen kept every id ever shown, and every switch
+flashed the new view's rows (review M30).
 
 A row opens the lead's timeline, read-only (2026-09-28 - it waited on that page
 existing).

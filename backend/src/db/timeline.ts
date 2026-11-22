@@ -78,7 +78,7 @@ const QUERIES: { kind: TimelineKind; sql: string }[] = [
     kind: 'call',
     sql: `
       SELECT COALESCE(c.started_at, c.created_at) AS at,
-             u.name AS author,
+             u.name AS author, c.agent_id,
              c.outcome, c.duration_sec, c.direction, c.script_result,
              t.status AS transcript_status, t.sentences AS transcript_lines,
              ans.answers,
@@ -268,6 +268,8 @@ interface TimelineRow {
   at: Date;
   /** Every query selects it: the agent, or null for our own and the lead's. */
   author: string | null;
+  /** A call's: who was on it, by id - names can be shared (review M32). */
+  agent_id?: number | null;
   /** Messages and calls: which way it went. A call can also be `automated` (T4). */
   direction?: CallDirection;
   sent_by?: number | null;
@@ -376,6 +378,9 @@ function toEntry(kind: TimelineKind, row: TimelineRow): TimelineEntry {
           outcome: row.outcome,
           durationSec: row.duration_sec,
           direction: row.direction,
+          // Who was on it, by id: the caller's card says "you tried 2× today" by it, not by a name two people can share
+          // (review M32, 2026-11-22).
+          agentId: row.agent_id ?? null,
           // The robot's call: how its script ended - null while it is going -
           // and what the lead said (T21).
           ...(row.direction === 'automated'

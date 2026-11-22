@@ -93,6 +93,8 @@
   --space-5: 20px;
   --space-6: 24px;
   --space-8: 32px;
+  /* A call bar's height and the gap above it: a second bar docks above the first (call-bar.css). */
+  --call-bar-raise: 84px;
   --radius-sm: 4px;
   --radius-md: 6px;
   --radius-lg: 10px;

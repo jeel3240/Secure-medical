@@ -162,6 +162,38 @@ describe('a lead calling in', () => {
     stop();
   });
 
+  it('a ring the connection dropped, or an error ended, is over too - never left ringing until Decline (review M29)', async () => {
+    for (const event of ['disconnect', 'error']) {
+      const { ring, call, incoming, stop } = await ringing();
+      call.emit(event);
+      expect(incoming.onRingOver).toHaveBeenCalledWith(ring);
+      call.emit('cancel');
+      expect(incoming.onRingOver).toHaveBeenCalledTimes(1);
+      stop();
+    }
+  });
+
+  it('a ring no event ever ends is cleared after the longest any ring lasts (review M29)', async () => {
+    vi.useFakeTimers();
+    const { ring, incoming, stop } = await ringing();
+    const { RING_SAFETY_MS } = await import('./calling');
+    await vi.advanceTimersByTimeAsync(RING_SAFETY_MS - 1);
+    expect(incoming.onRingOver).not.toHaveBeenCalled();
+    await vi.advanceTimersByTimeAsync(1);
+    expect(incoming.onRingOver).toHaveBeenCalledWith(ring);
+    stop();
+  });
+
+  it('answered, the safety never ends it: the call reports its own end', async () => {
+    vi.useFakeTimers();
+    const { ring, incoming, stop } = await ringing();
+    ring.answer(handlers());
+    const { RING_SAFETY_MS } = await import('./calling');
+    await vi.advanceTimersByTimeAsync(RING_SAFETY_MS);
+    expect(incoming.onRingOver).not.toHaveBeenCalled();
+    stop();
+  });
+
   it('decline: rejects the call, and is not reported as a ring that ran out', async () => {
     const { ring, call, incoming, stop } = await ringing();
     ring.decline();

@@ -207,7 +207,7 @@ function RingingCard({
   const context = kind.transfer
     ? transferContext(kind.transfer.step)
     : entries && me
-      ? callerContext(entries, me.name, now)
+      ? callerContext(entries, me, now)
       : null;
   const lastAnswer = lead?.chips[lead.chips.length - 1];
   const mine = Boolean(lead?.claimedBy && me && lead.claimedBy.id === me.id);

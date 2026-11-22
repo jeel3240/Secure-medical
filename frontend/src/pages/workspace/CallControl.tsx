@@ -5,7 +5,7 @@ import { Button } from '../../components/Button';
 import { callBlockedReason, isActive } from '../../lib/call-state';
 import { formatPhone } from '../../lib/format';
 import { useIncomingCall } from '../../lib/incoming-call';
-import { isBusy } from '../../lib/incoming-state';
+import { incomingOccupiesAgent, isBusy } from '../../lib/incoming-state';
 import type { LeadCall } from './useLeadCall';
 
 /**
@@ -47,6 +47,8 @@ export function CallControl({
 
   // A call a lead placed to us counts: one agent, one call at a time.
   const receiving = useIncomingCall((s) => isBusy(s.state));
+  // And its note box still open: a call placed now would be a second call bar on top of it (review M26, 2026-11-22).
+  const noting = useIncomingCall((s) => incomingOccupiesAgent(s.state) && !isBusy(s.state));
   const onCall = isActive(call.state) || receiving;
   const blocked = callBlockedReason({
     enabled: config ? config.enabled : null,
@@ -57,11 +59,13 @@ export function CallControl({
   return (
     <Button
       variant="secondary"
-      disabled={onCall || blocked !== null}
+      disabled={onCall || noting || blocked !== null}
       title={
         onCall
           ? 'A call is in progress.'
-          : (blocked ?? (config?.callerId ? `The lead will see ${formatPhone(config.callerId)}` : undefined))
+          : noting
+            ? "Save or skip the last call's note first."
+            : (blocked ?? (config?.callerId ? `The lead will see ${formatPhone(config.callerId)}` : undefined))
       }
       onClick={call.start}
     >

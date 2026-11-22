@@ -199,7 +199,8 @@ async function main(): Promise<void> {
     check(
       'a call carries its outcome and length',
       t.find((e) => e.kind === 'call')?.detail,
-      { outcome: 'no_answer', durationSec: 34, direction: 'outbound' }
+      // With who was on it, by id - the caller's card counts "you" by it (review M32).
+      { outcome: 'no_answer', durationSec: 34, direction: 'outbound', agentId: maya }
     );
   }
 

@@ -36,6 +36,9 @@ interface IncomingCallStore {
 let ring: IncomingRing | null = null;
 let handle: CallHandle | null = null;
 
+/** How soon calling's settings are asked for again after they could not be read. */
+export const CONFIG_RETRY_MS = 15_000;
+
 export const useIncomingCall = create<IncomingCallStore>((set, get) => {
   const send = (event: IncomingEvent) => set({ state: incomingReducer(get().state, event) });
 
@@ -46,40 +49,49 @@ export const useIncomingCall = create<IncomingCallStore>((set, get) => {
     listen() {
       let stop: (() => void) | null = null;
       let stopped = false;
+      let retry: number | undefined;
 
-      void getCallConfig()
-        .then((config) => {
-          if (stopped || !config.enabled) return;
-          set({ ringable: true });
-          stop = listenForCalls({
-            onRing: (incoming) => {
-              // A ring that went to several people is left to the others
-              // while anything here keeps this person busy - a call, a ring,
-              // a note box, on any screen (lib/presence.ts) - so an open note
-              // is never lost to it. Declined, so Twilio stops ringing this
-              // browser; the others keep ringing. T11, AUTO-CALLS.md.
-              if (incoming.kind.group && isBrowserBusy()) {
-                incoming.decline();
-                return;
-              }
-              const before = get().state;
-              send({ type: 'ring', caller: incoming.lead, kind: incoming.kind, at: Date.now() });
-              // Shown, or turned away because this agent is already on a call.
-              if (get().state !== before) ring = incoming;
-            },
-            onRingOver: (incoming) => {
-              if (ring !== incoming) return;
-              ring = null;
-              send({ type: 'ring_over', at: Date.now() });
-            },
+      // Asked again until it answers: a page opened while the API restarted was never ringable until a reload, and
+      // nothing on screen said so (review M28, 2026-11-22).
+      const start = (): void => {
+        void getCallConfig()
+          .then((config) => {
+            if (stopped || !config.enabled) return;
+            set({ ringable: true });
+            stop = listenForCalls({
+              onRing: (incoming) => {
+                // A ring that went to several people is left to the others
+                // while anything here keeps this person busy - a call, a ring,
+                // a note box, on any screen (lib/presence.ts) - so an open note
+                // is never lost to it. Declined, so Twilio stops ringing this
+                // browser; the others keep ringing. T11, AUTO-CALLS.md.
+                if (incoming.kind.group && isBrowserBusy()) {
+                  incoming.decline();
+                  return;
+                }
+                const before = get().state;
+                send({ type: 'ring', caller: incoming.lead, kind: incoming.kind, at: Date.now() });
+                // Shown, or turned away because this agent is already on a call.
+                if (get().state !== before) ring = incoming;
+              },
+              onRingOver: (incoming) => {
+                if (ring !== incoming) return;
+                ring = null;
+                send({ type: 'ring_over', at: Date.now() });
+              },
+            });
+          })
+          // Calling's state is unknown: this browser cannot be rung for now, and the caller hears that we will call
+          // back - asked again shortly.
+          .catch(() => {
+            if (!stopped) retry = window.setTimeout(start, CONFIG_RETRY_MS);
           });
-        })
-        // Calling's state is unknown: this browser simply cannot be rung, and
-        // the caller hears that we will call back.
-        .catch(() => undefined);
+      };
+      start();
 
       return () => {
         stopped = true;
+        window.clearTimeout(retry);
         stop?.();
         handle?.hangUp();
         ring = null;
