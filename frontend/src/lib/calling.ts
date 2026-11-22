@@ -110,16 +110,24 @@ function discardDevice(): void {
   void stale?.then((device) => device.destroy()).catch(() => undefined);
 }
 
-/** Registers the device if it is not; replaces one that has been destroyed. Then says whether it can ring. */
+/**
+ * Registers the device if it is not; replaces one that has been destroyed.
+ * Then says whether it can ring. A device carrying a call is left alone: its
+ * registration lapsing mid-call - a token not renewed - had it destroyed, and
+ * the live call with it (review H7, 2026-11-22). The next check, once the call
+ * is over, registers it again.
+ */
 async function keepRegistered(): Promise<void> {
   if (!listener) return;
   try {
     const device = await getDevice();
+    if (device.isBusy) return;
     if (device.state === 'destroyed') discardDevice();
     else if (device.state === 'unregistered') await device.register();
   } catch {
-    // Offline, signed out, or Twilio unreachable. Start clean at the next check.
-    discardDevice();
+    // Offline, signed out, or Twilio unreachable. Start clean at the next check - never with a call on it.
+    const device = await devicePromise?.catch(() => null);
+    if (!device?.isBusy) discardDevice();
   }
   await reportRingable();
 }

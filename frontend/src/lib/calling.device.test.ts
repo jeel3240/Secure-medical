@@ -35,6 +35,7 @@ class FakeCall extends Emitter {
 
 class FakeDevice extends Emitter {
   state = 'unregistered';
+  isBusy = false;
   outgoing = new FakeCall();
   register = vi.fn(async () => {
     this.state = 'registered';
@@ -228,6 +229,29 @@ describe('telling the server whether this browser can take a call', () => {
     const { stop } = await listening();
     await vi.waitFor(() => expect(said()).toEqual([false]));
     expect(device.register).toHaveBeenCalled();
+    stop();
+  });
+
+  it('a registration lapsing during a call: the device is left alone - never destroyed with the call on it (review H7)', async () => {
+    vi.useFakeTimers();
+    const { stop } = await listening();
+    await vi.waitFor(() => expect(said()).toEqual([true]));
+    device.isBusy = true;
+    device.state = 'unregistered';
+    device.register = vi.fn(async (): Promise<void> => {
+      throw new Error('token expired');
+    });
+    await vi.advanceTimersByTimeAsync(30_000);
+    expect(device.register).not.toHaveBeenCalled();
+    expect(device.destroy).not.toHaveBeenCalled();
+    // The call over: registered again at the next check.
+    device.isBusy = false;
+    device.register = vi.fn(async () => {
+      device.state = 'registered';
+    });
+    await vi.advanceTimersByTimeAsync(30_000);
+    expect(device.register).toHaveBeenCalled();
+    expect(device.destroy).not.toHaveBeenCalled();
     stop();
   });
 
