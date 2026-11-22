@@ -330,6 +330,7 @@ commit.
 | `LOGGING.md` | Log format and the health endpoints | Anything logged, or the health routes |
 | `FLOWS.md` | How SMS scripts are stored - flows, questions, choices, answers - why, and how to add one | A new or changed flow, or anything about how answers are stored |
 | `STATE-MACHINE.md` | The SMS flow: replies, scoring, expiry, sending, repeat leads. Overrides the mockup | The state machine, or any flow decision |
+| `REVIEW-2026-11-22.md` | The whole repo read against its docs, 2026-11-22: every finding, its size, and whether it is fixed - the tracker for those fixes | A fix of one of its findings: its status, in the same commit |
 | `EZTEXTING-API.md` | Verified API behaviour | You learn something new about the API |
 | `WORKFLOW.md` | Branches, PRs, migrations, deploys | The process itself |
 | `FRONTEND.md` | The React app as built: screens, polling, and the decisions behind them | Any frontend change |
