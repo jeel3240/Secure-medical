@@ -2,7 +2,7 @@
 
 **Goal:** every path of A21's checklist heard on a real phone with the new brain, before A22.
 
-**Depends on:** A30-A32  ·  **Size:** M  ·  **Status:** In progress - calls 113-140, 2026-11-17 to 2026-11-22; A33's measurements were taken on calls 118 and 119
+**Depends on:** A30-A32  ·  **Size:** M  ·  **Status:** Done 2026-11-23 - calls 113-140, 2026-11-17 to 2026-11-22, and call 122's call back on the screens when it came due; A33's measurements were taken on calls 118 and 119
 
 ## Build
 
@@ -60,9 +60,11 @@ With 123, 124 and 126, a yes now is heard on every path: everyone free, the lead
 
 **The three minutes** (Jeel, 2026-11-22): not heard on a real phone - calls 135-137 each ended before them - and left to the tests that move the clock by hand (`conversation.test.ts`, "three minutes"; `policy.test.ts`, "the three minutes"). **OpenAI down before calling:** Seri's check against the real OpenAI - a refused key `OpenAI 401 invalid_api_key`, so nothing placed; the real key, ready - the robot holding back on it is `npm run e2e`'s.
 
+**Call 122's call back, when it came due** (2026-11-23): booked by Seri for Monday 12 PM Arizona time, nobody's yet. At 4:22 PM, overdue, read from what each screen reads on the local database: **the queue** - "Callback · 12:00 PM", due, so bold, no name, in the promised calls at the top, 14th of 31 behind 13 older promises from earlier test calls (the longest waiting first, `QUEUE.md`, "The order"); **the lead page** - her call back, Monday at 12 PM, with her reason "Interested in the offer; asked for a call back.", open to everyone; **Admin > Leads** - the Call column `callback_booked`, "Call back booked". The words on screen from those are the frontend's tests (A16). Not done: an agent picking it up on this call's lead - the same step is `queue-live-check`'s and `npm run e2e`'s.
+
 ## Done when
 
-- [ ] Every line heard and noted with its date in `docs/AI-AGENT.md`, like T26; then A22.
+- [x] Every line heard and noted with its date in `docs/AI-AGENT.md`, like T26 - the three minutes left to the tests (Jeel, 2026-11-22); then A22.
 
 ## Docs to update in the same commit
 
