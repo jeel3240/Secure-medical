@@ -170,8 +170,10 @@ A lead is called (`leadsToCall`, `db/auto-dial.ts`) when:
 
 New leads first - those that arrived after `auto_calls_since`, when
 automated calls were last switched on (below) - then the ones already
-waiting; within each, oldest first, by when the first text went out, from
-the last 30 days (no conversation stays open that long). The hours are
+waiting; within each, those Twilio has refused fewest times for our account
+first (`not_placed`, "When Twilio refuses" - so the first try after a pause
+goes to a lead it has not tried), then oldest first, by when the first text went out,
+from the last 30 days (no conversation stays open that long). The hours are
 `auto_call_hours_start`/`_end` in `auto_call_time_zone` on `auto_call_days`
 (`readCallHours`) - the start and end fall back together to migration 015's
 when either is malformed or the end is not after the start, and the zone, the
@@ -475,7 +477,10 @@ row: a choice with its key and label as they are now, or what else it was.
 - **The call's end gives an unfinished script its result** (`/auto/status`,
   `settleAutomatedCall`): `unanswered` if it was never picked up, `hung_up` if
   it was and the script never reached its own end. A call Twilio would not
-  place is `unanswered` too.
+  place for the lead's own number is `unanswered` too - their one call, used;
+  refused for any other reason - our account, its key, too many requests - it
+  is `not_placed`, not the lead's call (T28, "When Twilio refuses";
+  `failAutomatedCall`; review R11, 2026-11-23).
 
 ### Traffic
 

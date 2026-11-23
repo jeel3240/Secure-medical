@@ -12,7 +12,7 @@
  *
  *   docker compose exec postgres psql -U app -d postgres -c 'CREATE DATABASE read_check'
  *   DATABASE_URL=postgres://app:app@localhost:5433/read_check node scripts/migrate.js
- *   DATABASE_URL=postgres://app:app@localhost:5433/read_check REDIS_URL=x JWT_SECRET=x \
+ *   DATABASE_URL=postgres://app:app@localhost:5433/read_check JWT_SECRET=x \
  *     EZT_USERNAME=x EZT_PASSWORD=x EZT_GROUP=x npx ts-node --transpile-only scripts/read-flag-live-check.ts
  */
 import { pool } from '../src/db/pool';

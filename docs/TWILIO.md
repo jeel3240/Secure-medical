@@ -102,7 +102,11 @@ Twilio ── POST /api/webhooks/twilio/incoming ──► who is this, and whos
 1. **The agent holding the lead** - they are working it right now.
 2. Otherwise **the agent who last called that lead** - the lead is most likely
    returning that call. An automated call counts once a person took its
-   transfer (T4); one nobody took has no agent and is skipped.
+   transfer (T4); one nobody took has no agent and is skipped. Only active
+   accounts count, at both steps: a holder who was deactivated is passed over,
+   and so is a last caller - the latest call by someone still active rings
+   them, even when someone since deactivated called after (`startIncomingCall`,
+   `db/calls.ts`; review R10, 2026-11-23).
 3. Otherwise, **with automated calls on, everyone free together** (T19,
    2026-10-24) - `FREE_SQL`: the "Taking calls" switch on, a browser open
    and not busy, no call going; at most ten. A lead the robot's voicemail
@@ -702,10 +706,19 @@ or dropped.
 changes:
 
 ```bash
-docker compose exec api npm run dev:twilio:configure   # local - the dev number only
+docker compose exec api npm run dev:twilio:configure   # local - with the dev number in .env
 docker compose exec api npm run twilio:configure       # production
 # add -- --dry-run to see what it would change, without changing it
 ```
+
+The two are the same command - `dev:` runs it with `ts-node`, the other from
+`dist/`. **Neither checks which number it is given:** it points whatever
+`TWILIO_PHONE_NUMBER` and `TWILIO_TWIML_APP_SID` hold, so locally it is the dev
+number only because the local `.env` holds the dev number (`CLAUDE.md`, never
+production's). What does stop a laptop taking production's calls is the
+pointing check, `core/twilio-pointing.ts`: it refuses a number or a TwiML App
+already pointing at this app on another real server, unless `--take-over` is
+given (review R10, 2026-11-23).
 
 It sets the TwiML App's Voice URL to `PUBLIC_URL/api/webhooks/twilio/voice`
 and the phone number's to `PUBLIC_URL/api/webhooks/twilio/incoming`, and
