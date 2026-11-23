@@ -145,8 +145,10 @@ export interface StepResult {
   /**
    * The reply is not something the questions can handle, so a person has to
    * read it: the caller sets `leads.has_unread_inbound`, which is what the
-   * queue shows as Inbound reply. True only for rules 2 and 2b - a message
-   * after the conversation ended, or to an agent who took it over. An answer,
+   * queue shows as Inbound reply. True only for rules 2, 2b and 2d - a message
+   * after the conversation ended, to an agent who took it over, or after a
+   * phone call took it over - and for a conversation on no question its flow
+   * has. An answer,
    * an unclear reply and an opt-out are all handled here, and flagging them
    * made every responder read as an inbound reply. Jeel, 2026-09-28.
    */

@@ -14,6 +14,7 @@
  *   DATABASE_URL=postgres://app:app@localhost:5433/timeline_check JWT_SECRET=x \
  *     EZT_USERNAME=x EZT_PASSWORD=x EZT_GROUP=x npx ts-node --transpile-only scripts/timeline-live-check.ts
  */
+import { check, failureCount, verdict } from './check';
 import { pool } from '../src/db/pool';
 import { createCallback, updateCallback } from '../src/db/callbacks';
 import { claimLead, releaseLead } from '../src/db/claims';
@@ -24,18 +25,6 @@ import { failAutomatedCall, keepAnswer, linkAutomatedCall, startAutomatedCall, t
 import { endAiCall, saveTurn, startAiCall } from '../src/ai/relay-store';
 import { replyAs } from './live-flow';
 
-let failures = 0;
-
-function check(label: string, actual: unknown, expected: unknown): void {
-  const a = JSON.stringify(actual);
-  const e = JSON.stringify(expected);
-  if (a === e) {
-    console.log(`  ok   ${label}`);
-  } else {
-    failures++;
-    console.log(`  FAIL ${label}\n       expected ${e}\n       actual   ${a}`);
-  }
-}
 
 async function refuseIfNotEmpty(): Promise<void> {
   const { rows } = await pool.query(`SELECT count(*)::int AS leads FROM leads`);
@@ -409,9 +398,9 @@ async function main(): Promise<void> {
     check('it never reached the lead: no call on its timeline', (await getTimeline(lead))!.filter((e) => e.kind === 'call').length, 0);
   }
 
-  console.log(failures === 0 ? '\nall checks passed' : `\n${failures} check(s) FAILED`);
+  console.log(verdict());
   await pool.end();
-  process.exit(failures === 0 ? 0 : 1);
+  process.exit(failureCount() === 0 ? 0 : 1);
 }
 
 main().catch((err) => {

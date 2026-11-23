@@ -147,8 +147,7 @@ you change something the docs describe, update the doc in the same commit.
 
 ```
   docker-compose.prod.yml   server-only override: RDS, no exposed ports, caddy service
-  Caddyfile                 production's: /api to the api, holding a request up to 10 s while the api restarts - so Seri's reconnect lands; recreate caddy to read a change
-  Caddyfile.dev             not used by anything; local dev goes through Vite
+  caddy/Caddyfile           production's: /api to the api, holding a request up to 10 s while the api restarts - so Seri's reconnect lands; in its own folder, mounted whole, and Caddy runs with --watch, so a pull that changes it is reloaded by itself (review Q11, 2026-11-23)
   README.md                 a short index into docs/
   backend/
     scripts/migrate.js      migration runner
@@ -244,6 +243,7 @@ you change something the docs describe, update the doc in the same commit.
     scripts/ai-replay.ts    A21's real calls replayed through the new brain against the real OpenAI, checked for the rules that hold on every call - npm run ai:replay (A32); real lines from a local export, never committed
     scripts/end-to-end.ts   the whole system in one run - npm run e2e; since T25 the robot's calls too, Twilio stubbed at its HTTP boundary and its webhooks signed; since A20 Seri's calls ending each way, through her real relay, OpenAI a local server
     scripts/live-checks.sh  runs every live check, each on its own scratch database
+    scripts/check.ts        the one `check()` every live check and the end-to-end script use - keys compared in order, the verdict live-checks.sh reads (review Q9)
     scripts/flows-live-check.ts  proves a second, five-question flow works from rows alone; scripts/live-flow.ts answers a flow for the other checks
     scripts/dev-ask-again.ts  local testing only: asks a held lead the questions again, so one phone can walk every path
     scripts/speed-check.ts  loads 50,000 fake leads into a scratch database and times every screen's read - npm run speed

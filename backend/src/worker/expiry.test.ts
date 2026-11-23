@@ -57,7 +57,7 @@ describe('expireStaleConversations', () => {
     expect(updateSql()).toMatch(/COALESCE\(expires_at, created_at/);
   });
 
-  it('uses the admin-editable window', async () => {
+  it('uses the window in settings, `expiry_days`', async () => {
     respond('14', 0);
     await expireStaleConversations();
     expect(updateValues()).toEqual(['14']);

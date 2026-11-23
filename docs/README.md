@@ -80,7 +80,6 @@ docker compose exec postgres psql -U app -d leads \
 | `OPENAI_API_KEY` | Optional. Seri, the AI agent on the automated call (`AI-AGENT.md`). **Empty, she is off whatever her switch says**, and every call gets the script. Her switch is not a variable: it is `settings.ai_agent`, changed only with `npm run ai-agent -- on` or `-- off` (`dev:ai-agent` locally), read on every call, so no restart. `on` is refused without the key. Read by the api, and passed to the worker, which checks OpenAI before placing calls (A17). Never in the repo, never in a log line |
 | `OPENAI_BASE_URL` | **For tests only - never set it in `.env`.** Not read by our code: the OpenAI library reads it, and sends Seri's requests, with her key, to that address instead of OpenAI's. `npm run e2e` and the unit tests point it at a local stand-in. The compose files do not pass it to the containers (review R5, 2026-11-23) |
 | `PORT`, `SERVICE_NAME` | Not in `.env.example` and not set by the compose files. `PORT` is the API's port, 3000 by default. `SERVICE_NAME` overrides the `svc` field on every log line, which is otherwise worked out from the entry point (`api`, `worker`). |
-| `CADDY_DOMAIN` | Not read by anything. The production `Caddyfile` names `dailyleadhub.com` directly. |
 
 Never commit `.env`.
 

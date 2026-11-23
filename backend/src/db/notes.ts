@@ -26,9 +26,9 @@ export type AddNoteResult = { ok: true; note: Note } | { ok: false; reason: 'not
  * Writes a note against a lead.
  *
  * The author is the signed-in agent, taken from the session by the route and
- * never from the request body. Deliberately not restricted to the lead's
- * holder: a superadmin reviewing a lead an agent is working may still record
- * what they saw, and a note is evidence rather than ownership.
+ * never from the request body. This does not check who holds the lead; the
+ * route does - only the holder writes a note (`requireHolding`,
+ * `api/lead-workspace.ts`, since 2026-09-28).
  */
 export async function addNote(leadId: number, agentId: number, body: string): Promise<AddNoteResult> {
   // The foreign key would reject a bad lead id anyway, but as a constraint

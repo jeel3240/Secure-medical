@@ -76,8 +76,9 @@ const FORBIDDEN = new Set([
 /**
  * Names that are always allowed, whatever the suffix rules below would say.
  *
- * `key` is the settings key an SMS was rendered from - `question_1`,
- * `message_clarify_2` - and it is the field the sms.* events group by. The
+ * `key` names the text an sms.* event is about - `question_1` for the first
+ * question, or the name of a call's text (`db/lead-texts.ts`) - and it is the
+ * field those events group by. The
  * `endsWith('key')` rule below redacted it, which cost nothing in safety and
  * most of the value of those lines. Found by reading real output rather than
  * the code.

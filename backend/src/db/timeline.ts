@@ -164,8 +164,9 @@ const iso = (v: Date | null | undefined): string | null => v?.toISOString() ?? n
 /**
  * The events that have no table.
  *
- * "Lead received" is the only one with a timestamp of its own. The other two
- * are placed at the moment that caused them: a conversation carries its score
+ * "Lead received" is the only one with a timestamp of its own. The others -
+ * scored, taken over by an agent or a phone call, expired - are placed at the
+ * moment that caused them: a conversation carries its score
  * and status but no record of when it reached them, and `updated_at` moves on
  * every change, so it cannot be used. The last inbound reply is what earned the
  * final points, and `expires_at` is when the conversation lapsed - both are

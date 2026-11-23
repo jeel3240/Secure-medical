@@ -105,9 +105,10 @@ const BASE = `
  *   the conversation ended, or to an agent who took it over. Since the same day
  *   that is exactly what `has_unread_inbound` means - STATE-MACHINE.md, rules 2
  *   and 2b - so the flag can stand on its own here.
- * - **Being worked** - an active agent holds it, or a callback is booked. A
- *   lead must never vanish from under the agent working it, whatever its
- *   conversation says.
+ * - **Being worked** - an active agent holds it, which stands on its own; or
+ *   a callback is open, on a lead that has replied and is not closed, like
+ *   the two above. A lead must never vanish from under the agent working it,
+ *   whatever its conversation says.
  *
  * **A closed lead leaves** - Jeel, 2026-09-28. Once an agent has pressed
  * Closed (`db/lead-state.ts`), completing the questions, needing review or an

@@ -19,6 +19,7 @@
  * docs/FLOWS.md, "Testing a flow with one phone".
  */
 import '../src/config';
+import { recordActivity } from '../src/db/activity';
 import { openingQuestion, startConversation } from '../src/db/flows';
 import { pool } from '../src/db/pool';
 import { sendOpener } from '../src/worker/opener';
@@ -55,11 +56,18 @@ async function main(): Promise<number> {
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
-    await client.query(
-      `UPDATE conversations SET status = 'expired', updated_at = now() WHERE lead_id = $1 AND status = 'open'`,
+    const expired = await client.query<{ id: number }>(
+      `UPDATE conversations SET status = 'expired', updated_at = now() WHERE lead_id = $1 AND status = 'open' RETURNING id`,
       [lead.id]
     );
     await startConversation(client, lead.id, 'open');
+    // Recorded with the change, as every write is - AUDIT.md (review Q9).
+    await recordActivity(client, {
+      action: 'dev.test_reset',
+      actorId: null,
+      leadId: lead.id,
+      detail: { what: 'ask_again', expired: expired.rows.map((r) => r.id) },
+    });
     await client.query('COMMIT');
   } catch (err) {
     await client.query('ROLLBACK');

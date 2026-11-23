@@ -23,6 +23,7 @@
  * It writes rows, so it refuses to run against a database that holds leads.
  * Run it with the others: scripts/live-checks.sh auto-calls
  */
+import { check, failureCount, verdict } from './check';
 import {
   actOnVerdict,
   callsOnHold,
@@ -44,18 +45,6 @@ import { finishCall, recordAnsweredBy } from '../src/db/calls';
 import { startConversation } from '../src/db/flows';
 import { pool } from '../src/db/pool';
 
-let failures = 0;
-
-function check(label: string, actual: unknown, expected: unknown): void {
-  const a = JSON.stringify(actual);
-  const e = JSON.stringify(expected);
-  if (a === e) {
-    console.log(`  ok   ${label}`);
-  } else {
-    failures++;
-    console.log(`  FAIL ${label}\n       expected ${e}\n       actual   ${a}`);
-  }
-}
 
 async function refuseIfNotEmpty(): Promise<void> {
   const { rows } = await pool.query(`SELECT count(*)::int AS leads FROM leads`);
@@ -742,9 +731,9 @@ async function main(): Promise<void> {
     check('Twilio asked once', asked.length, 1);
   }
 
-  console.log(failures === 0 ? '\nall checks passed' : `\n${failures} check(s) FAILED`);
+  console.log(verdict());
   await pool.end();
-  process.exit(failures === 0 ? 0 : 1);
+  process.exit(failureCount() === 0 ? 0 : 1);
 }
 
 main().catch((err) => {

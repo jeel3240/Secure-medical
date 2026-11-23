@@ -17,6 +17,7 @@
  * It writes rows, so it refuses to run against a database that holds users.
  * Run it with the others: scripts/live-checks.sh presence
  */
+import { check, failureCount, verdict } from './check';
 import { pool } from '../src/db/pool';
 import {
   freePeople,
@@ -28,18 +29,6 @@ import {
 } from '../src/db/presence';
 import { pgUserStore } from '../src/db/users';
 
-let failures = 0;
-
-function check(label: string, actual: unknown, expected: unknown): void {
-  const a = JSON.stringify(actual);
-  const e = JSON.stringify(expected);
-  if (a === e) {
-    console.log(`  ok   ${label}`);
-  } else {
-    failures++;
-    console.log(`  FAIL ${label}\n       expected ${e}\n       actual   ${a}`);
-  }
-}
 
 async function refuseIfNotEmpty(): Promise<void> {
   const { rows } = await pool.query(`SELECT count(*)::int AS users FROM users`);
@@ -404,9 +393,9 @@ async function main(): Promise<void> {
     await pool.query(`UPDATE calls SET ended_at = now() - interval '3 minutes', outcome = 'answered' WHERE id = $1`, [seriCall]);
   }
 
-  console.log(failures === 0 ? '\nall checks passed' : `\n${failures} check(s) FAILED`);
+  console.log(verdict());
   await pool.end();
-  process.exit(failures === 0 ? 0 : 1);
+  process.exit(failureCount() === 0 ? 0 : 1);
 }
 
 main().catch((err) => {

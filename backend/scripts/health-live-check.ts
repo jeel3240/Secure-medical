@@ -15,21 +15,10 @@
  *     EZT_USERNAME=x EZT_PASSWORD=x EZT_GROUP=x EZT_SEND_GROUP=x \
  *     npx ts-node --transpile-only scripts/health-live-check.ts
  */
+import { check, failureCount, verdict } from './check';
 import { pool } from '../src/db/pool';
 import { getHealth, type HealthCheck } from '../src/db/health';
 
-let failures = 0;
-
-function check(label: string, actual: unknown, expected: unknown): void {
-  const a = JSON.stringify(actual);
-  const e = JSON.stringify(expected);
-  if (a === e) {
-    console.log(`  ok   ${label}`);
-  } else {
-    failures++;
-    console.log(`  FAIL ${label}\n       expected ${e}\n       actual   ${a}`);
-  }
-}
 
 async function refuseIfNotEmpty(): Promise<void> {
   const { rows } = await pool.query(`SELECT count(*)::int AS n FROM leads`);
@@ -202,9 +191,9 @@ async function main(): Promise<void> {
     check('a later text going out: ok again', named((await getHealth()).checks, 'sending')?.status, 'ok');
   }
 
-  console.log(failures === 0 ? '\nall checks passed' : `\n${failures} check(s) FAILED`);
+  console.log(verdict());
   await pool.end();
-  process.exit(failures === 0 ? 0 : 1);
+  process.exit(failureCount() === 0 ? 0 : 1);
 }
 
 main().catch((err) => {

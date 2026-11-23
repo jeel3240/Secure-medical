@@ -1,7 +1,7 @@
 /**
  * Blocking and releasing a number.
  *
- * Three things block a number and they must all write `dnc_list` the same way,
+ * Four things block a number and they must all write `dnc_list` the same way,
  * or a number blocked one way behaves differently from a number blocked
  * another:
  *

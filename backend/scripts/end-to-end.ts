@@ -43,6 +43,7 @@
  * It sets the calling hours of that database to every hour of every day, so it
  * passes whenever it is run.
  */
+import { check, checkCount, failureCount } from './check';
 import axios from 'axios';
 import RequestClient from 'twilio/lib/base/RequestClient';
 
@@ -127,8 +128,6 @@ import { placeAutoCall } from '../src/worker/place-auto-call';
 import type { AutoCallNumbers } from '../src/auto-calls-settings';
 import type { TwilioSettings } from '../src/twilio-settings';
 
-let failures = 0;
-let checks = 0;
 
 /**
  * A made-up Twilio account: nothing here reaches Twilio. What matters is that
@@ -304,18 +303,6 @@ function api() {
     activity: { record: (entry) => recordActivity(pool, entry) },
   });
   return cachedApp;
-}
-
-function check(label: string, actual: unknown, expected: unknown): void {
-  checks++;
-  const a = JSON.stringify(actual);
-  const e = JSON.stringify(expected);
-  if (a === e) {
-    console.log(`    ok   ${label}`);
-  } else {
-    failures++;
-    console.log(`    FAIL ${label}\n         expected ${e}\n         actual   ${a}`);
-  }
 }
 
 function step(title: string): void {
@@ -1080,13 +1067,13 @@ async function main(): Promise<void> {
   check('the poller is honestly reported', health.checks.find((c) => c.name === 'poller')?.status, 'degraded');
 
   console.log(
-    failures === 0
-      ? `\nAll ${checks} checks passed.\n\nNot proved: that a real text arrives, a real phone rings, or the real model answers as scripted. EZ Texting, Twilio and OpenAI were stubbed.`
-      : `\n${failures} of ${checks} checks FAILED.`
+    failureCount() === 0
+      ? `\nAll ${checkCount()} checks passed.\n\nNot proved: that a real text arrives, a real phone rings, or the real model answers as scripted. EZ Texting, Twilio and OpenAI were stubbed.`
+      : `\n${failureCount()} of ${checkCount()} checks FAILED.`
   );
 
   await pool.end();
-  process.exit(failures === 0 ? 0 : 1);
+  process.exit(failureCount() === 0 ? 0 : 1);
 }
 
 main().catch((err) => {

@@ -15,6 +15,7 @@
  * It writes rows, so it refuses to run against a database that holds leads.
  * Run it with the others: scripts/live-checks.sh hold-offers
  */
+import { check, failureCount, verdict } from './check';
 import { holdCall, linkAutomatedCall, missTransfer, startAutomatedCall, takeTransfer } from '../src/db/auto-calls';
 import {
   endOffer,
@@ -27,18 +28,6 @@ import { pool } from '../src/db/pool';
 import { setRingable } from '../src/db/presence';
 import { pgUserStore } from '../src/db/users';
 
-let failures = 0;
-
-function check(label: string, actual: unknown, expected: unknown): void {
-  const a = JSON.stringify(actual);
-  const e = JSON.stringify(expected);
-  if (a === e) {
-    console.log(`  ok   ${label}`);
-  } else {
-    failures++;
-    console.log(`  FAIL ${label}\n       expected ${e}\n       actual   ${a}`);
-  }
-}
 
 async function refusedBy(sql: string, params: unknown[] = []): Promise<string> {
   try {
@@ -243,9 +232,9 @@ async function main(): Promise<void> {
     check('a lead no longer on hold - the busy line - is never offered', await startOffer(cara), null);
   }
 
-  console.log(failures === 0 ? '\nall checks passed' : `\n${failures} check(s) FAILED`);
+  console.log(verdict());
   await pool.end();
-  process.exit(failures === 0 ? 0 : 1);
+  process.exit(failureCount() === 0 ? 0 : 1);
 }
 
 main().catch((err) => {

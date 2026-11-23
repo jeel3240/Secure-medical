@@ -16,6 +16,7 @@
  *
  * Re-running needs a fresh database: DROP and re-migrate.
  */
+import { check, failureCount, verdict } from './check';
 import { pool } from '../src/db/pool';
 import { callsLeftOpen, finishCall, incomingTakenBy, recordAnsweredBy, startCall, startIncomingCall, takeIncomingCall } from '../src/db/calls';
 import { saveRecording } from '../src/db/transcripts';
@@ -28,18 +29,6 @@ import { blockNumber, DNC_REASONS } from '../src/db/dnc';
 import { listAdminLeads } from '../src/db/leads';
 import { getTimeline } from '../src/db/timeline';
 
-let failures = 0;
-
-function check(label: string, actual: unknown, expected: unknown): void {
-  const a = JSON.stringify(actual);
-  const e = JSON.stringify(expected);
-  if (a === e) {
-    console.log(`  ok   ${label}`);
-  } else {
-    failures++;
-    console.log(`  FAIL ${label}\n       expected ${e}\n       actual   ${a}`);
-  }
-}
 
 async function refuseIfNotEmpty(): Promise<void> {
   const { rows } = await pool.query(
@@ -780,9 +769,9 @@ async function main(): Promise<void> {
     check('nobody free: missed at once, as before', missed, { kind: 'missed', leadId: nobodyFree, firstReport: true });
   }
 
-  console.log(failures === 0 ? '\nall checks passed' : `\n${failures} check(s) FAILED`);
+  console.log(verdict());
   await pool.end();
-  process.exit(failures === 0 ? 0 : 1);
+  process.exit(failureCount() === 0 ? 0 : 1);
 }
 
 main().catch((err) => {

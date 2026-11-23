@@ -13,8 +13,9 @@ import { Button } from '../../components/Button';
  * 2b: once an agent texts, the lead is talking to a person, and an automated
  * "Question 2 of 3" landing on top of that reads as a broken system. The
  * warning appears as soon as there is something to send and before the first
- * send, never after, because it cannot be undone - and the response's
- * `tookOver` says whether this send was the one that did it.
+ * send, never after, because it cannot be undone. (The response's `tookOver`
+ * says whether this send was the one that did it; the page reads the thread
+ * again instead.)
  *
  * **160 characters.** One segment. Longer costs a second segment on every send,
  * so the count is a hard limit here rather than a suggestion - the API rejects

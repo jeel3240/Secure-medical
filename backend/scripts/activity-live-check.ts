@@ -13,6 +13,7 @@
  *   DATABASE_URL=postgres://app:app@localhost:5433/activity_check JWT_SECRET=x \
  *     EZT_USERNAME=x EZT_PASSWORD=x EZT_GROUP=x npx ts-node --transpile-only scripts/activity-live-check.ts
  */
+import { check, failureCount, verdict } from './check';
 import { pool } from '../src/db/pool';
 import { switchAiAgent } from '../src/ai/settings';
 import { archiveWebhook, recordActivity } from '../src/db/activity';
@@ -29,18 +30,6 @@ import { pollOnce } from '../src/worker/poller';
 /** The module the poller reads EZ Texting through, so a check can supply its answer. */
 const eztClient = eztClientModule as unknown as { listContacts: (...args: unknown[]) => Promise<unknown> };
 
-let failures = 0;
-
-function check(label: string, actual: unknown, expected: unknown): void {
-  const a = JSON.stringify(actual);
-  const e = JSON.stringify(expected);
-  if (a === e) {
-    console.log(`  ok   ${label}`);
-  } else {
-    failures++;
-    console.log(`  FAIL ${label}\n       expected ${e}\n       actual   ${a}`);
-  }
-}
 
 async function refuseIfNotEmpty(): Promise<void> {
   const { rows } = await pool.query(
@@ -367,9 +356,9 @@ async function main(): Promise<void> {
     )).rows[0], { lead: 1, notes: 1, log: 1 });
   }
 
-  console.log(failures === 0 ? '\nall checks passed' : `\n${failures} check(s) FAILED`);
+  console.log(verdict());
   await pool.end();
-  process.exit(failures === 0 ? 0 : 1);
+  process.exit(failureCount() === 0 ? 0 : 1);
 }
 
 main().catch((err) => {

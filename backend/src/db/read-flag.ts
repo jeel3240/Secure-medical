@@ -28,9 +28,9 @@ export type MarkReadResult =
  * caller wanted it read and it is. The `changed` flag says whether this call
  * was the one that did it, which is what a log line or a UI refresh keys on.
  *
- * Deliberately not scoped to the lead's holder. Reading is not claiming - a
- * superadmin looking at a lead an agent holds has still read it, and the flag
- * is about whether a human has seen the message, not about who owns the work.
+ * This does not check who holds the lead; the route does - only the holder
+ * marks a reply read, so a superadmin looking at someone else's lead is not
+ * what makes it leave the queue (`requireHolding`, `api/lead-workspace.ts`).
  */
 export async function markLeadRead(leadId: number, actorId: number | null = null): Promise<MarkReadResult> {
   // Clearing the flag leaves no trace of who read the reply or when, so the
