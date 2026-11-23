@@ -11,13 +11,14 @@
 import { queueTag, type QueueTag } from '../core/queue-tags';
 import { NOT_FOR_AGENTS } from '../core/state-machine';
 import {
-  AI_CALLBACK_DUE_AT_SQL,
-  AI_CALLBACK_DUE_SQL,
   CLOSED_SQL,
   MISSED_CALL_SQL,
   MISSED_YES_AT_SQL,
   MISSED_YES_SQL,
   newestConversation,
+  PROMISED_CALLBACK_DUE_AT_SQL,
+  PROMISED_CALLBACK_DUE_SQL,
+  promisedCallbackDue,
   RECEIVED_SQL,
 } from './lead-state';
 import { leadSearchSql, wordList } from './sql';
@@ -137,9 +138,11 @@ const BASE = `
  * who never replied, so such a lead has no score, and it is never closed: an
  * outcome saved after the call is what clears it.
  *
- * **And a call back Seri booked, once it is due** - A16 (`AI_CALLBACK_DUE_SQL`).
+ * **And a call back Seri booked, once it is due** - A16 (`PROMISED_CALLBACK_DUE_SQL`).
  * The lead picked a time with her on the robot's call; at that time a person
- * must call. No score for the same reason, and an outcome finishes it.
+ * must call. No score for the same reason, and an outcome finishes it. **So
+ * does one whose agent was deactivated** (D2, 2026-11-23): nobody's now, and
+ * nobody else would make it.
  */
 /** Safe to inline: a constant from this codebase, each value checked (`wordList`). */
 const notForAgents = wordList(NOT_FOR_AGENTS);
@@ -153,7 +156,7 @@ const INCLUDED = `
     OR l.has_unread_inbound
     OR ${MISSED_CALL_SQL}
     OR ${MISSED_YES_SQL}
-    OR ${AI_CALLBACK_DUE_SQL}
+    OR ${PROMISED_CALLBACK_DUE_SQL}
     OR (
       c.score > 0
       AND NOT ${CLOSED_SQL}
@@ -296,7 +299,7 @@ export async function listQueue(query: QueueQuery = {}): Promise<QueuePage> {
               u.id AS agent_id, u.name AS agent_name, l.has_unread_inbound,
               ${MISSED_YES_AT_SQL} AS missed_yes_at,
               -- LEAST skips a null: whichever promised call came first.
-              LEAST(${MISSED_YES_AT_SQL}, ${AI_CALLBACK_DUE_AT_SQL}) AS promised_at
+              LEAST(${MISSED_YES_AT_SQL}, ${PROMISED_CALLBACK_DUE_AT_SQL}) AS promised_at
        ${BASE}
        ${inQueue}
      ),
@@ -328,19 +331,19 @@ export async function listQueue(query: QueueQuery = {}): Promise<QueuePage> {
          LIMIT ${limit}
        ) l
        -- The next callback - Seri's included, which has no agent until someone
-       -- takes it (A16).
+       -- takes it (A16). One whose agent was deactivated names nobody (D2).
        LEFT JOIN LATERAL (
-         SELECT cb.agent_id, cu.name AS agent_name, cb.scheduled_at
-         FROM callbacks cb LEFT JOIN users cu ON cu.id = cb.agent_id
+         SELECT cu.id AS agent_id, cu.name AS agent_name, cb.scheduled_at
+         FROM callbacks cb LEFT JOIN users cu ON cu.id = cb.agent_id AND cu.is_active
          WHERE cb.lead_id = l.id AND cb.done_at IS NULL
          ORDER BY cb.scheduled_at, cb.id
          LIMIT 1
        ) ncb ON true
-       -- Seri's, due: what puts the lead at the top.
+       -- A promised one, due - Seri's, or one nobody has any more: what puts the lead at the top.
        LEFT JOIN LATERAL (
-         SELECT dc.agent_id, du.name AS agent_name, dc.scheduled_at
-         FROM callbacks dc LEFT JOIN users du ON du.id = dc.agent_id
-         WHERE dc.lead_id = l.id AND dc.reason = 'ai_booked' AND dc.done_at IS NULL AND dc.scheduled_at <= now()
+         SELECT du.id AS agent_id, du.name AS agent_name, dc.scheduled_at
+         FROM callbacks dc LEFT JOIN users du ON du.id = dc.agent_id AND du.is_active
+         WHERE dc.lead_id = l.id AND ${promisedCallbackDue('dc')}
          ORDER BY dc.scheduled_at, dc.id
          LIMIT 1
        ) dcb ON true

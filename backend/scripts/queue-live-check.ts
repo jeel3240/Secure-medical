@@ -22,7 +22,7 @@ import { startFlow } from './live-flow';
 import { listQueue } from '../src/db/queue';
 import { getLeadDetail } from '../src/db/lead-detail';
 import { keepCallResult, startAutomatedCall, missTransfer } from '../src/db/auto-calls';
-import { listCallbacks } from '../src/db/callbacks';
+import { createCallback, listCallbacks } from '../src/db/callbacks';
 import { claimLead, releaseLead } from '../src/db/claims';
 import { startCall } from '../src/db/calls';
 import { setDisposition } from '../src/db/dispositions';
@@ -344,6 +344,47 @@ async function main() {
 
   check('the outcome is saved', (await setDisposition(late, michael, 'closed')).ok, true);
   check('an outcome finishes it: out of the queue', at(await queueNow(), late), -1);
+
+  // A deactivated agent's call back - review D2, Jeel 2026-11-23: nobody's,
+  // as one Seri booked that nobody took; nothing rewritten when they go.
+  console.log('\na deactivated agent\'s call back (D2)');
+  const { rows: leaving } = await pool.query(
+    `INSERT INTO users (email, password_hash, name, role) VALUES ('leaving-d2@example.com', 'x', 'Leaving', 'agent') RETURNING id`
+  );
+  const leaver = leaving[0].id as number;
+  const owed = await lead({ phone: '+15550000321', first: 'Owed', source: 'CORE-G-27', ageMin: 300, status: 'completed', q1: '1', q2: '1', q3: '1', score: 20, tier: 'LOW' });
+  check('booked by its agent', (await createCallback(owed, leaver, new Date(Date.now() - 10 * 60_000))).ok, true);
+  const owedAt = (await pool.query(`SELECT scheduled_at FROM callbacks WHERE lead_id = $1`, [owed])).rows[0].scheduled_at.toISOString();
+  rows = await queueNow();
+  check('their own, due: named, not pushed up - theirs to make', [rows[at(rows, owed)]?.tag, at(rows, owed) > at(rows, hot)],
+    [{ kind: 'callback', agentId: leaver, agentName: 'Leaving', at: owedAt }, true]);
+
+  await pool.query(`UPDATE users SET is_active = false WHERE id = $1`, [leaver]);
+  rows = await queueNow();
+  check('deactivated: nobody\'s - no name, bold, ahead of the 90-point lead', [rows[at(rows, owed)]?.tag, at(rows, owed) < at(rows, hot)],
+    [{ kind: 'callback', at: owedAt, due: true }, true]);
+  check('nothing rewritten: the row still says whose it was',
+    (await pool.query(`SELECT agent_id FROM callbacks WHERE lead_id = $1`, [owed])).rows[0].agent_id, leaver);
+
+  await pool.query(`UPDATE users SET is_active = true WHERE id = $1`, [leaver]);
+  rows = await queueNow();
+  check('reactivated: theirs again', rows[at(rows, owed)]?.tag, { kind: 'callback', agentId: leaver, agentName: 'Leaving', at: owedAt });
+  await pool.query(`UPDATE users SET is_active = false WHERE id = $1`, [leaver]);
+
+  check('the first agent to pick the lead up takes it', (await claimLead(owed, michael)).ok, true);
+  check('the call back is theirs now', (await pool.query(`SELECT agent_id FROM callbacks WHERE lead_id = $1`, [owed])).rows[0].agent_id, michael);
+  check(
+    'recorded, by them, with whose it was',
+    (await pool.query(
+      `SELECT actor_id, subject_user_id, (detail->>'from')::int AS from_agent FROM activity_log WHERE action = 'callback.taken' AND lead_id = $1`,
+      [owed]
+    )).rows,
+    [{ actor_id: michael, subject_user_id: michael, from_agent: leaver }]
+  );
+  check('on their My Callbacks', (await listCallbacks({ agentId: michael, when: 'overdue' })).callbacks.some((c) => c.leadId === owed), true);
+  check('put back: theirs, named - an active agent\'s, so not pushed up', (await releaseLead(owed, michael, false)).ok, true);
+  rows = await queueNow();
+  check('the row', rows[at(rows, owed)]?.tag, { kind: 'callback', agentId: michael, agentName: 'Michael', at: owedAt });
 
   console.log(verdict());
   await pool.end();

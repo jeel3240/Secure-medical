@@ -145,7 +145,8 @@ const SQL = `
   LEFT JOIN users ou ON ou.id = od.agent_id
   LEFT JOIN LATERAL (
     SELECT acb.scheduled_at, acb.note, au.name AS agent_name FROM callbacks acb
-    LEFT JOIN users au ON au.id = acb.agent_id
+    -- Taken by someone since deactivated: open to everyone again (D2).
+    LEFT JOIN users au ON au.id = acb.agent_id AND au.is_active
     WHERE acb.lead_id = l.id AND acb.reason = 'ai_booked' AND acb.done_at IS NULL
     ORDER BY acb.scheduled_at, acb.id
     LIMIT 1
