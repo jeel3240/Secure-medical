@@ -5,7 +5,7 @@
  * each call is placed by `worker/place-auto-call.ts`, as from T12.
  */
 
-import type { DialRoom } from '../core/auto-dial';
+import { UNDER_WAY_MINUTES, type DialRoom } from '../core/auto-dial';
 import { activityInsertSql, recordActivity } from './activity';
 import { automatedCallUsedSql, ON_HOLD_SQL } from './auto-calls';
 import { readCallsPerPerson, readHoldMaxSeconds } from './call-script';
@@ -14,12 +14,6 @@ import { withTryLock } from './locks';
 import { pool } from './pool';
 import { FREE_SQL } from './presence';
 
-/**
- * How long a call of the robot's counts as still going with nobody on it, for
- * the room - and how long a row that never reached Twilio is left before it is
- * closed. Ten minutes: far longer than any call that is ringing or asking.
- */
-export const UNDER_WAY_MINUTES = 10;
 
 /** Now, as `settings` keeps a time: ISO 8601, UTC. */
 const NOW_TEXT = `to_char(now() AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"')`;

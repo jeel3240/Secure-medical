@@ -167,7 +167,7 @@ you change something the docs describe, update the doc in the same commit.
     src/api/lead-workspace.ts  every route on one lead: card, timeline, notes, callbacks, SMS, dispositions, read
     src/api/filters.ts      request parsing shared by several routes: since, tz, lists, lead id
     src/api/startup-checks.ts  what stops the API starting in production: weak JWT secret, no webhook token, Twilio settings only partly set
-    src/db/claims.ts        claiming and releasing a lead; a pick-up takes the call back Seri booked that nobody has (A16)
+    src/db/claims.ts        claiming and releasing a lead; a pick-up takes the call back Seri booked that nobody has (A16); taking a call with a lead on it, the lead following the call - a transfer and a call back that rang everyone free share it (`takeCallWithLead`, review Q4)
     src/db/read-flag.ts     clears has_unread_inbound
     src/db/lead-detail.ts   the lead card
     src/db/timeline.ts      the merged lead timeline; a robot call's result and what the lead said on it (T21); Seri's conversation on a call she took (A19)

@@ -8,8 +8,79 @@
  * AGENT-WORKSPACE.md, "Rules", is the spec.
  */
 
-import { activityInsertSql } from './activity';
+import type { PoolClient } from 'pg';
+import { activityInsertSql, recordActivity } from './activity';
 import { pool } from './pool';
+
+/** A call with a lead on it, found and locked - the call and its lead - for `takeCallWithLead`. */
+export interface LockedCall {
+  id: number;
+  leadId: number;
+  /** Whose the call is already - null when nobody's yet. */
+  agentId: number | null;
+  /** Who holds the lead now. */
+  assignedTo: number | null;
+}
+
+export type TakeCallResult =
+  | { ok: true; leadId: number; tookOverFrom: number | null }
+  /** `taken`: another person has it; `inactive`: this account was deactivated while it rang. */
+  | { ok: false; reason: 'not_found' | 'taken' | 'inactive' };
+
+/**
+ * One person taking a call with a lead on it, in one transaction: the robot's
+ * transfer (`takeTransfer`, T15a) and a lead's call that rang everyone free
+ * (`takeIncomingCall`, T19). `lock` finds the call and locks it and its lead,
+ * or answers null when there is none to take. Refused when another person has
+ * it, or the account is not active. Then `claim` writes what taking this kind
+ * of call means - `firstTime` when it was nobody's - and the lead follows the
+ * call: theirs, taken over from whoever held it, recorded as `lead.picked_up`
+ * with `via`. Already theirs, no new pick-up. One copy since review Q4,
+ * 2026-11-23.
+ */
+export async function takeCallWithLead(
+  agentId: number,
+  via: 'transfer' | 'call_back',
+  lock: (client: PoolClient) => Promise<LockedCall | null>,
+  claim: (client: PoolClient, call: LockedCall, taken: { firstTime: boolean; tookOverFrom: number | null }) => Promise<void>
+): Promise<TakeCallResult> {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const call = await lock(client);
+    const refuse = async (reason: 'not_found' | 'taken' | 'inactive') => {
+      await client.query('ROLLBACK');
+      return { ok: false as const, reason };
+    };
+    if (!call) return await refuse('not_found');
+    if (call.agentId !== null && call.agentId !== agentId) return await refuse('taken');
+    const agent = await client.query(`SELECT 1 FROM users WHERE id = $1 AND is_active`, [agentId]);
+    if (agent.rowCount === 0) return await refuse('inactive');
+
+    const tookOverFrom = call.assignedTo !== null && call.assignedTo !== agentId ? call.assignedTo : null;
+    await claim(client, call, { firstTime: call.agentId === null, tookOverFrom });
+    if (call.assignedTo !== agentId) {
+      await client.query(`UPDATE leads SET assigned_to = $2, assigned_at = now(), updated_at = now() WHERE id = $1`, [
+        call.leadId,
+        agentId,
+      ]);
+      await recordActivity(client, {
+        action: 'lead.picked_up',
+        actorId: agentId,
+        leadId: call.leadId,
+        detail: { via, callId: call.id, ...(tookOverFrom === null ? {} : { tookOverFrom }) },
+      });
+    }
+
+    await client.query('COMMIT');
+    return { ok: true, leadId: call.leadId, tookOverFrom };
+  } catch (err) {
+    await client.query('ROLLBACK');
+    throw err;
+  } finally {
+    client.release();
+  }
+}
 
 export interface Claim {
   leadId: number;
