@@ -1,4 +1,15 @@
-import { DEFAULT_EXPIRY_DAYS, DEFAULT_POLL_INTERVAL_SECONDS, expiryDays, isTimeZone, likeLiteral, pollIntervalSeconds, readExpiryDays, startOfTodaySql } from './sql';
+import {
+  DEFAULT_EXPIRY_DAYS,
+  DEFAULT_POLL_INTERVAL_SECONDS,
+  expiryDays,
+  isTimeZone,
+  leadSearchSql,
+  likeLiteral,
+  pollIntervalSeconds,
+  readExpiryDays,
+  startOfTodaySql,
+  wordList,
+} from './sql';
 
 describe('likeLiteral', () => {
   it('escapes the LIKE wildcards and the escape character itself', () => {
@@ -68,5 +79,32 @@ describe('the settings every reader takes alike (review M17)', () => {
     ['soon', DEFAULT_POLL_INTERVAL_SECONDS],
   ] as const)('poll_interval_seconds %p: %p seconds - the worker\'s and Admin > Leads\' alike', (raw, seconds) => {
     expect(pollIntervalSeconds(raw)).toBe(seconds);
+  });
+});
+
+describe('the search box, one copy for the queue and Admin > Leads (review Q5)', () => {
+  it('the name, escaped, and the phone by its digits', () => {
+    const values: unknown[] = ['already there'];
+    const sql = leadSearchSql(values, '(602) 620-35_%');
+    expect(values).toEqual(['already there', '%(602) 620-35\\_\\%%', '%60262035%']);
+    expect(sql).toContain('LIKE $2');
+    expect(sql).toContain("$3 <> '%%' AND l.phone LIKE $3");
+  });
+
+  it('a name alone: no digits, so the phone is not searched', () => {
+    const values: unknown[] = [];
+    leadSearchSql(values, 'Dana');
+    expect(values).toEqual(['%dana%', '%%']);
+  });
+});
+
+describe('a list of constant words for IN (review Q5)', () => {
+  it('quoted and joined', () => {
+    expect(wordList(['closed', 'not_interested', 'call.started'])).toBe("'closed', 'not_interested', 'call.started'");
+  });
+
+  it('anything but a plain word is refused, never quietly changed', () => {
+    expect(() => wordList(['closed', "x'; DROP TABLE leads; --"])).toThrow('Not a plain word for SQL');
+    expect(() => wordList(['Closed'])).toThrow();
   });
 });

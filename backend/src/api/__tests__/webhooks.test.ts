@@ -371,7 +371,8 @@ describe('START, a lead asking to hear from us again', () => {
     // Stored and flagged, so an agent sees they came back.
     expect(sqlOf(calls)).toMatch(/INSERT INTO messages/i);
     expect(sqlOf(calls)).toMatch(/UPDATE leads SET has_unread_inbound/i);
-    expect(savedConversation(calls)).toMatchObject({ status: 'suppressed' });
+    // Nothing changed, so nothing is written to it (review Q6, 2026-11-23).
+    expect(savedConversation(calls)).toBeNull();
     expect(sendMessage).not.toHaveBeenCalled();
   });
 
@@ -664,7 +665,8 @@ describe('the reply advances the conversation', () => {
 
     await request(buildApp()).post('/api/webhooks/eztexting').send(reply({ message: '1' }));
 
-    expect(savedConversation(calls)).toMatchObject({ status: 'completed', score: 100 });
+    // Not even written back as it was: its `updated_at` keeps saying when it last moved (review Q6, 2026-11-23).
+    expect(savedConversation(calls)).toBeNull();
     expect(sendMessage).not.toHaveBeenCalled();
   });
 

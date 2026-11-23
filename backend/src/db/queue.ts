@@ -10,8 +10,17 @@
 
 import { queueTag, type QueueTag } from '../core/queue-tags';
 import { NOT_FOR_AGENTS } from '../core/state-machine';
-import { AI_CALLBACK_DUE_AT_SQL, AI_CALLBACK_DUE_SQL, CLOSED_SQL, MISSED_CALL_SQL, MISSED_YES_AT_SQL, MISSED_YES_SQL } from './lead-state';
-import { likeLiteral } from './sql';
+import {
+  AI_CALLBACK_DUE_AT_SQL,
+  AI_CALLBACK_DUE_SQL,
+  CLOSED_SQL,
+  MISSED_CALL_SQL,
+  MISSED_YES_AT_SQL,
+  MISSED_YES_SQL,
+  newestConversation,
+  RECEIVED_SQL,
+} from './lead-state';
+import { leadSearchSql, wordList } from './sql';
 import { pool } from './pool';
 
 /** One answer on a queue row. */
@@ -75,13 +84,7 @@ const MAX_LIMIT = 500;
  */
 const BASE = `
   FROM leads l
-  JOIN LATERAL (
-    SELECT c.id, c.status, c.step, c.score, c.tier, c.end_outcome
-    FROM conversations c
-    WHERE c.lead_id = l.id
-    ORDER BY c.created_at DESC, c.id DESC
-    LIMIT 1
-  ) c ON true
+  JOIN ${newestConversation('c.id, c.status, c.step, c.score, c.tier, c.end_outcome')}
   LEFT JOIN users u ON u.id = l.assigned_to AND u.is_active
 `;
 
@@ -137,11 +140,8 @@ const BASE = `
  * The lead picked a time with her on the robot's call; at that time a person
  * must call. No score for the same reason, and an outcome finishes it.
  */
-/** Safe to inline: a constant from this codebase, each value checked to be a plain word. */
-const notForAgents = NOT_FOR_AGENTS.map((ending) => {
-  if (!/^[a-z_]+$/.test(ending)) throw new Error(`Unexpected ending: ${ending}`);
-  return `'${ending}'`;
-}).join(', ');
+/** Safe to inline: a constant from this codebase, each value checked (`wordList`). */
+const notForAgents = wordList(NOT_FOR_AGENTS);
 
 const INCLUDED = `
   NOT EXISTS (
@@ -170,7 +170,6 @@ const INCLUDED = `
   )
 `;
 
-const RECEIVED = `COALESCE(l.ezt_added_at, l.created_at)`;
 
 /**
  * The filters every part of the answer shares: who is in the queue, the time
@@ -183,20 +182,10 @@ function buildSetFilters(query: QueueQuery, values: unknown[]): string {
 
   if (query.since) {
     values.push(query.since);
-    clauses.push(`${RECEIVED} >= $${values.length}`);
+    clauses.push(`${RECEIVED_SQL} >= $${values.length}`);
   }
 
-  if (query.q) {
-    // Phone with punctuation stripped, so "(602) 620-3572" finds +16026203572.
-    values.push(`%${likeLiteral(query.q.toLowerCase())}%`);
-    const like = `$${values.length}`;
-    values.push(`%${query.q.replace(/\D/g, '')}%`);
-    const digits = `$${values.length}`;
-    clauses.push(`(
-      lower(coalesce(l.first_name, '') || ' ' || coalesce(l.last_name, '')) LIKE ${like}
-      OR (${digits} <> '%%' AND l.phone LIKE ${digits})
-    )`);
-  }
+  if (query.q) clauses.push(leadSearchSql(values, query.q));
 
   return `WHERE ${clauses.join(' AND ')}`;
 }
@@ -301,7 +290,7 @@ export async function listQueue(query: QueueQuery = {}): Promise<QueuePage> {
   const { rows } = await pool.query<QueueDbRow>(
     `WITH q AS MATERIALIZED (
        SELECT l.id, l.phone, l.first_name, l.last_name, l.source,
-              ${RECEIVED} AS received_at,
+              ${RECEIVED_SQL} AS received_at,
               c.id AS conversation_id, c.score, c.tier, c.status, c.end_outcome,
               u.id AS agent_id, u.name AS agent_name, l.has_unread_inbound,
               ${MISSED_YES_AT_SQL} AS missed_yes_at,

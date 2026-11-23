@@ -54,11 +54,6 @@ interface InboundText {
   optOut?: boolean;
 }
 
-/**
- * Opt-out keywords. EZ Texting sets `optOut` itself, but a reply is checked
- * against these too so a STOP that arrives without the flag still blocks the
- * number. CTIA's standard set.
- */
 /** dnc_list.reason for an opt-out that arrived as a reply, vs the poller's `ezt_opt_out`. */
 const STOP_REASON = DNC_REASONS.smsStop;
 
@@ -69,6 +64,11 @@ const STOP_REASON = DNC_REASONS.smsStop;
  */
 const START_WORDS = new Set(['start', 'unstop', 'yes', 'subscribe']);
 
+/**
+ * Opt-out keywords. EZ Texting sets `optOut` itself, but a reply is checked
+ * against these too so a STOP that arrives without the flag still blocks the
+ * number. CTIA's standard set.
+ */
 const STOP_WORDS = new Set(['stop', 'stopall', 'unsubscribe', 'cancel', 'end', 'quit', 'revoke', 'optout']);
 
 /** A keyword is one short word. A longer message is not one, and is not scanned. */
@@ -201,10 +201,10 @@ const handleInbound = async (req: Request, res: Response) => {
       // A START from a number we hold no lead for still lifts a block we hold -
       // it may be a lead the partner delivered before, or one still to come.
       if (isOptIn(payload)) {
-        const released = await releaseNumber(client, phone);
+        const unblocked = await releaseNumber(client, phone);
         await client.query('COMMIT');
-        log.info(released ? 'dnc.released' : 'webhook.ignored', {
-          reason: released ? undefined : 'no_lead',
+        log.info(unblocked ? 'dnc.released' : 'webhook.ignored', {
+          reason: unblocked ? undefined : 'no_lead',
           hasLead: false,
         });
         return res.sendStatus(200);
@@ -252,8 +252,8 @@ const handleInbound = async (req: Request, res: Response) => {
     // suppressed one is finished, and what the lead sends next reaches an
     // agent as an inbound reply - STATE-MACHINE.md, "Opting back in".
     if (isOptIn(payload)) {
-      const released = await releaseNumber(client, phone);
-      if (released) {
+      const unblocked = await releaseNumber(client, phone);
+      if (unblocked) {
         log.info('dnc.released', { leadId });
       }
     }

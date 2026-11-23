@@ -95,6 +95,15 @@ verified against `groups[]` rather than trusted from the filter.
 **Checkpoint written last, and only on success.** A throw anywhere leaves it
 untouched, so the next cycle re-covers the same ground rather than skipping it.
 
+*Tested since 2026-11-23 (review Q6):* `worker/poller.test.ts` reads the
+checkpoint and the overlap as two settings - before, its stub answered every
+key alike, so neither was ever tested. It now proves the cutoff (a contact
+inside the overlap taken in; one at the cutoff or older not, and no next page
+asked for), paging while every contact is newer, the newest time written back,
+the same value on a quiet poll, an oldest-first page refused with nothing
+written, a missing or unreadable checkpoint looking back an hour, and the
+overlap read from its own setting.
+
 **A failed opener does not fail the cycle.** The poller's `openLead` catches
 every error from `sendOpener`. The lead is already committed by then, so throwing would abandon the
 rest of the page and leave the checkpoint behind, re-polling every later contact

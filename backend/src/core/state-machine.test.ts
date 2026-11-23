@@ -4,7 +4,7 @@
  * about that flow: a different one, with five questions, runs on the same code.
  */
 import { ANTIBIOTICS, LINK, OFFERS, Q1, Q2, Q3, RULES } from './flow-fixtures';
-import { firstQuestion, step, tierFor, type Conversation, type Flow, type Rules } from './state-machine';
+import { step, tierFor, type Conversation, type Flow, type Rules } from './state-machine';
 
 function fresh(overrides: Partial<Conversation> = {}): Conversation {
   return {
@@ -29,13 +29,6 @@ function run(texts: string[], from: Conversation = fresh(), rules: Rules = RULES
 }
 
 const body = (id: number) => ANTIBIOTICS.questions.find((q) => q.id === id)!.body;
-
-describe('a new lead', () => {
-  it('is sent the question with the lowest position', () => {
-    expect(firstQuestion(ANTIBIOTICS)?.key).toBe('q1');
-    expect(firstQuestion({ ...ANTIBIOTICS, questions: [] })).toBeNull();
-  });
-});
 
 describe('Question 1: did you request info?', () => {
   it('Yes: the reply and Question 2 in one text; 10 for replying and 20 for Yes', () => {

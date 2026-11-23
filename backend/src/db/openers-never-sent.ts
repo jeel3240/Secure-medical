@@ -14,6 +14,7 @@
  * it can run inside a caller's transaction.
  */
 
+import { RECEIVED_SQL } from './lead-state';
 import type { Querier } from './sql';
 
 export interface OpenerNeverSent {
@@ -64,7 +65,7 @@ export async function findOpenersNeverSent(
             fq.body AS template,
             (SELECT count(*)::int ${FAILED_OPENERS}) AS attempts,
             (SELECT max(m.created_at) ${FAILED_OPENERS}) AS last_failed_at,
-            COALESCE(l.ezt_added_at, l.created_at) AS arrived_at
+            ${RECEIVED_SQL} AS arrived_at
      FROM leads l
      JOIN conversations c ON c.lead_id = l.id
      JOIN flow_questions fq ON fq.id = c.current_question_id

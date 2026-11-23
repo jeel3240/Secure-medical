@@ -164,11 +164,6 @@ export function tierFor(rules: Pick<Rules, 'tiers'>, score: number): string | nu
   return rules.tiers.find((t) => score >= t.minScore && score <= t.maxScore)?.name ?? null;
 }
 
-/** The question a new lead is sent: the one with the lowest position. */
-export function firstQuestion(flow: Flow): FlowQuestion | null {
-  return [...flow.questions].sort((a, b) => a.position - b.position)[0] ?? null;
-}
-
 /**
  * True once any reply has been scored. Used to award `respondedPoints` exactly
  * once, however many replies arrive: on the first reply the score is still 0.

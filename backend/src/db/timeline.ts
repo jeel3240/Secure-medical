@@ -14,7 +14,8 @@ import { fallbackHandoff, fromHandoff, type Handoff } from '../ai/actions';
 import type { CallDirection } from '../core/calls';
 import type { ActivityAction } from '../core/activity';
 import { questionShort } from '../core/questions';
-import { phoneStoppedQuestionsAtSql } from './lead-state';
+import { newestConversation, phoneStoppedQuestionsAtSql, RECEIVED_SQL } from './lead-state';
+import { wordList } from './sql';
 import { pool } from './pool';
 
 export type TimelineKind =
@@ -153,7 +154,7 @@ const QUERIES: { kind: TimelineKind; sql: string }[] = [
       LEFT JOIN users u ON u.id = a.actor_id
       LEFT JOIN users s ON s.id = a.subject_user_id
       WHERE a.lead_id = $1
-        AND a.action IN (${TIMELINE_ACTIONS.map((action) => `'${action}'`).join(', ')})
+        AND a.action IN (${wordList(TIMELINE_ACTIONS)})
     `,
   },
 ];
@@ -181,20 +182,14 @@ const iso = (v: Date | null | undefined): string | null => v?.toISOString() ?? n
 async function systemEvents(leadId: number): Promise<TimelineEntry[]> {
   const { rows } = await pool.query(
     `SELECT
-       COALESCE(l.ezt_added_at, l.created_at) AS received_at,
+       ${RECEIVED_SQL} AS received_at,
        l.source,
        c.status, c.end_outcome, c.score, c.tier, c.expires_at, c.agent_took_over_at, c.completed_at,
        ${phoneStoppedQuestionsAtSql('c', 'l.id')} AS phone_took_over_at,
        (SELECT max(m.received_at) FROM messages m
         WHERE m.lead_id = l.id AND m.direction = 'inbound') AS last_reply_at
      FROM leads l
-     LEFT JOIN LATERAL (
-       SELECT c.status, c.end_outcome, c.score, c.tier, c.expires_at, c.agent_took_over_at, c.completed_at, c.created_at
-       FROM conversations c
-       WHERE c.lead_id = l.id
-       ORDER BY c.created_at DESC, c.id DESC
-       LIMIT 1
-     ) c ON true
+     LEFT JOIN ${newestConversation('c.status, c.end_outcome, c.score, c.tier, c.expires_at, c.agent_took_over_at, c.completed_at, c.created_at')}
      WHERE l.id = $1`,
     [leadId]
   );
