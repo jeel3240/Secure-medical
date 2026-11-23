@@ -30,7 +30,7 @@
 
 Two findings for later tickets: **Smart Turn Detection does not apply with Deepgram Flux** - only Nova-3 can try it (A33); and the stand-in's labels missed an act for **asking for the link** ("Just text me the link." came out as a call back) - A28's act list has `wants_link`.
 
-The bake-off is kept, not thrown away as first planned: `npm run ai:bakeoff` measures again after A30 and A33. Real lines are read from a file exported from the local database (`--real`), never committed: they hold a test lead's words.
+The bake-off is kept, not thrown away as first planned: `npm run ai:bakeoff` measures again after A30 and A33. Real lines are read from a file exported from the local database (`--real`), never committed: they hold a test lead's words. *(Removed 2026-11-19 with today's brain, its baseline: `ai-bakeoff.ts` and `npm run ai:bakeoff` are gone. A33 was measured on A34's real calls instead (calls 118 and 119), and whole calls are replayed with `npm run ai:replay` (A32) - its real lines read the same way.)*
 
 ## Not in this ticket
 

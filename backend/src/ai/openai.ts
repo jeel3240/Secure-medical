@@ -23,7 +23,13 @@ export interface ModelToolCall {
   arguments: string;
 }
 
-export type ModelEvent = { type: 'text'; text: string } | { type: 'tool'; call: ModelToolCall };
+/**
+ * What her brain gives for a reply: words as they are written, her action once
+ * decided - or `quiet`, nothing to say on purpose (a voicemail's greeting, an
+ * "okay" with no question open), so the call does not warn of an empty reply
+ * (review R9, 2026-11-23).
+ */
+export type ModelEvent = { type: 'text'; text: string } | { type: 'tool'; call: ModelToolCall } | { type: 'quiet' };
 
 /** Her brain, as the call asks it (brain.ts). */
 export interface SeriModel {

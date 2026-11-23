@@ -53,7 +53,13 @@ export interface BrainSetup {
   keep?: (record: BrainRecord) => void;
 }
 
-/** What is kept of each reply (A31): never a word said - the lead's acts and her moves by kind, and the call's record. */
+/**
+ * What is kept of each reply (A31): the lead's acts and her moves, and the
+ * call's record - in the database, never the logs. Not the conversation, which
+ * is the other turns, but not free of words: an approved answer's text, the
+ * time said back, and the first two words of her last replies (`openings`),
+ * which can be the lead's name (review R7, 2026-11-23).
+ */
 export interface BrainRecord {
   version: number;
   /** How the lead's words were read: `fast`, `openai`, `early` - started while they spoke (A33) - or `refused`, after an action the call refused. */
@@ -284,6 +290,11 @@ export class Brain implements SeriModel {
     });
     const pending: Pending = { state: decision.state, moves, who, herTurns: turn.herTurns, full: '' };
     this.pending = pending;
+    // Nothing to say, on purpose: the call is told, so it does not warn of an empty reply (review R9).
+    if (moves.length === 0) {
+      yield { type: 'quiet' };
+      return;
+    }
 
     // Said by code first: the approved answers - the client's words exactly - then her saved introduction, when nothing else needs her words.
     const byCode = codeLines(moves, spokenNumber(this.setup.callbackNumber));
