@@ -2,7 +2,7 @@
 
 **Goal:** every path of A21's checklist heard on a real phone with the new brain, before A22.
 
-**Depends on:** A30-A32  ·  **Size:** M  ·  **Status:** Ready 2026-11-17 - A33's measurements are taken on these calls
+**Depends on:** A30-A32  ·  **Size:** M  ·  **Status:** In progress - calls 113-140, 2026-11-17 to 2026-11-22; A33's measurements were taken on calls 118 and 119
 
 ## Build
 

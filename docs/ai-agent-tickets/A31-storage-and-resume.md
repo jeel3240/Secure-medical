@@ -18,7 +18,7 @@
 
 ## As built
 
-`docs/AI-AGENT.md` section 12, "As built: what is kept, and picking a call back up (A31)". Two changes from the ticket: the record is kept at each reply, before and after, so resume needs no replay - with its reply said when her turn followed it; and **`npm run e2e` was not moved to the new brain** - its OpenAI stand-in answers today's requests, so it still proves the call around the brain; the new brain's whole calls are A32's replays, against the real OpenAI.
+`docs/AI-AGENT.md` section 12, "As built: what is kept, and picking a call back up (A31)". Two changes from the ticket: the record is kept at each reply, before and after, so resume needs no replay - with its reply said when her turn followed it; and **`npm run e2e` was not moved to the new brain** - its OpenAI stand-in answers today's requests, so it still proves the call around the brain; the new brain's whole calls are A32's replays, against the real OpenAI. *(Moved 2026-11-19, when today's brain was removed: `npm run e2e` now runs the new brain - `new Brain` with understand and speak - and its stand-in answers understand's strict JSON and speak's stream; `docs/README.md`, "How to test".)*
 
 ## Docs to update in the same commit
 

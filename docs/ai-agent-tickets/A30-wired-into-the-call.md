@@ -8,7 +8,7 @@
 
 `conversation.ts`:
 
-- Understand and who is there asked at the same time; then the policy; then the approved answer and Speak.
+- Understand and who is there asked at the same time; then the policy; then the approved answer and Speak. *(As built: who is there first, then understand - `docs/AI-AGENT.md` section 12, "As built: the brain on the call".)*
 - **The commit point:** the lead's acts change the record only when her first sentence goes out. New words before then stop the run and start it again on everything unanswered; each run numbered, a late answer dropped.
 - Talked over: a move counts as said only if its first sentence is in what Twilio says the lead heard.
 - One deadline from the lead's words: "One moment..." at 4 s, the script at 8 s; understand slower than about 2.5 s - Speak answers that turn alone, briefly, with no offer and no action.

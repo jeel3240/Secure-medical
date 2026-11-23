@@ -341,7 +341,9 @@ describe('what the lead heard', () => {
   it('a voicemail greeting: nothing said - the beep decides', async () => {
     understand.answers.push(acts(['machine']));
     conversation.heard('Hi, you have reached John, please leave a message after the tone.');
-    await until(() => logged.some((l) => l.event === 'ai_relay.empty_reply'), 'the empty reply');
+    await until(() => logged.some((l) => l.event === 'ai_relay.reply'), 'the reply');
+    // Nothing said on purpose - not warned as an empty reply (review R9).
+    expect(logged.some((l) => l.event === 'ai_relay.empty_reply')).toBe(false);
     expect(speak.briefs).toEqual([]);
     expect(sent.filter((m) => m.type === 'text' && m.token)).toEqual([]);
   });

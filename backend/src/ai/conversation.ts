@@ -212,6 +212,8 @@ interface Reply {
   filler: boolean;
   /** Sentences written after her question and never said: her action waits for the answer. */
   unsaid: number;
+  /** Her brain chose to say nothing (review R9): not an empty reply. */
+  quiet: boolean;
 }
 
 export class Conversation {
@@ -486,6 +488,7 @@ export class Conversation {
       timer: null,
       filler: false,
       unsaid: 0,
+      quiet: false,
     };
     this.reply = reply;
     reply.timer = this.timers.set(() => this.slow(reply), LIMITS.firstWordMs);
@@ -529,6 +532,10 @@ export class Conversation {
       for await (const event of this.deps.model.reply([...this.history], reply.abort.signal)) {
         // The call closed - a hang-up, the beep - is over for her reply too: nothing more said or carried out (review H5).
         if (reply.done || this.over) return;
+        if (event.type === 'quiet') {
+          reply.quiet = true;
+          continue;
+        }
         if (reply.firstWordAt === null) {
           reply.firstWordAt = Date.now();
           this.timers.clear(reply.timer);
@@ -573,7 +580,7 @@ export class Conversation {
       this.act(reply, tool, opts.attempt);
       return;
     }
-    if (reply.sent.length === 0) log.warn('ai_relay.empty_reply', { callId: this.setup.callId });
+    if (reply.sent.length === 0 && !reply.quiet) log.warn('ai_relay.empty_reply', { callId: this.setup.callId });
     this.finish(reply);
     this.afterReply();
   }

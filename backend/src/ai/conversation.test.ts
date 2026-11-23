@@ -240,6 +240,15 @@ describe('her reply', () => {
     await until(() => logged.some((l) => l.event === 'ai_relay.empty_reply'), 'the warning');
     expect(sent).toEqual([]);
   });
+
+  it('nothing said on purpose is not an empty reply (review R9)', async () => {
+    model.replies.push([{ type: 'quiet' }]);
+    conversation.heard('Okay.');
+    await until(() => logged.some((l) => l.event === 'ai_relay.reply'), 'the reply');
+    expect(sent).toEqual([]);
+    expect(logged.some((l) => l.event === 'ai_relay.empty_reply')).toBe(false);
+    expect(logged.find((l) => l.event === 'ai_relay.reply')?.fields).toMatchObject({ sentences: 0, firstWordMs: null });
+  });
 });
 
 describe('her tone (tone.ts)', () => {

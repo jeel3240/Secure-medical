@@ -6,8 +6,9 @@
  * it on the script's backup at best. Before a look that would place calls,
  * with her switched on:
  *
- * - **OpenAI answers** - a one-word request to her own model (`openAiProbe`),
- *   at most once a minute (`cachedProbe`). An error, a refused key or no answer
+ * - **OpenAI answers** - a one-word request to each of her two models, speak's
+ *   and understand's, together (`openAiProbe`, since A30), at most once a
+ *   minute (`cachedProbe`). An error, a refused key or no answer
  *   in 5 seconds is down: nothing is placed, and it is asked again a minute on.
  * - **Her last three calls did not all fall back** (`fallbackStreak`). Three
  *   in a row, the latest started within the pause - 15 minutes, as the robot
