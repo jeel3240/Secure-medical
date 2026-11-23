@@ -2,7 +2,7 @@
  * Seri's streamed reply, cut into sentences - A11. Each is checked and sent the
  * moment it is whole.
  */
-import { asks, SentenceSplitter, upToQuestion } from './sentences';
+import { asks, SentenceSplitter } from './sentences';
 
 /** Feeds `parts` one at a time, as OpenAI writes them; what came out after each, then at the end. */
 function feed(parts: string[]): { after: string[][]; last: string[] } {
@@ -54,20 +54,7 @@ describe('cutting a streamed reply into sentences', () => {
   });
 });
 
-describe('what the lead hears when her action waits for their answer (A21, call 95)', () => {
-  it('up to the end of her first question', () => {
-    expect(upToQuestion("So that's Tuesday at 12 PM your time? Great, I'll schedule that call back now. Goodbye, Jeel.")).toBe(
-      "So that's Tuesday at 12 PM your time?"
-    );
-    expect(upToQuestion('Got it. Is it the timing? Or the price? I can text you a link.')).toBe('Got it. Is it the timing?');
-  });
-
-  it('the whole reply when it asks nothing, or the question is last', () => {
-    expect(upToQuestion("Sure. I'll text you the link now.")).toBe("Sure. I'll text you the link now.");
-    expect(upToQuestion('Great! Would you like me to connect you now?')).toBe('Great! Would you like me to connect you now?');
-    expect(upToQuestion('')).toBe('');
-  });
-
+describe('whether her words ask the lead something', () => {
   it('a question is words with a question mark', () => {
     expect(asks('Would that work?')).toBe(true);
     expect(asks('That works.')).toBe(false);

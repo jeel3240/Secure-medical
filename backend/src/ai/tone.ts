@@ -4,8 +4,8 @@
  *
  * ElevenLabs's v4 model takes a direction in square brackets inside the words
  * - "[friendly] No problem at all." - and says what follows that way:
- * brighter, calmer, more understanding. The brackets are not said. Seri writes them, as her
- * instructions say ("How you sound", instructions.ts); this keeps only the
+ * brighter, calmer, more understanding. The brackets are not said. Seri writes them, as the
+ * speak step tells her ("How you sound", speak.ts); this keeps only the
  * tones on `TONES` and drops every other bracket before Twilio gets the text -
  * a direction she made up, or the who-is-there note read back - since the
  * voice can say an unknown one aloud.
@@ -82,14 +82,9 @@ export function spokenWords(text: string): string {
   return collapse(stray(text.replace(BRACKETED, ' ')));
 }
 
-/** The brackets she wrote that are not our tones - for the answer test set (A09). */
+/** The brackets she wrote that are not our tones - for speak's test set (`evals/speak-grade.ts`). */
 export function strayBrackets(text: string): string[] {
   return [...text.matchAll(BRACKETED)].filter((m) => !approved(m[1])).map((m) => m[0]);
-}
-
-/** Whether she gave the sentence a tone. */
-export function hasTone(text: string): boolean {
-  return [...text.matchAll(BRACKETED)].some((m) => approved(m[1]) !== null);
 }
 
 /** Her greeting as the voice is sent it - friendly - by Twilio, the moment the lead picks up (A13). */

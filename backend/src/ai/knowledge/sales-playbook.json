@@ -1,5 +1,5 @@
 {
- "version": "approved-2026-11-17",
+ "version": "approved-2026-11-23",
  "style": [
   "Short: 1 to 2 sentences, then one question - never two in a reply.",
   "Use the lead's first name once or twice per call, not every sentence.",
@@ -62,7 +62,7 @@
    "lead_says": [
     "I already have a doctor"
    ],
-   "approach": "Position as convenience.",
+   "approach": "They already have a doctor: say that's great, and that a lot of our customers use us alongside their doctor, because it's quick and ships to their home.",
    "example": "That's great. A lot of our customers use us alongside their doctor, because it's quick and ships to your home."
   },
   {
@@ -111,5 +111,5 @@
   "Quote prices or give medical advice.",
   "Say 'I don't know' or 'I can't answer that'. Offer a specialist instead."
  ],
- "learning": "Not automatic. Every change to this playbook, answers.json or the instructions is run against the answer test set before it goes live. A self-improving loop (why leads hang up or say no) is a future phase."
+ "learning": "Not automatic. Every change to this playbook, answers.json or products.json is run against the understand and speak test sets (npm run ai:eval:understand, ai:eval:speak) and the real calls replayed (npm run ai:replay) before it goes live. A self-improving loop (why leads hang up or say no) is a future phase."
 }

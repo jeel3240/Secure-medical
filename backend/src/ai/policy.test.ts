@@ -320,6 +320,22 @@ describe('objections', () => {
     expect(names(turn(opened(), [{ act: 'objection', id: 'have_doctor' }]).moves)).toEqual(['objection:have_doctor', 'return_to:interest']);
   });
 
+  it('the approach comes from the playbook file, so changing the file changes what she is told (review Q1)', () => {
+    const [move] = turn(opened(), [{ act: 'objection', id: 'have_doctor' }]).moves;
+    expect(move).toEqual({ move: 'objection', id: 'have_doctor', approach: knowledge.playbook.objections.find((o) => o.id === 'have_doctor')?.approach });
+    // The words speak was given in code until 2026-11-23, unchanged.
+    expect(move).toMatchObject({
+      approach: "They already have a doctor: say that's great, and that a lot of our customers use us alongside their doctor, because it's quick and ships to their home.",
+    });
+  });
+
+  it('every objection is handled: an approved answer the files hold, worded from the playbook, or routed', () => {
+    for (const { id } of knowledge.playbook.objections) {
+      const moves = turn(opened(), [{ act: 'objection', id }]).moves;
+      expect([id, moves.length > 0]).toEqual([id, true]);
+    }
+  });
+
   it('"I\'m busy" - when would suit; "I need to think about it" - the link', () => {
     expect(names(turn(opened(), [{ act: 'objection', id: 'busy' }]).moves)).toEqual(['ask_time']);
     expect(names(turn(opened(), [{ act: 'objection', id: 'think_about_it' }]).moves)).toEqual(['offer:link']);

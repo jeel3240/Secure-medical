@@ -110,7 +110,7 @@ const REFUSED: Record<CallbackRefusal, string> = {
 /**
  * Whether this action waits for the lead's answer when her reply asked them
  * something: every action but a stop (`toHandoff`). The relay then does not
- * say the rest of her reply either (conversation.ts, `upToQuestion`).
+ * say the rest of her reply either (conversation.ts, `respond`).
  */
 export function waitsForAnswer(name: string): boolean {
   return name !== 'opt_out' && (ACTIONS as readonly string[]).includes(name);

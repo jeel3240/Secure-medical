@@ -7,6 +7,10 @@ import { spokenTime } from './callback-time';
 import { welcomeGreeting } from './instructions';
 import { loadKnowledge } from './knowledge';
 import { checkSentence, SPECIALIST_LINE, SPECIALIST_LINE_NOBODY, specialistLine, type SafetyReason } from './safety';
+import { END_REASONS, lastLine, RELAY_END_REASONS } from './actions';
+import { FILLER_LINE, STILL_THERE_LINE } from './conversation';
+import { OPENING_LINE } from './speak';
+import { spokenWords } from './tone';
 
 const knowledge = loadKnowledge();
 const sentences = (text: string) => text.split(/(?<=[.?!])\s+/).filter(Boolean);
@@ -132,11 +136,20 @@ describe('every line in the knowledge files passes unchanged', () => {
   });
 });
 
-describe('and every line her instructions give her', () => {
+describe('and every line said by code, not written by OpenAI', () => {
+  const context = { stopLine: ANTIBIOTICS_CALL.optOutBody, now: new Date('2026-11-11T19:00:00Z') };
+  const callBack = { action: 'book_callback' as const, at: '2026-11-12T20:00:00.000Z', timeZone: 'America/New_York', reason: 'Asked for a call back.' };
   it.each([
-    'This is Seri from eDrugstore. You signed up on one of our partner sites, and I\'m calling about our offer of up to 25% off your first order. Is that something you\'d be interested in?',
-    'That\'s a great question. Let me connect you with one of our specialists who can help with that.',
-    'Great, connecting you now.',
+    spokenWords(OPENING_LINE),
+    FILLER_LINE,
+    STILL_THERE_LINE,
+    ...[
+      { action: 'transfer_to_agent' as const },
+      callBack,
+      { action: 'send_link' as const },
+      { action: 'opt_out' as const },
+      ...[...END_REASONS, ...RELAY_END_REASONS].map((reason) => ({ action: 'end_call' as const, reason })),
+    ].map((handoff) => lastLine(handoff, context) as string),
     ANTIBIOTICS_CALL.optOutBody,
     welcomeGreeting('John'),
     welcomeGreeting(null),

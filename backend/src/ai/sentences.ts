@@ -53,24 +53,9 @@ export class SentenceSplitter {
 /**
  * Whether her words ask the lead something. After a question, an action that
  * waits for the answer is held back (`waitsForAnswer`, actions.ts), and so is
- * the rest of her reply (`upToQuestion`).
+ * the rest of her reply (conversation.ts, `respond`).
  */
 export function asks(text: string): boolean {
   return text.includes('?');
 }
 
-/**
- * What the lead hears of a reply that asked them something and ended with an
- * action that waits for their answer: up to the end of her first question,
- * as the relay says it (conversation.ts). The rest is never said: on A21's
- * call 95 she asked "So that's Tuesday at 12 PM your time?", then said "Great,
- * I'll schedule that call back now. Goodbye." and booked it in the same reply -
- * the booking was held back for the answer, but the lead had heard the
- * goodbye. The whole reply when it asks nothing.
- */
-export function upToQuestion(text: string): string {
-  const splitter = new SentenceSplitter();
-  const sentences = [...splitter.push(text), ...splitter.flush()];
-  const question = sentences.findIndex(asks);
-  return (question < 0 ? sentences : sentences.slice(0, question + 1)).join(' ');
-}

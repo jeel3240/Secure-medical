@@ -13,7 +13,7 @@
  * request a reply. The new brain (section 12) replaced it, and it was removed.
  */
 
-import type { CallHours, Weekday } from '../core/auto-dial';
+import { formatClock, WEEKDAYS, type CallHours, type Weekday } from '../core/auto-dial';
 import { atLocalTime, FALLBACK_ZONE_SAID, leadTimeZone, spokenClock } from './callback-time';
 
 /** What the call's own details are worked out from. */
@@ -83,7 +83,7 @@ export function callPart({ lead, now, hours }: CallDetails): string {
   const { zone, known } = leadTimeZone(lead.phone);
   const today = dateIn(now, hours.timeZone);
   // Always a time: `clock` writes one, and `readCallHours` checked the zone.
-  const at = (minute: number) => atLocalTime(`${today}T${clock(minute)}`, hours.timeZone) as Date;
+  const at = (minute: number) => atLocalTime(`${today}T${formatClock(minute)}`, hours.timeZone) as Date;
   const open = at(hours.startMinute);
   const close = at(hours.endMinute);
   const openToday = hours.days.has(weekdayIn(now, hours.timeZone));
@@ -175,7 +175,6 @@ function dateIn(when: Date, zone: string): string {
   return new Intl.DateTimeFormat('en-CA', { timeZone: zone, year: 'numeric', month: '2-digit', day: '2-digit' }).format(when);
 }
 
-const WEEKDAYS: readonly Weekday[] = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'];
 const DAY_NAMES: Record<Weekday, string> = {
   mon: 'Monday',
   tue: 'Tuesday',
@@ -205,9 +204,4 @@ function closedDays(days: ReadonlySet<Weekday>): string {
   const closed = WEEKDAYS.filter((d) => !days.has(d)).map((d) => DAY_NAMES[d]);
   if (closed.length === 0) return '';
   return ` - never ${closed.length > 1 ? `${closed.slice(0, -1).join(', ')} or ${closed[closed.length - 1]}` : closed[0]}`;
-}
-
-/** 660 -> "11:00". */
-function clock(minute: number): string {
-  return `${String(Math.floor(minute / 60)).padStart(2, '0')}:${String(minute % 60).padStart(2, '0')}`;
 }

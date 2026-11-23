@@ -16,9 +16,9 @@
  *                                   moves the lead heard, when talked over (A30)
  */
 
-import type { CallHours, Weekday } from '../core/auto-dial';
+import { formatClock, indexOfWeekday, weekdayOfIndex, WEEKDAYS, type CallHours, type Weekday } from '../core/auto-dial';
 import type { EndReason, Handoff } from './actions';
-import { MAX_AHEAD_DAYS, atLocalTime, bookableAt, checkCallbackTime, spokenTime, toLocalTime, type CallbackRefusal } from './callback-time';
+import { MAX_AHEAD_DAYS, atLocalTime, bookableAt, checkCallbackTime, dateAfter, spokenTime, toLocalTime, type CallbackRefusal } from './callback-time';
 import type { WhoIsThere } from './instructions';
 import type { AnswerOffer, Knowledge } from './knowledge';
 
@@ -76,8 +76,12 @@ const OBJECTION_ANSWERS: Readonly<Record<string, string>> = {
   never_signed_up: 'how_got_number',
 };
 
-/** Objections worded from their approach - the others are routed (a no, busy, the link) or are an approved answer. */
-const WORDED_OBJECTIONS = new Set(['have_doctor', 'too_expensive', 'scam', 'never_signed_up']);
+/**
+ * Objections she words herself, from the playbook's `approach` - the others are
+ * routed (a no, busy, the link) or are an approved answer above, which the
+ * knowledge tests hold present (review Q1, 2026-11-23).
+ */
+const WORDED_OBJECTIONS = new Set(['have_doctor']);
 
 /** Questions the opening itself answers. */
 const OPENING_TOPICS = new Set(['why_calling', 'who_we_are', 'offer', 'medical_web']);
@@ -175,8 +179,8 @@ export type Move =
   | { move: 'specialist'; again: boolean }
   /** She is eDrugstore's virtual assistant. */
   | { move: 'virtual' }
-  /** A playbook objection, worded from its approach. */
-  | { move: 'objection'; id: string }
+  /** A playbook objection, worded from its `approach` - carried here, so changing the file changes what she is told (review Q1). */
+  | { move: 'objection'; id: string; approach: string }
   | { move: 'ask_why' }
   | { move: 'offer'; kind: OfferKind }
   /** Nobody can take a call now, said plainly. */
@@ -396,7 +400,10 @@ function answersFor(s: CallState, acts: readonly Act[], context: PolicyContext):
     if (a.act === 'objection') {
       const id = OBJECTION_ANSWERS[a.id];
       if (id && context.knowledge.answers.some((x) => x.id === id)) moves.push(answer(s, id, context));
-      else if (WORDED_OBJECTIONS.has(a.id)) moves.push({ move: 'objection', id: a.id });
+      else if (WORDED_OBJECTIONS.has(a.id)) {
+        const objection = context.knowledge.playbook.objections.find((o) => o.id === a.id);
+        if (objection) moves.push({ move: 'objection', id: a.id, approach: objection.approach });
+      }
     }
   }
   const seen = new Set<string>();
@@ -530,7 +537,6 @@ function end(action: 'end_call', reason: EndReason): Move {
 // ---------------------------------------------------------------------------
 // A call-back time - worked out here, never by the model
 
-const WEEKDAYS: readonly Weekday[] = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'];
 const DAY_WORDS: Readonly<Record<string, Weekday>> = {
   sunday: 'sun',
   monday: 'mon',
@@ -541,14 +547,18 @@ const DAY_WORDS: Readonly<Record<string, Weekday>> = {
   saturday: 'sat',
 };
 
+/** "monday" for `mon` - the day word `resolveTime` reads back. */
+function wordForDay(day: Weekday): string {
+  return Object.keys(DAY_WORDS).find((word) => DAY_WORDS[word] === day) as string;
+}
+
 /** Why a day said with no time cannot have a call back: the agents do not work it, its hours are over, or it is beyond the booking window. */
 export type DayRefusal = 'closed_day' | 'none_left' | 'too_far';
 
 /** Whether any quarter hour of `date` (the lead's own, YYYY-MM-DD) can have a call back. */
 function dayHasTime(date: string, context: PolicyContext): boolean {
   for (let minute = 0; minute < 24 * 60; minute += 15) {
-    const clock = `${String(Math.floor(minute / 60)).padStart(2, '0')}:${String(minute % 60).padStart(2, '0')}`;
-    const at = atLocalTime(`${date}T${clock}`, context.leadZone);
+    const at = atLocalTime(`${date}T${formatClock(minute)}`, context.leadZone);
     if (at && bookableAt(at, context.hours, context.now)) return true;
   }
   return false;
@@ -569,17 +579,17 @@ function dayForCallback(dayWord: string, context: PolicyContext): { ok: true } |
   const asked = spokenTime(noon, context.leadZone, context.now, context.leadZoneKnown).replace(/ at .*$/, '');
   const agentsDay = new Date(`${toLocalTime(noon, context.hours.timeZone).slice(0, 10)}T12:00:00Z`).getUTCDay();
   const today = toLocalTime(context.now, context.leadZone).slice(0, 10);
-  const why: DayRefusal = !context.hours.days.has(WEEKDAYS[agentsDay])
+  const why: DayRefusal = !context.hours.days.has(weekdayOfIndex(agentsDay))
     ? 'closed_day'
     : noon.getTime() > context.now.getTime() + MAX_AHEAD_DAYS * 24 * 60 * 60 * 1000
       ? 'too_far'
       : 'none_left';
   if (why === 'too_far') return { ok: false, asked, why, next: null };
   for (let d = 1; d <= MAX_AHEAD_DAYS; d++) {
-    const next = addDays(date, d);
+    const next = dateAfter(date, d);
     if (!dayHasTime(next, context)) continue;
     const ahead = Math.round((Date.parse(`${next}T12:00:00Z`) - Date.parse(`${today}T12:00:00Z`)) / (24 * 60 * 60 * 1000));
-    const word = ahead === 1 ? 'tomorrow' : ahead < 7 ? Object.keys(DAY_WORDS)[new Date(`${next}T12:00:00Z`).getUTCDay()] : next;
+    const word = ahead === 1 ? 'tomorrow' : ahead < 7 ? wordForDay(weekdayOfIndex(new Date(`${next}T12:00:00Z`).getUTCDay())) : next;
     return { ok: false, asked, why, next: word };
   }
   return { ok: false, asked, why, next: null };
@@ -643,33 +653,27 @@ export function resolveTime(said: SaidTime, zone: string, now: Date): Date | nul
 
   if (/^\d{4}-\d{2}-\d{2}$/.test(day)) return on(day);
   if (day === 'today') return on(today);
-  if (day === 'tomorrow') return on(addDays(today, 1));
+  if (day === 'tomorrow') return on(dateAfter(today, 1));
   const weekday = DAY_WORDS[day] ?? (WEEKDAYS.includes(day as Weekday) ? (day as Weekday) : undefined);
   if (weekday) {
     const todayIndex = new Date(`${today}T12:00:00Z`).getUTCDay();
-    let ahead = (WEEKDAYS.indexOf(weekday) - todayIndex + 7) % 7;
+    let ahead = (indexOfWeekday(weekday) - todayIndex + 7) % 7;
     const sameDay = ahead === 0 ? on(today) : null;
     if (ahead === 0 && (!sameDay || sameDay <= now)) ahead = 7;
-    return on(addDays(today, ahead));
+    return on(dateAfter(today, ahead));
   }
   if (day) return null;
   const sameDay = on(today);
-  return sameDay && sameDay > now ? sameDay : on(addDays(today, 1));
+  return sameDay && sameDay > now ? sameDay : on(dateAfter(today, 1));
 }
 
-function addDays(date: string, days: number): string {
-  const d = new Date(`${date}T12:00:00Z`);
-  d.setUTCDate(d.getUTCDate() + days);
-  return d.toISOString().slice(0, 10);
-}
-
-/** The call back, booked: at the time she said back and they agreed, with a reason from the record. */
 /** The time she said back, said again - they cut in before it, and a yes to it booked a time they never heard. */
 function sayTimeAgain(at: string, context: PolicyContext): Move {
   const when = new Date(at);
   return { move: 'confirm_time', at, zone: context.leadZone, spoken: spokenTime(when, context.leadZone, context.now, context.leadZoneKnown), instead: null, asked: null };
 }
 
+/** The call back, booked: at the time she said back and they agreed, with a reason from the record. */
 function book(s: CallState, context: PolicyContext): Move {
   const reason = s.wantsSpecialist
     ? 'Has a question for a specialist.'

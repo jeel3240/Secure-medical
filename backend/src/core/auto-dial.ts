@@ -7,7 +7,18 @@
 
 export type Weekday = 'mon' | 'tue' | 'wed' | 'thu' | 'fri' | 'sat' | 'sun';
 
-const WEEKDAYS: readonly Weekday[] = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'];
+/** The week as the settings write it and the screens say it, Monday first - the one list (review Q3, 2026-11-23). */
+export const WEEKDAYS: readonly Weekday[] = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'];
+
+/** The day JavaScript numbers `jsDay` - 0 is Sunday, as `getUTCDay()` counts. */
+export function weekdayOfIndex(jsDay: number): Weekday {
+  return WEEKDAYS[(jsDay + 6) % 7];
+}
+
+/** `weekdayOfIndex` the other way: Sunday 0, Monday 1. */
+export function indexOfWeekday(day: Weekday): number {
+  return (WEEKDAYS.indexOf(day) + 1) % 7;
+}
 
 /** The `auto_call_*` settings a call's timing reads, parsed. */
 export interface CallHours {
@@ -34,6 +45,11 @@ export const DEFAULT_CALL_HOURS: CallHours = {
 export function parseClock(raw: string | undefined): number | null {
   const match = /^([01]\d|2[0-3]):([0-5]\d)$/.exec((raw ?? '').trim());
   return match ? Number(match[1]) * 60 + Number(match[2]) : null;
+}
+
+/** 660 -> "11:00" - `parseClock` the other way. */
+export function formatClock(minute: number): string {
+  return `${String(Math.floor(minute / 60)).padStart(2, '0')}:${String(minute % 60).padStart(2, '0')}`;
 }
 
 /** "mon,tue,wed" -> those days. Null when empty, or when any entry is not a day. */

@@ -19,6 +19,7 @@
 import { expiryDays } from './sql';
 import { loadFlow } from './flows';
 import { RECORDING_NOTICE } from '../core/calls';
+import { WEEKDAYS } from '../core/auto-dial';
 import type { CallScript } from '../core/call-script';
 import { questionShort } from '../core/questions';
 import { pool } from './pool';
@@ -116,7 +117,6 @@ export interface CallingContext {
 
 const NO_CALLING: CallingContext = { autoCalls: false, callbackNumber: null, recorded: false };
 
-const WEEK = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'];
 
 export interface AdminConfig {
   messages: ConfiguredMessage[];
@@ -249,7 +249,7 @@ async function callSettings(calling: CallingContext): Promise<CallSettings> {
     startMinute: hours.startMinute,
     endMinute: hours.endMinute,
     timeZone: hours.timeZone,
-    days: WEEK.filter((d) => (hours.days as ReadonlySet<string>).has(d)),
+    days: WEEKDAYS.filter((d) => hours.days.has(d)),
     waitMinutes: hours.waitMinutes,
     ringSeconds,
     offerRingSeconds,

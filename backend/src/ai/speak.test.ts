@@ -85,7 +85,7 @@ describe('the brief for each move', () => {
   it('every move has a brief', () => {
     const moves: Move[] = [
       { move: 'virtual' },
-      { move: 'objection', id: 'have_doctor' },
+      { move: 'objection', id: 'have_doctor', approach: 'They already have a doctor: say that is great.' },
       { move: 'ask_why' },
       { move: 'offer', kind: 'products' },
       { move: 'busy' },
@@ -96,6 +96,10 @@ describe('the brief for each move', () => {
       { move: 'anything_else' },
     ];
     for (const m of moves) expect(brief(m).length).toBeGreaterThan(10);
+    // An objection's brief is its approach from the playbook, as the policy carried it (review Q1).
+    expect(brief({ move: 'objection', id: 'have_doctor', approach: 'They already have a doctor: say that is great.' })).toContain(
+      'They already have a doctor: say that is great.'
+    );
     expect(brief({ move: 'ask_time', day: 'tomorrow' })).toContain('what time tomorrow');
     expect(brief({ move: 'ask_time', day: 'monday' })).toContain('what time on Monday');
     // A day the team does not work, said alone (call 122): why first, then the next day - never a time on the day refused.

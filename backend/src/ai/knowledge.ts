@@ -7,6 +7,15 @@
  * start-up and refuses to start on any problem, each named by file and field;
  * the files are in the repo, so the tests (knowledge.test.ts) find it first.
  *
+ * What a call reads (review Q1, 2026-11-23): the rules; each answer's id,
+ * questions, words and offers; each product's name and spoken line; the
+ * playbook's style, never list, objection ids and what leads say, and the
+ * approach of an objection she words herself. The rest - an answer's topic
+ * and source, a product's type, Rx flag and URL, the objections'
+ * examples, the closing questions and `learning` - is kept for people: checked
+ * here, so the files stay whole, and read by no call. docs/AI-AGENT.md
+ * section 5.
+ *
  * Two things never get past this file:
  * - **Prices.** `site_price_usd` is in products.json for reference only; a
  *   product here has no field for it.

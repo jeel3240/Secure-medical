@@ -5,7 +5,15 @@
  */
 
 import type { WhoIsThere } from '../instructions';
+import { loadKnowledge } from '../knowledge';
 import type { CallState, Move } from '../policy';
+
+/** A playbook objection's approach, as the policy carries it on the move (review Q1). */
+function approachOf(id: string): string {
+  const objection = loadKnowledge().playbook.objections.find((o) => o.id === id);
+  if (!objection) throw new Error(`no objection ${id} in the playbook`);
+  return objection.approach;
+}
 
 export interface SpeakCase {
   id: string;
@@ -211,7 +219,7 @@ export const SPEAK_CASES: SpeakCase[] = [
     id: 'have_doctor',
     who: 'free',
     recent: [...OPENED, { who: 'lead', text: 'I already have a doctor.' }],
-    moves: [{ move: 'objection', id: 'have_doctor' }, { move: 'return_to', open: 'interest' }],
+    moves: [{ move: 'objection', id: 'have_doctor', approach: approachOf('have_doctor') }, { move: 'return_to', open: 'interest' }],
     mustSay: [['alongside', 'along with', 'together with', 'as well as']],
     asks: true,
   },

@@ -11,7 +11,7 @@
  * the same moment, stored once.
  */
 
-import { insideCallHours, type CallHours, type Weekday } from '../core/auto-dial';
+import { insideCallHours, weekdayOfIndex, type CallHours, type Weekday } from '../core/auto-dial';
 import { isTimeZone } from '../db/sql';
 
 /** A call back is at least this far ahead: a real time, not "now". */
@@ -182,10 +182,15 @@ function addDays(date: LocalDate, days: number): LocalDate {
   return { year: d.getUTCFullYear(), month: d.getUTCMonth() + 1, day: d.getUTCDate() };
 }
 
-const WEEKDAYS: readonly Weekday[] = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'];
+/** The calendar day `days` after `date`, both "2026-11-12" - for the policy, which keeps dates so. */
+export function dateAfter(date: string, days: number): string {
+  const [year, month, day] = date.split('-').map(Number);
+  const next = addDays({ year, month, day }, days);
+  return `${next.year}-${String(next.month).padStart(2, '0')}-${String(next.day).padStart(2, '0')}`;
+}
 
 function weekday(date: LocalDate): Weekday {
-  return WEEKDAYS[new Date(Date.UTC(date.year, date.month - 1, date.day)).getUTCDay()];
+  return weekdayOfIndex(new Date(Date.UTC(date.year, date.month - 1, date.day)).getUTCDay());
 }
 
 /**
