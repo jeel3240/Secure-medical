@@ -32,7 +32,9 @@ export type Disposition = (typeof DISPOSITIONS)[number];
 /**
  * Values that may be in the table from before 2026-09-28 and are never written
  * again. Rows holding them stay - the table is append-only history - and the
- * timeline and Overview still name them.
+ * screens still name them: the words are the frontend's (`frontend/src/api/
+ * workspace.ts`). Here they type `CLOSING_DISPOSITIONS`, so it can hold no value
+ * the table never had (review Q5, 2026-11-23).
  */
 export const RETIRED_DISPOSITIONS = [
   'sold',
@@ -43,6 +45,8 @@ export const RETIRED_DISPOSITIONS = [
   'not_interested',
   'wrong_number',
 ] as const;
+
+export type RetiredDisposition = (typeof RETIRED_DISPOSITIONS)[number];
 
 /** The one that also blocks the number. */
 export const DNC_DISPOSITION: Disposition = 'dnc';
@@ -59,7 +63,7 @@ export const DNC_DISPOSITION: Disposition = 'dnc';
  * `dnc` is not here because it needs no help: it blocks the number, and a
  * blocked number is Opted out and out of the queue already.
  */
-export const CLOSING_DISPOSITIONS: readonly string[] = ['closed', 'sold', 'not_interested', 'wrong_number'];
+export const CLOSING_DISPOSITIONS: readonly (Disposition | RetiredDisposition)[] = ['closed', 'sold', 'not_interested', 'wrong_number'];
 
 export function isDisposition(value: string): value is Disposition {
   return (DISPOSITIONS as readonly string[]).includes(value);

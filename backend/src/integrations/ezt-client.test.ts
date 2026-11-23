@@ -96,7 +96,8 @@ describe('sendMessage', () => {
     const { config } = require('../config') as { config: { ezt: { sendGroup: string } } };
     config.ezt.sendGroup = '';
 
-    await expect(sendMessage(['+16026203572'], 'hello')).rejects.toThrow(/EZT_SEND_GROUP/);
+    // Said as what it is: a switch, not a group of numbers allowed (review Q12, 2026-11-23).
+    await expect(sendMessage(['+16026203572'], 'hello')).rejects.toThrow(/EZT_SEND_GROUP is not set\. It is the switch/);
     expect(poolQuery).not.toHaveBeenCalled();
     expect(post).not.toHaveBeenCalled();
 

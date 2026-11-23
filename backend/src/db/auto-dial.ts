@@ -9,7 +9,7 @@ import { UNDER_WAY_MINUTES, type DialRoom } from '../core/auto-dial';
 import { activityInsertSql, recordActivity } from './activity';
 import { automatedCallUsedSql, ON_HOLD_SQL } from './auto-calls';
 import { readCallsPerPerson, readHoldMaxSeconds } from './call-script';
-import { WORKED_SQL } from './lead-state';
+import { newestConversation, WORKED_SQL } from './lead-state';
 import { withTryLock } from './locks';
 import { pool } from './pool';
 import { FREE_SQL } from './presence';
@@ -194,10 +194,7 @@ export async function leadsToCall(opts: {
   const { rows } = await pool.query<{ id: number }>(
     `SELECT l.id
      FROM leads l
-     JOIN LATERAL (
-       SELECT c.status, c.question_sent_at FROM conversations c
-       WHERE c.lead_id = l.id ORDER BY c.created_at DESC, c.id DESC LIMIT 1
-     ) c ON true
+     JOIN ${newestConversation('c.status, c.question_sent_at')}
      WHERE l.created_at > $1::timestamptz - interval '${LOOK_BACK_DAYS} days'
        AND ($6::int IS NULL OR l.id = $6)
        AND c.status = 'open'

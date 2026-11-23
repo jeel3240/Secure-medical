@@ -1,7 +1,7 @@
 import type { CallResult } from '../core/call-script';
 import { questionShort } from '../core/questions';
-import { CLOSED_SQL, WORKED_SQL } from './lead-state';
-import { likeLiteral, pollIntervalSeconds } from './sql';
+import { CLOSED_SQL, newestConversation, RECEIVED_SQL, WORKED_SQL } from './lead-state';
+import { leadSearchSql, pollIntervalSeconds } from './sql';
 import { pool } from './pool';
 
 /**
@@ -100,18 +100,10 @@ export interface AdminLeadPage {
  */
 const BASE = `
   FROM leads l
-  LEFT JOIN LATERAL (
-    SELECT c.id, c.status, c.step, c.score, c.tier, c.end_outcome, c.flow_id, c.current_question_id
-    FROM conversations c
-    WHERE c.lead_id = l.id
-    ORDER BY c.created_at DESC, c.id DESC
-    LIMIT 1
-  ) c ON true
+  LEFT JOIN ${newestConversation('c.id, c.status, c.step, c.score, c.tier, c.end_outcome, c.flow_id, c.current_question_id')}
   LEFT JOIN dnc_list d ON d.phone = l.phone AND d.released_at IS NULL
 `;
 
-/** When the lead reached us - the page's order, and what `since` filters on. */
-const RECEIVED = `COALESCE(l.ezt_added_at, l.created_at)`;
 
 /**
  * The first match wins, so the order is the rule:
@@ -191,7 +183,7 @@ function buildFilters(query: AdminLeadQuery): { sql: string; values: unknown[] }
 
   if (query.since) {
     values.push(query.since);
-    clauses.push(`${RECEIVED} >= $${values.length}`);
+    clauses.push(`${RECEIVED_SQL} >= $${values.length}`);
   }
 
   if (query.call) {
@@ -199,19 +191,7 @@ function buildFilters(query: AdminLeadQuery): { sql: string; values: unknown[] }
     clauses.push(`COALESCE(${robotCallSql('l.id')}, 'none') = $${values.length}`);
   }
 
-  if (query.q) {
-    // Phone is searched with punctuation stripped, so "(602) 620-3572" matches
-    // the stored +16026203572.
-    // Escaped, so a "%" or "_" in the box is that character, not a wildcard.
-    values.push(`%${likeLiteral(query.q.toLowerCase())}%`);
-    const like = `$${values.length}`;
-    values.push(`%${query.q.replace(/\D/g, '')}%`);
-    const digits = `$${values.length}`;
-    clauses.push(`(
-      lower(coalesce(l.first_name, '') || ' ' || coalesce(l.last_name, '')) LIKE ${like}
-      OR (${digits} <> '%%' AND l.phone LIKE ${digits})
-    )`);
-  }
+  if (query.q) clauses.push(leadSearchSql(values, query.q));
 
   return { sql: clauses.length ? `WHERE ${clauses.join(' AND ')}` : '', values };
 }
@@ -263,12 +243,12 @@ export async function listAdminLeads(query: AdminLeadQuery): Promise<AdminLeadPa
             ${robotCallSql('p.id')} AS robot_call
      FROM (
        SELECT l.id, l.phone, l.first_name, l.last_name, l.source,
-              ${RECEIVED} AS received_at,
+              ${RECEIVED_SQL} AS received_at,
               ${STATUS_SQL} AS status,
               c.status AS conversation_status, c.step, c.score, c.tier, c.flow_id, c.current_question_id
        ${BASE}
        ${where}
-       ORDER BY ${RECEIVED} DESC, l.id DESC
+       ORDER BY ${RECEIVED_SQL} DESC, l.id DESC
        LIMIT ${pageSize} OFFSET ${(page - 1) * pageSize}
      ) p
      LEFT JOIN LATERAL (

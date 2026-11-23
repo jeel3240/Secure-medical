@@ -25,9 +25,12 @@ export const config = {
     // dashboard arrive as WebInterface, so set this to WebInterface locally
     // to test with a contact you added yourself.
     source: process.env.EZT_SOURCE ?? 'API',
-    // Deliberately separate from the poll group, and deliberately not in
-    // `required`: with no dev-test group to send to yet, leaving it unset
-    // keeps sendMessage from texting real leads.
+    // The switch that lets this server send texts - not a group: set to
+    // anything, `sendMessage` sends; unset, it refuses every send. Its value is
+    // never read beyond that (review Q12, 2026-11-23). The name is from when it
+    // was to name a dev-test group of our own phones; it stays, as production's
+    // .env sets it. Deliberately not in `required`: a new server sends nothing
+    // until someone means it to.
     sendGroup: process.env.EZT_SEND_GROUP ?? '',
     // EZ Texting sends no signature header, even though a secret is passed when
     // registering the subscription, so the caller cannot be verified. A random

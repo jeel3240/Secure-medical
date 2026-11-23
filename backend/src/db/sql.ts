@@ -19,6 +19,40 @@ export function likeLiteral(text: string): string {
   return text.replace(/[\\%_]/g, (c) => `\\${c}`);
 }
 
+/**
+ * The search box on the queue and Admin > Leads: what was typed, in the lead's
+ * name, or its digits in the phone - so "(602) 620-3572" finds +16026203572.
+ * Pushes its two values onto `values` and gives the clause, for `l` (leads).
+ * One copy since review Q5, 2026-11-23 - the two screens had it word for word.
+ */
+export function leadSearchSql(values: unknown[], typed: string): string {
+  // Escaped, so a "%" or "_" in the box is that character, not a wildcard.
+  values.push(`%${likeLiteral(typed.toLowerCase())}%`);
+  const like = `$${values.length}`;
+  values.push(`%${typed.replace(/\D/g, '')}%`);
+  const digits = `$${values.length}`;
+  return `(
+      lower(coalesce(l.first_name, '') || ' ' || coalesce(l.last_name, '')) LIKE ${like}
+      OR (${digits} <> '%%' AND l.phone LIKE ${digits})
+    )`;
+}
+
+/**
+ * A list of constant words for `IN (...)`, inlined: `'closed', 'sold'`. Only
+ * for values written in this codebase, never from a request - and each is
+ * checked to be a plain word (small letters, `_`, `.`), so a typo cannot make
+ * SQL of it. One copy since review Q5, 2026-11-23: there were three, and one
+ * quietly dropped bad characters where the others threw.
+ */
+export function wordList(words: readonly string[]): string {
+  return words
+    .map((word) => {
+      if (!/^[a-z_.]+$/.test(word)) throw new Error(`Not a plain word for SQL: ${word}`);
+      return `'${word}'`;
+    })
+    .join(', ');
+}
+
 /** Anything with a `query` method: the pool, or a client inside a transaction. */
 export interface Querier {
   query: (sql: string, values?: unknown[]) => Promise<{ rows: Array<Record<string, unknown>> }>;

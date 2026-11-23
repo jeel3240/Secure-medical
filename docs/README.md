@@ -104,9 +104,12 @@ kept for history. To unlock sending:
    `EZT_SEND_GROUP=weightloss`.
 3. `docker compose up -d worker api` so the new values are picked up.
 
-`EZT_SEND_GROUP` is only the on/off switch for `sendMessage`. It is checked
-again immediately before every send, together with `dnc_list`, so a number that
-opted out is refused however the send was triggered.
+`EZT_SEND_GROUP` is only the on/off switch for `sendMessage`: any value turns
+sending on, and its value is never used to choose who is texted - not a group,
+despite the name, which stays because production's `.env` sets it (review Q12,
+2026-11-23). It is checked again immediately before every send, together with
+`dnc_list`, so a number that opted out is refused however the send was
+triggered.
 
 **Update 2026-09-15:** sending is live. The poller now sends question 1 when it
 creates a lead and records it in `messages`, so with `EZT_SEND_GROUP` set, a new

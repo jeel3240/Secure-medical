@@ -147,7 +147,7 @@ Configuration shows each text and its segment count.
 
 | File | Holds |
 |---|---|
-| `core/state-machine.ts` | `step()`, `tierFor()` - every rule below, for any flow. Also `firstQuestion()`, which only its tests call: the app picks a new lead's first question - the lowest position - in SQL, `startConversation` (`db/flows.ts`) and `findOpenersNeverSent` (review R12, 2026-11-23) |
+| `core/state-machine.ts` | `step()`, `tierFor()` - every rule below, for any flow. A new lead's first question - the lowest position - is picked in SQL, `startConversation` (`db/flows.ts`) and `findOpenersNeverSent`; `firstQuestion()`, which only its tests called, was removed (review R12, Q6, 2026-11-23) |
 | `core/answers.ts` | `matchChoice()` - a reply against one question's choices |
 | `db/flows.ts` | Reads a flow; starts a conversation in the active one |
 | `api/reply-flow.ts` | Loads the conversation and its flow, runs `step`, saves the answer row, sends |
@@ -296,7 +296,10 @@ belongs to. From then on:
 
 `completed`, `review`, `expired` or `suppressed`: store the message, set
 `leads.has_unread_inbound`, send nothing. A human sees it on the lead. Already
-implemented.
+implemented. The conversation itself is not written to, nor on any reply that
+changes nothing in it (2b, 2d): its `updated_at` keeps saying when it last
+moved (`api/reply-flow.ts`; until review Q6, 2026-11-23, it was written back
+unchanged on every reply).
 
 ### Which replies need a person - Decided by Jeel, 2026-09-28
 

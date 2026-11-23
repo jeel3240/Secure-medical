@@ -17,6 +17,29 @@
  */
 
 import { CLOSING_DISPOSITIONS } from '../core/dispositions';
+import { wordList } from './sql';
+
+/**
+ * When a lead reached us, for `l` (leads): when EZ Texting says it was added,
+ * else when we took it in - the queue's age, Admin > Leads' order and Overview's
+ * count. One copy since review Q5, 2026-11-23.
+ */
+export const RECEIVED_SQL = `COALESCE(l.ezt_added_at, l.created_at)`;
+
+/**
+ * A lead's newest conversation, as a lateral join for `l` (leads), named `c` -
+ * the newest by when it started, then id. Put after `JOIN` or `LEFT JOIN`.
+ * One copy since review Q5, 2026-11-23: the rule was written out six times.
+ */
+export function newestConversation(columns: string): string {
+  return `LATERAL (
+    SELECT ${columns}
+    FROM conversations c
+    WHERE c.lead_id = l.id
+    ORDER BY c.created_at DESC, c.id DESC
+    LIMIT 1
+  ) c ON true`;
+}
 
 /**
  * How long a person's call whose end never reached us counts as still going:
@@ -25,14 +48,8 @@ import { CLOSING_DISPOSITIONS } from '../core/dispositions';
  */
 export const CALL_UNDER_WAY_HOURS = 2;
 
-/**
- * Safe to inline: the values come from a constant in this codebase, never
- * from a request, and each is checked to be a plain word.
- */
-const closingList = CLOSING_DISPOSITIONS.map((value) => {
-  if (!/^[a-z_]+$/.test(value)) throw new Error(`Unexpected disposition: ${value}`);
-  return `'${value}'`;
-}).join(', ');
+/** Safe to inline: a constant in this codebase, each value checked (`wordList`). */
+const closingList = wordList(CLOSING_DISPOSITIONS);
 
 /**
  * A missed call nobody has returned - Jeel, 2026-10-01. The lead rang our

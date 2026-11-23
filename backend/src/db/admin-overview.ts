@@ -24,7 +24,8 @@
 
 import { CLOSING_DISPOSITIONS } from '../core/dispositions';
 import { pool } from './pool';
-import { startOfTodaySql, startOfTomorrowSql } from './sql';
+import { RECEIVED_SQL } from './lead-state';
+import { startOfTodaySql, startOfTomorrowSql, wordList } from './sql';
 
 export type OverviewPeriod = 'today' | '7d' | '30d';
 
@@ -82,14 +83,12 @@ export interface Overview {
 export async function getOverview(period: OverviewPeriod, timeZone?: string): Promise<Overview> {
   const since = sinceSql(period, timeZone);
 
-  // Leads are counted by when they reached us - ezt_added_at where EZ Texting
-  // gave us one, created_at otherwise - the same expression the queue uses for
-  // a lead's age.
-  const received = `COALESCE(l.ezt_added_at, l.created_at)`;
+  // Leads are counted by when they reached us - the queue's age (`RECEIVED_SQL`).
+  const received = RECEIVED_SQL;
 
   // `closed` and the retired values that meant the same, so leads closed under
   // the old list still count. Constants from core/dispositions.ts, never input.
-  const closing = CLOSING_DISPOSITIONS.map((v) => `'${v.replace(/[^a-z_]/g, '')}'`).join(', ');
+  const closing = wordList(CLOSING_DISPOSITIONS);
 
   const [leadRows, agentRows, activityRows] = await Promise.all([
     // Every total counts things that *happened* in the period - Jeel,

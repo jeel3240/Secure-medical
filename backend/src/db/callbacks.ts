@@ -5,6 +5,7 @@
  * done from either. AGENT-WORKSPACE.md, "Endpoints"; DESIGN-PROMPT.md 5.
  */
 
+import { newestConversation } from './lead-state';
 import { startOfTodaySql, startOfTomorrowSql } from './sql';
 import { activityInsertSql, type ActivityWriter } from './activity';
 import type { Db } from './flows';
@@ -331,10 +332,7 @@ export async function listCallbacks(opts: {
      JOIN leads l ON l.id = cb.lead_id
      LEFT JOIN users u ON u.id = cb.agent_id
      LEFT JOIN users h ON h.id = l.assigned_to AND h.is_active
-     LEFT JOIN LATERAL (
-       SELECT c.tier FROM conversations c
-       WHERE c.lead_id = l.id ORDER BY c.created_at DESC, c.id DESC LIMIT 1
-     ) c ON true
+     LEFT JOIN ${newestConversation('c.tier')}
      LEFT JOIN LATERAL (
        SELECT n.body FROM notes n
        WHERE n.lead_id = l.id ORDER BY n.created_at DESC, n.id DESC LIMIT 1
