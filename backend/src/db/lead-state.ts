@@ -165,21 +165,41 @@ export const MISSED_YES_AT_SQL = `(
 )`;
 
 /**
- * A call back Seri booked that is due - A16, docs/AI-AGENT.md section 4: open,
- * and its time has come. Due, it puts the lead in the queue on its own - the
- * robot calls leads who never replied, so most have no score - and at the top,
- * beside a missed "yes": the lead was promised a person's call at that time.
- * Before its time it pushes nothing up. Done, it is gone.
- *
- * `AI_CALLBACK_DUE_SQL` says whether the lead has one; `AI_CALLBACK_DUE_AT_SQL`
- * since when - the earliest - or null: what the queue sorts on, the longest
- * waiting first.
+ * A call back nobody has - `cb` names `callbacks`: one Seri booked that no
+ * agent has taken yet (A16), or one whose agent has since been deactivated
+ * (Jeel, 2026-11-23, review D2). It is open to everyone: the queue names
+ * nobody on it, and the first agent to pick the lead up takes it
+ * (`claimLead`). Nothing is rewritten when someone is deactivated - as with a
+ * lead they held, the screens read their account as gone - so the row still
+ * says whose it was, and reactivating them gives it back.
  */
-const AI_CALLBACK_DUE = `dc.lead_id = l.id AND dc.reason = 'ai_booked' AND dc.done_at IS NULL AND dc.scheduled_at <= now()`;
+export function nobodysCallbackSql(cb: string): string {
+  return `(${cb}.agent_id IS NULL OR NOT EXISTS (SELECT 1 FROM users nu WHERE nu.id = ${cb}.agent_id AND nu.is_active))`;
+}
 
-export const AI_CALLBACK_DUE_SQL = `(EXISTS (SELECT 1 FROM callbacks dc WHERE ${AI_CALLBACK_DUE}))`;
+/**
+ * A promised call back that is due: open, its time come, and either one Seri
+ * booked - A16, docs/AI-AGENT.md section 4 - or one nobody has any more, its
+ * agent deactivated (D2). Due, it puts the lead in the queue on its own - the
+ * robot calls leads who never replied, so most of Seri's have no score - and
+ * at the top, beside a missed "yes": the lead was promised a person's call at
+ * that time, and with its agent gone nobody else would make it. Before its
+ * time it pushes nothing up. Done, it is gone.
+ *
+ * `PROMISED_CALLBACK_DUE_SQL` says whether the lead has one;
+ * `PROMISED_CALLBACK_DUE_AT_SQL` since when - the earliest - or null: what the
+ * queue sorts on, the longest waiting first. `promisedCallbackDue` is the rule
+ * for one call back, `dc`.
+ */
+export function promisedCallbackDue(dc: string): string {
+  return `${dc}.done_at IS NULL AND ${dc}.scheduled_at <= now() AND (${dc}.reason = 'ai_booked' OR ${nobodysCallbackSql(dc)})`;
+}
 
-export const AI_CALLBACK_DUE_AT_SQL = `(SELECT min(dc.scheduled_at) FROM callbacks dc WHERE ${AI_CALLBACK_DUE})`;
+const PROMISED_CALLBACK_DUE = `dc.lead_id = l.id AND ${promisedCallbackDue('dc')}`;
+
+export const PROMISED_CALLBACK_DUE_SQL = `(EXISTS (SELECT 1 FROM callbacks dc WHERE ${PROMISED_CALLBACK_DUE}))`;
+
+export const PROMISED_CALLBACK_DUE_AT_SQL = `(SELECT min(dc.scheduled_at) FROM callbacks dc WHERE ${PROMISED_CALLBACK_DUE})`;
 
 /**
  * Closed: the newest disposition is `closed` (or a retired value that meant

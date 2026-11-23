@@ -176,6 +176,8 @@ async function main(): Promise<void> {
 
   console.log('\nthe list row carries what the screen shows');
   {
+    // Every tab, not today's: this is about what a row carries, and 45 minutes
+    // on is tomorrow after 23:15 UTC - it failed then, whatever the code did.
     const other = await makeLead('+15550000402');
     await pool.query(
       `INSERT INTO conversations (lead_id, status, step, score, tier) VALUES ($1, 'completed', 3, 100, 'HOT')`,
@@ -185,7 +187,7 @@ async function main(): Promise<void> {
     await pool.query(`INSERT INTO notes (lead_id, agent_id, body) VALUES ($1, $2, 'newest note')`, [other, maya]);
     await createCallback(other, sam, inMinutes(45));
 
-    const row = (await listCallbacks({ agentId: sam, when: 'today' })).callbacks.find(
+    const row = (await listCallbacks({ agentId: sam, when: 'all' })).callbacks.find(
       (c) => c.leadId === other
     );
     check('the lead phone', row?.lead.phone, '+15550000402');
@@ -195,10 +197,10 @@ async function main(): Promise<void> {
 
     // The holder, so the row says Resume to them and View to anyone else.
     await pool.query(`UPDATE leads SET assigned_to = $2, assigned_at = now() WHERE id = $1`, [other, sam]);
-    const held = (await listCallbacks({ agentId: sam, when: 'today' })).callbacks.find((c) => c.leadId === other);
+    const held = (await listCallbacks({ agentId: sam, when: 'all' })).callbacks.find((c) => c.leadId === other);
     check('who holds the lead', held?.holder, { id: sam, name: 'Sam' });
     await pool.query(`UPDATE users SET is_active = false WHERE id = $1`, [sam]);
-    const gone = (await listCallbacks({ agentId: sam, when: 'today' })).callbacks.find((c) => c.leadId === other);
+    const gone = (await listCallbacks({ agentId: sam, when: 'all' })).callbacks.find((c) => c.leadId === other);
     check('but not a deactivated holder', gone?.holder, null);
     await pool.query(`UPDATE users SET is_active = true WHERE id = $1`, [sam]);
   }

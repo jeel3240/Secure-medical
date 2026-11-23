@@ -33,7 +33,7 @@ keep even a closed lead in:
 | `has_unread_inbound` | Texted something the questions cannot handle - after the conversation ended, to an agent who took it over, or after a phone call took it over (rule 2d). `STATE-MACHINE.md`, "Which replies need a person" |
 | An unreturned **missed call** | They rang our number and nobody answered - 2026-10-01. This one needs no reply and no score: a lead who has never texted is in the queue for it. `TWILIO.md`, "A missed call" |
 | An unreturned **missed "yes"** | They said yes on the automated call, nobody took the transfer, and they heard "An agent will call you back shortly" (`script_result = 'transfer_missed'`) - T22, 2026-10-24, `AUTO-CALLS.md`. The robot calls only leads who never replied, so these have no score. Cleared exactly as a missed call is - an agent calls or texts them, answers when they ring, or saves an outcome - so it never meets a closed lead: closing it is one of the things that clears it |
-| A **call back Seri booked, once it is due** | The lead picked a time with Seri on the automated call (`callbacks.reason = 'ai_booked'`), and that time has come - A16, 2026-11-12, `AI-AGENT.md` section 4. No score for the same reason. Before its time it does not put the lead in: the lead's page says when (`AGENT-WORKSPACE.md`, "Callbacks"). Finished like any callback - marked done, or an outcome saved - `AI_CALLBACK_DUE_SQL` |
+| A **call back nobody has, once it is due** | One Seri booked - the lead picked a time with her on the automated call (`callbacks.reason = 'ai_booked'`) - and that time has come - A16, 2026-11-12, `AI-AGENT.md` section 4; or, since 2026-11-23 (review D2), any call back whose agent has been deactivated, below. No score for the same reason. Before its time it does not put the lead in: the lead's page says when (`AGENT-WORKSPACE.md`, "Callbacks"). Finished like any callback - marked done, or an outcome saved - `AI_CALLBACK_DUE_SQL` |
 
 **Three more need a score above 0 and a lead that is not closed.** Scoring
 starts at the first reply, so a score is the mark of a responder:
@@ -117,7 +117,7 @@ picked that time with her, and was told someone would call then. Both are a
 promised call, so they share the top, sorted together on when the call was
 promised for - the missed "yes" on when its call was made, the call back on the
 time it was booked for, the earliest first (`promised_at`: `LEAST` of
-`MISSED_YES_AT_SQL` and `AI_CALLBACK_DUE_AT_SQL`, `db/lead-state.ts`). An
+`MISSED_YES_AT_SQL` and `PROMISED_CALLBACK_DUE_AT_SQL`, `db/lead-state.ts`). An
 overdue one stays there until someone calls. Not yet due, it is not pushed
 up - and with no score, not in the queue at all. An agent's own callback is
 not moved: it is theirs, on My Callbacks, and keeps the lead at its score. The
@@ -211,6 +211,19 @@ One thing worth knowing:
 - **A claim by a deactivated agent is ignored.** `assigned_to` is joined through
   `users.is_active`, so deactivating an agent hands their held leads back to the
   floor instead of parking them behind a name nobody can sign in as.
+- **So are their call backs** - Jeel, 2026-11-23 (review D2). Before, an open
+  call back stayed in the deactivated agent's name: "Callback · Maya" in the
+  queue, so others left it, on nobody's My Callbacks, and not on Overview - a
+  promised call nobody would make, unless a superadmin moved it by hand. Now
+  it is nobody's, as a call back Seri booked that nobody has taken
+  (`nobodysCallbackSql`, `db/lead-state.ts`): no name on its tag; once due,
+  "Callback · 2:00 PM" in bold and at the top beside a missed "yes"
+  (`PROMISED_CALLBACK_DUE_SQL`); and the first agent to pick the lead up takes
+  it - `callback.taken`, with `from` the deactivated agent - and it is on their
+  My Callbacks. Nothing is rewritten when someone is deactivated, as with a
+  claim: the row still says whose it was, and reactivating them gives it back.
+  `queue-live-check`, "a deactivated agent's call back (D2)". Not changed: the
+  superadmin's All callbacks list still names the agent it was booked for.
 
 `Seen before, stopped at Qn` is in the mockup and is not built: repeat leads are
 a future item, CLAUDE.md §10.

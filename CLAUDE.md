@@ -166,7 +166,7 @@ you change something the docs describe, update the doc in the same commit.
     src/api/lead-workspace.ts  every route on one lead: card, timeline, notes, callbacks, SMS, dispositions, read
     src/api/filters.ts      request parsing shared by several routes: since, tz, lists, lead id
     src/api/startup-checks.ts  what stops the API starting in production: weak JWT secret, no webhook token, Twilio settings only partly set
-    src/db/claims.ts        claiming and releasing a lead; a pick-up takes the call back Seri booked that nobody has (A16); taking a call with a lead on it, the lead following the call - a transfer and a call back that rang everyone free share it (`takeCallWithLead`, review Q4)
+    src/db/claims.ts        claiming and releasing a lead; a pick-up takes a call back nobody has - Seri's untaken (A16), or a deactivated agent's (D2); taking a call with a lead on it, the lead following the call - a transfer and a call back that rang everyone free share it (`takeCallWithLead`, review Q4)
     src/db/read-flag.ts     clears has_unread_inbound
     src/db/lead-detail.ts   the lead card
     src/db/timeline.ts      the merged lead timeline; a robot call's result and what the lead said on it (T21); Seri's conversation on a call she took (A19)
@@ -202,7 +202,7 @@ you change something the docs describe, update the doc in the same commit.
     scripts/admin-live-check.ts  proves the three admin read models
     scripts/health-live-check.ts  proves the poller staleness signal
     src/core/queue-tags.ts  which tag a queued lead gets; Seri's call back, bold once due (A16)
-    src/db/queue.ts         the priority queue SQL; a promised call first - a missed "yes", or Seri's call back once due (A16)
+    src/db/queue.ts         the priority queue SQL; a promised call first - a missed "yes", or a call back once due that Seri booked (A16) or whose agent was deactivated (D2)
     scripts/queue-live-check.ts  proves that SQL against a real database
     src/api/webhooks.ts     inbound SMS from EZ Texting
     src/core/messages.ts    renders outbound copy ({first_name}, segment limit)

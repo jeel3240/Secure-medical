@@ -10,6 +10,7 @@
 
 import type { PoolClient } from 'pg';
 import { activityInsertSql, recordActivity } from './activity';
+import { nobodysCallbackSql } from './lead-state';
 import { pool } from './pool';
 
 /** A call with a lead on it, found and locked - the call and its lead - for `takeCallWithLead`. */
@@ -116,10 +117,12 @@ export type ReleaseResult =
  * Re-claiming a lead you already hold succeeds and leaves `assigned_at` alone,
  * because opening a lead twice is not a new claim.
  *
- * **A call back Seri booked that nobody has taken becomes the claimer's** -
- * A16, docs/AI-AGENT.md section 4: the first agent to pick the lead up takes
- * it, `callback.taken` records it, and from then it is on their My Callbacks.
- * One already someone's stays theirs.
+ * **A call back nobody has becomes the claimer's** - one Seri booked that no
+ * agent has taken (A16, docs/AI-AGENT.md section 4), or one whose agent has
+ * been deactivated (D2, Jeel 2026-11-23; `nobodysCallbackSql`): the first agent
+ * to pick the lead up takes it, `callback.taken` records it - with `from`, the
+ * deactivated agent it was booked for - and from then it is on their My
+ * Callbacks. One an active agent has stays theirs.
  */
 export async function claimLead(leadId: number, agentId: number, againIfFree = true): Promise<ClaimResult> {
   // One statement, so the claim and its record cannot come apart and the race
@@ -158,15 +161,21 @@ export async function claimLead(leadId: number, agentId: number, againIfFree = t
        FROM claimed
        WHERE previous_holder IS DISTINCT FROM $2
      ),
+     handed AS (
+       SELECT cb.id, cb.agent_id FROM callbacks cb, claimed
+       WHERE cb.lead_id = $1 AND cb.done_at IS NULL AND ${nobodysCallbackSql('cb')}
+     ),
      taken AS (
        UPDATE callbacks cb SET agent_id = $2
-       FROM claimed
-       WHERE cb.lead_id = $1 AND cb.reason = 'ai_booked' AND cb.agent_id IS NULL AND cb.done_at IS NULL
-       RETURNING cb.id, cb.scheduled_at
+       FROM handed
+       WHERE cb.id = handed.id
+       RETURNING cb.id, cb.scheduled_at, handed.agent_id AS from_agent
      ),
      took AS (
        ${activityInsertSql}
-       SELECT $2, 'callback.taken', $1, $2, jsonb_build_object('callbackId', id, 'scheduledAt', scheduled_at)
+       SELECT $2, 'callback.taken', $1, $2,
+              -- from: the deactivated agent it was booked for; none on one of Seri's nobody had.
+              jsonb_strip_nulls(jsonb_build_object('callbackId', id, 'scheduledAt', scheduled_at, 'from', from_agent))
        FROM taken
      )
      SELECT assigned_at FROM claimed`,

@@ -35,7 +35,7 @@
 
 ## As built
 
-- **In the queue on its own once due:** `AI_CALLBACK_DUE_SQL` in `INCLUDED` (`db/queue.ts`) - no score needed, as with a missed "yes". Before its time it adds nothing.
+- **In the queue on its own once due:** `AI_CALLBACK_DUE_SQL` (since 2026-11-23 `PROMISED_CALLBACK_DUE_SQL`, which counts a deactivated agent's call back too - review D2) in `INCLUDED` (`db/queue.ts`) - no score needed, as with a missed "yes". Before its time it adds nothing.
 - **At the top with the missed "yes":** both are a promised call, sorted together on `promised_at` - `LEAST` of when the "yes" call was made and when the call back was due - the earliest first. Not "with Missed call": a missed call sorts by score like any lead, so ranking with it would have left these at the bottom.
 - **The tag:** `callback` with `due` (`core/queue-tags.ts`), ranked after a missed call and a missed "yes", before an unread reply - "Callback · 3:00 PM", bold; named once taken. An unowned one not yet due, on a lead in the queue for another reason, reads "Callback · 3:00 PM" in the ordinary place - the next-callback join no longer drops a callback with no agent.
 - **Taken on pick-up:** `claimLead` (`db/claims.ts`) updates every open, unowned `ai_booked` callback of the lead to the claimer in the same statement, with `callback.taken` (new action, on the timeline). A transfer or a call back taken in the browser picks the lead up as it rings in, so it takes it too.

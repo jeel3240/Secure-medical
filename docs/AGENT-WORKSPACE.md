@@ -62,7 +62,9 @@ Release is now there on that page.)*
 
 **A claim by a deactivated agent does not count.** The queue already ignores it
 (`QUEUE.md`); the claim endpoint treats such a lead as free, and since
-2026-11-22 so does Release: any agent may release it (review M9 - it was a 403
+2026-11-22 so does Release. Since 2026-11-23 their open call backs are nobody's
+too, and picking the lead up takes them (review D2, `QUEUE.md`, "One thing
+worth knowing"): any agent may release it (review M9 - it was a 403
 naming the deactivated person). Lost the race to someone who has let the lead
 go again since, a claim is tried once more rather than answer "null is already
 working this lead" (M42).
