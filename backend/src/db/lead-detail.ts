@@ -68,7 +68,7 @@ export interface LeadDetail {
   aiCallback: { at: string; note: string | null; agentName: string | null } | null;
 
   flags: {
-    /** A live dnc_list row: blocks every action, not just SMS. */
+    /** A live dnc_list row: no text and no call, ours or the robot's; a note, a call back and picking it up still work. */
     dnc: boolean;
     /** Two unclear replies; the raw messages are worth reading. */
     needsReview: boolean;

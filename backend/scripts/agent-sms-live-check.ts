@@ -18,6 +18,7 @@
  * EZT_SEND_GROUP must be set because the real sendMessage runs - only its HTTP
  * call is stubbed.
  */
+import { check, failureCount, verdict } from './check';
 import { pool } from '../src/db/pool';
 import { replyAs, startFlow } from './live-flow';
 import axios from 'axios';
@@ -57,18 +58,6 @@ import { startIncomingCall } from '../src/db/calls';
 import { startConversation } from '../src/db/flows';
 import { saveTurn } from '../src/ai/relay-store';
 
-let failures = 0;
-
-function check(label: string, actual: unknown, expected: unknown): void {
-  const a = JSON.stringify(actual);
-  const e = JSON.stringify(expected);
-  if (a === e) {
-    console.log(`  ok   ${label}`);
-  } else {
-    failures++;
-    console.log(`  FAIL ${label}\n       expected ${e}\n       actual   ${a}`);
-  }
-}
 
 async function refuseIfNotEmpty(): Promise<void> {
   const { rows } = await pool.query(`SELECT count(*)::int AS n FROM leads`);
@@ -353,9 +342,9 @@ async function main(): Promise<void> {
     check('the voicemail message took her call: the greeting was not the lead - "1" answers Q1', [machineOne?.result.needsPerson, (await conversationOf(machine)).step], [false, 20]);
   }
 
-  console.log(failures === 0 ? '\nall checks passed' : `\n${failures} check(s) FAILED`);
+  console.log(verdict());
   await pool.end();
-  process.exit(failures === 0 ? 0 : 1);
+  process.exit(failureCount() === 0 ? 0 : 1);
 }
 
 main().catch((err) => {

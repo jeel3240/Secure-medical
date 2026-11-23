@@ -61,7 +61,9 @@ export const ACTIVITY_ACTIONS = [
   'dnc.released',
   /**
    * The "Taking calls" switch went on or off - `detail.on`, and `detail.why`:
-   * `by_hand`, `sign_in` or `sign_out` (T10, AUTO-CALLS.md "Who is free").
+   * `by_hand`, `sign_in` or `sign_out` (T10, AUTO-CALLS.md "Who is free"), or
+   * `missed_transfer` - the server turned it off after a ring was let run out,
+   * with `detail.callId` (T15c).
    */
   'calls.availability_changed',
   /**
@@ -98,6 +100,18 @@ export const ACTIVITY_ACTIONS = [
    * drops"). The system's doing. Up to five per call.
    */
   'ai_agent.reconnected',
+  /**
+   * A local test script changed a test lead's rows - never on production, where
+   * the scripts refuse to run. `detail.what`: `ask_again` (dev-ask-again: the
+   * open conversation expired and a new one started, `expired` its ids),
+   * `number_moved` (dev-auto-call --again: this lead's number given to a fresh
+   * test lead, `phone` the number it had, `now` the one it has, `freshLeadId`),
+   * or `conversation_given` (dev-auto-call: a lead with none given one, nothing
+   * texted). Run from a laptop, so no actor. Review Q9, 2026-11-23: these wrote
+   * with no record, and the number move overwrote the only record of the
+   * number a lead had.
+   */
+  'dev.test_reset',
   // Sign-in.
   'auth.signed_in',
   'auth.sign_in_failed',

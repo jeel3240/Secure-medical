@@ -7,7 +7,8 @@
  * a read-only config page.
  *
  * Live system status is deliberately not here: it comes from the health
- * endpoint, so external monitoring reads exactly what the screen does.
+ * endpoint, so the screen and the health check read the same thing - which
+ * only a superadmin can reach, nothing outside (README, "Known limits").
  * ADMIN.md.
  */
 

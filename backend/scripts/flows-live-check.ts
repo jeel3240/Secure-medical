@@ -10,6 +10,7 @@
  * It writes rows, so it refuses to run against a database that holds any:
  * `scripts/live-checks.sh flows` gives it a scratch database.
  */
+import { check, failureCount, verdict } from './check';
 import { getAdminConfig } from '../src/db/admin-config';
 import { loadFlow, startConversation } from '../src/db/flows';
 import { getLeadDetail } from '../src/db/lead-detail';
@@ -17,18 +18,6 @@ import { pool } from '../src/db/pool';
 import { listQueue } from '../src/db/queue';
 import { replyAs, startFlow } from './live-flow';
 
-let failures = 0;
-
-function check(label: string, actual: unknown, expected: unknown): void {
-  const a = JSON.stringify(actual);
-  const e = JSON.stringify(expected);
-  if (a === e) {
-    console.log(`  ok   ${label}`);
-  } else {
-    failures++;
-    console.log(`  FAIL ${label}\n       expected ${e}\n       actual   ${a}`);
-  }
-}
 
 let nextPhone = 900;
 async function makeLead(name: string): Promise<number> {
@@ -270,9 +259,9 @@ async function main(): Promise<void> {
     check('two flows, and still the same three flow tables', schema, 3);
   }
 
-  console.log(failures === 0 ? '\nall checks passed' : `\n${failures} check(s) FAILED`);
+  console.log(verdict());
   await pool.end();
-  process.exit(failures === 0 ? 0 : 1);
+  process.exit(failureCount() === 0 ? 0 : 1);
 }
 
 main().catch((err) => {

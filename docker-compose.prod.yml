@@ -79,8 +79,14 @@ services:
     ports:
       - "80:80"
       - "443:443"
+    # The folder, not the file, and --watch: a `git pull` that changes the
+    # Caddyfile reaches Caddy, which reloads it within seconds - a broken one is
+    # refused and the running config kept. Mounted as one file, a pull swapped
+    # the file under it and Caddy went on with the old one until recreated
+    # (review Q11, 2026-11-23; docs/WORKFLOW.md).
+    command: caddy run --config /etc/caddy/Caddyfile --adapter caddyfile --watch
     volumes:
-      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - ./caddy:/etc/caddy:ro
       - caddy_data:/data
       - caddy_config:/config
     depends_on:

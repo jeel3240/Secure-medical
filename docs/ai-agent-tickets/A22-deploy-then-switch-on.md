@@ -22,10 +22,11 @@ both `-f` files, as production runs:
   Callbacks read columns that are not there yet. Neither changes an existing
   row; 023 (A15) adds `callbacks.note`, Seri's one-line reason on a call back
   she books, and one call back per call.
-- Recreate Caddy after the `up` - this deploy changes the `Caddyfile`, which a
-  running Caddy never rereads: `docker compose -f docker-compose.yml -f
-  docker-compose.prod.yml up -d --force-recreate caddy` (`docs/WORKFLOW.md`).
-  It holds Seri's reconnect while the api restarts, so a call with her lives
+- The Caddyfile this deploy changes reaches Caddy by itself: since review Q11
+  (2026-11-23) it is `caddy/Caddyfile`, its folder mounted and watched, and the
+  `up` recreates the caddy container once, as its compose settings changed
+  (`docs/WORKFLOW.md`). *Before: recreate Caddy by hand after the `up`.* It
+  holds Seri's reconnect while the api restarts, so a call with her lives
   through a deploy (`docs/AI-AGENT.md` section 2, "When the line drops").
 - `ai_agent` stays `off` (022 seeds it): calls go on exactly as today, the
   script from its first question.

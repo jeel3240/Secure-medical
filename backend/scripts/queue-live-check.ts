@@ -16,6 +16,7 @@
  * Re-running needs a fresh database: DROP and re-migrate - or
  * `scripts/live-checks.sh queue`. 84 checks as of 2026-11-12.
  */
+import { check, failureCount, verdict } from './check';
 import { pool } from '../src/db/pool';
 import { startFlow } from './live-flow';
 import { listQueue } from '../src/db/queue';
@@ -25,25 +26,6 @@ import { listCallbacks } from '../src/db/callbacks';
 import { claimLead, releaseLead } from '../src/db/claims';
 import { startCall } from '../src/db/calls';
 import { setDisposition } from '../src/db/dispositions';
-
-let failures = 0;
-const stable = (v: unknown) =>
-  JSON.stringify(v, (_k, val) =>
-    val && typeof val === 'object' && !Array.isArray(val)
-      ? Object.fromEntries(Object.entries(val).sort(([a], [b]) => a.localeCompare(b)))
-      : val
-  );
-
-function check(label: string, actual: unknown, expected: unknown) {
-  const a = stable(actual);
-  const e = stable(expected);
-  if (a !== e) {
-    failures++;
-    console.log(`FAIL ${label}\n  expected ${e}\n  actual   ${a}`);
-  } else {
-    console.log(`ok   ${label}  ${a}`);
-  }
-}
 
 async function lead(opts: {
   phone: string; first: string; source: string; ageMin: number;
@@ -363,9 +345,9 @@ async function main() {
   check('the outcome is saved', (await setDisposition(late, michael, 'closed')).ok, true);
   check('an outcome finishes it: out of the queue', at(await queueNow(), late), -1);
 
-  console.log(failures ? `\n${failures} FAILED` : '\nall checks passed');
+  console.log(verdict());
   await pool.end();
-  process.exit(failures ? 1 : 0);
+  process.exit(failureCount() === 0 ? 0 : 1);
 }
 
 main().catch((e) => { console.error(e); process.exit(1); });

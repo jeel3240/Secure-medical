@@ -10,32 +10,13 @@
  *   DATABASE_URL=postgres://app:app@localhost:5433/leads_check JWT_SECRET=x \
  *     EZT_USERNAME=x EZT_PASSWORD=x EZT_GROUP=x npx ts-node --transpile-only scripts/admin-leads-live-check.ts
  */
+import { check, failureCount, verdict } from './check';
 import { pool } from '../src/db/pool';
 import { startFlow } from './live-flow';
 import { listAdminLeads } from '../src/db/leads';
 import { startAutomatedCall } from '../src/db/auto-calls';
 import { bookAiCallback } from '../src/db/callbacks';
 
-let failures = 0;
-
-/** JSON with object keys sorted, so a GROUP BY's row order cannot fail a check. */
-const stable = (v: unknown) =>
-  JSON.stringify(v, (_k, val) =>
-    val && typeof val === 'object' && !Array.isArray(val)
-      ? Object.fromEntries(Object.entries(val).sort(([a], [b]) => a.localeCompare(b)))
-      : val
-  );
-
-function check(label: string, actual: unknown, expected: unknown): void {
-  const a = stable(actual);
-  const e = stable(expected);
-  if (a === e) {
-    console.log(`  ok   ${label}`);
-  } else {
-    failures++;
-    console.log(`  FAIL ${label}\n       expected ${e}\n       actual   ${a}`);
-  }
-}
 
 let nextPhone = 600;
 
@@ -297,9 +278,9 @@ async function main(): Promise<void> {
   check('the agent\'s call among them', notCalled.leads.some((l) => l.firstName === 'Called'), true);
   check('and the call Twilio never placed', notCalled.leads.some((l) => l.firstName === 'NotPlaced'), true);
 
-  console.log(failures === 0 ? '\nall checks passed' : `\n${failures} check(s) FAILED`);
+  console.log(verdict());
   await pool.end();
-  process.exit(failures === 0 ? 0 : 1);
+  process.exit(failureCount() === 0 ? 0 : 1);
 }
 
 main().catch((err) => {

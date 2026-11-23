@@ -117,8 +117,9 @@ export function ActionsPanel({
 
   /**
    * The unsaved-changes guard the brief asks for, for the case that actually
-   * loses work: closing the tab or hitting back. An in-app navigation cannot be
-   * intercepted without a router data API this app does not use.
+   * loses work: closing or reloading the tab, or leaving the app. Back to
+   * another page of the app is an in-app navigation, which this does not catch:
+   * that needs a router data API this app does not use.
    */
   useEffect(() => {
     if (!dirty) return;

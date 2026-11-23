@@ -35,8 +35,8 @@
  * database, which is the time to count from.
  *
  * **Never late by more than a day.** A lead whose opener has not gone out 24
- * hours after they arrived is not sent one. "You asked about health &
- * wellness" days after they asked reads as broken, and they have moved on -
+ * hours after they arrived is not sent one. A first question days after they
+ * asked reads as broken, and they have moved on -
  * and without this cap the first deploy would text every old lead whose opener
  * never went out, however old. Found in review, 2026-09-28.
  *

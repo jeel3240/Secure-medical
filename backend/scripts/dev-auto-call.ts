@@ -33,8 +33,9 @@
  */
 import { mayRing, readAutoCalls, readAutoCallTestNumbers } from '../src/auto-calls-settings';
 import { config } from '../src/config';
+import { recordActivity } from '../src/db/activity';
 import { releaseNumber, RELEASE_REASONS } from '../src/db/dnc';
-import { startConversation, type Db } from '../src/db/flows';
+import { startConversation } from '../src/db/flows';
 import { pool } from '../src/db/pool';
 import { readExpiryDays } from '../src/db/sql';
 import { placeAutoCall, type PlaceAutoCallResult } from '../src/worker/place-auto-call';
@@ -80,7 +81,7 @@ async function main(): Promise<number> {
     console.error('No lead with that number in this database.');
     return 1;
   }
-  if (await giveConversation(pool, leadId)) {
+  if (await giveConversation(leadId)) {
     console.log(`Lead ${leadId} had no text conversation: given one, its first question marked as sent - nothing was texted.`);
   }
 
@@ -104,18 +105,33 @@ async function leadFor(phone: string): Promise<number | null> {
  * and the opener retry never takes it for a first question that failed. True
  * when one was given.
  */
-async function giveConversation(q: Db, leadId: number): Promise<boolean> {
-  const { rows } = await q.query(`SELECT 1 FROM conversations WHERE lead_id = $1 LIMIT 1`, [leadId]);
-  if (rows.length > 0) return false;
-  await startConversation(q, leadId, 'open');
-  const days = await readExpiryDays(q);
-  await q.query(
-    `UPDATE conversations
-     SET expires_at = now() + ($2 || ' days')::interval, question_sent_at = now(), updated_at = now()
-     WHERE lead_id = $1 AND status = 'open'`,
-    [leadId, String(days)]
-  );
-  return true;
+async function giveConversation(leadId: number): Promise<boolean> {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const { rows } = await client.query(`SELECT 1 FROM conversations WHERE lead_id = $1 LIMIT 1`, [leadId]);
+    if (rows.length > 0) {
+      await client.query('COMMIT');
+      return false;
+    }
+    await startConversation(client, leadId, 'open');
+    const days = await readExpiryDays(client);
+    await client.query(
+      `UPDATE conversations
+       SET expires_at = now() + ($2 || ' days')::interval, question_sent_at = now(), updated_at = now()
+       WHERE lead_id = $1 AND status = 'open'`,
+      [leadId, String(days)]
+    );
+    // Recorded with the change (review Q9): this conversation's question was never texted.
+    await recordActivity(client, { action: 'dev.test_reset', actorId: null, leadId, detail: { what: 'conversation_given' } });
+    await client.query('COMMIT');
+    return true;
+  } catch (err) {
+    await client.query('ROLLBACK');
+    throw err;
+  } finally {
+    client.release();
+  }
 }
 
 /**
@@ -139,12 +155,22 @@ async function freshLeadIfCalled(phone: string): Promise<number | null> {
       await client.query('COMMIT');
       return old?.id ?? null;
     }
-    await client.query(`UPDATE leads SET phone = '+1555' || lpad(id::text, 7, '0') WHERE id = $1`, [old.id]);
+    const moved = await client.query<{ phone: string }>(
+      `UPDATE leads SET phone = '+1555' || lpad(id::text, 7, '0') WHERE id = $1 RETURNING phone`,
+      [old.id]
+    );
     const fresh = await client.query(
       `INSERT INTO leads (phone, first_name, last_name, source, ezt_added_at)
        VALUES ($1, $2, $3, 'dev_test', now()) RETURNING id`,
       [phone, old.first_name, old.last_name]
     );
+    // The number this lead had is kept here - the update above overwrote its only record (review Q9).
+    await recordActivity(client, {
+      action: 'dev.test_reset',
+      actorId: null,
+      leadId: old.id,
+      detail: { what: 'number_moved', phone, now: moved.rows[0].phone, freshLeadId: fresh.rows[0].id },
+    });
     await client.query('COMMIT');
     console.log(`Lead ${old.id} has had its call: the number now belongs to fresh test lead ${fresh.rows[0].id}.`);
     return fresh.rows[0].id;
@@ -171,9 +197,14 @@ function describe(result: PlaceAutoCallResult): string {
   }
 }
 
-main()
-  .then((code) => pool.end().then(() => process.exit(code)))
-  .catch((err) => {
-    console.error(err);
-    process.exit(1);
-  });
+// Run as a command only: imported, its two writes are proved on a scratch database (review Q9).
+if (require.main === module) {
+  main()
+    .then((code) => pool.end().then(() => process.exit(code)))
+    .catch((err) => {
+      console.error(err);
+      process.exit(1);
+    });
+}
+
+export { freshLeadIfCalled, giveConversation };

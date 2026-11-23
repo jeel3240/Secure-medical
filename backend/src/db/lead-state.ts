@@ -183,7 +183,7 @@ export const AI_CALLBACK_DUE_AT_SQL = `(SELECT min(dc.scheduled_at) FROM callbac
 
 /**
  * Closed: the newest disposition is `closed` (or a retired value that meant
- * the same - `core/dispositions.ts`), and nothing has reopened it since. Two
+ * the same - `core/dispositions.ts`), and nothing has reopened it since. Four
  * things reopen a closed lead:
  *
  * - **The lead writes to us.** A person has to read it, so it returns to the

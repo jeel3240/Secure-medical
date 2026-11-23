@@ -13,22 +13,11 @@
  *   DATABASE_URL=postgres://app:app@localhost:5433/cb_check JWT_SECRET=x \
  *     EZT_USERNAME=x EZT_PASSWORD=x EZT_GROUP=x npx ts-node --transpile-only scripts/callbacks-live-check.ts
  */
+import { check, failureCount, verdict } from './check';
 import { pool } from '../src/db/pool';
 import { startOfTodaySql, startOfTomorrowSql } from '../src/db/sql';
 import { createCallback, listCallbacks, updateCallback } from '../src/db/callbacks';
 
-let failures = 0;
-
-function check(label: string, actual: unknown, expected: unknown): void {
-  const a = JSON.stringify(actual);
-  const e = JSON.stringify(expected);
-  if (a === e) {
-    console.log(`  ok   ${label}`);
-  } else {
-    failures++;
-    console.log(`  FAIL ${label}\n       expected ${e}\n       actual   ${a}`);
-  }
-}
 
 async function refuseIfNotEmpty(): Promise<void> {
   const { rows } = await pool.query(`SELECT count(*)::int AS n FROM leads`);
@@ -226,9 +215,9 @@ async function main(): Promise<void> {
     check('an unknown callback is rejected', missing.ok === false && missing.reason, 'not_found');
   }
 
-  console.log(failures === 0 ? '\nall checks passed' : `\n${failures} check(s) FAILED`);
+  console.log(verdict());
   await pool.end();
-  process.exit(failures === 0 ? 0 : 1);
+  process.exit(failureCount() === 0 ? 0 : 1);
 }
 
 main().catch((err) => {

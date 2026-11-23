@@ -196,13 +196,16 @@ A call already with her finishes; the next call follows the switch.
 to Twilio as it stops, Caddy holds Twilio's reconnect until the new api is up -
 a few seconds - and she goes on where she was. Still deploy after 5 PM Arizona:
 Caddy itself restarting is untested. **The deploy that brings this also changes
-the `Caddyfile`, which Caddy reads only when its container starts** - the file
-is mounted on its own, and `git pull` replaces it, so a running Caddy keeps the
-old one. After the `up`, recreate Caddy (the site is down a second or two):
-
-```bash
-docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --force-recreate caddy
-```
+the Caddyfile** - and since review Q11 (2026-11-23) nothing more is needed for
+it: the Caddyfile is `caddy/Caddyfile`, its folder mounted whole, and Caddy
+runs with `--watch` (`docker-compose.prod.yml`), so a `git pull` that changes
+it reaches Caddy, which reloads it within about ten seconds; a broken one is
+refused, logged by Caddy's `watcher`, and the running config kept - both seen
+on the `caddy:2` image locally. The first deploy with this change recreates
+the caddy container by itself, as its compose settings changed (the site down
+a second or two). Before, the file was mounted on its own: `git pull` replaced
+it, a running Caddy kept the old one, and Caddy had to be recreated by hand
+with `up -d --force-recreate caddy`.
 
 **Calling: run `docker compose exec api npm run twilio:configure`** on the
 first deploy that has calling, and whenever `PUBLIC_URL` or a Twilio setting

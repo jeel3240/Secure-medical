@@ -20,7 +20,6 @@ export const TOKEN_TTL_SECONDS = 60 * 60;
 
 export const VOICE_PATH = '/api/webhooks/twilio/voice';
 export const STATUS_PATH = '/api/webhooks/twilio/status';
-/** A lead calling our number. The phone number's Voice URL points here. */
 /** What the lead hears before a recorded call we placed is connected - the recording notice. */
 export const NOTICE_PATH = '/api/webhooks/twilio/notice';
 
@@ -49,6 +48,7 @@ function recordingAttributes(settings: TwilioSettings, callSid: string): Partial
 
 /** Twilio's verdict on who picked up a call we placed: a person or a machine. */
 export const AMD_PATH = '/api/webhooks/twilio/answered-by';
+/** A lead calling our number. The phone number's Voice URL points here. */
 export const INCOMING_PATH = '/api/webhooks/twilio/incoming';
 /** Where Twilio goes once ringing the agent is over, to ask what to say to the lead. */
 export const INCOMING_AFTER_PATH = '/api/webhooks/twilio/incoming/after';

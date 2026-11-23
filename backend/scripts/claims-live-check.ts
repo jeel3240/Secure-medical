@@ -16,21 +16,10 @@
  *
  * Re-running needs a fresh database: DROP and re-migrate.
  */
+import { check, failureCount, verdict } from './check';
 import { pool } from '../src/db/pool';
 import { claimLead, releaseLead } from '../src/db/claims';
 
-let failures = 0;
-
-function check(label: string, actual: unknown, expected: unknown): void {
-  const a = JSON.stringify(actual);
-  const e = JSON.stringify(expected);
-  if (a === e) {
-    console.log(`  ok   ${label}`);
-  } else {
-    failures++;
-    console.log(`  FAIL ${label}\n       expected ${e}\n       actual   ${a}`);
-  }
-}
 
 async function refuseIfNotEmpty(): Promise<void> {
   const { rows } = await pool.query(
@@ -174,9 +163,9 @@ async function main(): Promise<void> {
     check('releasing reports not_found', release.ok === false && release.reason, 'not_found');
   }
 
-  console.log(failures === 0 ? '\nall checks passed' : `\n${failures} check(s) FAILED`);
+  console.log(verdict());
   await pool.end();
-  process.exit(failures === 0 ? 0 : 1);
+  process.exit(failureCount() === 0 ? 0 : 1);
 }
 
 main().catch((err) => {

@@ -11,23 +11,12 @@
  * It writes rows, so it refuses to run against a database that holds leads.
  * Run it with the others: scripts/live-checks.sh call-script
  */
+import { check, failureCount, verdict } from './check';
 import type { CallScript } from '../src/core/call-script';
 import { ANTIBIOTICS_CALL } from '../src/core/call-script-fixtures';
 import { loadActiveCallScript } from '../src/db/call-script';
 import { pool } from '../src/db/pool';
 
-let failures = 0;
-
-function check(label: string, actual: unknown, expected: unknown): void {
-  const a = JSON.stringify(actual);
-  const e = JSON.stringify(expected);
-  if (a === e) {
-    console.log(`  ok   ${label}`);
-  } else {
-    failures++;
-    console.log(`  FAIL ${label}\n       expected ${e}\n       actual   ${a}`);
-  }
-}
 
 /** A script with its database ids replaced by step keys, so two copies compare by content. */
 function shape(script: CallScript) {
@@ -189,9 +178,9 @@ async function main(): Promise<void> {
     check('an unclear second asking is kept', await answer(2, 'unclear', null, null), 'accepted');
   }
 
-  console.log(failures === 0 ? '\nall checks passed' : `\n${failures} check(s) FAILED`);
+  console.log(verdict());
   await pool.end();
-  process.exit(failures === 0 ? 0 : 1);
+  process.exit(failureCount() === 0 ? 0 : 1);
 }
 
 main().catch((err) => {

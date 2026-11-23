@@ -1,8 +1,9 @@
 /**
  * Rendering outbound SMS copy. Pure: no database, no network.
  *
- * Copy lives in `settings` so a superadmin can edit it, and may contain
- * `{first_name}`. Rendering is here rather than at the send site so the state
+ * The copy is rows - a flow's questions and replies (`FLOWS.md`), and the
+ * missed-call text in `settings` - changed by migration, not from a screen; it
+ * may contain `{first_name}`. Rendering is here rather than at the send site so the state
  * machine and the poller produce identical text from the same template.
  */
 

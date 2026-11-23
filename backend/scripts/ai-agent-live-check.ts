@@ -15,6 +15,7 @@
  *
  *   scripts/live-checks.sh ai-agent
  */
+import { check, failureCount, verdict } from './check';
 import { seriGreeting } from '../src/ai/answer';
 import { fallbackStreak } from '../src/ai/health';
 import { endAiCall, recordedHandoff, resumeAiCall, saveTurn, startAiCall, verdictState, whoIsThere } from '../src/ai/relay-store';
@@ -26,18 +27,6 @@ import { WORKED_SQL } from '../src/db/lead-state';
 import { getTimeline } from '../src/db/timeline';
 import { pool } from '../src/db/pool';
 
-let failures = 0;
-
-function check(label: string, actual: unknown, expected: unknown): void {
-  const a = JSON.stringify(actual);
-  const e = JSON.stringify(expected);
-  if (a === e) {
-    console.log(`  ok   ${label}`);
-  } else {
-    failures++;
-    console.log(`  FAIL ${label}\n       expected ${e}\n       actual   ${a}`);
-  }
-}
 
 /** 'allowed', or the name of the check, trigger or rule that refused it. */
 async function attempt(sql: string, values: unknown[] = []): Promise<string> {
@@ -641,9 +630,9 @@ async function main(): Promise<void> {
     check('no such call: not held', await verdictState(pool, 999999), 'in');
   }
 
-  console.log(failures === 0 ? '\nall checks passed' : `\n${failures} check(s) FAILED`);
+  console.log(verdict());
   await pool.end();
-  process.exit(failures === 0 ? 0 : 1);
+  process.exit(failureCount() === 0 ? 0 : 1);
 }
 
 main().catch((err) => {

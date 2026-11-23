@@ -12,8 +12,9 @@
  * than a slow one.
  *
  * **Live system status is not here.** Last poll, last webhook and worker health
- * come from the health endpoint - `LOGGING.md` - so that anything monitoring
- * the system from outside reads exactly what this screen does.
+ * come from the health endpoint - `LOGGING.md` - so the screen and the health
+ * check read the same thing. (Superadmin only, so no monitor outside can poll
+ * it yet - README, "Known limits".)
  *
  * **Only what the page shows - Jeel, 2026-09-28: "we are making the system
  * complex".** Calls made, reached, average call length, HOT, callbacks set, DNC
