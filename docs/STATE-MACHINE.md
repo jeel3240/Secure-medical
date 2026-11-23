@@ -147,7 +147,7 @@ Configuration shows each text and its segment count.
 
 | File | Holds |
 |---|---|
-| `core/state-machine.ts` | `step()`, `tierFor()`, `firstQuestion()` - every rule below, for any flow |
+| `core/state-machine.ts` | `step()`, `tierFor()` - every rule below, for any flow. Also `firstQuestion()`, which only its tests call: the app picks a new lead's first question - the lowest position - in SQL, `startConversation` (`db/flows.ts`) and `findOpenersNeverSent` (review R12, 2026-11-23) |
 | `core/answers.ts` | `matchChoice()` - a reply against one question's choices |
 | `db/flows.ts` | Reads a flow; starts a conversation in the active one |
 | `api/reply-flow.ts` | Loads the conversation and its flow, runs `step`, saves the answer row, sends |

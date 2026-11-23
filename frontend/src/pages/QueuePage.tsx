@@ -64,11 +64,15 @@ export function answersTitle(answers: QueueLead['answers']): string | undefined 
 
 /**
  * The order, as the page states it. A "yes" on the robot's call that nobody
- * took comes first (T22, QUEUE.md "The order") - said only while automated
- * calls are on, so nobody reads about transfers that cannot happen.
+ * took comes first (T22), and so does a call back Seri booked once it is due
+ * (A16) - QUEUE.md "The order". Said only while automated calls are on, so
+ * nobody reads about transfers that cannot happen; Seri's call backs were left
+ * out of it until review R15, 2026-11-23.
  */
 export function orderText(autoCalls: boolean): string {
-  return autoCalls ? 'Missed transfers first, then highest score, then newest.' : 'Highest score first, then newest.';
+  return autoCalls
+    ? "Missed transfers and Seri's due call backs first, then highest score, then newest."
+    : 'Highest score first, then newest.';
 }
 
 const SINCE: { key: string; label: string }[] = [

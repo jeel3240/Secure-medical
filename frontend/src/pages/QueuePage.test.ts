@@ -24,8 +24,8 @@ describe('a lead\'s answers in the queue', () => {
 });
 
 describe('the order, as the page states it', () => {
-  it('a "yes" nobody took first, while automated calls are on - T22', () => {
-    expect(orderText(true)).toBe('Missed transfers first, then highest score, then newest.');
+  it('a "yes" nobody took and Seri\'s due call backs first, while automated calls are on - T22, A16', () => {
+    expect(orderText(true)).toBe("Missed transfers and Seri's due call backs first, then highest score, then newest.");
   });
 
   it('otherwise as before: there are no transfers to miss', () => {

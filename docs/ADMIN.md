@@ -168,7 +168,7 @@ complex".** The page and the API now hold only what a superadmin acts on:
 | Part | Shows |
 |---|---|
 | Totals | Leads in · Replied · Completed · Closed - for Today, 7 days or 30 days, chosen on the navy switcher |
-| Agents | Per active user, superadmins included: **Working now** (leads they hold), **Closed** in the period, **Due today**, **Last active** (their newest note, callback they booked, outcome, call they placed or answered - a transfer they took from an automated call included, never one nobody took (T4) - or SMS that went out) |
+| Agents | Per active user, superadmins included: **Working now** (leads they hold), **Closed** in the period, **Due today**, **Last active** (their newest note, callback booked for them - by them, or by a superadmin for them: the table reads whose callback it is, and who booked it is only in the activity log (review R14) - outcome, call they placed or answered - a transfer they took from an automated call included, never one nobody took (T4) - or SMS that went out) |
 | System | Database, EZ Texting sync, the expiry sweep, sending and calling - each OK or Degraded - and incoming replies, which shows its last reply with no verdict. Calling is Degraded when the phone number or the TwiML App no longer points at this server (2026-10-02), and reads "not set up", with no verdict, where calling is off. From the health endpoint |
 
 **Every number counts what happened in the period - Jeel, 2026-09-28, "i want
@@ -219,8 +219,11 @@ from the health endpoint in `LOGGING.md` rather than this route, so the screen
 and that endpoint cannot disagree. The endpoint is superadmin-only, so nothing
 outside can poll it - `README.md`, "Known limits".
 
-The per-agent table and the activity feed are the only place one agent's work is
-visible to anyone but themselves. Agents cannot reach this page: `AUTH.md`.
+The per-agent table and the activity feed are the only view of agents' work
+across leads. One lead's own history - every agent's notes, outcomes and texts,
+with who wrote them - is on its timeline, open to every signed-in user; this
+page is the one that puts all of it side by side (review R14, 2026-11-23).
+Agents cannot reach this page: `AUTH.md`.
 
 **"Today" is the viewer's day** - since 2026-09-28 the browser sends its time
 zone as `?tz=`, and today starts at the viewer's midnight, not the database's
@@ -228,7 +231,9 @@ UTC one (`db/sql.ts`, `startOfTodaySql`). An invalid zone is a 400; none means
 UTC.
 
 **As built.** `period` defaults to `today`, which means since midnight rather
-than the last 24 hours. Leads are counted by when they reached us
+than the last 24 hours. The response's `since` is that start - the viewer's
+midnight, or 7 or 30 days ago - read with the counts (until 2026-11-23 it held
+the time of the request; nothing on screen reads it). Leads are counted by when they reached us
 (`ezt_added_at`, falling back to `created_at`) - the same expression the queue
 uses for a lead's age - while closings are counted by when they happened, so a
 lead closed today about last week's lead lands in today's figures.
@@ -236,7 +241,8 @@ lead closed today about last week's lead lands in today's figures.
 The activity feed is a four-way UNION over `dispositions`, `notes`, `callbacks`
 and agent-sent `messages`, newest first, capped at 50. Agent actions only: the
 automated flow is already visible per lead on the timeline, and this feed
-answers "what are my agents doing". For the same reason a callback the system
+answers "what are my agents doing". A callback in it is shown under the name
+of the agent it is for, as in Last active. For the same reason a callback the system
 books for a missed call (`callbacks.reason = 'missed_call'`) is not in the
 feed, and neither it nor a call that only rang an agent moves their Last
 active (2026-10-01). Nor does a call back Seri booked (`ai_booked`, A15): the

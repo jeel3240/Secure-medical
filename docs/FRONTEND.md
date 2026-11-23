@@ -671,7 +671,7 @@ Decided 2026-09-26. It goes back in if the partner ever sends state.
 **The queue has one Answers column** - 2026-10-05. A row carries `answers`,
 as many as the lead's flow asked and they answered, and the cell reads "Yes ·
 No · Talk to an agent" with each question's heading on hover
-(`QueuePage.tsx`, `answersText`). It had three fixed columns - Interest,
+(`QueuePage.tsx`; the cell writes each answer with its question for a screen reader - `answersText`, the same words as one string, is called only by its tests, review R15). It had three fixed columns - Interest,
 Timing, Preference - which cannot fit flows with different numbers of
 questions. The list of answer names written into `lib/format.ts` is gone:
 every word comes from the server, saved with the answer. `FLOWS.md`.
@@ -706,13 +706,17 @@ writes `leads.assigned_to` and locks every colleague out. An agent could take a
 lead believing they had only looked at it. It is now **Pick up**, and two further
 states follow from the same rule - **Resume** on your own lead, **View** on
 someone else's when you are a superadmin. `QUEUE.md`, "What the button offers",
-is the table. The same wording is on the My Callbacks row and the Lead Timeline
-header, which claim the same way.
+is the table. The same wording is on the My Callbacks row, which claims the
+same way. The Lead Timeline header has two of the three: Pick up and Resume; on
+a lead someone else holds it shows "Held by <name>" and no button, a superadmin
+included - View is on the queue and My Callbacks (review R15, 2026-11-23).
 
 **The lock is decided in `lib/lock.ts`.** The server enforces it; the screen has
-to decide which rows to mute before anyone clicks. `lockHolder()` answers
-"is this row muted", `rowAction()` answers "what may this person do" - and the
-first is derived from the second so they cannot disagree. `QUEUE.md`, "The
+to decide which rows to mute before anyone clicks. `rowAction()` answers
+"what may this person do", and the queue mutes a row it answers `locked` for,
+naming the holder from the row's tag (`QueuePage.tsx`). `lockHolder()`, derived
+from `rowAction()` for the same answer as a name, is called only by its tests
+(review R15, 2026-11-23). `QUEUE.md`, "The
 one-agent lock on screen", has both tables. The holder is matched by id since
 2026-09-28; before, by name, which two agents sharing a name would break.
 

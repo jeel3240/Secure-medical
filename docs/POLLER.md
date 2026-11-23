@@ -9,8 +9,12 @@ going out. Two things add up: EZ Texting lists a new contact some time after
 creating it - that one was not visible 47 seconds in, and was 107 seconds in -
 and the next check can be a whole interval away. Nothing on our side shortens
 the first; halving the interval halves the second. The overlap window already
-means a contact that shows up late is never missed, only picked up a round
-later.
+means a contact that shows up late is not missed, only picked up a round
+later - **as long as it shows up within the overlap**, 5 minutes after its
+`createdAt`. One that EZ Texting lists later than that, or one added to the
+group more than 5 minutes after it was created (a contact moved into the group
+by hand, say), is older than the cutoff by the time it is seen, and is never
+taken in (review R12, 2026-11-23).
 
 Code: `backend/src/worker/poller.ts` and `backend/src/worker/index.ts`. Sending
 question 1 is `backend/src/worker/opener.ts`, shared with the opener retry
@@ -76,7 +80,10 @@ filter would have done server-side.
 
 **The 5 minute overlap.** Deliberately re-reads contacts already processed, in
 case one becomes visible slightly after its `createdAt`. Re-reading is free
-because the insert dedupes.
+because the insert dedupes. It covers a delay of up to 5 minutes, no more: the
+poll stops at the first contact older than the cutoff, so a contact that
+appears later than that - listed late, or moved into the group - is never
+reached (the top of this page).
 
 **`ON CONFLICT (phone) DO NOTHING`.** The API has no per-contact id, so phone is
 the only stable identity. This is what stops a restart from duplicating every

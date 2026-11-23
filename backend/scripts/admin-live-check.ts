@@ -259,6 +259,12 @@ async function main(): Promise<void> {
     const sevenDay = await getOverview('7d');
     check('7d takes the 3-day-old lead and leaves the 10-day-old one', sevenDay.kpis.leadsReceived, 5);
 
+    // `since` is where the period starts, not when it was asked (review R14, 2026-11-23).
+    const daysBack = (o: { since: string }) => Math.round((Date.now() - Date.parse(o.since)) / 86_400_000);
+    check('since: 7 and 30 days back', [daysBack(sevenDay), daysBack(thirty)], [7, 30]);
+    const todayStarts = Date.now() - Date.parse(today.since);
+    check("since: today's start, earlier than now and within the day", todayStarts > 0 && todayStarts < 86_400_000, true);
+
     console.log('\nthe totals and the per-agent table');
     const lead = await makeLead({ phone: '+15550000706', status: 'completed', score: 80, tier: 'HOT' });
     await pool.query(`INSERT INTO dispositions (lead_id, agent_id, value) VALUES ($1, $2, 'closed')`, [lead, maya]);
