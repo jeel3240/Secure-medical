@@ -253,7 +253,7 @@ you change something the docs describe, update the doc in the same commit.
     src/db/locks.ts         an advisory lock for work done in one place at a time - the worker's cycle, the dialler's look (review M14)
     src/core/activity.ts    every action the activity log records
     src/db/activity.ts      writes the activity log and the raw webhook archive
-    scripts/activity-live-check.ts  proves every action is recorded, and that the log cannot be altered
+    scripts/activity-live-check.ts  proves the log cannot be altered, and 16 of the 40 actions recorded; 18 more are proved by their own area's live check, and the six account actions (sign-ins, passwords, accounts) by src/api/__tests__/activity.test.ts - AUDIT.md, "Testing"
     src/db/holder.ts        who holds a lead - checked before every write on it
     src/db/failed-sends.ts  keeps an agent's own text that EZ Texting refused, marked failed
     src/db/outbound.ts      sends an automated text and records it: opener, retry, reply flow, missed-call text, the call's link

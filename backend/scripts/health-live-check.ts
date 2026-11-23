@@ -4,14 +4,14 @@
  * The check that matters here is the one a mock would have got wrong: the
  * poller's liveness comes from `settings.updated_at`, not from the checkpoint's
  * value. The value is the newest contact's createdAt, which stands still on a
- * quiet account while the worker polls happily every minute. Reading it would
+ * quiet account while the worker polls happily every 30 seconds. Reading it would
  * report a healthy system as dead every time leads stop arriving.
  *
  * It writes rows, so it refuses to run against a database that holds any:
  *
  *   docker compose exec postgres psql -U app -d postgres -c 'CREATE DATABASE health_check'
  *   DATABASE_URL=postgres://app:app@localhost:5433/health_check node scripts/migrate.js
- *   DATABASE_URL=postgres://app:app@localhost:5433/health_check REDIS_URL=x JWT_SECRET=x \
+ *   DATABASE_URL=postgres://app:app@localhost:5433/health_check JWT_SECRET=x \
  *     EZT_USERNAME=x EZT_PASSWORD=x EZT_GROUP=x EZT_SEND_GROUP=x \
  *     npx ts-node --transpile-only scripts/health-live-check.ts
  */

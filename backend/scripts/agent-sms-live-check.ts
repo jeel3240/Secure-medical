@@ -12,7 +12,7 @@
  *
  *   docker compose exec postgres psql -U app -d postgres -c 'CREATE DATABASE sms_check'
  *   DATABASE_URL=postgres://app:app@localhost:5433/sms_check node scripts/migrate.js
- *   DATABASE_URL=postgres://app:app@localhost:5433/sms_check REDIS_URL=x JWT_SECRET=x \
+ *   DATABASE_URL=postgres://app:app@localhost:5433/sms_check JWT_SECRET=x \
  *     EZT_USERNAME=x EZT_PASSWORD=x EZT_GROUP=x EZT_SEND_GROUP=x \n *     npx ts-node --transpile-only scripts/agent-sms-live-check.ts
  *
  * EZT_SEND_GROUP must be set because the real sendMessage runs - only its HTTP
@@ -124,6 +124,12 @@ async function main(): Promise<void> {
     // one of ours.
     const kinds = (await getTimeline(leadId))?.map((e) => e.kind) ?? [];
     check('the timeline calls it an agent message', kinds.includes('agent_sms'), true);
+    // The text and its record are one transaction (review R4, 2026-11-23).
+    const recorded = await pool.query(
+      `SELECT actor_id, (detail->>'tookOver')::boolean AS took_over FROM activity_log WHERE lead_id = $1 AND action = 'sms.sent'`,
+      [leadId]
+    );
+    check('recorded as sms.sent, by her, once, as the take-over', recorded.rows, [{ actor_id: maya, took_over: true }]);
   }
 
   console.log('\nrule 2b, through the real reply path');
@@ -196,6 +202,8 @@ async function main(): Promise<void> {
 
     check('is refused', res.ok === false && res.reason, 'blocked');
     check('nothing is sent', sent.length, 0);
+    const tried = await pool.query(`SELECT actor_id FROM activity_log WHERE lead_id = $1 AND action = 'sms.blocked'`, [leadId]);
+    check('the try is recorded as sms.blocked, by her (review R4)', tried.rows.map((r) => r.actor_id), [maya]);
     check('nothing is stored', (await getTimeline(leadId))?.some((e) => e.kind === 'agent_sms'), false);
     // The questions must not stop on the strength of a message never sent.
     check('and no take-over is recorded', await tookOverAt(conversationId), null);

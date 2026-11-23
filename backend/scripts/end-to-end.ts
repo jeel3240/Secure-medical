@@ -36,7 +36,7 @@
  *
  *   docker compose exec postgres psql -U app -d postgres -c 'CREATE DATABASE e2e'
  *   DATABASE_URL=postgres://app:app@localhost:5433/e2e node scripts/migrate.js
- *   DATABASE_URL=postgres://app:app@localhost:5433/e2e REDIS_URL=x JWT_SECRET=x \
+ *   DATABASE_URL=postgres://app:app@localhost:5433/e2e JWT_SECRET=x \
  *     EZT_USERNAME=x EZT_PASSWORD=x EZT_GROUP=weightloss EZT_SEND_GROUP=weightloss \
  *     npx ts-node --transpile-only scripts/end-to-end.ts
  *

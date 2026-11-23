@@ -337,6 +337,9 @@ async function main(): Promise<void> {
     check('and given up after five', (await pool.query(`SELECT status FROM call_transcripts WHERE call_id = (SELECT id FROM calls WHERE twilio_call_sid = 'CA-61')`)).rows[0].status, 'failed');
     const failedEntry = (await getTimeline(refused))!.find((e) => e.kind === 'call');
     check('which the timeline says', (failedEntry?.detail.transcript as { status: string } | undefined)?.status, 'failed');
+    // Given up is recorded once, by nobody - the worker - against the call's agent (review R4, 2026-11-23).
+    const gaveUp = await pool.query(`SELECT actor_id, subject_user_id FROM activity_log WHERE lead_id = $1 AND action = 'call.transcript_failed'`, [refused]);
+    check('and the activity log records it, once', gaveUp.rows, [{ actor_id: null, subject_user_id: maya }]);
   }
 
   console.log('\na lead calling our number: who rings');

@@ -4,8 +4,10 @@ Built 2026-10-01. The company's policy is that data is kept as proof - Jeel's
 instruction that day: whatever action happens, all of it should be tracked.
 
 Code: `backend/src/core/activity.ts` (the list of actions), `db/activity.ts`
-(the writer), migration `006_activity_log.sql`. Proof:
-`scripts/activity-live-check.ts`, 54 checks against a real Postgres (2026-11-13).
+(the writer), migration `006_activity_log.sql`. Proof: every one of the 40
+actions is recorded in a test - against a real Postgres in a live check, all
+but the six account actions, which go through the routes' own recorder
+("Testing", below).
 
 ## What was being lost
 
@@ -230,11 +232,15 @@ database and has no screen yet.
 
 | What | Where |
 |---|---|
-| Every action leaves its record, the poller's block of an opted-out arrival included; nothing is recorded when nothing changed; the log and the archive refuse edits and deletes; a lead with history cannot be deleted | `scripts/activity-live-check.ts` |
-| Calls: `call.incoming`, `call.missed`, the callback the system books and what finishes it (`called_back`, `answered`) | `scripts/calls-live-check.ts` |
-| `callback.done` with `texted_back` | `scripts/agent-sms-live-check.ts` |
+| 16 of the 40 actions leave their record - a lead picked up and released, a reply read, a note, an outcome, a call back booked, moved, done and reopened, a call started, ended and refused, a block and its release, the poller's block of an opted-out arrival, Seri's switch, a sign-in; nothing is recorded when nothing changed; the log and the archive refuse edits and deletes; a lead with history cannot be deleted | `scripts/activity-live-check.ts` |
+| Calls: `call.incoming`, `call.missed`, `call.taken`, `call.answered_by`, `call.recorded`, `call.transcribed` and, given up, `call.transcript_failed` (since 2026-11-23); the callback the system books and what finishes it (`called_back`, `answered`) | `scripts/calls-live-check.ts` |
+| An agent's own text: `sms.sent` with the take-over, and `sms.blocked` for a blocked number (both since 2026-11-23), `sms.failed`; `callback.done` with `texted_back` | `scripts/agent-sms-live-check.ts` |
+| An automated text refused for a blocked number, `sms.blocked` by nobody | `scripts/lead-texts-live-check.ts` |
+| The robot's calls: `call.transferred`, `call.held` | `scripts/auto-calls-live-check.ts` |
+| `calls.availability_changed`; `auto_calls.switched_on`; `callback.taken` | `scripts/presence-live-check.ts`; `auto-dial-live-check.ts`; `queue-live-check.ts` |
+| Seri's part: `ai_agent.started`, `ai_agent.ended`, `ai_agent.reconnected` | `scripts/ai-agent-live-check.ts`, and `npm run e2e` |
 | The claim race still holds with the record in the statement | `scripts/claims-live-check.ts` |
-| Sign-ins, failures and account changes, and that no password is ever recorded | `src/api/__tests__/activity.test.ts` |
+| Sign-ins, failures and account changes, and that no password is ever recorded - `auth.sign_in_failed`, `auth.signed_out`, `auth.password_changed`, `user.created`, `user.updated`, `user.password_reset` proved here only, through the routes' recorder with no database (review R4, 2026-11-23) | `src/api/__tests__/activity.test.ts` |
 | The archive: kept for an ignored request, not kept for a wrong token | `src/api/__tests__/webhooks.test.ts`, `calls.test.ts` |
 | The timeline shows log entries once, not twice | `scripts/timeline-live-check.ts` |
 | The wording on screen | `frontend/src/components/Timeline.test.tsx` |
