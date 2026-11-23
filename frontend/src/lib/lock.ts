@@ -1,15 +1,15 @@
 import type { QueueLead } from '../api/leads';
 import type { PublicUser } from '../api/types';
 
-/**
+/*
  * The one-agent lock, as the screens see it.
  *
  * Phase 3 task 16. The rule itself is enforced on the server - `db/claims.ts`,
  * and no screen is trusted with it - but the queue has to decide which rows to
- * mute before anyone clicks, so the same decision is made here too.
- *
- * Returns the name of the agent holding the lead, or null when the caller may
- * open it.
+ * mute before anyone clicks, so the same decision is made here too: a row is
+ * muted when `rowAction` says `locked`, and the queue names the holder from
+ * the row's tag. (`lockHolder`, the same answer as a name, was called only by
+ * its tests - removed, review Q7, 2026-11-23.)
  *
  * Three ways a row is *not* locked, each for its own reason:
  *
@@ -24,9 +24,6 @@ import type { PublicUser } from '../api/types';
  * "Sam Okonjo" each saw the other's lead as their own "Resume" row and got a
  * 409 on clicking it. Found in review.
  */
-export function lockHolder(lead: QueueLead, me: PublicUser | null): string | null {
-  return rowAction(lead, me) === 'locked' ? lead.tag?.agentName ?? null : null;
-}
 
 /**
  * What the row's action button may actually do, which is not the same question

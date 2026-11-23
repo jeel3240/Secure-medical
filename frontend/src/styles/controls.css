@@ -371,6 +371,12 @@
   justify-content: flex-end;
 }
 
+/* Focused itself only when it holds no control (useDialogFocus): no ring round the whole box. */
+.modal:focus,
+.drawer:focus {
+  outline: none;
+}
+
 .modal {
   width: 100%;
   max-width: 440px;

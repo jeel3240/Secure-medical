@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { listAdminLeads, type AdminLeadsResponse } from '../../api/leads';
 import { usePolling } from '../../api/usePolling';
 import { Banner } from '../../components/Banner';
@@ -270,7 +270,10 @@ export function LeadsPage() {
                       <TierSignal tier={lead.tier} />
                     </td>
                     <td>
-                      <span className="cell-name">{leadName(lead)}</span>
+                      {/* A link, so the keyboard can open it too; the row's click stays for the mouse. */}
+                      <Link className="cell-name" to={`/leads/${lead.id}/timeline`} onClick={(e) => e.stopPropagation()}>
+                        {leadName(lead)}
+                      </Link>
                       <span className="cell-sub">{formatPhone(lead.phone)}</span>
                     </td>
                     <td>{lead.status ? <LeadStatus status={lead.status} /> : EMPTY}</td>

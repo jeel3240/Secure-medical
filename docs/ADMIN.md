@@ -257,6 +257,10 @@ lead if we hold one, and whether and why it was released. There is no "who
 added it": `dnc_list` has no such column; the agent behind a DNC outcome is in
 the activity log (`AUDIT.md`).
 
+The page keeps its state tab, search and page in its address (`?state=`,
+`?q=`, `?page=`; `frontend/src/lib/dnc-view.ts`), as Admin > Leads does, so
+Back from a lead's timeline returns to the same list (review Q8, 2026-11-23).
+
 Read-only, and there is no manual add (Jeel, 2026-09-23): a number reaches the
 list through an agent's DNC disposition, an SMS STOP, an EZ Texting opt-out
 found by the poller, or a stop said on the automated call (T13). `AGENT-WORKSPACE.md` has the disposition path,

@@ -44,6 +44,12 @@ export function useLeadCall(
   const busy = useRef(false);
   /** Hang up was pressed - possibly before `handle` existed. */
   const hangUpAsked = useRef(false);
+  /**
+   * This call is over and its refreshes are on their way. A failed call is
+   * followed by Twilio's `disconnect`, which ends it again: without this it
+   * refreshed twice over (review Q7, 2026-11-23).
+   */
+  const over = useRef(true);
   const mounted = useRef(true);
   const onOverRef = useRef(onOver);
   useEffect(() => {
@@ -51,6 +57,8 @@ export function useLeadCall(
   }, [onOver]);
 
   const finish = useCallback(() => {
+    if (over.current) return;
+    over.current = true;
     handle.current = null;
     busy.current = false;
     if (!mounted.current) return;
@@ -62,6 +70,7 @@ export function useLeadCall(
     if (busy.current) return;
     busy.current = true;
     hangUpAsked.current = false;
+    over.current = false;
     dispatch({ type: 'start' });
 
     placeCall(leadId, {
@@ -86,6 +95,8 @@ export function useLeadCall(
         dispatch({ type: 'failed', message: describeCallError(err) });
         handle.current = null;
         busy.current = false;
+        // Never placed: nothing to refresh, and nothing to end again.
+        over.current = true;
       });
   }, [leadId, finish]);
 

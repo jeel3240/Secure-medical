@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { getDnc, type DncResult, type DncState } from '../../api/admin';
 import { usePolling } from '../../api/usePolling';
 import { Banner } from '../../components/Banner';
@@ -8,6 +8,7 @@ import { LiveStatus } from '../../components/LiveStatus';
 import { Segmented } from '../../components/Segmented';
 import { Spinner } from '../../components/Spinner';
 import { StatusIcon } from '../../components/StatusIcon';
+import { readDncView, writeDncView, type DncView } from '../../lib/dnc-view';
 import { formatPhone, formatReceived } from '../../lib/format';
 
 /**
@@ -50,18 +51,30 @@ const RELEASE_REASON: Record<string, string> = {
 
 export function DncPage() {
   const navigate = useNavigate();
-  const [state, setState] = useState<DncState>('all');
-  const [search, setSearch] = useState('');
-  const [query, setQuery] = useState('');
-  const [page, setPage] = useState(1);
+
+  // The tab, the search and the page are in the address, as on Admin > Leads
+  // (`lib/dnc-view.ts`, review Q8, 2026-11-23): opening a lead and coming Back
+  // returns to the same list. Replaced, not added to the history, so Back from
+  // the list leaves it rather than stepping through every tab clicked.
+  const [params, setParams] = useSearchParams();
+  const view = readDncView(params);
+  const { state, q: query, page } = view;
+  const latest = useRef(view);
+  latest.current = view;
+  const show = useCallback(
+    (changes: Partial<DncView>) => setParams(writeDncView({ ...latest.current, ...changes }), { replace: true }),
+    [setParams]
+  );
+
+  // What is typed, ahead of the search that has been sent.
+  const [search, setSearch] = useState(query);
 
   useEffect(() => {
-    const id = setTimeout(() => {
-      setQuery(search.trim());
-      setPage(1);
-    }, 300);
+    const next = search.trim();
+    if (next === query) return;
+    const id = setTimeout(() => show({ q: next, page: 1 }), 300);
     return () => clearTimeout(id);
-  }, [search]);
+  }, [search, query, show]);
 
   const fetcher = useCallback(
     () => getDnc({ state, q: query || undefined, page }),
@@ -95,10 +108,7 @@ export function DncPage() {
           <Segmented
             label="State"
             value={state}
-            onChange={(next) => {
-              setState(next);
-              setPage(1);
-            }}
+            onChange={(next: DncState) => show({ state: next, page: 1 })}
             options={TABS.map((tab) => ({ value: tab.key, label: tab.label, count: counts[tab.key] }))}
           />
           <input
@@ -142,9 +152,14 @@ export function DncPage() {
                       <td>
                         {/* A number can be blocked before we hold a lead for it -
                             that is what protects a later partner delivery. */}
-                        <span className={`cell-name${lead ? '' : ' dnc__no-lead'}`}>
-                          {lead ? lead.name : 'No lead'}
-                        </span>
+                        {lead ? (
+                          // A link, so the keyboard can open it too; the row's click stays for the mouse.
+                          <Link className="cell-name" to={`/leads/${lead.id}/timeline`} onClick={(e) => e.stopPropagation()}>
+                            {lead.name}
+                          </Link>
+                        ) : (
+                          <span className="cell-name dnc__no-lead">No lead</span>
+                        )}
                         <span className="cell-sub">{formatPhone(row.phone)}</span>
                       </td>
                       <td>{REASON[row.reason] ?? row.reason}</td>
@@ -178,7 +193,7 @@ export function DncPage() {
 
         {data && totalPages > 1 && (
           <div className="table-card__pager">
-            <Button variant="secondary" disabled={page <= 1} onClick={() => setPage((p) => p - 1)}>
+            <Button variant="secondary" disabled={page <= 1} onClick={() => show({ page: page - 1 })}>
               Previous
             </Button>
             <span>
@@ -187,7 +202,7 @@ export function DncPage() {
             <Button
               variant="secondary"
               disabled={page >= totalPages}
-              onClick={() => setPage((p) => p + 1)}
+              onClick={() => show({ page: page + 1 })}
             >
               Next
             </Button>
