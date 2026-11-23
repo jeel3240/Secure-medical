@@ -251,6 +251,20 @@ Both now use `parseSince` in `api/filters.ts`, where the viewer's `?tz=` check
 also lives. A typo in a filter now shows as an error, not as the wrong list.
 `api/__tests__/admin-leads.test.ts` pins it.
 
+### The response
+
+Written down 2026-11-23 (review R14); the types are `AdminLeadPage` and
+`AdminLeadRow` in `db/leads.ts`, and their copies in `frontend/src/api/admin.ts`.
+
+| Field | |
+|---|---|
+| `leads` | The page's rows, newest arrival first. Each: `id`, `phone` (E.164), `firstName`, `lastName`, `source`, `receivedAt`; `status` (one of the tabs, "Status" above - null when none applies, a lead with no conversation yet); `step` ("Step" below - "Q2", "Q1-a", `done`, or null when opted out); `score`, `tier`; `lastActivityAt` and `lastActivityDirection` (`inbound`, `outbound`) - the newest text either way, a send EZ Texting refused left out; `call`, the robot's call ("Call" below), null when it has not called |
+| `counts` | One number per status tab, and `all`. They ignore `status` and honour every other filter, so each tab shows what it would hold |
+| `total` | The rows the current tab holds - `counts[status]`, or `counts.all` |
+| `page`, `pageSize` | The page shown and its size: 50 rows, which the route does not let the request change |
+| `sources` | Every source any lead has, for the Source filter - not only this page's |
+| `poll` | `at`, the worker's last successful poll, and `intervalSeconds`, its interval - the "Synced with EZ Texting" line, "The page" below |
+
 ### The SQL
 
 Newest conversation and newest message are both lateral joins, so the result

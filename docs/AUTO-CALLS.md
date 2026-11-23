@@ -2685,7 +2685,8 @@ ticket: **the lead card says it too** - a Wants a call badge
 up; **the tag ranks with the missed call**, just below it and above an unread
 reply - the lead was promised a call back; **the page states the order**,
 "Missed transfers first, then highest score, then newest.", only while
-automated calls are on; and **the rule is the missed call's**, one
+automated calls are on (with Seri's due call backs named since 2026-11-23,
+`QUEUE.md`, "The order"); and **the rule is the missed call's**, one
 `nobodyGotBackSince` in `db/lead-state.ts`. Written against the call's own
 lead, it lets Postgres work out both once per refresh rather than once per
 lead, so the queue got faster though it asks more (122 ms in the first

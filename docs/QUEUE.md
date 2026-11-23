@@ -106,9 +106,9 @@ for every other lead, which keeps today's order beneath them. Once someone
 gets back to the lead it drops to its own place - usually out of the queue, as
 it never replied.
 
-While automated calls are on, the page says "Missed transfers first, then
-highest score, then newest." - "Missed a transfer" is already what the app bar
-says to the person who let one ring out (`AUTO-CALLS.md`, T15c). Off, it keeps
+While automated calls are on, the page says "Missed transfers and Seri's due
+call backs first, then highest score, then newest." - "Missed a transfer" is
+already what the app bar says to the person who let one ring out (`AUTO-CALLS.md`, T15c). Off, it keeps
 the old words: no transfers are made. (One nobody got back to before automated
 calls were switched off still sorts first, under the old words.)
 
@@ -120,7 +120,9 @@ time it was booked for, the earliest first (`promised_at`: `LEAST` of
 `MISSED_YES_AT_SQL` and `AI_CALLBACK_DUE_AT_SQL`, `db/lead-state.ts`). An
 overdue one stays there until someone calls. Not yet due, it is not pushed
 up - and with no score, not in the queue at all. An agent's own callback is
-not moved: it is theirs, on My Callbacks, and keeps the lead at its score.
+not moved: it is theirs, on My Callbacks, and keeps the lead at its score. The
+page's line names them since 2026-11-23 (review R15) - before, it said only
+"Missed transfers first".
 
 **Only under All.** A missed "yes" has no tier, so picking Hot, Warm or Low
 hides it, like any lead with no score. The switcher starts on All. So does a
@@ -510,11 +512,15 @@ the same read-only workspace. Locked rows are still not clickable at all.
 working their own lead would be sent to the read-only page for a lead they are
 in the middle of.
 
-**`lockHolder()` is derived from `rowAction()`** rather than repeating the rule,
-so the muting and the button cannot drift apart.
+**The muting and the button are one rule, `rowAction()`**: the queue mutes a
+row it answers `locked` for, so the two cannot drift apart. (`lockHolder()`,
+the same answer as the holder's name, is called only by its tests - review R15,
+2026-11-23.)
 
-The same three states are on the Lead Timeline header, decided there by holder
-id because `GET /api/leads/:id` returns one.
+The Lead Timeline header has two of the three states, decided there by holder
+id because `GET /api/leads/:id` returns one: Pick up and Resume. On a lead
+someone else holds it shows "Held by <name>" and no button - for a superadmin
+too; View is on the queue and My Callbacks.
 
 **A deactivated agent's claim counts as unlocked.** The queue joins `users` on
 `is_active`, so such a claim returns no holder and no `working` tag, and

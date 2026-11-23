@@ -64,6 +64,7 @@ export interface ActivityEntry {
 
 export interface Overview {
   period: OverviewPeriod;
+  /** When the period starts - today's midnight in the viewer's zone, or 7 or 30 days ago. */
   since: string;
   kpis: {
     leadsReceived: number;
@@ -117,7 +118,9 @@ export async function getOverview(period: OverviewPeriod, timeZone?: string): Pr
         (
           SELECT count(DISTINCT lead_id)::int FROM dispositions
           WHERE value IN (${closing}) AND created_at >= ${since}
-        ) AS closed
+        ) AS closed,
+        -- The start of the period, as every count above used it.
+        ${since} AS since
     `),
 
     pool.query(`
@@ -205,7 +208,8 @@ export async function getOverview(period: OverviewPeriod, timeZone?: string): Pr
 
   return {
     period,
-    since: new Date().toISOString(),
+    // The window's start - until 2026-11-23 the time of the request (review R14).
+    since: new Date(leads.since).toISOString(),
     kpis: {
       leadsReceived: leads.leads_received,
       responded: leads.responded,

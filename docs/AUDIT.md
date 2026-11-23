@@ -157,8 +157,18 @@ ignore.
 | `payload` | The body, as `JSON` |
 
 **`JSON`, not `JSONB`.** JSONB reorders keys and drops duplicates; this is kept
-as proof of what was sent, so it is stored as the text that arrived. The live
-check caught the difference.
+as proof of what was sent, so it keeps the keys in the order they came. The
+live check caught the difference.
+
+**What is kept is the body as our server read it, not the request's own
+bytes** (review R13, 2026-11-23). EZ Texting's JSON is parsed by
+`express.json` and Twilio's form by `express.urlencoded` before the route sees
+it, and the archive writes that back out as JSON (`archiveWebhook`,
+`db/activity.ts`). Every field and value is there; the whitespace, how a
+number was written, and a key EZ Texting sent twice - JSON parsing keeps the
+last - are not. (A field Twilio sends twice comes back as a list of both.) Keeping
+the raw bytes would mean reading the body before the parser does; not done, as
+nothing has needed more than the fields.
 
 - **EZ Texting**: archived after the path token is checked and outside the
   handler's transaction, so a request that is ignored or fails is still on

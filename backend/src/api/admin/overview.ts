@@ -1,9 +1,10 @@
 /**
  * `GET /api/admin/overview?period=today|7d|30d` - Admin > Overview.
  *
- * Superadmin only. The per-agent table and the activity feed are the only place
- * one agent's work is visible to anyone but themselves - AUTH.md - which is why
- * the guard matters more here than on a read-only config page.
+ * Superadmin only. The per-agent table and the activity feed are the only view
+ * of agents' work across leads - one lead's own history is on its timeline,
+ * open to everyone - AUTH.md - which is why the guard matters more here than on
+ * a read-only config page.
  *
  * Live system status is deliberately not here: it comes from the health
  * endpoint, so external monitoring reads exactly what the screen does.

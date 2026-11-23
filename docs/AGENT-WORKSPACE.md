@@ -141,7 +141,7 @@ hand - there is no manual add screen (Jeel, 2026-09-23). It needs a confirm
 dialog, and it cannot be undone from the app.
 
 **Nothing is sent to a blocked number.** `sendMessage` already refuses one, so
-the agent SMS box is disabled on a DNC lead rather than failing at send time.
+the agent SMS box is not shown on a DNC lead - in its place, "Texting is blocked - this number is on the do-not-call list." - rather than failing at send time (`SmsCompose.tsx`; "disabled" until review R15, 2026-11-23, which the code never was).
 
 ## Endpoints
 
