@@ -12,6 +12,7 @@ import {
   AREA_CODES,
   atLocalTime,
   checkCallbackTime,
+  dateAfter,
   FALLBACK_ZONE,
   leadTimeZone,
   MAX_AHEAD_DAYS,
@@ -287,5 +288,16 @@ describe('whether a reply said a call back\'s time back (saysClock, A21 call 92)
     expect(said('So thirteen PM?', '2026-11-12T15:00')).toBe(false);
     expect(said('So twenty-three PM?', '2026-11-12T15:00')).toBe(false);
     expect(said('Someone PM?', '2026-11-12T13:00')).toBe(false);
+  });
+});
+
+describe('a calendar day some days on (review Q3)', () => {
+  it('across a month, a year and a leap day', () => {
+    expect(dateAfter('2026-11-12', 1)).toBe('2026-11-13');
+    expect(dateAfter('2026-11-30', 1)).toBe('2026-12-01');
+    expect(dateAfter('2026-12-31', 1)).toBe('2027-01-01');
+    expect(dateAfter('2028-02-28', 1)).toBe('2028-02-29');
+    expect(dateAfter('2026-11-12', 7)).toBe('2026-11-19');
+    expect(dateAfter('2026-11-12', 0)).toBe('2026-11-12');
   });
 });

@@ -1,4 +1,4 @@
-import { greetingWithTone, hasTone, spokenWords, strayBrackets, TONES, withTone } from './tone';
+import { greetingWithTone, spokenWords, strayBrackets, TONES, withTone } from './tone';
 
 describe('her tone, sent to the voice (withTone)', () => {
   it('keeps every tone on the list, as written', () => {
@@ -70,12 +70,6 @@ describe('what the answer test set checks', () => {
   it('names the brackets that are not our tones', () => {
     expect(strayBrackets('[friendly] Hi. [laughs] Sure. [Who is there: nobody] Okay.')).toEqual(['[laughs]', '[Who is there: nobody]']);
     expect(strayBrackets('[friendly, upbeat] Hi.')).toEqual([]);
-  });
-
-  it('says whether she gave a sentence a tone', () => {
-    expect(hasTone('[curious] Is that something you would like?')).toBe(true);
-    expect(hasTone('[laughs] Sure.')).toBe(false);
-    expect(hasTone('Sure.')).toBe(false);
   });
 });
 

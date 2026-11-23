@@ -2,7 +2,18 @@
  * When the robot calls, and how many at once - T20, AUTO-CALLS.md "When a lead
  * is called" and "Traffic".
  */
-import { callsToPlace, DEFAULT_CALL_HOURS, insideCallHours, parseClock, parseDays, refusedForTheNumber } from './auto-dial';
+import {
+  callsToPlace,
+  DEFAULT_CALL_HOURS,
+  formatClock,
+  indexOfWeekday,
+  insideCallHours,
+  parseClock,
+  parseDays,
+  refusedForTheNumber,
+  weekdayOfIndex,
+  WEEKDAYS,
+} from './auto-dial';
 
 // Arizona is UTC-7 all year - no daylight saving - so 18:00Z is 11:00 there.
 // 2026-10-26 is a Monday; 2026-10-24 a Saturday.
@@ -86,5 +97,25 @@ describe('whose refusal it is - When Twilio refuses', () => {
   it('anything else is ours - the key, the account, too many requests, a setting, no code at all', () => {
     for (const code of [20003, 20005, 20429, 21210, 21212, 21215, 21219, 20404]) expect(refusedForTheNumber(code)).toBe(false);
     expect(refusedForTheNumber(null)).toBe(false);
+  });
+});
+
+describe('the week and the clock, one copy for every file (review Q3)', () => {
+  it('Monday first, as the settings write it', () => {
+    expect(WEEKDAYS).toEqual(['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun']);
+  });
+
+  it("a day as JavaScript numbers it - Sunday 0 - and back", () => {
+    expect(weekdayOfIndex(new Date('2026-10-25T12:00:00Z').getUTCDay())).toBe('sun');
+    expect(weekdayOfIndex(new Date('2026-10-26T12:00:00Z').getUTCDay())).toBe('mon');
+    expect(weekdayOfIndex(6)).toBe('sat');
+    for (let i = 0; i < 7; i++) expect(indexOfWeekday(weekdayOfIndex(i))).toBe(i);
+  });
+
+  it('a minute of the day as a clock, parseClock the other way', () => {
+    expect(formatClock(660)).toBe('11:00');
+    expect(formatClock(0)).toBe('00:00');
+    expect(formatClock(17 * 60 + 5)).toBe('17:05');
+    for (const minute of [0, 59, 660, 1439]) expect(parseClock(formatClock(minute))).toBe(minute);
   });
 });

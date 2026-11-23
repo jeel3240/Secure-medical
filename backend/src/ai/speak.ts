@@ -147,7 +147,7 @@ export function moveBrief(move: Move, who: WhoIsThere, firstName: string | null)
     case 'virtual':
       return "Say honestly that you're eDrugstore's virtual assistant.";
     case 'objection':
-      return OBJECTION_BRIEFS[move.id] ?? 'Answer what they said, briefly and kindly.';
+      return move.approach;
     case 'ask_why':
       return "Ask, alone and kindly, whether it's more the timing or just not something they need right now. Offer nothing with it.";
     case 'offer':
@@ -182,17 +182,6 @@ export function moveBrief(move: Move, who: WhoIsThere, firstName: string | null)
     }
   }
 }
-
-/** The objections she words herself - from the playbook's approach (A26). */
-const OBJECTION_BRIEFS: Record<string, string> = {
-  have_doctor:
-    "They already have a doctor: say that's great, and that a lot of our customers use us alongside their doctor, because it's quick and ships to their home.",
-  too_expensive:
-    "They think it's too expensive: encourage them, kindly, to compare - there's a good chance ours is lower, and we ship it to their home.",
-  scam: "They worry it's a scam: say you understand, that eDrugstore has been around for over 25 years, and they can check our customer reviews on Trustpilot.",
-  never_signed_up:
-    "They say they never signed up: say they signed up on one of our partner sites, and if they'd rather not hear from us, you can remove their number.",
-};
 
 /** What she already said that matters for this reply: the openings to avoid, the answers already given. */
 function ledger(state: CallState): string[] {
