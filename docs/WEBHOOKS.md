@@ -94,6 +94,23 @@ the table is keyed on phone alone. If that number is later delivered as a
 partner lead, the poller's `dnc_list` check stops us texting someone who has
 already opted out of this client's messages.
 
+## A lead's reply to another campaign
+
+A reply is matched to a lead by its phone number alone; which text it answers
+(`in_reply_to_ezt_id`) is kept but never checked. So if one of our leads
+answered one of the client's other campaigns, it would be read as an answer to
+our question - scored, moved on, put in review, or on "YES" a block lifted.
+
+**Not changed - Jeel, 2026-11-23** (review D1): the leads' group is a dedicated
+one, pulled from by us and never sent to by the client, so a lead's reply is a
+reply to our texts. The other campaigns go to other groups, whose replies are
+ignored above. **Revisit if that changes** - a campaign sent to the whole
+account, or our leads also added to a group the client markets to: then only a
+reply whose `in_reply_to_ezt_id` is one of our own texts should run the
+questions. Whether it has happened can be read from production at any time:
+inbound messages whose `in_reply_to_ezt_id` matches no outbound
+`ezt_message_id` of ours.
+
 Opt-out is `optOut` on the payload, or the message being one of the CTIA
 keywords: STOP, STOPALL, UNSUBSCRIBE, CANCEL, END, QUIT, REVOKE, OPTOUT. Case,
 surrounding spaces and a trailing `.`, `!` or `,` are ignored ("STOP?" is not
