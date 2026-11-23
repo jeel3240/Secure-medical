@@ -567,28 +567,49 @@ export function twilioWebhooksRouter(deps: AppDeps): Router {
     step: { id: number; heading: string }
   ): Promise<string> => {
     const { plan } = yes;
-    if (plan.kind === 'ring') {
-      log.info('auto_call.transfer', { callId: call.callId, rung: plan.agentIds.length, holderFirst: plan.holderFirst });
-      return transferTwiml(deps.twilio!, {
-        callId: call.callId,
-        callSid: call.callSid,
-        script,
-        say: plan.say,
-        notice: true,
-        agentIds: plan.agentIds,
-        holderFirst: plan.holderFirst,
-        lead: yes.lead,
-        step,
-        ringSeconds: await autoCalls().readRingSeconds(),
-      });
-    }
-    if (plan.kind === 'hold') {
-      await autoCalls().holdCall(call.callId);
-      log.info('auto_call.hold', { callId: call.callId });
-      return holdTwiml(deps.twilio!, { callId: call.callId, script, say: plan.say, track: null, notice: true });
-    }
+    if (plan.kind === 'ring') return ringTwiml(call, script, plan, { lead: yes.lead, step, notice: true });
+    if (plan.kind === 'hold') return holdNowTwiml(call.callId, script, plan, true);
     log.info('auto_call.transfer_missed', { callId: call.callId, reason: 'nobody_free' });
     return autoCallTwiml(deps.twilio!, { callId: call.callId, script, action: plan });
+  };
+
+  /**
+   * The people a planned transfer rings: from a "yes" (`yesTwiml`), after the
+   * recording notice, and again from `/auto/after` when the lead's own agent
+   * let it ring out - the notice already said. One copy since review Q4,
+   * 2026-11-23.
+   */
+  const ringTwiml = async (
+    call: { callId: number; callSid: string },
+    script: CallScript,
+    plan: Extract<TransferPlan, { kind: 'ring' }>,
+    opts: { lead: TransferContext['lead']; step: { id: number; heading: string }; notice: boolean }
+  ): Promise<string> => {
+    log.info('auto_call.transfer', { callId: call.callId, rung: plan.agentIds.length, holderFirst: plan.holderFirst });
+    return transferTwiml(deps.twilio!, {
+      callId: call.callId,
+      callSid: call.callSid,
+      script,
+      say: plan.say,
+      notice: opts.notice,
+      agentIds: plan.agentIds,
+      holderFirst: plan.holderFirst,
+      lead: opts.lead,
+      step: opts.step,
+      ringSeconds: await autoCalls().readRingSeconds(),
+    });
+  };
+
+  /** The lead put on hold for someone on a call (T16) - marked so now; the notice as for `ringTwiml`. */
+  const holdNowTwiml = async (
+    callId: number,
+    script: CallScript,
+    plan: Extract<TransferPlan, { kind: 'hold' }>,
+    notice: boolean
+  ): Promise<string> => {
+    await autoCalls().holdCall(callId);
+    log.info('auto_call.hold', { callId });
+    return holdTwiml(deps.twilio!, { callId, script, say: plan.say, track: null, notice });
   };
 
   // The lead picked up: connected to Seri when she is switched on (A13,
@@ -1026,24 +1047,12 @@ export function twilioWebhooksRouter(deps: AppDeps): Router {
             plan = planNobodyTook(script, { onCall });
           }
 
+          // The notice was said before the first ring; a ring here is never the holder first (`planAfterHolder`).
           if (plan?.kind === 'ring' && script && context && stepId !== null) {
-            log.info('auto_call.transfer', { callId: call.callId, rung: plan.agentIds.length, holderFirst: false });
-            reply = transferTwiml(deps.twilio!, {
-              callId: call.callId,
-              callSid: call.callSid,
-              script,
-              say: plan.say,
-              notice: false,
-              agentIds: plan.agentIds,
-              holderFirst: false,
-              lead: context.lead,
-              step: { id: stepId, heading: script.steps.find((s) => s.id === stepId)?.heading ?? '' },
-              ringSeconds: await ac.readRingSeconds(),
-            });
+            const step = { id: stepId, heading: script.steps.find((s) => s.id === stepId)?.heading ?? '' };
+            reply = await ringTwiml(call, script, plan, { lead: context.lead, step, notice: false });
           } else if (plan?.kind === 'hold' && script) {
-            await ac.holdCall(call.callId);
-            log.info('auto_call.hold', { callId: call.callId });
-            reply = holdTwiml(deps.twilio!, { callId: call.callId, script, say: plan.say, track: null });
+            reply = await holdNowTwiml(call.callId, script, plan, false);
           } else {
             await ac.missTransfer(call.callId);
             log.info('auto_call.transfer_missed', {

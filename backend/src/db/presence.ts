@@ -15,7 +15,9 @@
  */
 
 import type { TakingCallsWhy } from '../api/users/types';
+import { UNDER_WAY_MINUTES } from '../core/auto-dial';
 import { activityInsertSql } from './activity';
+import { CALL_UNDER_WAY_HOURS } from './lead-state';
 import type { Querier } from './sql';
 
 /** How long one "I'm here" holds: four times the browser's 30-second check. */
@@ -27,12 +29,12 @@ export const RINGABLE_SQL = `(u.ringable_until IS NOT NULL AND u.ringable_until 
 /**
  * Whether `u` (users) has a call of theirs still going - one part of
  * `FREE_SQL`. Only one started in the last 2 hours - the window a missed
- * call's "under way" uses (`db/lead-state.ts`) - so a call whose end Twilio
+ * call's "under way" uses (`CALL_UNDER_WAY_HOURS`, `db/lead-state.ts`) - so a call whose end Twilio
  * never reported cannot keep someone busy for good.
  */
 export const ON_A_CALL_SQL = `EXISTS (
   SELECT 1 FROM calls oc
-  WHERE oc.agent_id = u.id AND oc.outcome IS NULL AND oc.started_at > now() - interval '2 hours'
+  WHERE oc.agent_id = u.id AND oc.outcome IS NULL AND oc.started_at > now() - interval '${CALL_UNDER_WAY_HOURS} hours'
 )`;
 
 /**
@@ -92,7 +94,7 @@ export const TRANSFER_RINGING_SQL = `EXISTS (
   SELECT 1 FROM calls tc
   WHERE tc.direction = 'automated' AND tc.agent_id IS NULL AND tc.held_at IS NULL
     AND tc.script_result IS NULL AND tc.outcome IS NULL
-    AND tc.started_at > now() - interval '10 minutes'
+    AND tc.started_at > now() - interval '${UNDER_WAY_MINUTES} minutes'
     AND tc.id IS DISTINCT FROM $1::int
     AND (
       tc.ai_ended_with = 'transfer_to_agent'

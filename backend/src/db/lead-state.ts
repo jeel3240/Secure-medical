@@ -19,6 +19,13 @@
 import { CLOSING_DISPOSITIONS } from '../core/dispositions';
 
 /**
+ * How long a person's call whose end never reached us counts as still going:
+ * two hours. Here for a missed call's "under way", and for who is on a call
+ * (`ON_A_CALL_SQL`, `db/presence.ts`) - one number since review Q4, 2026-11-23.
+ */
+export const CALL_UNDER_WAY_HOURS = 2;
+
+/**
  * Safe to inline: the values come from a constant in this codebase, never
  * from a request, and each is checked to be a plain word.
  */
@@ -96,7 +103,7 @@ function nobodyGotBackSince(call: string): string {
             rc.direction = 'outbound'
             OR (
               rc.agent_id IS NOT NULL
-              AND (rc.outcome = 'answered' OR (rc.outcome IS NULL AND rc.started_at > now() - interval '2 hours'))
+              AND (rc.outcome = 'answered' OR (rc.outcome IS NULL AND rc.started_at > now() - interval '${CALL_UNDER_WAY_HOURS} hours'))
             )
           )
       )

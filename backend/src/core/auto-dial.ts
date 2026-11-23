@@ -20,6 +20,14 @@ export function indexOfWeekday(day: Weekday): number {
   return (WEEKDAYS.indexOf(day) + 1) % 7;
 }
 
+/**
+ * How long a call of the robot's counts as still going with nobody on it - for
+ * the room, for a transfer still ringing (`TRANSFER_RINGING_SQL`), and before
+ * a row that never reached Twilio is closed. Ten minutes: far longer than any
+ * call that is ringing or asking. One number since review Q4, 2026-11-23.
+ */
+export const UNDER_WAY_MINUTES = 10;
+
 /** The `auto_call_*` settings a call's timing reads, parsed. */
 export interface CallHours {
   /** Minutes after midnight, local: from (inclusive), to (exclusive). */

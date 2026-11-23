@@ -25,6 +25,7 @@ import { activityInsertSql, recordActivity } from './activity';
 import { TAKEN_BY_VERDICT_SQL } from './calls';
 import { bookAiCallback } from './callbacks';
 import { blockNumber, DNC_REASONS } from './dnc';
+import { takeCallWithLead, type TakeCallResult } from './claims';
 import { pool } from './pool';
 
 /**
@@ -483,9 +484,12 @@ export async function takenByVerdict(callId: number): Promise<boolean> {
 
 /**
  * A call waiting on hold: it went on hold, has no result yet, and has not
- * ended - T16. `c` is `calls`.
+ * ended - T16. `call` names `calls` in the query: `ON_HOLD_SQL` for `c`.
  */
-export const ON_HOLD_SQL = `(c.held_at IS NOT NULL AND c.script_result IS NULL AND c.outcome IS NULL)`;
+export function onHoldSql(call: string): string {
+  return `(${call}.held_at IS NOT NULL AND ${call}.script_result IS NULL AND ${call}.outcome IS NULL)`;
+}
+export const ON_HOLD_SQL = onHoldSql('c');
 
 /**
  * Puts the automated call `callId` on hold - T16, AUTO-CALLS.md "The hold
@@ -517,8 +521,7 @@ export async function holdState(callId: number): Promise<{ waitedSeconds: number
   const { rows } = await pool.query<{ waited: number; place: number }>(
     `SELECT extract(epoch FROM now() - c.held_at)::int AS waited,
             (SELECT count(*) FROM calls o
-             WHERE o.held_at IS NOT NULL AND o.script_result IS NULL AND o.outcome IS NULL
-               AND (o.held_at, o.id) < (c.held_at, c.id))::int + 1 AS place
+             WHERE ${onHoldSql('o')} AND (o.held_at, o.id) < (c.held_at, c.id))::int + 1 AS place
      FROM calls c
      WHERE c.id = $1 AND c.direction = 'automated' AND ${ON_HOLD_SQL}`,
     [callId]
@@ -589,10 +592,20 @@ export async function transferContext(callId: number): Promise<TransferContext |
   };
 }
 
-export type TakeTransferResult =
-  | { ok: true; leadId: number; tookOverFrom: number | null }
-  /** `taken`: another person has it; `inactive`: this account was deactivated while it rang. */
-  | { ok: false; reason: 'not_found' | 'taken' | 'inactive' };
+export type TakeTransferResult = TakeCallResult;
+
+/**
+ * Who took the automated call's transfer - null when nobody did. Twilio
+ * reports the ring `completed` when someone accepted, even if `takeTransfer`
+ * refused them and their leg hung up (review H9, 2026-11-22).
+ */
+export async function transferTakenBy(callId: number): Promise<number | null> {
+  const { rows } = await pool.query<{ agent_id: number | null }>(
+    `SELECT agent_id FROM calls WHERE id = $1 AND direction = 'automated'`,
+    [callId]
+  );
+  return rows[0]?.agent_id ?? null;
+}
 
 /**
  * `agentId` accepted the transfer of the automated call `callId` - T15a, in
@@ -614,90 +627,47 @@ export type TakeTransferResult =
  * taken is refused: Twilio connects only the first to accept, so a second is
  * a mistake, not a race to settle.
  */
-/**
- * Who took the automated call's transfer - null when nobody did. Twilio
- * reports the ring `completed` when someone accepted, even if `takeTransfer`
- * refused them and their leg hung up (review H9, 2026-11-22).
- */
-export async function transferTakenBy(callId: number): Promise<number | null> {
-  const { rows } = await pool.query<{ agent_id: number | null }>(
-    `SELECT agent_id FROM calls WHERE id = $1 AND direction = 'automated'`,
-    [callId]
-  );
-  return rows[0]?.agent_id ?? null;
-}
-
 export async function takeTransfer(callId: number, agentId: number): Promise<TakeTransferResult> {
-  const client = await pool.connect();
-  try {
-    await client.query('BEGIN');
-    const { rows } = await client.query<{
-      lead_id: number;
-      agent_id: number | null;
-      assigned_to: number | null;
-      over: boolean;
-    }>(
-      `SELECT c.lead_id, c.agent_id, l.assigned_to,
-              (c.ended_at IS NOT NULL OR ${TAKEN_BY_VERDICT_SQL}) AS over
-       FROM calls c JOIN leads l ON l.id = c.lead_id
-       WHERE c.id = $1 AND c.direction = 'automated'
-       FOR UPDATE OF c, l`,
-      [callId]
-    );
-    const call = rows[0];
-    const refuse = async (reason: 'not_found' | 'taken' | 'inactive') => {
-      await client.query('ROLLBACK');
-      return { ok: false as const, reason };
-    };
-    // Over, or the voicemail message took it while the accept waited on its lock (`actOnVerdict` holds it as it
-    // asks Twilio): nobody is on the line to take (review H8, 2026-11-22) - the other order, the accept first, is
-    // `onVerdict`'s, which then carries on.
-    if (!call || call.over) return await refuse('not_found');
-    if (call.agent_id !== null && call.agent_id !== agentId) return await refuse('taken');
-    const agent = await client.query(`SELECT 1 FROM users WHERE id = $1 AND is_active`, [agentId]);
-    if (agent.rowCount === 0) return await refuse('inactive');
-
-    const firstTime = call.agent_id === null;
-    await client.query(
-      `UPDATE calls SET agent_id = $2, script_result = COALESCE(script_result, 'transferred') WHERE id = $1`,
-      [callId, agentId]
-    );
-    // Taken from hold, offered to them (T17): that offer ended, taken.
-    await client.query(
-      `UPDATE call_offers SET ended_at = now(), outcome = 'taken'
-       WHERE call_id = $1 AND agent_id = $2 AND ended_at IS NULL`,
-      [callId, agentId]
-    );
-    const tookOverFrom = call.assigned_to !== null && call.assigned_to !== agentId ? call.assigned_to : null;
-    if (firstTime) {
-      await recordActivity(client, {
-        action: 'call.transferred',
-        actorId: agentId,
-        leadId: call.lead_id,
-        detail: { callId, ...(tookOverFrom === null ? {} : { tookOverFrom }) },
-      });
+  return takeCallWithLead(
+    agentId,
+    'transfer',
+    async (client) => {
+      const { rows } = await client.query<{ lead_id: number; agent_id: number | null; assigned_to: number | null; over: boolean }>(
+        `SELECT c.lead_id, c.agent_id, l.assigned_to,
+                (c.ended_at IS NOT NULL OR ${TAKEN_BY_VERDICT_SQL}) AS over
+         FROM calls c JOIN leads l ON l.id = c.lead_id
+         WHERE c.id = $1 AND c.direction = 'automated'
+         FOR UPDATE OF c, l`,
+        [callId]
+      );
+      const call = rows[0];
+      // Over, or the voicemail message took it while the accept waited on its lock (`actOnVerdict` holds it as it
+      // asks Twilio): nobody is on the line to take (review H8, 2026-11-22) - the other order, the accept first, is
+      // `onVerdict`'s, which then carries on.
+      if (!call || call.over) return null;
+      return { id: callId, leadId: call.lead_id, agentId: call.agent_id, assignedTo: call.assigned_to };
+    },
+    async (client, call, { firstTime, tookOverFrom }) => {
+      await client.query(
+        `UPDATE calls SET agent_id = $2, script_result = COALESCE(script_result, 'transferred') WHERE id = $1`,
+        [callId, agentId]
+      );
+      // Taken from hold, offered to them (T17): that offer ended, taken.
+      await client.query(
+        `UPDATE call_offers SET ended_at = now(), outcome = 'taken'
+         WHERE call_id = $1 AND agent_id = $2 AND ended_at IS NULL`,
+        [callId, agentId]
+      );
+      if (firstTime) {
+        await recordActivity(client, {
+          action: 'call.transferred',
+          actorId: agentId,
+          leadId: call.leadId,
+          detail: { callId, ...(tookOverFrom === null ? {} : { tookOverFrom }) },
+        });
+      }
     }
-    if (call.assigned_to !== agentId) {
-      await client.query(`UPDATE leads SET assigned_to = $2, assigned_at = now(), updated_at = now() WHERE id = $1`, [
-        call.lead_id,
-        agentId,
-      ]);
-      await recordActivity(client, {
-        action: 'lead.picked_up',
-        actorId: agentId,
-        leadId: call.lead_id,
-        detail: { via: 'transfer', callId, ...(tookOverFrom === null ? {} : { tookOverFrom }) },
-      });
-    }
-
-    await client.query('COMMIT');
-    return { ok: true, leadId: call.lead_id, tookOverFrom };
-  } catch (err) {
-    await client.query('ROLLBACK');
-    throw err;
-  } finally {
-    client.release();
-  }
+  );
 }
 
 /**
