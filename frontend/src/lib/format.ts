@@ -71,10 +71,19 @@ export function formatPhone(phone: string): string {
   return m ? `(${m[1]}) ${m[2]}-${m[3]}` : phone;
 }
 
-export function formatReceived(iso: string | null, now = new Date()): string {
-  if (!iso) return '-';
+/**
+ * "Today, 3:05 PM", or the date and time on another day - `none` when there is
+ * no time. One copy for a lead's arrival and an agent's last sign-in, which
+ * were the same function twice until review Q7, 2026-11-23.
+ */
+function dayOrDate(iso: string | null, none: string, now: Date): string {
+  if (!iso) return none;
   const date = new Date(iso);
   return isSameDay(date, now) ? `Today, ${timeFormat.format(date)}` : dateTimeFormat.format(date);
+}
+
+export function formatReceived(iso: string | null, now = new Date()): string {
+  return dayOrDate(iso, '-', now);
 }
 
 /** Short relative time for the last-activity column. */
@@ -90,9 +99,7 @@ export function formatRelative(iso: string | null, now = new Date()): string {
 }
 
 export function formatLastLogin(iso: string | null, now = new Date()): string {
-  if (!iso) return 'Never';
-  const date = new Date(iso);
-  return isSameDay(date, now) ? `Today, ${timeFormat.format(date)}` : dateTimeFormat.format(date);
+  return dayOrDate(iso, 'Never', now);
 }
 
 /**

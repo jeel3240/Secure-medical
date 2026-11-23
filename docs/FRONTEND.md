@@ -671,7 +671,7 @@ Decided 2026-09-26. It goes back in if the partner ever sends state.
 **The queue has one Answers column** - 2026-10-05. A row carries `answers`,
 as many as the lead's flow asked and they answered, and the cell reads "Yes ·
 No · Talk to an agent" with each question's heading on hover
-(`QueuePage.tsx`; the cell writes each answer with its question for a screen reader - `answersText`, the same words as one string, is called only by its tests, review R15). It had three fixed columns - Interest,
+(`QueuePage.tsx`; the cell writes each answer with its question for a screen reader - `answersText`, the same words as one string, was called only by its tests and was removed, review Q7, 2026-11-23). It had three fixed columns - Interest,
 Timing, Preference - which cannot fit flows with different numbers of
 questions. The list of answer names written into `lib/format.ts` is gone:
 every word comes from the server, saved with the answer. `FLOWS.md`.
@@ -715,8 +715,8 @@ included - View is on the queue and My Callbacks (review R15, 2026-11-23).
 to decide which rows to mute before anyone clicks. `rowAction()` answers
 "what may this person do", and the queue mutes a row it answers `locked` for,
 naming the holder from the row's tag (`QueuePage.tsx`). `lockHolder()`, derived
-from `rowAction()` for the same answer as a name, is called only by its tests
-(review R15, 2026-11-23). `QUEUE.md`, "The
+from `rowAction()` for the same answer as a name, was called only by its tests -
+removed, its tests kept as tests of `rowAction()` (review Q7, 2026-11-23). `QUEUE.md`, "The
 one-agent lock on screen", has both tables. The holder is matched by id since
 2026-09-28; before, by name, which two agents sharing a name would break.
 
@@ -787,7 +787,7 @@ arrives after a newer one is still dropped.
 
 ## Tests
 
-`npm test` in `frontend/`. Vitest with jsdom, 432 tests in 36 files (2026-11-13).
+`npm test` in `frontend/`. Vitest with jsdom, 453 tests in 40 files (2026-11-23; 432 in 36 on 2026-11-13).
 
 Logic first, by agreement - a screen is easy to judge by eye, and a dropped
 response or an off-by-one age threshold is not:
@@ -797,6 +797,9 @@ response or an off-by-one age threshold is not:
 | `api/usePolling.test.ts` | The polling hook's guarantees, the race guard included, and that a slow answer is waited for rather than asked for again |
 | `lib/format.test.ts`, `lib/lock.test.ts` | Formatting, which row action and lock a lead gets, and who may release a held lead |
 | `lib/leads-view.test.ts` | Admin > Leads' view read from and written to the address: the round trip, defaults left out, anything unrecognised read as the default - the Call filter (T23) included |
+| `lib/dnc-view.test.ts` | The same for the DNC list: its state tab, search and page (review Q8, 2026-11-23) |
+| `pages/workspace/useLeadCall.test.ts` | The lead's call on the workspace: refreshed once and once more, never twice over; Hang up while connecting; one call at a time; leaving the lead ends it (review Q7) |
+| `components/Modal.test.tsx` | A dialog's keyboard focus: taken on opening, kept inside on Tab, given back on closing (review Q8) |
 | `lib/call-results.test.ts` | The robot's call in words: the Call column's, the timeline's capitalised, and the Call filter's choices (T23) |
 | `lib/call-settings.test.ts`, `pages/admin/ConfigPage.test.ts` | Admin > Configuration's call settings in words - hours, days, waits - its placeholders, what picks a line of the call script (T24), and its tab read from the address |
 | `components/Timeline.test.tsx`, `pages/LeadTimelinePage.test.ts` | The timeline's wording - "Delivery failed" on a refused text, ours or an agent's - and the summary sidebar |
@@ -869,6 +872,37 @@ The website's medium findings of `docs/REVIEW-2026-11-22.md`, each with its test
 - **"You tried" by id** (M32), `lib/caller-context.ts`.
 - **A failed Reactivate says so** (M33), on its own - it showed "Could not load
   agents" with a Retry that loaded them.
+
+## After the review: code quality, 2026-11-23
+
+The website's code-quality findings (Q7, Q8), on `fix/review-quality-frontend`:
+
+- **The lead's call refreshes once** (Q7, `useLeadCall`): a failed call is
+  followed by Twilio's `disconnect`, which ended it again - two refreshes, and
+  two more 2.5 seconds on. It now finishes once. The hook had no test; it has
+  seven - the refresh and the second one, a failure then a disconnect, Hang up
+  while connecting, no second call while one is going, a new one once the last
+  is over, leaving the lead, a call that could not be placed.
+- **Left over, removed** (Q7): `Timeline`'s `autoScroll` - the workspace has
+  its own list now, `Conversation.tsx` - with its ref, a `<div>` inside an
+  `<ol>`; `lockHolder` and `answersText`, called only by their tests (the
+  lock's tests kept, as tests of `rowAction`). One `dayOrDate` behind
+  `formatReceived` and `formatLastLogin`; `LiveStatus` on `useSecond`.
+- **Every row opens from the keyboard** (Q8): on the queue, Admin > Leads and
+  the DNC list a row opened only on a mouse click. The lead's name is now a
+  link to the same place - Tab to it, Enter - looking as the name always did
+  (`a.cell-name`); the row's click stays for the mouse. Not on a locked row.
+- **A dialog takes focus and gives it back** (Q8, `useDialogFocus`,
+  `components/useDismiss.ts`): on opening, to a control that asked for it,
+  else its first field, else its first control; Tab goes round inside it; on
+  closing, back to what opened it. `Modal` and `Drawer` both;
+  `components/Modal.test.tsx`.
+- **The Wrap up note is named** by its heading, "Note" (Q8).
+- **The DNC list's view is in the address** (Q8, `lib/dnc-view.ts`), as
+  Admin > Leads': Back from a lead's timeline returns to the same tab, search
+  and page.
+- **Not seen in a browser:** each is proved by its tests and the build; the
+  name links and the dialog focus were not looked at on screen.
 
 ## Not built
 

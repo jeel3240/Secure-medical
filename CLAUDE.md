@@ -275,6 +275,7 @@ you change something the docs describe, update the doc in the same commit.
     src/lib/format.ts       phone, dates, age, names
     src/lib/lock.ts         which queue rows an agent may open, and who may release a held lead
     src/lib/leads-view.ts   Admin > Leads' tab, filters and page, kept in the address so Back returns to them
+    src/lib/dnc-view.ts     the same for the DNC list: its state tab, search and page (review Q8)
     src/api/calls.ts        calling config and token; the browser's word and the "Taking calls" switch
     src/lib/call-state.ts   a call's states, pure
     src/lib/calling.ts      the only file that uses Twilio's Voice SDK

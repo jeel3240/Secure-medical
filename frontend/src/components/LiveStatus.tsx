@@ -1,20 +1,16 @@
-import { useEffect, useState } from 'react';
+import { useSecond } from '../lib/useSecond';
 
 /**
  * "Live · updated just now" beside a page title, or "Live updates paused" when
- * the last poll failed. Shared by the queue and Admin > Leads so both screens
- * that update by themselves say so the same way.
+ * the last poll failed - on every screen that updates by itself, so each says
+ * so the same way.
  *
- * It keeps its own one-second clock, so "updated 12s ago" counts up between
- * polls without making the whole page re-render every second.
+ * Its own one-second clock (`useSecond`, one copy since review Q7,
+ * 2026-11-23), so "updated 12s ago" counts up between polls without making the
+ * whole page re-render every second.
  */
 export function LiveStatus({ updatedAt, paused }: { updatedAt: number | null; paused: boolean }) {
-  const [now, setNow] = useState(() => Date.now());
-
-  useEffect(() => {
-    const id = setInterval(() => setNow(Date.now()), 1000);
-    return () => clearInterval(id);
-  }, []);
+  const now = useSecond().getTime();
 
   let label = 'Connecting';
   if (paused) {

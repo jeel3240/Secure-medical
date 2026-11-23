@@ -293,11 +293,13 @@ export function ActionsPanel({
         </section>
 
         <section className="wrapup__section">
-          <h3 className="wrapup__legend">
+          <h3 id="note-heading" className="wrapup__legend">
             <span className="wrapup__num">3</span> Note
           </h3>
+          {/* Named by its heading, so a screen reader says "Note" (review Q8, 2026-11-23). */}
           <textarea
             id="note"
+            aria-labelledby="note-heading"
             className="actions-panel__textarea"
             rows={4}
             value={note}

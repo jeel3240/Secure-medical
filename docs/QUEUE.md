@@ -514,8 +514,8 @@ in the middle of.
 
 **The muting and the button are one rule, `rowAction()`**: the queue mutes a
 row it answers `locked` for, so the two cannot drift apart. (`lockHolder()`,
-the same answer as the holder's name, is called only by its tests - review R15,
-2026-11-23.)
+the same answer as the holder's name, was called only by its tests - removed,
+review Q7, 2026-11-23.)
 
 The Lead Timeline header has two of the three states, decided there by holder
 id because `GET /api/leads/:id` returns one: Pick up and Resume. On a lead
