@@ -23,7 +23,7 @@ the brief now exists except calling, which is Phase 4. *(Calling was built on
 | `/admin/overview` | Overview | `ADMIN.md`, `DESIGN-PROMPT.md` 6a |
 | `/admin/leads` | Every lead, replied or not | `ADMIN-LEADS.md` |
 | `/admin/agents` | Agent accounts | `AUTH.md` |
-| `/admin/config` | Configuration, read-only - three tabs, Texts, Scoring and Calls, the tab kept in the address (`?tab=`) | `ADMIN.md`, `DESIGN-PROMPT.md` 6b/6c |
+| `/admin/config` | Configuration, read-only but for Seri's switch on Calls (2026-11-24) - three tabs, Texts, Scoring and Calls, the tab kept in the address (`?tab=`) | `ADMIN.md`, `DESIGN-PROMPT.md` 6b/6c |
 | `/admin/dnc` | Do-not-call list, read-only | `ADMIN.md`, `DESIGN-PROMPT.md` 6e |
 | every signed-in screen | The incoming-call card, mounted once in the app shell (`layout/AppShell.tsx`) | `TWILIO.md`, "Incoming calls" |
 
@@ -903,6 +903,20 @@ The website's code-quality findings (Q7, Q8), on `fix/review-quality-frontend`:
   and page.
 - **Not seen in a browser:** each is proved by its tests and the build; the
   name links and the dialog focus were not looked at on screen.
+
+## Seri's switch on Configuration - 2026-11-24
+
+Jeel: a button to switch Seri on and off, so she can be stopped from a
+browser. The Calls tab's right column now holds a **Seri** card above the call
+settings (`.config__side`): her state, a line on what follows - robot calls go
+to her, use the script, get the script for want of the key, or none go at all
+with automated calls off (`seriState`, pure) - and Switch on / Switch off
+behind a confirm step. Switch on cannot be pressed without the key. After a
+switch the page reads the config again. `ConfirmDialog` moved out of the
+Agents page into `components/` for it - one copy for both. The page's line now
+says it is read-only "apart from Seri's switch, on Calls".
+`pages/admin/ConfigSeri.test.tsx`: each state's words, the confirm then the
+switch, Cancel, and no Switch on without the key. Not yet seen in a browser.
 
 ## Not built
 

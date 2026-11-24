@@ -14,11 +14,15 @@
  *
  * Read-only: Jeel's decision, 2026-09-23. Changes go through a numbered
  * migration and a PR. There is no writer here and there should not be one.
+ * Seri's switch, which the page can change since 2026-11-24, is only read here
+ * (`aiAgent`); it is written by `switchAiAgent` (`ai/settings.ts`), the same
+ * for the command and the page's button.
  */
 
 import { expiryDays } from './sql';
 import { loadFlow } from './flows';
 import { RECORDING_NOTICE } from '../core/calls';
+import { readAiAgentSwitch } from '../ai/settings';
 import { WEEKDAYS } from '../core/auto-dial';
 import type { CallScript } from '../core/call-script';
 import { questionShort } from '../core/questions';
@@ -113,9 +117,11 @@ export interface CallingContext {
   callbackNumber: string | null;
   /** Calls are recorded, so the recording notice is said before a person joins. */
   recorded: boolean;
+  /** `OPENAI_API_KEY` is set on this server: Seri can be switched on (AI-AGENT.md section 7). */
+  openAiKeySet: boolean;
 }
 
-const NO_CALLING: CallingContext = { autoCalls: false, callbackNumber: null, recorded: false };
+const NO_CALLING: CallingContext = { autoCalls: false, callbackNumber: null, recorded: false, openAiKeySet: false };
 
 
 export interface AdminConfig {
@@ -152,6 +158,12 @@ export interface AdminConfig {
   /** The automated call's active script, every line in order - null when none is active (T24). */
   callScript: { key: string; name: string; voice: string; lines: CallLine[] } | null;
   callSettings: CallSettings;
+  /**
+   * Seri's switch, which the Calls tab can change (Jeel, 2026-11-24): `on` as
+   * stored, and whether the key she needs is set. She takes the robot's calls
+   * only with both, and automated calls on.
+   */
+  aiAgent: { on: boolean; keySet: boolean };
 }
 
 const segmentsFor = (length: number): number => Math.max(1, Math.ceil(length / SEGMENT_LIMIT));
@@ -274,6 +286,7 @@ export async function getAdminConfig(calling: CallingContext = NO_CALLING): Prom
   const name = await longestFirstName();
   const script = await loadActiveCallScript(pool);
   const call = await callSettings(calling);
+  const aiSwitch = await readAiAgentSwitch(pool);
 
   const settings = new Map<string, string>(settingsRows.rows.map((r) => [r.key, r.value]));
   // The page describes the flow new leads get - docs/FLOWS.md.
@@ -394,5 +407,6 @@ export async function getAdminConfig(calling: CallingContext = NO_CALLING): Prom
       ? { key: script.key, name: script.name, voice: script.voice, lines: callLines(script, calling.recorded) }
       : null,
     callSettings: call,
+    aiAgent: { on: aiSwitch === 'on', keySet: calling.openAiKeySet },
   };
 }

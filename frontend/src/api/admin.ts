@@ -3,9 +3,10 @@ import { api, viewerTimeZone } from './client';
 /**
  * The three read-only admin screens: Configuration, Overview and the DNC list.
  *
- * There are no writers here, deliberately - Jeel's decision of 2026-09-23.
- * Scoring, copy and the DNC list are changed through a numbered migration and a
- * PR, not from a screen. `ADMIN.md` has the reasoning.
+ * There are no writers here, deliberately - Jeel's decision of 2026-09-23 -
+ * but one: Seri's switch (`setAiAgent`, Jeel 2026-11-24). Scoring, copy and
+ * the DNC list are changed through a numbered migration and a PR, not from a
+ * screen. `ADMIN.md` has the reasoning.
  */
 
 /** Mirrors ConfiguredMessage in backend/src/db/admin-config.ts. */
@@ -50,6 +51,8 @@ export interface AdminConfig {
   /** The automated call's active script, every line in order; null when none is active (T24). */
   callScript: { key: string; name: string; voice: string; lines: CallLine[] } | null;
   callSettings: CallSettings;
+  /** Seri's switch as stored, and whether her key is set on the server (Jeel, 2026-11-24). */
+  aiAgent: { on: boolean; keySet: boolean };
 }
 
 /** One thing the robot says - mirrors CallLine in backend/src/db/admin-config.ts. */
@@ -86,6 +89,12 @@ export interface CallSettings {
 
 export async function getConfig(): Promise<AdminConfig> {
   const { data } = await api.get<AdminConfig>('/admin/config');
+  return data;
+}
+
+/** Switches Seri on or off - the next robot call follows it. Superadmin only; on is refused without her key (`no_key`). */
+export async function setAiAgent(on: boolean): Promise<{ on: boolean; changed: boolean }> {
+  const { data } = await api.post<{ on: boolean; changed: boolean }>('/admin/config/ai-agent', { on });
   return data;
 }
 

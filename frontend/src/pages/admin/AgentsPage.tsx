@@ -1,10 +1,11 @@
-import { useCallback, useEffect, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { toApiError } from '../../api/client';
 import type { PublicUser, Role } from '../../api/types';
 import { listUsers, resetUserPassword, updateUser } from '../../api/users';
 import { useAuth } from '../../auth/store';
 import { Banner } from '../../components/Banner';
 import { Button } from '../../components/Button';
+import { ConfirmDialog } from '../../components/ConfirmDialog';
 import { Modal } from '../../components/Modal';
 import { OneTimeSecret } from '../../components/OneTimeSecret';
 import { RowMenu, type RowMenuItem } from '../../components/RowMenu';
@@ -26,56 +27,6 @@ type Dialog =
  * one "⋯" menu instead of three text buttons.
  */
 const COLUMNS = ['Agent', 'Role', 'Status', 'Last login', ''];
-
-function ConfirmDialog({
-  title,
-  children,
-  confirmLabel,
-  danger = false,
-  onConfirm,
-  onClose,
-}: {
-  title: string;
-  children: ReactNode;
-  confirmLabel: string;
-  danger?: boolean;
-  onConfirm: () => Promise<void>;
-  onClose: () => void;
-}) {
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  async function confirm() {
-    setBusy(true);
-    setError(null);
-    try {
-      await onConfirm();
-    } catch (err) {
-      setError(toApiError(err).message);
-      setBusy(false);
-    }
-  }
-
-  return (
-    <Modal
-      title={title}
-      onClose={busy ? undefined : onClose}
-      footer={
-        <>
-          <Button variant="secondary" onClick={onClose} disabled={busy}>
-            Cancel
-          </Button>
-          <Button variant={danger ? 'danger' : 'primary'} loading={busy} onClick={() => void confirm()} autoFocus>
-            {confirmLabel}
-          </Button>
-        </>
-      }
-    >
-      {error ? <Banner tone="error">{error}</Banner> : null}
-      {children}
-    </Modal>
-  );
-}
 
 function SkeletonRows() {
   return (

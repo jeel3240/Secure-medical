@@ -18,10 +18,11 @@ both `-f` files, as production runs:
   `docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d api worker`
   - a `restart` keeps the old environment.
 - Pull, `up -d --build`, then **`npm run migrate` straight after the `up`**
-  (022 and 023): until they have run, the lead page, its timeline and My
-  Callbacks read columns that are not there yet. Neither changes an existing
+  (022, 023 and 024): until they have run, the lead page, its timeline and My
+  Callbacks read columns that are not there yet. None changes an existing
   row; 023 (A15) adds `callbacks.note`, Seri's one-line reason on a call back
-  she books, and one call back per call.
+  she books, and one call back per call; 024 (A31) `call_ai_turns.data`, the
+  brain's record of each reply. *(Said "022 and 023" until 2026-11-24.)*
 - The Caddyfile this deploy changes reaches Caddy by itself: since review Q11
   (2026-11-23) it is `caddy/Caddyfile`, its folder mounted and watched, and the
   `up` recreates the caddy container once, as its compose settings changed
@@ -31,7 +32,8 @@ both `-f` files, as production runs:
 - `ai_agent` stays `off` (022 seeds it): calls go on exactly as today, the
   script from its first question.
 - Next calling day, switch her on - no restart, recorded in the activity log,
-  refused without the key:
+  refused without the key: the Seri card on Admin > Configuration's Calls tab
+  (since 2026-11-24), or
   `docker compose -f docker-compose.yml -f docker-compose.prod.yml exec api npm run ai-agent -- on`
 - Watch the first calls: each lead's timeline shows her conversation under the
   call (A19), and the logs are in CloudWatch, log group `/leads-app`, streams

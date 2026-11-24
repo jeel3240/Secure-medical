@@ -76,7 +76,9 @@ export const ACTIVITY_ACTIONS = [
   /**
    * Seri, the AI agent, switched on or off - `detail.from`, what
    * `settings.ai_agent` said before (null when it was never set), `to`, and
-   * `via: 'command'` (AI-AGENT.md section 7). Run on the server, so no actor.
+   * `via`: `command` - run on the server, so no actor - or `website`, the
+   * superadmin who clicked on Admin > Configuration (2026-11-24). AI-AGENT.md
+   * section 7.
    */
   'ai_agent.switched',
   /**

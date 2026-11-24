@@ -4,7 +4,8 @@
  * what is under test. The SQL is proved by scripts/admin-live-check.ts.
  *
  * Read-only is a decision, not an omission (Jeel, 2026-09-23), so these tests
- * also pin that no writer exists.
+ * also pin that no writer exists - but one: Seri's switch on Configuration
+ * (Jeel, 2026-11-24), its own route, tested below.
  */
 import request from 'supertest';
 import type { TwilioSettings } from '../../twilio-settings';
@@ -17,6 +18,12 @@ const listDnc = jest.fn();
 jest.mock('../../db/admin-config', () => ({ getAdminConfig: (calling: unknown) => getAdminConfig(calling) }));
 jest.mock('../../db/admin-overview', () => ({ getOverview: (p: unknown) => getOverview(p) }));
 jest.mock('../../db/admin-dnc', () => ({ listDnc: (q: unknown) => listDnc(q) }));
+const switchAiAgent = jest.fn();
+jest.mock('../../ai/settings', () => ({
+  ...jest.requireActual('../../ai/settings'),
+  switchAiAgent: (...a: unknown[]) => switchAiAgent(...a),
+}));
+jest.mock('../../db/pool', () => ({ pool: { name: 'the pool' } }));
 
 const PASSWORD = 'correct-horse-battery';
 
@@ -32,10 +39,10 @@ beforeEach(() => {
   });
 });
 
-async function setup(opts: { twilio?: TwilioSettings | null; autoCalls?: boolean } = {}) {
+async function setup(opts: { twilio?: TwilioSettings | null; autoCalls?: boolean; openAiKey?: string } = {}) {
   const { app, users } = await buildApp(opts);
   await seedUser(users, { email: 'maya@example.com', name: 'Maya', password: PASSWORD });
-  await seedUser(users, {
+  const bossUser = await seedUser(users, {
     email: 'boss@example.com',
     name: 'Boss',
     role: 'superadmin',
@@ -43,7 +50,7 @@ async function setup(opts: { twilio?: TwilioSettings | null; autoCalls?: boolean
   });
   const agent = await signIn(app, 'maya@example.com', PASSWORD);
   const boss = await signIn(app, 'boss@example.com', PASSWORD);
-  return { app, agent, boss };
+  return { app, agent, boss, bossId: bossUser.id };
 }
 
 describe.each([
@@ -110,19 +117,66 @@ describe('Configuration', () => {
   it('tells the read model whether automated calls are on, the calling number, and whether calls are recorded', async () => {
     const { boss } = await setup({ twilio: { ...TWILIO, transcriptionServiceSid: `GA${'4'.repeat(32)}` }, autoCalls: true });
     expect((await boss.get('/api/admin/config')).status).toBe(200);
-    expect(getAdminConfig).toHaveBeenCalledWith({ autoCalls: true, callbackNumber: '+14805308582', recorded: true });
+    expect(getAdminConfig).toHaveBeenCalledWith({ autoCalls: true, callbackNumber: '+14805308582', recorded: true, openAiKeySet: false });
   });
 
   it('calling set up, automated calls off, nothing recorded', async () => {
     const { boss } = await setup({ twilio: TWILIO, autoCalls: false });
     await boss.get('/api/admin/config');
-    expect(getAdminConfig).toHaveBeenCalledWith({ autoCalls: false, callbackNumber: '+14805308582', recorded: false });
+    expect(getAdminConfig).toHaveBeenCalledWith({ autoCalls: false, callbackNumber: '+14805308582', recorded: false, openAiKeySet: false });
   });
 
   it('calling not set up: off, no number', async () => {
     const { boss } = await setup();
     await boss.get('/api/admin/config');
-    expect(getAdminConfig).toHaveBeenCalledWith({ autoCalls: false, callbackNumber: null, recorded: false });
+    expect(getAdminConfig).toHaveBeenCalledWith({ autoCalls: false, callbackNumber: null, recorded: false, openAiKeySet: false });
+  });
+});
+
+describe("Seri's switch on Configuration (Jeel, 2026-11-24)", () => {
+  const PATH = '/api/admin/config/ai-agent';
+  beforeEach(() => {
+    switchAiAgent.mockReset().mockResolvedValue({ from: 'off', to: 'on', changed: true });
+  });
+
+  it('tells the read model whether the key is set', async () => {
+    const { boss } = await setup({ openAiKey: 'sk-test' });
+    await boss.get('/api/admin/config');
+    expect(getAdminConfig).toHaveBeenCalledWith(expect.objectContaining({ openAiKeySet: true }));
+  });
+
+  it('turns away anyone not signed in, and an agent', async () => {
+    const { app, agent } = await setup({ openAiKey: 'sk-test' });
+    expect((await request(app).post(PATH).send({ on: true })).status).toBe(401);
+    expect((await agent.post(PATH).send({ on: true })).status).toBe(403);
+    expect(switchAiAgent).not.toHaveBeenCalled();
+  });
+
+  it('switches it on, recorded as by this superadmin, from the website', async () => {
+    const { boss, bossId } = await setup({ openAiKey: 'sk-test' });
+    const res = await boss.post(PATH).send({ on: true });
+    expect([res.status, res.body]).toEqual([200, { on: true, changed: true }]);
+    expect(switchAiAgent).toHaveBeenCalledWith({ name: 'the pool' }, 'on', { via: 'website', userId: bossId });
+  });
+
+  it('refuses on without the key, and changes nothing', async () => {
+    const { boss } = await setup();
+    const res = await boss.post(PATH).send({ on: true });
+    expect([res.status, res.body.error]).toEqual([409, 'no_key']);
+    expect(switchAiAgent).not.toHaveBeenCalled();
+  });
+
+  it('off needs no key - she can always be stopped', async () => {
+    const { boss, bossId } = await setup();
+    switchAiAgent.mockResolvedValue({ from: 'on', to: 'off', changed: true });
+    expect((await boss.post(PATH).send({ on: false })).status).toBe(200);
+    expect(switchAiAgent).toHaveBeenCalledWith({ name: 'the pool' }, 'off', { via: 'website', userId: bossId });
+  });
+
+  it.each([[{}], [{ on: 'yes' }], [{ on: 1 }]])('refuses a body that is not on or off: %j', async (body) => {
+    const { boss } = await setup({ openAiKey: 'sk-test' });
+    expect((await boss.post(PATH).send(body)).status).toBe(400);
+    expect(switchAiAgent).not.toHaveBeenCalled();
   });
 });
 

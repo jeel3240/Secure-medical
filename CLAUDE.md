@@ -154,7 +154,7 @@ you change something the docs describe, update the doc in the same commit.
     src/api/auth/           sign-in, sessions, guards
     src/api/users/          superadmin account management
     src/api/admin/leads.ts  Admin > Leads query endpoint; its Call filter (T23)
-    src/api/admin/config.ts    Admin > Configuration, read-only; tells it whether automated calls are on, the calling number, whether calls are recorded (T24)
+    src/api/admin/config.ts    Admin > Configuration, read-only but for Seri's switch (POST /ai-agent, 2026-11-24); tells it whether automated calls are on, the calling number, whether calls are recorded (T24), and whether Seri is on and her key set
     src/api/admin/overview.ts  Admin > Overview statistics
     src/api/admin/dnc.ts       Admin > DNC list, read-only
     src/api/admin/health.ts    deep health check, superadmin only
@@ -566,6 +566,7 @@ They do not. Admin shows the configuration; it does not change it:
 | Settings (6f) | Expiry, delivery type, poll interval, caller ID | Not built as an editor. Expiry and the other flow settings are shown read-only on the Texts tab; the poll interval is a settings row, caller ID an environment variable |
 | DNC list (6e) | Table plus **Add manually** | Read-only. Blocking happens through an agent's DNC disposition, a STOP reply, an EZ Texting opt-out, or a stop said on the automated call (T13) |
 | Agents (6d) | Editable | Unchanged - creating and deactivating accounts is the point of it |
+| Seri's switch | - (Phase 7) | *Added 2026-11-24, Jeel:* Switch on / off on Configuration's Calls tab, superadmin only, confirmed, recorded by whoever clicked - the one control on Configuration. `npm run ai-agent` still works |
 
 **Why:** scoring and copy are not small changes. A mistyped point value silently
 reshuffles the queue; a broken opener costs a second segment on every message or

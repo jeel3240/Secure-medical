@@ -321,6 +321,10 @@ async function main(): Promise<void> {
       await stored(),
       (await switches())[4],
     ], [{ from: null, to: 'off', changed: true }, 'off', [null, null, 'off', 'command']]);
+    // From Admin > Configuration (Jeel, 2026-11-24): the superadmin who clicked is the actor.
+    check('switched on from the website', await switchAiAgent(pool, 'on', { via: 'website', userId: boss }), { from: 'off', to: 'on', changed: true });
+    check('recorded as by them, from the website', (await switches())[5], [boss, 'off', 'on', 'website']);
+    check('and off again from it', (await switchAiAgent(pool, 'off', { via: 'website', userId: boss })).changed, true);
   }
 
   console.log('\nthe log cannot be altered');
