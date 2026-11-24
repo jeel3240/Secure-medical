@@ -3,9 +3,10 @@ import { api, viewerTimeZone } from './client';
 /**
  * The three read-only admin screens: Configuration, Overview and the DNC list.
  *
- * There are no writers here, deliberately - Jeel's decision of 2026-09-23.
- * Scoring, copy and the DNC list are changed through a numbered migration and a
- * PR, not from a screen. `ADMIN.md` has the reasoning.
+ * There are no writers here, deliberately - Jeel's decision of 2026-09-23 -
+ * but one: Seri's switch (`setAiAgent`, Jeel 2026-11-24). Scoring, copy and
+ * the DNC list are changed through a numbered migration and a PR, not from a
+ * screen. `ADMIN.md` has the reasoning.
  */
 
 /** Mirrors ConfiguredMessage in backend/src/db/admin-config.ts. */

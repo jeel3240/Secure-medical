@@ -23,7 +23,7 @@ the brief now exists except calling, which is Phase 4. *(Calling was built on
 | `/admin/overview` | Overview | `ADMIN.md`, `DESIGN-PROMPT.md` 6a |
 | `/admin/leads` | Every lead, replied or not | `ADMIN-LEADS.md` |
 | `/admin/agents` | Agent accounts | `AUTH.md` |
-| `/admin/config` | Configuration, read-only - three tabs, Texts, Scoring and Calls, the tab kept in the address (`?tab=`) | `ADMIN.md`, `DESIGN-PROMPT.md` 6b/6c |
+| `/admin/config` | Configuration, read-only but for Seri's switch on Calls (2026-11-24) - three tabs, Texts, Scoring and Calls, the tab kept in the address (`?tab=`) | `ADMIN.md`, `DESIGN-PROMPT.md` 6b/6c |
 | `/admin/dnc` | Do-not-call list, read-only | `ADMIN.md`, `DESIGN-PROMPT.md` 6e |
 | every signed-in screen | The incoming-call card, mounted once in the app shell (`layout/AppShell.tsx`) | `TWILIO.md`, "Incoming calls" |
 

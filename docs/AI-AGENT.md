@@ -514,7 +514,7 @@ Decided by Jeel, 2026-11-11.
 
 **As built (A01, 2026-11-11):**
 
-- **The switch is a server command** (Jeel, 2026-11-11), not a hand edit: production's database is changed only by migrations and by the app itself (`WORKFLOW.md`, "Migrations"). On the server: `docker compose -f docker-compose.yml -f docker-compose.prod.yml exec api npm run ai-agent -- on`; locally, `docker compose exec api npm run dev:ai-agent -- on`.
+- **The switch is a server command** (Jeel, 2026-11-11) - *and since 2026-11-24 a button too, below* - not a hand edit: production's database is changed only by migrations and by the app itself (`WORKFLOW.md`, "Migrations"). On the server: `docker compose -f docker-compose.yml -f docker-compose.prod.yml exec api npm run ai-agent -- on`; locally, `docker compose exec api npm run dev:ai-agent -- on`.
 - **Each change is recorded** - `ai_agent.switched` in the activity log, with what it was and what it became, in the same transaction as the change (`AUDIT.md`). Switching it to what it already is changes nothing and records nothing. Two commands at once take turns.
 - **`on` is refused without `OPENAI_API_KEY`**, and nothing is written.
 - **On without a key counts as off** - the key was taken out of `.env` after switching on, say. Calls go to the script, and the first such call logs `ai_agent.no_key` once.
