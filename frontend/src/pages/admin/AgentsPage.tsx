@@ -97,6 +97,7 @@ export function AgentsPage() {
   const me = useAuth((s) => s.user)!;
   const [users, setUsers] = useState<PublicUser[] | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
   const [dialog, setDialog] = useState<Dialog | null>(null);
   const [flash, setFlash] = useState<string | null>(null);
 
@@ -137,6 +138,7 @@ export function AgentsPage() {
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
         {flash ? <Banner tone="success">{flash}</Banner> : null}
+        {actionError ? <Banner tone="error">{actionError}</Banner> : null}
         {loadError ? (
           <Banner tone="error">
             Could not load agents. {loadError}{' '}
@@ -176,7 +178,9 @@ export function AgentsPage() {
                               replaceUser(await updateUser(user.id, { isActive: true }));
                               setFlash(`${user.name} can sign in again.`);
                             } catch (err) {
-                              setLoadError(toApiError(err).message);
+                              // Its own message: "Could not load agents" with a Retry that loads them said the wrong
+                              // thing (review M33, 2026-11-22).
+                              setActionError(`Could not reactivate ${user.name}. ${toApiError(err).message}`);
                             }
                           },
                         },

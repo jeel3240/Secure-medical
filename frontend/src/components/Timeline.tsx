@@ -1,25 +1,26 @@
-import { useEffect, useRef } from 'react';
 import type { TimelineEntry, TimelineKind } from '../api/workspace';
 import { DISPOSITION_LABEL, type Disposition } from '../api/workspace';
 import { CALL_RESULT_WORDS } from '../lib/call-results';
 import { dayLabel, formatDay, formatTime, isSameDay } from '../lib/format';
 import { CallAnswers } from './CallAnswers';
+import { SeriConversation } from './SeriConversation';
 import { CallTranscript } from './CallTranscript';
 
 /**
  * The lead's history: one ordered list built from messages, calls, notes,
  * callbacks, dispositions and the system events the backend derives.
  *
- * Shared by the workspace centre column and the full-width Lead Timeline page,
- * which is why it takes entries rather than fetching: the two screens poll at
- * different times and the page adds a sidebar. Phase 3 task 18.
+ * The full-width Lead Timeline page's list. It takes entries rather than
+ * fetching, as the page polls and adds a sidebar. Phase 3 task 18. The
+ * workspace's centre column has its own, `Conversation.tsx`, which shares the
+ * words for a call and a system event from here (`callText`, `systemText`).
  *
  * DESIGN-PROMPT.md 3, "Timeline"; AGENT-WORKSPACE.md, "The timeline".
  *
  * **Oldest first, newest at the bottom,** as the brief asks, so the list reads
- * like a conversation. `autoScroll` keeps the newest in view in the workspace,
- * where an agent is watching replies land; the timeline page leaves it off so
- * the page does not jump under someone reading from the top.
+ * like a conversation. The page does not scroll itself, so it does not jump
+ * under someone reading from the top. (An `autoScroll` for the workspace went
+ * unused once the workspace had its own list - removed, review Q7, 2026-11-23.)
  */
 
 const LABEL: Record<TimelineKind, string> = {
@@ -41,7 +42,6 @@ function duration(seconds: unknown): string {
   return `${Math.floor(n / 60)}:${String(n % 60).padStart(2, '0')}`;
 }
 
-/** The system events the backend derives, in words. */
 /**
  * A call in words - shared with the workspace conversation. Only an answered
  * call has a length worth showing; "no answer · 0s" said nothing. A call with
@@ -138,6 +138,8 @@ export function activityText(detail: Record<string, unknown>, at: string): strin
           : 'Put the lead back in the queue';
       return held ? `${how} · held ${held}` : how;
     }
+    case 'callback.taken':
+      return `Took the callback Seri booked for ${when(detail.scheduledAt)}`;
     case 'callback.rescheduled':
       return `Callback moved from ${when(detail.from)} to ${when(detail.to)}`;
     case 'callback.reopened':
@@ -196,6 +198,11 @@ function entryText(entry: TimelineEntry): string {
       const when = at ? `${formatDay(at)} ${formatTime(at)}` : 'unscheduled';
       // One the system booked because their call was missed has no chosen time.
       if (d.reason === 'missed_call') return d.doneAt ? 'Missed call returned' : 'Callback added · missed call';
+      // Seri's, at a time the lead picked, with her line for whoever calls (A15).
+      if (d.reason === 'ai_booked') {
+        const note = typeof d.note === 'string' && d.note ? ` · ${d.note}` : '';
+        return d.doneAt ? `Callback completed (was ${when})` : `Callback booked by Seri for ${when}${note}`;
+      }
       return d.doneAt ? `Callback completed (was ${when})` : `Callback scheduled for ${when}`;
     }
     case 'disposition': {
@@ -211,20 +218,11 @@ function entryText(entry: TimelineEntry): string {
 
 export function Timeline({
   entries,
-  autoScroll = false,
   emptyText = 'Nothing has happened on this lead yet.',
 }: {
   entries: TimelineEntry[];
-  autoScroll?: boolean;
   emptyText?: string;
 }) {
-  const bottom = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (!autoScroll) return;
-    bottom.current?.scrollIntoView({ block: 'nearest' });
-  }, [entries.length, autoScroll]);
-
   if (entries.length === 0) {
     return <p className="timeline__empty">{emptyText}</p>;
   }
@@ -263,6 +261,7 @@ export function Timeline({
                   {failed && <span className="timeline__failed">Delivery failed</span>}
                 </p>
                 {entry.kind === 'call' && <CallAnswers detail={entry.detail} />}
+                {entry.kind === 'call' && <SeriConversation detail={entry.detail} />}
                 {entry.kind === 'call' && <CallTranscript detail={entry.detail} agentName={entry.author} />}
               </div>
 
@@ -273,7 +272,6 @@ export function Timeline({
           </li>
         );
       })}
-      <div ref={bottom} />
     </ol>
   );
 }

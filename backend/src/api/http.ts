@@ -21,6 +21,15 @@ export function asyncHandler(
   };
 }
 
+/**
+ * A request's path, fit for a log: the EZ Texting webhook's address holds its
+ * secret token (`/api/webhooks/eztexting/<token>`, WEBHOOKS.md), and an error
+ * before its own handling reached here with it (review H2, 2026-11-22).
+ */
+export function loggablePath(path: string): string {
+  return path.replace(/^(\/api\/webhooks\/eztexting\/)[^/]+/, '$1:token');
+}
+
 export const errorHandler: ErrorRequestHandler = (err, req, res, _next) => {
   if (err instanceof HttpError) {
     res.status(err.status).json({ error: err.code, message: err.message });
@@ -30,6 +39,6 @@ export const errorHandler: ErrorRequestHandler = (err, req, res, _next) => {
     res.status(400).json({ error: 'invalid_json', message: 'Request body is not valid JSON.' });
     return;
   }
-  log.error('http.unhandled', { method: req.method, path: req.path, err: errText(err) });
+  log.error('http.unhandled', { method: req.method, path: loggablePath(req.path), err: errText(err) });
   res.status(500).json({ error: 'internal_error', message: 'Something went wrong.' });
 };

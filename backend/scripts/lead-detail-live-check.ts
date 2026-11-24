@@ -10,26 +10,15 @@
  *
  *   docker compose exec postgres psql -U app -d postgres -c 'CREATE DATABASE detail_check'
  *   DATABASE_URL=postgres://app:app@localhost:5433/detail_check node scripts/migrate.js
- *   DATABASE_URL=postgres://app:app@localhost:5433/detail_check REDIS_URL=x JWT_SECRET=x \
+ *   DATABASE_URL=postgres://app:app@localhost:5433/detail_check JWT_SECRET=x \
  *     EZT_USERNAME=x EZT_PASSWORD=x EZT_GROUP=x npx ts-node --transpile-only scripts/lead-detail-live-check.ts
  */
+import { check, failureCount, verdict } from './check';
 import { pool } from '../src/db/pool';
 import { getLeadDetail } from '../src/db/lead-detail';
 import { listQueue } from '../src/db/queue';
 import { replyAs, startFlow } from './live-flow';
 
-let failures = 0;
-
-function check(label: string, actual: unknown, expected: unknown): void {
-  const a = JSON.stringify(actual);
-  const e = JSON.stringify(expected);
-  if (a === e) {
-    console.log(`  ok   ${label}`);
-  } else {
-    failures++;
-    console.log(`  FAIL ${label}\n       expected ${e}\n       actual   ${a}`);
-  }
-}
 
 async function refuseIfNotEmpty(): Promise<void> {
   const { rows } = await pool.query(`SELECT count(*)::int AS leads FROM leads`);
@@ -243,9 +232,9 @@ async function main(): Promise<void> {
     check('a saved answer cannot be edited', refused, 'conversation_answers is add-only: rows cannot be changed or deleted');
   }
 
-  console.log(failures === 0 ? '\nall checks passed' : `\n${failures} check(s) FAILED`);
+  console.log(verdict());
   await pool.end();
-  process.exit(failures === 0 ? 0 : 1);
+  process.exit(failureCount() === 0 ? 0 : 1);
 }
 
 main().catch((err) => {

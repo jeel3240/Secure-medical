@@ -23,6 +23,7 @@
  * It writes rows, so it refuses to run against a database that holds leads.
  * Run it with the others: scripts/live-checks.sh auto-calls
  */
+import { check, failureCount, verdict } from './check';
 import {
   actOnVerdict,
   callsOnHold,
@@ -35,6 +36,7 @@ import {
   settleAutomatedCall,
   startAutomatedCall,
   takeTransfer,
+  transferTakenBy,
   takenByVerdict,
   transferContext,
 } from '../src/db/auto-calls';
@@ -43,18 +45,6 @@ import { finishCall, recordAnsweredBy } from '../src/db/calls';
 import { startConversation } from '../src/db/flows';
 import { pool } from '../src/db/pool';
 
-let failures = 0;
-
-function check(label: string, actual: unknown, expected: unknown): void {
-  const a = JSON.stringify(actual);
-  const e = JSON.stringify(expected);
-  if (a === e) {
-    console.log(`  ok   ${label}`);
-  } else {
-    failures++;
-    console.log(`  FAIL ${label}\n       expected ${e}\n       actual   ${a}`);
-  }
-}
 
 async function refuseIfNotEmpty(): Promise<void> {
   const { rows } = await pool.query(`SELECT count(*)::int AS leads FROM leads`);
@@ -528,6 +518,20 @@ async function main(): Promise<void> {
       null,
     ]);
     check('a call that is not ours to transfer', await takeTransfer(999999, maya), { ok: false, reason: 'not_found' });
+    check('who took it - nobody yet', await transferTakenBy(lateCall), null);
+    check('who took it - Maya', await transferTakenBy(callId), maya);
+
+    // The voicemail message took the call while the accept waited on its lock, or the call is over (review H8).
+    const { leadId: vmLead, callId: vmCall } = await placedCall('+15550000596', 'CA-XFER-VM');
+    await pool.query(`UPDATE calls SET script_result = 'voicemail_left' WHERE id = $1`, [vmCall]);
+    check('taken over by the voicemail message: nobody to take', await takeTransfer(vmCall, maya), { ok: false, reason: 'not_found' });
+    check('the call and the lead untouched', [await callOf(vmCall), await holderOf(vmLead)], [
+      { agent_id: null, script_result: 'voicemail_left' },
+      null,
+    ]);
+    const { callId: overCall } = await placedCall('+15550000597', 'CA-XFER-OVER');
+    await pool.query(`UPDATE calls SET ended_at = now(), outcome = 'answered' WHERE id = $1`, [overCall]);
+    check('over: nobody to take', await takeTransfer(overCall, maya), { ok: false, reason: 'not_found' });
 
     await missTransfer(lateCall);
     check('nobody took it: transfer_missed', (await callOf(lateCall)).script_result, 'transfer_missed');
@@ -727,9 +731,9 @@ async function main(): Promise<void> {
     check('Twilio asked once', asked.length, 1);
   }
 
-  console.log(failures === 0 ? '\nall checks passed' : `\n${failures} check(s) FAILED`);
+  console.log(verdict());
   await pool.end();
-  process.exit(failures === 0 ? 0 : 1);
+  process.exit(failureCount() === 0 ? 0 : 1);
 }
 
 main().catch((err) => {

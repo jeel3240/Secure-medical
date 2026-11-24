@@ -16,6 +16,7 @@
  * It writes rows, so it refuses to run against a database that holds any.
  * Run it with the others: scripts/live-checks.sh send-waiting-openers
  */
+import { check, failureCount, verdict } from './check';
 import axios from 'axios';
 
 let sent: string[] = [];
@@ -38,18 +39,6 @@ import { pool } from '../src/db/pool';
 import { retryFailedOpeners } from '../src/worker/retry-openers';
 import { resendWaitingOpeners, type ResendDeps, type ResendReport } from '../src/worker/send-waiting-openers';
 
-let failures = 0;
-
-function check(label: string, actual: unknown, expected: unknown): void {
-  const a = JSON.stringify(actual);
-  const e = JSON.stringify(expected);
-  if (a === e) {
-    console.log(`  ok   ${label}`);
-  } else {
-    failures++;
-    console.log(`  FAIL ${label}\n       expected ${e}\n       actual   ${a}`);
-  }
-}
 
 const EVERY_MS = 30_000;
 const WINDOW = { from: new Date(Date.now() - 72 * 3_600_000), to: new Date(Date.now() + 60_000) };
@@ -301,9 +290,9 @@ async function main(): Promise<void> {
     check('once the first is over, it runs', after.sent, 1);
   }
 
-  console.log(failures === 0 ? '\nall checks passed' : `\n${failures} check(s) FAILED`);
+  console.log(verdict());
   await pool.end();
-  process.exit(failures === 0 ? 0 : 1);
+  process.exit(failureCount() === 0 ? 0 : 1);
 }
 
 main().catch((err) => {

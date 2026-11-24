@@ -12,8 +12,9 @@
  * than a slow one.
  *
  * **Live system status is not here.** Last poll, last webhook and worker health
- * come from the health endpoint - `LOGGING.md` - so that anything monitoring
- * the system from outside reads exactly what this screen does.
+ * come from the health endpoint - `LOGGING.md` - so the screen and the health
+ * check read the same thing. (Superadmin only, so no monitor outside can poll
+ * it yet - README, "Known limits".)
  *
  * **Only what the page shows - Jeel, 2026-09-28: "we are making the system
  * complex".** Calls made, reached, average call length, HOT, callbacks set, DNC
@@ -24,7 +25,8 @@
 
 import { CLOSING_DISPOSITIONS } from '../core/dispositions';
 import { pool } from './pool';
-import { startOfTodaySql } from './sql';
+import { RECEIVED_SQL } from './lead-state';
+import { startOfTodaySql, startOfTomorrowSql, wordList } from './sql';
 
 export type OverviewPeriod = 'today' | '7d' | '30d';
 
@@ -40,7 +42,10 @@ function sinceSql(period: OverviewPeriod, timeZone?: string): string {
 export interface AgentRow {
   agentId: number;
   name: string;
-  /** Open callbacks due now or overdue - not ones booked for later. */
+  /**
+   * Open callbacks of theirs due by the end of today, overdue included - not
+   * later ones. A call back Seri booked counts once someone has it (A16).
+   */
   callbacksDue: number;
   /** Leads this agent holds right now, whatever the period. */
   holding: number;
@@ -61,6 +66,7 @@ export interface ActivityEntry {
 
 export interface Overview {
   period: OverviewPeriod;
+  /** When the period starts - today's midnight in the viewer's zone, or 7 or 30 days ago. */
   since: string;
   kpis: {
     leadsReceived: number;
@@ -78,14 +84,12 @@ export interface Overview {
 export async function getOverview(period: OverviewPeriod, timeZone?: string): Promise<Overview> {
   const since = sinceSql(period, timeZone);
 
-  // Leads are counted by when they reached us - ezt_added_at where EZ Texting
-  // gave us one, created_at otherwise - the same expression the queue uses for
-  // a lead's age.
-  const received = `COALESCE(l.ezt_added_at, l.created_at)`;
+  // Leads are counted by when they reached us - the queue's age (`RECEIVED_SQL`).
+  const received = RECEIVED_SQL;
 
   // `closed` and the retired values that meant the same, so leads closed under
   // the old list still count. Constants from core/dispositions.ts, never input.
-  const closing = CLOSING_DISPOSITIONS.map((v) => `'${v.replace(/[^a-z_]/g, '')}'`).join(', ');
+  const closing = wordList(CLOSING_DISPOSITIONS);
 
   const [leadRows, agentRows, activityRows] = await Promise.all([
     // Every total counts things that *happened* in the period - Jeel,
@@ -114,7 +118,9 @@ export async function getOverview(period: OverviewPeriod, timeZone?: string): Pr
         (
           SELECT count(DISTINCT lead_id)::int FROM dispositions
           WHERE value IN (${closing}) AND created_at >= ${since}
-        ) AS closed
+        ) AS closed,
+        -- The start of the period, as every count above used it.
+        ${since} AS since
     `),
 
     pool.query(`
@@ -132,7 +138,7 @@ export async function getOverview(period: OverviewPeriod, timeZone?: string): Pr
         (
           SELECT count(*)::int FROM callbacks cb
           WHERE cb.agent_id = u.id AND cb.done_at IS NULL
-            AND cb.scheduled_at < (${startOfTodaySql(timeZone)} + interval '1 day')
+            AND cb.scheduled_at < ${startOfTomorrowSql(timeZone)}
         ) AS callbacks_due,
         (SELECT count(*)::int FROM leads hl WHERE hl.assigned_to = u.id) AS holding,
         (
@@ -202,7 +208,8 @@ export async function getOverview(period: OverviewPeriod, timeZone?: string): Pr
 
   return {
     period,
-    since: new Date().toISOString(),
+    // The window's start - until 2026-11-23 the time of the request (review R14).
+    since: new Date(leads.since).toISOString(),
     kpis: {
       leadsReceived: leads.leads_received,
       responded: leads.responded,

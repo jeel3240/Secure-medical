@@ -32,6 +32,7 @@ commit message.
 
 ```bash
 cd backend && npx tsc --noEmit    # must be clean
+npm run typecheck:scripts         # scripts/ and the tests, with the app - must be clean (2026-11-22)
 npm test                          # must pass
 npm run lint                      # must pass - ESLint for the backend
 scripts/live-checks.sh            # when the change touches SQL - README.md, "How to test"
@@ -75,6 +76,14 @@ edit to a file that has already shipped. A schema change that exists only on
 someone's laptop is a schema change that will be missing in production, and the
 code that depends on it will fail there and nowhere else.
 
+**One runner at a time** (2026-11-22, `docs/REVIEW-2026-11-22.md` M36). The
+runner takes a Postgres advisory lock for its whole run, so two
+`npm run migrate` at once cannot both apply the same file: the second waits,
+then finds nothing pending. It still remembers a file by its name only - an
+edited file that already ran is not noticed, which is why the rule below holds;
+a checksum would need a column on `schema_migrations`, a change to make by
+migration if it is ever wanted.
+
 **Never edit a migration that has already run.** Add a new numbered file that
 changes what the old one did. Assume every file already in `dev` has run in
 production unless Jeel says otherwise - that assumption is cheap when wrong and
@@ -105,11 +114,18 @@ second part's SQL there once.
 *(The `004` on disk today, `004_conversation_completed_at.sql`, is a later and
 unrelated file.)*
 
-**Where the files stand - 2026-11-02.** `main` and production hold 001 to
-020. 021 is on `dev`, and the next deploy runs it: one `settings` row,
-`auto_call_calls_per_person`, 5 - five automated calls at once for each
-person free (T29, `AUTO-CALLS.md` "Traffic"). Nothing to switch: the robot
-reads it on its next look, and without the row it uses 5 all the same.
+**Where the files stand - 2026-11-13.** `main` holds 001 to 021 - 021, five
+automated calls at once for each person free (T29, `AUTO-CALLS.md`
+"Traffic"), reached it through PR #29. 022 is on `dev`: Seri, the AI agent
+(Phase 7, `AI-AGENT.md`) - new columns on `calls` and `callbacks`, a new
+add-only table, `call_ai_turns`, and the `ai_agent` setting, seeded `off`. It
+changes no existing row; the app writes to the new parts only on a call Seri
+takes, so with her switch off, calls go on exactly as today. 023 too
+(2026-11-12, A15): `callbacks.note`, the one-line reason Seri gives with a call
+back she books, and one call back per call she booked it on - it changes no
+existing row. 024 too (2026-11-17, A31): `call_ai_turns.data`, the new brain's
+record of each reply, only on the relay's own notes - a new column, no row
+changed.
 
 *(How 014 to 020 went out, on `main` from 2026-10-30 - automated calls, T4,
 T6, T9, T10, T12, T13, T15c, T16 and T17, `AUTO-CALLS.md`.)* None
@@ -159,6 +175,38 @@ docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
 docker compose exec api npm run migrate
 ```
 
+**Seri, the AI agent (Phase 7, `AI-AGENT.md`; A22).** The deploy that brings
+022, 023 and 024 runs them as above: `npm run migrate` straight after the `up` -
+until they have run, the lead page, its timeline and My Callbacks read columns
+that are not there yet. Put `OPENAI_API_KEY` in the server's `.env` before that
+`up -d --build`, which recreates the api and the worker with it; added later,
+recreate both with the same `-f` files (`up -d api worker` - a `restart` keeps
+the old environment). She stays off: 022 seeds `ai_agent` as `off`, and calls
+go on exactly as today. To switch her on - and off again at any time, with no
+restart; recorded in the activity log; `on` is refused without the key:
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.prod.yml exec api npm run ai-agent -- on
+```
+
+A call already with her finishes; the next call follows the switch.
+
+**A call with Seri during a deploy is picked back up** (2026-11-13,
+`AI-AGENT.md` section 2, "When the line drops"): the api hands her line back
+to Twilio as it stops, Caddy holds Twilio's reconnect until the new api is up -
+a few seconds - and she goes on where she was. Still deploy after 5 PM Arizona:
+Caddy itself restarting is untested. **The deploy that brings this also changes
+the Caddyfile** - and since review Q11 (2026-11-23) nothing more is needed for
+it: the Caddyfile is `caddy/Caddyfile`, its folder mounted whole, and Caddy
+runs with `--watch` (`docker-compose.prod.yml`), so a `git pull` that changes
+it reaches Caddy, which reloads it within about ten seconds; a broken one is
+refused, logged by Caddy's `watcher`, and the running config kept - both seen
+on the `caddy:2` image locally. The first deploy with this change recreates
+the caddy container by itself, as its compose settings changed (the site down
+a second or two). Before, the file was mounted on its own: `git pull` replaced
+it, a running Caddy kept the old one, and Caddy had to be recreated by hand
+with `up -d --force-recreate caddy`.
+
 **Calling: run `docker compose exec api npm run twilio:configure`** on the
 first deploy that has calling, and whenever `PUBLIC_URL` or a Twilio setting
 changes. **Only ever on the server.** Run from a laptop with production's
@@ -203,9 +251,39 @@ The API refuses to start in production on any of three things, logging
 `api.refused_start` with the `reason` (`api/startup-checks.ts`): `JWT_SECRET`
 a placeholder or shorter than 32 characters - generate one with
 `openssl rand -hex 32`; `EZT_WEBHOOK_TOKEN` missing or shorter than 16; or the
-seven Twilio settings only partly set - all or none.
+seven Twilio settings only partly set - all or none. And in any environment
+on a broken knowledge file of Seri's (`ai_knowledge_invalid`, `api/index.ts`,
+`AI-AGENT.md` section 5): the files are in the repo, so a broken one is a bug
+found on the first start.
 
-Production runs compiled `dist/`, not ts-node. The `caddy` service is built
+Production runs compiled `dist/`, not ts-node.
+
+### The images
+
+`backend/Dockerfile` has two stages (2026-11-22, `docs/REVIEW-2026-11-22.md`
+H13); the deploy command above is unchanged.
+
+- **`dev`** - every dependency (`npm ci`), the source, the scripts, and the
+  build. Local `docker compose` builds this stage (`target: dev`): the api and
+  the worker run under ts-node with `src/` mounted, and `npm run dev:*`,
+  `dev:auto-call` and the live checks work as before.
+- **`production`** - what the server builds (`docker-compose.prod.yml`,
+  `target: production`): the compiled `dist/` from the stage above, production
+  dependencies only (`npm ci --omit=dev`), and what `npm run migrate` reads
+  (`scripts/migrate.js`, `src/db/migrations/`); run as the unprivileged `node`
+  user. No ts-node, no tests, no dev scripts: `npm run migrate`, `ai-agent`,
+  `twilio:configure`, `openers:send-waiting` and `create-superadmin` run as
+  before; anything `dev:` cannot run there at all (`ts-node: not found`).
+  Before, the server's image carried every dev dependency, the tests and the
+  dev scripts - guarded only by `NODE_ENV` - installed without the lockfile,
+  and ran as root.
+
+Proved before the change: the production image migrated a scratch database
+(24 files), ran `ai-agent`, and started the api with `NODE_ENV=production` -
+health 200, Seri's knowledge loaded; a dev script in it, refused; the local
+`dev` image as before.
+
+The `caddy` service is built
 from `frontend/Dockerfile`, which compiles the React app and copies it into the
 Caddy image, so the same `--build` rebuilds the frontend and the server needs no
 Node install. Real credentials live in `.env`

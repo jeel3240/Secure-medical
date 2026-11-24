@@ -15,6 +15,7 @@
  * It writes rows, so it refuses to run against a database that holds leads.
  * Run it with the others: scripts/live-checks.sh hold-offers
  */
+import { check, failureCount, verdict } from './check';
 import { holdCall, linkAutomatedCall, missTransfer, startAutomatedCall, takeTransfer } from '../src/db/auto-calls';
 import {
   endOffer,
@@ -27,18 +28,6 @@ import { pool } from '../src/db/pool';
 import { setRingable } from '../src/db/presence';
 import { pgUserStore } from '../src/db/users';
 
-let failures = 0;
-
-function check(label: string, actual: unknown, expected: unknown): void {
-  const a = JSON.stringify(actual);
-  const e = JSON.stringify(expected);
-  if (a === e) {
-    console.log(`  ok   ${label}`);
-  } else {
-    failures++;
-    console.log(`  FAIL ${label}\n       expected ${e}\n       actual   ${a}`);
-  }
-}
 
 async function refusedBy(sql: string, params: unknown[] = []): Promise<string> {
   try {
@@ -227,9 +216,13 @@ async function main(): Promise<void> {
     const ben = await freePerson('ben@example.com');
     const offer = await startOffer(ben);
     await pool.query(`ALTER TABLE call_offers DISABLE TRIGGER call_offers_end_once`);
+    // Its longest ring is 60 seconds: at 70 it may still be ringing - live, never expired mid-ring (review M22).
+    await pool.query(`UPDATE call_offers SET offered_at = now() - interval '70 seconds' WHERE id = $1`, [offer!.offerId]);
+    check('an offer 70 seconds old - its ring may be 60 - is still live', (await liveOffer(fourth))?.offerId, offer!.offerId);
+    check('and not expired', await endStaleOffers(), 0);
     await pool.query(`UPDATE call_offers SET offered_at = now() - interval '2 minutes' WHERE id = $1`, [offer!.offerId]);
     await pool.query(`ALTER TABLE call_offers ENABLE TRIGGER call_offers_end_once`);
-    check('an offer open after a minute is no longer live', await liveOffer(fourth), null);
+    check('an offer open after its ring and a half minute more is no longer live', await liveOffer(fourth), null);
     check('and is ended, expired', await endStaleOffers(), 1);
     const { rows } = await pool.query(`SELECT outcome FROM call_offers WHERE id = $1`, [offer!.offerId]);
     check('expired', rows[0].outcome, 'expired');
@@ -239,9 +232,9 @@ async function main(): Promise<void> {
     check('a lead no longer on hold - the busy line - is never offered', await startOffer(cara), null);
   }
 
-  console.log(failures === 0 ? '\nall checks passed' : `\n${failures} check(s) FAILED`);
+  console.log(verdict());
   await pool.end();
-  process.exit(failures === 0 ? 0 : 1);
+  process.exit(failureCount() === 0 ? 0 : 1);
 }
 
 main().catch((err) => {

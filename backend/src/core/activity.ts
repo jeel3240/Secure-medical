@@ -17,6 +17,8 @@ export const ACTIVITY_ACTIONS = [
   'outcome.set',
   // Callbacks. A reschedule and a reopen overwrite the row; the log keeps both sides.
   'callback.booked',
+  // A call back Seri booked, taken by the first agent to pick the lead up (A16).
+  'callback.taken',
   'callback.rescheduled',
   'callback.done',
   'callback.reopened',
@@ -59,7 +61,9 @@ export const ACTIVITY_ACTIONS = [
   'dnc.released',
   /**
    * The "Taking calls" switch went on or off - `detail.on`, and `detail.why`:
-   * `by_hand`, `sign_in` or `sign_out` (T10, AUTO-CALLS.md "Who is free").
+   * `by_hand`, `sign_in` or `sign_out` (T10, AUTO-CALLS.md "Who is free"), or
+   * `missed_transfer` - the server turned it off after a ring was let run out,
+   * with `detail.callId` (T15c).
    */
   'calls.availability_changed',
   /**
@@ -69,6 +73,45 @@ export const ACTIVITY_ACTIONS = [
    * system's doing - someone set `AUTO_CALLS=on`.
    */
   'auto_calls.switched_on',
+  /**
+   * Seri, the AI agent, switched on or off - `detail.from`, what
+   * `settings.ai_agent` said before (null when it was never set), `to`, and
+   * `via: 'command'` (AI-AGENT.md section 7). Run on the server, so no actor.
+   */
+  'ai_agent.switched',
+  /**
+   * Seri took an automated call: the relay's `setup` - `detail.callId` and
+   * `knowledgeVersion`, the version of her knowledge files (A10, AI-AGENT.md
+   * section 9). The system's doing. Once per call.
+   */
+  'ai_agent.started',
+  /**
+   * How Seri's part of a call ended - `detail.callId`, `action` (one of her
+   * five, or `fallback`), and for `end_call` its `reason` (A11, AI-AGENT.md
+   * section 9). The system's doing. Once per call, with `calls.ai_ended_with`.
+   */
+  'ai_agent.ended',
+  /**
+   * The line to our server dropped on a call of Seri's - a restart of the api,
+   * or the network - and Twilio opened the relay again: the call was picked
+   * back up where it was - `detail.callId`, `attempt` (Twilio's count on this
+   * call, null when it gave none), and `ended`: she had already chosen her
+   * action, which was then carried out (AI-AGENT.md section 2, "When the line
+   * drops"). The system's doing. Up to five per call.
+   */
+  'ai_agent.reconnected',
+  /**
+   * A local test script changed a test lead's rows - never on production, where
+   * the scripts refuse to run. `detail.what`: `ask_again` (dev-ask-again: the
+   * open conversation expired and a new one started, `expired` its ids),
+   * `number_moved` (dev-auto-call --again: this lead's number given to a fresh
+   * test lead, `phone` the number it had, `now` the one it has, `freshLeadId`),
+   * or `conversation_given` (dev-auto-call: a lead with none given one, nothing
+   * texted). Run from a laptop, so no actor. Review Q9, 2026-11-23: these wrote
+   * with no record, and the number move overwrote the only record of the
+   * number a lead had.
+   */
+  'dev.test_reset',
   // Sign-in.
   'auth.signed_in',
   'auth.sign_in_failed',

@@ -32,9 +32,17 @@ interface Recorded {
 const recorded: Recorded[] = [];
 let leadInsertReturns: { rows: unknown[]; rowCount: number };
 let dncRows: { rows: unknown[]; rowCount: number };
+/** What `settings` holds for the poller's own two keys - null: no row (review Q6: one answer for every key hid them). */
+let checkpointValue: string | null;
+let overlapValue: string | null;
 
-function answer(sql: string) {
+function answer(sql: string, values?: unknown[]) {
   if (/FROM settings WHERE key = \$1/i.test(sql)) {
+    const key = values?.[0];
+    if (key === 'ezt_poll_checkpoint' || key === 'poll_overlap_minutes') {
+      const value = key === 'ezt_poll_checkpoint' ? checkpointValue : overlapValue;
+      return value === null ? { rows: [], rowCount: 0 } : { rows: [{ value }], rowCount: 1 };
+    }
     return { rows: [{ value: 'Hi {first_name}, reply 1. A, 2. B, 3. C' }], rowCount: 1 };
   }
   // The first question of the lead's flow - db/flows.ts.
@@ -48,7 +56,7 @@ function answer(sql: string) {
 
 const query = jest.fn(async (sql: string, values?: unknown[]) => {
   recorded.push({ sql: sql.replace(/\s+/g, ' ').trim(), values });
-  return answer(sql);
+  return answer(sql, values);
 });
 
 jest.mock('../db/pool', () => ({
@@ -58,7 +66,8 @@ jest.mock('../db/pool', () => ({
   },
 }));
 
-import { pollOnce } from './poller';
+import * as logModule from '../lib/log';
+import { overlapMinutes, pollOnce } from './poller';
 
 function contact(over: Record<string, unknown> = {}) {
   return {
@@ -84,6 +93,9 @@ beforeEach(() => {
   sendMessage.mockResolvedValue({ id: 'sent-1' });
   leadInsertReturns = { rows: [{ id: 42 }], rowCount: 1 };
   dncRows = { rows: [], rowCount: 0 };
+  checkpointValue = null;
+  overlapValue = null;
+  listContacts.mockReset();
   listContacts.mockResolvedValue({ content: [contact()], last: true });
 });
 
@@ -193,6 +205,21 @@ describe('when the opener cannot be sent', () => {
     expect(String(failed?.[1]?.[1])).not.toContain('{first_name}');
   });
 
+  it('a send that timed out may have gone: its reply window starts, so a reply counts - and it is not logged as failed (review H12, M15)', async () => {
+    sendMessage.mockRejectedValue(Object.assign(new Error('timeout of 30000ms exceeded'), { code: 'ECONNABORTED' }));
+    const errors: string[] = [];
+    const spy = jest.spyOn(logModule.log, 'error').mockImplementation((event: string) => {
+      errors.push(event);
+    });
+
+    await pollOnce();
+    spy.mockRestore();
+
+    expect(sqlOf()).toMatch(/SET expires_at = now\(\) \+ \(\$2 \|\| ' days'\)::interval, question_sent_at = now\(\)/i);
+    expect(errors).not.toContain('sms.failed');
+    expect(sqlOf()).not.toMatch(/'failed'/);
+  });
+
   it('keeps nothing when the number is blocked - that send was never attempted', async () => {
     const blocked = Object.assign(new Error('blocked'), { name: 'BlockedNumberError' });
     sendMessage.mockRejectedValue(blocked);
@@ -219,5 +246,118 @@ describe('the checkpoint', () => {
     await pollOnce();
 
     expect(sqlOf()).toMatch(/INSERT INTO settings/i);
+  });
+});
+
+describe('the overlap window (review M16)', () => {
+  it.each([
+    ['5', 5],
+    ['2.5', 2.5],
+    [null, 5],
+    ['soon', 5],
+    ['0', 5],
+    ['-3', 5],
+  ] as const)('poll_overlap_minutes %p: %p minutes - never none, or less', (raw, minutes) => {
+    expect(overlapMinutes(raw)).toBe(minutes);
+  });
+});
+
+describe('the checkpoint, against what EZ Texting lists (review Q6)', () => {
+  const CHECKPOINT = new Date('2026-11-23T18:00:00.000Z');
+  const minutesFrom = (minutes: number) => new Date(CHECKPOINT.getTime() + minutes * 60_000).toISOString();
+  const leadsInserted = () => recorded.filter((r) => /INSERT INTO leads/i.test(r.sql)).map((r) => r.values?.[0]);
+  const written = () => recorded.find((r) => /INSERT INTO settings/i.test(r.sql))?.values;
+
+  beforeEach(() => {
+    checkpointValue = CHECKPOINT.toISOString();
+    overlapValue = '5';
+  });
+
+  it('takes in what is newer than the checkpoint less the overlap, and stops at the first older one', async () => {
+    listContacts.mockResolvedValue({
+      content: [
+        contact({ phoneNumber: '15550000001', createdAt: minutesFrom(2) }),
+        // Inside the overlap: a contact listed late is still taken in.
+        contact({ phoneNumber: '15550000002', createdAt: minutesFrom(-4) }),
+        // Exactly the cutoff, and older: already covered by an earlier poll.
+        contact({ phoneNumber: '15550000003', createdAt: minutesFrom(-5) }),
+        contact({ phoneNumber: '15550000004', createdAt: minutesFrom(-9) }),
+      ],
+      last: false,
+    });
+
+    const stats = await pollOnce();
+
+    expect(leadsInserted()).toEqual(['+15550000001', '+15550000002']);
+    expect(stats.fetched).toBe(4);
+    // Reached the cutoff: no second page asked for.
+    expect(listContacts).toHaveBeenCalledTimes(1);
+    expect(written()).toEqual(['ezt_poll_checkpoint', minutesFrom(2)]);
+  });
+
+  it('reads the next page while every contact is newer, and writes the newest seen', async () => {
+    listContacts
+      .mockResolvedValueOnce({
+        content: [
+          contact({ phoneNumber: '15550000011', createdAt: minutesFrom(10) }),
+          contact({ phoneNumber: '15550000012', createdAt: minutesFrom(8) }),
+        ],
+        last: false,
+      })
+      .mockResolvedValueOnce({ content: [contact({ phoneNumber: '15550000013', createdAt: minutesFrom(6) })], last: true });
+
+    await pollOnce();
+
+    expect(listContacts.mock.calls.map((c) => (c as unknown as [{ page: number }])[0].page)).toEqual([0, 1]);
+    expect(leadsInserted()).toEqual(['+15550000011', '+15550000012', '+15550000013']);
+    expect(written()).toEqual(['ezt_poll_checkpoint', minutesFrom(10)]);
+  });
+
+  it('nothing newer: the same value written back', async () => {
+    listContacts.mockResolvedValue({ content: [contact({ createdAt: minutesFrom(-30) })], last: true });
+
+    await pollOnce();
+
+    expect(leadsInserted()).toEqual([]);
+    expect(written()).toEqual(['ezt_poll_checkpoint', CHECKPOINT.toISOString()]);
+  });
+
+  it('a page listed oldest first is refused, and the checkpoint left alone', async () => {
+    listContacts.mockResolvedValue({
+      content: [contact({ phoneNumber: '15550000021', createdAt: minutesFrom(1) }), contact({ phoneNumber: '15550000022', createdAt: minutesFrom(3) })],
+      last: true,
+    });
+
+    await expect(pollOnce()).rejects.toThrow('oldest-first');
+    expect(leadsInserted()).toEqual([]);
+    expect(written()).toBeUndefined();
+  });
+
+  it('a checkpoint that is missing, or not a time, looks back an hour', async () => {
+    for (const stored of [null, 'not a time']) {
+      recorded.length = 0;
+      checkpointValue = stored;
+      const now = Date.now();
+      listContacts.mockResolvedValue({
+        content: [
+          contact({ phoneNumber: '15550000031', createdAt: new Date(now - 30 * 60_000).toISOString() }),
+          contact({ phoneNumber: '15550000032', createdAt: new Date(now - 2 * 60 * 60_000).toISOString() }),
+        ],
+        last: true,
+      });
+
+      await pollOnce();
+
+      expect([stored, leadsInserted()]).toEqual([stored, ['+15550000031']]);
+    }
+  });
+
+  it('the overlap is read from its own setting', async () => {
+    overlapValue = '10';
+    listContacts.mockResolvedValue({ content: [contact({ phoneNumber: '15550000041', createdAt: minutesFrom(-8) })], last: true });
+
+    await pollOnce();
+
+    expect(leadsInserted()).toEqual(['+15550000041']);
   });
 });

@@ -9,6 +9,7 @@
  * numbers to a browser, which needs Jeel to say so first.
  */
 
+import { parsePage, parseSearch } from '../filters';
 import { Router } from 'express';
 import { requireAuth, requirePasswordChanged, requireRole } from '../auth/middleware';
 import type { AppDeps } from '../deps';
@@ -25,15 +26,6 @@ function parseState(raw: unknown): NonNullable<DncQuery['state']> {
   return raw as NonNullable<DncQuery['state']>;
 }
 
-function parsePage(raw: unknown): number {
-  if (raw === undefined || raw === '') return 1;
-  const n = Number(raw);
-  if (!Number.isInteger(n) || n < 1) {
-    throw new HttpError(400, 'invalid_page', 'page must be a whole number above 0.');
-  }
-  return n;
-}
-
 export function adminDncRouter(deps: AppDeps): Router {
   const router = Router();
   router.use(requireAuth(deps), requirePasswordChanged, requireRole('superadmin'));
@@ -46,7 +38,7 @@ export function adminDncRouter(deps: AppDeps): Router {
 
       res.json(
         await db.listDnc({
-          q: typeof req.query.q === 'string' ? req.query.q : undefined,
+          q: parseSearch(req.query.q),
           page: parsePage(req.query.page),
           state: parseState(req.query.state),
         })

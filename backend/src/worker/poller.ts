@@ -50,9 +50,17 @@ async function readSetting(key: string): Promise<string | null> {
 }
 
 async function readOverlapMs(): Promise<number> {
-  const raw = await readSetting('poll_overlap_minutes');
-  const minutes = raw !== null ? Number(raw) : 5;
-  return (Number.isFinite(minutes) ? minutes : 5) * 60 * 1000;
+  return overlapMinutes(await readSetting('poll_overlap_minutes')) * 60 * 1000;
+}
+
+/**
+ * `poll_overlap_minutes` as used: 5 when missing, not a number, or not above
+ * 0 - none, or less, and a contact listed a moment late was never ingested
+ * (review M16, 2026-11-22), as the interval and expiry readers already refuse.
+ */
+export function overlapMinutes(raw: string | null): number {
+  const minutes = raw === null ? NaN : Number(raw);
+  return Number.isFinite(minutes) && minutes > 0 ? minutes : 5;
 }
 
 function assertNewestFirst(contacts: EztContact[]): void {
@@ -96,7 +104,7 @@ async function isOnDnc(phone: string): Promise<boolean> {
  *
  * That means keeping leads.phone unique, allowing many conversations per lead,
  * and dropping previous_lead_id - "seen before" in the queue is then derived
- * from the prior conversations. Blocked on Jim confirming whether a
+ * from the prior conversations. Blocked on confirming whether a
  * re-delivered phone arrives as a new EZ Texting contact or an update to the
  * existing one, since that decides whether createdAt moves and the poller sees
  * it at all. Wire it with the state machine.
@@ -192,7 +200,8 @@ async function openLead(leadId: number, phone: string, firstName: string | null)
 
     const result = await sendOpener({ id: leadId, phone, firstName }, template);
     if (!result.sent) {
-      log.error('sms.failed', { leadId, key: 'question_1', blocked: result.blocked, err: errText(result.err) });
+      // Timed out, it may have gone - `sms.unconfirmed` said so (db/outbound.ts); not a failure (review M15).
+      if (!result.unconfirmed) log.error('sms.failed', { leadId, key: 'question_1', blocked: result.blocked, err: errText(result.err) });
       return false;
     }
 

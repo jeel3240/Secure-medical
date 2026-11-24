@@ -15,7 +15,9 @@
  */
 
 import type { TakingCallsWhy } from '../api/users/types';
+import { UNDER_WAY_MINUTES } from '../core/auto-dial';
 import { activityInsertSql } from './activity';
+import { CALL_UNDER_WAY_HOURS } from './lead-state';
 import type { Querier } from './sql';
 
 /** How long one "I'm here" holds: four times the browser's 30-second check. */
@@ -27,12 +29,12 @@ export const RINGABLE_SQL = `(u.ringable_until IS NOT NULL AND u.ringable_until 
 /**
  * Whether `u` (users) has a call of theirs still going - one part of
  * `FREE_SQL`. Only one started in the last 2 hours - the window a missed
- * call's "under way" uses (`db/lead-state.ts`) - so a call whose end Twilio
+ * call's "under way" uses (`CALL_UNDER_WAY_HOURS`, `db/lead-state.ts`) - so a call whose end Twilio
  * never reported cannot keep someone busy for good.
  */
 export const ON_A_CALL_SQL = `EXISTS (
   SELECT 1 FROM calls oc
-  WHERE oc.agent_id = u.id AND oc.outcome IS NULL AND oc.started_at > now() - interval '2 hours'
+  WHERE oc.agent_id = u.id AND oc.outcome IS NULL AND oc.started_at > now() - interval '${CALL_UNDER_WAY_HOURS} hours'
 )`;
 
 /**
@@ -46,6 +48,9 @@ export const ON_A_CALL_SQL = `EXISTS (
 export const JUST_OFF_A_CALL_SQL = `(NOT ${RINGABLE_SQL} AND EXISTS (
   SELECT 1 FROM calls jc
   WHERE jc.agent_id = u.id AND jc.ended_at > now() - interval '${RINGABLE_SECONDS} seconds'
+    -- A lead's call they never answered is no call to write a note on: someone away, switch on, kept every "yes"
+    -- waiting on hold for two minutes (review M24, 2026-11-22).
+    AND NOT (jc.direction = 'inbound' AND jc.outcome = 'missed')
 ))`;
 
 /**
@@ -57,15 +62,20 @@ export const JUST_OFF_A_CALL_SQL = `(NOT ${RINGABLE_SQL} AND EXISTS (
  * - "Taking calls" switched on (T10) - the switch decides, not the role,
  * - a browser open that can be rung (`RINGABLE_SQL`) - which also means no
  *   call, ring or note box open on its screen,
- * - and no call of theirs still going (`ON_A_CALL_SQL`), checked here too,
+ * - no call of theirs still going (`ON_A_CALL_SQL`), checked here too,
  *   so a call counts the moment it starts rather than at the browser's next
- *   word.
+ *   word,
+ * - and no lead on hold ringing them now (`call_offers`, T17): a transfer or a
+ *   call back ringing them as well, in the seconds before their browser says
+ *   busy, is declined by it - and a declined offer shuts them out of that held
+ *   lead (review H10, 2026-11-22).
  */
 export const FREE_SQL = `(
   u.is_active
   AND u.taking_calls
   AND ${RINGABLE_SQL}
   AND NOT ${ON_A_CALL_SQL}
+  AND NOT EXISTS (SELECT 1 FROM call_offers fo WHERE fo.agent_id = u.id AND fo.ended_at IS NULL)
 )`;
 
 /**
@@ -75,17 +85,24 @@ export const FREE_SQL = `(
  * on that call - but while it rings their browsers say busy and no call is
  * theirs, so they count as neither free nor on a call. A second "yes" then
  * waits on hold for them rather than hearing the busy line at once.
+ *
+ * The "yes" is a script answer whose choice ends in a transfer, or - on a
+ * call Seri took, which keeps no script answer - her part ending with
+ * `transfer_to_agent` (added 2026-11-13, found in the doc check after A20).
  */
 export const TRANSFER_RINGING_SQL = `EXISTS (
   SELECT 1 FROM calls tc
   WHERE tc.direction = 'automated' AND tc.agent_id IS NULL AND tc.held_at IS NULL
     AND tc.script_result IS NULL AND tc.outcome IS NULL
-    AND tc.started_at > now() - interval '10 minutes'
+    AND tc.started_at > now() - interval '${UNDER_WAY_MINUTES} minutes'
     AND tc.id IS DISTINCT FROM $1::int
-    AND EXISTS (
-      SELECT 1 FROM call_answers ta
-      JOIN call_choices tch ON tch.step_id = ta.step_id AND tch.key = ta.choice_key
-      WHERE ta.call_id = tc.id AND tch.ending = 'transfer'
+    AND (
+      tc.ai_ended_with = 'transfer_to_agent'
+      OR EXISTS (
+        SELECT 1 FROM call_answers ta
+        JOIN call_choices tch ON tch.step_id = ta.step_id AND tch.key = ta.choice_key
+        WHERE ta.call_id = tc.id AND tch.ending = 'transfer'
+      )
     )
 )`;
 

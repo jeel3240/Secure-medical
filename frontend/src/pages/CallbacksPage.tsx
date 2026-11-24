@@ -258,7 +258,9 @@ export function CallbacksPage() {
                         <TierSignal tier={row.lead.tier} />
                       </td>
                       {everyone && <td>{row.agentName || '-'}</td>}
-                      <td className="callbacks__note">{row.latestNote ?? '-'}</td>
+                      {/* The newest note on the lead; on a call back Seri
+                          booked with none since, her line for whoever calls (A16). */}
+                      <td className="callbacks__note">{row.latestNote ?? (row.note ? `Seri: ${row.note}` : '-')}</td>
                       <td className="cell-action callbacks__actions">
                         {rescheduling === row.id ? (
                           <div className="callbacks__reschedule">

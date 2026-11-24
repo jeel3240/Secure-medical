@@ -14,10 +14,11 @@
  *
  *   docker compose exec postgres psql -U app -d postgres -c 'CREATE DATABASE retry_check'
  *   DATABASE_URL=postgres://app:app@localhost:5433/retry_check node scripts/migrate.js
- *   DATABASE_URL=postgres://app:app@localhost:5433/retry_check REDIS_URL=x JWT_SECRET=x \
+ *   DATABASE_URL=postgres://app:app@localhost:5433/retry_check JWT_SECRET=x \
  *     EZT_USERNAME=x EZT_PASSWORD=x EZT_GROUP=x EZT_SEND_GROUP=x \
  *     npx ts-node --transpile-only scripts/retry-openers-live-check.ts
  */
+import { check, failureCount, verdict } from './check';
 import axios from 'axios';
 
 let sent: { to: string[]; body: string }[] = [];
@@ -42,18 +43,6 @@ import { pool } from '../src/db/pool';
 import { retryFailedOpeners } from '../src/worker/retry-openers';
 import { blockNumber, DNC_REASONS } from '../src/db/dnc';
 
-let failures = 0;
-
-function check(label: string, actual: unknown, expected: unknown): void {
-  const a = JSON.stringify(actual);
-  const e = JSON.stringify(expected);
-  if (a === e) {
-    console.log(`  ok   ${label}`);
-  } else {
-    failures++;
-    console.log(`  FAIL ${label}\n       expected ${e}\n       actual   ${a}`);
-  }
-}
 
 async function refuseIfNotEmpty(): Promise<void> {
   const { rows } = await pool.query(`SELECT count(*)::int AS n FROM leads`);
@@ -310,6 +299,26 @@ async function main(): Promise<void> {
     check('and the attempt is remembered', attempts, 2);
   }
 
+  console.log('\nwhen the send times out - it may have gone (review H12, M15)');
+  {
+    sent = [];
+    const lead = await leadWithFailedOpener('+15550000909', { minutesAgo: 60, attempts: 1 });
+    failNext = Object.assign(new Error('timeout of 30000ms exceeded'), { code: 'ECONNABORTED' });
+
+    const stats = await retryFailedOpeners();
+
+    check('counted as unconfirmed, never failed', [stats.unconfirmed, stats.failed], [1, 0]);
+    const conversation = (
+      await pool.query(
+        `SELECT question_sent_at IS NOT NULL AS asked, expires_at IS NOT NULL AS "windowRuns" FROM conversations WHERE lead_id = $1`,
+        [lead]
+      )
+    ).rows[0];
+    check('its reply window runs: a reply counts as an answer, and the robot can call', conversation, { asked: true, windowRuns: true });
+    await retryFailedOpeners();
+    check('and it is never sent again', sent.some((s) => s.to[0] === '15550000909'), false);
+  }
+
   console.log('\nthe oldest lead goes first');
   {
     sent = [];
@@ -329,9 +338,9 @@ async function main(): Promise<void> {
     check('exactly these two were sent', sent.map((s) => s.to[0]).sort(), ['15550000907', '15550000908']);
   }
 
-  console.log(failures === 0 ? '\nall checks passed' : `\n${failures} check(s) FAILED`);
+  console.log(verdict());
   await pool.end();
-  process.exit(failures === 0 ? 0 : 1);
+  process.exit(failureCount() === 0 ? 0 : 1);
 }
 
 main().catch((err) => {

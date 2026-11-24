@@ -4,32 +4,21 @@
  * The check that matters here is the one a mock would have got wrong: the
  * poller's liveness comes from `settings.updated_at`, not from the checkpoint's
  * value. The value is the newest contact's createdAt, which stands still on a
- * quiet account while the worker polls happily every minute. Reading it would
+ * quiet account while the worker polls happily every 30 seconds. Reading it would
  * report a healthy system as dead every time leads stop arriving.
  *
  * It writes rows, so it refuses to run against a database that holds any:
  *
  *   docker compose exec postgres psql -U app -d postgres -c 'CREATE DATABASE health_check'
  *   DATABASE_URL=postgres://app:app@localhost:5433/health_check node scripts/migrate.js
- *   DATABASE_URL=postgres://app:app@localhost:5433/health_check REDIS_URL=x JWT_SECRET=x \
+ *   DATABASE_URL=postgres://app:app@localhost:5433/health_check JWT_SECRET=x \
  *     EZT_USERNAME=x EZT_PASSWORD=x EZT_GROUP=x EZT_SEND_GROUP=x \
  *     npx ts-node --transpile-only scripts/health-live-check.ts
  */
+import { check, failureCount, verdict } from './check';
 import { pool } from '../src/db/pool';
 import { getHealth, type HealthCheck } from '../src/db/health';
 
-let failures = 0;
-
-function check(label: string, actual: unknown, expected: unknown): void {
-  const a = JSON.stringify(actual);
-  const e = JSON.stringify(expected);
-  if (a === e) {
-    console.log(`  ok   ${label}`);
-  } else {
-    failures++;
-    console.log(`  FAIL ${label}\n       expected ${e}\n       actual   ${a}`);
-  }
-}
 
 async function refuseIfNotEmpty(): Promise<void> {
   const { rows } = await pool.query(`SELECT count(*)::int AS n FROM leads`);
@@ -202,9 +191,9 @@ async function main(): Promise<void> {
     check('a later text going out: ok again', named((await getHealth()).checks, 'sending')?.status, 'ok');
   }
 
-  console.log(failures === 0 ? '\nall checks passed' : `\n${failures} check(s) FAILED`);
+  console.log(verdict());
   await pool.end();
-  process.exit(failures === 0 ? 0 : 1);
+  process.exit(failureCount() === 0 ? 0 : 1);
 }
 
 main().catch((err) => {

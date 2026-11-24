@@ -9,8 +9,12 @@ going out. Two things add up: EZ Texting lists a new contact some time after
 creating it - that one was not visible 47 seconds in, and was 107 seconds in -
 and the next check can be a whole interval away. Nothing on our side shortens
 the first; halving the interval halves the second. The overlap window already
-means a contact that shows up late is never missed, only picked up a round
-later.
+means a contact that shows up late is not missed, only picked up a round
+later - **as long as it shows up within the overlap**, 5 minutes after its
+`createdAt`. One that EZ Texting lists later than that, or one added to the
+group more than 5 minutes after it was created (a contact moved into the group
+by hand, say), is older than the cutoff by the time it is seen, and is never
+taken in (review R12, 2026-11-23).
 
 Code: `backend/src/worker/poller.ts` and `backend/src/worker/index.ts`. Sending
 question 1 is `backend/src/worker/opener.ts`, shared with the opener retry
@@ -25,7 +29,10 @@ on one does not stop the others. With automated calls on (`AUTO_CALLS`) and
 calling set up, a fifth, last: the robot's calls (`worker/auto-calls.ts`,
 T20, `AUTO-CALLS.md` "When a lead is called") - in its own try/catch too, so
 a failure placing calls never stops the poll, nor the poll's the calls. It
-runs after the others in the same tick, so a slow poll delays it. **Every call to EZ
+runs after the others in the same tick, so a slow poll delays it. With Seri,
+the AI agent, switched on, it first asks whether she can take calls - OpenAI
+answering, at most once a minute, and her last calls not all falling back
+(A17, `AI-AGENT.md` section 6). **Every call to EZ
 Texting gives up after 30 seconds** (2026-10-06): without a limit one hung
 connection stopped all four, with nothing in the logs. Expiring is local work that must keep happening while EZ Texting is
 unreachable. The sweep's rules are in STATE-MACHINE.md, "Expiry"; what the
@@ -47,7 +54,10 @@ filter would have done server-side.
 ## A cycle
 
 1. Read `ezt_poll_checkpoint` from `settings`. Absent means look back one hour.
-2. Subtract `poll_overlap_minutes` (5) to get the cutoff.
+2. Subtract `poll_overlap_minutes` (5) to get the cutoff - 5 too when the
+   setting is missing, not a number, or not above 0 (`overlapMinutes`,
+   2026-11-22, review M16): none, and a contact listed a moment late was never
+   taken in.
 3. Request page 0 of the group, `sort=createdAt,desc`, 50 per page.
 4. Walk the page. Stop the whole cycle at the first contact at or older than the
    cutoff - everything below it is older still.
@@ -70,7 +80,10 @@ filter would have done server-side.
 
 **The 5 minute overlap.** Deliberately re-reads contacts already processed, in
 case one becomes visible slightly after its `createdAt`. Re-reading is free
-because the insert dedupes.
+because the insert dedupes. It covers a delay of up to 5 minutes, no more: the
+poll stops at the first contact older than the cutoff, so a contact that
+appears later than that - listed late, or moved into the group - is never
+reached (the top of this page).
 
 **`ON CONFLICT (phone) DO NOTHING`.** The API has no per-contact id, so phone is
 the only stable identity. This is what stops a restart from duplicating every
@@ -81,6 +94,15 @@ verified against `groups[]` rather than trusted from the filter.
 
 **Checkpoint written last, and only on success.** A throw anywhere leaves it
 untouched, so the next cycle re-covers the same ground rather than skipping it.
+
+*Tested since 2026-11-23 (review Q6):* `worker/poller.test.ts` reads the
+checkpoint and the overlap as two settings - before, its stub answered every
+key alike, so neither was ever tested. It now proves the cutoff (a contact
+inside the overlap taken in; one at the cutoff or older not, and no next page
+asked for), paging while every contact is newer, the newest time written back,
+the same value on a quiet poll, an oldest-first page refused with nothing
+written, a missing or unreadable checkpoint looking back an hour, and the
+overlap read from its own setting.
 
 **A failed opener does not fail the cycle.** The poller's `openLead` catches
 every error from `sendOpener`. The lead is already committed by then, so throwing would abandon the
@@ -177,7 +199,16 @@ steady state `inserted=0` with a small `skipped` is normal and correct.
 | `EZT_SOURCE` | Defaults to `API`, how partner leads arrive. `WebInterface` for contacts added by hand. |
 | `EZT_SEND_GROUP` | Unset means `sendMessage` throws, so no opener goes out. |
 | `poll_interval_seconds` | In `settings`, read each tick, so it changes without a restart. 30 since migration 005; 60 before. |
-| `poll_overlap_minutes` | In `settings`. |
+| `poll_overlap_minutes` | In `settings`. 5 when missing, not a number, or not above 0. |
+
+**One cycle at a time, however many workers run** (2026-11-22, review M14).
+Each cycle - the poll, the expiry sweep, the opener retry, transcripts and the
+robot's calls - runs holding a Postgres advisory lock (`withTryLock`,
+`db/locks.ts`, the dialler's own lock built on it). A second worker on the same
+database, started by mistake, skips its cycle and says so once
+(`worker.another_running`) rather than polling and retrying alongside the first
+- which sent a retried first question twice. The lock is the session's, so a
+worker that dies lets it go with its connection.
 
 ## Retrying a failed opener
 

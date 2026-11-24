@@ -8,7 +8,7 @@
 
 import { pool } from './pool';
 import { questionShort } from '../core/questions';
-import { CLOSED_SQL, MISSED_CALL_SQL, MISSED_YES_SQL, phoneStoppedQuestionsAtSql } from './lead-state';
+import { CLOSED_SQL, MISSED_CALL_SQL, MISSED_YES_SQL, newestConversation, phoneStoppedQuestionsAtSql, RECEIVED_SQL } from './lead-state';
 import { answerChips, scoreBreakdown, type SavedAnswer } from '../core/score-breakdown';
 import type { AnswerChip, BreakdownLine } from '../core/score-breakdown';
 
@@ -60,8 +60,15 @@ export interface LeadDetail {
    */
   closed: { by: string | null; at: string } | null;
 
+  /**
+   * The call back Seri booked, while it is open - A15, AI-AGENT.md section 4:
+   * when, her one-line reason, and whose it is - null while it is open to
+   * everyone. The earliest, should there be more than one.
+   */
+  aiCallback: { at: string; note: string | null; agentName: string | null } | null;
+
   flags: {
-    /** A live dnc_list row: blocks every action, not just SMS. */
+    /** A live dnc_list row: no text and no call, ours or the robot's; a note, a call back and picking it up still work. */
     dnc: boolean;
     /** Two unclear replies; the raw messages are worth reading. */
     needsReview: boolean;
@@ -89,7 +96,7 @@ export interface LeadDetail {
 const SQL = `
   SELECT
     l.id, l.phone, l.first_name, l.last_name, l.email, l.source,
-    COALESCE(l.ezt_added_at, l.created_at) AS received_at,
+    ${RECEIVED_SQL} AS received_at,
     l.has_unread_inbound,
     c.id   AS conversation_id,
     c.status, c.step, c.score, c.tier, c.end_outcome,
@@ -110,16 +117,15 @@ const SQL = `
     ${MISSED_CALL_SQL} AS missed_call,
     ${MISSED_YES_SQL} AS missed_yes,
     od.created_at AS outcome_at,
-    ou.name AS outcome_by
+    ou.name AS outcome_by,
+    ac.scheduled_at AS ai_callback_at,
+    ac.note AS ai_callback_note,
+    ac.agent_name AS ai_callback_agent
   FROM leads l
-  LEFT JOIN LATERAL (
-    SELECT c.id, c.status, c.step, c.flow_id, c.current_question_id, c.end_outcome,
-           c.score, c.tier, c.expires_at, c.agent_took_over_at, c.created_at
-    FROM conversations c
-    WHERE c.lead_id = l.id
-    ORDER BY c.created_at DESC, c.id DESC
-    LIMIT 1
-  ) c ON true
+  LEFT JOIN ${newestConversation(
+    `c.id, c.status, c.step, c.flow_id, c.current_question_id, c.end_outcome,
+           c.score, c.tier, c.expires_at, c.agent_took_over_at, c.created_at`
+  )}
   LEFT JOIN flows f ON f.id = c.flow_id
   -- The question it is on: by id, or for a row that names none, by its flow and position.
   LEFT JOIN LATERAL (
@@ -137,6 +143,14 @@ const SQL = `
     LIMIT 1
   ) od ON true
   LEFT JOIN users ou ON ou.id = od.agent_id
+  LEFT JOIN LATERAL (
+    SELECT acb.scheduled_at, acb.note, au.name AS agent_name FROM callbacks acb
+    -- Taken by someone since deactivated: open to everyone again (D2).
+    LEFT JOIN users au ON au.id = acb.agent_id AND au.is_active
+    WHERE acb.lead_id = l.id AND acb.reason = 'ai_booked' AND acb.done_at IS NULL
+    ORDER BY acb.scheduled_at, acb.id
+    LIMIT 1
+  ) ac ON true
   WHERE l.id = $1
 `;
 
@@ -204,6 +218,10 @@ export async function getLeadDetail(leadId: number): Promise<LeadDetail | null> 
 
     closed: r.is_closed
       ? { by: r.outcome_by ?? null, at: r.outcome_at?.toISOString() ?? '' }
+      : null,
+
+    aiCallback: r.ai_callback_at
+      ? { at: r.ai_callback_at.toISOString(), note: r.ai_callback_note ?? null, agentName: r.ai_callback_agent ?? null }
       : null,
 
     flags: {

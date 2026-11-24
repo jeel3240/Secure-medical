@@ -6,6 +6,7 @@ import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { PublicUser } from '../api/types';
 import { useAuth } from '../auth/store';
+import { CONFIG_RETRY_MS } from '../lib/incoming-call';
 import { TakingCalls } from './TakingCalls';
 
 const getCallConfig = vi.fn();
@@ -62,6 +63,19 @@ describe('when it shows', () => {
     render(<TakingCalls />);
     await act(async () => undefined);
     expect(screen.queryByRole('switch')).toBeNull();
+  });
+
+  it('asked again until the config answers - a page opened while the API restarted still gets its switch (review M28)', async () => {
+    vi.useFakeTimers();
+    getCallConfig.mockRejectedValueOnce(new Error('restarting'));
+    render(<TakingCalls />);
+    await act(async () => undefined);
+    expect(screen.queryByRole('switch')).toBeNull();
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(CONFIG_RETRY_MS);
+    });
+    expect(screen.getByRole('switch')).toBeTruthy();
+    vi.useRealTimers();
   });
 });
 

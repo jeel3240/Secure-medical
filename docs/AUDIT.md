@@ -4,8 +4,10 @@ Built 2026-10-01. The company's policy is that data is kept as proof - Jeel's
 instruction that day: whatever action happens, all of it should be tracked.
 
 Code: `backend/src/core/activity.ts` (the list of actions), `db/activity.ts`
-(the writer), migration `006_activity_log.sql`. Proof:
-`scripts/activity-live-check.ts`, 42 checks against a real Postgres.
+(the writer), migration `006_activity_log.sql`. Proof: every one of the 40
+actions is recorded in a test - against a real Postgres in a live check, all
+but the six account actions, which go through the routes' own recorder
+("Testing", below).
 
 ## What was being lost
 
@@ -41,14 +43,15 @@ it.
 |---|---|---|
 | `lead.picked_up` | An agent picks a lead up. Resuming a lead already held is not a new pick-up and records nothing. Taking an automated call's transfer picks the lead up too, from whoever held it (T15a), and so does taking a call back that rang everyone free (T19) | `tookOverFrom`, when taken from a deactivated agent - or, with `via: 'transfer'` or `via: 'call_back'` and the `callId`, from any agent |
 | `lead.released` | The Release button (until 2026-10-08, Back to queue); a superadmin's force-release; an outcome letting go of the lead | `heldSince`, `forced`, `because: 'outcome'` |
-| `reply.read` | An unread reply is opened - once, by whoever cleared it | |
+| `reply.read` | An unread reply is opened - once, by whoever cleared it - or cleared by an outcome saved on the lead (2026-11-22, review M20) | `because: 'outcome'` when an outcome cleared it |
 | `note.added` | A note is saved | `noteId` - the text stays in `notes`, not copied |
 | `outcome.set` | Closed or DNC is saved | `value`, `dispositionId` |
-| `callback.booked` | A callback is booked. Actor is who booked it, subject who it is for. No actor when the system booked it for a missed call | `callbackId`, `scheduledAt`, `because: 'missed_call'` |
-| `callback.rescheduled` | Its time changes | `from`, `to` |
-| `callback.done` | Marked done, finished by an outcome, or - a missed call's callback - by the lead being got back to. Actor is who did that | `scheduledAt`, `because`: `outcome`, `called_back`, `texted_back` or `answered` |
-| `callback.reopened` | A done callback is un-done | `wasDoneAt` |
-| `sms.sent`, `sms.failed`, `sms.blocked` | An agent's own text. `blocked` leaves no message row, so the log is its only record | `sent`: `messageId`, `tookOver`. `failed`, `blocked`: nothing more |
+| `callback.taken` | A call back nobody had became an agent's: one Seri booked (A16), or since 2026-11-23 one whose agent was deactivated, with `detail.from` that agent (review D2) - the first to pick the lead up takes it (`QUEUE.md`). Written in the same statement as the pick-up. Actor and subject are that agent. On the lead's timeline | `callbackId`, `scheduledAt` |
+| `callback.booked` | A callback is booked. Actor is who booked it, subject who it is for. No actor when the system booked it for a missed call, nor when Seri booked it on the automated call (A15) - hers is for the lead's holder when an active agent holds the lead, and otherwise open to everyone, with no subject (the agent who takes it is in `callback.taken`); written in the same statement that books it | `callbackId`, `scheduledAt`; a missed call's `because: 'missed_call'`; Seri's: `via: 'seri'`, `callId`, `timeZone` - the lead's zone she agreed it in. Her one-line reason is on the callback (`note`), not here |
+| `callback.rescheduled` | Its time changes | `callbackId`, `from`, `to` |
+| `callback.done` | Marked done, finished by an outcome, or - a missed call's callback - by the lead being got back to. Actor is who did that | `callbackId`, `scheduledAt`, and `because`: `outcome`, `called_back`, `texted_back` or `answered` - none when marked done by hand on My Callbacks |
+| `callback.reopened` | A done callback is un-done | `callbackId`, `wasDoneAt` |
+| `sms.sent`, `sms.failed`, `sms.blocked` | An agent's own text. `failed` is written in the same statement as the failed message it records (2026-11-22, review M12 - two writes before). `blocked` leaves no message row, so the log is its only record - and since 2026-11-22 an automated text refused for a blocked number is recorded the same way, by nobody: the system (`db/outbound.ts`, in the statement that drops its row; review M41) | `sent`: `messageId`, `tookOver`. `failed`, `blocked`: nothing more |
 | `call.started`, `call.ended`, `call.refused` | A call. A refused call leaves no `calls` row, so the log is its only record. An automated call's are the system's (no actor) and say `direction: automated` (T12): refused as `not_found`, `blocked`, `already_called`, `no_script` or `not_test_number`; ended as `failed` with `reason: twilio_refused`, `twilioStatus` and `twilioCode` when Twilio would not place it for the lead's number - `AUTO-CALLS.md`, "How a call is placed" - or `reason: not_placed`, with the same, when it refused for our account's reasons and the lead's call was not used (T28, "When Twilio refuses"), or `reason: no_webhook` when its placing was never confirmed and no webhook named it within 10 minutes (T20, "Traffic"; not the lead's call either) | `callSid`, `callId`, `outcome`, `durationSec`, `reason` |
 | `call.incoming` | A lead rings our number and an agent is rung - the subject is that agent; or, for a lead nobody owns, everyone free (T19) - no subject. From a number we hold no lead for there is no `calls` row, so the log is its only record | `callId`, `callSid`; `ring: 'group'` and `rung`, how many, when everyone free rang; for an unknown number, `phone` and `known: false` |
 | `call.taken` | A person accepted a lead's call that rang everyone free - the call is theirs from then, and so is the lead (`lead.picked_up`, `via: 'call_back'`) (T19, `TWILIO.md` "Who rings"). Once per call: the first to accept. Without it, nothing would say who took a call no one was rung for by name | `callId`, `callSid`; `tookOverFrom` when the lead was someone else's |
@@ -65,6 +68,11 @@ it.
 | `user.created`, `user.updated`, `user.password_reset` | A superadmin changes an agent's account | `created`: `email`, `name`, `role`. `updated`: `changes`, each field as `{ from, to }`. `password_reset`: nothing more. Never a password |
 | `calls.availability_changed` | The "Taking calls" switch went on or off (T10, `AUTO-CALLS.md` "Who is free") - by the person, or because they signed in or out; or off by the system because they let a transfer ring out (T15c) - then no actor, the person its subject. Only when it really changed | `on`, and `why`: `by_hand`, `sign_in`, `missed_transfer` (with the `callId`) or `sign_out` |
 | `auto_calls.switched_on` | The worker started placing automated calls after they were off, or for the first time - leads that arrive after it are called before those already waiting (T20, T27, `AUTO-CALLS.md` "When a lead is called"). The system's doing - someone set `AUTO_CALLS=on`. It overwrites `settings.auto_calls_since`, so the time it replaced is kept here | `since`, `previousSince` |
+| `ai_agent.switched` | Seri, the AI agent, switched on or off with the server command, `npm run ai-agent -- on\|off` (A01, `AI-AGENT.md` section 7). Only when it really changed. Run by someone on the server, who is no user of the app, so no actor. It overwrites `settings.ai_agent`, so what it said before is kept here | `from` (null when never set), `to`, `via: 'command'` |
+| `ai_agent.started` | Seri took an automated call: Twilio's relay connected and named the call (A10, `AI-AGENT.md` section 9). Written in the same transaction as `calls.ai_started_at`, once per call. The system's doing, so no actor. What was said is in `call_ai_turns`, never here | `callId`, `knowledgeVersion` |
+| `dev.test_reset` | A local test script changed a test lead's rows: `ask_again` (`dev-ask-again`: the open conversation expired, a new one started), `number_moved` (`dev-auto-call --again`: this lead's number given to a fresh test lead - `phone`, the number it had, `now`, the one it has), `conversation_given` (`dev-auto-call`: a lead with none given one, nothing texted). The scripts refuse production, so this is only ever on a laptop. Since 2026-11-23 (review Q9): they wrote with no record, and the number move overwrote the only record of the number a lead had |
+| `ai_agent.reconnected` | The line to our server dropped on a call of Seri's - the api restarting, or the network - and Twilio opened the relay again: the call was picked back up where it was (`AI-AGENT.md` section 2, "When the line drops"). Written in the same transaction that reads the call's turns. The system's doing, so no actor. Up to five per call, as Twilio reconnects | `callId`, `attempt` (Twilio's count on the call, or null), `ended` - she had already chosen her action, which was carried out |
+| `ai_agent.ended` | How Seri's part of the call ended - one of her five actions, or `fallback` (A11, `AI-AGENT.md` section 9). Written in the same transaction as `calls.ai_ended_with`, once per call. The system's doing, so no actor. A call back's time and reason are in the `action` turn of `call_ai_turns`. Since A12 also when the relay ends her part itself: `end_call` for silence (`no_response`) or the time limit (`time_limit`), and `fallback` when she failed - what the robot counts (A17) | `callId`, `action`, `reason` for `end_call`, and `why` for `fallback` - `model_failed`, `model_slow`, `socket_error`, `relay_failed`, and since A14 `twilio_failed`: Twilio's side failed before the relay recorded anything, written by `/auto/ai-after`; and, should Twilio hand back an end that cannot be read, `no_handoff`, `unreadable_handoff` or `unknown_action` (`fromHandoff`, `ai/actions.ts`) |
 
 The list is `ACTIVITY_ACTIONS` in `core/activity.ts`. A new action is added
 there first, so the vocabulary stays in one place.
@@ -76,11 +84,14 @@ missed call, and the link a lead asked for on the automated call), a lead arrivi
 (`leads`), a conversation completing or expiring (`conversations`), and each
 answer a lead gives (`conversation_answers` - add-only, and tied to the
 inbound text it was read from; on an automated call, `call_answers` - add-only
-too, with what Twilio heard, since migration 015), and each time a lead on
+too, with what Twilio heard, since migration 015; and each turn of Seri's
+conversation, `call_ai_turns` - add-only, since 022), and each time a lead on
 hold rang someone who came free (`call_offers`, since 020 - who, when, and how
 it ended). When automated calls were last switched on (`auto_calls_since` in
 `settings`, T20) is overwritten at each switch-on, so each switch-on is
-recorded with the time it replaced - `auto_calls.switched_on`. Each robot call
+recorded with the time it replaced - `auto_calls.switched_on`. The AI agent's
+switch (`ai_agent` in `settings`) is overwritten at each change, so each change
+is recorded with what it replaced - `ai_agent.switched`. Each robot call
 the worker places is its `call.started`, as one placed by hand. A reply that was not counted because it
 arrived before our text had gone out is kept in `messages` like any other,
 and written to the application log as `reply.before_our_text` (`LOGGING.md`) -
@@ -116,7 +127,8 @@ lead nobody holds writes nothing.
 ### It cannot be altered
 
 A trigger on `activity_log`, on `webhook_events`, on `conversation_answers`
-(since migration 012) and on `call_answers` (since 015) refuses every `UPDATE`
+(since migration 012), on `call_answers` (since 015) and on `call_ai_turns` (since
+022 - every turn of Seri's conversations, `AI-AGENT.md`) refuses every `UPDATE`
 and `DELETE`:
 
 ```
@@ -146,8 +158,18 @@ ignore.
 | `payload` | The body, as `JSON` |
 
 **`JSON`, not `JSONB`.** JSONB reorders keys and drops duplicates; this is kept
-as proof of what was sent, so it is stored as the text that arrived. The live
-check caught the difference.
+as proof of what was sent, so it keeps the keys in the order they came. The
+live check caught the difference.
+
+**What is kept is the body as our server read it, not the request's own
+bytes** (review R13, 2026-11-23). EZ Texting's JSON is parsed by
+`express.json` and Twilio's form by `express.urlencoded` before the route sees
+it, and the archive writes that back out as JSON (`archiveWebhook`,
+`db/activity.ts`). Every field and value is there; the whitespace, how a
+number was written, and a key EZ Texting sent twice - JSON parsing keeps the
+last - are not. (A field Twilio sends twice comes back as a list of both.) Keeping
+the raw bytes would mean reading the body before the parser does; not done, as
+nothing has needed more than the fields.
 
 - **EZ Texting**: archived after the path token is checked and outside the
   handler's transaction, so a request that is ignored or fails is still on
@@ -221,11 +243,15 @@ database and has no screen yet.
 
 | What | Where |
 |---|---|
-| Every action leaves its record, the poller's block of an opted-out arrival included; nothing is recorded when nothing changed; the log and the archive refuse edits and deletes; a lead with history cannot be deleted | `scripts/activity-live-check.ts` |
-| Calls: `call.incoming`, `call.missed`, the callback the system books and what finishes it (`called_back`, `answered`) | `scripts/calls-live-check.ts` |
-| `callback.done` with `texted_back` | `scripts/agent-sms-live-check.ts` |
+| 16 of the 40 actions leave their record - a lead picked up and released, a reply read, a note, an outcome, a call back booked, moved, done and reopened, a call started, ended and refused, a block and its release, the poller's block of an opted-out arrival, Seri's switch, a sign-in; nothing is recorded when nothing changed; the log and the archive refuse edits and deletes; a lead with history cannot be deleted | `scripts/activity-live-check.ts` |
+| Calls: `call.incoming`, `call.missed`, `call.taken`, `call.answered_by`, `call.recorded`, `call.transcribed` and, given up, `call.transcript_failed` (since 2026-11-23); the callback the system books and what finishes it (`called_back`, `answered`) | `scripts/calls-live-check.ts` |
+| An agent's own text: `sms.sent` with the take-over, and `sms.blocked` for a blocked number (both since 2026-11-23), `sms.failed`; `callback.done` with `texted_back` | `scripts/agent-sms-live-check.ts` |
+| An automated text refused for a blocked number, `sms.blocked` by nobody | `scripts/lead-texts-live-check.ts` |
+| The robot's calls: `call.transferred`, `call.held` | `scripts/auto-calls-live-check.ts` |
+| `calls.availability_changed`; `auto_calls.switched_on`; `callback.taken` | `scripts/presence-live-check.ts`; `auto-dial-live-check.ts`; `queue-live-check.ts` |
+| Seri's part: `ai_agent.started`, `ai_agent.ended`, `ai_agent.reconnected` | `scripts/ai-agent-live-check.ts`, and `npm run e2e` |
 | The claim race still holds with the record in the statement | `scripts/claims-live-check.ts` |
-| Sign-ins, failures and account changes, and that no password is ever recorded | `src/api/__tests__/activity.test.ts` |
+| Sign-ins, failures and account changes, and that no password is ever recorded - `auth.sign_in_failed`, `auth.signed_out`, `auth.password_changed`, `user.created`, `user.updated`, `user.password_reset` proved here only, through the routes' recorder with no database (review R4, 2026-11-23) | `src/api/__tests__/activity.test.ts` |
 | The archive: kept for an ignored request, not kept for a wrong token | `src/api/__tests__/webhooks.test.ts`, `calls.test.ts` |
 | The timeline shows log entries once, not twice | `scripts/timeline-live-check.ts` |
 | The wording on screen | `frontend/src/components/Timeline.test.tsx` |

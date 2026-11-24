@@ -133,6 +133,20 @@ describe('the filters an agent sets', () => {
     expect(askedFor().source).toEqual(['CORE-G-27', 'CORE-G-31']);
   });
 
+  it('a filter given twice is both - never dropped without a word (review M19)', async () => {
+    const { agent } = await setup();
+    await agent.get('/api/leads?source=CORE-G-27&source=CORE-G-31&tier=hot&tier=warm');
+    expect(askedFor().source).toEqual(['CORE-G-27', 'CORE-G-31']);
+    expect(askedFor().tier).toEqual(['HOT', 'WARM']);
+  });
+
+  it('a search given twice is refused - which was meant cannot be told (review M19)', async () => {
+    const { agent } = await setup();
+    const res = await agent.get('/api/leads?q=jeel&q=kim');
+    expect(res.status).toBe(400);
+    expect(res.body.error).toBe('invalid_q');
+  });
+
   it.each([
     ['1h', 3600_000],
     ['24h', 24 * 3600_000],

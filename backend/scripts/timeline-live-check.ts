@@ -11,9 +11,10 @@
  *
  *   docker compose exec postgres psql -U app -d postgres -c 'CREATE DATABASE timeline_check'
  *   DATABASE_URL=postgres://app:app@localhost:5433/timeline_check node scripts/migrate.js
- *   DATABASE_URL=postgres://app:app@localhost:5433/timeline_check REDIS_URL=x JWT_SECRET=x \
+ *   DATABASE_URL=postgres://app:app@localhost:5433/timeline_check JWT_SECRET=x \
  *     EZT_USERNAME=x EZT_PASSWORD=x EZT_GROUP=x npx ts-node --transpile-only scripts/timeline-live-check.ts
  */
+import { check, failureCount, verdict } from './check';
 import { pool } from '../src/db/pool';
 import { createCallback, updateCallback } from '../src/db/callbacks';
 import { claimLead, releaseLead } from '../src/db/claims';
@@ -21,20 +22,9 @@ import { addNote } from '../src/db/notes';
 import { getTimeline } from '../src/db/timeline';
 import { startConversation } from '../src/db/flows';
 import { failAutomatedCall, keepAnswer, linkAutomatedCall, startAutomatedCall, takeTransfer } from '../src/db/auto-calls';
+import { endAiCall, saveTurn, startAiCall } from '../src/ai/relay-store';
 import { replyAs } from './live-flow';
 
-let failures = 0;
-
-function check(label: string, actual: unknown, expected: unknown): void {
-  const a = JSON.stringify(actual);
-  const e = JSON.stringify(expected);
-  if (a === e) {
-    console.log(`  ok   ${label}`);
-  } else {
-    failures++;
-    console.log(`  FAIL ${label}\n       expected ${e}\n       actual   ${a}`);
-  }
-}
 
 async function refuseIfNotEmpty(): Promise<void> {
   const { rows } = await pool.query(`SELECT count(*)::int AS leads FROM leads`);
@@ -198,7 +188,8 @@ async function main(): Promise<void> {
     check(
       'a call carries its outcome and length',
       t.find((e) => e.kind === 'call')?.detail,
-      { outcome: 'no_answer', durationSec: 34, direction: 'outbound' }
+      // With who was on it, by id - the caller's card counts "you" by it (review M32).
+      { outcome: 'no_answer', durationSec: 34, direction: 'outbound', agentId: maya }
     );
   }
 
@@ -330,6 +321,64 @@ async function main(): Promise<void> {
     );
   }
 
+  console.log('\na call Seri took: what was said, and how her part ended (A19)');
+  {
+    const seriCall = async (phone: string, sid: string) => {
+      const lead = await makeLead(phone, '20 minutes');
+      const started = await startAutomatedCall({ leadId: lead, mayRing: () => true });
+      const callId = started.ok ? started.callId : 0;
+      await linkAutomatedCall(callId, sid);
+      await startAiCall(pool, { callId, callSid: sid, knowledgeVersion: 'v' });
+      return { lead, callId };
+    };
+    // A call's detail is typed loosely (`Record<string, unknown>`): her part as the timeline builds it.
+    const seriOf = async (lead: number) =>
+      (await getTimeline(lead))!.find((e) => e.kind === 'call')!.detail.seri as { ended: unknown } & Record<string, unknown>;
+
+    const booked = await seriCall('+15550000331', 'CA-A19-1');
+    const callback = { action: 'book_callback', at: '2026-11-16T20:00:00.000Z', timeZone: 'America/New_York', reason: 'Wants to order' };
+    for (const turn of [
+      { who: 'seri' as const, text: 'Hi, is this John?' },
+      { who: 'lead' as const, text: 'Yes, who is this?' },
+      { who: 'seri' as const, text: "It's Seri from eDrugstore. We have 25% off antibiotics today." },
+      { who: 'system' as const, text: 'Cut off. Heard: "It\'s Seri"' },
+      { who: 'lead' as const, text: "I'm driving, call me Monday at 3." },
+      { who: 'seri' as const, text: 'Sure, someone will call you Monday at 3 PM your time.' },
+      { who: 'action' as const, text: JSON.stringify(callback) },
+    ]) {
+      await saveTurn(pool, { callId: booked.callId, ...turn });
+    }
+    await endAiCall(pool, booked.callId, callback as never);
+    check('her conversation in order - the lead and her, no notes - and the call back she ended with', await seriOf(booked.lead), {
+      turns: [
+        { who: 'seri', text: 'Hi, is this John?' },
+        { who: 'lead', text: 'Yes, who is this?' },
+        { who: 'seri', text: "It's Seri from eDrugstore. We have 25% off antibiotics today." },
+        { who: 'lead', text: "I'm driving, call me Monday at 3." },
+        { who: 'seri', text: 'Sure, someone will call you Monday at 3 PM your time.' },
+      ],
+      ended: callback,
+    });
+
+    const failed = await seriCall('+15550000332', 'CA-A19-2');
+    await saveTurn(pool, { callId: failed.callId, who: 'seri', text: 'Hi there!' });
+    await saveTurn(pool, { callId: failed.callId, who: 'action', text: JSON.stringify({ action: 'fallback', why: 'model_slow' }) });
+    await endAiCall(pool, failed.callId, { action: 'fallback', why: 'model_slow' });
+    check('a fallback: her part ended, why', (await seriOf(failed.lead)).ended, { action: 'fallback', why: 'model_slow' });
+
+    const twilioFailed = await seriCall('+15550000333', 'CA-A19-3');
+    await endAiCall(pool, twilioFailed.callId, { action: 'fallback', why: 'twilio_failed' });
+    check('Twilio\'s side failed - no action of hers: a fallback all the same', (await seriOf(twilioFailed.lead)).ended, { action: 'fallback', why: 'twilio_failed' });
+
+    const voicemail = await seriCall('+15550000334', 'CA-A19-4');
+    await saveTurn(pool, { callId: voicemail.callId, who: 'lead', text: "John isn't available." });
+    await saveTurn(pool, { callId: voicemail.callId, who: 'action', text: JSON.stringify({ action: 'end_call', reason: 'wrong_person' }) });
+    check('her choice never carried out - the voicemail message took the call: not shown as how it ended', (await seriOf(voicemail.lead)).ended, null);
+
+    const script = (await getTimeline((await pool.query(`SELECT lead_id FROM calls WHERE twilio_call_sid = 'CA-T21-1'`)).rows[0].lead_id))!.find((e) => e.kind === 'call')!;
+    check('a robot call she never took: none', 'seri' in script.detail, false);
+  }
+
   console.log('\na lead with no history');
   {
     const lead = await makeLead('+15550000306', '5 minutes');
@@ -349,9 +398,9 @@ async function main(): Promise<void> {
     check('it never reached the lead: no call on its timeline', (await getTimeline(lead))!.filter((e) => e.kind === 'call').length, 0);
   }
 
-  console.log(failures === 0 ? '\nall checks passed' : `\n${failures} check(s) FAILED`);
+  console.log(verdict());
   await pool.end();
-  process.exit(failures === 0 ? 0 : 1);
+  process.exit(failureCount() === 0 ? 0 : 1);
 }
 
 main().catch((err) => {

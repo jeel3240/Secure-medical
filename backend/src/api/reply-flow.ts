@@ -111,6 +111,19 @@ export async function loadRules(client: PoolClient, flowId: number | null): Prom
   };
 }
 
+/** Whether the step moved anything `saveConversation` writes. */
+function changed(before: Conversation, after: Conversation): boolean {
+  return (
+    before.status !== after.status ||
+    before.step !== after.step ||
+    before.currentQuestionId !== after.currentQuestionId ||
+    before.invalidCount !== after.invalidCount ||
+    before.score !== after.score ||
+    before.tier !== after.tier ||
+    before.endOutcome !== after.endOutcome
+  );
+}
+
 async function saveConversation(
   client: PoolClient,
   id: number,
@@ -227,7 +240,12 @@ export async function applyReply(
   const result = step(conversation, reply, rules);
 
   const textOwed = result.conversation.status === 'open' && result.send.length > 0;
-  await saveConversation(client, conversation.id, result.conversation, textOwed);
+  // A reply that changed nothing - a "thanks" after the questions, a text the
+  // flow leaves to a person - is not saved: `updated_at` keeps saying when the
+  // conversation last moved (review Q6, 2026-11-23).
+  if (textOwed || changed(conversation, result.conversation)) {
+    await saveConversation(client, conversation.id, result.conversation, textOwed);
+  }
   if (result.answer) await saveAnswer(client, conversation.id, leadId, result.answer, reply.messageId ?? null);
 
   // The send is handed back as a closure so the caller can commit first.

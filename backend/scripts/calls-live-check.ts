@@ -16,8 +16,9 @@
  *
  * Re-running needs a fresh database: DROP and re-migrate.
  */
+import { check, failureCount, verdict } from './check';
 import { pool } from '../src/db/pool';
-import { finishCall, recordAnsweredBy, startCall, startIncomingCall, takeIncomingCall } from '../src/db/calls';
+import { callsLeftOpen, finishCall, incomingTakenBy, recordAnsweredBy, startCall, startIncomingCall, takeIncomingCall } from '../src/db/calls';
 import { saveRecording } from '../src/db/transcripts';
 import * as transcriptClient from '../src/integrations/twilio-transcripts';
 import { advanceTranscripts } from '../src/worker/transcripts';
@@ -28,18 +29,6 @@ import { blockNumber, DNC_REASONS } from '../src/db/dnc';
 import { listAdminLeads } from '../src/db/leads';
 import { getTimeline } from '../src/db/timeline';
 
-let failures = 0;
-
-function check(label: string, actual: unknown, expected: unknown): void {
-  const a = JSON.stringify(actual);
-  const e = JSON.stringify(expected);
-  if (a === e) {
-    console.log(`  ok   ${label}`);
-  } else {
-    failures++;
-    console.log(`  FAIL ${label}\n       expected ${e}\n       actual   ${a}`);
-  }
-}
 
 async function refuseIfNotEmpty(): Promise<void> {
   const { rows } = await pool.query(
@@ -170,6 +159,22 @@ async function main(): Promise<void> {
     check('a report for a call we never started is ignored', (await finishCall({ callSid: 'CA-nope', outcome: 'busy', durationSec: 0 })).recorded, false);
   }
 
+  console.log('\ncalls left open (review H4)');
+  {
+    const lead = await makeLead('+15550000690', 'Lost', maya);
+    await startCall({ callSid: 'CA-LOST', leadId: lead, agentId: maya });
+    await pool.query(`UPDATE calls SET started_at = now() - interval '20 minutes' WHERE twilio_call_sid = 'CA-LOST'`);
+    await startCall({ callSid: 'CA-FRESH', leadId: lead, agentId: maya });
+    const open = (await callsLeftOpen(15)).map((c) => c.callSid);
+    check('open 20 minutes: asked about', open.includes('CA-LOST'), true);
+    check('open a moment: not yet', open.includes('CA-FRESH'), false);
+    check('ended: never', open.includes('CA-7'), false);
+    await finishCall({ callSid: 'CA-LOST', outcome: 'answered', durationSec: 60 });
+    check('once ended from Twilio\'s record: no longer open', (await callsLeftOpen(15)).map((c) => c.callSid).includes('CA-LOST'), false);
+    check('who took a call - the agent on it', await incomingTakenBy('CA-FRESH'), maya);
+    check('who took a call we do not have - nobody', await incomingTakenBy('CA-none'), null);
+  }
+
   console.log('\nwhat a call shows up as');
   {
     const lead = await makeLead('+15550000607', 'Shown', maya);
@@ -179,7 +184,7 @@ async function main(): Promise<void> {
     const entry = (await getTimeline(lead))!.find((e) => e.kind === 'call');
     check('on the timeline, with who called and how it went', entry && { author: entry.author, detail: entry.detail }, {
       author: 'Maya',
-      detail: { outcome: 'no_answer', durationSec: 0, direction: 'outbound' },
+      detail: { outcome: 'no_answer', durationSec: 0, direction: 'outbound', agentId: maya },
     });
 
     // A lead that has been called has been worked, even once it is let go.
@@ -321,6 +326,9 @@ async function main(): Promise<void> {
     check('and given up after five', (await pool.query(`SELECT status FROM call_transcripts WHERE call_id = (SELECT id FROM calls WHERE twilio_call_sid = 'CA-61')`)).rows[0].status, 'failed');
     const failedEntry = (await getTimeline(refused))!.find((e) => e.kind === 'call');
     check('which the timeline says', (failedEntry?.detail.transcript as { status: string } | undefined)?.status, 'failed');
+    // Given up is recorded once, by nobody - the worker - against the call's agent (review R4, 2026-11-23).
+    const gaveUp = await pool.query(`SELECT actor_id, subject_user_id FROM activity_log WHERE lead_id = $1 AND action = 'call.transcript_failed'`, [refused]);
+    check('and the activity log records it, once', gaveUp.rows, [{ actor_id: null, subject_user_id: maya }]);
   }
 
   console.log('\na lead calling our number: who rings');
@@ -761,9 +769,9 @@ async function main(): Promise<void> {
     check('nobody free: missed at once, as before', missed, { kind: 'missed', leadId: nobodyFree, firstReport: true });
   }
 
-  console.log(failures === 0 ? '\nall checks passed' : `\n${failures} check(s) FAILED`);
+  console.log(verdict());
   await pool.end();
-  process.exit(failures === 0 ? 0 : 1);
+  process.exit(failureCount() === 0 ? 0 : 1);
 }
 
 main().catch((err) => {

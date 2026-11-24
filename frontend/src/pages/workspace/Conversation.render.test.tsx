@@ -88,7 +88,7 @@ describe('a label wherever the day changes - W1', () => {
   const local = (month: number, day: number, hour: number, minute = 0) =>
     new Date(2026, month - 1, day, hour, minute).toISOString();
   const at = (kind: TimelineEntry['kind'], when: string, body = 'hi'): TimelineEntry =>
-    ({ kind, at: when, author: 'Chris', detail: { body, outcome: 'voicemail', durationSec: 0 } }) as TimelineEntry;
+    ({ kind, at: when, author: 'Maya', detail: { body, outcome: 'voicemail', durationSec: 0 } }) as TimelineEntry;
 
   beforeEach(() => {
     vi.useFakeTimers();
@@ -122,6 +122,6 @@ describe('a label wherever the day changes - W1', () => {
 
   it('keeps each item’s own time', () => {
     const { container } = renderThread([at('agent_sms', local(10, 18, 14, 43), 'Hi David')]);
-    expect(container.querySelector('.convo__meta')?.textContent).toMatch(/^Chris · 2:43\sPM$/);
+    expect(container.querySelector('.convo__meta')?.textContent).toMatch(/^Maya · 2:43\sPM$/);
   });
 });

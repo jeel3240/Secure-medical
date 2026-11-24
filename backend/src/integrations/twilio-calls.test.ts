@@ -3,6 +3,7 @@
  * is replaced: what is asked for, and what each kind of answer becomes.
  */
 import type { TwilioSettings } from '../twilio-settings';
+import * as logModule from '../lib/log';
 
 const create = jest.fn();
 const list = jest.fn();
@@ -124,6 +125,17 @@ describe('cutting a lead\'s hold music short (T16)', () => {
   it('Twilio refusing - the call has ended meanwhile: false, never a throw', async () => {
     update.mockRejectedValue(Object.assign(new Error('Call is not in-progress'), { status: 400, code: 21220 }));
     expect(await recheckHold(SETTINGS, 'CA900', 42)).toBe(false);
+  });
+
+  it('a refusal is logged - what, Twilio\'s status and code, never its message (review M23)', async () => {
+    const warned: { event: string; fields: unknown }[] = [];
+    const spy = jest.spyOn(logModule.log, 'warn').mockImplementation((event: string, fields?: unknown) => {
+      warned.push({ event, fields });
+    });
+    update.mockRejectedValue(Object.assign(new Error('Call +16025550123 is not in-progress'), { status: 400, code: 21220 }));
+    await recheckHold(SETTINGS, 'CA900', 42);
+    spy.mockRestore();
+    expect(warned).toEqual([{ event: 'twilio.request_failed', fields: { what: 'recheck_hold', status: 400, code: 21220 } }]);
   });
 });
 

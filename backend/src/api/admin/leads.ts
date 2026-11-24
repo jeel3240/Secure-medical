@@ -2,7 +2,7 @@ import { Router } from 'express';
 import { requireAuth, requirePasswordChanged, requireRole } from '../auth/middleware';
 import type { AppDeps } from '../deps';
 import { asyncHandler, HttpError } from '../http';
-import { parseList, parseSince } from '../filters';
+import { parseList, parsePage, parseSearch, parseSince } from '../filters';
 import type { LeadCallFilter, LeadStatus } from '../../db/leads';
 
 const STATUSES: LeadStatus[] = [
@@ -24,6 +24,7 @@ const CALLS: LeadCallFilter[] = [
   'calling',
   'transferred',
   'transfer_missed',
+  'callback_booked',
   'link_sent',
   'not_interested',
   'voicemail_left',
@@ -33,22 +34,6 @@ const CALLS: LeadCallFilter[] = [
   'opted_out',
   'unknown',
 ];
-
-/**
- * `?page=`: a whole number from 1, in a range no table will reach. Absent is
- * the first page. It goes into the statement as an offset, so anything else -
- * `2.5`, `1e30` - is refused here rather than turned into an error there.
- */
-const MAX_PAGE = 100_000;
-
-function parsePage(raw: unknown): number {
-  if (raw === undefined || raw === '') return 1;
-  const page = Number(raw);
-  if (!Number.isInteger(page) || page < 1 || page > MAX_PAGE) {
-    throw new HttpError(400, 'invalid_page', 'Page must be a whole number from 1.');
-  }
-  return page;
-}
 
 /** `?call=`: absent or empty is every lead; anything else one of `CALLS`, or a 400 like every other filter. */
 function parseCall(raw: unknown): LeadCallFilter | undefined {
@@ -92,7 +77,7 @@ export function adminLeadsRouter(deps: AppDeps): Router {
         source: parseList(req.query.source),
         since: parseSince(req.query.since),
         call: parseCall(req.query.call),
-        q: typeof req.query.q === 'string' && req.query.q.trim() ? req.query.q.trim() : undefined,
+        q: parseSearch(req.query.q),
         page: parsePage(req.query.page),
       });
 

@@ -13,13 +13,14 @@ import { ActionsPanel } from './workspace/ActionsPanel';
 import { Conversation } from './workspace/Conversation';
 import { LeadAnswers } from './workspace/LeadAnswers';
 import { CallBar } from './workspace/CallBar';
-import { LeadHeader } from './workspace/LeadHeader';
+import { aiCallbackLabel, LeadHeader } from './workspace/LeadHeader';
 import { LeadNotes } from './workspace/LeadNotes';
 import { SmsCompose } from './workspace/SmsCompose';
 import { useLeadCall } from './workspace/useLeadCall';
 import { formatTime, leadName } from '../lib/format';
 import { mayRelease } from '../lib/lock';
 import { useIncomingCall } from '../lib/incoming-call';
+import { isBusy } from '../lib/incoming-state';
 import { useSecond } from '../lib/useSecond';
 
 /**
@@ -85,6 +86,8 @@ export function WorkspacePage() {
   const call = useLeadCall(leadId, reloadAfterCall);
   // An answered incoming call's bar sits in the same place; the page leaves it room too.
   const incomingBar = useIncomingCall((s) => s.state.phase === 'call');
+  // A lead's call taken here is a call under way too: Release waits for it (review M27, 2026-11-22).
+  const incomingLive = useIncomingCall((s) => isBusy(s.state));
 
   /**
    * "Lead 3 of 12" - where this one sits in the queue an agent is working
@@ -237,7 +240,7 @@ export function WorkspacePage() {
                 variant="ghost"
                 onClick={() => void release()}
                 loading={releasing}
-                disabled={call.state.phase !== 'idle'}
+                disabled={call.state.phase !== 'idle' || incomingLive}
               >
                 Release
               </Button>
@@ -290,6 +293,8 @@ export function WorkspacePage() {
         {/* A "yes" on the robot's call nobody took (T22): the queue's words,
             kept here once the lead is picked up and the queue says Working. */}
         {lead.flags.missedYes && <Badge tone="warning">Wants a call</Badge>}
+        {/* A time the lead picked with Seri, for a person to call them (A15). */}
+        {lead.aiCallback && <Badge tone="navy">{aiCallbackLabel(lead.aiCallback)}</Badge>}
         {lead.flags.needsReview && <Badge tone="warning">Needs review</Badge>}
         {lead.flags.expired && <Badge tone="muted">Expired</Badge>}
         {lead.conversation?.agentTookOverAt && (
@@ -346,6 +351,7 @@ export function WorkspacePage() {
         call={call}
         now={now}
         onNoteSaved={reloadAfterCall}
+        raised={incomingBar}
       />
     </section>
   );

@@ -13,7 +13,9 @@
  *   DATABASE_URL=postgres://app:app@localhost:5433/activity_check JWT_SECRET=x \
  *     EZT_USERNAME=x EZT_PASSWORD=x EZT_GROUP=x npx ts-node --transpile-only scripts/activity-live-check.ts
  */
+import { check, failureCount, verdict } from './check';
 import { pool } from '../src/db/pool';
+import { switchAiAgent } from '../src/ai/settings';
 import { archiveWebhook, recordActivity } from '../src/db/activity';
 import { createCallback, updateCallback } from '../src/db/callbacks';
 import { finishCall, startCall } from '../src/db/calls';
@@ -28,18 +30,6 @@ import { pollOnce } from '../src/worker/poller';
 /** The module the poller reads EZ Texting through, so a check can supply its answer. */
 const eztClient = eztClientModule as unknown as { listContacts: (...args: unknown[]) => Promise<unknown> };
 
-let failures = 0;
-
-function check(label: string, actual: unknown, expected: unknown): void {
-  const a = JSON.stringify(actual);
-  const e = JSON.stringify(expected);
-  if (a === e) {
-    console.log(`  ok   ${label}`);
-  } else {
-    failures++;
-    console.log(`  FAIL ${label}\n       expected ${e}\n       actual   ${a}`);
-  }
-}
 
 async function refuseIfNotEmpty(): Promise<void> {
   const { rows } = await pool.query(
@@ -296,6 +286,43 @@ async function main(): Promise<void> {
     check('the end is Twilio’s report, against the agent who called', [rows[3].actor, rows[3].subject, rows[3].detail.outcome, rows[3].detail.durationSec], [null, maya, 'answered', 42]);
   }
 
+  console.log('\nthe AI agent switched on and off (A01, AI-AGENT.md section 7)');
+  {
+    // jsonb keeps its own key order, so a record is compared field by field.
+    const switches = async () =>
+      (
+        await pool.query(`SELECT actor_id, detail FROM activity_log WHERE action = 'ai_agent.switched' ORDER BY id`)
+      ).rows.map((r) => [r.actor_id, r.detail.from, r.detail.to, r.detail.via]);
+    const stored = async () => (await pool.query(`SELECT value FROM settings WHERE key = 'ai_agent'`)).rows[0]?.value ?? null;
+
+    check('migration 022 starts it off', await stored(), 'off');
+    check('switched on: on, from off', await switchAiAgent(pool, 'on'), { from: 'off', to: 'on', changed: true });
+    check('the row says on', await stored(), 'on');
+    check('recorded once, in the same transaction, by nobody signed in', await switches(), [[null, 'off', 'on', 'command']]);
+    check('on again changes nothing', await switchAiAgent(pool, 'on'), { from: 'on', to: 'on', changed: false });
+    check('and records nothing', (await switches()).length, 1);
+    check('switched off', await switchAiAgent(pool, 'off'), { from: 'on', to: 'off', changed: true });
+    check('the row says off, and the log keeps what it was', [await stored(), (await switches())[1]], [
+      'off',
+      [null, 'on', 'off', 'command'],
+    ]);
+    await pool.query(`UPDATE settings SET value = 'ON' WHERE key = 'ai_agent'`);
+    check('a value it cannot read, switched off: written as off, the old value kept', [
+      await switchAiAgent(pool, 'off'),
+      await stored(),
+      (await switches())[2],
+    ], [{ from: 'ON', to: 'off', changed: true }, 'off', [null, 'ON', 'off', 'command']]);
+    const both = await Promise.all([switchAiAgent(pool, 'on'), switchAiAgent(pool, 'on')]);
+    check('two at once take turns: one switches, the other finds it done', both.map((r) => r.changed).sort(), [false, true]);
+    check('and one record between them', (await switches()).length, 4);
+    await pool.query(`DELETE FROM settings WHERE key = 'ai_agent'`);
+    check('never set - a database before 022 - switched off: written, from nothing', [
+      await switchAiAgent(pool, 'off'),
+      await stored(),
+      (await switches())[4],
+    ], [{ from: null, to: 'off', changed: true }, 'off', [null, null, 'off', 'command']]);
+  }
+
   console.log('\nthe log cannot be altered');
   {
     check('an edit is refused', await refuses(`UPDATE activity_log SET action = 'x'`), 'activity_log is add-only: rows cannot be changed or deleted');
@@ -329,9 +356,9 @@ async function main(): Promise<void> {
     )).rows[0], { lead: 1, notes: 1, log: 1 });
   }
 
-  console.log(failures === 0 ? '\nall checks passed' : `\n${failures} check(s) FAILED`);
+  console.log(verdict());
   await pool.end();
-  process.exit(failures === 0 ? 0 : 1);
+  process.exit(failureCount() === 0 ? 0 : 1);
 }
 
 main().catch((err) => {

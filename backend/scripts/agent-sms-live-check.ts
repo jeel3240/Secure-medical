@@ -12,12 +12,13 @@
  *
  *   docker compose exec postgres psql -U app -d postgres -c 'CREATE DATABASE sms_check'
  *   DATABASE_URL=postgres://app:app@localhost:5433/sms_check node scripts/migrate.js
- *   DATABASE_URL=postgres://app:app@localhost:5433/sms_check REDIS_URL=x JWT_SECRET=x \
+ *   DATABASE_URL=postgres://app:app@localhost:5433/sms_check JWT_SECRET=x \
  *     EZT_USERNAME=x EZT_PASSWORD=x EZT_GROUP=x EZT_SEND_GROUP=x \n *     npx ts-node --transpile-only scripts/agent-sms-live-check.ts
  *
  * EZT_SEND_GROUP must be set because the real sendMessage runs - only its HTTP
  * call is stubbed.
  */
+import { check, failureCount, verdict } from './check';
 import { pool } from '../src/db/pool';
 import { replyAs, startFlow } from './live-flow';
 import axios from 'axios';
@@ -55,19 +56,8 @@ import { getLeadDetail } from '../src/db/lead-detail';
 import { keepAnswer, startAutomatedCall } from '../src/db/auto-calls';
 import { startIncomingCall } from '../src/db/calls';
 import { startConversation } from '../src/db/flows';
+import { saveTurn } from '../src/ai/relay-store';
 
-let failures = 0;
-
-function check(label: string, actual: unknown, expected: unknown): void {
-  const a = JSON.stringify(actual);
-  const e = JSON.stringify(expected);
-  if (a === e) {
-    console.log(`  ok   ${label}`);
-  } else {
-    failures++;
-    console.log(`  FAIL ${label}\n       expected ${e}\n       actual   ${a}`);
-  }
-}
 
 async function refuseIfNotEmpty(): Promise<void> {
   const { rows } = await pool.query(`SELECT count(*)::int AS n FROM leads`);
@@ -123,6 +113,12 @@ async function main(): Promise<void> {
     // one of ours.
     const kinds = (await getTimeline(leadId))?.map((e) => e.kind) ?? [];
     check('the timeline calls it an agent message', kinds.includes('agent_sms'), true);
+    // The text and its record are one transaction (review R4, 2026-11-23).
+    const recorded = await pool.query(
+      `SELECT actor_id, (detail->>'tookOver')::boolean AS took_over FROM activity_log WHERE lead_id = $1 AND action = 'sms.sent'`,
+      [leadId]
+    );
+    check('recorded as sms.sent, by her, once, as the take-over', recorded.rows, [{ actor_id: maya, took_over: true }]);
   }
 
   console.log('\nrule 2b, through the real reply path');
@@ -195,6 +191,8 @@ async function main(): Promise<void> {
 
     check('is refused', res.ok === false && res.reason, 'blocked');
     check('nothing is sent', sent.length, 0);
+    const tried = await pool.query(`SELECT actor_id FROM activity_log WHERE lead_id = $1 AND action = 'sms.blocked'`, [leadId]);
+    check('the try is recorded as sms.blocked, by her (review R4)', tried.rows.map((r) => r.actor_id), [maya]);
     check('nothing is stored', (await getTimeline(leadId))?.some((e) => e.kind === 'agent_sms'), false);
     // The questions must not stop on the strength of a message never sent.
     check('and no take-over is recorded', await tookOverAt(conversationId), null);
@@ -217,6 +215,9 @@ async function main(): Promise<void> {
       await pool.query(`SELECT ezt_message_id FROM messages WHERE lead_id = $1`, [leadId])
     ).rows.map((r) => r.ezt_message_id), [null]);
     check('and no take-over is recorded', await tookOverAt(conversationId), null);
+    // The failed message and its record were written together, once (review M12).
+    const recorded = await pool.query(`SELECT actor_id FROM activity_log WHERE lead_id = $1 AND action = 'sms.failed'`, [leadId]);
+    check('recorded as sms.failed, by her, once', recorded.rows.map((r) => r.actor_id), [maya]);
   }
 
   console.log('\nan unknown lead');
@@ -309,11 +310,41 @@ async function main(): Promise<void> {
       (await getLeadDetail(finished))?.conversation?.phoneTookOverAt,
       ((await getTimeline(finished)) ?? []).some((e) => e.detail.event === 'phone_took_over'),
     ], [null, false]);
+
+    // A call Seri took (Phase 7): the lead talking to her is answering the call.
+    /** The robot's call, taken by Seri, with what the lead said to her - kept as the relay keeps it. */
+    const seriHeard = async (leadId: number, leadSaid: string[], scriptResult: string | null = null) => {
+      const started = await startAutomatedCall({ leadId, mayRing: () => true });
+      if (!started.ok) throw new Error(`the robot's call was refused: ${started.reason}`);
+      await pool.query(`UPDATE calls SET ai_started_at = now(), ai_knowledge_version = 'v', script_result = $2 WHERE id = $1`, [started.callId, scriptResult]);
+      await saveTurn(pool, { callId: started.callId, who: 'seri', text: 'Hi, is this Avery?' });
+      for (const text of leadSaid) await saveTurn(pool, { callId: started.callId, who: 'lead', text });
+    };
+
+    const talked = await waitingOnQ1('+15550000695');
+    await seriHeard(talked, ['Yes, who is this?']);
+    const seriThanks = await replyAs(talked, 'thanks', { stored: true });
+    check('talked to Seri, then "thanks": for a person, nothing sent - as after the script\'s call', [seriThanks?.result.needsPerson, seriThanks?.result.send], [true, []]);
+    check('the card says the call stopped them', (await getLeadDetail(talked))?.conversation?.phoneTookOverAt !== null, true);
+
+    const pressedOnly = await waitingOnQ1('+15550000696');
+    await seriHeard(pressedOnly, ['(pressed 1)']);
+    check('a key pressed to her counts too', (await replyAs(pressedOnly, 'ok', { stored: true }))?.result.needsPerson, true);
+
+    const silentToHer = await waitingOnQ1('+15550000697');
+    await seriHeard(silentToHer, []);
+    const silentOne = await replyAs(silentToHer, '1', { stored: true });
+    check('she spoke and the lead said nothing: the questions go on, "1" answers Q1', [silentOne?.result.needsPerson, (await conversationOf(silentToHer)).step], [false, 20]);
+
+    const machine = await waitingOnQ1('+15550000698');
+    await seriHeard(machine, ["Avery isn't available. Leave a message after the tone."], 'voicemail_left');
+    const machineOne = await replyAs(machine, '1', { stored: true });
+    check('the voicemail message took her call: the greeting was not the lead - "1" answers Q1', [machineOne?.result.needsPerson, (await conversationOf(machine)).step], [false, 20]);
   }
 
-  console.log(failures === 0 ? '\nall checks passed' : `\n${failures} check(s) FAILED`);
+  console.log(verdict());
   await pool.end();
-  process.exit(failures === 0 ? 0 : 1);
+  process.exit(failureCount() === 0 ? 0 : 1);
 }
 
 main().catch((err) => {

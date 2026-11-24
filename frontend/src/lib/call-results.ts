@@ -10,6 +10,8 @@
 export const CALL_RESULT_WORDS: Record<string, string> = {
   transferred: 'said yes · taken',
   transfer_missed: 'said yes · nobody took it',
+  // Seri's: a time the lead picked, for a person to call them (A15).
+  callback_booked: 'callback booked',
   link_sent: 'link sent',
   not_interested: 'not interested',
   opted_out: 'opted out',
@@ -41,6 +43,7 @@ const CALL_FILTER_KEYS = [
   'calling',
   'transferred',
   'transfer_missed',
+  'callback_booked',
   'link_sent',
   'not_interested',
   'voicemail_left',

@@ -28,7 +28,7 @@ jest.mock('../../db/pool', () => ({
 }));
 
 import { ANTIBIOTICS, Q1, Q2 } from '../../core/flow-fixtures';
-import { webhooksRouter } from '../webhooks';
+import { webhooksRouter, within } from '../webhooks';
 
 interface Recorded {
   sql: string;
@@ -96,6 +96,8 @@ function fakeClient(opts: {
   duplicate?: boolean;
   /** Omit for a lead with no conversation at all. */
   conversation?: ConversationSeed | null;
+  /** The number on dnc_list already, live. */
+  blocked?: boolean;
 }) {
   const calls: Recorded[] = [];
   const conversation =
@@ -126,6 +128,9 @@ function fakeClient(opts: {
     query: jest.fn(async (sql: string, values?: unknown[]) => {
       calls.push({ sql: sql.replace(/\s+/g, ' ').trim(), values });
 
+      if (/FROM dnc_list WHERE phone = \$1 AND released_at IS NULL/i.test(sql)) {
+        return opts.blocked ? { rows: [{ '?column?': 1 }], rowCount: 1 } : { rows: [], rowCount: 0 };
+      }
       if (/SELECT id, first_name FROM leads/i.test(sql)) {
         return opts.leadId
           ? { rows: [{ id: opts.leadId, first_name: 'Jordan' }], rowCount: 1 }
@@ -177,6 +182,29 @@ function savedAnswer(calls: Recorded[]) {
   const [conversationId, leadId, questionId, questionKey, , , choice, label, points, messageId] = insert.values as unknown[];
   return { conversationId, leadId, questionId, questionKey, choice, label, points, messageId };
 }
+
+describe('how long EZ Texting waits (review M13)', () => {
+  it('the send done in time: answered after it, as before', async () => {
+    jest.useFakeTimers();
+    let done = false;
+    const waited = within(Promise.resolve().then(() => (done = true)), 2000);
+    await waited;
+    expect(done).toBe(true);
+    jest.useRealTimers();
+  });
+
+  it('a slow send: answered at the limit, the send left to finish', async () => {
+    jest.useFakeTimers();
+    let answered = false;
+    const waited = within(new Promise(() => undefined), 2000).then(() => (answered = true));
+    await jest.advanceTimersByTimeAsync(1999);
+    expect(answered).toBe(false);
+    await jest.advanceTimersByTimeAsync(1);
+    await waited;
+    expect(answered).toBe(true);
+    jest.useRealTimers();
+  });
+});
 
 function buildApp() {
   const app = express();
@@ -253,6 +281,31 @@ describe('a reply from a number with no lead', () => {
     expect(client.release).toHaveBeenCalled();
   });
 
+  it('a STOP from a number already blocked: its block, reason and record stand - nothing written (review M40)', async () => {
+    const { client, calls } = fakeClient({ leadId: null, blocked: true });
+    connect.mockReturnValue(client);
+
+    const res = await request(buildApp()).post('/api/webhooks/eztexting').send(reply({ message: 'STOP' }));
+
+    expect(res.status).toBe(200);
+    expect(sqlOf(calls)).not.toMatch(/INSERT INTO dnc_list/i);
+  });
+
+  it.each([
+    ['the text a number', { message: 12 }],
+    ['the sender a number', { fromNumber: 15551230000 }],
+    ['the time no time', { received: 'yesterday-ish' }],
+  ])('a payload with %s: answered 200 and left - never a 500 EZ Texting retries for ever (review M13)', async (_label, over) => {
+    const { client, calls } = fakeClient({ leadId: 42, conversation: {} });
+    connect.mockReturnValue(client);
+
+    const res = await request(buildApp()).post('/api/webhooks/eztexting').send(reply(over));
+
+    expect(res.status).toBe(200);
+    expect(calls).toEqual([]);
+    expect(sendMessage).not.toHaveBeenCalled();
+  });
+
   it.each([
     ['the optOut flag', { optOut: true, message: 'whatever' }],
     ['a plain STOP', { message: 'STOP' }],
@@ -318,7 +371,8 @@ describe('START, a lead asking to hear from us again', () => {
     // Stored and flagged, so an agent sees they came back.
     expect(sqlOf(calls)).toMatch(/INSERT INTO messages/i);
     expect(sqlOf(calls)).toMatch(/UPDATE leads SET has_unread_inbound/i);
-    expect(savedConversation(calls)).toMatchObject({ status: 'suppressed' });
+    // Nothing changed, so nothing is written to it (review Q6, 2026-11-23).
+    expect(savedConversation(calls)).toBeNull();
     expect(sendMessage).not.toHaveBeenCalled();
   });
 
@@ -611,7 +665,8 @@ describe('the reply advances the conversation', () => {
 
     await request(buildApp()).post('/api/webhooks/eztexting').send(reply({ message: '1' }));
 
-    expect(savedConversation(calls)).toMatchObject({ status: 'completed', score: 100 });
+    // Not even written back as it was: its `updated_at` keeps saying when it last moved (review Q6, 2026-11-23).
+    expect(savedConversation(calls)).toBeNull();
     expect(sendMessage).not.toHaveBeenCalled();
   });
 

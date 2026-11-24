@@ -5,8 +5,10 @@
  * done from either. AGENT-WORKSPACE.md, "Endpoints"; DESIGN-PROMPT.md 5.
  */
 
-import { startOfTodaySql } from './sql';
+import { newestConversation } from './lead-state';
+import { startOfTodaySql, startOfTomorrowSql } from './sql';
 import { activityInsertSql, type ActivityWriter } from './activity';
+import type { Db } from './flows';
 import { pool } from './pool';
 
 export type CallbackWhen = 'today' | 'upcoming' | 'overdue' | 'all';
@@ -14,18 +16,22 @@ export type CallbackWhen = 'today' | 'upcoming' | 'overdue' | 'all';
 /**
  * Why a callback exists. `booked`: a person booked it. `missed_call`: the lead
  * rang, the agent it rang did not pick up, and the system booked it for them -
- * `db/calls.ts`, `finishCall`.
+ * `db/calls.ts`, `finishCall`. `ai_booked`: Seri booked it on the automated
+ * call, at a time the lead picked - `bookAiCallback` (A15).
  */
-export type CallbackReason = 'booked' | 'missed_call';
+export type CallbackReason = 'booked' | 'missed_call' | 'ai_booked';
 
 export interface Callback {
   id: number;
   leadId: number;
-  agentId: number;
+  /** Null only for one Seri booked that nobody has taken yet (A15, A16). */
+  agentId: number | null;
   agentName: string;
   scheduledAt: string;
   doneAt: string | null;
   reason: CallbackReason;
+  /** Seri's one-line reason, on one she booked (A15); null otherwise. */
+  note: string | null;
 }
 
 /** A row on My Callbacks: the callback, plus enough of the lead to act on it. */
@@ -68,7 +74,7 @@ export type UpdateResult =
 
 async function readCallback(id: number): Promise<Callback | null> {
   const { rows } = await pool.query(
-    `SELECT cb.id, cb.lead_id, cb.agent_id, cb.scheduled_at, cb.done_at, cb.reason, u.name
+    `SELECT cb.id, cb.lead_id, cb.agent_id, cb.scheduled_at, cb.done_at, cb.reason, cb.note, u.name
      FROM callbacks cb
      LEFT JOIN users u ON u.id = cb.agent_id
      WHERE cb.id = $1`,
@@ -84,6 +90,7 @@ async function readCallback(id: number): Promise<Callback | null> {
     scheduledAt: r.scheduled_at.toISOString(),
     doneAt: r.done_at?.toISOString() ?? null,
     reason: r.reason,
+    note: r.note ?? null,
   };
 }
 
@@ -116,6 +123,44 @@ export async function finishMissedCallCallbacks(
      FROM finished`,
     [leadId, actorId, because]
   );
+}
+
+/**
+ * A call back Seri booked on the automated call `callId` - A15,
+ * docs/AI-AGENT.md section 4: at `at`, with her one-line reason (`note`).
+ *
+ * The lead's own agent's, when an active one holds the lead; otherwise it has
+ * no agent - open to everyone until someone takes it (A16). Booked once per
+ * call (`callbacks_one_per_ai_call`): Twilio asking again books nothing, and
+ * null is returned. In the caller's transaction, with its record in the same
+ * statement - `callback.booked`, the system's doing, `via: 'seri'`. The note
+ * is on the callback, not in the log: it is her words.
+ */
+export async function bookAiCallback(
+  q: Db,
+  opts: { leadId: number; callId: number; at: Date; note: string; timeZone: string }
+): Promise<{ callbackId: number; agentId: number | null } | null> {
+  const { rows } = await q.query(
+    `WITH holder AS (
+       SELECT u.id FROM leads l JOIN users u ON u.id = l.assigned_to AND u.is_active WHERE l.id = $1
+     ),
+     booked AS (
+       INSERT INTO callbacks (lead_id, agent_id, scheduled_at, reason, booked_by_call_id, note)
+       VALUES ($1, (SELECT id FROM holder), $3, 'ai_booked', $2, $4)
+       ON CONFLICT (booked_by_call_id) WHERE booked_by_call_id IS NOT NULL DO NOTHING
+       RETURNING id, agent_id, scheduled_at
+     ),
+     logged AS (
+       ${activityInsertSql}
+       SELECT NULL::int, 'callback.booked', $1, agent_id,
+              jsonb_build_object('callbackId', id, 'scheduledAt', scheduled_at, 'via', 'seri',
+                                 'callId', $2::int, 'timeZone', $5::text)
+       FROM booked
+     )
+     SELECT id, agent_id FROM booked`,
+    [opts.leadId, opts.callId, opts.at, opts.note, opts.timeZone]
+  );
+  return rows[0] ? { callbackId: rows[0].id, agentId: rows[0].agent_id } : null;
 }
 
 /**
@@ -244,7 +289,7 @@ export async function updateCallback(
  */
 function whenSql(timeZone?: string): Record<Exclude<CallbackWhen, 'all'>, string> {
   const today = startOfTodaySql(timeZone);
-  const tomorrow = `${today} + interval '1 day'`;
+  const tomorrow = startOfTomorrowSql(timeZone);
   const missedToday = `(cb.reason = 'missed_call' AND cb.scheduled_at >= ${today} AND cb.scheduled_at < ${tomorrow})`;
   return {
     today: `cb.done_at IS NULL AND ((cb.scheduled_at >= now() AND cb.scheduled_at < ${tomorrow}) OR ${missedToday})`,
@@ -276,7 +321,7 @@ export async function listCallbacks(opts: {
   const params = everyone ? [] : [opts.agentId];
 
   const { rows } = await pool.query(
-    `SELECT cb.id, cb.lead_id, cb.agent_id, cb.scheduled_at, cb.done_at, cb.reason,
+    `SELECT cb.id, cb.lead_id, cb.agent_id, cb.scheduled_at, cb.done_at, cb.reason, cb.note,
             u.name AS agent_name,
             l.phone, l.first_name, l.last_name, l.source,
             c.tier,
@@ -287,10 +332,7 @@ export async function listCallbacks(opts: {
      JOIN leads l ON l.id = cb.lead_id
      LEFT JOIN users u ON u.id = cb.agent_id
      LEFT JOIN users h ON h.id = l.assigned_to AND h.is_active
-     LEFT JOIN LATERAL (
-       SELECT c.tier FROM conversations c
-       WHERE c.lead_id = l.id ORDER BY c.created_at DESC, c.id DESC LIMIT 1
-     ) c ON true
+     LEFT JOIN ${newestConversation('c.tier')}
      LEFT JOIN LATERAL (
        SELECT n.body FROM notes n
        WHERE n.lead_id = l.id ORDER BY n.created_at DESC, n.id DESC LIMIT 1
@@ -330,6 +372,7 @@ export async function listCallbacks(opts: {
       scheduledAt: r.scheduled_at.toISOString(),
       doneAt: r.done_at?.toISOString() ?? null,
       reason: r.reason,
+      note: r.note ?? null,
       lead: {
         phone: r.phone,
         firstName: r.first_name,

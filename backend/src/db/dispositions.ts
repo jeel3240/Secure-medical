@@ -25,7 +25,9 @@ export interface DispositionRow {
 
 export type SetDispositionResult =
   | { ok: true; disposition: DispositionRow }
-  | { ok: false; reason: 'lead_not_found' };
+  | { ok: false; reason: 'lead_not_found' }
+  /** Another active person holds it now - released and picked up since the route checked (review M10). */
+  | { ok: false; reason: 'not_yours' };
 
 /**
  * Records the disposition, and blocks the number when it is `dnc`.
@@ -77,12 +79,20 @@ export async function setDisposition(
     // Locked, so the phone cannot change under the block between reading it
     // and writing dnc_list. Also gives the clean 404 for an unknown lead.
     const lead = await client.query(
-      'SELECT id, phone, assigned_to, assigned_at FROM leads WHERE id = $1 FOR UPDATE',
-      [leadId]
+      `SELECT id, phone, assigned_to, assigned_at, has_unread_inbound,
+              EXISTS (SELECT 1 FROM users u WHERE u.id = leads.assigned_to AND u.is_active AND u.id <> $2) AS someone_else_holds
+       FROM leads WHERE id = $1 FOR UPDATE`,
+      [leadId, agentId]
     );
     if (!lead.rowCount) {
       await client.query('ROLLBACK');
       return { ok: false, reason: 'lead_not_found' };
+    }
+    // Not someone else's now, under the lock: the route asked before, and a release and someone else's pick-up in
+    // between let one agent's outcome release another's claim and close their call backs (review M10, 2026-11-22).
+    if (lead.rows[0].someone_else_holds) {
+      await client.query('ROLLBACK');
+      return { ok: false, reason: 'not_yours' };
     }
 
     const { rows } = await client.query(
@@ -119,6 +129,10 @@ export async function setDisposition(
        WHERE id = $1`,
       [leadId]
     );
+    // An unread reply cleared by the outcome is read, by who set it - as opening the lead records it (review M20).
+    if (lead.rows[0].has_unread_inbound) {
+      await recordActivity(client, { action: 'reply.read', actorId: agentId, leadId, detail: { because: 'outcome' } });
+    }
 
     // The outcome let go of the lead: the same record a release writes, so the
     // log always says how long a lead was held, whichever way it was let go.

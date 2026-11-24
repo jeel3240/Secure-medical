@@ -107,7 +107,6 @@ export interface Overview {
   agents: {
     agentId: number;
     name: string;
-    /** Open callbacks due now or overdue. */
     /** Open callbacks due by the end of today, overdue included. */
     callbacksDue: number;
     holding: number;

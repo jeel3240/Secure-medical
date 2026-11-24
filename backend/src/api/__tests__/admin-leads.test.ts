@@ -86,7 +86,7 @@ describe('the Call filter - T23', () => {
     }
   });
 
-  it.each(['none', 'calling', 'transferred', 'transfer_missed', 'link_sent', 'not_interested', 'voicemail_left',
+  it.each(['none', 'calling', 'transferred', 'transfer_missed', 'callback_booked', 'link_sent', 'not_interested', 'voicemail_left',
     'no_response', 'hung_up', 'unanswered', 'opted_out', 'unknown'])('passes call=%s through', async (call) => {
     const { boss } = await setup();
     expect((await boss.get(`/api/admin/leads?call=${call}&status=working`)).status).toBe(200);

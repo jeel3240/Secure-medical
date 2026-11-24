@@ -17,6 +17,7 @@
 import twilio from 'twilio';
 import type { CallListInstanceCreateOptions } from 'twilio/lib/rest/api/v2010/account/call';
 import type { TwilioSettings } from '../twilio-settings';
+import { log } from '../lib/log';
 import { AUTO_AMD_PATH, AUTO_ANSWER_PATH, AUTO_HOLD_PATH, AUTO_OFFER_PATH, AUTO_STATUS_PATH, autoCallUrl } from './twilio';
 
 const REQUEST_TIMEOUT_MS = 10_000;
@@ -90,6 +91,21 @@ export async function placeAutomatedCall(
   }
 }
 
+/**
+ * A request to Twilio that failed, logged by what it was and Twilio's status
+ * and code - never its message, which can quote a number. Until 2026-11-22
+ * these were swallowed: a call already over and a refused key looked the same
+ * (review M23).
+ */
+function logFailure(what: string, err: unknown): void {
+  const { status, code } = (err ?? {}) as { status?: unknown; code?: unknown };
+  log.warn('twilio.request_failed', {
+    what,
+    status: typeof status === 'number' ? status : null,
+    code: typeof code === 'number' || typeof code === 'string' ? code : null,
+  });
+}
+
 /** One ring of a transfer, as Twilio keeps it - `transferRings`. */
 export interface TransferRing {
   /** Who was rung: `client:agent-16`. */
@@ -109,7 +125,8 @@ export async function transferRings(settings: TwilioSettings, callSid: string): 
     const client = twilio(settings.accountSid, settings.authToken, { timeout: REQUEST_TIMEOUT_MS });
     const legs = await client.calls.list({ parentCallSid: callSid, limit: 50 });
     return legs.map((leg) => ({ to: leg.to, status: leg.status, startedAt: leg.startTime ?? null }));
-  } catch {
+  } catch (err) {
+    logFailure('transfer_rings', err);
     return null;
   }
 }
@@ -126,7 +143,8 @@ export async function recheckHold(settings: TwilioSettings, callSid: string, cal
     const client = twilio(settings.accountSid, settings.authToken, { timeout: REQUEST_TIMEOUT_MS });
     await client.calls(callSid).update({ url: autoCallUrl(settings, AUTO_HOLD_PATH, callId, { via: 'watcher' }), method: 'POST' });
     return true;
-  } catch {
+  } catch (err) {
+    logFailure('recheck_hold', err);
     return false;
   }
 }
@@ -142,7 +160,8 @@ export async function sendToOffer(settings: TwilioSettings, callSid: string, cal
     const client = twilio(settings.accountSid, settings.authToken, { timeout: REQUEST_TIMEOUT_MS });
     await client.calls(callSid).update({ url: autoCallUrl(settings, AUTO_OFFER_PATH, callId, { offer: offerId }), method: 'POST' });
     return true;
-  } catch {
+  } catch (err) {
+    logFailure('send_to_offer', err);
     return false;
   }
 }
@@ -162,6 +181,7 @@ export async function replaceCall(settings: TwilioSettings, callSid: string, twi
     await client.calls(callSid).update({ twiml });
     return true;
   } catch (err) {
+    logFailure('replace_call', err);
     // Twilio's own refusals carry its HTTP status; a timeout or a network
     // failure has none.
     return typeof (err as { status?: unknown }).status !== 'number';
@@ -187,7 +207,8 @@ export async function callEnd(
     if (!OVER.has(call.status)) return null;
     const seconds = Number(call.duration);
     return { status: call.status, durationSec: Number.isInteger(seconds) && seconds >= 0 ? seconds : 0 };
-  } catch {
+  } catch (err) {
+    logFailure('call_end', err);
     return null;
   }
 }

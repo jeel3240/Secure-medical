@@ -1,7 +1,7 @@
 /**
  * Blocking and releasing a number.
  *
- * Three things block a number and they must all write `dnc_list` the same way,
+ * Four things block a number and they must all write `dnc_list` the same way,
  * or a number blocked one way behaves differently from a number blocked
  * another:
  *
@@ -94,6 +94,12 @@ export async function blockNumber(
      SELECT 1 FROM blocked`,
     [phone, reason, actorId]
   );
+}
+
+/** Whether the number is blocked now - a live row on `dnc_list`. */
+export async function isBlockedNow(client: Queryable, phone: string): Promise<boolean> {
+  const { rows } = await client.query(`SELECT 1 FROM dnc_list WHERE phone = $1 AND released_at IS NULL`, [phone]);
+  return rows.length > 0;
 }
 
 /**

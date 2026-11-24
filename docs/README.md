@@ -33,7 +33,9 @@ cd frontend && npm run dev
 ```
 
 The frontend dev server forwards `/api` to the API on port 3000. Local Docker
-runs postgres, redis, api and worker only; Caddy is used in production.
+runs postgres, redis, api and worker only; Caddy is used in production. Their
+ports - 5433, 6379, 3000 - are open on the laptop only (`127.0.0.1`), not to its
+network (2026-11-22).
 
 **Stopping for the day.** `docker compose stop` keeps all data. Stop the
 frontend with Ctrl+C. On Colima, `colima stop` frees the VM's memory. Next time:
@@ -73,10 +75,11 @@ docker compose exec postgres psql -U app -d leads \
 | `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_API_KEY`, `TWILIO_API_SECRET`, `TWILIO_TWIML_APP_SID`, `TWILIO_PHONE_NUMBER`, `PUBLIC_URL` | Browser calling (`TWILIO.md`). All empty: calling is off and everything else works. All set: calling is on. Some set: off locally with a warning, and **the API refuses to start in production**. Where each comes from is in `.env.example`. |
 | `TWILIO_IDENTITY_PREFIX` | Optional, apart from the seven. Put in front of every browser's name at Twilio. **Empty in production; `dev-` locally**, because the laptop shares production's Twilio account and Twilio rings every browser with the same name - `TWILIO.md`, "What it needs on the Twilio account". Needed by the api |
 | `TWILIO_TRANSCRIPTION_SERVICE_SID` | Optional, apart from the seven. Set, every call is recorded and transcribed (`TWILIO.md`, "Recordings and transcripts"); empty, nothing is recorded. `npm run twilio:configure -- --transcription` creates the service and prints the id. Needed by both the api and the worker |
-| `AUTO_CALLS` | Automated calls (`AUTO-CALLS.md`). **Off unless exactly `on`**, and only with calling set up; `off` or empty is off, any other value is off and logged once as `auto_calls.off`, never a reason to refuse to start. Production gets every automated-calling change with it off. On, the app bar shows the "Taking calls" switch. Read by the api (and the dev command); passed to the worker too, which places the calls (T20). Changing it means recreating **both** - `docker compose up -d` does - or the worker goes on calling while the api answers its webhooks 404 (it then stops by itself: `auto_call.webhooks_silent`). On, it calls every lead still waiting for a reply - those that arrived before it was switched on too - new leads first (`AUTO-CALLS.md`, "Leads already waiting") |
+| `AUTO_CALLS` | Automated calls (`AUTO-CALLS.md`). **Off unless exactly `on`**, and only with calling set up; `off` or empty is off, any other value is off and logged once as `auto_calls.off`, never a reason to refuse to start. **On in production since 2026-10-30** (`AUTO-CALLS.md`); off by default anywhere else - locally only for a test, which rings only `AUTO_CALL_TEST_NUMBERS`. On, the app bar shows the "Taking calls" switch. Read by the api (and the dev command); passed to the worker too, which places the calls (T20). Changing it means recreating **both** - `docker compose up -d` does - or the worker goes on calling while the api answers its webhooks 404 (it then stops by itself: `auto_call.webhooks_silent`). On, it calls every lead still waiting for a reply - those that arrived before it was switched on too - new leads first (`AUTO-CALLS.md`, "Leads already waiting") |
 | `AUTO_CALL_TEST_NUMBERS` | Outside production, **the only numbers an automated call may ring** - our own phones, comma-separated E.164 (`+16025550123,+16025550124`). Empty, nothing is rung; an entry that is not E.164 is ignored. Production does not read it. `AUTO-CALLS.md`, "How a call is placed". Read where calls are placed: the dev command and the worker (T20) |
+| `OPENAI_API_KEY` | Optional. Seri, the AI agent on the automated call (`AI-AGENT.md`). **Empty, she is off whatever her switch says**, and every call gets the script. Her switch is not a variable: it is `settings.ai_agent`, changed only with `npm run ai-agent -- on` or `-- off` (`dev:ai-agent` locally), read on every call, so no restart. `on` is refused without the key. Read by the api, and passed to the worker, which checks OpenAI before placing calls (A17). Never in the repo, never in a log line |
+| `OPENAI_BASE_URL` | **For tests only - never set it in `.env`.** Not read by our code: the OpenAI library reads it, and sends Seri's requests, with her key, to that address instead of OpenAI's. `npm run e2e` and the unit tests point it at a local stand-in. The compose files do not pass it to the containers (review R5, 2026-11-23) |
 | `PORT`, `SERVICE_NAME` | Not in `.env.example` and not set by the compose files. `PORT` is the API's port, 3000 by default. `SERVICE_NAME` overrides the `svc` field on every log line, which is otherwise worked out from the entry point (`api`, `worker`). |
-| `CADDY_DOMAIN` | Not read by anything. The production `Caddyfile` names `dailyleadhub.com` directly. |
 
 Never commit `.env`.
 
@@ -100,9 +103,12 @@ kept for history. To unlock sending:
    `EZT_SEND_GROUP=weightloss`.
 3. `docker compose up -d worker api` so the new values are picked up.
 
-`EZT_SEND_GROUP` is only the on/off switch for `sendMessage`. It is checked
-again immediately before every send, together with `dnc_list`, so a number that
-opted out is refused however the send was triggered.
+`EZT_SEND_GROUP` is only the on/off switch for `sendMessage`: any value turns
+sending on, and its value is never used to choose who is texted - not a group,
+despite the name, which stays because production's `.env` sets it (review Q12,
+2026-11-23). It is checked again immediately before every send, together with
+`dnc_list`, so a number that opted out is refused however the send was
+triggered.
 
 **Update 2026-09-15:** sending is live. The poller now sends question 1 when it
 creates a lead and records it in `messages`, so with `EZT_SEND_GROUP` set, a new
@@ -112,9 +118,11 @@ contact in the group gets a text within a poll interval. `openers` in the
 ## How to test
 
 ```bash
-cd backend  && npm test && npm run lint    # 1,056 tests
-cd frontend && npm test && npm run lint    # 407 tests   (counts as of 2026-11-02)
+cd backend  && npm test && npm run lint    # 1,634 tests
+cd frontend && npm test && npm run lint    # 432 tests   (counts as of 2026-11-13)
 ```
+
+**Seri's test sets** run against OpenAI, so they are run by hand, before every change to her knowledge files or her brain's prompts, never in CI: `cd backend && OPENAI_API_KEY=... npm run ai:eval:understand`, `npm run ai:eval:speak`, and whole real calls replayed with `npm run ai:replay -- --real turns.json` (`AI-AGENT.md`, sections 8 and 12) - which exits 1 when a replay breaks a rule, since 2026-11-22. The answer test set of today's brain, `npm run ai:eval`, was removed with it on 2026-11-19.
 
 **Unit and route tests** mock the database and cover behaviour in isolation.
 
@@ -130,7 +138,11 @@ scripts/live-checks.sh              # all of them
 scripts/live-checks.sh flows queue  # just these
 ```
 
-There are twenty-two live checks, covering the robot placing calls by itself (who is due, when, at what pace, never twice, calls that never reached Twilio), the texts a call leads to (the link, and the text after a missed call - EZ Texting stubbed), the automated call (its row, every refusal, linking it to Twilio's call, two placements racing; each answer kept once, a result never overwritten, a stop blocking once and ending the text questions, the end settling an unfinished script; a transfer taken - from the lead's holder, once, never by a second person - or missed; a lead on hold, its place in line, and hanging up on hold; Twilio's voicemail verdict acted on - the beep decides, under the call's lock, never twice), a lead on hold rung to whoever comes free (migration 020: longest waiting first, one ring at a time per lead and per person, never the same person twice, and who is still coming for a lead), who can take a call (migrations 016 and 017: the browser's word, the "Taking calls" switch and why it is so, who is free, the switch turned off after a ring let run out, and who counts as on a call, or just off one, while a lead is on hold), the automated call's script (migrations 015, 018 and 019, and 020's ring time), the SMS flows (a second flow added as
+It uses this project's own postgres (`docker compose ps -q postgres`), and a
+migration that fails stops that check with the migration's own error (both
+2026-11-22).
+
+There are twenty-three live checks, covering Seri (`ai-agent-live-check`: migration 022 - her part of a call, the turns of her conversation, add-only, and the call backs she books, the only kind that may have no agent - 023, and 024, the brain's record of each reply, only on the relay's own notes; the relay's SQL; whether a call goes to her; carrying out how her part ended; her call backs; her fallbacks pausing the robot; the voicemail rule with what the lead said to her), the robot placing calls by itself (who is due, when, at what pace, never twice, calls that never reached Twilio), the texts a call leads to (the link, and the text after a missed call - EZ Texting stubbed), the automated call (its row, every refusal, linking it to Twilio's call, two placements racing; each answer kept once, a result never overwritten, a stop blocking once and ending the text questions, the end settling an unfinished script; a transfer taken - from the lead's holder, once, never by a second person - or missed; a lead on hold, its place in line, and hanging up on hold; Twilio's voicemail verdict acted on - the beep decides, under the call's lock, never twice), a lead on hold rung to whoever comes free (migration 020: longest waiting first, one ring at a time per lead and per person, never the same person twice, and who is still coming for a lead), who can take a call (migrations 016 and 017: the browser's word, the "Taking calls" switch and why it is so, who is free, the switch turned off after a ring let run out, and who counts as on a call, or just off one, while a lead is on hold), the automated call's script (migrations 015, 018 and 019, and 020's ring time), the SMS flows (a second flow added as
 rows only), the queue, claims, the read flag, the lead card,
 the timeline, callbacks, dispositions, agent SMS, calls (outgoing, incoming and
 missed, and a call back ringing everyone free), the activity log, Admin > Leads, the admin read models, health, the
@@ -154,7 +166,13 @@ is claimed, worked, closed, and finally blocked; then, with automated calls on,
 the robot calls three leads who never replied, one at a time as one agent is
 free (the five calls each of T29 set to one for it) - one says yes and the agent takes it, one says yes and nobody does (first
 in the queue), one says no, then yes to the link, which is texted (T25,
-`AUTO-CALLS.md`):
+`AUTO-CALLS.md`). Then Seri, the AI agent, is switched on (A20,
+`AI-AGENT.md`): the robot places nothing while OpenAI does not answer its
+check, then calls five leads who each talk to her through her real relay -
+one books a call back (due, first in the queue, taken by the agent who picks
+the lead up), one is put through and the agent takes it, one gets the link,
+one says stop and is blocked without OpenAI being asked, and on the last
+OpenAI fails mid-call and the script takes over:
 
 ```bash
 docker compose exec postgres psql -U app -d postgres -c 'CREATE DATABASE e2e'
@@ -163,12 +181,20 @@ docker compose exec -e DATABASE_URL=postgres://app:app@postgres:5432/e2e api   n
 docker compose exec -e DATABASE_URL=postgres://app:app@postgres:5432/e2e   -e EZT_SEND_GROUP=stub api npm run e2e
 ```
 
-Ninety-seven checks (2026-10-27) - Avery's "thanks" after the link included,
+142 checks (2026-11-22; 131 on 2026-11-12, 97 before Seri) - Avery's "thanks" after the link included,
 which goes to a person (`STATE-MACHINE.md` 2d). EZ Texting and Twilio are stubbed at their
 HTTP boundaries - `axios.post`, and the Twilio library's one request method,
-which answers only "place this call" and fails the run on anything else - so it
-proves everything up to the moment a text or a call would leave the building,
-and nothing about whether a real phone buzzes or rings. Twilio's side of each
+which answers only "place this call" and fails the run on anything else - and
+OpenAI is a local server `OPENAI_BASE_URL` points at, answering Seri's brain
+with the acts and words each step scripts while the brain itself decides (A20;
+the new brain since 2026-11-19). So it proves everything up to the moment a
+text, a call or a question to the model would leave the building, and nothing
+about whether a real phone buzzes or rings, or what the real model would say -
+the test sets are for that (`npm run ai:eval:understand`, `ai:eval:speak`,
+`ai:replay`, `AI-AGENT.md` sections 8 and 12). Seri's
+relay is the real WebSocket on a real server, connected as ConversationRelay
+connects. The api container must be on the current image (`docker compose up
+-d --no-deps api` after a build): an older one lacks Phase 7's packages. Twilio's side of each
 call is its webhooks, posted to the real routes and signed as Twilio signs them,
 each at the address the previous answer gave. It sets its own database's calling
 hours to every hour of every day, so it passes whenever it is run. For real
@@ -178,6 +204,15 @@ texts, set the real `EZT_*` values and add your own number to the test group, as
 ## Known limits
 
 Things that are true today and will surprise someone who assumes otherwise.
+
+**Seri, the AI agent, is tested on the dev number but not deployed**
+(2026-11-23). She is proved end to end with Twilio and OpenAI stubbed
+(`npm run e2e`), her brain against the real model (`npm run ai:eval:understand`, `ai:eval:speak`, `ai:replay`),
+and on real calls to our own phones from the dev number - A21's calls 86-112
+on her first brain, A34's calls 113-140 on today's (A34 done 2026-11-23,
+the three minutes left to the tests). Production has neither her migrations
+nor her switch on (A22).
+`AI-AGENT.md`; its open points are in each ticket's "Not covered".
 
 **Calling is simple.** Agents call leads from the browser (`TWILIO.md`, built
 2026-10-01). A lead who rings the number back rings one agent's browser - the
@@ -274,6 +309,7 @@ whether the page forgot it; State is not shown at all.
 - **Frontend**: React + Vite
 - **Calling**: Twilio - the `twilio` library on the server, `@twilio/voice-sdk`
   in the browser. Audio goes browser to Twilio, never through our server
+- **AI agent** (Phase 7, `AI-AGENT.md`): Seri runs the automated call when switched on - Twilio ConversationRelay (Deepgram listening, an ElevenLabs voice) and two OpenAI models - `gpt-5.4-mini` to understand what the lead said, `gpt-4.1-mini` to word her reply, with what she does next decided in code between them - through a WebSocket at `/api/ai/relay`. Off unless `OPENAI_API_KEY` is set and her switch is on (`npm run ai-agent -- on`); off, every call gets the script
 - **Deployment**: EC2 (Caddy + Docker Compose) + RDS
 
 *As of 2026-09-14:* all API routes are under `/api`, which is the only path
@@ -296,6 +332,7 @@ commit.
 | `WEBHOOKS.md` | How replies are received | The webhook handler |
 | `TWILIO.md` | Browser calling: how a call works, incoming calls and missed calls, what is saved, settings, testing, deploying | Anything about calls, Twilio's webhooks, the Call button, the incoming-call card or the call bar |
 | `AUTO-CALLS.md` | Automated outbound calls: the agreed script and flow, the transfer and hold rules, the "Taking calls" switch, and the build tracker. T0-T25 are done (2026-10-25): the server places a call, asks the script, keeps every answer, texts the link, puts a "yes" through to the lead's own agent first, then everyone free, switches off whoever let it ring out, holds a "yes" while someone is on a call or writing its note, rings the next person who comes free with the lead who has waited longest, leaves the voicemail message once a machine's greeting is over, rings everyone free for a lead calling back whom nobody owns, calls the right leads by itself, five at once for each person free (T29), shows each robot call on the lead's timeline with what was said, puts a "yes" nobody took first in the agents' queue, shows each lead's robot call on Admin > Leads, and the script and its settings on Admin > Configuration, every doc read against the code and the end-to-end script running robot calls, and every path heard on a real phone (T26, 2026-10-27); live on production since the deploy of `main` from 2026-10-30 | A ticket from its tracker is merged, or any decision about automated calls |
+| `AI-AGENT.md` | Phase 7: Seri, the AI agent that runs the automated call - ConversationRelay with OpenAI, the sales playbook, who is there on every turn and her five actions, calls back at a time the lead picks, what she knows (`backend/src/ai/knowledge/`, and the edrugstore.com crawl in `data/edrugstore-site/` it was written from), limits and backups, the `ai-agent` switch command. Designed 2026-11-11; the build tracker is `ai-agent-tickets/README.md` (A01-A34): A01 to A20 done (2026-11-12); A21 (every path on a real phone) paused after call 112 while each reply was rebuilt as three steps - understand, decide in code, speak (A24-A33, done 2026-11-17 and 18, section 12); A34, A21's checklist again on the new brain, done 2026-11-23 (calls 113-140); then A22 (deploy, then switch on) and A23. All on `dev` | Any ticket of Phase 7, a change to Seri's knowledge, or any decision about the AI agent |
 | `AUDIT.md` | The activity log and the raw webhook archive: what is recorded, why nothing can be edited or deleted, what it does not cover | **Any new action a person or the system can take** - it records itself, or this doc says why not |
 | `ADMIN-LEADS.md` | The superadmin Leads page | That page or its API |
 | `QUEUE.md` | The agents' priority queue API: who is in it, the order, the tags | `GET /api/leads`, the queue query or the tag rules |
@@ -304,6 +341,7 @@ commit.
 | `LOGGING.md` | Log format and the health endpoints | Anything logged, or the health routes |
 | `FLOWS.md` | How SMS scripts are stored - flows, questions, choices, answers - why, and how to add one | A new or changed flow, or anything about how answers are stored |
 | `STATE-MACHINE.md` | The SMS flow: replies, scoring, expiry, sending, repeat leads. Overrides the mockup | The state machine, or any flow decision |
+| `REVIEW-2026-11-22.md` | The whole repo read against its docs, 2026-11-22: every finding, its size, and whether it is fixed - the tracker for those fixes | A fix of one of its findings: its status, in the same commit |
 | `EZTEXTING-API.md` | Verified API behaviour | You learn something new about the API |
 | `WORKFLOW.md` | Branches, PRs, migrations, deploys | The process itself |
 | `FRONTEND.md` | The React app as built: screens, polling, and the decisions behind them | Any frontend change |

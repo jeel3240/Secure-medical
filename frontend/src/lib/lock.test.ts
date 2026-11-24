@@ -8,7 +8,7 @@
 import { describe, expect, it } from 'vitest';
 import type { QueueLead, QueueTag } from '../api/leads';
 import type { PublicUser } from '../api/types';
-import { lockHolder, mayRelease, rowAction } from './lock';
+import { mayRelease, rowAction } from './lock';
 
 const lead = (tag: QueueTag | null): QueueLead => ({
   id: 1,
@@ -47,30 +47,30 @@ describe('a lead nobody holds', () => {
     ['inbound_reply', { kind: 'inbound_reply' }],
     ['needs_review', { kind: 'needs_review' }],
   ])('is open to anyone (%s)', (_, tag) => {
-    expect(lockHolder(lead(tag), MAYA)).toBeNull();
+    expect(rowAction(lead(tag), MAYA)).not.toBe('locked');
   });
 });
 
 describe('a lead another agent holds', () => {
   const held = lead({ kind: 'working', agentId: RAE.id, agentName: 'Rae Whitfield' });
 
-  it('is locked, and names the holder', () => {
-    expect(lockHolder(held, MAYA)).toBe('Rae Whitfield');
+  it('is locked for another agent', () => {
+    expect(rowAction(held, MAYA)).toBe('locked');
   });
 
   it('is locked for a signed-out view too', () => {
     // Defaulting to unlocked would invite a click that the server refuses.
-    expect(lockHolder(held, null)).toBe('Rae Whitfield');
+    expect(rowAction(held, null)).toBe('locked');
   });
 
   it('is not locked for the agent who holds it', () => {
     // Reopening your own claim is the normal way back into a lead.
-    expect(lockHolder(held, RAE)).toBeNull();
+    expect(rowAction(held, RAE)).not.toBe('locked');
   });
 
   it('is not locked for a superadmin', () => {
     // They can force-release, and need to see what an agent is stuck on.
-    expect(lockHolder(held, BOSS)).toBeNull();
+    expect(rowAction(held, BOSS)).not.toBe('locked');
   });
 });
 
@@ -91,7 +91,7 @@ describe('a working tag with no holder id', () => {
     // The queue endpoint only omits the name when the holder is deactivated,
     // and db/claims.ts lets anyone take over such a lead. Muting the row would
     // strand it: nobody could ever open it.
-    expect(lockHolder(lead({ kind: 'working' }), MAYA)).toBeNull();
+    expect(rowAction(lead({ kind: 'working' }), MAYA)).not.toBe('locked');
   });
 });
 

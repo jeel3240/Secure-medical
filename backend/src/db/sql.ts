@@ -19,6 +19,40 @@ export function likeLiteral(text: string): string {
   return text.replace(/[\\%_]/g, (c) => `\\${c}`);
 }
 
+/**
+ * The search box on the queue and Admin > Leads: what was typed, in the lead's
+ * name, or its digits in the phone - so "(602) 620-3572" finds +16026203572.
+ * Pushes its two values onto `values` and gives the clause, for `l` (leads).
+ * One copy since review Q5, 2026-11-23 - the two screens had it word for word.
+ */
+export function leadSearchSql(values: unknown[], typed: string): string {
+  // Escaped, so a "%" or "_" in the box is that character, not a wildcard.
+  values.push(`%${likeLiteral(typed.toLowerCase())}%`);
+  const like = `$${values.length}`;
+  values.push(`%${typed.replace(/\D/g, '')}%`);
+  const digits = `$${values.length}`;
+  return `(
+      lower(coalesce(l.first_name, '') || ' ' || coalesce(l.last_name, '')) LIKE ${like}
+      OR (${digits} <> '%%' AND l.phone LIKE ${digits})
+    )`;
+}
+
+/**
+ * A list of constant words for `IN (...)`, inlined: `'closed', 'sold'`. Only
+ * for values written in this codebase, never from a request - and each is
+ * checked to be a plain word (small letters, `_`, `.`), so a typo cannot make
+ * SQL of it. One copy since review Q5, 2026-11-23: there were three, and one
+ * quietly dropped bad characters where the others threw.
+ */
+export function wordList(words: readonly string[]): string {
+  return words
+    .map((word) => {
+      if (!/^[a-z_.]+$/.test(word)) throw new Error(`Not a plain word for SQL: ${word}`);
+      return `'${word}'`;
+    })
+    .join(', ');
+}
+
 /** Anything with a `query` method: the pool, or a client inside a transaction. */
 export interface Querier {
   query: (sql: string, values?: unknown[]) => Promise<{ rows: Array<Record<string, unknown>> }>;
@@ -36,8 +70,26 @@ export const DEFAULT_EXPIRY_DAYS = 7;
  */
 export async function readExpiryDays(q: Querier): Promise<number> {
   const { rows } = await q.query(`SELECT value FROM settings WHERE key = 'expiry_days'`);
-  const days = Number(rows[0]?.value);
-  return Number.isFinite(days) && days > 0 ? days : DEFAULT_EXPIRY_DAYS;
+  return expiryDays(rows[0]?.value);
+}
+
+/** `expiry_days` as every reader takes it - Configuration's page too (review M17): `DEFAULT_EXPIRY_DAYS` unless above 0. */
+export function expiryDays(raw: unknown): number {
+  const days = Number(raw);
+  return raw !== undefined && raw !== null && Number.isFinite(days) && days > 0 ? days : DEFAULT_EXPIRY_DAYS;
+}
+
+/** How often the worker polls when `poll_interval_seconds` says nothing usable - migration 005. */
+export const DEFAULT_POLL_INTERVAL_SECONDS = 30;
+
+/**
+ * `poll_interval_seconds` as the worker takes it, and so as Admin > Leads says
+ * it (review M17, 2026-11-22: that page read 60 by default, and took 0 at its
+ * word): `DEFAULT_POLL_INTERVAL_SECONDS` unless above 0.
+ */
+export function pollIntervalSeconds(raw: unknown): number {
+  const seconds = Number(raw);
+  return raw !== undefined && raw !== null && Number.isFinite(seconds) && seconds > 0 ? seconds : DEFAULT_POLL_INTERVAL_SECONDS;
 }
 
 /**
@@ -69,4 +121,14 @@ export function isTimeZone(tz: unknown): tz is string {
 export function startOfTodaySql(tz = 'UTC'): string {
   if (!isTimeZone(tz)) throw new Error(`Not a time zone: ${tz}`);
   return `(date_trunc('day', now() AT TIME ZONE '${tz}') AT TIME ZONE '${tz}')`;
+}
+
+/**
+ * When the viewer's next day begins - their midnight, worked out on their own
+ * clock. Today's start plus a day was 24 hours on, an hour off it on the two
+ * days a year the clocks change (review M11, 2026-11-22).
+ */
+export function startOfTomorrowSql(tz = 'UTC'): string {
+  if (!isTimeZone(tz)) throw new Error(`Not a time zone: ${tz}`);
+  return `((date_trunc('day', now() AT TIME ZONE '${tz}') + interval '1 day') AT TIME ZONE '${tz}')`;
 }

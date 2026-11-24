@@ -96,7 +96,7 @@ export function OverviewPage() {
   });
 
   const healthFetcher = useCallback(() => getHealth(), []);
-  const { data: health } = usePolling<Health>(healthFetcher);
+  const { data: health, error: healthError } = usePolling<Health>(healthFetcher);
 
   if (loading) {
     return (
@@ -190,7 +190,10 @@ export function OverviewPage() {
               </span>
             )}
           </header>
-          {!health ? (
+          {/* A check that could not be read says so - it spun for ever (review M31, 2026-11-22). */}
+          {!health && healthError ? (
+            <Banner tone="error">Could not read the system checks. {healthError}</Banner>
+          ) : !health ? (
             <div className="loading-block">
               <Spinner />
             </div>

@@ -48,6 +48,15 @@ describe('sendMessage', () => {
     expect(post).not.toHaveBeenCalled();
   });
 
+  it('keeps the blocked numbers off the message, which is logged - on `phones` only (review H1)', async () => {
+    poolQuery.mockResolvedValue({ rows: [{ phone: '+16026203572' }], rowCount: 1 });
+
+    const err = await sendMessage(['+16026203572'], 'hello').catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(BlockedNumberError);
+    expect((err as Error).message).toBe('Refusing to send: the number is on dnc_list');
+    expect((err as BlockedNumberError).phones).toEqual(['+16026203572']);
+  });
+
   it('refuses the whole send when any recipient is blocked', async () => {
     poolQuery.mockResolvedValue({ rows: [{ phone: '+15550000002' }], rowCount: 1 });
 
@@ -87,7 +96,8 @@ describe('sendMessage', () => {
     const { config } = require('../config') as { config: { ezt: { sendGroup: string } } };
     config.ezt.sendGroup = '';
 
-    await expect(sendMessage(['+16026203572'], 'hello')).rejects.toThrow(/EZT_SEND_GROUP/);
+    // Said as what it is: a switch, not a group of numbers allowed (review Q12, 2026-11-23).
+    await expect(sendMessage(['+16026203572'], 'hello')).rejects.toThrow(/EZT_SEND_GROUP is not set\. It is the switch/);
     expect(poolQuery).not.toHaveBeenCalled();
     expect(post).not.toHaveBeenCalled();
 

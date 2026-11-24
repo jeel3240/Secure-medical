@@ -35,7 +35,11 @@ export async function sendOpener(
     send: () => sendMessage([lead.phone], text),
   });
 
-  if (result.sent) {
+  // A send EZ Texting did not answer in time may have gone out - db/outbound.ts. Taken as sent here: its reply counts
+  // as an answer, its window runs, and the robot calls a lead who never answers. Taken as unsent, a reply in the next
+  // two minutes was dropped, the retry - which never sends twice - left it, and the lead was stuck until it expired
+  // (review H12, 2026-11-22).
+  if (result.sent || result.unconfirmed) {
     // The reply window starts when the opener actually goes out, not when the
     // lead arrived: a conversation whose opener failed has no deadline it
     // never earned (the expiry sweep falls back to created_at for those), and

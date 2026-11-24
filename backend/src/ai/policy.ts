@@ -1,0 +1,789 @@
+/**
+ * What Seri does next - Phase 7, A27, docs/AI-AGENT.md section 12, "Decide".
+ * Pure: no OpenAI, no database, no clock of its own.
+ *
+ * Until A24 one OpenAI request worked out, from the transcript alone, where
+ * the call was and what to do - and on A21's real calls it said the opening
+ * again two and a half minutes in, offered to connect in 7 of 9 replies,
+ * booked a time it chose, kept offering after two clear no's. Here the call
+ * has a record (`CallState`), and the next move is decided from it by rules
+ * that hold every time; OpenAI only says what the lead did (understand, A28)
+ * and words the moves (speak, A29).
+ *
+ *   decide(state, acts, context) -> the moves for her reply, and the record
+ *                                   with what the lead did
+ *   markSaid(state, moves)       -> the record with what she said - only the
+ *                                   moves the lead heard, when talked over (A30)
+ */
+
+import { formatClock, indexOfWeekday, weekdayOfIndex, WEEKDAYS, type CallHours, type Weekday } from '../core/auto-dial';
+import type { EndReason, Handoff } from './actions';
+import { MAX_AHEAD_DAYS, atLocalTime, bookableAt, checkCallbackTime, dateAfter, spokenTime, toLocalTime, type CallbackRefusal } from './callback-time';
+import type { WhoIsThere } from './instructions';
+import type { AnswerOffer, Knowledge } from './knowledge';
+
+/** Kept with every record (A31): a record from another version is read with care, not trusted. */
+export const POLICY_VERSION = 1;
+
+// ---------------------------------------------------------------------------
+// What the lead did - from the understand step (A28), or the fast path
+
+export type NoReason = 'closed' | 'timing' | 'product';
+
+/** A call-back time as the lead said it - the parts, never a date the model worked out (A24: call 93's Saturday). */
+export interface SaidTime {
+  /** "today", "tomorrow", a weekday ("monday"), a date ("2026-11-19"), or null. */
+  day: string | null;
+  hour: number | null;
+  minute: number | null;
+  ampm: 'am' | 'pm' | null;
+}
+
+export type Act =
+  | { act: 'confirm_identity' }
+  | { act: 'interested' }
+  | { act: 'not_interested'; reason: NoReason | null }
+  | { act: 'not_now' }
+  | { act: 'wants_person' }
+  | { act: 'wants_callback'; time: SaidTime | null }
+  | { act: 'wants_link' }
+  | { act: 'agrees' }
+  | { act: 'declines' }
+  /** A question: an approved answer's id, or `UNCOVERED`, or `REAL_PERSON`. */
+  | { act: 'asks'; topic: string }
+  /** One of the playbook's objections, by id (A26). */
+  | { act: 'objection'; id: string }
+  | { act: 'emergency' }
+  | { act: 'wrong_person' }
+  | { act: 'stop' }
+  | { act: 'unclear' }
+  | { act: 'checking_line' }
+  /** They ask her to say it again, or did not understand her (calls 136, 137). */
+  | { act: 'repeat' }
+  | { act: 'backchannel' }
+  | { act: 'machine' }
+  | { act: 'other' };
+
+/** A question no approved answer covers - our specialists can tell them. */
+export const UNCOVERED = 'uncovered';
+/** "Are you a real person?" */
+export const REAL_PERSON = 'real_person';
+
+/** Objections the client answered in an approved answer: said as that answer, word for word. */
+const OBJECTION_ANSWERS: Readonly<Record<string, string>> = {
+  scam: 'scam',
+  too_expensive: 'cheaper_pharmacy',
+  never_signed_up: 'how_got_number',
+};
+
+/**
+ * Objections she words herself, from the playbook's `approach` - the others are
+ * routed (a no, busy, the link) or are an approved answer above, which the
+ * knowledge tests hold present (review Q1, 2026-11-23).
+ */
+const WORDED_OBJECTIONS = new Set(['have_doctor']);
+
+/** Questions the opening itself answers. */
+const OPENING_TOPICS = new Set(['why_calling', 'who_we_are', 'offer', 'medical_web']);
+
+// ---------------------------------------------------------------------------
+// The record of the call
+
+export type OfferKind = 'connect' | 'callback' | 'link' | 'products';
+export type OfferAnswer = 'none' | 'yes' | 'no';
+
+/** Her question the lead has not answered yet. */
+export type OpenQuestion =
+  | 'identity' // the greeting: "Hi, is this John?"
+  | 'interest' // the offer: "Is that something you'd be interested in?"
+  | 'why' // after a no: "Is it more the timing, or…?"
+  | 'offer_connect'
+  | 'offer_callback'
+  | 'offer_link'
+  | 'offer_products'
+  | 'time' // "What time works for you?"
+  | 'confirm' // "So that's Monday at 2 PM your time?"
+  | 'anything_else';
+
+export interface CallState {
+  version: number;
+  stage: 'greeting' | 'talking' | 'closing';
+  /** They said it is them. */
+  identity: boolean;
+  interest: 'unknown' | 'yes' | 'no';
+  /** Clear no's: two end the call. */
+  nos: number;
+  whyAsked: boolean;
+  offers: Record<OfferKind, { made: number; answer: OfferAnswer }>;
+  open: OpenQuestion | null;
+  /**
+   * A call back: the day they named with no hour yet, and the time she said back - `unheard` when they cut in before
+   * the time itself: a yes to it then has her say it again, never books it (review M4, 2026-11-22).
+   */
+  callback: { day: string | null; proposed: string | null; unheard?: true };
+  /** Lines in a row she could not make out. */
+  misheard: number;
+  /** How often each approved answer was given. */
+  answered: Record<string, number>;
+  /** How often she said a question is our specialists' to answer. */
+  specialist: number;
+  /** "Everyone on our team is busy right now" - said once is enough. */
+  busySaid: boolean;
+  /** A medical or uncovered question was asked - the call back's reason. */
+  wantsSpecialist: boolean;
+  /** Her last reply came back to her open question, or asked if there was anything else: not twice in a row. */
+  returned: boolean;
+  /** Her replies since she last came back to her open question - so she comes back to the same one once every few, not every other reply (call 135). */
+  sinceReturn?: number;
+  askedAnythingElse: boolean;
+  /** The three minutes: the closing offer is due, then made. */
+  wrapUp: 'not_yet' | 'due' | 'offered';
+  /** How her last two replies began - so the next does not begin the same way (A29). */
+  openings: string[];
+}
+
+export function startState(): CallState {
+  const offer = () => ({ made: 0, answer: 'none' as OfferAnswer });
+  return {
+    version: POLICY_VERSION,
+    stage: 'greeting',
+    identity: false,
+    interest: 'unknown',
+    nos: 0,
+    whyAsked: false,
+    offers: { connect: offer(), callback: offer(), link: offer(), products: offer() },
+    open: 'identity',
+    callback: { day: null, proposed: null },
+    misheard: 0,
+    answered: {},
+    specialist: 0,
+    busySaid: false,
+    wantsSpecialist: false,
+    returned: false,
+    sinceReturn: RETURN_EVERY,
+    askedAnythingElse: false,
+    wrapUp: 'not_yet',
+    openings: [],
+  };
+}
+
+// ---------------------------------------------------------------------------
+// What she does: the moves of one reply
+
+export type Move =
+  /** Who she is, the offer, and whether they are interested - only once, at the start. */
+  | { move: 'opening' }
+  /** An approved answer: said by code word for word (`text`) - or, asked again, briefly in her words (`again`). */
+  | { move: 'answer'; id: string; text: string; again: boolean }
+  /** A question no approved answer covers: our specialists can tell them - never "I don't know". */
+  | { move: 'specialist'; again: boolean }
+  /** She is eDrugstore's virtual assistant. */
+  | { move: 'virtual' }
+  /** A playbook objection, worded from its `approach` - carried here, so changing the file changes what she is told (review Q1). */
+  | { move: 'objection'; id: string; approach: string }
+  | { move: 'ask_why' }
+  | { move: 'offer'; kind: OfferKind }
+  /** Nobody can take a call now, said plainly. */
+  | { move: 'busy' }
+  /** When would suit for a call back - on `day` if they named one. */
+  | {
+      move: 'ask_time';
+      day: string | null;
+      /** The day they asked for has no time a call back can be booked: why, and the day said - `day` is then the next that has one (call 122). */
+      instead?: { asked: string; why: DayRefusal };
+    }
+  /**
+   * The time said back, as a question. `instead`: the time they asked for
+   * could not be booked, and why - this is the nearest that can (`asked`, theirs).
+   */
+  | { move: 'confirm_time'; at: string; zone: string; spoken: string; instead: CallbackRefusal | null; asked: string | null }
+  | { move: 'ask_repeat' }
+  /** "Yes, I'm here." */
+  | { move: 'still_here' }
+  /** What she just said, again - more simply (calls 136, 137: "Can you repeat your answer?", "I don't understand"). */
+  | { move: 'say_again' }
+  /** They asked more at once than one reply answers: the rest one at a time, which first (call 136). */
+  | { move: 'which_next' }
+  /** Her open question again, briefly and in new words. */
+  | { move: 'return_to'; open: OpenQuestion }
+  | { move: 'anything_else' }
+  /** The call ends: her last line, then the action. */
+  | { move: 'end'; handoff: Handoff };
+
+/** The moves that ask the lead something: at most one in a reply, and it comes last. */
+export function asks(move: Move): boolean {
+  return ['opening', 'ask_why', 'offer', 'ask_time', 'confirm_time', 'ask_repeat', 'return_to', 'anything_else', 'which_next'].includes(move.move);
+}
+
+export interface PolicyContext {
+  who: WhoIsThere;
+  now: Date;
+  hours: CallHours;
+  /** The lead's zone - from the area code (`leadTimeZone`). */
+  leadZone: string;
+  /** False when the area code does not tell it: `leadZone` is then Arizona's, and every time is said as Arizona time (review H11). */
+  leadZoneKnown?: boolean;
+  knowledge: Knowledge;
+}
+
+export interface Decision {
+  /** The record with what the lead did; `markSaid` adds what she said. */
+  state: CallState;
+  /** Her reply, in order. Empty: she says nothing and listens on (a voicemail greeting). */
+  moves: Move[];
+}
+
+// ---------------------------------------------------------------------------
+// Deciding
+
+const copy = (s: CallState): CallState => ({
+  ...s,
+  offers: {
+    connect: { ...s.offers.connect },
+    callback: { ...s.offers.callback },
+    link: { ...s.offers.link },
+    products: { ...s.offers.products },
+  },
+  callback: { ...s.callback },
+  answered: { ...s.answered },
+  openings: [...s.openings],
+});
+
+const UNDERSTOOD_NOTHING = new Set<Act['act']>(['unclear', 'other', 'backchannel', 'checking_line']);
+const ROUTING = new Set<Act['act']>([
+  'interested',
+  'not_interested',
+  'not_now',
+  'wants_person',
+  'wants_callback',
+  'wants_link',
+  'agrees',
+  'declines',
+]);
+
+export function decide(previous: CallState, acts: readonly Act[], context: PolicyContext): Decision {
+  const s = copy(previous);
+  const has = <K extends Act['act']>(name: K) => acts.find((a): a is Extract<Act, { act: K }> => a.act === name);
+  const open = s.open;
+  const done = (moves: Move[]) => ({ state: s, moves: shape(moves) });
+  const objectionIds = acts.filter((a): a is Extract<Act, { act: 'objection' }> => a.act === 'objection').map((a) => a.id);
+  // An answer to her question closes it; a question of theirs instead leaves it open.
+  if (acts.some((a) => ROUTING.has(a.act))) s.open = null;
+
+  if (acts.some((a) => !UNDERSTOOD_NOTHING.has(a.act))) s.misheard = 0;
+
+  // Whatever else was said, these come first.
+  if (has('stop')) return done([{ move: 'end', handoff: { action: 'opt_out' } }]);
+  if (has('emergency')) return done([answer(s, 'emergency', context), end('end_call', 'emergency')]);
+  if (acts.length > 0 && acts.every((a) => a.act === 'machine')) return done([]);
+
+  // The wrong person - only said plainly, and only before they said it is them: after it, a line like that was misheard (call 109).
+  const saysWrongPerson =
+    has('wrong_person') !== undefined || objectionIds.includes('wrong_person') || (open === 'identity' && has('declines') !== undefined && !has('confirm_identity'));
+  if (saysWrongPerson && !s.identity) return done([end('end_call', 'wrong_person')]);
+  if (has('confirm_identity') || (open === 'identity' && has('agrees'))) s.identity = true;
+  if (saysWrongPerson) return done(misheard(s));
+
+  // The greeting answered - however: the opening, once (call 112: said again two and a half minutes in).
+  // Asking for a person, a call back or the link straight away is answered as asked.
+  // "I'm busy", "I'm driving" too: a call back, later in the call, so at the greeting the same - not the whole
+  // opening to someone who has just said they have no time (review M5, 2026-11-22).
+  const asksForSomething = has('wants_person') || has('wants_callback') || has('wants_link') || objectionIds.includes('busy');
+  if (s.stage === 'greeting' && asksForSomething) s.stage = 'talking';
+  if (s.stage === 'greeting') {
+    const question = acts.find((a): a is Extract<Act, { act: 'asks' }> => a.act === 'asks' && !OPENING_TOPICS.has(a.topic));
+    return done([...(question ? questionMoves(s, question.topic, context) : []), { move: 'opening' }]);
+  }
+
+  // A time for a call back, or a yes to the one she said back.
+  const time = has('wants_callback')?.time ?? null;
+  if (time && (time.hour !== null || time.day !== null)) return done([...answersFor(s, acts, context), ...timeMoves(s, time, context)]);
+  // A yes to the time she said back - read as asking for the call back again counts the same (call 93: "Yes.").
+  if (open === 'confirm' && (has('agrees') || has('wants_callback')) && s.callback.proposed) {
+    return done([s.callback.unheard ? sayTimeAgain(s.callback.proposed, context) : book(s, context)]);
+  }
+  if (open === 'confirm' && has('declines')) {
+    s.callback.proposed = null;
+    delete s.callback.unheard;
+    return done([{ move: 'ask_time', day: s.callback.day }]);
+  }
+
+  // What they want.
+  const agrees = has('agrees') !== undefined;
+  const declines = has('declines') !== undefined;
+  const wantsLink = has('wants_link') || (open === 'offer_link' && agrees);
+  const wantsPerson = has('wants_person') || (open === 'offer_connect' && agrees);
+  const wantsCallback = has('wants_callback') || (open === 'offer_callback' && agrees) || objectionIds.includes('busy');
+  const interested = has('interested') || ((open === 'interest' || open === 'offer_products') && agrees);
+  const noAct = has('not_interested') ?? (objectionIds.includes('not_interested') ? { act: 'not_interested' as const, reason: null } : undefined);
+  const notNow = has('not_now') !== undefined;
+  // "What time?" - "I don't want to talk": a no to the call back she offered, not a question left hanging (call 127).
+  const offerOpen = open?.startsWith('offer_') ? (open.slice(6) as OfferKind) : open === 'time' && declines ? 'callback' : null;
+  const says = (kind: OfferKind, answer: OfferAnswer) => {
+    s.offers[kind].answer = answer;
+  };
+
+  if (offerOpen && (agrees || wantsLink || wantsPerson || wantsCallback || interested)) says(offerOpen, 'yes');
+  if (wantsLink) return done([...answersFor(s, acts, context), { move: 'end', handoff: { action: 'send_link' } }]);
+  if (wantsPerson) {
+    s.interest = 'yes';
+    if (context.who !== 'nobody') return done([{ move: 'end', handoff: { action: 'transfer_to_agent' } }]);
+    return done([...answersFor(s, acts, context), ...busyAskTime(s)]);
+  }
+  if (wantsCallback) return done([...answersFor(s, acts, context), { move: 'ask_time', day: s.callback.day }]);
+  if (interested) {
+    s.interest = 'yes';
+    if (context.who === 'nobody') return done([...answersFor(s, acts, context), ...busyAskTime(s)]);
+    return done([...answersFor(s, acts, context), { move: 'offer', kind: s.offers.connect.answer === 'no' ? 'callback' : 'connect' }]);
+  }
+
+  // "I need to think about it", "I want to look myself" - the door left open with the link, even read as not now as well (call 127).
+  if (objectionIds.includes('think_about_it') && !noAct && s.offers.link.answer !== 'no') {
+    return done(offerOrFollowUp(s, 'link', context, answersFor(s, acts, context)));
+  }
+
+  // A no - to the offer, to an offer she made, or the reason after "why".
+  const productNo = objectionIds.includes('dont_need_antibiotics');
+  const isNo = noAct || notNow || productNo || (declines && (open === 'interest' || open === 'why' || offerOpen !== null));
+  if (isNo) {
+    const reason: NoReason | null = productNo ? 'product' : notNow ? 'timing' : (noAct?.reason ?? null);
+    const no = noMoves(s, reason, offerOpen, open);
+    // A no said with a question is not a clear no (call 137: "Uh, no. First, I want to understand that... do you ship
+    // outside the USA?" - the call ended on it): the question answered, the no kept on the record, the call goes on.
+    const asked = answersFor(s, acts, context);
+    if (asked.length > 0) {
+      const next = no.some((m) => m.move === 'end') ? (s.askedAnythingElse ? [] : [{ move: 'anything_else' as const }]) : no;
+      return done([...asked, ...next]);
+    }
+    return done(no);
+  }
+  // "I need to think about it" after the link was turned down: what else they would like to know.
+  if (objectionIds.includes('think_about_it')) return done(offerOrFollowUp(s, 'link', context, answersFor(s, acts, context)));
+
+  // "Anything else?" - "No, that's all."
+  if (open === 'anything_else' && declines) {
+    if (s.interest === 'yes') return done(context.who === 'nobody' ? busyAskTime(s) : [{ move: 'offer', kind: 'connect' }]);
+    if (s.interest === 'unknown' && s.offers.connect.made === 0) return done([{ move: 'return_to', open: 'interest' }]);
+    return done([end('end_call', 'other')]);
+  }
+
+  // Questions and objections, then one question to go on with - or, asked more than one reply answers, which next.
+  const statements = answersFor(s, acts, context);
+  if (statements.length > 0) {
+    if (askedCount(acts) > statements.length) return done([...statements, { move: 'which_next' }]);
+    return done([...statements, ...followUp(s, statements, context)]);
+  }
+
+  // "Can you repeat that?", "I don't understand" - what she just said, again, more simply.
+  if (has('repeat')) return done([{ move: 'say_again' }]);
+
+  // "Hello?" - she is here, and her question still stands.
+  if (has('checking_line')) return done([{ move: 'still_here' }, ...(open ? [{ move: 'return_to' as const, open }] : [])]);
+  // "Okay" is never a yes (call 99): her question again - or, with none open, nothing; she listens on.
+  if (has('backchannel') && !acts.some((a) => ROUTING.has(a.act))) {
+    return done(open && !s.returned ? [{ move: 'return_to', open }] : []);
+  }
+  if (has('unclear') && acts.every((a) => UNDERSTOOD_NOTHING.has(a.act))) return done(misheard(s));
+  return done(followUp(s, [], context));
+}
+
+/** How many different questions and objections were said - more than `answersFor` answers in one reply, and the rest wait. */
+function askedCount(acts: readonly Act[]): number {
+  return new Set(acts.filter((a) => a.act === 'asks' || a.act === 'objection').map((a) => (a.act === 'asks' ? `asks:${a.topic}` : `objection:${a.id}`))).size;
+}
+
+/** The moves for each question and objection said - at most two, each once. */
+function answersFor(s: CallState, acts: readonly Act[], context: PolicyContext): Move[] {
+  const moves: Move[] = [];
+  for (const a of acts) {
+    if (a.act === 'asks') moves.push(...questionMoves(s, a.topic, context));
+    if (a.act === 'objection') {
+      const id = OBJECTION_ANSWERS[a.id];
+      if (id && context.knowledge.answers.some((x) => x.id === id)) moves.push(answer(s, id, context));
+      else if (WORDED_OBJECTIONS.has(a.id)) {
+        const objection = context.knowledge.playbook.objections.find((o) => o.id === a.id);
+        if (objection) moves.push({ move: 'objection', id: a.id, approach: objection.approach });
+      }
+    }
+  }
+  const seen = new Set<string>();
+  return moves
+    .filter((m) => {
+      const key = m.move === 'answer' ? `answer:${m.id}` : m.move;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    })
+    .slice(0, 2);
+}
+
+function questionMoves(s: CallState, topic: string, context: PolicyContext): Move[] {
+  if (topic === REAL_PERSON) return [{ move: 'virtual' }];
+  const known = context.knowledge.answers.some((a) => a.id === topic);
+  if (!known || topic === UNCOVERED) {
+    s.wantsSpecialist = true;
+    return [{ move: 'specialist', again: s.specialist > 0 }];
+  }
+  if (topic === 'medical_question' || topic === 'which_medication') s.wantsSpecialist = true;
+  return [answer(s, topic, context)];
+}
+
+function answer(s: CallState, id: string, context: PolicyContext): Move {
+  const found = context.knowledge.answers.find((a) => a.id === id);
+  return { move: 'answer', id, text: found?.spoken ?? '', again: (s.answered[id] ?? 0) > 0 };
+}
+
+/** One question to go on with, after what she said: her open question, an answer's offer, or "anything else?". */
+function followUp(s: CallState, said: readonly Move[], context: PolicyContext): Move[] {
+  if (s.wrapUp === 'due') return [wrapUpOffer(s, context)];
+  if (s.wrapUp === 'offered' && said.length === 0) return [end('end_call', 'other')];
+  const leadsTo = new Set<AnswerOffer>();
+  for (const m of said) {
+    if (m.move === 'answer') for (const o of context.knowledge.answers.find((a) => a.id === m.id)?.offers ?? []) leadsTo.add(o);
+    if (m.move === 'specialist' || m.move === 'virtual') leadsTo.add('connect');
+  }
+  // A question about their health: the people who can take it further, offered first - a person, or with nobody
+  // there a call back - before her own question (call 130: she offered it unasked, and the record never knew).
+  const health = said.some((m) => m.move === 'answer' && HEALTH_ANSWERS.has(m.id));
+  const offer = pickOffer(s, leadsTo, context);
+  if (health && offer) return [{ move: 'offer', kind: offer }];
+  // Her own question, come back to once every few replies - not after every other side question (calls 94, 135).
+  const mayReturn = !s.returned && (s.sinceReturn ?? RETURN_EVERY) >= RETURN_EVERY;
+  if (s.open && s.open !== 'anything_else' && s.open !== 'identity' && mayReturn) return [{ move: 'return_to', open: s.open }];
+  if (offer) return [{ move: 'offer', kind: offer }];
+  if (s.interest === 'unknown' && mayReturn && s.offers.connect.made === 0) return [{ move: 'return_to', open: 'interest' }];
+  return s.askedAnythingElse ? [] : [{ move: 'anything_else' }];
+}
+
+/**
+ * After coming back to her open question, the replies to side questions before she may again: an answer and
+ * "anything else?", an answer alone, an answer and "anything else?" - then her question (call 135: the offer in five
+ * of seven replies).
+ */
+const RETURN_EVERY = 3;
+
+/** The approved answers to a question about their own health - the client's note on each: a person, or the call back queue. */
+const HEALTH_ANSWERS: ReadonlySet<string> = new Set(['medical_question', 'which_medication']);
+
+/**
+ * Which offer an answer leads to, by who is there: a person only when someone
+ * is free or coming; with nobody, a call back. Each once: one they turned
+ * down or let pass is not made again (call 90: seven of nine replies offered
+ * to connect) - interest shown is answered on its own path.
+ */
+function pickOffer(s: CallState, leadsTo: ReadonlySet<AnswerOffer>, context: PolicyContext): OfferKind | null {
+  const fresh = (kind: OfferKind) => s.offers[kind].made === 0 && s.offers[kind].answer !== 'no';
+  if (leadsTo.has('connect') && context.who !== 'nobody' && fresh('connect')) return 'connect';
+  if ((leadsTo.has('connect') || leadsTo.has('callback')) && fresh('callback')) return 'callback';
+  if (leadsTo.has('link') && fresh('link')) return 'link';
+  return null;
+}
+
+function offerOrFollowUp(s: CallState, kind: OfferKind, context: PolicyContext, before: Move[]): Move[] {
+  return s.offers[kind].answer === 'no' ? [...before, ...followUp(s, before, context)] : [...before, { move: 'offer', kind }];
+}
+
+function wrapUpOffer(s: CallState, context: PolicyContext): Move {
+  if (context.who !== 'nobody' && s.offers.connect.answer !== 'no') return { move: 'offer', kind: 'connect' };
+  if (s.offers.callback.answer !== 'no') return { move: 'offer', kind: 'callback' };
+  return { move: 'offer', kind: 'link' };
+}
+
+/**
+ * A no. The first: why, asked alone - or, with the reason already given, the
+ * one offer it leaves open (the timing: a call back; not antibiotics: the
+ * other products). A second clear no, or a no to that one offer, ends the call.
+ */
+function noMoves(s: CallState, reason: NoReason | null, offerOpen: OfferKind | null, open: OpenQuestion | null): Move[] {
+  if (s.interest !== 'yes') s.interest = 'no';
+  if (offerOpen) {
+    s.offers[offerOpen].answer = 'no';
+    // Turning down a person, with interest shown, is not turning down the offer: a call back instead.
+    if (offerOpen === 'connect' && s.interest === 'yes' && s.offers.callback.answer !== 'no') return [{ move: 'offer', kind: 'callback' }];
+    // A call back turned down, interest shown: the link instead, once - a no all the same, so a no to the link ends the call.
+    if (offerOpen === 'callback' && s.interest === 'yes' && s.offers.link.made === 0 && s.offers.link.answer !== 'no') {
+      s.nos += 1;
+      return [{ move: 'offer', kind: 'link' }];
+    }
+    s.nos += 1;
+  } else if (open === 'why') {
+    if (reason !== 'timing' && reason !== 'product') s.nos += 1;
+  } else {
+    s.nos += 1;
+  }
+  if (s.nos >= 2) return [end('end_call', 'not_interested')];
+  const door: OfferKind | null = reason === 'timing' ? 'callback' : reason === 'product' ? 'products' : null;
+  if (door && s.offers[door].made === 0) return [{ move: 'offer', kind: door }];
+  if (!s.whyAsked && !door) return [{ move: 'ask_why' }];
+  return [end('end_call', 'not_interested')];
+}
+
+function busyAskTime(s: CallState): Move[] {
+  return [...(s.busySaid ? [] : [{ move: 'busy' as const }]), { move: 'ask_time', day: s.callback.day }];
+}
+
+function misheard(s: CallState): Move[] {
+  s.misheard += 1;
+  if (s.misheard === 1) return [{ move: 'ask_repeat' }];
+  if (s.misheard === 2 && s.offers.link.answer !== 'no') return [{ move: 'offer', kind: 'link' }];
+  if (s.misheard === 2) return [{ move: 'ask_repeat' }];
+  return [end('end_call', 'other')];
+}
+
+function end(action: 'end_call', reason: EndReason): Move {
+  return { move: 'end', handoff: { action, reason } };
+}
+
+// ---------------------------------------------------------------------------
+// A call-back time - worked out here, never by the model
+
+const DAY_WORDS: Readonly<Record<string, Weekday>> = {
+  sunday: 'sun',
+  monday: 'mon',
+  tuesday: 'tue',
+  wednesday: 'wed',
+  thursday: 'thu',
+  friday: 'fri',
+  saturday: 'sat',
+};
+
+/** "monday" for `mon` - the day word `resolveTime` reads back. */
+function wordForDay(day: Weekday): string {
+  return Object.keys(DAY_WORDS).find((word) => DAY_WORDS[word] === day) as string;
+}
+
+/** Why a day said with no time cannot have a call back: the agents do not work it, its hours are over, or it is beyond the booking window. */
+export type DayRefusal = 'closed_day' | 'none_left' | 'too_far';
+
+/** Whether any quarter hour of `date` (the lead's own, YYYY-MM-DD) can have a call back. */
+function dayHasTime(date: string, context: PolicyContext): boolean {
+  for (let minute = 0; minute < 24 * 60; minute += 15) {
+    const at = atLocalTime(`${date}T${formatClock(minute)}`, context.leadZone);
+    if (at && bookableAt(at, context.hours, context.now)) return true;
+  }
+  return false;
+}
+
+/**
+ * A day said with no time ("How about Sunday?"): whether it has a time a call
+ * back can be booked; if not, why, and the next day that has one - as a day word
+ * `resolveTime` reads: "tomorrow", a weekday within the week, else a date. Call
+ * 122: "Sunday" was asked "what time on Sunday?", then refused once a time came.
+ * Null when the day cannot be read.
+ */
+function dayForCallback(dayWord: string, context: PolicyContext): { ok: true } | { ok: false; asked: string; why: DayRefusal; next: string | null } | null {
+  const noon = resolveTime({ day: dayWord, hour: 12, minute: 0, ampm: 'pm' }, context.leadZone, context.now);
+  if (!noon) return null;
+  const date = toLocalTime(noon, context.leadZone).slice(0, 10);
+  if (dayHasTime(date, context)) return { ok: true };
+  const asked = spokenTime(noon, context.leadZone, context.now, context.leadZoneKnown).replace(/ at .*$/, '');
+  const agentsDay = new Date(`${toLocalTime(noon, context.hours.timeZone).slice(0, 10)}T12:00:00Z`).getUTCDay();
+  const today = toLocalTime(context.now, context.leadZone).slice(0, 10);
+  const why: DayRefusal = !context.hours.days.has(weekdayOfIndex(agentsDay))
+    ? 'closed_day'
+    : noon.getTime() > context.now.getTime() + MAX_AHEAD_DAYS * 24 * 60 * 60 * 1000
+      ? 'too_far'
+      : 'none_left';
+  if (why === 'too_far') return { ok: false, asked, why, next: null };
+  for (let d = 1; d <= MAX_AHEAD_DAYS; d++) {
+    const next = dateAfter(date, d);
+    if (!dayHasTime(next, context)) continue;
+    const ahead = Math.round((Date.parse(`${next}T12:00:00Z`) - Date.parse(`${today}T12:00:00Z`)) / (24 * 60 * 60 * 1000));
+    const word = ahead === 1 ? 'tomorrow' : ahead < 7 ? wordForDay(weekdayOfIndex(new Date(`${next}T12:00:00Z`).getUTCDay())) : next;
+    return { ok: false, asked, why, next: word };
+  }
+  return { ok: false, asked, why, next: null };
+}
+
+/** The time they said, worked out on their own clock, checked, and said back - or the nearest that can be booked. */
+function timeMoves(s: CallState, said: SaidTime, context: PolicyContext): Move[] {
+  const day = said.day ?? s.callback.day;
+  if (said.hour === null) {
+    // A day alone: asked for a time only when that day has one - else why, and the next day that does.
+    const check = said.day ? dayForCallback(said.day, context) : { ok: true as const };
+    if (check && !check.ok) {
+      s.callback.day = check.next;
+      return [{ move: 'ask_time', day: check.next, instead: { asked: check.asked, why: check.why } }];
+    }
+    s.callback.day = day;
+    return [{ move: 'ask_time', day }];
+  }
+  const when = resolveTime({ ...said, day }, context.leadZone, context.now);
+  if (!when) {
+    s.callback.day = null;
+    return [{ move: 'ask_time', day: null }];
+  }
+  const check = checkCallbackTime(when, context.leadZone, context.hours, context.now);
+  const zone = context.leadZone;
+  if (check.ok) {
+    return [{ move: 'confirm_time', at: when.toISOString(), zone, spoken: spokenTime(when, zone, context.now, context.leadZoneKnown), instead: null, asked: null }];
+  }
+  if (!check.offer) return s.offers.link.answer === 'no' ? [end('end_call', 'other')] : [{ move: 'offer', kind: 'link' }];
+  return [
+    {
+      move: 'confirm_time',
+      at: check.offer.toISOString(),
+      zone,
+      spoken: spokenTime(check.offer, zone, context.now, context.leadZoneKnown),
+      instead: check.why,
+      asked: spokenTime(when, zone, context.now, context.leadZoneKnown),
+    },
+  ];
+}
+
+/**
+ * The instant for a time said on the lead's clock: "tomorrow at 2" - a day
+ * (today, tomorrow, a weekday, a date, or none: today if the time is still
+ * ahead, else tomorrow), an hour with AM or PM (none: 8-11 the morning, 12
+ * noon, 1-7 the afternoon). Null when it cannot be read.
+ */
+export function resolveTime(said: SaidTime, zone: string, now: Date): Date | null {
+  if (said.hour === null || said.hour < 0 || said.hour > 23) return null;
+  const minute = said.minute ?? 0;
+  if (minute < 0 || minute > 59) return null;
+  let hour = said.hour;
+  if (hour <= 12) {
+    const pm = said.ampm ? said.ampm === 'pm' : hour === 12 || hour <= 7;
+    hour = pm ? (hour % 12) + 12 : hour % 12;
+  }
+  const clock = `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`;
+  const today = toLocalTime(now, zone).slice(0, 10);
+  const on = (date: string) => atLocalTime(`${date}T${clock}`, zone);
+  const day = (said.day ?? '').trim().toLowerCase();
+
+  if (/^\d{4}-\d{2}-\d{2}$/.test(day)) return on(day);
+  if (day === 'today') return on(today);
+  if (day === 'tomorrow') return on(dateAfter(today, 1));
+  const weekday = DAY_WORDS[day] ?? (WEEKDAYS.includes(day as Weekday) ? (day as Weekday) : undefined);
+  if (weekday) {
+    const todayIndex = new Date(`${today}T12:00:00Z`).getUTCDay();
+    let ahead = (indexOfWeekday(weekday) - todayIndex + 7) % 7;
+    const sameDay = ahead === 0 ? on(today) : null;
+    if (ahead === 0 && (!sameDay || sameDay <= now)) ahead = 7;
+    return on(dateAfter(today, ahead));
+  }
+  if (day) return null;
+  const sameDay = on(today);
+  return sameDay && sameDay > now ? sameDay : on(dateAfter(today, 1));
+}
+
+/** The time she said back, said again - they cut in before it, and a yes to it booked a time they never heard. */
+function sayTimeAgain(at: string, context: PolicyContext): Move {
+  const when = new Date(at);
+  return { move: 'confirm_time', at, zone: context.leadZone, spoken: spokenTime(when, context.leadZone, context.now, context.leadZoneKnown), instead: null, asked: null };
+}
+
+/** The call back, booked: at the time she said back and they agreed, with a reason from the record. */
+function book(s: CallState, context: PolicyContext): Move {
+  const reason = s.wantsSpecialist
+    ? 'Has a question for a specialist.'
+    : s.interest === 'yes'
+      ? 'Interested in the offer; asked for a call back.'
+      : 'Asked for a call back.';
+  return {
+    move: 'end',
+    handoff: { action: 'book_callback', at: s.callback.proposed as string, timeZone: context.leadZone, reason },
+  };
+}
+
+// ---------------------------------------------------------------------------
+// The shape of a reply
+
+/**
+ * At most one question, and last; nothing after an ending, and no question
+ * with one - an ending's line never asks (call 95).
+ */
+function shape(moves: Move[]): Move[] {
+  const ending = moves.findIndex((m) => m.move === 'end');
+  if (ending >= 0) return [...moves.slice(0, ending).filter((m) => !asks(m)), moves[ending]];
+  const question = moves.findIndex(asks);
+  if (question < 0) return moves;
+  return [...moves.filter((m) => !asks(m)), moves[question]];
+}
+
+// ---------------------------------------------------------------------------
+// What she said
+
+/** The record once she has said `moves` - all of them, or the ones the lead heard before cutting in. */
+export function markSaid(previous: CallState, moves: readonly Move[]): CallState {
+  const s = copy(previous);
+  s.returned = false;
+  s.askedAnythingElse = false;
+  // A question new to them may be come back to at once; the same one, once every few replies.
+  const asksAnew = moves.some((m) => ['opening', 'ask_why', 'offer', 'ask_time', 'confirm_time'].includes(m.move));
+  s.sinceReturn = moves.some((m) => m.move === 'return_to') ? 0 : asksAnew ? RETURN_EVERY : (previous.sinceReturn ?? RETURN_EVERY) + 1;
+  for (const m of moves) {
+    switch (m.move) {
+      case 'opening':
+        s.stage = 'talking';
+        s.open = 'interest';
+        break;
+      case 'answer':
+        s.answered[m.id] = (s.answered[m.id] ?? 0) + 1;
+        break;
+      case 'specialist':
+        s.specialist += 1;
+        break;
+      case 'ask_why':
+        s.whyAsked = true;
+        s.open = 'why';
+        break;
+      case 'offer':
+        s.offers[m.kind].made += 1;
+        s.open = `offer_${m.kind}`;
+        if (s.wrapUp === 'due') s.wrapUp = 'offered';
+        break;
+      case 'busy':
+        s.busySaid = true;
+        break;
+      case 'ask_time':
+        s.open = 'time';
+        break;
+      case 'confirm_time':
+        s.callback.proposed = m.at;
+        delete s.callback.unheard;
+        s.open = 'confirm';
+        break;
+      case 'return_to':
+        s.returned = true;
+        s.open = m.open;
+        break;
+      case 'anything_else':
+        s.askedAnythingElse = true;
+        s.open = 'anything_else';
+        break;
+      case 'end':
+        s.stage = 'closing';
+        s.open = null;
+        break;
+      case 'which_next':
+        s.askedAnythingElse = true;
+        s.open = 'anything_else';
+        break;
+      case 'virtual':
+      case 'objection':
+      case 'ask_repeat':
+      case 'still_here':
+      case 'say_again':
+        break;
+      default: {
+        const never: never = m;
+        throw new Error(`a move the record does not know: ${JSON.stringify(never)}`);
+      }
+    }
+  }
+  // A reply that asked nothing leaves her open question as it was; one that answered it closes it.
+  return s;
+}
+
+/** The three minutes are up: her next reply makes the closing offer (A12). */
+export function wrapUpDue(previous: CallState): CallState {
+  return previous.wrapUp === 'not_yet' ? { ...copy(previous), wrapUp: 'due' } : previous;
+}
+
+/** How her reply began, kept for the next (A29): its first two words. */
+export function markOpening(previous: CallState, said: string): CallState {
+  const start = said.trim().split(/\s+/).slice(0, 2).join(' ').replace(/[,.!?]+$/, '');
+  if (!start) return previous;
+  return { ...copy(previous), openings: [...previous.openings, start].slice(-2) };
+}

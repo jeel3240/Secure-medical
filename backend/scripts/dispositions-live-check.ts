@@ -12,9 +12,10 @@
  *
  *   docker compose exec postgres psql -U app -d postgres -c 'CREATE DATABASE disp_check'
  *   DATABASE_URL=postgres://app:app@localhost:5433/disp_check node scripts/migrate.js
- *   DATABASE_URL=postgres://app:app@localhost:5433/disp_check REDIS_URL=x JWT_SECRET=x \
+ *   DATABASE_URL=postgres://app:app@localhost:5433/disp_check JWT_SECRET=x \
  *     EZT_USERNAME=x EZT_PASSWORD=x EZT_GROUP=x npx ts-node --transpile-only scripts/dispositions-live-check.ts
  */
+import { check, failureCount, verdict } from './check';
 import { pool } from '../src/db/pool';
 import { setDisposition } from '../src/db/dispositions';
 import { blockNumber, DNC_REASONS, releaseNumber } from '../src/db/dnc';
@@ -22,18 +23,6 @@ import { listQueue } from '../src/db/queue';
 import { getTimeline } from '../src/db/timeline';
 import { getLeadDetail } from '../src/db/lead-detail';
 
-let failures = 0;
-
-function check(label: string, actual: unknown, expected: unknown): void {
-  const a = JSON.stringify(actual);
-  const e = JSON.stringify(expected);
-  if (a === e) {
-    console.log(`  ok   ${label}`);
-  } else {
-    failures++;
-    console.log(`  FAIL ${label}\n       expected ${e}\n       actual   ${a}`);
-  }
-}
 
 async function refuseIfNotEmpty(): Promise<void> {
   const { rows } = await pool.query(`SELECT count(*)::int AS n FROM leads`);
@@ -257,6 +246,27 @@ async function main(): Promise<void> {
     check('the lead is out of the queue', await inQueue(lead), false);
   }
 
+  console.log('\nsomeone else holds it now (review M10), and an unread reply cleared (review M20)');
+  {
+    const sam = await makeUser('Sam');
+    const lead = await makeQueuedLead('+15550000591', 'Taken');
+    await pool.query(`UPDATE leads SET assigned_to = $2, assigned_at = now() WHERE id = $1`, [lead, sam]);
+    const res = await setDisposition(lead, maya, 'closed');
+    check('refused: not hers', res.ok === false && res.reason, 'not_yours');
+    const after = (await pool.query(`SELECT assigned_to FROM leads WHERE id = $1`, [lead])).rows[0];
+    check('Sam still holds it', after.assigned_to, sam);
+    check('and nothing is written', (await pool.query(`SELECT count(*)::int AS n FROM dispositions WHERE lead_id = $1`, [lead])).rows[0].n, 0);
+
+    const unread = await makeQueuedLead('+15550000592', 'Unread');
+    await pool.query(`UPDATE leads SET assigned_to = $2, assigned_at = now(), has_unread_inbound = true WHERE id = $1`, [unread, maya]);
+    check('an outcome on her own lead with a reply unread is saved', (await setDisposition(unread, maya, 'closed')).ok, true);
+    const read = await pool.query(
+      `SELECT actor_id, detail->>'because' AS because FROM activity_log WHERE lead_id = $1 AND action = 'reply.read'`,
+      [unread]
+    );
+    check('and the reply is recorded read, by her, because of the outcome', read.rows, [{ actor_id: maya, because: 'outcome' }]);
+  }
+
   console.log('\nan unknown lead');
   {
     const res = await setDisposition(999999, maya, 'closed');
@@ -266,9 +276,9 @@ async function main(): Promise<void> {
     check('and nothing is written', rows[0].n, 0);
   }
 
-  console.log(failures === 0 ? '\nall checks passed' : `\n${failures} check(s) FAILED`);
+  console.log(verdict());
   await pool.end();
-  process.exit(failures === 0 ? 0 : 1);
+  process.exit(failureCount() === 0 ? 0 : 1);
 }
 
 main().catch((err) => {

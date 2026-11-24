@@ -11,26 +11,15 @@
  *
  *   docker compose exec postgres psql -U app -d postgres -c 'CREATE DATABASE claims_check'
  *   DATABASE_URL=postgres://app:app@localhost:5433/claims_check node scripts/migrate.js
- *   DATABASE_URL=postgres://app:app@localhost:5433/claims_check REDIS_URL=x JWT_SECRET=x \
+ *   DATABASE_URL=postgres://app:app@localhost:5433/claims_check JWT_SECRET=x \
  *     EZT_USERNAME=x EZT_PASSWORD=x EZT_GROUP=x npx ts-node --transpile-only scripts/claims-live-check.ts
  *
  * Re-running needs a fresh database: DROP and re-migrate.
  */
+import { check, failureCount, verdict } from './check';
 import { pool } from '../src/db/pool';
 import { claimLead, releaseLead } from '../src/db/claims';
 
-let failures = 0;
-
-function check(label: string, actual: unknown, expected: unknown): void {
-  const a = JSON.stringify(actual);
-  const e = JSON.stringify(expected);
-  if (a === e) {
-    console.log(`  ok   ${label}`);
-  } else {
-    failures++;
-    console.log(`  FAIL ${label}\n       expected ${e}\n       actual   ${a}`);
-  }
-}
 
 async function refuseIfNotEmpty(): Promise<void> {
   const { rows } = await pool.query(
@@ -111,6 +100,14 @@ async function main(): Promise<void> {
     // would look free in the list and refuse to be taken.
     check('does not block another agent', taken.ok, true);
     check('the lead moves to the new holder', await holderOf(lead), maya);
+
+    // Nor releasing it, by an agent - as everywhere else (review M9).
+    const stale = await makeLead('+15550000013');
+    await claimLead(stale, sam);
+    await pool.query(`UPDATE users SET is_active = false WHERE id = $1`, [sam]);
+    check('an agent may release a deactivated agent\'s lead', (await releaseLead(stale, maya, false)).ok, true);
+    check('and it is free', await holderOf(stale), null);
+    await pool.query(`UPDATE users SET is_active = true WHERE id = $1`, [sam]);
   }
 
   console.log('\ntwo agents claiming at the same moment');
@@ -166,9 +163,9 @@ async function main(): Promise<void> {
     check('releasing reports not_found', release.ok === false && release.reason, 'not_found');
   }
 
-  console.log(failures === 0 ? '\nall checks passed' : `\n${failures} check(s) FAILED`);
+  console.log(verdict());
   await pool.end();
-  process.exit(failures === 0 ? 0 : 1);
+  process.exit(failureCount() === 0 ? 0 : 1);
 }
 
 main().catch((err) => {

@@ -8,8 +8,80 @@
  * AGENT-WORKSPACE.md, "Rules", is the spec.
  */
 
-import { activityInsertSql } from './activity';
+import type { PoolClient } from 'pg';
+import { activityInsertSql, recordActivity } from './activity';
+import { nobodysCallbackSql } from './lead-state';
 import { pool } from './pool';
+
+/** A call with a lead on it, found and locked - the call and its lead - for `takeCallWithLead`. */
+export interface LockedCall {
+  id: number;
+  leadId: number;
+  /** Whose the call is already - null when nobody's yet. */
+  agentId: number | null;
+  /** Who holds the lead now. */
+  assignedTo: number | null;
+}
+
+export type TakeCallResult =
+  | { ok: true; leadId: number; tookOverFrom: number | null }
+  /** `taken`: another person has it; `inactive`: this account was deactivated while it rang. */
+  | { ok: false; reason: 'not_found' | 'taken' | 'inactive' };
+
+/**
+ * One person taking a call with a lead on it, in one transaction: the robot's
+ * transfer (`takeTransfer`, T15a) and a lead's call that rang everyone free
+ * (`takeIncomingCall`, T19). `lock` finds the call and locks it and its lead,
+ * or answers null when there is none to take. Refused when another person has
+ * it, or the account is not active. Then `claim` writes what taking this kind
+ * of call means - `firstTime` when it was nobody's - and the lead follows the
+ * call: theirs, taken over from whoever held it, recorded as `lead.picked_up`
+ * with `via`. Already theirs, no new pick-up. One copy since review Q4,
+ * 2026-11-23.
+ */
+export async function takeCallWithLead(
+  agentId: number,
+  via: 'transfer' | 'call_back',
+  lock: (client: PoolClient) => Promise<LockedCall | null>,
+  claim: (client: PoolClient, call: LockedCall, taken: { firstTime: boolean; tookOverFrom: number | null }) => Promise<void>
+): Promise<TakeCallResult> {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const call = await lock(client);
+    const refuse = async (reason: 'not_found' | 'taken' | 'inactive') => {
+      await client.query('ROLLBACK');
+      return { ok: false as const, reason };
+    };
+    if (!call) return await refuse('not_found');
+    if (call.agentId !== null && call.agentId !== agentId) return await refuse('taken');
+    const agent = await client.query(`SELECT 1 FROM users WHERE id = $1 AND is_active`, [agentId]);
+    if (agent.rowCount === 0) return await refuse('inactive');
+
+    const tookOverFrom = call.assignedTo !== null && call.assignedTo !== agentId ? call.assignedTo : null;
+    await claim(client, call, { firstTime: call.agentId === null, tookOverFrom });
+    if (call.assignedTo !== agentId) {
+      await client.query(`UPDATE leads SET assigned_to = $2, assigned_at = now(), updated_at = now() WHERE id = $1`, [
+        call.leadId,
+        agentId,
+      ]);
+      await recordActivity(client, {
+        action: 'lead.picked_up',
+        actorId: agentId,
+        leadId: call.leadId,
+        detail: { via, callId: call.id, ...(tookOverFrom === null ? {} : { tookOverFrom }) },
+      });
+    }
+
+    await client.query('COMMIT');
+    return { ok: true, leadId: call.leadId, tookOverFrom };
+  } catch (err) {
+    await client.query('ROLLBACK');
+    throw err;
+  } finally {
+    client.release();
+  }
+}
 
 export interface Claim {
   leadId: number;
@@ -44,8 +116,15 @@ export type ReleaseResult =
  *
  * Re-claiming a lead you already hold succeeds and leaves `assigned_at` alone,
  * because opening a lead twice is not a new claim.
+ *
+ * **A call back nobody has becomes the claimer's** - one Seri booked that no
+ * agent has taken (A16, docs/AI-AGENT.md section 4), or one whose agent has
+ * been deactivated (D2, Jeel 2026-11-23; `nobodysCallbackSql`): the first agent
+ * to pick the lead up takes it, `callback.taken` records it - with `from`, the
+ * deactivated agent it was booked for - and from then it is on their My
+ * Callbacks. One an active agent has stays theirs.
  */
-export async function claimLead(leadId: number, agentId: number): Promise<ClaimResult> {
+export async function claimLead(leadId: number, agentId: number, againIfFree = true): Promise<ClaimResult> {
   // One statement, so the claim and its record cannot come apart and the race
   // rule above still holds. The row is locked first, so `prev` is the holder at
   // the moment of the claim - what the record needs, and what the UPDATE below
@@ -81,6 +160,23 @@ export async function claimLead(leadId: number, agentId: number): Promise<ClaimR
               jsonb_strip_nulls(jsonb_build_object('tookOverFrom', previous_holder))
        FROM claimed
        WHERE previous_holder IS DISTINCT FROM $2
+     ),
+     handed AS (
+       SELECT cb.id, cb.agent_id FROM callbacks cb, claimed
+       WHERE cb.lead_id = $1 AND cb.done_at IS NULL AND ${nobodysCallbackSql('cb')}
+     ),
+     taken AS (
+       UPDATE callbacks cb SET agent_id = $2
+       FROM handed
+       WHERE cb.id = handed.id
+       RETURNING cb.id, cb.scheduled_at, handed.agent_id AS from_agent
+     ),
+     took AS (
+       ${activityInsertSql}
+       SELECT $2, 'callback.taken', $1, $2,
+              -- from: the deactivated agent it was booked for; none on one of Seri's nobody had.
+              jsonb_strip_nulls(jsonb_build_object('callbackId', id, 'scheduledAt', scheduled_at, 'from', from_agent))
+       FROM taken
      )
      SELECT assigned_at FROM claimed`,
     [leadId, agentId]
@@ -109,11 +205,14 @@ export async function claimLead(leadId: number, agentId: number): Promise<ClaimR
   );
 
   if (rows.length === 0) return { ok: false, reason: 'not_found' };
+  // Lost the race to someone who let it go again since: it is free now - asked once more, so the answer is never
+  // "null is already working this lead" (review M42, 2026-11-22).
+  if (rows[0].holder_id === null && againIfFree) return claimLead(leadId, agentId, false);
 
   return {
     ok: false,
     reason: 'already_claimed',
-    heldBy: { id: rows[0].holder_id, name: rows[0].holder_name },
+    heldBy: { id: rows[0].holder_id, name: rows[0].holder_name ?? 'Someone else' },
   };
 }
 
@@ -143,7 +242,9 @@ export async function releaseLead(
        SET assigned_to = NULL, assigned_at = NULL, updated_at = now()
        FROM prev
        WHERE l.id = prev.id
-         AND ($3 OR prev.assigned_to IS NULL OR prev.assigned_to = $2)
+         AND ($3 OR prev.assigned_to IS NULL OR prev.assigned_to = $2
+              -- A deactivated agent's claim does not count, here as everywhere else (review M9, 2026-11-22).
+              OR NOT EXISTS (SELECT 1 FROM users hu WHERE hu.id = prev.assigned_to AND hu.is_active))
        RETURNING prev.assigned_to AS holder, prev.assigned_at AS held_since
      ),
      logged AS (
@@ -162,7 +263,7 @@ export async function releaseLead(
   const { rows } = await pool.query(
     `SELECT l.id, u.id AS holder_id, u.name AS holder_name
      FROM leads l
-     LEFT JOIN users u ON u.id = l.assigned_to
+     LEFT JOIN users u ON u.id = l.assigned_to AND u.is_active
      WHERE l.id = $1`,
     [leadId]
   );

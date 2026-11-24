@@ -3,7 +3,8 @@
  * "How fast it is" in docs/QUEUE.md and docs/ADMIN-LEADS.md.
  *
  * Loads fake leads into an empty scratch database - with their conversations,
- * answers, messages, calls, notes, callbacks and outcomes, in the proportions
+ * answers, messages, calls - the robot's too, and the call backs Seri books -
+ * notes, callbacks and outcomes, in the proportions
  * a year or two of real use would leave - then times the function behind each
  * screen, and the reply path, the way the API calls them.
  *
@@ -111,11 +112,22 @@ async function load(): Promise<void> {
            SELECT n, CASE WHEN n % 20 = 18 THEN 1 + (n % 10) END, 'RB' || n, at + interval '1 hour',
                   at + interval '1 hour 1 minute', 60,
                   CASE WHEN n % 20 < 8 THEN 'no_answer' WHEN n % 20 < 12 THEN 'voicemail' ELSE 'answered' END, 'automated',
-                  CASE WHEN n % 20 < 8 THEN 'unanswered' WHEN n % 20 < 12 THEN 'voicemail_left' WHEN n % 20 < 15 THEN 'not_interested'
+                  CASE WHEN n % 20 < 8 THEN 'unanswered' WHEN n % 20 < 12 THEN 'voicemail_left' WHEN n % 20 < 14 THEN 'not_interested'
+                       WHEN n % 20 = 14 THEN 'callback_booked'
                        WHEN n % 20 = 15 THEN 'link_sent' WHEN n % 20 = 16 THEN 'no_response' WHEN n % 20 = 17 THEN 'hung_up'
                        WHEN n % 20 = 18 THEN 'transferred' ELSE 'transfer_missed' END,
                   at + interval '1 hour'
            FROM speed_plan WHERE kind < 30`);
+  // A call back Seri booked on one robot call in twenty (A15), a day on: done
+  // by an agent, except those booked in the last two days - some due now,
+  // first in the queue, some still ahead; nobody's until someone picks the
+  // lead up (A16).
+  await q(`INSERT INTO callbacks (lead_id, agent_id, scheduled_at, done_at, reason, booked_by_call_id, note, created_at)
+           SELECT p.n, CASE WHEN p.at < now() - interval '2 days' THEN 1 + (p.n % 10) END, p.at + interval '1 day',
+                  CASE WHEN p.at < now() - interval '2 days' THEN p.at + interval '1 day' END,
+                  'ai_booked', c.id, 'Wants to order', p.at + interval '1 hour'
+           FROM speed_plan p JOIN calls c ON c.twilio_call_sid = 'RB' || p.n
+           WHERE p.kind < 30 AND p.n % 20 = 14`);
   await q(`INSERT INTO calls (lead_id, agent_id, twilio_call_sid, started_at, ended_at, duration_sec, outcome, direction, created_at)
            SELECT n, 1 + (n % 10), 'CB' || n, at + interval '2 hours', at + interval '2 hours 3 minutes', 180, 'answered', 'outbound',
                   at + interval '2 hours'
@@ -173,6 +185,7 @@ async function main(): Promise<void> {
   await time('a late page', () => listAdminLeads({ page: 400 }));
   await time('a name search', () => listAdminLeads({ q: 'Lead4999' }));
   await time('one call result (T23)', () => listAdminLeads({ call: 'voicemail_left' }));
+  await time('Seri\'s call backs (A15)', () => listAdminLeads({ call: 'callback_booked' }));
 
   console.log('\none lead');
   await time('the lead card', () => getLeadDetail(finished));

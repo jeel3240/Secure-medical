@@ -117,8 +117,9 @@ export function ActionsPanel({
 
   /**
    * The unsaved-changes guard the brief asks for, for the case that actually
-   * loses work: closing the tab or hitting back. An in-app navigation cannot be
-   * intercepted without a router data API this app does not use.
+   * loses work: closing or reloading the tab, or leaving the app. Back to
+   * another page of the app is an in-app navigation, which this does not catch:
+   * that needs a router data API this app does not use.
    */
   useEffect(() => {
     if (!dirty) return;
@@ -293,11 +294,13 @@ export function ActionsPanel({
         </section>
 
         <section className="wrapup__section">
-          <h3 className="wrapup__legend">
+          <h3 id="note-heading" className="wrapup__legend">
             <span className="wrapup__num">3</span> Note
           </h3>
+          {/* Named by its heading, so a screen reader says "Note" (review Q8, 2026-11-23). */}
           <textarea
             id="note"
+            aria-labelledby="note-heading"
             className="actions-panel__textarea"
             rows={4}
             value={note}

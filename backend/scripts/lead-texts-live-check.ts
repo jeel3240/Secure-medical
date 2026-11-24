@@ -15,6 +15,7 @@
  * It writes rows, so it refuses to run against a database that holds leads.
  * Run it with the others: scripts/live-checks.sh lead-texts
  */
+import { check, failureCount, verdict } from './check';
 import axios from 'axios';
 
 let sent: { to: string[]; body: string }[] = [];
@@ -28,18 +29,6 @@ import { blockNumber, DNC_REASONS } from '../src/db/dnc';
 import { sendCallLinkText, sendMissedCallText } from '../src/db/lead-texts';
 import { pool } from '../src/db/pool';
 
-let failures = 0;
-
-function check(label: string, actual: unknown, expected: unknown): void {
-  const a = JSON.stringify(actual);
-  const e = JSON.stringify(expected);
-  if (a === e) {
-    console.log(`  ok   ${label}`);
-  } else {
-    failures++;
-    console.log(`  FAIL ${label}\n       expected ${e}\n       actual   ${a}`);
-  }
-}
 
 async function refuseIfNotEmpty(): Promise<void> {
   const { rows } = await pool.query(`SELECT count(*)::int AS leads FROM leads`);
@@ -104,6 +93,12 @@ async function main(): Promise<void> {
     check('no missed-call text', await sendMissedCallText(lee), false);
     check('nothing reached EZ Texting', sent, []);
     check('and nothing on the thread', await thread(lee), []);
+    // No message row: the activity log is the record that each was tried - the system's, no actor (review M41).
+    const tried = await pool.query(
+      `SELECT actor_id FROM activity_log WHERE lead_id = $1 AND action = 'sms.blocked' ORDER BY id`,
+      [lee]
+    );
+    check('each refused text recorded, by nobody', tried.rows.map((r) => r.actor_id), [null, null]);
   }
 
   console.log('\nmissing words send nothing');
@@ -122,9 +117,9 @@ async function main(): Promise<void> {
     check('an unknown lead: nothing', await sendCallLinkText(999999), false);
   }
 
-  console.log(failures === 0 ? '\nall checks passed' : `\n${failures} check(s) FAILED`);
+  console.log(verdict());
   await pool.end();
-  process.exit(failures === 0 ? 0 : 1);
+  process.exit(failureCount() === 0 ? 0 : 1);
 }
 
 main().catch((err) => {

@@ -28,6 +28,8 @@ describe('statuses', () => {
     ['a lead who asked to hear from a rep', { kind: 'wants_call' }, 'Wants a call', 'phone', false],
     ['replies nobody understood', { kind: 'needs_review' }, 'Needs review', 'warning', false],
     ['a callback booked', { kind: 'callback', agentId: 21, agentName: 'Maya Chen' }, 'Callback – Maya Chen', 'clock', false],
+    ['a call back Seri booked, nobody\'s yet (A16)', { kind: 'callback' }, 'Callback', 'clock', false],
+    ['one whose time has come: bold, like a call we owe', { kind: 'callback', due: true }, 'Callback', 'clock', true],
   ])('%s: its own icon, and the words', (_, tag, text, icon, bold) => {
     expect(renderTag(tag)).toEqual({ text, icon, bold });
   });
@@ -48,6 +50,12 @@ describe('statuses', () => {
     expect(tagText({ kind: 'callback', agentName: 'Maya Chen', at: later.toISOString() })).toMatch(
       /^Callback – Maya Chen · [A-Z][a-z]{2} \d{1,2}, 8:13\sPM$/
     );
+  });
+
+  it('a call back Seri booked with nobody\'s name yet: the time alone (A16)', () => {
+    const today = new Date();
+    today.setHours(15, 0, 0, 0);
+    expect(tagText({ kind: 'callback', at: today.toISOString(), due: true })).toMatch(/^Callback · 3:00\sPM$/);
   });
 
   it('names the holder with an en dash, as drawn', () => {

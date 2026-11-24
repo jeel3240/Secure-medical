@@ -10,10 +10,12 @@
  * AGENT-WORKSPACE.md, "The timeline"; DESIGN-PROMPT.md section 3.
  */
 
+import { fallbackHandoff, fromHandoff, type Handoff } from '../ai/actions';
 import type { CallDirection } from '../core/calls';
 import type { ActivityAction } from '../core/activity';
 import { questionShort } from '../core/questions';
-import { phoneStoppedQuestionsAtSql } from './lead-state';
+import { newestConversation, phoneStoppedQuestionsAtSql, RECEIVED_SQL } from './lead-state';
+import { wordList } from './sql';
 import { pool } from './pool';
 
 export type TimelineKind =
@@ -44,6 +46,7 @@ export interface TimelineEntry {
 const TIMELINE_ACTIONS: ActivityAction[] = [
   'lead.picked_up',
   'lead.released',
+  'callback.taken',
   'callback.rescheduled',
   'callback.reopened',
   'sms.blocked',
@@ -76,10 +79,11 @@ const QUERIES: { kind: TimelineKind; sql: string }[] = [
     kind: 'call',
     sql: `
       SELECT COALESCE(c.started_at, c.created_at) AS at,
-             u.name AS author,
+             u.name AS author, c.agent_id,
              c.outcome, c.duration_sec, c.direction, c.script_result,
              t.status AS transcript_status, t.sentences AS transcript_lines,
-             ans.answers
+             ans.answers,
+             c.ai_started_at IS NOT NULL AS seri, c.ai_ended_with, seri.turns AS seri_turns
       FROM calls c
       LEFT JOIN users u ON u.id = c.agent_id
       -- Its transcript, if the call was recorded - TWILIO.md, "Recordings and
@@ -99,6 +103,13 @@ const QUERIES: { kind: TimelineKind; sql: string }[] = [
         LEFT JOIN call_steps s ON s.id = a.step_id
         WHERE a.call_id = c.id
       ) ans ON true
+      -- A call Seri took: her conversation, in the order it was said, and the
+      -- action she ended with (A19, AI-AGENT.md section 9). Empty otherwise.
+      LEFT JOIN LATERAL (
+        SELECT json_agg(json_build_object('who', at.who, 'text', at.text) ORDER BY at.id) AS turns
+        FROM call_ai_turns at
+        WHERE at.call_id = c.id AND at.who IN ('lead', 'seri', 'action')
+      ) seri ON true
       -- Not a robot call Twilio never placed (not_placed): it never reached
       -- the lead - AUTO-CALLS.md, "When Twilio refuses".
       WHERE c.lead_id = $1 AND c.script_result IS DISTINCT FROM 'not_placed'
@@ -117,7 +128,7 @@ const QUERIES: { kind: TimelineKind; sql: string }[] = [
     kind: 'callback',
     sql: `
       SELECT cb.created_at AS at, u.name AS author,
-             cb.scheduled_at, cb.done_at, cb.reason
+             cb.scheduled_at, cb.done_at, cb.reason, cb.note
       FROM callbacks cb
       LEFT JOIN users u ON u.id = cb.agent_id
       WHERE cb.lead_id = $1
@@ -143,7 +154,7 @@ const QUERIES: { kind: TimelineKind; sql: string }[] = [
       LEFT JOIN users u ON u.id = a.actor_id
       LEFT JOIN users s ON s.id = a.subject_user_id
       WHERE a.lead_id = $1
-        AND a.action IN (${TIMELINE_ACTIONS.map((action) => `'${action}'`).join(', ')})
+        AND a.action IN (${wordList(TIMELINE_ACTIONS)})
     `,
   },
 ];
@@ -153,8 +164,9 @@ const iso = (v: Date | null | undefined): string | null => v?.toISOString() ?? n
 /**
  * The events that have no table.
  *
- * "Lead received" is the only one with a timestamp of its own. The other two
- * are placed at the moment that caused them: a conversation carries its score
+ * "Lead received" is the only one with a timestamp of its own. The others -
+ * scored, taken over by an agent or a phone call, expired - are placed at the
+ * moment that caused them: a conversation carries its score
  * and status but no record of when it reached them, and `updated_at` moves on
  * every change, so it cannot be used. The last inbound reply is what earned the
  * final points, and `expires_at` is when the conversation lapsed - both are
@@ -171,20 +183,14 @@ const iso = (v: Date | null | undefined): string | null => v?.toISOString() ?? n
 async function systemEvents(leadId: number): Promise<TimelineEntry[]> {
   const { rows } = await pool.query(
     `SELECT
-       COALESCE(l.ezt_added_at, l.created_at) AS received_at,
+       ${RECEIVED_SQL} AS received_at,
        l.source,
        c.status, c.end_outcome, c.score, c.tier, c.expires_at, c.agent_took_over_at, c.completed_at,
        ${phoneStoppedQuestionsAtSql('c', 'l.id')} AS phone_took_over_at,
        (SELECT max(m.received_at) FROM messages m
         WHERE m.lead_id = l.id AND m.direction = 'inbound') AS last_reply_at
      FROM leads l
-     LEFT JOIN LATERAL (
-       SELECT c.status, c.end_outcome, c.score, c.tier, c.expires_at, c.agent_took_over_at, c.completed_at, c.created_at
-       FROM conversations c
-       WHERE c.lead_id = l.id
-       ORDER BY c.created_at DESC, c.id DESC
-       LIMIT 1
-     ) c ON true
+     LEFT JOIN ${newestConversation('c.status, c.end_outcome, c.score, c.tier, c.expires_at, c.agent_took_over_at, c.completed_at, c.created_at')}
      WHERE l.id = $1`,
     [leadId]
   );
@@ -258,6 +264,8 @@ interface TimelineRow {
   at: Date;
   /** Every query selects it: the agent, or null for our own and the lead's. */
   author: string | null;
+  /** A call's: who was on it, by id - names can be shared (review M32). */
+  agent_id?: number | null;
   /** Messages and calls: which way it went. A call can also be `automated` (T4). */
   direction?: CallDirection;
   sent_by?: number | null;
@@ -269,11 +277,17 @@ interface TimelineRow {
   duration_sec?: number | null;
   scheduled_at?: Date | null;
   reason?: string | null;
+  /** Seri's one-line reason, on a call back she booked (A15). */
+  note?: string | null;
   transcript_status?: string | null;
   transcript_lines?: unknown[] | null;
   /** The robot's call: how its script ended, and what the lead said (T21). */
   script_result?: string | null;
   answers?: CallAnswerRow[] | null;
+  /** A call Seri took (A19): her conversation, and how her part ended. */
+  seri?: boolean;
+  ai_ended_with?: string | null;
+  seri_turns?: { who: 'lead' | 'seri' | 'action'; text: string }[] | null;
   done_at?: Date | null;
   value?: string;
   action?: string;
@@ -310,6 +324,30 @@ function callAnswers(rows: CallAnswerRow[]) {
   }));
 }
 
+/**
+ * Seri's part of a call, for the screen (A19): the lead's words and hers in
+ * the order said, and how her part ended - the action she ended with, as she
+ * chose it (a call back with its time), or null when she ended with none: the
+ * lead hung up, or the voicemail message took the call. `ai_ended_with` is the
+ * record: an action she chose but never carried out is not shown as how it
+ * ended. A fallback Twilio's side caused has no action turn of hers.
+ */
+function seriPart(turns: { who: string; text: string }[], endedWith: string | null) {
+  const actions = turns.filter((t) => t.who === 'action').map((t) => fromHandoff(t.text));
+  const chosen = actions.at(-1);
+  const ended: Handoff | null = endedWith
+    ? chosen?.action === endedWith
+      ? chosen
+      : endedWith === 'fallback'
+        ? fallbackHandoff('twilio_failed')
+        : ({ action: endedWith } as Handoff)
+    : null;
+  return {
+    turns: turns.filter((t) => t.who === 'lead' || t.who === 'seri').map((t) => ({ who: t.who, text: t.text })),
+    ended,
+  };
+}
+
 function toEntry(kind: TimelineKind, row: TimelineRow): TimelineEntry {
   const at: string = row.at.toISOString();
 
@@ -336,11 +374,16 @@ function toEntry(kind: TimelineKind, row: TimelineRow): TimelineEntry {
           outcome: row.outcome,
           durationSec: row.duration_sec,
           direction: row.direction,
+          // Who was on it, by id: the caller's card says "you tried 2× today" by it, not by a name two people can share
+          // (review M32, 2026-11-22).
+          agentId: row.agent_id ?? null,
           // The robot's call: how its script ended - null while it is going -
           // and what the lead said (T21).
           ...(row.direction === 'automated'
             ? { scriptResult: row.script_result ?? null, answers: callAnswers(row.answers ?? []) }
             : {}),
+          // A call Seri took (A19): what was said, and how her part ended.
+          ...(row.seri ? { seri: seriPart(row.seri_turns ?? [], row.ai_ended_with ?? null) } : {}),
           // Absent when the call was not recorded.
           ...(row.transcript_status
             ? { transcript: { status: row.transcript_status, lines: row.transcript_lines ?? [] } }
@@ -363,7 +406,13 @@ function toEntry(kind: TimelineKind, row: TimelineRow): TimelineEntry {
         kind,
         at,
         author: row.author,
-        detail: { scheduledAt: iso(row.scheduled_at), doneAt: iso(row.done_at), reason: row.reason ?? 'booked' },
+        detail: {
+          scheduledAt: iso(row.scheduled_at),
+          doneAt: iso(row.done_at),
+          reason: row.reason ?? 'booked',
+          // Seri's one-line reason, on a call back she booked (A15).
+          ...(row.note ? { note: row.note } : {}),
+        },
       };
     case 'disposition':
       return { kind, at, author: row.author, detail: { value: row.value } };
@@ -384,13 +433,14 @@ export async function getTimeline(leadId: number): Promise<TimelineEntry[] | nul
 }
 
 async function buildTimeline(leadId: number): Promise<TimelineEntry[]> {
-  const [system, ...tables] = await Promise.all([
-    systemEvents(leadId),
-    ...QUERIES.map(async ({ kind, sql }) => {
-      const { rows } = await pool.query<TimelineRow>(sql, [leadId]);
-      return rows.map((r) => toEntry(kind, r));
-    }),
-  ]);
+  // One query at a time: each is quick, and seven at once took seven of the pool's ten connections on a screen
+  // polled every 5 seconds - a few people on it, and everything else waited (review M18, 2026-11-22).
+  const system = await systemEvents(leadId);
+  const tables: TimelineEntry[][] = [];
+  for (const { kind, sql } of QUERIES) {
+    const { rows } = await pool.query<TimelineRow>(sql, [leadId]);
+    tables.push(rows.map((r) => toEntry(kind, r)));
+  }
 
   const all = [...system, ...tables.flat()];
 

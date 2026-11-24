@@ -11,9 +11,10 @@
  *
  *   docker compose exec postgres psql -U app -d postgres -c 'CREATE DATABASE admin_check'
  *   DATABASE_URL=postgres://app:app@localhost:5433/admin_check node scripts/migrate.js
- *   DATABASE_URL=postgres://app:app@localhost:5433/admin_check REDIS_URL=x JWT_SECRET=x \
+ *   DATABASE_URL=postgres://app:app@localhost:5433/admin_check JWT_SECRET=x \
  *     EZT_USERNAME=x EZT_PASSWORD=x EZT_GROUP=x npx ts-node --transpile-only scripts/admin-live-check.ts
  */
+import { check, failureCount, verdict } from './check';
 import { pool } from '../src/db/pool';
 import { getAdminConfig } from '../src/db/admin-config';
 import { getOverview } from '../src/db/admin-overview';
@@ -22,18 +23,6 @@ import { listDnc } from '../src/db/admin-dnc';
 import { blockNumber, DNC_REASONS, releaseNumber } from '../src/db/dnc';
 import { ANTIBIOTICS_CALL } from '../src/core/call-script-fixtures';
 
-let failures = 0;
-
-function check(label: string, actual: unknown, expected: unknown): void {
-  const a = JSON.stringify(actual);
-  const e = JSON.stringify(expected);
-  if (a === e) {
-    console.log(`  ok   ${label}`);
-  } else {
-    failures++;
-    console.log(`  FAIL ${label}\n       expected ${e}\n       actual   ${a}`);
-  }
-}
 
 async function refuseIfNotEmpty(): Promise<void> {
   const { rows } = await pool.query(`SELECT count(*)::int AS n FROM leads`);
@@ -259,6 +248,12 @@ async function main(): Promise<void> {
     const sevenDay = await getOverview('7d');
     check('7d takes the 3-day-old lead and leaves the 10-day-old one', sevenDay.kpis.leadsReceived, 5);
 
+    // `since` is where the period starts, not when it was asked (review R14, 2026-11-23).
+    const daysBack = (o: { since: string }) => Math.round((Date.now() - Date.parse(o.since)) / 86_400_000);
+    check('since: 7 and 30 days back', [daysBack(sevenDay), daysBack(thirty)], [7, 30]);
+    const todayStarts = Date.now() - Date.parse(today.since);
+    check("since: today's start, earlier than now and within the day", todayStarts > 0 && todayStarts < 86_400_000, true);
+
     console.log('\nthe totals and the per-agent table');
     const lead = await makeLead({ phone: '+15550000706', status: 'completed', score: 80, tier: 'HOT' });
     await pool.query(`INSERT INTO dispositions (lead_id, agent_id, value) VALUES ($1, $2, 'closed')`, [lead, maya]);
@@ -357,9 +352,9 @@ async function main(): Promise<void> {
     check('a number typed with a leading +1 still matches', (await listDnc({ q: '+1 555 000 0708' })).rows.length, 1);
   }
 
-  console.log(failures === 0 ? '\nall checks passed' : `\n${failures} check(s) FAILED`);
+  console.log(verdict());
   await pool.end();
-  process.exit(failures === 0 ? 0 : 1);
+  process.exit(failureCount() === 0 ? 0 : 1);
 }
 
 main().catch((err) => {

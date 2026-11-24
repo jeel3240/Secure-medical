@@ -5,7 +5,7 @@
  * the database, so these are the sentences a lead might really say to the
  * real questions.
  */
-import { matchSpokenChoice, normaliseSpeech, type SpokenAnswer } from './answers';
+import { matchSpokenChoice, normaliseSpeech, saysStop, type SpokenAnswer } from './answers';
 import { OPT_OUT_KEY } from './call-script';
 import { ANTIBIOTICS_CALL } from './call-script-fixtures';
 
@@ -133,5 +133,40 @@ describe('normaliseSpeech', () => {
     expect(normaliseSpeech(null)).toBe('');
     expect(normaliseSpeech('   ')).toBe('');
     expect(normaliseSpeech('a'.repeat(301))).toBe('');
+  });
+});
+
+describe('a stop said to Seri - saysStop (A11)', () => {
+  const stop = (text: string) => saysStop(text, ANTIBIOTICS_CALL.optOutWords);
+
+  it.each([
+    'Stop calling me.',
+    "Please don't call me again",
+    'Do not call this number',
+    'Take me off your list',
+    'Remove me',
+    'I said stop calling, okay?',
+    'Look, I am busy, I have told you people before, please just remove me from whatever list this is',
+  ])('a stop phrase, anywhere: "%s"', (text) => expect(stop(text)).toBe(true));
+
+  it.each(['Stop.', 'stop', 'Stop it.', 'No, stop.', 'Just stop, please.', 'Stop. Stop.', 'Unsubscribe'])(
+    'a one-word stop said on its own: "%s"',
+    (text) => expect(stop(text)).toBe(true)
+  );
+
+  it.each([
+    'Do I need to stop my other medicine?',
+    'Can I stop taking it early?',
+    'Stop, I have a question',
+    "Don't stop, tell me more",
+    'Nine',
+    '9',
+    'Who is this?',
+    '',
+    '   ',
+  ])('not a stop - hers to answer: "%s"', (text) => expect(stop(text)).toBe(false));
+
+  it('no length limit: a long turn is still read', () => {
+    expect(stop(`${'I really do not want this. '.repeat(20)}Stop calling me.`)).toBe(true);
   });
 });

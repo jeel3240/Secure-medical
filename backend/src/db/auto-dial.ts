@@ -5,20 +5,15 @@
  * each call is placed by `worker/place-auto-call.ts`, as from T12.
  */
 
-import type { DialRoom } from '../core/auto-dial';
+import { UNDER_WAY_MINUTES, type DialRoom } from '../core/auto-dial';
 import { activityInsertSql, recordActivity } from './activity';
 import { automatedCallUsedSql, ON_HOLD_SQL } from './auto-calls';
 import { readCallsPerPerson, readHoldMaxSeconds } from './call-script';
-import { WORKED_SQL } from './lead-state';
+import { newestConversation, WORKED_SQL } from './lead-state';
+import { withTryLock } from './locks';
 import { pool } from './pool';
 import { FREE_SQL } from './presence';
 
-/**
- * How long a call of the robot's counts as still going with nobody on it, for
- * the room - and how long a row that never reached Twilio is left before it is
- * closed. Ten minutes: far longer than any call that is ringing or asking.
- */
-export const UNDER_WAY_MINUTES = 10;
 
 /** Now, as `settings` keeps a time: ISO 8601, UTC. */
 const NOW_TEXT = `to_char(now() AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"')`;
@@ -199,10 +194,7 @@ export async function leadsToCall(opts: {
   const { rows } = await pool.query<{ id: number }>(
     `SELECT l.id
      FROM leads l
-     JOIN LATERAL (
-       SELECT c.status, c.question_sent_at FROM conversations c
-       WHERE c.lead_id = l.id ORDER BY c.created_at DESC, c.id DESC LIMIT 1
-     ) c ON true
+     JOIN ${newestConversation('c.status, c.question_sent_at')}
      WHERE l.created_at > $1::timestamptz - interval '${LOOK_BACK_DAYS} days'
        AND ($6::int IS NULL OR l.id = $6)
        AND c.status = 'open'
@@ -280,30 +272,5 @@ const DIAL_LOCK = 'auto_dial';
  * it, and the database allows one automated call per lead.)
  */
 export async function withDialLock<T>(look: () => Promise<T>): Promise<T | null> {
-  const client = await pool.connect();
-  let locked: boolean;
-  try {
-    locked = (await client.query(`SELECT pg_try_advisory_lock(hashtext($1)) AS locked`, [DIAL_LOCK])).rows[0].locked;
-  } catch (err) {
-    client.release(err as Error);
-    throw err;
-  }
-  if (!locked) {
-    client.release();
-    return null;
-  }
-  try {
-    return await look();
-  } finally {
-    // A connection whose lock could not be let go is thrown away, never handed
-    // back to the pool still holding it - every later look would find it
-    // held; and the look's own error, if any, is the one that is thrown.
-    let stuck: Error | undefined;
-    try {
-      await client.query(`SELECT pg_advisory_unlock(hashtext($1))`, [DIAL_LOCK]);
-    } catch (err) {
-      stuck = err as Error;
-    }
-    client.release(stuck);
-  }
+  return withTryLock(DIAL_LOCK, look);
 }

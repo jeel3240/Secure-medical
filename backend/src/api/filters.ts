@@ -44,9 +44,49 @@ export function parseLeadId(raw: string): number {
   return id;
 }
 
-/** A comma-separated list, `?source=API,WebInterface`. Empty means no filter. */
+/**
+ * A comma-separated list, `?source=API,WebInterface` - or the same given
+ * twice, `?source=API&source=WebInterface`, which Express hands over as an
+ * array and which was dropped without a word (review M19, 2026-11-22). Empty
+ * means no filter.
+ */
 export function parseList(raw: unknown): string[] | undefined {
-  if (typeof raw !== 'string' || !raw.trim()) return undefined;
-  const values = raw.split(',').map((s) => s.trim()).filter(Boolean);
+  const parts = Array.isArray(raw) ? raw : [raw];
+  if (!parts.every((p) => p === undefined || typeof p === 'string')) {
+    throw new HttpError(400, 'invalid_list', 'A list must be words separated by commas.');
+  }
+  const values = (parts as (string | undefined)[])
+    .flatMap((p) => (p ?? '').split(','))
+    .map((s) => s.trim())
+    .filter(Boolean);
   return values.length ? values : undefined;
+}
+
+/**
+ * `?q=`, a search: trimmed, absent when empty. Given twice it is refused -
+ * which search was meant cannot be told, and it was dropped without a word
+ * (review M19).
+ */
+export function parseSearch(raw: unknown): string | undefined {
+  if (raw === undefined) return undefined;
+  if (typeof raw !== 'string') throw new HttpError(400, 'invalid_q', 'Search for one thing at a time.');
+  return raw.trim() || undefined;
+}
+
+/**
+ * A list's `?page=`: 1 when absent, else a whole number from 1 to `MAX_PAGE`.
+ * It goes into the statement as an offset, so anything else - `2.5`, `1e30` -
+ * is refused here rather than turned into an error there. Shared by Admin >
+ * Leads and the DNC list, which had no upper bound: `?page=1e20` was a 500
+ * (review M17, 2026-11-22).
+ */
+export const MAX_PAGE = 100_000;
+
+export function parsePage(raw: unknown): number {
+  if (raw === undefined || raw === '') return 1;
+  const page = Number(raw);
+  if (!Number.isInteger(page) || page < 1 || page > MAX_PAGE) {
+    throw new HttpError(400, 'invalid_page', 'Page must be a whole number from 1.');
+  }
+  return page;
 }

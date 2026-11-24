@@ -46,6 +46,7 @@ export function CallBar({
   call,
   now,
   onNoteSaved,
+  raised = false,
 }: {
   who: CallParty;
   call: BarCall;
@@ -53,12 +54,14 @@ export function CallBar({
   now: Date;
   /** A note was saved from the bar: reload what the page shows. */
   onNoteSaved: () => void;
+  /** Another call's bar is docked below - an incoming call's: this one sits above it, never on top (review M26). */
+  raised?: boolean;
 }) {
   const { state } = call;
   if (state.phase === 'idle') return null;
 
   return (
-    <div className={`call-bar call-bar--${state.phase}`} role="region" aria-label="Call">
+    <div className={`call-bar call-bar--${state.phase}${raised ? ' call-bar--raised' : ''}`} role="region" aria-label="Call">
       <div className="call-bar__who">
         <span className="call-bar__avatar" aria-hidden="true">
           {initials(who.name)}

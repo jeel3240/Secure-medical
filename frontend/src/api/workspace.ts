@@ -61,6 +61,11 @@ export interface LeadDetail {
   claimedBy: { id: number; name: string; at: string } | null;
   /** Set while the lead is closed: who closed it and when. */
   closed: { by: string | null; at: string } | null;
+  /**
+   * The call back Seri booked, while open (A15): when, her one-line reason,
+   * and whose it is - null while it is open to everyone.
+   */
+  aiCallback: { at: string; note: string | null; agentName: string | null } | null;
   flags: {
     /** A live dnc_list row: blocks every action, not just SMS. */
     dnc: boolean;
@@ -103,7 +108,7 @@ export type CallDirection = 'outbound' | 'inbound' | 'automated';
 export interface TimelineEntry {
   kind: TimelineKind;
   at: string;
-  /** The agent, where one acted. Null for automated and inbound entries. */
+  /** The agent, where one acted - by name; a call carries their id too, `detail.agentId`. Null where nobody did. */
   author: string | null;
   /** Free-form per kind - the screen knows what to read. */
   detail: Record<string, unknown>;
@@ -187,12 +192,18 @@ export async function setDisposition(
 export interface Callback {
   id: number;
   leadId: number;
-  agentId: number;
+  /** Null only for one Seri booked that nobody has taken yet (A16). */
+  agentId: number | null;
   agentName: string;
   scheduledAt: string;
   doneAt: string | null;
-  /** `missed_call`: booked by the system because the lead rang and this agent did not pick up. */
-  reason: 'booked' | 'missed_call';
+  /**
+   * `missed_call`: booked by the system because the lead rang and this agent
+   * did not pick up. `ai_booked`: Seri booked it on the automated call (A15).
+   */
+  reason: 'booked' | 'missed_call' | 'ai_booked';
+  /** Seri's one-line reason, on one she booked (A15). */
+  note: string | null;
 }
 
 /**

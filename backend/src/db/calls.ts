@@ -13,8 +13,9 @@
 
 import { activityInsertSql, recordActivity } from './activity';
 import { finishMissedCallCallbacks } from './callbacks';
+import { takeCallWithLead, type TakeCallResult } from './claims';
 import { pool } from './pool';
-import { FREE_SQL } from './presence';
+import { freePeople } from './presence';
 import type { AnsweredBy, CallOutcome, CallRefusal } from '../core/calls';
 import { MAX_RUNG_AT_ONCE } from '../core/call-script';
 
@@ -328,10 +329,8 @@ export async function startIncomingCall(opts: {
       return { kind: 'unknown' };
     }
     const who = { id: lead.id, name: [lead.first_name, lead.last_name].filter(Boolean).join(' '), phone: lead.phone };
-    const everyoneFree = async () =>
-      (
-        await client.query<{ id: number }>(`SELECT u.id FROM users u WHERE ${FREE_SQL} ORDER BY u.id LIMIT ${MAX_RUNG_AT_ONCE}`)
-      ).rows.map((r) => r.id);
+    // The same free people a transfer rings, the first ten by account (review Q4).
+    const everyoneFree = async () => (await freePeople(client)).slice(0, MAX_RUNG_AT_ONCE);
 
     // Twilio asking again about the same call: what was decided the first
     // time holds - a call that is over stays over, one agent's ring rings them
@@ -409,9 +408,34 @@ export async function startIncomingCall(opts: {
   }
 }
 
-export type TakeIncomingResult =
-  | { ok: true; leadId: number; tookOverFrom: number | null }
-  | { ok: false; reason: 'taken' | 'inactive' | 'not_found' };
+export type TakeIncomingResult = TakeCallResult;
+
+/**
+ * Calls Twilio placed that are still open `olderThanMinutes` after they
+ * started - any direction: their end never reached us, or they are still
+ * going (`api/left-open.ts`, review H4). The oldest first, a look's worth.
+ */
+export async function callsLeftOpen(olderThanMinutes: number): Promise<{ callId: number; callSid: string }[]> {
+  const { rows } = await pool.query<{ callId: number; callSid: string }>(
+    `SELECT id AS "callId", twilio_call_sid AS "callSid" FROM calls
+     WHERE twilio_call_sid IS NOT NULL AND ended_at IS NULL
+       AND started_at < now() - make_interval(mins => $1)
+     ORDER BY id
+     LIMIT 50`,
+    [olderThanMinutes]
+  );
+  return rows;
+}
+
+/**
+ * Who took a lead's call - null when nobody did. Twilio reports a ring to
+ * everyone free `completed` when someone accepted, even if that accept was
+ * refused (`takeIncomingCall`) and their leg hung up (review H9, 2026-11-22).
+ */
+export async function incomingTakenBy(callSid: string): Promise<number | null> {
+  const { rows } = await pool.query<{ agent_id: number | null }>(`SELECT agent_id FROM calls WHERE twilio_call_sid = $1`, [callSid]);
+  return rows[0]?.agent_id ?? null;
+}
 
 /**
  * A person accepted a lead's call that rang everyone free (T19): the call
@@ -426,55 +450,29 @@ export type TakeIncomingResult =
  * same person again changes nothing. `callSid` is the lead's call - our row's.
  */
 export async function takeIncomingCall(callSid: string, agentId: number): Promise<TakeIncomingResult> {
-  const client = await pool.connect();
-  try {
-    await client.query('BEGIN');
-    const { rows } = await client.query<{ id: number; lead_id: number; agent_id: number | null; assigned_to: number | null }>(
-      `SELECT c.id, c.lead_id, c.agent_id, l.assigned_to
-       FROM calls c JOIN leads l ON l.id = c.lead_id
-       WHERE c.twilio_call_sid = $1 AND c.direction = 'inbound' AND c.ended_at IS NULL
-       FOR UPDATE OF c, l`,
-      [callSid]
-    );
-    const call = rows[0];
-    const refuse = async (reason: 'not_found' | 'taken' | 'inactive') => {
-      await client.query('ROLLBACK');
-      return { ok: false as const, reason };
-    };
-    if (!call) return await refuse('not_found');
-    if (call.agent_id !== null && call.agent_id !== agentId) return await refuse('taken');
-    const agent = await client.query(`SELECT 1 FROM users WHERE id = $1 AND is_active`, [agentId]);
-    if (agent.rowCount === 0) return await refuse('inactive');
-
-    const tookOverFrom = call.assigned_to !== null && call.assigned_to !== agentId ? call.assigned_to : null;
-    if (call.agent_id === null) {
+  return takeCallWithLead(
+    agentId,
+    'call_back',
+    async (client) => {
+      const { rows } = await client.query<{ id: number; lead_id: number; agent_id: number | null; assigned_to: number | null }>(
+        `SELECT c.id, c.lead_id, c.agent_id, l.assigned_to
+         FROM calls c JOIN leads l ON l.id = c.lead_id
+         WHERE c.twilio_call_sid = $1 AND c.direction = 'inbound' AND c.ended_at IS NULL
+         FOR UPDATE OF c, l`,
+        [callSid]
+      );
+      const call = rows[0];
+      return call ? { id: call.id, leadId: call.lead_id, agentId: call.agent_id, assignedTo: call.assigned_to } : null;
+    },
+    async (client, call, { firstTime, tookOverFrom }) => {
+      if (!firstTime) return;
       await client.query(`UPDATE calls SET agent_id = $2 WHERE id = $1`, [call.id, agentId]);
       await recordActivity(client, {
         action: 'call.taken',
         actorId: agentId,
-        leadId: call.lead_id,
+        leadId: call.leadId,
         detail: { callId: call.id, callSid, ...(tookOverFrom === null ? {} : { tookOverFrom }) },
       });
     }
-    if (call.assigned_to !== agentId) {
-      await client.query(`UPDATE leads SET assigned_to = $2, assigned_at = now(), updated_at = now() WHERE id = $1`, [
-        call.lead_id,
-        agentId,
-      ]);
-      await recordActivity(client, {
-        action: 'lead.picked_up',
-        actorId: agentId,
-        leadId: call.lead_id,
-        detail: { via: 'call_back', callId: call.id, ...(tookOverFrom === null ? {} : { tookOverFrom }) },
-      });
-    }
-
-    await client.query('COMMIT');
-    return { ok: true, leadId: call.lead_id, tookOverFrom };
-  } catch (err) {
-    await client.query('ROLLBACK');
-    throw err;
-  } finally {
-    client.release();
-  }
+  );
 }

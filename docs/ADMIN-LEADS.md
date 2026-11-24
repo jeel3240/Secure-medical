@@ -38,7 +38,7 @@ ways the SMS part can end.
 |---|---|---|
 | `opted_out` | Opted out | On `dnc_list`, or newest conversation `suppressed` |
 | `closed` | Closed | An agent pressed Closed, and nothing has reopened it since: no unread text from the lead, no callback booked after it, no missed call from them that nobody has got back to (2026-10-01), and no agent holding it (2026-09-29) |
-| `working` | Working | An agent holds it, or has left any trace on it: a note, a callback, a disposition, a call they placed or answered, or an SMS of their own. A missed incoming call is the lead's doing, not a trace - though the callback it books for an agent is one; nor is an automated call nobody took (T4, `AUTO-CALLS.md`) |
+| `working` | Working | An agent holds it, or has left any trace on it: a note, a callback, a disposition, a call they placed or answered, or an SMS of their own. A missed incoming call is the lead's doing, not a trace - though the callback it books for an agent is one; nor is an automated call nobody took (T4, `AUTO-CALLS.md`), nor a call back Seri booked - even once an agent has taken it, since picking the lead up is the trace (A15, `AI-AGENT.md`) |
 | `needs_review` | Needs review | Conversation `review` |
 | `offers` | Offers | The flow ended with the lead asking for special offers only (`end_outcome = 'offers'`, 2026-10-05). Not Ready: there is no call to make. An agent's trace on it still reads Working |
 | `declined` | Not interested | The lead said No to the first question, then No thanks to the offers and to a rep (`end_outcome = 'declined'`, 2026-10-06). Nothing to do; out of the queue. They have not opted out |
@@ -191,6 +191,7 @@ both are true.
 | Calling now | Its call is going: ringing, asking, putting a "yes" through, or on hold |
 | Said yes · taken | Said yes, and a person took the transfer - the lead reads Working |
 | Said yes · nobody took it | Said yes, and nobody took it - first in the agents' queue as Wants a call until someone gets back to them (T22) |
+| Callback booked | Seri's call (Phase 7): the lead picked a time for a person to call them - the callback is on the lead's page (A15, `AGENT-WORKSPACE.md` "Callbacks"). Her booking alone does not make the lead Working |
 | Link sent | Said no, then yes to the link, which was texted |
 | Not interested | Said no twice |
 | Voicemail left | A machine answered; the message was left after its beep |
@@ -224,7 +225,8 @@ above in the order a call goes. `?call=` takes `none` or a value -
 with 400 `invalid_call`. It narrows the tab counts as Source and Received do,
 so with "Voicemail left" chosen the tabs say how many of those leads are
 Awaiting reply, Working and so on. Kept in the address with the other filters:
-`/admin/leads?call=voicemail_left`.
+`/admin/leads?call=voicemail_left`. Since A15 also `callback_booked`, after the
+two "yes" values.
 
 With automated calls off, every row reads "-" and the filter finds nothing but
 "Not called" - production, until `AUTO_CALLS` is on.
@@ -249,6 +251,20 @@ Both now use `parseSince` in `api/filters.ts`, where the viewer's `?tz=` check
 also lives. A typo in a filter now shows as an error, not as the wrong list.
 `api/__tests__/admin-leads.test.ts` pins it.
 
+### The response
+
+Written down 2026-11-23 (review R14); the types are `AdminLeadPage` and
+`AdminLeadRow` in `db/leads.ts`, and their copies in `frontend/src/api/admin.ts`.
+
+| Field | |
+|---|---|
+| `leads` | The page's rows, newest arrival first. Each: `id`, `phone` (E.164), `firstName`, `lastName`, `source`, `receivedAt`; `status` (one of the tabs, "Status" above - null when none applies, a lead with no conversation yet); `step` ("Step" below - "Q2", "Q1-a", `done`, or null when opted out); `score`, `tier`; `lastActivityAt` and `lastActivityDirection` (`inbound`, `outbound`) - the newest text either way, a send EZ Texting refused left out; `call`, the robot's call ("Call" below), null when it has not called |
+| `counts` | One number per status tab, and `all`. They ignore `status` and honour every other filter, so each tab shows what it would hold |
+| `total` | The rows the current tab holds - `counts[status]`, or `counts.all` |
+| `page`, `pageSize` | The page shown and its size: 50 rows, which the route does not let the request change |
+| `sources` | Every source any lead has, for the Source filter - not only this page's |
+| `poll` | `at`, the worker's last successful poll, and `intervalSeconds`, its interval - the "Synced with EZ Texting" line, "The page" below |
+
 ### The SQL
 
 Newest conversation and newest message are both lateral joins, so the result
@@ -269,8 +285,9 @@ lead closed under a retired value, reopening by a later callback or a text,
 and the tab counts; and the Call column (T23) - each result, two tracks at
 once, a "yes" taken reading Working, Calling now and No result by the call's
 age, a lead never called and an agent's own call reading nothing, the filter
-alone, with a tab and with the counts, and Not called - 51 checks as of
-2026-10-25, all passing. A missed call reopening a closed lead, and an outcome
+alone, with a tab and with the counts, and Not called; since A15 a call back
+Seri booked - Callback booked, not Working, and its filter - 55 checks as of
+2026-11-13, all passing. A missed call reopening a closed lead, and an outcome
 settling it, are in `scripts/calls-live-check.ts`.
 
 Score and tier are the running values, returned at every stage. Scoring starts
@@ -321,14 +338,19 @@ the new ones land.
 
 Rows that are new since the previous fetch get a 600ms highlight. Everything is
 new on the first load, so that case is deliberately excluded - otherwise the
-whole table flashes on arrival.
+whole table flashes on arrival - and so is the first load of another view: a
+tab, a filter, a page or a search is another list, not new rows. Until
+2026-11-22 the record of rows seen kept every id ever shown, and every switch
+flashed the new view's rows (review M30).
 
 A row opens the lead's timeline, read-only (2026-09-28 - it waited on that page
 existing).
 
 **The EZ Texting sync line - Jeel, 2026-09-28.** Under "Live · updated just
 now" sits "Synced with EZ Texting 1m ago": the last time the worker polled for
-new leads. After three poll intervals without a poll - the spec's signal that
+new leads. The interval is read as the worker reads it (`pollIntervalSeconds`,
+`db/sql.ts`): 30 seconds unless the setting is above 0 - until 2026-11-22 this
+page fell back to 60 and took 0 at its word (review M17). After three poll intervals without a poll - the spec's signal that
 the worker has stopped - it turns amber and reads "Last synced with EZ Texting
 2h ago - check the worker". Hovering shows the exact time.
 `components/SyncStatus.tsx`.

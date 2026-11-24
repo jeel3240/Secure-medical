@@ -27,9 +27,16 @@ here is what we ask, here is what each answer is worth.
 - The scoring table: response, completion, and the points for each choice of
   each question, with the maximum possible.
 - The tier bands.
-- Conversation expiry, read from `settings.expiry_days` - 7.
+- Conversation expiry, read from `settings.expiry_days` - 7 - as every other
+  reader takes it (`expiryDays`, `db/sql.ts`): 7 unless the setting is above 0.
+  Until 2026-11-22 the page parsed it on its own and could show 0 while the
+  system used 7 (review M17).
 - The automated call's script and settings (T24) - "The automated call",
   below.
+- Its reads run one at a time, not all at once (2026-11-22, review M18): eleven
+  together - with the automated call's settings - took more than the pool's
+  ten connections on a page polled every 5 seconds. With 50,000 leads the page
+  reads in 8 ms (`npm run speed`).
 
 `GET /api/admin/config` returns all of it from the flow new leads get
 (`flows`, `flow_questions`, `flow_choices` - `FLOWS.md`), `settings` and
@@ -137,8 +144,14 @@ recorded, which is when the recording notice is said. `{place}` in the hold
 line shows as "2, 3…".
 
 No script active: the card says so, and the link text is not listed. Read-only
-like the rest: the script and its settings change by migration (015, 018-020
-so far).
+like the rest: the script and its settings change by migration (015, 018-021
+so far - 021 is "Calls at once", five for each person free, T29).
+
+**Seri is not on Admin (Phase 7, `AI-AGENT.md`).** Her switch is changed only
+by the server command, `npm run ai-agent -- on|off`, and recorded in the
+activity log; her knowledge files are in the repo, not the database. The Calls
+tab shows the script she falls back to, not her. What she did on each call is
+on the lead's timeline and in Admin > Leads' Call column ("Callback booked").
 
 ## Overview (6a)
 
@@ -155,7 +168,7 @@ complex".** The page and the API now hold only what a superadmin acts on:
 | Part | Shows |
 |---|---|
 | Totals | Leads in · Replied · Completed · Closed - for Today, 7 days or 30 days, chosen on the navy switcher |
-| Agents | Per active user, superadmins included: **Working now** (leads they hold), **Closed** in the period, **Due today**, **Last active** (their newest note, callback they booked, outcome, call they placed or answered - a transfer they took from an automated call included, never one nobody took (T4) - or SMS that went out) |
+| Agents | Per active user, superadmins included: **Working now** (leads they hold), **Closed** in the period, **Due today**, **Last active** (their newest note, callback booked for them - by them, or by a superadmin for them: the table reads whose callback it is, and who booked it is only in the activity log (review R14) - outcome, call they placed or answered - a transfer they took from an automated call included, never one nobody took (T4) - or SMS that went out) |
 | System | Database, EZ Texting sync, the expiry sweep, sending and calling - each OK or Degraded - and incoming replies, which shows its last reply with no verdict. Calling is Degraded when the phone number or the TwiML App no longer points at this server (2026-10-02), and reads "not set up", with no verdict, where calling is off. From the health endpoint |
 
 **Every number counts what happened in the period - Jeel, 2026-09-28, "i want
@@ -168,7 +181,7 @@ all real":**
 | Completed | Leads who finished their flow's questions in the period, whichever way it ended - a lead who said No and then chose special offers is one. `conversations.completed_at`, migration 004. *(Called "Answered all 3" until 2026-10-06, when a flow stopped being three questions.)* |
 | Closed | **Leads** closed in the period, not presses of Closed: a lead closed, reopened by a text and closed again is one |
 | Working now | Leads the agent holds right now, whatever the period |
-| Due today | The agent's open callbacks due **by the end of today**, in the viewer's time zone, overdue ones included - one booked for next week is not. Until 2026-09-29 it counted only those already due, so a 3 PM callback showed nothing all morning; the column was called Callbacks due |
+| Due today | The agent's open callbacks due **by the end of today**, in the viewer's time zone, overdue ones included - one booked for next week is not. A call back Seri booked counts once it is theirs - booked for the lead they held, or taken on a pick-up (A16); one nobody has taken is no one's. Until 2026-09-29 it counted only those already due, so a 3 PM callback showed nothing all morning; the column was called Callbacks due |
 
 Until that day Replied and Completed counted leads that *arrived* in the
 period, Closed counted presses, and Callbacks due counted every open callback;
@@ -206,8 +219,11 @@ from the health endpoint in `LOGGING.md` rather than this route, so the screen
 and that endpoint cannot disagree. The endpoint is superadmin-only, so nothing
 outside can poll it - `README.md`, "Known limits".
 
-The per-agent table and the activity feed are the only place one agent's work is
-visible to anyone but themselves. Agents cannot reach this page: `AUTH.md`.
+The per-agent table and the activity feed are the only view of agents' work
+across leads. One lead's own history - every agent's notes, outcomes and texts,
+with who wrote them - is on its timeline, open to every signed-in user; this
+page is the one that puts all of it side by side (review R14, 2026-11-23).
+Agents cannot reach this page: `AUTH.md`.
 
 **"Today" is the viewer's day** - since 2026-09-28 the browser sends its time
 zone as `?tz=`, and today starts at the viewer's midnight, not the database's
@@ -215,7 +231,9 @@ UTC one (`db/sql.ts`, `startOfTodaySql`). An invalid zone is a 400; none means
 UTC.
 
 **As built.** `period` defaults to `today`, which means since midnight rather
-than the last 24 hours. Leads are counted by when they reached us
+than the last 24 hours. The response's `since` is that start - the viewer's
+midnight, or 7 or 30 days ago - read with the counts (until 2026-11-23 it held
+the time of the request; nothing on screen reads it). Leads are counted by when they reached us
 (`ezt_added_at`, falling back to `created_at`) - the same expression the queue
 uses for a lead's age - while closings are counted by when they happened, so a
 lead closed today about last week's lead lands in today's figures.
@@ -223,17 +241,25 @@ lead closed today about last week's lead lands in today's figures.
 The activity feed is a four-way UNION over `dispositions`, `notes`, `callbacks`
 and agent-sent `messages`, newest first, capped at 50. Agent actions only: the
 automated flow is already visible per lead on the timeline, and this feed
-answers "what are my agents doing". For the same reason a callback the system
+answers "what are my agents doing". A callback in it is shown under the name
+of the agent it is for, as in Last active. For the same reason a callback the system
 books for a missed call (`callbacks.reason = 'missed_call'`) is not in the
 feed, and neither it nor a call that only rang an agent moves their Last
-active (2026-10-01).
+active (2026-10-01). Nor does a call back Seri booked (`ai_booked`, A15): the
+feed and Last active read only `reason = 'booked'`.
 
 ## DNC list (6e)
 
-`GET /api/admin/dnc?q=&page=&state=` - phone, reason, when it was added, the
+`GET /api/admin/dnc?q=&page=&state=` - `page` a whole number from 1 to 100,000,
+as on Admin > Leads (`parsePage`, `api/filters.ts`; until 2026-11-22 it had no
+upper bound, and `?page=1e20` was a 500 - review M17) - phone, reason, when it was added, the
 lead if we hold one, and whether and why it was released. There is no "who
 added it": `dnc_list` has no such column; the agent behind a DNC outcome is in
 the activity log (`AUDIT.md`).
+
+The page keeps its state tab, search and page in its address (`?state=`,
+`?q=`, `?page=`; `frontend/src/lib/dnc-view.ts`), as Admin > Leads does, so
+Back from a lead's timeline returns to the same list (review Q8, 2026-11-23).
 
 Read-only, and there is no manual add (Jeel, 2026-09-23): a number reaches the
 list through an agent's DNC disposition, an SMS STOP, an EZ Texting opt-out

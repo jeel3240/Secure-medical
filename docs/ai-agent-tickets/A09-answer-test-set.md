@@ -1,0 +1,66 @@
+# A09 · Answer test set
+
+**Goal:** About 60 things leads say, each with what Seri must do, run against the real model.
+
+**Why:** The only safe way to change instructions or knowledge without breaking something.
+
+**Depends on:** A04, A05, A06  ·  **Size:** Medium (about a day)  ·  **Status:** Done 2026-11-11 - removed 2026-11-19 with today's brain, which it tested (`AI-AGENT.md` section 12, "Today's brain removed"); the understand and speak sets took its place
+
+## Build
+
+- `backend/src/ai/evals/cases.json`: each case is a short conversation, the action that must follow (or none yet), and words that must not appear.
+- Cover: yes now, yes later, no, two no's, every objection in the playbook, price, scam, insurance, medical question, upset, unknown question, "stop", wrong person, "call me at 9 PM", silence-like replies.
+- `npm run ai:eval`: runs every case against OpenAI with the real instructions and tools, prints pass or fail per case, and time to first word.
+- Pick the model: run with two or three small fast models; choose by pass rate, then speed. Write the choice in `docs/AI-AGENT.md` section 1.
+
+## Done when
+
+- [x] At least 95% of cases pass with the chosen model; every failure is understood and written down - `gpt-4.1-mini`, 133 of 134 (99.3%): the 67 cases run twice. The one failure is below.
+- [x] The chosen model and its typical time to first word are recorded - `gpt-4.1-mini`, first word in 0.55 s (median), 90% within 0.68 s, measured from a laptop; `backend/src/ai/model.ts`, and `docs/AI-AGENT.md` section 1.
+
+## Tests
+
+- This ticket is the test. And, without OpenAI, `src/ai/evals/grade.test.ts` (14 tests): the 67 cases well formed - each ends on the lead, expects outcomes that exist, every action and each of who is there tried, every objection covered - built as the relay will build them, and marked right; `actions.test.ts` gains the two rules the test set led to (11 tests). 1,409 backend tests in all.
+
+## Docs to update in the same commit
+
+- `docs/AI-AGENT.md` sections 1 and 8.
+
+## Not in this ticket
+
+- Running it in CI (it calls OpenAI and costs money: run by hand before each change).
+
+## As built
+
+**The test set.** `backend/src/ai/evals/cases.json`, 67 cases: yes now and later (someone free, coming, nobody), call backs confirmed and refused (9 PM, Saturday, an unknown area code), busy and driving, no, two no's, the link, every objection in the playbook, the price three ways, a 50% discount, insurance, payment, shipping, prescriptions, legal, privacy, the call-back number, Medical Web, "who is this", "am I talking to a real person", medical questions (which antibiotic, dosage, symptoms, side effects, with nobody there), an emergency, two upset callers, two questions the answers don't cover, six ways of saying stop, personal details, and four silence-like replies. Each is the call so far, built as the relay will build it (A11): the instructions, the greeting, the lead's turns with the note of who is there before each. What passes: an outcome the case allows - no action yet, or an action, checked by `toHandoff` exactly as a call checks it - and her words: at least one the case asks for, none it forbids (every case forbids "$", "dollars", "I don't know" and reading out the note of who is there), and nothing the sentence check (A05) would replace.
+
+**`npm run ai:eval`** (`src/ai/evals/run.ts`, `grade.ts` pure) streams each case from OpenAI as a call would - the five tools, one action at most, the shared prompt cached - and prints pass or fail per case with why, what the lead would hear, and the time to the first word; then the pass rate, the median and 90th percentile of that time, and how much of the prompt was read from OpenAI's cache. `--model name[:reasoning]` (repeatable), `--case <id prefix>`, `--runs N`. By hand, with `OPENAI_API_KEY` set; never in CI.
+
+**The model:** `gpt-4.1-mini` (`src/ai/model.ts`, read by the relay and the test set). The 67 cases twice each, after the changes below:
+
+| Model | Passed | First word, median | 90% within |
+|---|---|---|---|
+| **gpt-4.1-mini** | **133/134 (99.3%)** | **0.55 s** | **0.68 s** |
+| gpt-5.4-mini, reasoning none | 127/134 (94.8%) | 0.58 s | 0.68 s |
+| gpt-5-mini, reasoning minimal | 115/134 (85.8%) | 0.78 s | 0.89 s |
+| gpt-4o-mini | 107/134 (79.9%) | 0.48 s | 1.14 s |
+
+`gpt-5.4-nano` (reasoning none) passed 58% on the first run and was dropped. The smaller models' commonest fault was **the opposite of an action without words: words without the action** - "Okay, we will not call you again. Goodbye." with no `opt_out`, a goodbye with no `end_call` - which would leave a stop unrecorded or a call open; `gpt-4.1-mini` takes its actions reliably. The prompt was read from OpenAI's cache 87-95% of the time.
+
+**What the first runs changed** (`gpt-4.1-mini` went from 58 of 67 to 133 of 134):
+
+- **An action with no words before it** - the model often ends with the action alone (5 of 9 first failures). The lead must always hear a last line, so **the relay says one for her**: `lineToAdd` in `actions.ts` - each action's own last line, in her voice ("Great, connecting you now."; a call back's says the time as booked and checked - "Perfect, someone from our team will call you tomorrow at 3 PM your time. Have a great day!"); and an opt-out in her own words that lacks the stop line gets the stop line after them. 17 of 134 replies used it.
+- **A question and an action in the same reply** - "Would you like me to connect you with someone now?" and the transfer at once, before the lead could answer; "So that's Thursday at 3 PM your time?" and the booking at once. Instructions alone did not stop it, so **the server holds it back**: `toHandoff` refuses any action whose reply ended on a question (`awaitLead`) - nothing more is said, and the call goes on with the lead's answer. *(Since A21's call 89, a question anywhere in the reply - she asked why, offered the link and texted it in one reply.)* The instructions now say: the last line and the action in the same reply, never after a question.
+- **"dosage" in a harmless sentence** ("They determine the right dosage...") would be replaced by the sentence check: the instructions now keep her off doses, frequency, side effects and interactions altogether, even to say who decides them.
+- **Saturday accepted** as a call-back day (the booking would have been refused, Monday offered): the call's details now say "Monday to Friday - never Saturday or Sunday", and the instructions say to steer to the hours before agreeing a time.
+- **"Would 3 PM today work?"** for a lead who asked for tomorrow: the call's details now give tomorrow's date too, in Arizona and in the lead's zone; the case now needs "tomorrow" or "Thursday".
+- **Offering to remove the number instead of doing it**: the instruction now says opt out at once - don't offer, don't ask.
+- **Since A21 (2026-11-13):** 68 cases - `no_repeat_connect`, not offering to connect twice in a row. Her words are graded without her tones; a bracket that is not one of her tones fails; an action written in brackets is taken as the relay takes it, and counted; "no worries", "when you're ready" and "take your time" fail every case; an opt-out is no longer held back by a question. `dev` 133 of 134 against the branch 132 of 136, two runs each - `docs/AI-AGENT.md` section 1, "Her voice and tone". **After call 91:** 71 cases - `opening_free`, `opening_nobody`, `opening_coming`, the lead's first answer to the greeting, which must get the opening and its question, never a call back or someone to talk to; 141 of 142, two runs each. **After call 92:** 73 - `yes_short_nobody` and `connect_yes_nobody`, a "yes" with nobody free, which must be asked when, never booked for a time she chose; an action is checked against her reply the lead answered (`answeredReply`), as the relay checks it; 142 of 146. **After call 89:** 74 - `no_after_scam_question`, call 89's own turns; an action after a question anywhere in her reply is held back; 145 of 148. **After call 93:** 76 - `friday_yes_nobody` and `friday_tomorrow_nobody`, call 93 on its own Friday afternoon, with the lead's name and number. Found doing it: **every case ran at the default time** - a case's `now` was never read (`loadCases`); it is now, and tested. 149 of 152. **After call 94:** 79 - `friday_tomorrow_first_ask`, `side_question_once`, `side_question_twice`: why first, and her question not repeated after the lead's side question; 149 of 158. **After call 95 (2026-11-16):** 80 - `callback_time_given`, call 95's own turns: the time said back as a question, nothing booked yet; a reply whose action is held back is graded on what the lead hears - up to its first question, as the relay says it (`upToQuestion`); 154 of 160. **After call 96 (2026-11-16):** 82 - `callback_time_named_as_question` and `callback_time_named_refused`: a time the lead named said back, not asked for again; a turn of hers may end with an action that was refused (`refused`), checked as the relay checks it and told to her as the relay tells her - a case whose action would be taken stops the run; 152 of 164. **After call 99 (2026-11-16):** 85 - `no_plain`, `no_then_dont_need` and `no_reason_timing`, and `no_once` failing a link offered with the why: the why asked alone, a second no ending the call, the timing getting an offer; the "no" cases 29 of 45 before, 44 of 45 after; the whole set 166 of 170 (`AI-AGENT.md` section 3, "Changed after A21's call 99"). **After call 103 (2026-11-16):** 87 - `not_right_now_nobody` and `not_right_now_free`: "Not right now." to the offer is not asking for anyone, so nothing about who is busy; 4 of 6 runs said everyone was busy before, 12 of 12 did not after; 169 of 174 (`AI-AGENT.md` section 4, "Changed after A21's call 103"). **After call 109 (2026-11-16):** 89 - `misheard_name_mid_call` and `wrong_number_mid_call`: "Is this is Kim." - call 109's "Is this a scam?" misheard - is not the wrong person, and a plain wrong number mid-call still is; 0 of 8 before, 11 of 12 after; 170 of 178 (`AI-AGENT.md` section 3, "Changed after A21's call 109"). **After call 111 (2026-11-17):** 91 - `unknown_question_asked_again` and `unknown_question_asked_again_nobody`: a question the answers don't cover, asked again, is still the specialists' to answer - never "I don't have that information"; 2 of 12 on `dev` before, 9 of 12 after; `says` matches whole words, so "specialists" is listed beside "specialist"; 174 of 182 (`AI-AGENT.md` section 3, "Changed after A21's call 111").
+
+**The one failure left, understood:** `upset` (one run of two) - "I understand, John, that repeated calls can be frustrating..." - acknowledged, then offered a person or removal, but no apology; the case asks for one, as the approved answer for an upset caller has. The other run apologised.
+
+**Run again 2026-11-12, after the four speaking-style lines** (`AI-AGENT.md` section 1): the old and new instructions side by side, three runs each, in the same hour - 198/201 (98.5%) and 199/201 (99.0%). The old failed `personal_info` three times of three, transferring a lead who had just read out a card number; the new passed it every time, and failed `callback_saturday` once - Saturday offered, which the booking check (A06) would refuse with a weekday instead - and `no_twice` once, ended as an opt-out. `upset` passed every run on both. **First word: 0.92 s median for both**, against 0.55 s the day before - OpenAI's speed changes from hour to hour, so compare a change or a model in the same hour, never against an old run.
+
+**What it does not cover:** how she sounds, talking over her, silence and timing - the relay's (A11, A12) and the real phone's (A21). A case is one reply at a time, not a whole call. The 9 PM and Saturday cases check what she says, while the booking check (A06) is what stops such a time being booked. A stop said in the lead's own words is also caught by the relay's own stop-word check before Seri replies (A11); the six stop cases test her without it.
+
+Design: `docs/AI-AGENT.md`. All AI code in `backend/src/ai/`. One PR into `dev`.

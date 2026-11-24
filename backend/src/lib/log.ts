@@ -76,8 +76,9 @@ const FORBIDDEN = new Set([
 /**
  * Names that are always allowed, whatever the suffix rules below would say.
  *
- * `key` is the settings key an SMS was rendered from - `question_1`,
- * `message_clarify_2` - and it is the field the sms.* events group by. The
+ * `key` names the text an sms.* event is about - `question_1` for the first
+ * question, or the name of a call's text (`db/lead-texts.ts`) - and it is the
+ * field those events group by. The
  * `endsWith('key')` rule below redacted it, which cost nothing in safety and
  * most of the value of those lines. Found by reading real output rather than
  * the code.
@@ -115,23 +116,35 @@ export function redact(fields: Fields): Fields {
     }
 
     if (value instanceof Error) {
-      out[key] = value.message;
+      out[key] = withoutPhones(value.message);
       continue;
     }
 
     if (value && typeof value === 'object' && !Array.isArray(value)) {
       const nested: Fields = {};
       for (const [k, v] of Object.entries(value as Fields)) {
-        nested[k] = looksSensitive(k) ? '[redacted]' : v;
+        nested[k] = looksSensitive(k) ? '[redacted]' : typeof v === 'string' ? withoutPhones(v) : v;
       }
       out[key] = nested;
       continue;
     }
 
-    out[key] = value;
+    out[key] = typeof value === 'string' ? withoutPhones(value) : value;
   }
 
   return out;
+}
+
+/**
+ * A number written as E.164 - "+16025550123" - inside any text logged, an
+ * error's message above all, whatever the field is called: the field names
+ * above cannot see into a sentence (review H1, 2026-11-22: a refused send's
+ * error carried the number). Our own ids never start with "+".
+ */
+const E164_IN_TEXT = /\+\d{10,15}\b/g;
+
+function withoutPhones(text: string): string {
+  return text.replace(E164_IN_TEXT, '[redacted phone]');
 }
 
 /**

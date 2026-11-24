@@ -17,6 +17,7 @@
  * It writes rows, so it refuses to run against a database that holds users.
  * Run it with the others: scripts/live-checks.sh presence
  */
+import { check, failureCount, verdict } from './check';
 import { pool } from '../src/db/pool';
 import {
   freePeople,
@@ -28,18 +29,6 @@ import {
 } from '../src/db/presence';
 import { pgUserStore } from '../src/db/users';
 
-let failures = 0;
-
-function check(label: string, actual: unknown, expected: unknown): void {
-  const a = JSON.stringify(actual);
-  const e = JSON.stringify(expected);
-  if (a === e) {
-    console.log(`  ok   ${label}`);
-  } else {
-    failures++;
-    console.log(`  FAIL ${label}\n       expected ${e}\n       actual   ${a}`);
-  }
-}
 
 async function refuseIfNotEmpty(): Promise<void> {
   const { rows } = await pool.query(`SELECT count(*)::int AS users FROM users`);
@@ -228,6 +217,23 @@ async function main(): Promise<void> {
     check('once a person takes its transfer, they are on it: not free', await freePeople(pool), [kim]);
     await end(robot);
 
+    const heldLead = (
+      await pool.query(`INSERT INTO leads (phone, first_name, ezt_added_at) VALUES ('+15550000905', 'Hal', now()) RETURNING id`)
+    ).rows[0].id as number;
+    const held = (
+      await pool.query(
+        `INSERT INTO calls (lead_id, twilio_call_sid, direction, held_at) VALUES ($1, 'CA-held-1', 'automated', now()) RETURNING id`,
+        [heldLead]
+      )
+    ).rows[0].id as number;
+    const offer = (
+      await pool.query(`INSERT INTO call_offers (call_id, agent_id) VALUES ($1, $2) RETURNING id`, [held, kim])
+    ).rows[0].id as number;
+    check('a lead on hold ringing them: not free - no transfer rings them as well (review H10)', await freePeople(pool), [boss]);
+    await pool.query(`UPDATE call_offers SET ended_at = now(), outcome = 'missed' WHERE id = $1`, [offer]);
+    check('once that ring ends: free again', await freePeople(pool), [kim, boss]);
+    await end(held);
+
     await pool.query(`UPDATE users SET is_active = false WHERE id = $1`, [kim]);
     await pool.query(`UPDATE users SET ringable_until = now() + interval '1 minute' WHERE id = $1`, [kim]);
     check('deactivated, even with the switch on and a browser open: not free', await freePeople(pool), [boss]);
@@ -326,6 +332,15 @@ async function main(): Promise<void> {
     await pool.query(`UPDATE calls SET ended_at = now() - interval '3 minutes' WHERE id = $1`, [busy]);
     check('the note box open three minutes after the call: no longer counted', await someoneOnOrJustOffCall(pool, null), false);
 
+    // A lead's call that rang them and they never answered is no call to write a note on (review M24).
+    await setRingable(pool, zoe, false);
+    await pool.query(
+      `INSERT INTO calls (lead_id, agent_id, twilio_call_sid, direction, started_at, ended_at, outcome)
+       VALUES ($1, $2, 'CA-hold-missed', 'inbound', now() - interval '30 seconds', now(), 'missed')`,
+      [lead, zoe]
+    );
+    check('a lead\'s call they missed, the browser quiet: not "just off a call"', await someoneOnOrJustOffCall(pool, null), false);
+
     // Another of the robot's calls ringing its transfer (T20 review): whoever
     // it rings is free again in seconds, or on it.
     const step = (await pool.query(`SELECT id, key FROM call_steps WHERE key = 'q1'`)).rows[0];
@@ -356,11 +371,31 @@ async function main(): Promise<void> {
     check('on hold, it rings nobody', await someoneOnOrJustOffCall(pool, null), false);
     await pool.query(`UPDATE calls SET held_at = NULL, script_result = 'transfer_missed' WHERE id = $1`, [yesCall]);
     check('over, nobody took it: rings nobody', await someoneOnOrJustOffCall(pool, null), false);
+
+    // Seri's transfer (Phase 7): no answer row on the script - her part ended
+    // with `transfer_to_agent` (ai_ended_with), and it rings the same way.
+    const seriLead = (
+      await pool.query(`INSERT INTO leads (phone, first_name, ezt_added_at) VALUES ('+15550000913', 'Pat', now()) RETURNING id`)
+    ).rows[0].id as number;
+    const seriCall = (
+      await pool.query(
+        `INSERT INTO calls (lead_id, twilio_call_sid, direction, started_at, ai_started_at, ai_knowledge_version)
+         VALUES ($1, 'CA-RING-3', 'automated', now(), now(), 'v') RETURNING id`,
+        [seriLead]
+      )
+    ).rows[0].id as number;
+    check('Seri still talking: rings nobody', await someoneOnOrJustOffCall(pool, null), false);
+    await pool.query(`UPDATE calls SET ai_ended_with = 'transfer_to_agent' WHERE id = $1`, [seriCall]);
+    check('Seri\'s transfer ringing: someone coming, as the script\'s', await someoneOnOrJustOffCall(pool, null), true);
+    check('never the call asking itself', await someoneOnOrJustOffCall(pool, seriCall), false);
+    await pool.query(`UPDATE calls SET script_result = 'transferred', agent_id = $2 WHERE id = $1`, [seriCall, zoe]);
+    check('taken: no longer ringing - its person is on it', await someoneOnOrJustOffCall(pool, seriCall), true);
+    await pool.query(`UPDATE calls SET ended_at = now() - interval '3 minutes', outcome = 'answered' WHERE id = $1`, [seriCall]);
   }
 
-  console.log(failures === 0 ? '\nall checks passed' : `\n${failures} check(s) FAILED`);
+  console.log(verdict());
   await pool.end();
-  process.exit(failures === 0 ? 0 : 1);
+  process.exit(failureCount() === 0 ? 0 : 1);
 }
 
 main().catch((err) => {

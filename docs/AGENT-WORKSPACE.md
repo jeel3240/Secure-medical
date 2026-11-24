@@ -38,7 +38,10 @@ purpose - Jeel, 2026-10-08.** Two things release it:
   you · since 3:04 PM". The holder sees it on their own lead. A **superadmin
   sees it on anyone's** - "Held by Maya Chen · since 3:04 PM · Release" - which
   is the way out of a lead locked to an agent who is not there; the release is
-  recorded as forced. It is switched off while a call is under way.
+  recorded as forced. It is switched off while a call is under way - a lead's
+  call taken on that page included, since 2026-11-22 (review M27: it stayed
+  live during an answered incoming call, and the note after it was then
+  refused).
 
 **Back to queue only goes back.** Until 2026-10-08 it also released the lead.
 On the first day of real use an agent called a lead twice, reached voicemail,
@@ -58,7 +61,13 @@ read-only and claims nothing - `QUEUE.md`, "What the button offers" - and
 Release is now there on that page.)*
 
 **A claim by a deactivated agent does not count.** The queue already ignores it
-(`QUEUE.md`); the claim endpoint treats such a lead as free.
+(`QUEUE.md`); the claim endpoint treats such a lead as free, and since
+2026-11-22 so does Release. Since 2026-11-23 their open call backs are nobody's
+too, and picking the lead up takes them (review D2, `QUEUE.md`, "One thing
+worth knowing"): any agent may release it (review M9 - it was a 403
+naming the deactivated person). Lost the race to someone who has let the lead
+go again since, a claim is tried once more rather than answer "null is already
+working this lead" (M42).
 
 **Every write needs the lead to be yours - Jeel, 2026-09-28.** A note, a new
 callback, an agent SMS, a disposition and marking a reply read are all refused
@@ -104,7 +113,8 @@ scored. STOP and START still work. The rule and the reason are in
 authority, not this file.
 
 **So does a phone call** - 2026-10-27, `STATE-MACHINE.md` rule 2d: the lead
-answered the robot's call (yes, no, the link), or rang us. Nothing is stored
+answered the robot's call (yes, no, the link) - or, on a call Seri took, said
+anything to her (2026-11-13) - or rang us. Nothing is stored
 for it; the card's conversation carries `phoneTookOverAt`, worked out from the
 answer or the call, while the questions would otherwise still run. The page
 shows "Phone call - questions stopped" beside the other badges, and Questions
@@ -133,13 +143,13 @@ hand - there is no manual add screen (Jeel, 2026-09-23). It needs a confirm
 dialog, and it cannot be undone from the app.
 
 **Nothing is sent to a blocked number.** `sendMessage` already refuses one, so
-the agent SMS box is disabled on a DNC lead rather than failing at send time.
+the agent SMS box is not shown on a DNC lead - in its place, "Texting is blocked - this number is on the do-not-call list." - rather than failing at send time (`SmsCompose.tsx`; "disabled" until review R15, 2026-11-23, which the code never was).
 
 ## Endpoints
 
 | Method | Path | Does |
 |---|---|---|
-| `GET` | `/api/leads/:id` | Lead card: name, phone, source, age, score, tier, the conversation, answer chips, score breakdown, the holder (`claimedBy`), `closed` (who closed it and when, while it is closed), flags (DNC, needs review, unread, expired, missed call, and `missedYes` - a "yes" on the automated call nobody took and nobody has got back to, T22, `QUEUE.md`). Read-only - see below. |
+| `GET` | `/api/leads/:id` | Lead card: name, phone, source, age, score, tier, the conversation, answer chips, score breakdown, the holder (`claimedBy`), `closed` (who closed it and when, while it is closed), flags (DNC, needs review, unread, expired, missed call, and `missedYes` - a "yes" on the automated call nobody took and nobody has got back to, T22, `QUEUE.md`), and `aiCallback` - an open call back Seri booked: its time, her line and whose it is once taken (A15, "Callbacks"). Read-only - see below. |
 | `GET` | `/api/leads/:id/timeline` | Every event for the lead, oldest first: system, outbound SMS, inbound reply, agent SMS, call, note, callback, disposition, and `activity` - the log entries with no row of their own (`AUDIT.md`). |
 | `POST` | `/api/leads/:id/read` | Clears `has_unread_inbound`. 204, idempotent. |
 | `POST` | `/api/leads/:id/claim` | Claims it. 409 `already_claimed` with the holder's name when someone else has it. |
@@ -149,7 +159,7 @@ the agent SMS box is disabled on a DNC lead rather than failing at send time.
 | `POST` | `/api/leads/:id/dispositions` | `{ value, confirmDnc? }` - `closed` or `dnc`, "Dispositions" below. `dnc` also blocks the number and needs `confirmDnc: true`. |
 | `POST` | `/api/leads/:id/callbacks` | `{ scheduledAt, agentId? }` - defaults to you; a superadmin may assign another agent. |
 | `PATCH` | `/api/callbacks/:id` | `{ scheduledAt }` to reschedule, `{ done: true }` to complete, or both; `{ done: false }` reopens a done one. |
-| `GET` | `/api/callbacks?when=today\|upcoming\|overdue\|all&agentId=&tz=` | My Callbacks. `tz` is the viewer's time zone, for where today ends. `agentId` is superadmin only: an agent's id, or `all` for every agent's (2026-09-28). |
+| `GET` | `/api/callbacks?when=today\|upcoming\|overdue\|all&agentId=&tz=` | My Callbacks. `tz` is the viewer's time zone, for where today ends. `agentId` is superadmin only: an agent's id, or `all` for every agent's (2026-09-28). Each row carries its `reason` and, on one Seri booked, her `note`; one of hers nobody has taken has `agentId` null and is listed only under `all` (A15, A16). |
 
 ## Notes
 
@@ -173,7 +183,10 @@ a runaway client cannot fill the column, not to ration what an agent can say.
 
 ## Callbacks
 
-**Today and Upcoming split at the viewer's midnight** - 2026-09-28, from review.
+**Today and Upcoming split at the viewer's midnight** - 2026-09-28, from review;
+since 2026-11-22 their real midnight on the two days a year the clocks change
+too, worked out on their own clock (`startOfTomorrowSql`) - today's start plus a
+day was 24 hours on, an hour off it (review M11; Overview's "due today" alike).
 They split at the database's (UTC), so for a call center on US time a 9 PM
 callback was already "Upcoming", and after 5 PM Pacific the Today tab showed
 tomorrow's. The browser now sends its IANA zone as `?tz=`; an invalid one is a
@@ -218,17 +231,55 @@ callback due at that moment, `reason = 'missed_call'`. My Callbacks shows it as
 **Missed call** rather than Overdue, **under Today** - it is due the second it
 is booked, so by the rule above it would be overdue at once and never be on
 the tab an agent opens; it moves to Overdue only when the day ends - and it is marked done when anyone calls or
-texts the lead back, or answers when they ring again. Every other callback is
-`reason = 'booked'` and is finished only by a person or by an outcome. A lead
+texts the lead back, or answers when they ring again. A callback a person books
+is `reason = 'booked'` and is finished only by a person or by an outcome - the
+third reason, `ai_booked`, is Seri's, below. A lead
 who rings several times is still one row: it reads **Missed 3 calls** and shows
 the time of the latest, both read from `calls` rather than written onto the
 callback, so the first call's time is not overwritten.
 `TWILIO.md`, "A missed call".
 
+**Seri books one too - A15, 2026-11-12** (`AI-AGENT.md` section 4). When the
+lead picks a time with Seri on the automated call, `/auto/ai-after` books it
+with her result, `callback_booked`, in one transaction (`bookAiCallback`,
+`keepCallResult`): `reason = 'ai_booked'`, the call it was booked on
+(`booked_by_call_id`), and her one-line reason for whoever calls - `note`,
+"Wants to order antibiotics" (migration 023). It is **the lead's own agent's**
+when an active one holds the lead; otherwise it has **no agent** - open to
+everyone until someone takes it (A16 puts it in the queue). One per call: Twilio
+asking twice books once. Its time is checked again against the agents' hours;
+a refusal there is a bug - the relay checked it before she could book - so it is
+logged (`auto_call.callback_time_refused`) and booked all the same, since the
+lead was told someone would call then. Recorded as `callback.booked`, the
+system's doing, `via: 'seri'`, with the call and the lead's zone; the note stays
+on the callback, never in the log.
+
+- **On the lead's page,** while it is open: a badge, "Callback booked · Thu,
+  Nov 13 3:00 PM · Wants to order antibiotics" - the viewer's own time, then
+  whose it is once someone has it, then her line (`aiCallback` on the lead
+  card, `aiCallbackLabel`).
+- **On the timeline:** "Callback booked by Seri for Thu, Nov 13 3:00 PM ·
+  Wants to order antibiotics", with no author; done, "Callback completed".
+- **Not a person's work:** a lead whose only trace is her booking is not
+  Working (`WORKED_SQL`) - no person has been near it, as with a robot call
+  nobody took (T4).
+- **In the queue once due, and taken on pick-up - A16.** Due, it puts the lead
+  at the top of the queue, "Callback · 3:00 PM" in bold (`QUEUE.md`). The first
+  agent to pick the lead up takes it - `claimLead` makes it theirs in the same
+  statement, `callback.taken`, "Took the callback Seri booked for ..." on the
+  timeline - and from then it is on their **My Callbacks**, with her line in
+  the Last note column ("Seri: Wants to order antibiotics") while the lead has
+  no note - the column shows the lead's newest note, anyone's, once there is
+  one. Until someone takes it, only a superadmin's "All agents" view lists
+  it, with no agent, and only a superadmin may move it (`not_yours`
+  otherwise).
+
 **Whose callback it is.** An agent sees and changes only their own; a superadmin
 may list another agent's and may change one, which is how a callback left by
 someone off sick gets moved. A refusal names the owner so the screen can say who
-rather than just no.
+rather than just no. A call back Seri booked that nobody has taken has no
+owner to name: the refusal says "Nobody has this callback yet: pick up the
+lead to take it" (2026-11-13), and only a superadmin may change it until then.
 
 **The list row carries what the screen shows** - lead name, phone, source,
 tier, the newest note, who holds the lead now (`holder`, for Pick up / Resume
@@ -242,13 +293,24 @@ has passed is overdue and not also today, that completing twice keeps the
 first time, and that rescheduling moves a callback between tabs - 29 checks.
 The missed call's callback - booked once, under Today, its count and latest
 time, what finishes it - is in `scripts/calls-live-check.ts` and
-`agent-sms-live-check.ts`.
+`agent-sms-live-check.ts`. Seri's - whose it is, once per call, its record, not
+worked, on the lead's page and timeline, the note's rules - in
+`scripts/ai-agent-live-check.ts`.
 
 
 ## Dispositions
 
 `db/dispositions.ts` for the write, `core/dispositions.ts` for the list,
 `POST /api/leads/:id/dispositions`, 201 with the row.
+
+**Still yours as it is saved** (2026-11-22, review M10). The route checks the
+lead is yours, then the outcome is written in its own transaction: a release by
+a superadmin and someone else's pick-up in between let one agent's outcome
+release another's claim and close their call backs. Under the lead's lock, an
+outcome on a lead another active person now holds is refused - 409 `not_yours`,
+nothing saved. **An unread reply it clears is recorded read** (M20): saving an
+outcome clears the lead's unread flag, as opening it does, and now records
+`reply.read` by whoever saved it, `because: 'outcome'`.
 
 **Two: `closed` and `dnc` - Jeel, 2026-09-28.** Wrap up has two outcome
 buttons, Closed and DNC, then the callback and the note.
@@ -517,6 +579,12 @@ the only reason the column exists.
 already ignores it. If the two disagreed, a lead would appear free in the list
 and refuse to be taken.
 
+**A pick-up takes Seri's call back - A16, 2026-11-12.** The same statement
+makes every open call back she booked that nobody has taken the picker's, and
+records `callback.taken` for each (`QUEUE.md`, "The tag"). Re-claiming a lead
+you hold takes one booked since; a lead someone else holds is refused before
+anything is taken.
+
 Status codes: 409 `already_claimed` when an active agent holds it - the caller
 did nothing wrong, someone was first - and 403 `not_yours` when an agent tries
 to release a claim that is not theirs. Releasing a lead nobody holds succeeds:
@@ -529,12 +597,20 @@ One merged, ordered list assembled from `messages`, `calls`, `notes`,
 author where there is one, and its own fields. The screen decides the icons and
 wording, the way it does for queue tags.
 
+**Read one table at a time** (2026-11-22, review M18): the seven tables it
+merges were read all at once, seven of the pool's ten connections on a screen
+polled every 5 seconds - a few people looking, and every other request waited.
+Each is quick: with 50,000 leads the whole timeline reads in 3 ms
+(`npm run speed`).
+
 System events are not a table. They are derived from the lead and its
 conversation rather than logged rows, so the timeline synthesises them.
 
 **Built 2026-09-26**, `db/timeline.ts`. The list is assembled from `messages`,
-`calls`, `notes`, `callbacks`, `dispositions` and - since 2026-10-01 - six
-actions from `activity_log` that have no row of their own. Five system events, each standing on a
+`calls`, `notes`, `callbacks`, `dispositions` and - since 2026-10-01 - the
+actions from `activity_log` that have no row of their own: seven since A16
+(`TIMELINE_ACTIONS` - a pick-up, a release, a call back of Seri's taken, a
+callback moved or reopened, a text blocked, a call refused). Five system events, each standing on a
 timestamp that actually exists:
 
 | Event | Placed at | Why there |
@@ -542,7 +618,7 @@ timestamp that actually exists:
 | `lead_received` | `ezt_added_at` | Its own timestamp. Carries the source. |
 | `scored` | `completed_at` once the flow has finished; before that, the last inbound reply | `updated_at` moves on every change, so it cannot be used. Until 2026-09-29 it was always the last reply, so a lead texting "Hi" after finishing moved "Scored · completed" down under the "Hi" - found testing with a real lead. `completed_at` (migration 004) is when the flow actually finished |
 | `agent_took_over` | `agent_took_over_at` | Migration 003. |
-| `phone_took_over` | The lead's first answer on the robot's call, or call to us, since the conversation began - only while it was still open, and not when an agent's text came first | Rule 2d, 2026-10-27. "Phone call - automated questions stopped" |
+| `phone_took_over` | The lead's first answer on the robot's call - or first words to Seri on a call she took, unless the voicemail message took it - or call to us, since the conversation began - only while it was still open, and not when an agent's text came first | Rule 2d, 2026-10-27. "Phone call - automated questions stopped" |
 | `conversation_expired` | `expires_at`, only when the status is `expired` | `expires_at` is set on every send, so a live conversation always has a future one that has not happened. |
 
 An event with no timestamp to stand on is left out rather than guessed at.
@@ -554,7 +630,8 @@ received → inbound → SMS → call → note → callback → disposition and 
 entries → other system events, so the story reads in the sequence it happened.
 
 **What an entry carries.** A call: `outcome`, `durationSec` and `direction`. A
-callback: `scheduledAt`, `doneAt` and `reason`. `components/Timeline.tsx` words
+callback: `scheduledAt`, `doneAt` and `reason`, and on one Seri booked her
+`note`. `components/Timeline.tsx` words
 them - "Outbound call · answered · 2:14", "Incoming call · answered · 1:15",
 "Missed call · told we will call back"; a callback the system booked for a
 missed call reads "Callback added · missed call", then "Missed call
@@ -574,6 +651,7 @@ call:
 | `transfer_missed` | Automated call · said yes · nobody took it - not "nobody free": people may have let it ring, or the lead hung up waiting |
 | `voicemail_left`, `link_sent`, `not_interested`, `opted_out`, `no_response`, `hung_up` | Automated call · voicemail left, · link sent, · not interested, · opted out, · no response, · hung up |
 | `unanswered` | Automated call · no answer - or busy, or failed: Twilio's word for why |
+| `callback_booked` | Automated call · callback booked - Seri's alone (A15) |
 | none yet | As T5 had it: Automated call · in progress (T5, 2026-10-18 - worded as its own, never as an agent's) |
 
 Under the line, closed until opened like the transcript beside it, **Answers**:
@@ -583,6 +661,25 @@ this" → not understood`, `Q1 · nothing said`, `Q1 · pressed 9 → stop`
 workspace conversation and on the Lead Timeline - one `callText` for both.
 Not shown on the lead card's "What … told us", which is the text questions'
 answers.
+
+**A call Seri took carries her conversation - A19, 2026-11-12**
+(`AI-AGENT.md` section 9). Under the call, below **Answers** and closed the
+same way, **Seri**: each line in the order said - "Lead" in the lead's colour,
+"Seri" - then how her part ended: "Booked a call back: Mon, Nov 16 3:00 PM",
+"Put through to a person", "Texted the link", "Asked not to be called - number
+blocked", "Ended - not interested" (or wrong person, told to call 911, no
+response, three minutes up), or "Seri stopped - the call went on with the
+script" when she failed - the script's own answers after that fallback are
+in **Answers** above it (`components/SeriConversation.tsx`). It is there for the agent who
+takes the transfer or the call back, so the lead does not repeat themselves.
+`detail.seri` on the call (`seriPart`, `db/timeline.ts`): `turns`, the lead's
+and hers from `call_ai_turns` - her notes left out - and `ended`, the action
+she ended with as `calls.ai_ended_with` records it: an action she chose but
+that was never carried out - the voicemail message took the call - is not
+shown as how it ended, and nor is anything when the lead hung up first. A
+fallback Twilio's side caused has no action of hers and reads as one all the
+same. Absent on a call she did not take. Proved in
+`scripts/timeline-live-check.ts` (36 checks).
 
 **Three kinds come out of `messages`.** An inbound row is a reply; an outbound
 row with `sent_by` null is one of ours; an outbound row with an agent is their

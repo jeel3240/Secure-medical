@@ -14,7 +14,7 @@ import { LoginPage } from './pages/LoginPage';
 import { CallbacksPage } from './pages/CallbacksPage';
 import { LeadTimelinePage } from './pages/LeadTimelinePage';
 import { QueuePage } from './pages/QueuePage';
-import { WorkspacePage } from './pages/WorkspacePage';
+import { LeadWorkspaceRoute } from './pages/LeadWorkspaceRoute';
 
 export function App() {
   const bootstrap = useAuth((s) => s.bootstrap);
@@ -36,7 +36,7 @@ export function App() {
           <Route element={<AppShell />}>
             <Route index element={<Navigate to="/queue" replace />} />
             <Route path="/queue" element={<QueuePage />} />
-            <Route path="/leads/:id" element={<WorkspacePage />} />
+            <Route path="/leads/:id" element={<LeadWorkspaceRoute />} />
             <Route path="/leads/:id/timeline" element={<LeadTimelinePage />} />
             <Route path="/callbacks" element={<CallbacksPage />} />
             <Route element={<RequireRole role="superadmin" />}>

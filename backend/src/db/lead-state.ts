@@ -17,15 +17,39 @@
  */
 
 import { CLOSING_DISPOSITIONS } from '../core/dispositions';
+import { wordList } from './sql';
 
 /**
- * Safe to inline: the values come from a constant in this codebase, never
- * from a request, and each is checked to be a plain word.
+ * When a lead reached us, for `l` (leads): when EZ Texting says it was added,
+ * else when we took it in - the queue's age, Admin > Leads' order and Overview's
+ * count. One copy since review Q5, 2026-11-23.
  */
-const closingList = CLOSING_DISPOSITIONS.map((value) => {
-  if (!/^[a-z_]+$/.test(value)) throw new Error(`Unexpected disposition: ${value}`);
-  return `'${value}'`;
-}).join(', ');
+export const RECEIVED_SQL = `COALESCE(l.ezt_added_at, l.created_at)`;
+
+/**
+ * A lead's newest conversation, as a lateral join for `l` (leads), named `c` -
+ * the newest by when it started, then id. Put after `JOIN` or `LEFT JOIN`.
+ * One copy since review Q5, 2026-11-23: the rule was written out six times.
+ */
+export function newestConversation(columns: string): string {
+  return `LATERAL (
+    SELECT ${columns}
+    FROM conversations c
+    WHERE c.lead_id = l.id
+    ORDER BY c.created_at DESC, c.id DESC
+    LIMIT 1
+  ) c ON true`;
+}
+
+/**
+ * How long a person's call whose end never reached us counts as still going:
+ * two hours. Here for a missed call's "under way", and for who is on a call
+ * (`ON_A_CALL_SQL`, `db/presence.ts`) - one number since review Q4, 2026-11-23.
+ */
+export const CALL_UNDER_WAY_HOURS = 2;
+
+/** Safe to inline: a constant in this codebase, each value checked (`wordList`). */
+const closingList = wordList(CLOSING_DISPOSITIONS);
 
 /**
  * A missed call nobody has returned - Jeel, 2026-10-01. The lead rang our
@@ -96,7 +120,7 @@ function nobodyGotBackSince(call: string): string {
             rc.direction = 'outbound'
             OR (
               rc.agent_id IS NOT NULL
-              AND (rc.outcome = 'answered' OR (rc.outcome IS NULL AND rc.started_at > now() - interval '2 hours'))
+              AND (rc.outcome = 'answered' OR (rc.outcome IS NULL AND rc.started_at > now() - interval '${CALL_UNDER_WAY_HOURS} hours'))
             )
           )
       )
@@ -141,8 +165,45 @@ export const MISSED_YES_AT_SQL = `(
 )`;
 
 /**
+ * A call back nobody has - `cb` names `callbacks`: one Seri booked that no
+ * agent has taken yet (A16), or one whose agent has since been deactivated
+ * (Jeel, 2026-11-23, review D2). It is open to everyone: the queue names
+ * nobody on it, and the first agent to pick the lead up takes it
+ * (`claimLead`). Nothing is rewritten when someone is deactivated - as with a
+ * lead they held, the screens read their account as gone - so the row still
+ * says whose it was, and reactivating them gives it back.
+ */
+export function nobodysCallbackSql(cb: string): string {
+  return `(${cb}.agent_id IS NULL OR NOT EXISTS (SELECT 1 FROM users nu WHERE nu.id = ${cb}.agent_id AND nu.is_active))`;
+}
+
+/**
+ * A promised call back that is due: open, its time come, and either one Seri
+ * booked - A16, docs/AI-AGENT.md section 4 - or one nobody has any more, its
+ * agent deactivated (D2). Due, it puts the lead in the queue on its own - the
+ * robot calls leads who never replied, so most of Seri's have no score - and
+ * at the top, beside a missed "yes": the lead was promised a person's call at
+ * that time, and with its agent gone nobody else would make it. Before its
+ * time it pushes nothing up. Done, it is gone.
+ *
+ * `PROMISED_CALLBACK_DUE_SQL` says whether the lead has one;
+ * `PROMISED_CALLBACK_DUE_AT_SQL` since when - the earliest - or null: what the
+ * queue sorts on, the longest waiting first. `promisedCallbackDue` is the rule
+ * for one call back, `dc`.
+ */
+export function promisedCallbackDue(dc: string): string {
+  return `${dc}.done_at IS NULL AND ${dc}.scheduled_at <= now() AND (${dc}.reason = 'ai_booked' OR ${nobodysCallbackSql(dc)})`;
+}
+
+const PROMISED_CALLBACK_DUE = `dc.lead_id = l.id AND ${promisedCallbackDue('dc')}`;
+
+export const PROMISED_CALLBACK_DUE_SQL = `(EXISTS (SELECT 1 FROM callbacks dc WHERE ${PROMISED_CALLBACK_DUE}))`;
+
+export const PROMISED_CALLBACK_DUE_AT_SQL = `(SELECT min(dc.scheduled_at) FROM callbacks dc WHERE ${PROMISED_CALLBACK_DUE})`;
+
+/**
  * Closed: the newest disposition is `closed` (or a retired value that meant
- * the same - `core/dispositions.ts`), and nothing has reopened it since. Two
+ * the same - `core/dispositions.ts`), and nothing has reopened it since. Four
  * things reopen a closed lead:
  *
  * - **The lead writes to us.** A person has to read it, so it returns to the
@@ -194,11 +255,14 @@ export const CLOSED_SQL = `(
  * Picking a lead and putting it back without doing anything leaves no trace -
  * releasing clears `assigned_to` and `assigned_at` - so that lead is not
  * worked. That is deliberate: nothing happened to it.
+ *
+ * A call back Seri booked (`ai_booked`, A15) is not a trace: no person has
+ * been near the lead yet, as with a robot call nobody took (T4).
  */
 export const WORKED_SQL = `(
   EXISTS (SELECT 1 FROM users wu WHERE wu.id = l.assigned_to AND wu.is_active)
   OR EXISTS (SELECT 1 FROM notes wn WHERE wn.lead_id = l.id)
-  OR EXISTS (SELECT 1 FROM callbacks wc WHERE wc.lead_id = l.id)
+  OR EXISTS (SELECT 1 FROM callbacks wc WHERE wc.lead_id = l.id AND wc.reason <> 'ai_booked')
   OR EXISTS (SELECT 1 FROM dispositions wd WHERE wd.lead_id = l.id)
   -- A call an agent placed or answered. A missed incoming call is the lead's
   -- doing, not an agent's work; nor is an automated call nobody took (T4) -
@@ -219,6 +283,11 @@ export const WORKED_SQL = `(
  * The earliest such moment. Derived, never stored: the answer
  * (`call_answers`) and the call (`calls`) are the record.
  *
+ * On a call Seri took (Phase 7) the robot asks no question: anything the lead
+ * said or pressed to her (`call_ai_turns`, `who = 'lead'`) is answering the
+ * call - unless the voicemail message took that call over (T18, A18), when
+ * what she heard was a machine's greeting, not the lead.
+ *
  * `leadId` and `since` are SQL for the lead's id and the conversation's
  * `created_at`, so a call to an earlier conversation never stops a later one.
  */
@@ -230,6 +299,10 @@ export function phoneTookOverAtSql(leadId: string, since: string): string {
       UNION ALL
       SELECT ic.created_at FROM calls ic
       WHERE ic.lead_id = ${leadId} AND ic.direction = 'inbound' AND ic.created_at > ${since}
+      UNION ALL
+      SELECT st.created_at FROM call_ai_turns st JOIN calls sc ON sc.id = st.call_id
+      WHERE sc.lead_id = ${leadId} AND st.who = 'lead' AND st.created_at > ${since}
+        AND NOT COALESCE(sc.script_result = 'voicemail_left' OR (sc.script_result = 'unanswered' AND sc.answered_by = 'fax'), false)
     ) pt
   )`;
 }

@@ -2,9 +2,11 @@ import { Request, Response, Router } from 'express';
 // Safe at module scope: db/dnc.ts imports nothing, taking its client as an
 // argument, so it does not drag in src/config the way db/pool does.
 import { archiveWebhook } from '../db/activity';
-import { blockNumber, DNC_REASONS, releaseNumber } from '../db/dnc';
+import { blockNumber, DNC_REASONS, isBlockedNow, releaseNumber } from '../db/dnc';
 import { errText, log } from '../lib/log';
 import { asyncHandler } from './http';
+// A type only: erased when compiled, so reply-flow is still loaded lazily, as below.
+import type { PendingReply } from './reply-flow';
 
 export const webhooksRouter = Router();
 
@@ -52,11 +54,6 @@ interface InboundText {
   optOut?: boolean;
 }
 
-/**
- * Opt-out keywords. EZ Texting sets `optOut` itself, but a reply is checked
- * against these too so a STOP that arrives without the flag still blocks the
- * number. CTIA's standard set.
- */
 /** dnc_list.reason for an opt-out that arrived as a reply, vs the poller's `ezt_opt_out`. */
 const STOP_REASON = DNC_REASONS.smsStop;
 
@@ -67,6 +64,11 @@ const STOP_REASON = DNC_REASONS.smsStop;
  */
 const START_WORDS = new Set(['start', 'unstop', 'yes', 'subscribe']);
 
+/**
+ * Opt-out keywords. EZ Texting sets `optOut` itself, but a reply is checked
+ * against these too so a STOP that arrives without the flag still blocks the
+ * number. CTIA's standard set.
+ */
 const STOP_WORDS = new Set(['stop', 'stopall', 'unsubscribe', 'cancel', 'end', 'quit', 'revoke', 'optout']);
 
 /** A keyword is one short word. A longer message is not one, and is not scanned. */
@@ -112,6 +114,35 @@ function rejectBadToken(req: Request, res: Response): boolean {
   return true;
 }
 
+/** How long EZ Texting waits for its answer while the text back is sent (review M13). */
+const ANSWER_WITHIN_MS = 2_000;
+
+/** `promise`, or `ms` gone by - whichever is first; the timer never outlives it. */
+export async function within(promise: Promise<unknown>, ms: number): Promise<void> {
+  let timer: NodeJS.Timeout | undefined;
+  await Promise.race([promise, new Promise<void>((resolve) => (timer = setTimeout(resolve, ms)))]);
+  clearTimeout(timer);
+}
+
+/** Sends the text a reply led to, then says what happened - never the wording. */
+async function sendAndLog(pending: PendingReply, leadId: number): Promise<void> {
+  const sentId = await pending.send();
+  const c = pending.result.conversation;
+  log.info('conversation.advanced', {
+    leadId,
+    status: c.status,
+    step: c.step,
+    score: c.score,
+    tier: c.tier,
+    // How many pieces went into the one text - a reply, a question, or
+    // both. Not the wording: message bodies stay out of the logs.
+    parts: pending.result.send.length,
+    // A send can be refused (dnc_list) or fail while the conversation still
+    // advances; a line claiming it went out would hide the case worth seeing.
+    sent: Boolean(sentId),
+  });
+}
+
 const handleInbound = async (req: Request, res: Response) => {
   if (rejectBadToken(req, res)) return;
 
@@ -132,6 +163,12 @@ const handleInbound = async (req: Request, res: Response) => {
 
   if (!payload.fromNumber || !payload.received || payload.message === undefined) {
     log.warn('webhook.ignored', { reason: 'missing_fields' });
+    return res.sendStatus(200);
+  }
+  // Fields there but of the wrong kind - a number for the text, a time that is no time - are as unreadable as
+  // missing ones: answered 200 and kept in the archive, not a 500 EZ Texting retries for ever (review M13).
+  if (typeof payload.fromNumber !== 'string' || typeof payload.message !== 'string' || Number.isNaN(Date.parse(String(payload.received)))) {
+    log.warn('webhook.ignored', { reason: 'bad_fields' });
     return res.sendStatus(200);
   }
 
@@ -164,16 +201,16 @@ const handleInbound = async (req: Request, res: Response) => {
       // A START from a number we hold no lead for still lifts a block we hold -
       // it may be a lead the partner delivered before, or one still to come.
       if (isOptIn(payload)) {
-        const released = await releaseNumber(client, phone);
+        const unblocked = await releaseNumber(client, phone);
         await client.query('COMMIT');
-        log.info(released ? 'dnc.released' : 'webhook.ignored', {
-          reason: released ? undefined : 'no_lead',
+        log.info(unblocked ? 'dnc.released' : 'webhook.ignored', {
+          reason: unblocked ? undefined : 'no_lead',
           hasLead: false,
         });
         return res.sendStatus(200);
       }
 
-      if (isOptOut(payload)) {
+      if (isOptOut(payload) && !(await isBlockedNow(client, phone))) {
         // Kept even though there is no lead. If this number is later delivered
         // as a partner lead, the poller's dnc_list check stops us texting
         // someone who has already opted out of this client's messages.
@@ -215,8 +252,8 @@ const handleInbound = async (req: Request, res: Response) => {
     // suppressed one is finished, and what the lead sends next reaches an
     // agent as an inbound reply - STATE-MACHINE.md, "Opting back in".
     if (isOptIn(payload)) {
-      const released = await releaseNumber(client, phone);
-      if (released) {
+      const unblocked = await releaseNumber(client, phone);
+      if (unblocked) {
         log.info('dnc.released', { leadId });
       }
     }
@@ -232,7 +269,9 @@ const handleInbound = async (req: Request, res: Response) => {
 
     // blockNumber is driven by the state machine's result, so the rule lives in
     // one place. A lead with no conversation at all still gets blocked.
-    if (pending?.result.blockNumber ?? optedOut) {
+    // A number already blocked keeps its block, its reason and its one record: a STOP again changes nothing (review
+    // M40, 2026-11-22) - as the poller and the automated call already did.
+    if ((pending?.result.blockNumber ?? optedOut) && !(await isBlockedNow(client, phone))) {
       await blockNumber(client, phone, STOP_REASON);
     }
 
@@ -270,35 +309,24 @@ const handleInbound = async (req: Request, res: Response) => {
     // Only when there is something to send: `send` is a list, and an empty one
     // is a reply that changed nothing - a STOP, or a text to a finished
     // conversation.
-    if (pending && pending.result.send.length > 0) {
-      const sentId = await pending.send();
-      const c = pending.result.conversation;
-      // Says what actually happened: a send can be refused (dnc_list) or fail
-      // while the conversation still advances, and a log line claiming it went
-      // out would hide exactly the case worth noticing.
-      log.info('conversation.advanced', {
-        leadId,
-        status: c.status,
-        step: c.step,
-        score: c.score,
-        tier: c.tier,
-        // How many pieces went into the one text - a reply, a question, or
-        // both. Not the wording: message bodies stay out of the logs.
-        parts: pending.result.send.length,
-        // A send can be refused (dnc_list) or fail while the conversation still
-        // advances; a line claiming it went out would hide the case worth seeing.
-        sent: Boolean(sentId),
-      });
-    }
-
-    return res.sendStatus(200);
+    // EZ Texting waits for its answer at most `ANSWER_WITHIN_MS`: the reply is in, and the text back can wait on EZ
+    // Texting itself for up to 30 seconds, while its callback is meant to be answered fast (EZTEXTING-API.md; review
+    // M13, 2026-11-22). Most sends are done well before - answered after them, as before; a slow one finishes after
+    // the answer. The send catches its own errors.
+    const sending = pending && pending.result.send.length > 0 ? sendAndLog(pending, leadId) : null;
+    if (sending) await within(sending, ANSWER_WITHIN_MS);
+    res.sendStatus(200);
+    if (sending) await sending;
+    return;
   } catch (err) {
     // Nothing to roll back once the connection has gone back: that happens
     // only after the commit.
     if (!released) await client.query('ROLLBACK');
-    // 500 so EZ Texting retries; the dedupe makes that safe.
     log.error('webhook.failed', { err: errText(err) });
-    return res.sendStatus(500);
+    // 500 so EZ Texting retries; the dedupe makes that safe. Already answered - the commit went through - there is
+    // nothing to retry.
+    if (!res.headersSent) res.sendStatus(500);
+    return;
   } finally {
     release();
   }

@@ -354,6 +354,19 @@
   font-weight: var(--weight-semibold);
 }
 
+/* The lead's name as a link (review Q8, 2026-11-23): the keyboard's way into a
+   row - Tab to it, Enter opens what a click on the row opens. It looks as the
+   name always did; the row's own hover already says it can be opened. */
+a.cell-name {
+  color: inherit;
+  text-decoration: none;
+}
+
+a.cell-name:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
+
 .cell-sub {
   display: block;
   margin-top: 2px;

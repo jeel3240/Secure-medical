@@ -1,6 +1,6 @@
-import { useId, type ReactNode } from 'react';
+import { useId, useRef, type ReactNode } from 'react';
 import { Button } from './Button';
-import { useEscape } from './useDismiss';
+import { useDialogFocus, useEscape } from './useDismiss';
 
 interface DrawerProps {
   title: string;
@@ -11,7 +11,9 @@ interface DrawerProps {
 
 export function Drawer({ title, children, footer, onClose }: DrawerProps) {
   const titleId = useId();
+  const box = useRef<HTMLElement>(null);
   useEscape(Boolean(onClose), () => onClose?.());
+  useDialogFocus(box);
 
   return (
     <div
@@ -20,7 +22,7 @@ export function Drawer({ title, children, footer, onClose }: DrawerProps) {
         if (event.target === event.currentTarget) onClose?.();
       }}
     >
-      <aside className="drawer" role="dialog" aria-modal="true" aria-labelledby={titleId}>
+      <aside ref={box} className="drawer" role="dialog" aria-modal="true" aria-labelledby={titleId} tabIndex={-1}>
         <div className="drawer__header">
           <h2 id={titleId} className="drawer__title">
             {title}

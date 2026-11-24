@@ -10,6 +10,7 @@ import {
   hangupTwiml,
   HOLD_MUSIC,
   holdTrack,
+  holdTrackIndex,
   holdTwiml,
   isFromTwilio,
   mintCallToken,
@@ -17,6 +18,7 @@ import {
   recordingNoticeTwiml,
   refusalTwiml,
   ringAgentTwiml,
+  seriTwiml,
   TOKEN_TTL_SECONDS,
   transferTwiml,
   voicemailTwiml,
@@ -298,13 +300,27 @@ describe('on hold, in Twilio\'s words (T16)', () => {
     expect(xml).toContain(`You are next.</Say><Play>${HOLD_MUSIC[0]}</Play><Redirect method="POST">`);
   });
 
-  it('Twilio\'s classical tracks, over https, the next one each time a track ends', () => {
+  it('Twilio\'s classical tracks, over https, each ending into the next - none twice running (review M21)', () => {
     expect(HOLD_MUSIC.length).toBeGreaterThan(1);
     for (const track of HOLD_MUSIC) expect(track).toMatch(/^https:\/\/s3\.amazonaws\.com\/com\.twilio\.music\.classical\/.+\.mp3$/);
     expect(holdTrack(0)).toBe(HOLD_MUSIC[0]);
-    // Tracks run 5 to 10 minutes, so the next request is minutes on: another track.
-    expect(holdTrack(5 * 60)).not.toBe(holdTrack(0));
-    expect(holdTrack(-3)).toBe(HOLD_MUSIC[0]);
+    expect(holdTrack(1)).toBe(HOLD_MUSIC[1]);
+    expect(holdTrack(HOLD_MUSIC.length)).toBe(HOLD_MUSIC[0]);
+    expect(holdTrack(-1)).toBe(HOLD_MUSIC[HOLD_MUSIC.length - 1]);
+    // The count the hold page reads back decides; minutes waited only without one.
+    expect(holdTrackIndex('3', 400)).toBe(3);
+    expect(holdTrackIndex(undefined, 5 * 60)).toBe(5);
+    expect(holdTrackIndex('x', 0)).toBe(0);
+    // Counted by minutes, a first track ending 6 minutes and some in began the list again; counted, the second.
+    const minutesBack = holdTrackIndex(undefined, HOLD_MUSIC.length * 60 + 30);
+    expect(holdTrack(minutesBack)).toBe(HOLD_MUSIC[0]);
+    expect(holdTrack(holdTrackIndex('1', HOLD_MUSIC.length * 60 + 30))).toBe(HOLD_MUSIC[1]);
+  });
+
+  it('the count goes with the music: back to the hold page, told which track comes next', () => {
+    const xml = holdTwiml(SETTINGS, { callId: 42, script: SCRIPT, say: ['You are next.'], track: HOLD_MUSIC[2], nextTrack: 3 });
+    expect(xml).toContain('/auto/hold?call=42&amp;track=3</Redirect>');
+    expect(holdTwiml(SETTINGS, { callId: 42, script: SCRIPT, say: [], track: null, nextTrack: 3 })).toContain('/auto/hold?call=42</Redirect>');
   });
 });
 
@@ -315,6 +331,33 @@ describe('the voicemail message, in Twilio\'s words (T18)', () => {
         "Hi, this is Seri calling from eDrugstore with a quick message - we're offering antibiotics at 25% off right now. " +
         "We'd love to connect. Please call us back at 4 8 0, 4 7 0, 8 2 5 9. Thanks, and have a great day!</Say>" +
         '<Pause length="1"/><Hangup/></Response>'
+    );
+  });
+});
+
+describe('the call connected to Seri, in Twilio\'s words (A13)', () => {
+  it('her relay, the settings heard on the dev number, her greeting, our row, and where her part ends - nothing said first', () => {
+    expect(seriTwiml(SETTINGS, { callId: 42, greeting: 'Hi, is this John?' })).toBe(
+      '<?xml version="1.0" encoding="UTF-8"?><Response>' +
+        '<Connect action="https://calls.example.com/api/webhooks/twilio/auto/ai-after?call=42" method="POST">' +
+        '<ConversationRelay url="wss://calls.example.com/api/ai/relay" welcomeGreeting="[friendly] Hi, is this John?"' +
+        ' ttsProvider="ElevenLabs" voice="9BWtsMINqrJLrRacOk9x-v4-0.4_0.8"' +
+        ' transcriptionProvider="Deepgram" speechModel="flux"' +
+        ' interruptible="speech" interruptSensitivity="low" ignoreBackchannel="true"' +
+        ' elevenlabsTextNormalization="on" dtmfDetection="true" events="speaker-events" applicationReconnect="true" partialPrompts="true" eotThreshold="0.6">' +
+        '<Parameter name="call" value="42"/></ConversationRelay></Connect></Response>'
+    );
+  });
+
+  it('the relay\'s address carries no query - Twilio signs it as written, and the relay checks exactly that (A10)', () => {
+    const xml = seriTwiml(SETTINGS, { callId: 7, greeting: 'Hi there!' });
+    expect(/<ConversationRelay url="([^"]*)"/.exec(xml)![1]).toBe('wss://calls.example.com/api/ai/relay');
+    expect(xml).toContain('<Parameter name="call" value="7"/>');
+  });
+
+  it('a name with a character XML would break on is escaped, not cut', () => {
+    expect(seriTwiml(SETTINGS, { callId: 42, greeting: 'Hi, is this Mary & Jo?' })).toContain(
+      'welcomeGreeting="[friendly] Hi, is this Mary &amp; Jo?"'
     );
   });
 });

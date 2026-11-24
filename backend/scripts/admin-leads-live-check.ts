@@ -7,34 +7,16 @@
  *
  *   docker compose exec postgres psql -U app -d postgres -c 'CREATE DATABASE leads_check'
  *   DATABASE_URL=postgres://app:app@localhost:5433/leads_check node scripts/migrate.js
- *   DATABASE_URL=postgres://app:app@localhost:5433/leads_check REDIS_URL=x JWT_SECRET=x \
+ *   DATABASE_URL=postgres://app:app@localhost:5433/leads_check JWT_SECRET=x \
  *     EZT_USERNAME=x EZT_PASSWORD=x EZT_GROUP=x npx ts-node --transpile-only scripts/admin-leads-live-check.ts
  */
+import { check, failureCount, verdict } from './check';
 import { pool } from '../src/db/pool';
 import { startFlow } from './live-flow';
 import { listAdminLeads } from '../src/db/leads';
 import { startAutomatedCall } from '../src/db/auto-calls';
+import { bookAiCallback } from '../src/db/callbacks';
 
-let failures = 0;
-
-/** JSON with object keys sorted, so a GROUP BY's row order cannot fail a check. */
-const stable = (v: unknown) =>
-  JSON.stringify(v, (_k, val) =>
-    val && typeof val === 'object' && !Array.isArray(val)
-      ? Object.fromEntries(Object.entries(val).sort(([a], [b]) => a.localeCompare(b)))
-      : val
-  );
-
-function check(label: string, actual: unknown, expected: unknown): void {
-  const a = stable(actual);
-  const e = stable(expected);
-  if (a === e) {
-    console.log(`  ok   ${label}`);
-  } else {
-    failures++;
-    console.log(`  FAIL ${label}\n       expected ${e}\n       actual   ${a}`);
-  }
-}
 
 let nextPhone = 600;
 
@@ -261,6 +243,11 @@ async function main(): Promise<void> {
   await robotCall('Calling', { result: null, minutesAgo: 2 });
   await robotCall('Unreported', { result: null, minutesAgo: 90 });
   await robotCall('NotPlaced', { result: 'not_placed' });
+  // Seri booked a call back (A15): the result, and her booking - which is no
+  // person's work, so the lead is not Working for it.
+  const seriBooked = await robotCall('Booked', { result: 'callback_booked' });
+  const bookedCall = (await pool.query(`SELECT id FROM calls WHERE lead_id = $1`, [seriBooked])).rows[0].id;
+  await bookAiCallback(pool, { leadId: seriBooked, callId: bookedCall, at: new Date(Date.now() + 86_400_000), note: 'Wants to order', timeZone: 'America/New_York' });
 
   const withCalls = await listAdminLeads({ pageSize: 200 });
   const row = (name: string) => withCalls.leads.find((l) => l.firstName === name);
@@ -273,6 +260,9 @@ async function main(): Promise<void> {
   check('a lead the robot never called: nothing', row('Waiting')?.call, null);
   check('nor is an agent\'s call the robot\'s', row('Called')?.call, null);
   check('nor a call Twilio never placed - our account\'s problem, not the lead\'s call', row('NotPlaced')?.call, null);
+  check('a call back Seri booked: the call says so, and the lead is not Working - no person has been near it (A15)',
+    [row('Booked')?.status, row('Booked')?.call], ['awaiting_reply', 'callback_booked']);
+  check('and a filter of its own', (await listAdminLeads({ call: 'callback_booked' })).leads.map((l) => l.firstName), ['Booked']);
 
   const voicemails = await listAdminLeads({ call: 'voicemail_left', pageSize: 200 });
   check('the filter keeps exactly those leads', voicemails.leads.map((l) => l.firstName), ['Voicemail']);
@@ -284,13 +274,13 @@ async function main(): Promise<void> {
     (await listAdminLeads({ call: 'unknown' })).leads.map((l) => l.firstName),
   ], [['Calling'], ['Unreported']]);
   const notCalled = await listAdminLeads({ call: 'none', pageSize: 200 });
-  check('not called: every lead but the seven', [notCalled.total, withCalls.total], [27, 34]);
+  check('not called: every lead but the eight', [notCalled.total, withCalls.total], [27, 35]);
   check('the agent\'s call among them', notCalled.leads.some((l) => l.firstName === 'Called'), true);
   check('and the call Twilio never placed', notCalled.leads.some((l) => l.firstName === 'NotPlaced'), true);
 
-  console.log(failures === 0 ? '\nall checks passed' : `\n${failures} check(s) FAILED`);
+  console.log(verdict());
   await pool.end();
-  process.exit(failures === 0 ? 0 : 1);
+  process.exit(failureCount() === 0 ? 0 : 1);
 }
 
 main().catch((err) => {

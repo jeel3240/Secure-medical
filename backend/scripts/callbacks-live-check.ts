@@ -10,24 +10,14 @@
  *
  *   docker compose exec postgres psql -U app -d postgres -c 'CREATE DATABASE cb_check'
  *   DATABASE_URL=postgres://app:app@localhost:5433/cb_check node scripts/migrate.js
- *   DATABASE_URL=postgres://app:app@localhost:5433/cb_check REDIS_URL=x JWT_SECRET=x \
+ *   DATABASE_URL=postgres://app:app@localhost:5433/cb_check JWT_SECRET=x \
  *     EZT_USERNAME=x EZT_PASSWORD=x EZT_GROUP=x npx ts-node --transpile-only scripts/callbacks-live-check.ts
  */
+import { check, failureCount, verdict } from './check';
 import { pool } from '../src/db/pool';
+import { startOfTodaySql, startOfTomorrowSql } from '../src/db/sql';
 import { createCallback, listCallbacks, updateCallback } from '../src/db/callbacks';
 
-let failures = 0;
-
-function check(label: string, actual: unknown, expected: unknown): void {
-  const a = JSON.stringify(actual);
-  const e = JSON.stringify(expected);
-  if (a === e) {
-    console.log(`  ok   ${label}`);
-  } else {
-    failures++;
-    console.log(`  FAIL ${label}\n       expected ${e}\n       actual   ${a}`);
-  }
-}
 
 async function refuseIfNotEmpty(): Promise<void> {
   const { rows } = await pool.query(`SELECT count(*)::int AS n FROM leads`);
@@ -62,6 +52,19 @@ async function main(): Promise<void> {
   const maya = await makeUser('Maya');
   const sam = await makeUser('Sam');
   const lead = await makeLead('+15550000401');
+
+  console.log('\nthe day the clocks change (review M11)');
+  {
+    // New York, 2026-11-01: the clocks go back, so that day is 25 hours long. The day's end is worked out at noon
+    // that day - `now()` in the SQL stood in for by that moment.
+    const at = `'2026-11-01 12:00:00 America/New_York'::timestamptz`;
+    const tz = 'America/New_York';
+    const { rows } = await pool.query(
+      `SELECT EXTRACT(EPOCH FROM (${startOfTomorrowSql(tz).replace(/now\(\)/g, at)} - ${startOfTodaySql(tz).replace(/now\(\)/g, at)})) / 3600 AS hours,
+              to_char(${startOfTomorrowSql(tz).replace(/now\(\)/g, at)} AT TIME ZONE '${tz}', 'YYYY-MM-DD HH24:MI') AS ends`
+    );
+    check('that day is 25 hours, ending at its own midnight', [Number(rows[0].hours), rows[0].ends], [25, '2026-11-02 00:00']);
+  }
 
   console.log('\nthe tab windows');
   {
@@ -173,6 +176,8 @@ async function main(): Promise<void> {
 
   console.log('\nthe list row carries what the screen shows');
   {
+    // Every tab, not today's: this is about what a row carries, and 45 minutes
+    // on is tomorrow after 23:15 UTC - it failed then, whatever the code did.
     const other = await makeLead('+15550000402');
     await pool.query(
       `INSERT INTO conversations (lead_id, status, step, score, tier) VALUES ($1, 'completed', 3, 100, 'HOT')`,
@@ -182,7 +187,7 @@ async function main(): Promise<void> {
     await pool.query(`INSERT INTO notes (lead_id, agent_id, body) VALUES ($1, $2, 'newest note')`, [other, maya]);
     await createCallback(other, sam, inMinutes(45));
 
-    const row = (await listCallbacks({ agentId: sam, when: 'today' })).callbacks.find(
+    const row = (await listCallbacks({ agentId: sam, when: 'all' })).callbacks.find(
       (c) => c.leadId === other
     );
     check('the lead phone', row?.lead.phone, '+15550000402');
@@ -192,10 +197,10 @@ async function main(): Promise<void> {
 
     // The holder, so the row says Resume to them and View to anyone else.
     await pool.query(`UPDATE leads SET assigned_to = $2, assigned_at = now() WHERE id = $1`, [other, sam]);
-    const held = (await listCallbacks({ agentId: sam, when: 'today' })).callbacks.find((c) => c.leadId === other);
+    const held = (await listCallbacks({ agentId: sam, when: 'all' })).callbacks.find((c) => c.leadId === other);
     check('who holds the lead', held?.holder, { id: sam, name: 'Sam' });
     await pool.query(`UPDATE users SET is_active = false WHERE id = $1`, [sam]);
-    const gone = (await listCallbacks({ agentId: sam, when: 'today' })).callbacks.find((c) => c.leadId === other);
+    const gone = (await listCallbacks({ agentId: sam, when: 'all' })).callbacks.find((c) => c.leadId === other);
     check('but not a deactivated holder', gone?.holder, null);
     await pool.query(`UPDATE users SET is_active = true WHERE id = $1`, [sam]);
   }
@@ -212,9 +217,9 @@ async function main(): Promise<void> {
     check('an unknown callback is rejected', missing.ok === false && missing.reason, 'not_found');
   }
 
-  console.log(failures === 0 ? '\nall checks passed' : `\n${failures} check(s) FAILED`);
+  console.log(verdict());
   await pool.end();
-  process.exit(failures === 0 ? 0 : 1);
+  process.exit(failureCount() === 0 ? 0 : 1);
 }
 
 main().catch((err) => {

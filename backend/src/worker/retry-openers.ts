@@ -35,8 +35,8 @@
  * database, which is the time to count from.
  *
  * **Never late by more than a day.** A lead whose opener has not gone out 24
- * hours after they arrived is not sent one. "You asked about health &
- * wellness" days after they asked reads as broken, and they have moved on -
+ * hours after they arrived is not sent one. A first question days after they
+ * asked reads as broken, and they have moved on -
  * and without this cap the first deploy would text every old lead whose opener
  * never went out, however old. Found in review, 2026-09-28.
  *
@@ -81,6 +81,8 @@ export interface RetryStats {
   due: number;
   sent: number;
   failed: number;
+  /** EZ Texting did not answer in time: it may have gone out, and is taken as sent (review H12, M15). */
+  unconfirmed: number;
   /** Past the last attempt: left alone, counted so the number is visible. */
   abandoned: number;
   /** Older than MAX_AGE_HOURS with no opener: too late to send one. */
@@ -110,7 +112,7 @@ export function retryGaveUp(
  */
 export async function retryFailedOpeners(): Promise<RetryStats> {
   const startedAt = Date.now();
-  const stats: RetryStats = { due: 0, sent: 0, failed: 0, abandoned: 0, tooOld: 0, durationMs: 0 };
+  const stats: RetryStats = { due: 0, sent: 0, failed: 0, unconfirmed: 0, abandoned: 0, tooOld: 0, durationMs: 0 };
 
   const leads = await findOpenersNeverSent(pool);
   const now = Date.now();
@@ -142,6 +144,11 @@ export async function retryFailedOpeners(): Promise<RetryStats> {
         lead.template
       );
 
+      if (!result.sent && result.unconfirmed) {
+        // It may have gone out: never a failure, nor the last one - and never tried again (`sendOpener` took it as sent).
+        stats.unconfirmed++;
+        continue;
+      }
       if (!result.sent) {
         stats.failed++;
         log.error('sms.failed', {

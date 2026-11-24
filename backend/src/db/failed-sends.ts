@@ -21,6 +21,7 @@
  * caller.
  */
 
+import { activityInsertSql } from './activity';
 import { pool } from './pool';
 import { errText, log } from '../lib/log';
 
@@ -34,6 +35,30 @@ export async function recordFailedSend(
       `INSERT INTO messages (lead_id, direction, body, sent_by, delivery_status)
        VALUES ($1, 'outbound', $2, $3, 'failed')`,
       [leadId, body, sentBy]
+    );
+  } catch (err) {
+    log.error('sms.record_failed', { leadId, err: errText(err) });
+  }
+}
+
+/**
+ * An agent's own text EZ Texting refused: the failed message and its
+ * `sms.failed` record in one statement, so neither is kept without the other -
+ * two writes, the record could stand with no message, or the request fail
+ * after the message was kept (review M12, 2026-11-22). Never throws: a failure
+ * here is logged, and the agent is told the text did not go, as it did not.
+ */
+export async function recordAgentFailedSend(leadId: number, body: string, agentId: number): Promise<void> {
+  try {
+    await pool.query(
+      `WITH kept AS (
+         INSERT INTO messages (lead_id, direction, body, sent_by, delivery_status)
+         VALUES ($1, 'outbound', $2, $3, 'failed')
+         RETURNING lead_id
+       )
+       ${activityInsertSql}
+       SELECT $3, 'sms.failed', lead_id, NULL, '{}'::jsonb FROM kept`,
+      [leadId, body, agentId]
     );
   } catch (err) {
     log.error('sms.record_failed', { leadId, err: errText(err) });

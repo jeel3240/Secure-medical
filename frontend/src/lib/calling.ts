@@ -110,16 +110,24 @@ function discardDevice(): void {
   void stale?.then((device) => device.destroy()).catch(() => undefined);
 }
 
-/** Registers the device if it is not; replaces one that has been destroyed. Then says whether it can ring. */
+/**
+ * Registers the device if it is not; replaces one that has been destroyed.
+ * Then says whether it can ring. A device carrying a call is left alone: its
+ * registration lapsing mid-call - a token not renewed - had it destroyed, and
+ * the live call with it (review H7, 2026-11-22). The next check, once the call
+ * is over, registers it again.
+ */
 async function keepRegistered(): Promise<void> {
   if (!listener) return;
   try {
     const device = await getDevice();
+    if (device.isBusy) return;
     if (device.state === 'destroyed') discardDevice();
     else if (device.state === 'unregistered') await device.register();
   } catch {
-    // Offline, signed out, or Twilio unreachable. Start clean at the next check.
-    discardDevice();
+    // Offline, signed out, or Twilio unreachable. Start clean at the next check - never with a call on it.
+    const device = await devicePromise?.catch(() => null);
+    if (!device?.isBusy) discardDevice();
   }
   await reportRingable();
 }
@@ -204,25 +212,43 @@ export function ringKind(params: Map<string, string>): RingKind {
 
 function announce(call: Call, handlers: IncomingHandlers): void {
   let answered = false;
+  let over = false;
+  const ringOver = () => {
+    if (answered || over) return;
+    over = true;
+    window.clearTimeout(safety);
+    handlers.onRingOver(ring);
+  };
   const ring: IncomingRing = {
     lead: incomingLead(call.customParameters, call.parameters.From),
     kind: ringKind(call.customParameters),
     answer: (callHandlers) => {
       answered = true;
+      window.clearTimeout(safety);
       const handle = wire(call, callHandlers);
       call.accept();
       return handle;
     },
     decline: () => {
       answered = true;
+      window.clearTimeout(safety);
       call.reject();
     },
   };
-  // Before it is answered, the ring ending is a missed call. Once it is, the
-  // call's own handlers report how it ended.
-  call.on('cancel', () => !answered && handlers.onRingOver(ring));
+  // Before it is answered, the ring ending is a missed call. Once it is, the call's own handlers report how it
+  // ended. Not only Twilio's `cancel`: a connection dropped or an error ended it too, and left it ringing - the
+  // ringtone looping, the browser busy - until Decline; and a ring no event ever ends is cleared after the longest
+  // any ring can last (review M29, 2026-11-22).
+  call.on('cancel', ringOver);
+  call.on('disconnect', ringOver);
+  call.on('error', ringOver);
+  // Set before any event can fire: the closures above read it only when one does.
+  const safety = window.setTimeout(ringOver, RING_SAFETY_MS);
   handlers.onRing(ring);
 }
+
+/** Longer than any ring we place: an offer from hold rings at most 60 seconds, the others less. */
+export const RING_SAFETY_MS = 90_000;
 
 /** Joins a call's events to the handlers, and returns its controls. */
 function wire(call: Call, handlers: CallHandlers): CallHandle {

@@ -6,7 +6,7 @@ services:
       POSTGRES_PASSWORD: app
       POSTGRES_DB: leads
     ports:
-      - "5433:5432"
+      - "127.0.0.1:5433:5432"         # the laptop only, not its network (review M35)
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
@@ -18,7 +18,7 @@ services:
   redis:
     image: redis:7-alpine
     ports:
-      - "6379:6379"
+      - "127.0.0.1:6379:6379"
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 5s
@@ -29,8 +29,9 @@ services:
     build:
       context: ./backend
       dockerfile: Dockerfile
+      target: dev                      # every dependency; the server builds `production` (docker-compose.prod.yml)
     ports:
-      - "3000:3000"
+      - "127.0.0.1:3000:3000"
     environment:
       NODE_ENV: development
       DATABASE_URL: postgres://app:app@postgres:5432/leads
@@ -58,6 +59,8 @@ services:
       AUTO_CALLS: ${AUTO_CALLS:-}
       # Outside production, the only numbers an automated call may ring.
       AUTO_CALL_TEST_NUMBERS: ${AUTO_CALL_TEST_NUMBERS:-}
+      # Seri, the AI agent on the automated call - docs/AI-AGENT.md. Empty, she is off.
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
     depends_on:
       postgres:
         condition: service_healthy
@@ -71,6 +74,7 @@ services:
     build:
       context: ./backend
       dockerfile: Dockerfile
+      target: dev                      # every dependency; the server builds `production` (docker-compose.prod.yml)
     environment:
       NODE_ENV: development
       DATABASE_URL: postgres://app:app@postgres:5432/leads
@@ -95,6 +99,8 @@ services:
       # The worker places the automated calls (T20) - docs/AUTO-CALLS.md.
       AUTO_CALLS: ${AUTO_CALLS:-}
       AUTO_CALL_TEST_NUMBERS: ${AUTO_CALL_TEST_NUMBERS:-}
+      # The worker checks OpenAI before placing calls with Seri on - docs/AI-AGENT.md.
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
     depends_on:
       postgres:
         condition: service_healthy

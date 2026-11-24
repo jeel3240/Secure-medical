@@ -9,6 +9,7 @@ describe('the Call column on Admin > Leads - T23', () => {
   it.each([
     ['transferred', 'Said yes · taken'],
     ['transfer_missed', 'Said yes · nobody took it'],
+    ['callback_booked', 'Callback booked'],
     ['link_sent', 'Link sent'],
     ['not_interested', 'Not interested'],
     ['voicemail_left', 'Voicemail left'],
@@ -38,6 +39,6 @@ describe('the Call column on Admin > Leads - T23', () => {
     for (const result of [...Object.keys(CALL_RESULT_WORDS), 'calling', 'unknown']) {
       expect(CALL_FILTERS).toContainEqual({ key: result, label: leadCallText(result) });
     }
-    expect(CALL_FILTERS).toHaveLength(13);
+    expect(CALL_FILTERS).toHaveLength(14);
   });
 });

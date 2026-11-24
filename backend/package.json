@@ -9,7 +9,6 @@
     "worker": "node dist/worker/index.js",
     "dev:api": "ts-node src/api/index.ts",
     "dev:worker": "ts-node src/worker/index.ts",
-    "dev": "concurrently \"npm run dev:api\" \"npm run dev:worker\"",
     "migrate": "node scripts/migrate.js",
     "create-superadmin": "node dist/cli/create-superadmin.js",
     "dev:create-superadmin": "ts-node src/cli/create-superadmin.ts",
@@ -17,12 +16,18 @@
     "dev:twilio:configure": "ts-node src/cli/twilio-configure.ts",
     "openers:send-waiting": "node dist/cli/send-waiting-openers.js",
     "dev:openers:send-waiting": "ts-node src/cli/send-waiting-openers.ts",
+    "ai-agent": "node dist/cli/ai-agent.js",
+    "dev:ai-agent": "ts-node src/cli/ai-agent.ts",
     "test": "jest",
     "e2e": "ts-node --transpile-only scripts/end-to-end.ts",
     "dev:ask-again": "ts-node --transpile-only scripts/dev-ask-again.ts",
     "dev:auto-call": "ts-node --transpile-only scripts/dev-auto-call.ts",
     "speed": "ts-node --transpile-only scripts/speed-check.ts",
-    "lint": "eslint src scripts"
+    "ai:eval:understand": "ts-node --transpile-only src/ai/evals/understand-run.ts",
+    "ai:eval:speak": "ts-node --transpile-only src/ai/evals/speak-run.ts",
+    "ai:replay": "ts-node --transpile-only scripts/ai-replay.ts",
+    "lint": "eslint src scripts",
+    "typecheck:scripts": "tsc -p tsconfig.scripts.json"
   },
   "dependencies": {
     "axios": "^1.4.0",
@@ -31,8 +36,10 @@
     "express": "^4.18.2",
     "express-rate-limit": "^7.5.1",
     "jsonwebtoken": "^9.0.0",
+    "openai": "^6.49.0",
     "pg": "^8.11.0",
-    "twilio": "^6.1.2"
+    "twilio": "^6.1.2",
+    "ws": "^8.22.2"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.5",
@@ -44,7 +51,7 @@
     "@types/node": "^20.0.0",
     "@types/pg": "^8.23.1",
     "@types/supertest": "^7.2.1",
-    "concurrently": "^8.2.0",
+    "@types/ws": "^8.18.2",
     "eslint": "^9.39.5",
     "globals": "^17.12.0",
     "jest": "^29.5.0",

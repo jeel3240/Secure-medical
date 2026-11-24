@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { CONFIG_RETRY_MS } from '../lib/incoming-call';
 import { getCallConfig, setTakingCalls } from '../api/calls';
 import { useAuth } from '../auth/store';
 import { markSwitchedHere, missedTransfer } from '../lib/taking-calls';
@@ -28,12 +29,20 @@ export function TakingCalls() {
 
   useEffect(() => {
     let alive = true;
-    getCallConfig()
-      .then((config) => alive && setShown(config.enabled && config.autoCalls))
-      // Unknown is hidden: a switch that cannot be saved is worse than none.
-      .catch(() => undefined);
+    let retry: number | undefined;
+    const load = (): void => {
+      getCallConfig()
+        .then((config) => alive && setShown(config.enabled && config.autoCalls))
+        // Unknown is hidden - a switch that cannot be saved is worse than none - and asked again shortly, so a page
+        // opened while the API restarted still gets its switch (review M28, 2026-11-22).
+        .catch(() => {
+          if (alive) retry = window.setTimeout(load, CONFIG_RETRY_MS);
+        });
+    };
+    load();
     return () => {
       alive = false;
+      window.clearTimeout(retry);
     };
   }, []);
 

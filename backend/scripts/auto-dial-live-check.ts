@@ -16,6 +16,7 @@
  * It writes rows, so it refuses to run against a database that holds leads.
  * Run it with the others: scripts/live-checks.sh auto-dial
  */
+import { check, failureCount, verdict } from './check';
 import { DEFAULT_CALL_HOURS } from '../src/core/auto-dial';
 import { failAutomatedCall, startAutomatedCall, holdCall, linkAutomatedCall } from '../src/db/auto-calls';
 import {
@@ -31,18 +32,6 @@ import { startConversation } from '../src/db/flows';
 import { pool } from '../src/db/pool';
 import { dialDueLeads, type DialDeps } from '../src/worker/auto-calls';
 
-let failures = 0;
-
-function check(label: string, actual: unknown, expected: unknown): void {
-  const a = JSON.stringify(actual);
-  const e = JSON.stringify(expected);
-  if (a === e) {
-    console.log(`  ok   ${label}`);
-  } else {
-    failures++;
-    console.log(`  FAIL ${label}\n       expected ${e}\n       actual   ${a}`);
-  }
-}
 
 async function refuseIfNotEmpty(): Promise<void> {
   const { rows } = await pool.query(`SELECT count(*)::int AS leads FROM leads`);
@@ -391,9 +380,9 @@ async function main(): Promise<void> {
     check('a lead from over 30 days back is not looked at - no conversation stays open that long', looked.includes(old), false);
   }
 
-  console.log(failures === 0 ? '\nall checks passed' : `\n${failures} check(s) FAILED`);
+  console.log(verdict());
   await pool.end();
-  process.exit(failures === 0 ? 0 : 1);
+  process.exit(failureCount() === 0 ? 0 : 1);
 }
 
 main().catch((err) => {

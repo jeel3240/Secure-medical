@@ -32,7 +32,7 @@ It is built in two stages, agreed with the client on 2026-10-14:
 | Stage | What | When |
 |---|---|---|
 | **1** | A scripted call that follows the client's script word for word. The lead answers by voice ("yes", "no") or keypad (1, 2) | Now - this doc |
-| **2** | When the lead says something outside the script, an AI agent takes over **inside the same call** - no second number, no transfer | Later, its own plan |
+| **2** | As agreed then: when the lead says something outside the script, an AI agent takes over **inside the same call**. Changed 2026-11-11: the AI agent, Seri, runs the whole call from the start when switched on, with this script as her backup | Phase 7, its own plan: `AI-AGENT.md` - built on `dev` (A01-A20, 2026-11-12), not yet heard on a real phone (A21) nor deployed (A22) |
 
 **Production places no automated call until `AUTO_CALLS=on` is set on the
 server.** Every calling ticket is merged and deployed with it off: the header
@@ -105,7 +105,7 @@ LEAD ARRIVES
            never called by the robot before
          no answer  -> No answer
          voicemail  -> the voicemail message -> Voicemail left
-         picks up   -> the script above
+         picks up   -> the script above - or Seri, when she is switched on (Phase 7, `AI-AGENT.md`)
   -> day 7 -> expires, as today
 
 TRANSFER ("Great, connecting you with a live agent now. Please hold." + recording notice)
@@ -170,8 +170,10 @@ A lead is called (`leadsToCall`, `db/auto-dial.ts`) when:
 
 New leads first - those that arrived after `auto_calls_since`, when
 automated calls were last switched on (below) - then the ones already
-waiting; within each, oldest first, by when the first text went out, from
-the last 30 days (no conversation stays open that long). The hours are
+waiting; within each, those Twilio has refused fewest times for our account
+first (`not_placed`, "When Twilio refuses" - so the first try after a pause
+goes to a lead it has not tried), then oldest first, by when the first text went out,
+from the last 30 days (no conversation stays open that long). The hours are
 `auto_call_hours_start`/`_end` in `auto_call_time_zone` on `auto_call_days`
 (`readCallHours`) - the start and end fall back together to migration 015's
 when either is malformed or the end is not after the start, and the zone, the
@@ -306,7 +308,12 @@ agent counts, while a call back ringing everyone free (T19) and an automated
 call nobody has taken keep nobody busy until someone takes them - the people
 rung are kept out by their own browsers saying busy - and a call whose end
 Twilio never reported stops counting after 2 hours - the window a missed
-call's "under way" uses. A small index of the calls still going
+call's "under way" uses - and since 2026-11-22 is ended from Twilio's own record
+15 minutes on (`api/left-open.ts`, `TWILIO.md` "Calls whose end never came").
+Nor is anyone free whom a lead on hold is ringing now (a live `call_offers`
+row, T17): before, a transfer could ring them in the seconds before their
+browser said busy, the browser declined one of the two, and a declined offer
+shut them out of that held lead (review H10). A small index of the calls still going
 (`calls_under_way_by_agent`, migration 017) keeps it instant. `freePeople`
 lists them; a transfer rings them (T15a), a lead on hold rings them (T17), a
 lead calling back whom nobody owns rings them (T19, at most ten, lowest ids
@@ -464,12 +471,16 @@ row: a choice with its key and label as they are now, or what else it was.
   answer to the SMS question they were on (always Q1: the robot calls only
   leads who never replied). It is kept for a person, Inbound reply in the
   queue; nothing is scored or sent. Silence or an unclear answer stops
-  nothing; a stop has already ended the conversation. `STATE-MACHINE.md`,
-  "2d".
+  nothing; a stop has already ended the conversation. On a call Seri took,
+  anything the lead said to her counts as the answer (2026-11-13).
+  `STATE-MACHINE.md`, "2d".
 - **The call's end gives an unfinished script its result** (`/auto/status`,
   `settleAutomatedCall`): `unanswered` if it was never picked up, `hung_up` if
   it was and the script never reached its own end. A call Twilio would not
-  place is `unanswered` too.
+  place for the lead's own number is `unanswered` too - their one call, used;
+  refused for any other reason - our account, its key, too many requests - it
+  is `not_placed`, not the lead's call (T28, "When Twilio refuses";
+  `failAutomatedCall`; review R11, 2026-11-23).
 
 ### Traffic
 
@@ -516,7 +527,14 @@ Nothing at all is placed while:
 - **no call script is active** - logged once, `auto_call.no_script`;
 - **Twilio refused one of its calls for our account's reasons, or never
   confirmed placing it, in the last 15 minutes** - logged once, as an error,
-  `auto_call.twilio_refusing` ("When Twilio refuses", below).
+  `auto_call.twilio_refusing` ("When Twilio refuses", below);
+- **with Seri, the AI agent, switched on** (Phase 7, A17, `AI-AGENT.md`
+  section 6): **OpenAI not answering** - asked with a one-word request at most
+  once a minute, and only when there is room to place calls - logged once,
+  `ai_agent.openai_down`; or **her last three calls all falling back** to this
+  script, the latest within the same 15 minutes - logged once,
+  `ai_agent.fallbacks_paused`. A lead's one call is never spent on a broken
+  Seri. With her off, neither is asked: this script needs no OpenAI.
 
 One look at a time: the room and the leads are read holding an advisory lock
 (`withDialLock`), so two workers never dial together - and a connection whose
@@ -595,8 +613,10 @@ command and the dialler (T20):
 
 **Outside production, only our own phones are rung** - `AUTO_CALL_TEST_NUMBERS`
 (`auto-calls-settings.ts`), comma-separated E.164 numbers. Empty, nothing is;
-an entry that is not E.164 is ignored and counted. Production does not read
-it. It is checked in step 1, so the dev command and the dialler both obey it.
+an entry that is not E.164 is ignored and counted - and the worker says so
+once as it starts (`auto_calls.test_numbers_invalid`, with the `count`; review
+M25), since a mistyped number means that phone is never rung. Production does
+not read it. It is checked in step 1, so the dev command and the dialler both obey it.
 
 **What Twilio is asked for** (`automatedCallRequest`): our number as caller
 ID; the phone rings up to 60 seconds, long enough for a voicemail to answer;
@@ -608,13 +628,13 @@ only with a transfer ("The transfer").
 **The call's webhooks** - each names the call's row, `?call=<id>`, in the
 address Twilio signs, so the row cannot be swapped: a request for row 43
 signed as row 42 is refused. A webhook whose row is not an automated call, or
-is linked to another Twilio call, is not acted on. All eight answer 404 while
+is linked to another Twilio call, is not acted on. All nine answer 404 while
 automated calls are off, and 403 unsigned (`TWILIO.md`, "Why the webhooks can
 be trusted").
 
 | Webhook | Now | Later |
 |---|---|---|
-| `POST /api/webhooks/twilio/auto/answer` | The lead picked up: a second's quiet, the greeting with nothing listening, then the question itself inside a `<Gather>` - speech or one key, heard from its first word ("When the call listens"); silence reported too; the step's words and the stop words as hints. Anything wrong - no row, no script, the database down - ends the call quietly, never Twilio's "application error" | - |
+| `POST /api/webhooks/twilio/auto/answer` | The lead picked up: a second's quiet, the greeting with nothing listening, then the question itself inside a `<Gather>` - speech or one key, heard from its first word ("When the call listens"); silence reported too; the step's words and the stop words as hints. Anything wrong - no row, no script, the database down - ends the call quietly, never Twilio's "application error". With Seri switched on, the call is connected to her instead, no question asked - `AI-AGENT.md` section 2, "As built (A13)" | - |
 | `POST /api/webhooks/twilio/auto/gather` | The answer read (`matchSpokenChoice`), what follows decided (`handleAnswer`), kept with its result and any block (`keepAnswer`), and the next line said - T13, "On a live call". The address names the step and which asking it was. A yes to the link is texted after Twilio has its answer (T14); a yes to the transfer rings the lead's own agent first, then everyone free (T15a, T15b, "The transfer") | - |
 | `POST /api/webhooks/twilio/auto/status` | How it ended, saved as every call's end is (`finishCall`): outcome, talk time, `call.ended`; then an unfinished script given its result (T13). Never a missed-call text | - |
 | `POST /api/webhooks/twilio/auto/amd` | Who picked up, kept as `answered_by`; then acted on (T18, "Voicemail"): a machine gets the voicemail message, a fax is hung up on - the beep decides. Twilio has its answer first | - |
@@ -622,6 +642,7 @@ be trusted").
 | `POST /api/webhooks/twilio/auto/after` | The transfer's ringing is over: taken, nothing more; the lead's own agent did not take it, everyone else free rung (T15b); not taken, on hold while someone is on a call or writing its note (T16), else `transfer_missed` and the busy line (T15a); whoever let it ring out switched off, after Twilio has its answer (T15c). A ring from hold not taken: its offer ended, back on hold (T17). The address names the step and who was rung - `holder`, `rung`, or `offer` | - |
 | `POST /api/webhooks/twilio/auto/hold` | A lead waiting on hold: their place, then a track of hold music, then back here; nobody coming for them any more, or the safety stop, the busy line (T16, T17, "The hold line"). Asked when a track ends, and by the hold watcher (`via=watcher`). While the lead is ringing someone from hold, the same ring again, nothing changed | - |
 | `POST /api/webhooks/twilio/auto/offer` | A lead on hold ringing the person who came free: the server cuts the music and sends the call here - when someone's browser says it can take a call, or they switch on (`api/calls.ts`), or on the hold watcher's look; that browser alone rings, for `auto_call_offer_ring_seconds` (20), as a transfer of the lead's yes (T17, "The hold line"). The offer gone, back on hold | - |
+| `POST /api/webhooks/twilio/auto/ai-after` | Only on a call Seri took (Phase 7): her part is over, and her action is carried out with this doc's code - the transfer, the link, a stop's block, a goodbye's result - or the script takes the call from its first question when she failed. `AI-AGENT.md` section 3, "As built (A14)" | - |
 
 **Trying it locally** - `npm run dev:auto-call -- <phone>` (`scripts/dev-auto-call.ts`)
 calls the local lead with that number. It needs, in the environment the api
@@ -656,7 +677,10 @@ the one held.
 
 Built in T15a and T15b (2026-10-20). A "yes" to a step whose choice ends in
 `transfer` (Q1) is put through to a person, in `/auto/gather`; the rules are
-pure, `planTransfer` and `planAfterHolder` in `core/call-script.ts`.
+pure, `planTransfer` and `planAfterHolder` in `core/call-script.ts`. Seri's
+transfer, from `/auto/ai-after`, goes through the same code (`planYes`,
+`yesTwiml`), its ring shown as a yes to the script's first step (A14,
+`AI-AGENT.md` section 3).
 
 1. **Who can take it is read at that moment**: everyone free (`freePeople`,
    "Who is free") and who holds the lead (`transferContext`). Until T18 a
@@ -697,11 +721,18 @@ pure, `planTransfer` and `planAfterHolder` in `core/call-script.ts`.
    - `call.transferred` records taking the transfer, once per call, whoever
      held the lead.
    Refused - another person has the call, the account was deactivated while it
-   rang, no such call - their leg is hung up before it is connected. A
+   rang, no such call, or the call over or taken by the voicemail message (an
+   accept that waited on the call's lock while `actOnVerdict` replaced it -
+   review H8, 2026-11-22; the other order, the accept first, is `onVerdict`'s,
+   which carries on) - their leg is hung up before it is connected. A
    database error after they accepted still connects them: the lead is
    waiting for a person, and the error is logged (`auto_call.claim_failed`).
 3. **When the ringing is over**, Twilio asks `/auto/after` with how it went
-   (`DialCallStatus`); the address names the step and, after a ring to the
+   (`DialCallStatus`) - `completed` is taken only when the call is someone's
+   (`transferTakenBy`): Twilio says `completed` once an accept was answered,
+   even when `/auto/claim` refused it and hung that leg up, and such a ring
+   now ends as one nobody took (`auto_call.ring_not_taken`, review H9,
+   2026-11-22); the address names the step and, after a ring to the
    lead's own agent, who they were. Taken - they talked, nothing more to say.
    The lead's own agent let it ring out, or declined: **everyone else free
    rings at once** (`planAfterHolder`) - not them, with nothing said, since
@@ -791,7 +822,12 @@ otherwise the busy line at once, as before. The rules are pure, in
    them alone.
 4. **Each time** `/auto/hold` is asked: someone is still coming for the lead
    (`someoneComing`, below) and the lead has waited less than
-   `auto_call_hold_max_minutes` (10) - the place again and the next track.
+   `auto_call_hold_max_minutes` (10) - the place again and the next track:
+   the hold page's address counts the tracks (`track`, `holdTrackIndex`), so
+   each ends into the next and none plays twice running; counted by minutes
+   waited until 2026-11-22, a first track ending between 6:00 and 6:59 began the
+   list again (review M21). Sent back to hold from elsewhere - an offer not
+   taken, the watcher - there is no count, and minutes waited choose it.
    Otherwise the busy line, `transfer_missed`, so an agent calls them back
    (first in the queue, T22).
 5. **The hold watcher** (`api/hold-watch.ts`), every 30 seconds in the api
@@ -811,6 +847,9 @@ otherwise the busy line at once, as before. The rules are pure, in
 (`db/presence.ts`): an active account with the switch on, and a call of
 theirs going - or one that ended in the last two minutes while their browser
 has not said it is free since (`JUST_OFF_A_CALL_SQL`): its note box is open.
+A lead's call that rang them and they never answered is not one (review M24,
+2026-11-22): someone away with the switch on kept every "yes" waiting on hold
+for two minutes.
 Two minutes, as a browser's word holds ("Who is free"): a note box left open
 longer, or a browser closed on it, stops counting by itself. Someone free who
 did not take the ring does not count - they had their chance. **Another of the
@@ -819,7 +858,11 @@ robot's calls ringing its transfer counts too** (T20 review,
 while the first rings everyone free - their browsers say busy and no call is
 theirs yet, so they were neither free nor on a call, and the second lead heard
 the busy line though someone would be free in seconds. The call asking leaves
-itself out.
+itself out. A call Seri took counts the same once her part ended with
+`transfer_to_agent` (`calls.ai_ended_with`): it keeps no script answer, so
+until 2026-11-13 - found in the doc check after A20 - a "yes" during her
+transfer's ring heard the busy line, and she herself was told nobody was
+coming.
 
 **The music is Twilio's own classical hold music** (Jeel, 2026-10-21) - six
 tracks in a list in `integrations/twilio.ts` (`HOLD_MUSIC`), more to be added
@@ -861,8 +904,10 @@ not done.
   for any transfer ("Who is free"); declined: it stays on. Either way that
   person is never offered that lead again.
 - **Ended once, never removed**: `taken`, `declined`, `missed`, `failed`, `hung_up`
-  (the lead hung up while it rang), `expired` (open a minute and never heard
-  back - the watcher ends it), `unsent` (Twilio would not take the redirect,
+  (the lead hung up while it rang), `expired` (open its longest ring and 30
+  seconds more - 90 seconds - and never heard back: the watcher ends it; it was
+  a minute until 2026-11-22, the longest ring the setting allows, so an offer
+  set to ring 60 seconds expired as it rang - review M22), `unsent` (Twilio would not take the redirect,
   or the call was not ours to ring). The database holds one live offer per
   lead and per person, so two triggers at once - a browser saying it is free
   and the watcher's look - can never both ring (`call_offers_one_live_per_call`,
@@ -962,6 +1007,12 @@ A call whose script has its result already, or that is over, is left alone.
 Only the first verdict is acted on: Twilio sends one, and a repeat changes
 nothing (`recordAnsweredBy` keeps the first).
 
+**On a call Seri took** (Phase 7, A18, `AI-AGENT.md` section 2) the same rule
+holds: anything the lead said to her counts as an answer, and a key pressed
+while she talked as a key. Her goodbye, the link or a call back waits for the
+verdict - up to 15 seconds after her last line - so a greeting she took for a
+"no" still gets the message when its beep comes.
+
 **Taking the call over** (`actOnVerdict`, `db/auto-calls.ts`): the call row
 is locked while it decides - the same lock an answer is kept under
 (`keepAnswer`), so an answer arriving at that moment waits, then finds the
@@ -983,6 +1034,8 @@ it is the page the message replaced:
   recording, you may...", calls 58 and 59): not kept, nothing follows.
 - `/auto/after`, when a transfer was ringing - reported `no-answer`, exactly
   as a ring let run out (call 62). Nobody is switched off, nothing more said.
+- `/auto/ai-after`, the end of Seri's session the message replaced (A14,
+  A18): her action is not carried out.
 
 Each is logged as `auto_call.after_takeover` and nothing else - never as an
 answer or a transfer.
@@ -1005,6 +1058,10 @@ no beep (`machine_end_silence`, `machine_end_other`) is put through, as call
 24's person was: the rule cannot tell the two apart, and a person who said yes
 is the one not to lose. The agent who takes it hears a recording and hangs up.
 A beep after such a yes still stops the ring and leaves the message.
+*(Seen on production on 2026-11-13 and 2026-11-16: the voicemail's own menu,
+"To review your message, press 1", heard as "One" and "1." - a yes - and put
+through, with no voicemail message left. A later ticket, after Phase 7's
+deploy: `docs/ai-agent-tickets/A23-a-voicemail-menu-is-never-put-through.md`.)*
 
 **The real calls** (2026-10-23 and 24, Jeel's phone, the dev number):
 
@@ -1053,10 +1110,10 @@ Nothing is overwritten (`AUDIT.md`).
 
 | What | Where |
 |---|---|
-| The call | `calls`, with `direction = 'automated'`; `agent_id` empty until someone takes a transfer. `script_result`: `transferred`, `transfer_missed`, `link_sent`, `not_interested`, `opted_out`, `no_response`, `voicemail_left`, `hung_up`, `unanswered`; and `not_placed`, a call Twilio never placed, for our account's reasons - not the lead's call ("When Twilio refuses"). `held_at`: when it went on hold (019). `outcome` is `voicemail` only when Twilio's verdict took the call over (T18) |
+| The call | `calls`, with `direction = 'automated'`; `agent_id` empty until someone takes a transfer. `script_result`: `transferred`, `transfer_missed`, `link_sent`, `not_interested`, `opted_out`, `no_response`, `voicemail_left`, `hung_up`, `unanswered`; `not_placed`, a call Twilio never placed, for our account's reasons - not the lead's call ("When Twilio refuses"); and `callback_booked`, Seri's alone (022, `AI-AGENT.md`). `held_at`: when it went on hold (019). `outcome` is `voicemail` only when Twilio's verdict took the call over (T18) |
 | What the lead said | `call_answers`, one add-only row per answer: what Twilio heard, how sure, keys pressed, the choice it matched |
 | The script | `call_scripts`, `call_steps`, `call_choices` - rows, changed by migration, like the SMS flow (015). The script's own words - stop, no response, voicemail, busy, hold and the place on hold (019), the link text - are on its `call_scripts` row, so another script brings its own |
-| When it calls | `settings`: `auto_call_hours_start` 11:00, `auto_call_hours_end` 17:00, `auto_call_time_zone` America/Phoenix, `auto_call_days` mon,tue,wed,thu,fri, `auto_call_wait_minutes` 60, `auto_call_ring_seconds` 25, `auto_call_hold_max_minutes` 10, `auto_call_min_confidence` 0.4, `auto_call_offer_ring_seconds` 20 (020); and, written by the worker, `auto_calls_on` and `auto_calls_since` - whether it last started with automated calls on, and when they were last switched on ("When a lead is called") |
+| When it calls | `settings`: `auto_call_hours_start` 11:00, `auto_call_hours_end` 17:00, `auto_call_time_zone` America/Phoenix, `auto_call_days` mon,tue,wed,thu,fri, `auto_call_wait_minutes` 60, `auto_call_ring_seconds` 25, `auto_call_hold_max_minutes` 10, `auto_call_min_confidence` 0.4, `auto_call_offer_ring_seconds` 20 (020), `auto_call_calls_per_person` 5 (021, "Traffic"); `ai_agent` `off` (022), Seri's switch (`AI-AGENT.md` section 7); and, written by the worker, `auto_calls_on` and `auto_calls_since` - whether it last started with automated calls on, and when they were last switched on ("When a lead is called") |
 | The link text | `messages`, like every text |
 | Who is free | `users.taking_calls`, `taking_calls_at`, `taking_calls_why`, `users.ringable_until` |
 | Each ring from hold | `call_offers` (020): the call, who was rung, when, and how it ended - written once, ended once, never removed |
@@ -1074,8 +1131,8 @@ does not answer a missed call - until an agent takes the transfer.
 
 | Screen | What |
 |---|---|
-| Lead timeline and workspace | "Automated call · voicemail left", "· said yes · Maya Chen took it · 2:14", "· said yes · nobody took it", "· link sent", "· not interested", "· opted out", "· no response", "· hung up", "· no answer" - with what the lead said underneath, under **Answers** (T21, `AGENT-WORKSPACE.md` "The timeline"); and "Phone call - automated questions stopped" once the lead has answered (W2, `STATE-MACHINE.md` "2d") |
-| Agents' queue | Only a "yes" nobody took: first, the longest waiting on top, "Wants a call" - and a Wants a call badge on the lead's card - until an agent calls or texts them, answers when they ring, or saves an outcome (T22, `QUEUE.md` "Who is in it", "The order", "The tag") |
+| Lead timeline and workspace | "Automated call · voicemail left", "· said yes · Maya Chen took it · 2:14", "· said yes · nobody took it", "· link sent", "· not interested", "· opted out", "· no response", "· hung up", "· no answer" - with what the lead said underneath, under **Answers** (T21, `AGENT-WORKSPACE.md` "The timeline"); and "Phone call - automated questions stopped" once the lead has answered (W2, `STATE-MACHINE.md` "2d"). A call Seri took also reads "· callback booked", with her conversation under **Seri** (A15, A19) |
+| Agents' queue | A "yes" nobody took: first, the longest waiting on top, "Wants a call" - and a Wants a call badge on the lead's card - until an agent calls or texts them, answers when they ring, or saves an outcome (T22, `QUEUE.md` "Who is in it", "The order", "The tag"). And, since A16, a call back Seri booked once it is due: beside it at the top, "Callback · 3:00 PM" in bold |
 | Admin > Leads | A **Call** column with the robot call's result - "Voicemail left", "Said yes · nobody took it", "Calling now" - and a filter on it. No new status or tab - a lead is on two tracks at once ("Awaiting reply" and "Voicemail left") (T23, `ADMIN-LEADS.md` "Call") |
 | Admin > Configuration | On its Calls tab, the call script line by line, with what picks each answer, and the settings the robot reads - on or off, hours, time zone, days, the wait, ring times, the hold stop, the confidence a spoken answer needs, the call-back number; the link text with the other texts, on Texts. Read-only (T24, `ADMIN.md` "The automated call") |
 | App bar | The "Taking calls" switch |
@@ -2628,7 +2685,8 @@ ticket: **the lead card says it too** - a Wants a call badge
 up; **the tag ranks with the missed call**, just below it and above an unread
 reply - the lead was promised a call back; **the page states the order**,
 "Missed transfers first, then highest score, then newest.", only while
-automated calls are on; and **the rule is the missed call's**, one
+automated calls are on (with Seri's due call backs named since 2026-11-23,
+`QUEUE.md`, "The order"); and **the rule is the missed call's**, one
 `nobodyGotBackSince` in `db/lead-state.ts`. Written against the call's own
 lead, it lets Postgres work out both once per refresh rather than once per
 lead, so the queue got faster though it asks more (122 ms in the first
@@ -3136,7 +3194,7 @@ before asking, and the voice is a more natural one.
 
 ## Not in Stage 1
 
-- The AI agent (Stage 2), from the "not understood" branch.
+- The AI agent (Stage 2), from the "not understood" branch. *(2026-11-11: its own phase instead - Seri runs the whole call from the start, `AI-AGENT.md`.)*
 - A day-3 reminder text for leads still silent - a separate task once calling
   is stable, if the client agrees (Jeel, 2026-10-15).
 - Sending email.

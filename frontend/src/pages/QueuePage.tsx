@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { getCallConfig } from '../api/calls';
 import { toApiError } from '../api/client';
 import { claimLead, listQueue, type QueueLead, type QueueResponse } from '../api/leads';
@@ -50,25 +50,26 @@ const TIER_OPTIONS: { key: string; label: string }[] = [
 const EMPTY = '-';
 
 /**
- * A lead's answers in one cell: "Yes · No · Talk to an agent". One column, not
- * one per question - flows differ in how many questions they ask (FLOWS.md),
- * so there is no fixed set of columns to have. Hovering names each question.
+ * A lead's answers are one cell: "Yes · No · Talk to an agent", written by the
+ * row itself with each question for a screen reader. One column, not one per
+ * question - flows differ in how many questions they ask (FLOWS.md), so there
+ * is no fixed set of columns to have. Hovering names each question.
  */
-export function answersText(answers: QueueLead['answers']): string {
-  return answers.length > 0 ? answers.map((a) => a.label).join(' · ') : EMPTY;
-}
-
 export function answersTitle(answers: QueueLead['answers']): string | undefined {
   return answers.length > 0 ? answers.map((a) => `${a.heading}: ${a.label}`).join('\n') : undefined;
 }
 
 /**
  * The order, as the page states it. A "yes" on the robot's call that nobody
- * took comes first (T22, QUEUE.md "The order") - said only while automated
- * calls are on, so nobody reads about transfers that cannot happen.
+ * took comes first (T22), and so does a call back Seri booked once it is due
+ * (A16) - QUEUE.md "The order". Said only while automated calls are on, so
+ * nobody reads about transfers that cannot happen; Seri's call backs were left
+ * out of it until review R15, 2026-11-23.
  */
 export function orderText(autoCalls: boolean): string {
-  return autoCalls ? 'Missed transfers first, then highest score, then newest.' : 'Highest score first, then newest.';
+  return autoCalls
+    ? "Missed transfers and Seri's due call backs first, then highest score, then newest."
+    : 'Highest score first, then newest.';
 }
 
 const SINCE: { key: string; label: string }[] = [
@@ -280,7 +281,14 @@ export function QueuePage() {
                         <TierSignal tier={lead.tier} />
                       </td>
                       <td>
-                        <span className="cell-name">{leadName(lead)}</span>
+                        {/* A link, so the keyboard can look too - as the row's click, never a pick. Not on a locked row. */}
+                        {locked ? (
+                          <span className="cell-name">{leadName(lead)}</span>
+                        ) : (
+                          <Link className="cell-name" to={`/leads/${lead.id}`} onClick={(e) => e.stopPropagation()}>
+                            {leadName(lead)}
+                          </Link>
+                        )}
                         <span className="cell-sub">{formatPhone(lead.phone)}</span>
                       </td>
                       <td className="cell-answers" title={answersTitle(lead.answers)}>

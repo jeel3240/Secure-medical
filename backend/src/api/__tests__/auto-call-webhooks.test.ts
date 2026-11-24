@@ -7,6 +7,7 @@ import request from 'supertest';
 import twilio from 'twilio';
 import { ANTIBIOTICS_CALL, LINK_STEP, OFFER_STEP } from '../../core/call-script-fixtures';
 import type { CallScript } from '../../core/call-script';
+import * as logModule from '../../lib/log';
 import type { TwilioSettings } from '../../twilio-settings';
 import { buildApp } from './helpers';
 
@@ -23,20 +24,31 @@ const transferContext = jest.fn<Promise<Context>, [number]>();
 type Taken = Awaited<ReturnType<typeof import('../../db/auto-calls').takeTransfer>>;
 const takeTransfer = jest.fn<Promise<Taken>, [number, number]>();
 const missTransfer = jest.fn();
+type KeepResultArgs = Parameters<typeof import('../../db/auto-calls').keepCallResult>;
+const keepCallResult = jest.fn<Promise<{ saved: boolean; leadId: number | null; takenByVerdict: boolean; callbackId: number | null }>, KeepResultArgs>();
 const holdCall = jest.fn<Promise<boolean>, unknown[]>();
 type HoldState = Awaited<ReturnType<typeof import('../../db/auto-calls').holdState>>;
 const holdState = jest.fn<Promise<HoldState>, unknown[]>();
 jest.mock('../../db/auto-calls', () => ({
   linkAutomatedCall: (...a: [number, string]) => linkAutomatedCall(...a),
   keepAnswer: (...a: KeepArgs) => keepAnswer(...a),
+  keepCallResult: (...a: KeepResultArgs) => keepCallResult(...a),
   actOnVerdict: (...a: ActArgs) => actOnVerdict(...a),
   takenByVerdict: (callId: number) => takenByVerdict(callId),
   settleAutomatedCall: (...a: unknown[]) => settleAutomatedCall(...a),
   transferContext: (callId: number) => transferContext(callId),
   takeTransfer: (callId: number, agentId: number) => takeTransfer(callId, agentId),
+  transferTakenBy: (callId: number) => transferTakenBy(callId),
   missTransfer: (...a: unknown[]) => missTransfer(...a),
   holdCall: (...a: unknown[]) => holdCall(...a),
   holdState: (...a: unknown[]) => holdState(...a),
+}));
+type Handoff = import('../../ai/actions').Handoff;
+const recordedHandoff = jest.fn<Promise<Handoff | null>, [unknown, number]>();
+const endAiCall = jest.fn<Promise<boolean>, [unknown, number, Handoff]>();
+jest.mock('../../ai/relay-store', () => ({
+  recordedHandoff: (...a: [unknown, number]) => recordedHandoff(...a),
+  endAiCall: (...a: [unknown, number, Handoff]) => endAiCall(...a),
 }));
 type Rings = Awaited<ReturnType<typeof import('../../integrations/twilio-calls').transferRings>>;
 const transferRings = jest.fn<Promise<Rings>, unknown[]>();
@@ -58,7 +70,10 @@ const readMinConfidence = jest.fn<Promise<number>, unknown[]>();
 const readRingSeconds = jest.fn<Promise<number>, unknown[]>();
 const readHoldMaxSeconds = jest.fn<Promise<number>, unknown[]>();
 const readOfferRingSeconds = jest.fn<Promise<number>, unknown[]>();
+type Hours = Awaited<ReturnType<typeof import('../../db/call-script').readCallHours>>;
+const readCallHours = jest.fn<Promise<Hours>, unknown[]>();
 jest.mock('../../db/call-script', () => ({
+  readCallHours: (...a: unknown[]) => readCallHours(...a),
   loadActiveCallScript: (...a: unknown[]) => loadActiveCallScript(...a),
   readMinConfidence: (...a: unknown[]) => readMinConfidence(...a),
   readRingSeconds: (...a: unknown[]) => readRingSeconds(...a),
@@ -86,7 +101,7 @@ jest.mock('../../db/lead-texts', () => ({
   sendMissedCallText: (...a: unknown[]) => sendMissedCallText(...a),
   sendCallLinkText: (leadId: number) => sendCallLinkText(leadId),
 }));
-const poolQuery = jest.fn(async (_sql: string, _values?: unknown[]) => ({ rows: [], rowCount: 1 }));
+const poolQuery = jest.fn(async (_sql: string, _values?: unknown[]): Promise<{ rows: unknown[]; rowCount: number }> => ({ rows: [], rowCount: 1 }));
 jest.mock('../../db/pool', () => ({ pool: { query: (...a: [string, unknown[]?]) => poolQuery(...a) } }));
 
 const SETTINGS: TwilioSettings = {
@@ -115,9 +130,23 @@ const afterResponse = async () => {
 };
 afterEach(afterResponse);
 
+const transferTakenBy = jest.fn<Promise<number | null>, [number]>();
+
 beforeEach(() => {
   linkAutomatedCall.mockReset().mockResolvedValue(true);
+  transferTakenBy.mockReset().mockResolvedValue(16);
   keepAnswer.mockReset().mockResolvedValue({ kept: true, leadId: 7, takenByVerdict: false });
+  keepCallResult.mockReset().mockResolvedValue({ saved: true, leadId: 7, takenByVerdict: false, callbackId: null });
+  // Every day, all day: a call back's time is the relay's to check, not this test's.
+  readCallHours.mockReset().mockResolvedValue({
+    startMinute: 0,
+    endMinute: 24 * 60,
+    timeZone: 'America/Phoenix',
+    days: new Set(['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'] as const),
+    waitMinutes: 60,
+  });
+  recordedHandoff.mockReset().mockResolvedValue(null);
+  endAiCall.mockReset().mockResolvedValue(false);
   // Acts as the database would on a verdict it takes the call over for.
   actOnVerdict.mockReset().mockImplementation(async (_callId, verdict, takeOver) => {
     const action = verdict === 'fax' ? 'hang_up' : 'voicemail';
@@ -230,6 +259,368 @@ describe('the lead picks up', () => {
     const failed = await fromTwilio(app, ANSWER, PICKED_UP);
     expect(failed.status).toBe(200);
     expect(failed.text).toMatch(/<Response><Hangup\/><\/Response>$/);
+  });
+});
+
+describe('the call goes to Seri (A13)', () => {
+  /** The database's answers to Seri's two reads - her switch, the lead's first name - and nothing else. */
+  const seriRows = (switchValue: string | null, firstName: string | null = 'John') =>
+    poolQuery.mockImplementation(async (sql: string) => {
+      if (/key = 'ai_agent'/.test(sql)) return { rows: switchValue === null ? [] : [{ value: switchValue }], rowCount: 1 };
+      if (/first_name/.test(sql)) return { rows: [{ firstName }], rowCount: 1 };
+      return { rows: [], rowCount: 1 };
+    });
+  const withKey = () => buildApp({ twilio: SETTINGS, autoCalls: true, openAiKey: 'sk-test' });
+  let info: jest.SpyInstance;
+  let warn: jest.SpyInstance;
+  beforeEach(() => {
+    info = jest.spyOn(logModule.log, 'info').mockImplementation(() => undefined);
+    warn = jest.spyOn(logModule.log, 'warn').mockImplementation(() => undefined);
+  });
+  afterEach(() => {
+    info.mockRestore();
+    warn.mockRestore();
+    poolQuery.mockImplementation(async () => ({ rows: [], rowCount: 1 }));
+  });
+
+  it('switched on, with a key: connected to her relay, greeted by name - no question, nothing said by the script', async () => {
+    seriRows('on');
+    const { app } = await withKey();
+    const res = await fromTwilio(app, ANSWER, PICKED_UP);
+    expect(res.status).toBe(200);
+    expect(res.type).toBe('text/xml');
+    expect(linkAutomatedCall).toHaveBeenCalledWith(42, 'CA900');
+    expect(res.text).toContain(
+      '<Connect action="https://calls.example.com/api/webhooks/twilio/auto/ai-after?call=42" method="POST">'
+    );
+    expect(res.text).toContain('<ConversationRelay url="wss://calls.example.com/api/ai/relay" welcomeGreeting="[friendly] Hi, is this John?"');
+    expect(res.text).toContain('voice="9BWtsMINqrJLrRacOk9x-v4-0.4_0.8"');
+    expect(res.text).toContain('<Parameter name="call" value="42"/>');
+    expect(res.text).not.toMatch(/<Say|<Gather|<Pause/);
+    // The lead's name is read for the row the address names.
+    const nameRead = poolQuery.mock.calls.find(([sql]) => /first_name/.test(sql))!;
+    expect(nameRead[1]).toEqual([42]);
+    expect(info).toHaveBeenCalledWith('auto_call.answered', { callId: 42, callSid: 'CA900', to: 'seri' });
+  });
+
+  it('no first name for the lead: "Hi there!"', async () => {
+    seriRows('on', null);
+    const { app } = await withKey();
+    expect((await fromTwilio(app, ANSWER, PICKED_UP)).text).toContain('welcomeGreeting="[friendly] Hi there!"');
+  });
+
+  it('switched off, or never set: today\'s first question, exactly as before', async () => {
+    for (const value of ['off', null]) {
+      seriRows(value);
+      const { app } = await withKey();
+      const res = await fromTwilio(app, ANSWER, PICKED_UP);
+      expect(res.text).toContain('<Pause length="1"/><Say voice="Google.en-US-Chirp3-HD-Kore">Hi, this is Seri calling from eDrugstore.');
+      expect(res.text).not.toContain('ConversationRelay');
+      expect(poolQuery.mock.calls.some(([sql]) => /first_name/.test(sql))).toBe(false);
+    }
+    expect(info).toHaveBeenCalledWith('auto_call.answered', { callId: 42, callSid: 'CA900', to: 'script' });
+  });
+
+  it('switched on without OPENAI_API_KEY: today\'s script, and ai_agent.no_key logged once - not on every call', async () => {
+    seriRows('on');
+    const { app } = await on();
+    for (let i = 0; i < 2; i++) {
+      const res = await fromTwilio(app, ANSWER, PICKED_UP);
+      expect(res.text).toContain('<Gather');
+      expect(res.text).not.toContain('ConversationRelay');
+    }
+    expect(warn.mock.calls.filter(([event]) => event === 'ai_agent.no_key')).toHaveLength(1);
+  });
+
+  it('no script active: the call ends, Seri or not - it is her backup, and her stop line', async () => {
+    seriRows('on');
+    loadActiveCallScript.mockResolvedValue(null);
+    const { app } = await withKey();
+    expect((await fromTwilio(app, ANSWER, PICKED_UP)).text).toMatch(/<Response><Hangup\/><\/Response>$/);
+  });
+
+  it('the switch cannot be read: the call ends quietly, as for any database failure', async () => {
+    poolQuery.mockImplementation(async (sql: string) => {
+      if (/key = 'ai_agent'/.test(sql)) throw new Error('connection refused');
+      return { rows: [], rowCount: 1 };
+    });
+    const error = jest.spyOn(logModule.log, 'error').mockImplementation(() => undefined);
+    const { app } = await withKey();
+    const res = await fromTwilio(app, ANSWER, PICKED_UP);
+    expect(res.status).toBe(200);
+    expect(res.text).toMatch(/<Response><Hangup\/><\/Response>$/);
+    expect(error).toHaveBeenCalledWith('auto_call.answer_failed', expect.objectContaining({ callId: '42' }));
+    error.mockRestore();
+  });
+});
+
+describe('after Seri (A14)', () => {
+  const AFTER = '/api/webhooks/twilio/auto/ai-after?call=42';
+  const ended = (handoff: Handoff, extra: Record<string, string> = {}) => ({
+    CallSid: 'CA900',
+    CallStatus: 'in-progress',
+    SessionStatus: 'ended',
+    SessionId: 'VX1',
+    HandoffData: JSON.stringify(handoff),
+    ...extra,
+  });
+  const hungUp = { CallSid: 'CA900', CallStatus: 'completed', SessionStatus: 'completed', SessionId: 'VX1' };
+  const failed = { CallSid: 'CA900', CallStatus: 'in-progress', SessionStatus: 'failed', SessionId: 'VX1', ErrorCode: '64105' };
+  /** Lines she has said in her own voice, or the script's own words for an outcome she has given: never said here. */
+  const neverSaid = (xml: string) => {
+    for (const line of [
+      'Great, connecting you',
+      'Hi, this is Seri',
+      "Okay, we will not call you again",
+      'Thank you for your time',
+      'Perfect. Check your SMS',
+    ]) {
+      expect(xml).not.toContain(line);
+    }
+  };
+  const recordedNotice = { ...SETTINGS, transcriptionServiceSid: `GA${'4'.repeat(32)}` };
+  let info: jest.SpyInstance;
+  let error: jest.SpyInstance;
+  beforeEach(() => {
+    info = jest.spyOn(logModule.log, 'info').mockImplementation(() => undefined);
+    error = jest.spyOn(logModule.log, 'error').mockImplementation(() => undefined);
+  });
+  afterEach(() => {
+    info.mockRestore();
+    error.mockRestore();
+  });
+
+  it('nobody while automated calls are off, and only Twilio', async () => {
+    const off = await buildApp({ twilio: SETTINGS, autoCalls: false });
+    expect((await fromTwilio(off.app, AFTER, ended({ action: 'send_link' }))).status).toBe(404);
+    const { app } = await on();
+    expect((await request(app).post(AFTER).type('form').send(ended({ action: 'send_link' }))).status).toBe(403);
+    expect(keepCallResult).not.toHaveBeenCalled();
+  });
+
+  describe('a transfer: the recording notice, then the script\'s own transfer - nothing she said said again', () => {
+    it('people free: they ring, shown as a yes to the offer; nothing saved yet - the ring decides', async () => {
+      freePeople.mockResolvedValue([16, 21]);
+      const { app } = await buildApp({ twilio: recordedNotice, autoCalls: true });
+      const res = await fromTwilio(app, AFTER, ended({ action: 'transfer_to_agent' }));
+      expect(res.text).toMatch(/<Response><Say voice="Google\.en-US-Chirp3-HD-Kore">This call may be recorded[^<]*<\/Say><Dial /);
+      expect(res.text).toContain('<Identity>dev-agent-16</Identity>');
+      expect(res.text).toContain('<Identity>dev-agent-21</Identity>');
+      expect(res.text).toContain('<Parameter name="step" value="Offer"/>');
+      expect(res.text).toContain(`/auto/after?call=42&amp;step=${OFFER_STEP}&amp;rung=16%2C21`);
+      neverSaid(res.text);
+      expect(keepCallResult).toHaveBeenCalledWith({ callId: 42, result: null, blockNumber: false });
+      expect(info).toHaveBeenCalledWith('auto_call.transfer', { callId: 42, rung: 2, holderFirst: false });
+    });
+
+    it('the lead\'s own agent free: rung alone first, as on the script', async () => {
+      freePeople.mockResolvedValue([16, 21]);
+      transferContext.mockResolvedValue({ lead: { id: 7, name: 'Priya Sharma', phone: '+15550100016' }, heldBy: 21, yesStepId: OFFER_STEP });
+      const { app } = await on();
+      const res = await fromTwilio(app, AFTER, ended({ action: 'transfer_to_agent' }));
+      expect(res.text).toContain('<Identity>dev-agent-21</Identity>');
+      expect(res.text).not.toContain('dev-agent-16');
+      expect(res.text).toContain('&amp;holder=21');
+    });
+
+    it('nobody free, someone on a call: on hold, with the notice - the hold line in the script\'s voice', async () => {
+      someoneOnOrJustOffCall.mockResolvedValue(true);
+      const { app } = await buildApp({ twilio: recordedNotice, autoCalls: true });
+      const res = await fromTwilio(app, AFTER, ended({ action: 'transfer_to_agent' }));
+      expect(res.text).toContain('All our agents are on other calls. Please stay on the line.');
+      expect(res.text).toContain('This call may be recorded');
+      expect(holdCall).toHaveBeenCalledWith(42);
+      neverSaid(res.text);
+    });
+
+    it('nobody at all by now: the busy line, transfer_missed - a person calls them back (T22)', async () => {
+      const { app } = await on();
+      const res = await fromTwilio(app, AFTER, ended({ action: 'transfer_to_agent' }));
+      expect(res.text).toContain('All our agents are busy right now. An agent will call you back shortly.</Say><Hangup/>');
+      expect(keepCallResult).toHaveBeenCalledWith({ callId: 42, result: 'transfer_missed', blockNumber: false });
+      neverSaid(res.text);
+    });
+
+    it('the lead hung up before it rang: nobody rung, nothing saved - the call\'s end says hung_up', async () => {
+      freePeople.mockResolvedValue([16]);
+      const { app } = await on();
+      const res = await fromTwilio(app, AFTER, ended({ action: 'transfer_to_agent' }, { CallStatus: 'completed' }));
+      expect(res.text).not.toContain('<Dial');
+      expect(keepCallResult).toHaveBeenCalledWith({ callId: 42, result: null, blockNumber: false, callback: null });
+    });
+  });
+
+  it.each<[string, Handoff, { result: string; blockNumber: boolean }]>([
+    ['a stop: opted_out, the number blocked', { action: 'opt_out' }, { result: 'opted_out', blockNumber: true }],
+    ['not interested', { action: 'end_call', reason: 'not_interested' }, { result: 'not_interested', blockNumber: false }],
+    ['the wrong person: not_interested', { action: 'end_call', reason: 'wrong_person' }, { result: 'not_interested', blockNumber: false }],
+    ['silent: no_response', { action: 'end_call', reason: 'no_response' }, { result: 'no_response', blockNumber: false }],
+    [
+      'a call back: callback_booked',
+      { action: 'book_callback', at: '2026-11-13T20:00:00.000Z', timeZone: 'America/New_York', reason: 'Wants to order' },
+      { result: 'callback_booked', blockNumber: false },
+    ],
+  ])('%s - saved once, then the call ends, nothing said', async (_, handoff, saved) => {
+    const { app } = await on();
+    const res = await fromTwilio(app, AFTER, ended(handoff));
+    expect(res.text).toMatch(/<Response><Hangup\/><\/Response>$/);
+    expect(keepCallResult).toHaveBeenCalledWith({ callId: 42, ...saved, callback: saved.result === 'callback_booked' ? expect.anything() : null });
+    expect(sendCallLinkText).not.toHaveBeenCalled();
+    expect(info).toHaveBeenCalledWith('auto_call.ai_after', { callId: 42, status: 'ended', action: handoff.action, hungUp: false });
+  });
+
+  it('a call back: booked with the result, at her time, with her line and the lead\'s zone (A15)', async () => {
+    keepCallResult.mockResolvedValue({ saved: true, leadId: 7, takenByVerdict: false, callbackId: 31 });
+    const { app } = await on();
+    const at = new Date(Date.now() + 2 * 86_400_000);
+    at.setUTCHours(20, 0, 0, 0);
+    const booked: Handoff = { action: 'book_callback', at: at.toISOString(), timeZone: 'America/New_York', reason: 'Wants to order' };
+    await fromTwilio(app, AFTER, ended(booked));
+    expect(keepCallResult).toHaveBeenCalledWith({
+      callId: 42,
+      result: 'callback_booked',
+      blockNumber: false,
+      callback: { at, note: 'Wants to order', timeZone: 'America/New_York' },
+    });
+    expect(info).toHaveBeenCalledWith('auto_call.callback_booked', { callId: 42, callbackId: 31 });
+    expect(error).not.toHaveBeenCalledWith('auto_call.callback_time_refused', expect.anything());
+  });
+
+  it('a call back at a time the hours do not allow - a bug, since the relay checked it: booked all the same, and logged', async () => {
+    keepCallResult.mockResolvedValue({ saved: true, leadId: 7, takenByVerdict: false, callbackId: 31 });
+    const { app } = await on();
+    const past: Handoff = { action: 'book_callback', at: '2026-01-05T18:00:00.000Z', timeZone: 'America/New_York', reason: 'Wants to order' };
+    await fromTwilio(app, AFTER, ended(past));
+    expect(keepCallResult).toHaveBeenCalledWith(expect.objectContaining({ result: 'callback_booked', callback: expect.objectContaining({ note: 'Wants to order' }) }));
+    expect(error).toHaveBeenCalledWith('auto_call.callback_time_refused', { callId: 42, callbackId: 31, why: 'past' });
+
+    // Twilio asking again books nothing, and logs nothing again.
+    error.mockClear();
+    keepCallResult.mockResolvedValue({ saved: false, leadId: 7, takenByVerdict: false, callbackId: null });
+    await fromTwilio(app, AFTER, ended(past));
+    expect(error).not.toHaveBeenCalled();
+  });
+
+  it('the link: link_sent, the call ends, and the link texted once Twilio has its answer - once, not for a repeat', async () => {
+    const { app } = await on();
+    const res = await fromTwilio(app, AFTER, ended({ action: 'send_link' }));
+    expect(res.text).toMatch(/<Response><Hangup\/><\/Response>$/);
+    expect(keepCallResult).toHaveBeenCalledWith({ callId: 42, result: 'link_sent', blockNumber: false, callback: null });
+    await afterResponse();
+    expect(sendCallLinkText).toHaveBeenCalledTimes(1);
+    expect(sendCallLinkText).toHaveBeenCalledWith(7);
+
+    keepCallResult.mockResolvedValue({ saved: false, leadId: 7, takenByVerdict: false, callbackId: null });
+    await fromTwilio(app, AFTER, ended({ action: 'send_link' }));
+    await afterResponse();
+    expect(sendCallLinkText).toHaveBeenCalledTimes(1);
+  });
+
+  it('her action is recorded once, whichever comes first - the relay has normally recorded it already', async () => {
+    const { app } = await on();
+    await fromTwilio(app, AFTER, ended({ action: 'opt_out' }));
+    expect(endAiCall).toHaveBeenCalledWith(expect.anything(), 42, { action: 'opt_out' });
+  });
+
+  describe('she failed: sorry, then the script\'s first question - not its greeting', () => {
+    const expectScript = (xml: string) => {
+      expect(xml).toContain('<Say voice="Google.en-US-Chirp3-HD-Kore">Sorry about that.</Say><Gather');
+      expect(xml).toContain('<Say voice="Google.en-US-Chirp3-HD-Kore">Are you interested in ordering?</Say></Gather>');
+      expect(xml).toContain(`/auto/gather?call=42&amp;step=${OFFER_STEP}&amp;try=1`);
+      expect(xml).not.toContain('<Pause');
+      neverSaid(xml);
+    };
+
+    it('the relay ended with a fallback (A12): the script; nothing saved, the answer to come is the script\'s', async () => {
+      const { app } = await on();
+      const res = await fromTwilio(app, AFTER, ended({ action: 'fallback', why: 'model_slow' }));
+      expectScript(res.text);
+      expect(keepCallResult).not.toHaveBeenCalled();
+      expect(info).toHaveBeenCalledWith('auto_call.ai_after', {
+        callId: 42,
+        status: 'ended',
+        action: 'fallback',
+        hungUp: false,
+        why: 'model_slow',
+      });
+    });
+
+    it('Twilio\'s side failed with nothing recorded: recorded here as a fallback, so the robot counts it (A17) - and the script', async () => {
+      const { app } = await on();
+      const res = await fromTwilio(app, AFTER, failed);
+      expectScript(res.text);
+      expect(endAiCall).toHaveBeenCalledWith(expect.anything(), 42, { action: 'fallback', why: 'twilio_failed' });
+      expect(info).toHaveBeenCalledWith('auto_call.ai_after', expect.objectContaining({ status: 'failed', errorCode: '64105' }));
+    });
+
+    it('failed after she had ended with an action: that action, carried out', async () => {
+      recordedHandoff.mockResolvedValue({ action: 'send_link' });
+      const { app } = await on();
+      const res = await fromTwilio(app, AFTER, failed);
+      expect(res.text).toMatch(/<Response><Hangup\/><\/Response>$/);
+      expect(keepCallResult).toHaveBeenCalledWith({ callId: 42, result: 'link_sent', blockNumber: false, callback: null });
+    });
+
+    it('an action Twilio handed back unreadable: the script, never a guess', async () => {
+      const { app } = await on();
+      expectScript((await fromTwilio(app, AFTER, { ...ended({ action: 'opt_out' }), HandoffData: '{not json' })).text);
+    });
+
+    it('no script active: the call ends quietly', async () => {
+      loadActiveCallScript.mockResolvedValue(null);
+      const { app } = await on();
+      expect((await fromTwilio(app, AFTER, failed)).text).toMatch(/<Response><Hangup\/><\/Response>$/);
+    });
+  });
+
+  describe('the lead hung up: what she had ended with, from the relay\'s record', () => {
+    it('a stop: blocked all the same', async () => {
+      recordedHandoff.mockResolvedValue({ action: 'opt_out' });
+      const { app } = await on();
+      await fromTwilio(app, AFTER, hungUp);
+      expect(recordedHandoff).toHaveBeenCalledWith(expect.anything(), 42);
+      expect(keepCallResult).toHaveBeenCalledWith({ callId: 42, result: 'opted_out', blockNumber: true, callback: null });
+      // Hers to record, not ours: nothing written to her part of the call.
+      expect(endAiCall).not.toHaveBeenCalled();
+    });
+
+    it('the link: texted all the same', async () => {
+      recordedHandoff.mockResolvedValue({ action: 'send_link' });
+      const { app } = await on();
+      await fromTwilio(app, AFTER, hungUp);
+      await afterResponse();
+      expect(sendCallLinkText).toHaveBeenCalledWith(7);
+    });
+
+    it('before she ended with anything: nothing saved, nothing rung - the call\'s end says hung_up', async () => {
+      const { app } = await on();
+      const res = await fromTwilio(app, AFTER, hungUp);
+      expect(res.text).toMatch(/<Response><Hangup\/><\/Response>$/);
+      expect(keepCallResult).toHaveBeenCalledWith({ callId: 42, result: null, blockNumber: false, callback: null });
+      expect(loadActiveCallScript).not.toHaveBeenCalled();
+    });
+  });
+
+  it('the voicemail message has the call (T18): nothing kept, logged as after the takeover', async () => {
+    takenByVerdict.mockResolvedValue(true);
+    const { app } = await on();
+    const res = await fromTwilio(app, AFTER, ended({ action: 'send_link' }));
+    expect(res.text).toMatch(/<Response><Hangup\/><\/Response>$/);
+    expect(keepCallResult).not.toHaveBeenCalled();
+    expect(info).toHaveBeenCalledWith('auto_call.after_takeover', { callId: 42, path: '/auto/ai-after' });
+  });
+
+  it('a request naming no call of ours, or the database failing: the call ends quietly', async () => {
+    const { app } = await on();
+    linkAutomatedCall.mockResolvedValue(false);
+    expect((await fromTwilio(app, AFTER, ended({ action: 'opt_out' }))).text).toMatch(/<Response><Hangup\/><\/Response>$/);
+    expect(keepCallResult).not.toHaveBeenCalled();
+    linkAutomatedCall.mockResolvedValue(true);
+    keepCallResult.mockRejectedValue(new Error('connection refused'));
+    const res = await fromTwilio(app, AFTER, ended({ action: 'opt_out' }));
+    expect(res.status).toBe(200);
+    expect(res.text).toMatch(/<Response><Hangup\/><\/Response>$/);
+    expect(error).toHaveBeenCalledWith('auto_call.ai_after_failed', expect.objectContaining({ callId: '42' }));
   });
 });
 
@@ -550,6 +941,15 @@ describe('the transfer (T15a)', () => {
       expect(switchOffAfterMissedRing).not.toHaveBeenCalled();
     });
 
+    it('"completed", but the accept was refused - nobody\'s call: transfer_missed, and the busy line, not taken (review H9)', async () => {
+      transferTakenBy.mockResolvedValue(null);
+      const { app } = await on();
+      const res = await fromTwilio(app, AFTER, { CallSid: 'CA900', DialCallStatus: 'completed' });
+      expect(transferTakenBy).toHaveBeenCalledWith(42);
+      expect(missTransfer).toHaveBeenCalledWith(42);
+      expect(res.text).toContain('All our agents are busy right now. An agent will call you back shortly.</Say><Hangup/>');
+    });
+
     it.each(['no-answer', 'busy', 'failed', 'canceled'])('%s - nobody took it: transfer_missed, and the busy line', async (status) => {
       const { app } = await on();
       const res = await fromTwilio(app, AFTER, { CallSid: 'CA900', DialCallStatus: status });
@@ -838,8 +1238,21 @@ describe('the hold line (T16)', () => {
       const { app } = await on();
       const res = await fromTwilio(app, HOLD, live);
       expect(res.text).toContain('>You are next.</Say><Play>https://s3.amazonaws.com/com.twilio.music.classical/');
-      expect(res.text).toMatch(new RegExp(`</Play><Redirect method="POST">${toHold.replace(/[?]/g, '\\?')}</Redirect></Response>$`));
+      // The track after it comes next, counted on the address (review M21).
+      expect(res.text).toMatch(new RegExp(`</Play><Redirect method="POST">${toHold.replace(/[?]/g, '\\?')}&amp;track=\\d+</Redirect></Response>$`));
       expect(missTransfer).not.toHaveBeenCalled();
+    });
+
+    it('a track ended: the next one, never the same twice running (review M21)', async () => {
+      someoneComing.mockResolvedValue(true);
+      holdState.mockResolvedValue({ waitedSeconds: 5, place: 1 });
+      const { app } = await on();
+      const first = await fromTwilio(app, HOLD, live);
+      const [, played, next] = /<Play>([^<]+)<\/Play><Redirect method="POST">[^<]*track=(\d+)</.exec(first.text) ?? [];
+      const second = await fromTwilio(app, `${HOLD}&track=${next}`, live);
+      const [, playedNext, after] = /<Play>([^<]+)<\/Play><Redirect method="POST">[^<]*track=(\d+)</.exec(second.text) ?? [];
+      expect(playedNext).not.toBe(played);
+      expect(Number(after)).toBe(Number(next) + 1);
     });
 
     it('further back: "You are number 2 in line."', async () => {

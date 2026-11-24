@@ -6,6 +6,10 @@ const path = require('path');
 const { Client } = require('pg');
 
 const MIGRATIONS_DIR = path.join(__dirname, '..', 'src', 'db', 'migrations');
+// One runner at a time (review M36, 2026-11-22): two `npm run migrate` at once
+// both saw a file as pending and both applied it. A second waits here until the
+// first is done, then finds nothing pending. Any constant: this lock is ours.
+const RUNNER_LOCK = 4_702_215;
 
 async function main() {
   if (!process.env.DATABASE_URL) {
@@ -23,6 +27,7 @@ async function main() {
   await client.connect();
 
   try {
+    await client.query('SELECT pg_advisory_lock($1)', [RUNNER_LOCK]);
     await client.query(`
       CREATE TABLE IF NOT EXISTS schema_migrations (
         name       TEXT PRIMARY KEY,
@@ -57,6 +62,8 @@ async function main() {
 
     console.log(ran === 0 ? 'no pending migrations' : `applied ${ran} migration(s)`);
   } finally {
+    // Released by the session ending too; said so all the same.
+    await client.query('SELECT pg_advisory_unlock($1)', [RUNNER_LOCK]).catch(() => undefined);
     await client.end();
   }
 }

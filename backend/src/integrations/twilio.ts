@@ -9,6 +9,8 @@
 
 import twilio from 'twilio';
 import type VoiceResponse from 'twilio/lib/twiml/VoiceResponse';
+import { CALL_PARAMETER, RELAY_SETTINGS, relayUrl } from '../ai/relay-messages';
+import { greetingWithTone } from '../ai/tone';
 import { splitForListening, voicemailLine, type AskOrEnd, type CallScript, type CallStep } from '../core/call-script';
 import { identityFor, INCOMING_RING_SECONDS, MISSED_CALL_SPEECH, RECORDING_NOTICE } from '../core/calls';
 import type { TwilioSettings } from '../twilio-settings';
@@ -18,7 +20,6 @@ export const TOKEN_TTL_SECONDS = 60 * 60;
 
 export const VOICE_PATH = '/api/webhooks/twilio/voice';
 export const STATUS_PATH = '/api/webhooks/twilio/status';
-/** A lead calling our number. The phone number's Voice URL points here. */
 /** What the lead hears before a recorded call we placed is connected - the recording notice. */
 export const NOTICE_PATH = '/api/webhooks/twilio/notice';
 
@@ -47,6 +48,7 @@ function recordingAttributes(settings: TwilioSettings, callSid: string): Partial
 
 /** Twilio's verdict on who picked up a call we placed: a person or a machine. */
 export const AMD_PATH = '/api/webhooks/twilio/answered-by';
+/** A lead calling our number. The phone number's Voice URL points here. */
 export const INCOMING_PATH = '/api/webhooks/twilio/incoming';
 /** Where Twilio goes once ringing the agent is over, to ask what to say to the lead. */
 export const INCOMING_AFTER_PATH = '/api/webhooks/twilio/incoming/after';
@@ -262,6 +264,8 @@ export const AUTO_AFTER_PATH = '/api/webhooks/twilio/auto/after';
 export const AUTO_HOLD_PATH = '/api/webhooks/twilio/auto/hold';
 /** A lead on hold, now ringing the person who came free (T17). */
 export const AUTO_OFFER_PATH = '/api/webhooks/twilio/auto/offer';
+/** Seri's part of the call is over: what she ended it with, or why it failed (A13, A14). */
+export const AUTO_AI_AFTER_PATH = '/api/webhooks/twilio/auto/ai-after';
 
 /** The full address of one of those webhooks, for one call. */
 export function autoCallUrl(
@@ -355,6 +359,36 @@ export function autoCallTwiml(
 }
 
 /**
+ * The automated call connected to Seri - A13, docs/AI-AGENT.md section 2. In
+ * place of the script's first question, when she is switched on.
+ *
+ * Twilio opens her relay's WebSocket and says `greeting` itself, warmly
+ * (`greetingWithTone`), the moment it connects, with no wait on OpenAI - so
+ * no second of quiet first, unlike the script. The `<Parameter>` names our
+ * row, which the relay reads in `setup`; the relay's address carries
+ * nothing, since Twilio signs it as written (A02).
+ * Her voice and how she listens are `RELAY_SETTINGS`, as heard on the dev
+ * number. When her part ends - her action, a failure, or the lead hanging up -
+ * Twilio asks `/auto/ai-after` (A14) with the session's status.
+ */
+export function seriTwiml(settings: TwilioSettings, opts: { callId: number; greeting: string }): string {
+  const response = new twilio.twiml.VoiceResponse();
+  const connect = response.connect({
+    action: autoCallUrl(settings, AUTO_AI_AFTER_PATH, opts.callId),
+    method: 'POST',
+  });
+  // Written as A02's test calls wrote them; the library's typings spell a few
+  // differently (`ignorebackchannel`), and some not at all.
+  const relay = connect.conversationRelay({
+    url: relayUrl(settings.publicUrl),
+    welcomeGreeting: greetingWithTone(opts.greeting),
+    ...RELAY_SETTINGS,
+  } as VoiceResponse.ConversationRelayAttributes);
+  relay.parameter({ name: CALL_PARAMETER, value: String(opts.callId) });
+  return response.toString();
+}
+
+/**
  * A "yes" put through to people - T15a, AUTO-CALLS.md "The transfer".
  *
  * The lines, then - on a transfer's first ring of a recorded call - the
@@ -442,9 +476,23 @@ export const HOLD_MUSIC: readonly string[] = [
   'Mellotroniac_-_Flight_Of_Young_Hearts_Flute.mp3',
 ].map((file) => `https://s3.amazonaws.com/com.twilio.music.classical/${file}`);
 
-/** The track for a lead who has waited `waitedSeconds` - the next one each time a track ends. */
-export function holdTrack(waitedSeconds: number): string {
-  return HOLD_MUSIC[Math.floor(Math.max(0, waitedSeconds) / 60) % HOLD_MUSIC.length];
+/** The `index`th track, round the list. */
+export function holdTrack(index: number): string {
+  const n = HOLD_MUSIC.length;
+  return HOLD_MUSIC[((Math.trunc(index) % n) + n) % n];
+}
+
+/**
+ * Which track a lead on hold hears now: the one after the last they heard,
+ * counted on the hold page's own address (`track`), so each track ends into the
+ * next and none plays twice running. Counted by minutes waited, a first track
+ * ending between 6:00 and 6:59 began the list again (review M21, 2026-11-22).
+ * Sent back to hold from elsewhere - an offer not taken, the watcher - there is
+ * no count, and it goes by minutes waited, as before.
+ */
+export function holdTrackIndex(played: unknown, waitedSeconds: number): number {
+  const n = typeof played === 'string' && /^\d+$/.test(played) ? Number(played) : NaN;
+  return Number.isInteger(n) ? n : Math.floor(Math.max(0, waitedSeconds) / 60);
 }
 
 /**
@@ -460,6 +508,8 @@ export function holdTwiml(
     script: CallScript;
     say: readonly string[];
     track: string | null;
+    /** The count the hold page reads back after `track` ends - `holdTrackIndex` (review M21). */
+    nextTrack?: number;
     /**
      * Say the recording notice after the lines: a "yes" put on hold before
      * any ring - whoever takes them later is recorded from the moment they
@@ -473,7 +523,8 @@ export function holdTwiml(
   for (const line of opts.say) response.say(voice, line);
   if (opts.notice && settings.transcriptionServiceSid) response.say(voice, RECORDING_NOTICE);
   if (opts.track) response.play(opts.track);
-  response.redirect({ method: 'POST' }, autoCallUrl(settings, AUTO_HOLD_PATH, opts.callId));
+  const after: Record<string, number> = opts.track && opts.nextTrack !== undefined ? { track: opts.nextTrack } : {};
+  response.redirect({ method: 'POST' }, autoCallUrl(settings, AUTO_HOLD_PATH, opts.callId, after));
   return response.toString();
 }
 

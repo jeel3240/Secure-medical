@@ -147,7 +147,7 @@ Configuration shows each text and its segment count.
 
 | File | Holds |
 |---|---|
-| `core/state-machine.ts` | `step()`, `tierFor()`, `firstQuestion()` - every rule below, for any flow |
+| `core/state-machine.ts` | `step()`, `tierFor()` - every rule below, for any flow. A new lead's first question - the lowest position - is picked in SQL, `startConversation` (`db/flows.ts`) and `findOpenersNeverSent`; `firstQuestion()`, which only its tests called, was removed (review R12, Q6, 2026-11-23) |
 | `core/answers.ts` | `matchChoice()` - a reply against one question's choices |
 | `db/flows.ts` | Reads a flow; starts a conversation in the active one |
 | `api/reply-flow.ts` | Loads the conversation and its flow, runs `step`, saves the answer row, sends |
@@ -296,7 +296,10 @@ belongs to. From then on:
 
 `completed`, `review`, `expired` or `suppressed`: store the message, set
 `leads.has_unread_inbound`, send nothing. A human sees it on the lead. Already
-implemented.
+implemented. The conversation itself is not written to, nor on any reply that
+changes nothing in it (2b, 2d): its `updated_at` keeps saying when it last
+moved (`api/reply-flow.ts`; until review Q6, 2026-11-23, it was written back
+unchanged on every reply).
 
 ### Which replies need a person - Decided by Jeel, 2026-09-28
 
@@ -442,6 +445,16 @@ nothing is sent. The score so far stands.
   one that was stopped (`suppressed`), before the call or after. The SMS
   compose box no longer warns that sending will stop the questions.
 
+**A call Seri took** (Phase 7, `AI-AGENT.md`; added 2026-11-13, found in the
+doc check after A20): she asks no question, so there is no choice to keep -
+anything the lead said or pressed to her (`call_ai_turns`, `who = 'lead'`)
+is answering the call, and stops the questions as a choice on the script
+does. Not when the voicemail message took her call over (T18, A18): what she
+heard then was a machine's greeting. A call where the lead said nothing to her
+stops nothing, as silence on the script stops nothing. Before this, a
+"thanks" to the link she texted got Q1's "Sorry, please reply 1 for Yes or 2
+for No." - the fault 2d was written for.
+
 Not covered: an agent's own call that the lead answers. It goes to leads who
 have finished, as a rule; an agent who reaches one mid-questions texts, which
 is 2b.
@@ -449,7 +462,9 @@ is 2b.
 `core/state-machine.test.ts`; `scripts/agent-sms-live-check.ts` proves it
 through the real reply path - answered the robot, then "thanks" and "1";
 nothing understood on the call, then "1" answered; rang us, then a text; a
-call before a new conversation; a lead who finished, then rang - and the
+call before a new conversation; a lead who finished, then rang; talked to
+Seri, then "thanks"; a key pressed to her; she spoke and the lead said
+nothing; her call taken by the voicemail message (46 checks) - and the
 end-to-end script, through the webhook, with the link text (T25).
 
 ### 3. A valid answer to the current question
@@ -593,7 +608,7 @@ covers both kinds:
 
 | Case | Queue |
 |---|---|
-| Never replied, then expired | Not shown - the queue only ever shows responders |
+| Never replied, then expired | Not shown - a lead who never replied is in the queue only for a missed call, a missed "yes" on the automated call, or a due call back Seri booked (`QUEUE.md`, "Who is in it"), and expiry takes none of those away |
 | Replied at least once, then went quiet and expired | Not shown either |
 
 Both stay visible on Admin > Leads under Expired. *(2026-09-28: there is no
@@ -684,7 +699,13 @@ left it `expired`, set `has_unread_inbound`, and sent nothing.
 - **A send that timed out is not treated as refused** - calls to EZ Texting
   give up after 30 seconds, and a text cut off that way may still have gone
   out. Its row stays `sending`, so it is never sent a second time;
-  `db/outbound.ts`.
+  `db/outbound.ts`. **The first question is then taken as sent** (2026-11-22,
+  `docs/REVIEW-2026-11-22.md` H12): its reply window starts and
+  `question_sent_at` is set, so a reply counts as an answer and the robot can
+  call a lead who never answers. Taken as unsent, a reply in the next two
+  minutes was dropped - not scored, not flagged - and, the retry never sending
+  twice, the lead sat until it expired. A later text of the flow that timed out
+  flags the lead for a person, as any it could not send.
 - The database changes commit first, then the send happens. A failed send is
   logged and leaves the conversation where it is; it does not roll the answer
   back. The lead has answered, and losing that would be worse than a missing
