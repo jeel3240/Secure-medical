@@ -337,7 +337,7 @@ commit.
 | `ADMIN-LEADS.md` | The superadmin Leads page | That page or its API |
 | `QUEUE.md` | The agents' priority queue API: who is in it, the order, the tags | `GET /api/leads`, the queue query or the tag rules |
 | `AGENT-WORKSPACE.md` | The agent screens: claiming, timeline, notes, callbacks, dispositions, agent SMS | Any of those endpoints or screens |
-| `ADMIN.md` | Admin Overview, Configuration and DNC list, and why admin is read-only | An admin screen other than Leads or Agents |
+| `ADMIN.md` | Admin Overview, Configuration and DNC list, why admin is read-only, and its one control, Seri's switch | An admin screen other than Leads or Agents |
 | `LOGGING.md` | Log format and the health endpoints | Anything logged, or the health routes |
 | `FLOWS.md` | How SMS scripts are stored - flows, questions, choices, answers - why, and how to add one | A new or changed flow, or anything about how answers are stored |
 | `STATE-MACHINE.md` | The SMS flow: replies, scoring, expiry, sending, repeat leads. Overrides the mockup | The state machine, or any flow decision |

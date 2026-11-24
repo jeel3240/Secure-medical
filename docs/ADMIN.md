@@ -154,10 +154,13 @@ No script active: the card says so, and the link text is not listed. Read-only
 like the rest: the script and its settings change by migration (015, 018-021
 so far - 021 is "Calls at once", five for each person free, T29).
 
-**Seri is not on Admin (Phase 7, `AI-AGENT.md`).** Her switch is changed only
-by the server command, `npm run ai-agent -- on|off`, and recorded in the
-activity log; her knowledge files are in the repo, not the database. The Calls
-tab shows the script she falls back to, not her. What she did on each call is
+**Seri on Admin (Phase 7, `AI-AGENT.md`)** is one card, since 2026-11-24:
+her switch, on the Calls tab - Switch on / Switch off, as the server command
+`npm run ai-agent -- on|off` does, each change in the activity log ("One
+exception, Seri's switch", above). Nothing else of hers is here: her knowledge
+files are in the repo, not the database, and the Calls tab's script is the one
+she falls back to. *(Until 2026-11-24: "Seri is not on Admin" - the command was
+the only way.)* What she did on each call is
 on the lead's timeline and in Admin > Leads' Call column ("Callback booked").
 
 ## Overview (6a)

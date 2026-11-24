@@ -14,6 +14,9 @@
  *
  * Read-only: Jeel's decision, 2026-09-23. Changes go through a numbered
  * migration and a PR. There is no writer here and there should not be one.
+ * Seri's switch, which the page can change since 2026-11-24, is only read here
+ * (`aiAgent`); it is written by `switchAiAgent` (`ai/settings.ts`), the same
+ * for the command and the page's button.
  */
 
 import { expiryDays } from './sql';
