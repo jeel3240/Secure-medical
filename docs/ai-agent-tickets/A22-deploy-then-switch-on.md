@@ -32,7 +32,8 @@ both `-f` files, as production runs:
 - `ai_agent` stays `off` (022 seeds it): calls go on exactly as today, the
   script from its first question.
 - Next calling day, switch her on - no restart, recorded in the activity log,
-  refused without the key:
+  refused without the key: the Seri card on Admin > Configuration's Calls tab
+  (since 2026-11-24), or
   `docker compose -f docker-compose.yml -f docker-compose.prod.yml exec api npm run ai-agent -- on`
 - Watch the first calls: each lead's timeline shows her conversation under the
   call (A19), and the logs are in CloudWatch, log group `/leads-app`, streams

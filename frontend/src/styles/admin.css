@@ -18,6 +18,20 @@
   }
 }
 
+/* The Calls tab's right column: Seri's card above the call settings (2026-11-24). */
+.config__side {
+  display: grid;
+  gap: var(--space-4);
+  align-content: start;
+}
+
+/* A card's one action, at its foot - Seri's switch. */
+.card-actions {
+  display: flex;
+  justify-content: flex-end;
+  padding: var(--space-3) var(--space-5) var(--space-4);
+}
+
 /* A card's title row: the title, and a quiet word on what the card holds. */
 .card-head {
   display: flex;

@@ -106,7 +106,8 @@ to a person as Inbound reply, never an automated "sorry" (`STATE-MACHINE.md`
 
 **Seri, the AI agent** (Phase 7, `AI-AGENT.md`) - built, not yet deployed
 (2026-11-13). Off by default: her switch, `settings.ai_agent`, is seeded `off`,
-changed only by `npm run ai-agent -- on|off`, and off whatever it says while
+changed by `npm run ai-agent -- on|off` or the Seri card on Admin >
+Configuration's Calls tab (2026-11-24), and off whatever it says while
 `OPENAI_API_KEY` is empty. On, an answered automated call goes to her instead
 of the script's first question. She answers questions and ends the call one
 of five ways: put through to a person (the script's own transfer and hold

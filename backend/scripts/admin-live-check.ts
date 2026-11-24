@@ -192,8 +192,13 @@ async function main(): Promise<void> {
       callbackNumber: null,
     });
 
-    const live = await getAdminConfig({ autoCalls: true, callbackNumber: '+14805308582', recorded: true });
+    const live = await getAdminConfig({ autoCalls: true, callbackNumber: '+14805308582', recorded: true, openAiKeySet: true });
     check('on, with the number the voicemail gives', [live.callSettings.on, live.callSettings.callbackNumber], [true, '+14805308582']);
+    // Seri's switch, as stored, and whether her key is set (Jeel, 2026-11-24).
+    check("Seri's switch: off as migration 022 seeds it, the key set", live.aiAgent, { on: false, keySet: true });
+    await pool.query(`UPDATE settings SET value = 'on' WHERE key = 'ai_agent'`);
+    check('switched on: shown on, at once', (await getAdminConfig()).aiAgent, { on: true, keySet: false });
+    await pool.query(`UPDATE settings SET value = 'off' WHERE key = 'ai_agent'`);
     check('recorded: the notice, after a yes and before anyone joins', live.callScript?.lines.map((l) => l.key).slice(9, 12), ['stop', 'notice', 'hold']);
 
     await pool.query(`UPDATE settings SET value = '30' WHERE key = 'auto_call_ring_seconds'`);

@@ -2,9 +2,11 @@
  * Whether Seri, the AI agent, runs the automated call - docs/AI-AGENT.md,
  * section 7.
  *
- * The switch is `settings.ai_agent`, changed only by the server command
- * (`cli/ai-agent.ts`, through `switchAiAgent` below) - production's database is
- * never edited by hand (WORKFLOW.md). It is read on every call, so the next
+ * The switch is `settings.ai_agent`, changed by the server command
+ * (`cli/ai-agent.ts`) or, since 2026-11-24 (Jeel), by a superadmin on Admin >
+ * Configuration's Calls tab (`api/admin/config.ts`) - both through
+ * `switchAiAgent` below; production's database is never edited by hand
+ * (WORKFLOW.md). It is read on every call, so the next
  * call follows it with no restart, and a call already talking to Seri goes on.
  *
  * Seri also needs `OPENAI_API_KEY`: on without a key is off.
@@ -73,6 +75,9 @@ export interface SwitchResult {
   changed: boolean;
 }
 
+/** Who switched it: the server command, run by no user of the app, or a superadmin on the website. */
+export type SwitchedBy = { via: 'command' } | { via: 'website'; userId: number };
+
 /**
  * Sets the switch, and records the change in the activity log in the same
  * transaction - `ai_agent.switched` (docs/AUDIT.md): the row is overwritten, so
@@ -80,10 +85,10 @@ export interface SwitchResult {
  * nothing. One switch at a time, row or no row, as `recordAutoCallsSwitch`
  * does.
  *
- * Run by someone on the server, who is no user of the app: the record's actor
- * is null, and `via` says it was the command.
+ * `via` says how: the command, with no actor - someone on the server - or the
+ * website, with the superadmin who clicked as the actor.
  */
-export async function switchAiAgent(pool: Pool, to: AiAgentSwitch): Promise<SwitchResult> {
+export async function switchAiAgent(pool: Pool, to: AiAgentSwitch, by: SwitchedBy = { via: 'command' }): Promise<SwitchResult> {
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
@@ -101,8 +106,8 @@ export async function switchAiAgent(pool: Pool, to: AiAgentSwitch): Promise<Swit
     );
     await recordActivity(client, {
       action: 'ai_agent.switched',
-      actorId: null,
-      detail: { from, to, via: 'command' },
+      actorId: by.via === 'website' ? by.userId : null,
+      detail: { from, to, via: by.via },
     });
     await client.query('COMMIT');
     return { from, to, changed: true };

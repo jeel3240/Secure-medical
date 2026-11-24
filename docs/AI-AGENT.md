@@ -510,7 +510,7 @@ Decided by Jeel, 2026-11-11.
 | | Where | What |
 |---|---|---|
 | `OPENAI_API_KEY` | Server `.env` (and local), passed to the api and the worker | From the client, 2026-11-09. Never in the repo. **Without it the AI agent is off, whatever the switch says** |
-| **AI agent on/off** | `settings.ai_agent`, changed only by `npm run ai-agent -- on` or `-- off` | On: Seri runs every call. Off: today's script. **Read on every call, so it changes without a restart** - switching it off at 2 PM cuts off no live call |
+| **AI agent on/off** | `settings.ai_agent`, changed by `npm run ai-agent -- on` or `-- off`, or since 2026-11-24 by a superadmin's button on Admin > Configuration's Calls tab | On: Seri runs every call. Off: today's script. **Read on every call, so it changes without a restart** - switching it off at 2 PM cuts off no live call |
 
 **As built (A01, 2026-11-11):**
 
@@ -519,7 +519,8 @@ Decided by Jeel, 2026-11-11.
 - **`on` is refused without `OPENAI_API_KEY`**, and nothing is written.
 - **On without a key counts as off** - the key was taken out of `.env` after switching on, say. Calls go to the script, and the first such call logs `ai_agent.no_key` once.
 - **Not a reason to refuse to start**, unlike a half-set Twilio group (`api/startup-checks.ts`): the switch changes while the API runs, so a startup check would catch it only at the next restart - and would take down the queue, the texts and every screen for something whose fallback is today's script.
-- The code: `backend/src/ai/settings.ts` (reading and writing the switch), `backend/src/cli/ai-agent.ts` (the command); the key is `config.openai.apiKey`, passed to the api and the worker by `docker-compose.yml`.
+- **A button too, since 2026-11-24** (Jeel): "Seri - On / Off" on Admin > Configuration's Calls tab, superadmin only, with a confirm step - so she can be stopped from any browser, by someone who cannot reach the server. `POST /api/admin/config/ai-agent` (`api/admin/config.ts`), through the same `switchAiAgent`: on refused without the key (`409 no_key`; off always allowed), the change recorded as `ai_agent.switched` with the superadmin as the actor and `via: 'website'` (`via: 'command'` for the command), and logged `ai_agent.switched`. The card says what follows: robot calls go to Seri, use the script, get the script for want of a key, or none go at all with automated calls off. The command stays. Tests: `api/__tests__/admin-screens.test.ts`, `frontend/src/pages/admin/ConfigSeri.test.tsx`, `activity-live-check`, `admin-live-check`; not yet seen in a browser.
+- The code: `backend/src/ai/settings.ts` (reading and writing the switch), `backend/src/cli/ai-agent.ts` (the command), `backend/src/api/admin/config.ts` (the button's route); the key is `config.openai.apiKey`, passed to the api and the worker by `docker-compose.yml`.
 - **Packages:** `openai` 6.x and `ws` 8 (with `@types/ws`). `openai` 7 needs Node 22, and the app runs Node 20 (`node:20-alpine`), so it stays on 6 until Node is upgraded - a change of its own.
 
 **Rollout** (Jeel, 2026-11-11): no partial share, no comparison report.

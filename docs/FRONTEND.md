@@ -904,6 +904,20 @@ The website's code-quality findings (Q7, Q8), on `fix/review-quality-frontend`:
 - **Not seen in a browser:** each is proved by its tests and the build; the
   name links and the dialog focus were not looked at on screen.
 
+## Seri's switch on Configuration - 2026-11-24
+
+Jeel: a button to switch Seri on and off, so she can be stopped from a
+browser. The Calls tab's right column now holds a **Seri** card above the call
+settings (`.config__side`): her state, a line on what follows - robot calls go
+to her, use the script, get the script for want of the key, or none go at all
+with automated calls off (`seriState`, pure) - and Switch on / Switch off
+behind a confirm step. Switch on cannot be pressed without the key. After a
+switch the page reads the config again. `ConfirmDialog` moved out of the
+Agents page into `components/` for it - one copy for both. The page's line now
+says it is read-only "apart from Seri's switch, on Calls".
+`pages/admin/ConfigSeri.test.tsx`: each state's words, the confirm then the
+switch, Cancel, and no Switch on without the key. Not yet seen in a browser.
+
 ## Not built
 
 - ~~**Calling.**~~ Built 2026-10-01, Phase 4 - `TWILIO.md`. Outgoing, and

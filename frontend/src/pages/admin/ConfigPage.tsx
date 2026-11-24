@@ -1,8 +1,10 @@
-import { Fragment, useCallback, type ReactNode } from 'react';
+import { Fragment, useCallback, useState, type ReactNode } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { getConfig, type AdminConfig } from '../../api/admin';
+import { getConfig, setAiAgent, type AdminConfig } from '../../api/admin';
 import { usePolling } from '../../api/usePolling';
 import { Banner } from '../../components/Banner';
+import { Button } from '../../components/Button';
+import { ConfirmDialog } from '../../components/ConfirmDialog';
 import { LiveStatus } from '../../components/LiveStatus';
 import { Segmented, type SegmentedOption } from '../../components/Segmented';
 import { Spinner } from '../../components/Spinner';
@@ -113,7 +115,7 @@ export function readConfigTab(raw: string | null): ConfigTab {
 
 export function ConfigPage() {
   const fetcher = useCallback(() => getConfig(), []);
-  const { data, loading, error, updatedAt } = usePolling<AdminConfig>(fetcher);
+  const { data, loading, error, updatedAt, refresh } = usePolling<AdminConfig>(fetcher);
   const [params, setParams] = useSearchParams();
   const tab = readConfigTab(params.get('tab'));
   // Replaces the address, so Back leaves the page rather than stepping through tabs.
@@ -136,7 +138,7 @@ export function ConfigPage() {
           <h1 className="page-title">Configuration</h1>
           <p className="page-subtitle">
             The live values the texts and the automated calls are using. Read-only - changes go
-            through a pull request.
+            through a pull request - apart from Seri's switch, on Calls.
           </p>
         </div>
         <div className="page-header__status">
@@ -165,7 +167,10 @@ export function ConfigPage() {
         {tab === 'calls' && (
           <>
             <CallScriptCard script={data.callScript} callbackNumber={data.callSettings.callbackNumber} />
-            <CallSettingsCard settings={data.callSettings} />
+            <div className="config__side">
+              <SeriCard aiAgent={data.aiAgent} autoCalls={data.callSettings.on} onChanged={refresh} />
+              <CallSettingsCard settings={data.callSettings} />
+            </div>
           </>
         )}
       </div>
@@ -347,6 +352,90 @@ function CallScriptCard({
             messages.
           </p>
         </>
+      )}
+    </section>
+  );
+}
+
+/**
+ * What Seri's card says - pure, for the test. Whether the robot's calls go to
+ * her: the switch on, her key set, and automated calls on.
+ */
+export function seriState(aiAgent: AdminConfig['aiAgent'], autoCalls: boolean): {
+  label: 'On' | 'Off';
+  note: string | null;
+  canSwitchOn: boolean;
+} {
+  const label = aiAgent.on ? 'On' : 'Off';
+  if (!aiAgent.keySet) {
+    return {
+      label,
+      note: aiAgent.on ? 'On, but OPENAI_API_KEY is not set: calls get the script.' : 'OPENAI_API_KEY is not set on the server.',
+      canSwitchOn: false,
+    };
+  }
+  if (!autoCalls) return { label, note: 'Automated calls are off: no call goes to her either way.', canSwitchOn: true };
+  return {
+    label,
+    note: aiAgent.on ? 'Robot calls go to Seri.' : 'Robot calls use the script.',
+    canSwitchOn: true,
+  };
+}
+
+/**
+ * Seri's switch - Jeel, 2026-11-24: the one thing on this page that changes
+ * anything, so she can be stopped from a browser rather than a command on the
+ * server. A confirm step, and the change is in the activity log by whoever
+ * clicked. AI-AGENT.md section 7.
+ */
+function SeriCard({
+  aiAgent,
+  autoCalls,
+  onChanged,
+}: {
+  aiAgent: AdminConfig['aiAgent'];
+  autoCalls: boolean;
+  onChanged: () => Promise<void>;
+}) {
+  const [confirming, setConfirming] = useState(false);
+  const state = seriState(aiAgent, autoCalls);
+  const turningOn = !aiAgent.on;
+
+  return (
+    <section className="card table-card">
+      <header className="card-head">
+        <h2 className="card-head__title">Seri</h2>
+        <span className="card-head__meta">The AI agent on the robot's calls</span>
+      </header>
+      <dl className="kv">
+        <div className="kv__row">
+          <dt>Seri</dt>
+          <dd>{state.label}</dd>
+        </div>
+      </dl>
+      {state.note && <p className="card-note">{state.note}</p>}
+      <div className="card-actions">
+        <Button variant="secondary" disabled={turningOn && !state.canSwitchOn} onClick={() => setConfirming(true)}>
+          {turningOn ? 'Switch on' : 'Switch off'}
+        </Button>
+      </div>
+      {confirming && (
+        <ConfirmDialog
+          title={turningOn ? 'Switch Seri on?' : 'Switch Seri off?'}
+          confirmLabel={turningOn ? 'Switch on' : 'Switch off'}
+          onConfirm={async () => {
+            await setAiAgent(turningOn);
+            setConfirming(false);
+            await onChanged();
+          }}
+          onClose={() => setConfirming(false)}
+        >
+          <p>
+            {turningOn
+              ? 'The next robot call goes to Seri. A call already under way goes on as it is.'
+              : 'The next robot call uses the script. A call already with Seri finishes with her.'}
+          </p>
+        </ConfirmDialog>
       )}
     </section>
   );
