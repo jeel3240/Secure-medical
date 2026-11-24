@@ -10,6 +10,13 @@ rules, tier bands, message copy, expiry and the DNC list are shown, not edited.
 The reasoning and the full before/after are in CLAUDE.md §10, "Phases, and what
 Phase 3 is". Changes go through a numbered migration and a PR.
 
+**One exception, Seri's switch - Jeel, 2026-11-24.** Configuration's Calls tab
+has a "Seri" card with Switch on / Switch off, superadmin only, behind a
+confirm step. It changes nothing she says, only whether the robot's calls go
+to her, and a button stops her faster than a command on the server. The same
+switch as `npm run ai-agent`: on refused without `OPENAI_API_KEY`, each change
+in the activity log by whoever clicked (`AI-AGENT.md` section 7).
+
 **Built 2026-09-26** (Phase 3 tasks 10, 11 and 12): all three endpoints -
 `api/admin/config.ts`, `api/admin/overview.ts`, `api/admin/dnc.ts`, over
 `db/admin-config.ts`, `db/admin-overview.ts`, `db/admin-dnc.ts`. The screens

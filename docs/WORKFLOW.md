@@ -183,7 +183,9 @@ that are not there yet. Put `OPENAI_API_KEY` in the server's `.env` before that
 recreate both with the same `-f` files (`up -d api worker` - a `restart` keeps
 the old environment). She stays off: 022 seeds `ai_agent` as `off`, and calls
 go on exactly as today. To switch her on - and off again at any time, with no
-restart; recorded in the activity log; `on` is refused without the key:
+restart; recorded in the activity log; `on` is refused without the key - use
+the Seri card on Admin > Configuration's Calls tab (since 2026-11-24), or on
+the server:
 
 ```bash
 docker compose -f docker-compose.yml -f docker-compose.prod.yml exec api npm run ai-agent -- on

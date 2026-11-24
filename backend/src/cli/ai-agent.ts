@@ -7,8 +7,9 @@
  * The switch is read on every call, so the next call follows it with no
  * restart, and a call already with Seri goes on. Each change is one row in the
  * activity log. `on` is refused without OPENAI_API_KEY, and nothing is
- * written. This command is the only way the switch changes: production's
- * database is never edited by hand (WORKFLOW.md).
+ * written. This command and the Seri card on Admin > Configuration (since
+ * 2026-11-24, `api/admin/config.ts`) are the ways the switch changes:
+ * production's database is never edited by hand (WORKFLOW.md).
  */
 import { config } from '../config';
 import { parseSwitchArgs, switchAiAgent, switchRefusal } from '../ai/settings';
