@@ -42,6 +42,11 @@ both `-f` files, as production runs:
 - Off again at any time with `-- off`: a call already with her finishes; the
   next call gets the script.
 
+## Progress
+
+- **Deployed, 2026-11-24, with Seri off.** `dev` into `main` through PR #31 - every fix of the review (`docs/REVIEW-2026-11-22.md`) and her switch on Admin > Configuration with it. On the server: `OPENAI_API_KEY` in `.env`, `up -d --build` - Caddy and the worker recreated, Caddy by itself as its settings changed - and the migrations: 022, 023 and 024 applied at 23:29 UTC (4:29 PM Arizona time), read back from `schema_migrations`.
+- **Next:** her card on Admin > Configuration's Calls tab saying Off with the key set; then, in the calling hours, switched on and the first real calls watched.
+
 ## Done when
 
 - [ ] Deployed with Seri off and nothing changed; then on, and the first real Seri calls look right.

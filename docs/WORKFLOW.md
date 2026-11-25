@@ -114,9 +114,11 @@ second part's SQL there once.
 *(The `004` on disk today, `004_conversation_completed_at.sql`, is a later and
 unrelated file.)*
 
-**Where the files stand - 2026-11-13.** `main` holds 001 to 021 - 021, five
-automated calls at once for each person free (T29, `AUTO-CALLS.md`
-"Traffic"), reached it through PR #29. 022 is on `dev`: Seri, the AI agent
+**Where the files stand - 2026-11-24.** `main` and production hold 001 to
+024: 021, five automated calls at once for each person free (T29,
+`AUTO-CALLS.md` "Traffic"), through PR #29; 022 to 024 through PR #31,
+applied on production 2026-11-24 at 23:29 UTC. The next migration is 025.
+*(Until then:)* 022 was on `dev`: Seri, the AI agent
 (Phase 7, `AI-AGENT.md`) - new columns on `calls` and `callbacks`, a new
 add-only table, `call_ai_turns`, and the `ai_agent` setting, seeded `off`. It
 changes no existing row; the app writes to the new parts only on a call Seri
