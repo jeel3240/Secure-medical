@@ -267,6 +267,33 @@ existing contact keeps its original `createdAt` unless an update resets it,
 which has not been checked. This matters to the poller, which finds new leads
 by `createdAt`: see POLLER.md, "Not done yet".
 
+**Checked 2026-11-27 on the test account: nothing moves.** A made-up number
+(+1 480 555 0142) was created through `POST /v1/contacts` in a new group A,
+then added to two more new groups, 75 seconds apart each, and read back after
+each step with `GET /v1/contacts/{phoneNumber}` and the poller's own list
+query on that group. Everything was deleted afterwards; nothing was texted.
+
+| Step | Response | `createdAt` (UTC) | Groups |
+|---|---|---|---|
+| `POST /v1/contacts`, `groupIdsAdd: [A]` - a new number | 201, `{"id": "<phone>"}` | 22:48:45 | A |
+| `POST /v1/contacts` again, the same number, `groupIdsAdd: [B]` - the partner's way | **200**, `{"id": "<phone>"}` - updated, not refused | 22:48:45 | A, B |
+| `POST /v1/contact-groups/{C}/contacts?phoneNumbers=<phone>` | 200, `["<phone>"]` | 22:48:45 | A, B, C |
+
+- **A number delivered again updates the existing contact**, adds the new
+  group and keeps the old ones. Only the partner sees the 200-not-201; nothing
+  on the contact tells us.
+- **`createdAt` never moves**, by either path.
+- **There is no `updatedAt`.** The API reference lists one ("Last
+  modification date") on the contact, but neither `GET /v1/contacts/{phone}`
+  nor the list returns it - the keys are `phoneNumber`, `firstName`,
+  `lastName`, `source`, `values`, `createdAt`, `optOut`, `groups`.
+  `sort=updatedAt,desc` is accepted, which proves nothing (see "Filters that
+  are silently ignored").
+- **What does change is `groups[]`.** A contact the poller already took in for
+  one group, seen again in a group it was not in, is the only sign of a
+  return - and the poller can only see it by reading that group past its
+  `createdAt` cutoff.
+
 ## STOP handling
 
 Verified 2026-09-19 by texting STOP to the account's number from Jeel's phone.

@@ -771,7 +771,8 @@ conversation expired - that is handled under "Expiry".
 **Not built.** Today the poller skips a phone it already holds: no new
 conversation, no text. The rules below are decided and wait for a check on
 whether a returning number can be detected at all - CLAUDE.md §10, "Future:
-repeat leads".
+repeat leads". *(Checked 2026-11-27: not by date - `createdAt` does not move
+on a return. EZTEXTING-API.md, "One contact per phone number".)*
 
 When built: when the poller finds a contact whose phone is already in `leads`, it decides
 from the number's block status and its **newest** conversation. Decided by
