@@ -96,6 +96,13 @@ is what the score is for - `DESIGN-PROMPT.md` section 2, "sorted by score then
 freshness". Id last so the order never wobbles between two identical rows.
 The page says so: "Highest score first, then newest."
 
+*(2026-11-27, Jeel - decided, not built: **tier first, then newest.** After the
+promised calls, as today: HOT leads newest first, then WARM newest first, then
+LOW. Score first keeps a HOT 90 that has waited five days above a HOT 85 that
+arrived two minutes ago, and speed to contact is what the score is for. The
+page's line changes with it. Raised while planning several buckets,
+`BUCKETS.md`, but built on its own.)*
+
 **A missed "yes" comes before all of it - T22, 2026-10-24.** The lead said yes
 to talking to a person, and was told an agent would call them back shortly.
 Nothing in the queue is warmer, and with no score it would otherwise sink to

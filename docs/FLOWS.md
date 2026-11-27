@@ -238,6 +238,7 @@ the inactive flow `wellness`, and every answer already given was copied into
   The tables are what such a screen would edit; it is a later phase.
 - **Several flows at once.** One flow is active. `flows.ezt_group` is there to
   give each EZ Texting group its own flow; the poller does not read it yet.
+  *(2026-11-27: planned as Phase 8, a flow per bucket - `BUCKETS.md`.)*
 - **A question that is not a choice** - a date, a free-text answer. Every
   question is a list of choices.
 - **The maximum score** on Admin > Configuration is the awards plus the best

@@ -426,6 +426,15 @@ sees it and none of the rules ever run. This can be checked on the test account:
 add a contact through the API that already exists in the group, and see whether
 its `createdAt` moves.
 
+*(Checked 2026-11-27: it does not. A number delivered again updates the
+existing contact - 200, the new group added beside the old - and `createdAt`
+stays as it was; there is no `updatedAt` either. A return shows only in the
+contact's `groups[]`, so the poller cannot find one by date: it has to read
+the group past its cutoff, or EZ Texting's groups have to be used another way.
+EZTEXTING-API.md, "One contact per phone number". The same holds for a
+contact added to a second group - several buckets, `BUCKETS.md`, which
+plans a way round it: two groups per bucket.)*
+
 **No page cap.** A checkpoint set far in the past would walk the whole group in
 one cycle - 36 requests for a 1,773-contact group at 50 a page, far more for the full
 account. Harmless at 50-100 leads a day, but unbounded.

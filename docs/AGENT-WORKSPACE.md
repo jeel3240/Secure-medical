@@ -313,7 +313,10 @@ outcome clears the lead's unread flag, as opening it does, and now records
 `reply.read` by whoever saved it, `because: 'outcome'`.
 
 **Two: `closed` and `dnc` - Jeel, 2026-09-28.** Wrap up has two outcome
-buttons, Closed and DNC, then the callback and the note.
+buttons, Closed and DNC, then the callback and the note. *(2026-11-27, planned
+for Phase 8: Closed opens a popup asking why - Sold, Not interested or Wrong
+number - so a closed lead knows whether a new bucket may start. `BUCKETS.md`,
+"A closed lead joins a new bucket". Not built.)*
 
 There were eight - Interested, Callback set, No answer, Voicemail, Not
 interested, Wrong number and DNC, plus Sold for part of that day. The
