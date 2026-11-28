@@ -5,12 +5,13 @@
  * antibiotics flow. No table, no column and no code is added for it.
  *
  * Also proves what migration 012 seeded, and that the two flows do not leak
- * into each other: a lead stays in the flow it started in.
+ * into each other: a lead stays in the flow it started in; and what 026 (B07)
+ * added - every flow in a bucket, one active flow per bucket.
  *
  * It writes rows, so it refuses to run against a database that holds any:
  * `scripts/live-checks.sh flows` gives it a scratch database.
  */
-import { check, failureCount, verdict } from './check';
+import { check, failureCount, rolledBack, verdict } from './check';
 import { getAdminConfig } from '../src/db/admin-config';
 import { loadFlow, startConversation } from '../src/db/flows';
 import { getLeadDetail } from '../src/db/lead-detail';
@@ -64,9 +65,14 @@ async function main(): Promise<void> {
     check('every text names eDrugstore, never Secure Medical',
       antibiotics.questions.some((q) => /secure medical/i.test(q.body + q.clarifyBody)) || /secure medical/i.test(antibiotics.reviewBody), false);
     let refused = '';
-    await pool.query(`INSERT INTO flows (key, name, responded_points, review_body, is_active) VALUES ('second', 'Second', 10, 'x', true)`).catch((err: Error) => {
-      refused = err.message;
-    });
+    await pool
+      .query(
+        `INSERT INTO flows (key, name, responded_points, review_body, is_active, bucket_id)
+         VALUES ('second', 'Second', 10, 'x', true, (SELECT id FROM buckets WHERE key = 'antibiotics'))`
+      )
+      .catch((err: Error) => {
+        refused = err.message;
+      });
     check('only one flow can be the one new leads get', /flows_one_active/.test(refused), true);
 
     // The rules a migration adding a flow is held to, by the database.
@@ -80,7 +86,10 @@ async function main(): Promise<void> {
     check(
       'a flow cannot award nothing for replying: "score above 0" is how a reply is known',
       /responded_points/.test(
-        await refusedBy(`INSERT INTO flows (key, name, responded_points, review_body) VALUES ('zero', 'Zero', 0, 'x')`)
+        await refusedBy(
+          `INSERT INTO flows (key, name, responded_points, review_body, bucket_id)
+           VALUES ('zero', 'Zero', 0, 'x', (SELECT id FROM buckets WHERE key = 'antibiotics'))`
+        )
       ),
       true
     );
@@ -94,6 +103,61 @@ async function main(): Promise<void> {
       ),
       true
     );
+  }
+
+  console.log('\nevery flow in a bucket, one active per bucket (026)');
+  {
+    check('one bucket, antibiotics', (await pool.query(`SELECT key, name FROM buckets ORDER BY id`)).rows, [
+      { key: 'antibiotics', name: 'Antibiotics' },
+    ]);
+    check(
+      'both flows are in it - the retired one too, which every conversation from before 2026-10-05 is on',
+      (await pool.query(`SELECT f.key, b.key AS bucket FROM flows f JOIN buckets b ON b.id = f.bucket_id ORDER BY f.id`)).rows,
+      [
+        { key: 'wellness', bucket: 'antibiotics' },
+        { key: 'antibiotics', bucket: 'antibiotics' },
+      ]
+    );
+
+    // A flow as a migration adding one would write it, in the bucket named.
+    const flow = (key: string, bucket: string, active: boolean) =>
+      `INSERT INTO flows (key, name, responded_points, review_body, is_active, bucket_id)
+       VALUES ('${key}', '${key}', 10, 'x', ${active}, (SELECT id FROM buckets WHERE key = '${bucket}'))`;
+    const twoBuckets = `INSERT INTO buckets (key, name) VALUES ('second', 'Second')`;
+
+    const sameBucket = await rolledBack(pool, async (tried) => {
+      // Both indexes would refuse it; the old one goes - in this transaction
+      // only - so the refusal is the bucket's own.
+      await tried('DROP INDEX flows_one_active');
+      return tried(flow('again', 'antibiotics', true));
+    });
+    check('a second active flow in the same bucket is refused, by the bucket\'s index', sameBucket, 'flows_one_active_per_bucket');
+
+    const [inTheOther, withoutTheOld] = await rolledBack(pool, async (tried) => {
+      await tried(twoBuckets);
+      const refused = await tried(flow('other', 'second', true));
+      await tried('DROP INDEX flows_one_active');
+      return [refused, await tried(flow('other', 'second', true))];
+    });
+    check('an active flow in each of two buckets: the old index, still there, refuses it', inTheOther, 'flows_one_active');
+    check('and the bucket\'s index alone allows it', withoutTheOld, 'allowed');
+
+    const noBucket = await rolledBack(pool, (tried) =>
+      tried(`INSERT INTO flows (key, name, responded_points, review_body) VALUES ('loose', 'Loose', 10, 'x')`)
+    );
+    check('a flow in no bucket is refused', /null value in column "bucket_id"/.test(noBucket), true);
+    check(
+      'a flow in a bucket that does not exist is refused',
+      await rolledBack(pool, (tried) =>
+        tried(`INSERT INTO flows (key, name, responded_points, review_body, bucket_id) VALUES ('ghost', 'Ghost', 10, 'x', 999999)`)
+      ),
+      'flows_bucket_fk'
+    );
+    const noFlow = await rolledBack(pool, async (tried) => {
+      await tried(`INSERT INTO leads (phone, first_name, source) VALUES ('+15550000899', 'Loose', 'API')`);
+      return tried(`INSERT INTO conversations (lead_id, status, step) SELECT id, 'open', 1 FROM leads WHERE phone = '+15550000899'`);
+    });
+    check('a conversation in no flow is refused: it would be in no bucket', /null value in column "flow_id"/.test(noFlow), true);
   }
 
   console.log('\na lead in the antibiotics flow');
@@ -167,8 +231,8 @@ async function main(): Promise<void> {
     // What a migration for a new group would contain - nothing but inserts.
     await pool.query(`UPDATE flows SET is_active = false`);
     await pool.query(
-      `INSERT INTO flows (key, name, responded_points, completed_points, review_body, is_active)
-       VALUES ('weight', 'Weight loss', 5, 15, 'Thanks! Someone will be in touch.', true)`
+      `INSERT INTO flows (key, name, responded_points, completed_points, review_body, is_active, bucket_id)
+       VALUES ('weight', 'Weight loss', 5, 15, 'Thanks! Someone will be in touch.', true, (SELECT id FROM buckets WHERE key = 'antibiotics'))`
     );
     await pool.query(
       `INSERT INTO flow_questions (flow_id, key, position, body, clarify_body, heading)

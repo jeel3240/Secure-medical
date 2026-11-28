@@ -167,8 +167,8 @@ async function main(): Promise<void> {
     const id = lead.rows[0].id;
 
     await pool.query(
-      `INSERT INTO conversations (lead_id, status, step, expires_at)
-       VALUES ($1, 'open', 1, now() - interval '1 day')`,
+      `INSERT INTO conversations (lead_id, flow_id, status, step, expires_at)
+       VALUES ($1, (SELECT id FROM flows WHERE is_active), 'open', 1, now() - interval '1 day')`,
       [id]
     );
 

@@ -62,8 +62,11 @@ scripts/live-checks.sh harness-upgrade-check  # an upgrade check, by its whole n
 - Each check refuses to run against a database that holds leads (the presence
   check: users). Its header comment gives the command to run it by hand.
 - Every check uses the one `check()` in `backend/scripts/check.ts`, which compares
-  values whatever the order of their keys and prints the verdict the runner reads;
-  `backend/scripts/live-flow.ts` puts a check's lead somewhere in a flow through
+  values whatever the order of their keys and prints the verdict the runner reads.
+  Beside it, `refusedBy` names the constraint that refused a row, and `rolledBack`
+  tries statements in a transaction that is always rolled back - for a check that
+  must drop an index, or add a second bucket, without the checks after it seeing
+  that. `backend/scripts/live-flow.ts` puts a check's lead somewhere in a flow through
   the real reply path, so it has the rows a real lead has. Nothing is sent.
 
 Which check proves what is in each area doc's Tests table.
@@ -241,6 +244,7 @@ What it checks is `DOCS.md`, "Checking a doc".
 
 ## History
 
+- 2026-11-28 · `check.ts`'s `refusedBy` (B04) and `rolledBack` written down; `buckets-upgrade-check`, the third upgrade check · B07
 - 2026-11-28 · "When it goes wrong": an upgrade check's last step, which migrates the rest, prints `migrate.js failed` with no `--to` (`scripts/upgrade.ts`, `migrateTo`) · review of B01-B06
 - 2026-11-28 · Upgrade checks: `migrate.js --to`, `scripts/upgrade.ts`, `live-checks.sh` leaving an upgrade check's database to it, and the first check, `harness-upgrade-check` · B03
 - 2026-11-27 · Written from `docs/README.md`'s "How to test", `FRONTEND.md`'s test commands and `FLOWS.md`'s "Testing a flow with one phone"; the counts of tests and checks dropped, as they drift; the claim that the server's image holds `scripts/` corrected - since review H13 it holds only `dist/`, `scripts/migrate.js` and the migrations · D06, D14, D29

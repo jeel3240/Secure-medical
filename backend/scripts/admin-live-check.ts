@@ -65,8 +65,8 @@ async function makeLead(spec: LeadSpec): Promise<number> {
   if (spec.status) {
     const completedAgo = spec.status === 'completed' ? String(spec.completedDaysAgo ?? spec.daysAgo ?? 0) : null;
     await pool.query(
-      `INSERT INTO conversations (lead_id, status, step, score, tier, completed_at)
-       VALUES ($1, $2, 3, $3, $4, CASE WHEN $5::text IS NULL THEN NULL ELSE now() - ($5 || ' days')::interval END)`,
+      `INSERT INTO conversations (lead_id, flow_id, status, step, score, tier, completed_at)
+       VALUES ($1, (SELECT id FROM flows WHERE is_active), $2, 3, $3, $4, CASE WHEN $5::text IS NULL THEN NULL ELSE now() - ($5 || ' days')::interval END)`,
       [id, spec.status, spec.score ?? 0, spec.tier ?? null, completedAgo]
     );
   }

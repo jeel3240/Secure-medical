@@ -58,8 +58,8 @@ async function makeLead(phone: string, name: string, holder: number | null): Pro
     [phone, name, holder]
   );
   await pool.query(
-    `INSERT INTO conversations (lead_id, status, step, q1, q2, q3, score, tier)
-     VALUES ($1, 'completed', 3, '1', '1', '1', 90, 'HOT')`,
+    `INSERT INTO conversations (lead_id, flow_id, status, step, q1, q2, q3, score, tier)
+     VALUES ($1, (SELECT id FROM flows WHERE is_active), 'completed', 3, '1', '1', '1', 90, 'HOT')`,
     [rows[0].id]
   );
   return rows[0].id;

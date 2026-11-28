@@ -2,7 +2,7 @@
 
 Every table in the app's Postgres database, one section each: its columns, what
 each means, its constraints and indexes, and the migration that made it. The
-migrations in `backend/src/db/migrations/` - `001` to `025`, run in order by
+migrations in `backend/src/db/migrations/` - `001` to `026`, run in order by
 `backend/scripts/migrate.js` - are the source of truth; this doc is checked
 against them. What a table is *for*, and the rules the code keeps with it, are in
 the doc named beside it.
@@ -38,6 +38,7 @@ written.
 | `call_answers` | Each answer on an automated call - add-only | `AUTO-CALL-SCRIPT.md`, "Understanding an answer" |
 | `call_offers` | Each ring of a lead on hold to someone who came free | `AUTO-CALL-TRANSFER.md`, "The hold line" |
 | `call_ai_turns` | Each turn of Seri's conversation - add-only | `AI-AGENT.md` |
+| `buckets` | One per campaign: antibiotics, so far. Every flow and call script is in one | `BUCKETS.md` |
 | `schema_migrations` | Which migration files have run | `WORKFLOW.md`, "Migrations" |
 
 ## `users`
@@ -94,7 +95,7 @@ lists them in (013).
 | `created_at`, `updated_at` | | not null, default now() | 001 |
 | `agent_took_over_at` | When an agent first texted the lead while it was open: the questions stop (`STATE-MACHINE.md` rule 2b). A time, not a status, so the status and all that reads it are unchanged | | 003 |
 | `completed_at` | When the lead finished the questions, whichever way the flow ended; NULL otherwise. Stamped by `api/reply-flow.ts` the first time the conversation is saved `completed`, and kept on later saves. Admin > Overview counts Completed by it | | 004 |
-| `flow_id` | The flow it follows | references `flows` | 012 |
+| `flow_id` | The flow it follows - and so its bucket, the flow's | not null (026), references `flows` | 012 |
 | `current_question_id` | The question the lead is on - or stopped at, once expired or in review. NULL once finished, and for a suppressed one | with `flow_id`, references `flow_questions (id, flow_id)`: `conversations_question_in_flow` | 012 |
 | `question_sent_at` | When the text the lead has to answer went out; NULL while we owe them one (`STATE-MACHINE.md` rule 2c) | | 012 |
 | `end_outcome` | How the flow ended - the last choice's `ending`: `completed`, `offers`, `wants_contact`, `declined`. NULL while open, and for expired, suppressed and review | check | 012 |
@@ -328,7 +329,7 @@ The SMS scripts. What each column does in a flow, and the rules the database
 enforces, are `FLOWS.md`'s; the flow new leads get is in `FLOWS.md`, "The
 antibiotics flow".
 
-**`flows`** (012)
+**`flows`** (012, 026)
 
 | Column | What | Constraint |
 |---|---|---|
@@ -339,8 +340,9 @@ antibiotics flow".
 | `responded_points` | Awarded once, on the first reply | not null, check `> 0` |
 | `completed_points` | Awarded when the flow ends by a choice whose ending is `completed` | not null, default 0 |
 | `review_body` | Sent after a second unclear reply | not null |
-| `is_active` | The flow new leads are given | not null, default false; `flows_one_active`: at most one |
+| `is_active` | The flow its bucket's new leads are given | not null, default false; `flows_one_active_per_bucket`: at most one per bucket (026); `flows_one_active`: at most one in all (012) - the code reads "the active flow" (`FLOWS.md`) |
 | `created_at` | | not null, default now() |
+| `bucket_id` | The bucket it is a flow of. `wellness` and `antibiotics` are both antibiotics' | not null, references `buckets` (`flows_bucket_fk`) (026) |
 
 **`flow_questions`** (012)
 
@@ -393,7 +395,7 @@ question_id)`. Index: `conversation_answers_lead` (012).
 The automated call's script, as rows - its own tables, not the SMS flow's
 (`AUTO-CALL-SCRIPT.md`, "The script", which also has the script's words).
 
-**`call_scripts`** (015, 019)
+**`call_scripts`** (015, 019, 026)
 
 | Column | What | Constraint |
 |---|---|---|
@@ -407,8 +409,9 @@ The automated call's script, as rows - its own tables, not the SMS flow's
 | `hold_body` | Before the music, when someone is on a call | not null |
 | `hold_next_body`, `hold_place_body` | The lead's place in line: "You are next.", "You are number {place} in line." | not null (019); `call_scripts_hold_place_says_place`: says `{place}` |
 | `link_text` | The text sent on a "yes" to the link | not null |
-| `is_active` | The script calls use | not null, default false; `call_scripts_one_active`: at most one |
+| `is_active` | The script its bucket's robot calls use | not null, default false; `call_scripts_one_active_per_bucket`: at most one per bucket (026); `call_scripts_one_active`: at most one in all (015) - the code reads "the active script" (`AUTO-CALL-SCRIPT.md`) |
 | `created_at` | | not null, default now() |
+| `bucket_id` | The bucket it is the script of. A bucket may have none: a new bucket's calls are Seri's (`BUCKETS.md`) | not null, references `buckets` (`call_scripts_bucket_fk`) (026) |
 
 **`call_steps`** (015)
 
@@ -494,6 +497,21 @@ by turn, is `AI-AGENT.md`'s.
 
 Index: `call_ai_turns_call` on `(call_id, id)` (022).
 
+## `buckets`
+
+One row per campaign - the EZ Texting group its leads arrive in, its text
+questions, its call script, what Seri knows for it. What a bucket is, and the
+columns each later ticket adds, are `BUCKETS.md`'s; the app runs one,
+antibiotics. Every flow (`flows.bucket_id`) and call script
+(`call_scripts.bucket_id`) is in one, and a conversation is in its flow's.
+
+| Column | What | Constraint | Migration |
+|---|---|---|---|
+| `id` | | primary key | 026 |
+| `key` | Stable name for code: `antibiotics`. A log line carries the id, `bucketId` - `bucketKey` or `name` would be redacted (`LOGGING.md`, "Redaction") | not null, `buckets_key_unique` | 026 |
+| `name` | What the screens show: "Antibiotics" | not null, `buckets_name_unique` | 026 |
+| `created_at` | | not null, default now() | 026 |
+
 ## `schema_migrations`
 
 Made by `backend/scripts/migrate.js`, not by a migration. The runner takes an
@@ -536,6 +554,7 @@ its own transaction, and records it; a file is never run twice.
 | `scoring_rules` | The first flow's points: Responded +10, Completed +10, Q1 5/10/15, Q2 30/20/5, Q3 35/25/10 (001) | not read |
 | `flows`, `flow_questions`, `flow_choices` | `wellness`, the first flow, inactive, built from the rows above; `antibiotics`, active - the flow new leads get (012) | `FLOWS.md`, "The antibiotics flow" |
 | `call_scripts`, `call_steps`, `call_choices` | `antibiotics`, active (015, 018, 019) | `AUTO-CALL-SCRIPT.md`, "The script" |
+| `buckets` | `antibiotics`, "Antibiotics" - every flow and call script in it (026) | `BUCKETS.md` |
 | `settings` | The rows above | "`settings` rows" |
 
 ## Columns with no check
@@ -569,6 +588,7 @@ values are fixed in code instead.
 
 ## History
 
+- 2026-11-28 · `buckets` (026), with antibiotics; `flows.bucket_id` and `call_scripts.bucket_id`, and one active flow and script per bucket beside the one-overall indexes the code still relies on; `conversations.flow_id` required · the database knows buckets before any code reads them · B07
 - 2026-11-28 · `dispositions.conversation_id` can be null on an outcome the old code saved during 025's deploy; the two poll rows' readers and writers corrected - the checkpoint is the newest contact seen, `db/health.ts` reads its value, and `ezt_last_read_at` is written through `markEztRead` · review of B01-B06
 - 2026-11-28 · `settings` row `ezt_last_read_at`, the poller's own · health and "Synced" read when EZ Texting was read, not when the checkpoint moved - which a failed contact now holds back · B06
 - 2026-11-28 · `dispositions.reason` and `dispositions.conversation_id`, with their checks and foreign key (025); the next number is left to `WORKFLOW.md`, "Where the files stand", rather than written here too · B04

@@ -1,6 +1,7 @@
 /**
  * Proves migrations 015, 018 and 019 and db/call-script.ts against a real
- * Postgres - T6, docs/AUTO-CALLS.md.
+ * Postgres - T6, docs/AUTO-CALLS.md - and what 026 (B07) added: the script in
+ * the antibiotics bucket, at most one active per bucket.
  *
  * What a mock cannot show: that the script in the database is the one agreed,
  * word for word, as 015 seeds it and 018 changes it; that the guards on the tables hold - one active script, a choice that
@@ -11,7 +12,7 @@
  * It writes rows, so it refuses to run against a database that holds leads.
  * Run it with the others: scripts/live-checks.sh call-script
  */
-import { check, failureCount, verdict } from './check';
+import { check, failureCount, rolledBack, verdict } from './check';
 import type { CallScript } from '../src/core/call-script';
 import { ANTIBIOTICS_CALL } from '../src/core/call-script-fixtures';
 import { loadActiveCallScript } from '../src/db/call-script';
@@ -113,6 +114,61 @@ async function main(): Promise<void> {
     });
   }
 
+  console.log('\nevery script in a bucket, one active per bucket (026)');
+  {
+    check(
+      'the one script is in the antibiotics bucket',
+      (await pool.query(`SELECT s.key, b.key AS bucket FROM call_scripts s JOIN buckets b ON b.id = s.bucket_id ORDER BY s.id`)).rows,
+      [{ key: 'antibiotics', bucket: 'antibiotics' }]
+    );
+
+    // A script as a migration adding one would write it, in the bucket named.
+    const script = (key: string, bucket: string, active: boolean) =>
+      `INSERT INTO call_scripts (key, name, voice, opt_out_words, opt_out_body, no_response_body, voicemail_body, busy_body, hold_body, hold_next_body, hold_place_body, link_text, is_active, bucket_id)
+       VALUES ('${key}', '${key}', 'v', '{}', 'x', 'x', 'x', 'x', 'x', 'x', '{place}', 'x', ${active}, (SELECT id FROM buckets WHERE key = '${bucket}'))`;
+
+    check(
+      'a second active script in the same bucket is refused, by the bucket\'s index',
+      await rolledBack(pool, async (tried) => {
+        // Both indexes would refuse it; the old one goes - in this transaction
+        // only - so the refusal is the bucket's own.
+        await tried('DROP INDEX call_scripts_one_active');
+        return tried(script('again', 'antibiotics', true));
+      }),
+      'call_scripts_one_active_per_bucket'
+    );
+    const [inTheOther, withoutTheOld] = await rolledBack(pool, async (tried) => {
+      await tried(`INSERT INTO buckets (key, name) VALUES ('second', 'Second')`);
+      const refused = await tried(script('other', 'second', true));
+      await tried('DROP INDEX call_scripts_one_active');
+      return [refused, await tried(script('other', 'second', true))];
+    });
+    check('an active script in each of two buckets: the old index, still there, refuses it', inTheOther, 'call_scripts_one_active');
+    check('and the bucket\'s index alone allows it', withoutTheOld, 'allowed');
+    check(
+      'a script in no bucket is refused',
+      /null value in column "bucket_id"/.test(
+        await rolledBack(pool, (tried) =>
+          tried(
+            `INSERT INTO call_scripts (key, name, voice, opt_out_words, opt_out_body, no_response_body, voicemail_body, busy_body, hold_body, hold_next_body, hold_place_body, link_text)
+             VALUES ('loose', 'Loose', 'v', '{}', 'x', 'x', 'x', 'x', 'x', 'x', '{place}', 'x')`
+          )
+        )
+      ),
+      true
+    );
+    check(
+      'a script in a bucket that does not exist is refused',
+      await rolledBack(pool, (tried) =>
+        tried(
+          `INSERT INTO call_scripts (key, name, voice, opt_out_words, opt_out_body, no_response_body, voicemail_body, busy_body, hold_body, hold_next_body, hold_place_body, link_text, bucket_id)
+           VALUES ('ghost', 'Ghost', 'v', '{}', 'x', 'x', 'x', 'x', 'x', 'x', '{place}', 'x', 999999)`
+        )
+      ),
+      'call_scripts_bucket_fk'
+    );
+  }
+
   console.log('\nthe guards on the script');
   {
     const [q1, q2] = script!.steps;
@@ -126,8 +182,8 @@ async function main(): Promise<void> {
     check(
       'a second active script is refused',
       await refusedBy(
-        `INSERT INTO call_scripts (key, name, voice, opt_out_words, opt_out_body, no_response_body, voicemail_body, busy_body, hold_body, hold_next_body, hold_place_body, link_text, is_active)
-         VALUES ('other', 'Other', 'v', '{}', 'x', 'x', 'x', 'x', 'x', 'x', '{place}', 'x', true)`
+        `INSERT INTO call_scripts (key, name, voice, opt_out_words, opt_out_body, no_response_body, voicemail_body, busy_body, hold_body, hold_next_body, hold_place_body, link_text, is_active, bucket_id)
+         VALUES ('other', 'Other', 'v', '{}', 'x', 'x', 'x', 'x', 'x', 'x', '{place}', 'x', true, (SELECT id FROM buckets WHERE key = 'antibiotics'))`
       ),
       'call_scripts_one_active'
     );
@@ -144,8 +200,8 @@ async function main(): Promise<void> {
 
     const { rows: other } = await pool.query(
       `WITH s AS (
-         INSERT INTO call_scripts (key, name, voice, opt_out_words, opt_out_body, no_response_body, voicemail_body, busy_body, hold_body, hold_next_body, hold_place_body, link_text)
-         VALUES ('other', 'Other', 'v', '{}', 'x', 'x', 'x', 'x', 'x', 'x', '{place}', 'x') RETURNING id
+         INSERT INTO call_scripts (key, name, voice, opt_out_words, opt_out_body, no_response_body, voicemail_body, busy_body, hold_body, hold_next_body, hold_place_body, link_text, bucket_id)
+         VALUES ('other', 'Other', 'v', '{}', 'x', 'x', 'x', 'x', 'x', 'x', '{place}', 'x', (SELECT id FROM buckets WHERE key = 'antibiotics')) RETURNING id
        )
        INSERT INTO call_steps (script_id, key, position, heading, body, repeat_body)
        SELECT id, 'q1', 10, 'H', 'b', 'r' FROM s RETURNING id`

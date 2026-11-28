@@ -14,6 +14,10 @@ read by `backend/src/db/call-script.ts`, each answer kept by
 
 ### The script
 
+It is the antibiotics bucket's script (`call_scripts.bucket_id`): every script is
+in a bucket, and a bucket has at most one active - a new bucket's calls are Seri's
+(`BUCKETS.md`).
+
 As it is said. The app only texts, so the client's email branch and the email line
 in the voicemail are dropped; a lead who does not want a text is a No. The opening
 says the offer first and ends on one short yes-or-no question, in Google's
@@ -272,7 +276,7 @@ whose yes must ring.
 
 | What | Where |
 |---|---|
-| The script | `call_scripts` - one per script, only one active; with the lines every step shares: stop, no response, voicemail, busy, hold and the place on hold (`hold_next_body`, `hold_place_body`), the link text and the voice. `call_steps` - the questions, each with its repeat line. `call_choices` - each answer: key, label, accepted words, reply, and either the next step or an ending (`transfer`, `send_link`, `declined`), never both. Seeded by migration 015, changed by 018 and 019 |
+| The script | `call_scripts` - one per script, each in a bucket, only one active and at most one per bucket; with the lines every step shares: stop, no response, voicemail, busy, hold and the place on hold (`hold_next_body`, `hold_place_body`), the link text and the voice. `call_steps` - the questions, each with its repeat line. `call_choices` - each answer: key, label, accepted words, reply, and either the next step or an ending (`transfer`, `send_link`, `declined`), never both. Seeded by migration 015, changed by 018 and 019, put in the antibiotics bucket by 026 |
 | What the lead said | `call_answers`, one add-only row per answer: what Twilio heard, how sure, keys pressed, the choice it matched |
 | The confidence an answer needs | `settings.auto_call_min_confidence`, 0.4 |
 | The result | `calls.script_result`, `answered_by` and `outcome` (`AUTO-CALLS.md`, "Data") |
@@ -309,7 +313,8 @@ fit a call.
 |---|---|
 | Every way an answer is read: keys, numbers said, stop, confidence, words inside a sentence, unclear, silence | `src/core/answers.spoken.test.ts` |
 | Every path of the script, a broken script four ways, the hang-up cases, the listening split, the voicemail rule and the message's words | `src/core/call-script.test.ts` |
-| The script as agreed, word for word against the fixture; its guards; answers add-only | `scripts/call-script-live-check.ts` |
+| The script as agreed, word for word against the fixture; its guards; answers add-only; every script in a bucket, one active per bucket, the one-overall index still there | `scripts/call-script-live-check.ts` |
+| The script lands in antibiotics, unchanged | `scripts/buckets-upgrade-check.ts` |
 | One answer per asking, a result never overwritten, a stop blocking once and ending the conversation, the end settling an unfinished script; each voicemail branch on a real row, an answer during a takeover waiting, two verdicts at once | `scripts/auto-calls-live-check.ts` |
 | An automated call `voicemail` only when taken over | `scripts/calls-live-check.ts` |
 | The link and the missed-call text: their words, the thread, a blocked number getting neither | `scripts/lead-texts-live-check.ts` |
@@ -349,6 +354,7 @@ fit a call.
 
 ## History
 
+- 2026-11-28 · The script is the antibiotics bucket's; at most one active per bucket, beside one overall · B07
 - 2026-11-27 · Written from `AUTO-CALLS.md`'s "The script", "Understanding an
   answer", "What the call does after each answer" and "Voicemail", to the area
   template; the real-call notes to the tickets' *As built* · docs to the standard ·

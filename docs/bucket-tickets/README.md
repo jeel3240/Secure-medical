@@ -77,7 +77,7 @@ below, is a suggested path through it.
 | B05 | [Overview counts sold](B05-overview-counts-sold.md) | B04 | S | Done 2026-11-28 - the admin live check's sold section, the frontend tests and the speed check; the card seen in Chrome |
 | B06 | [Poller: one contact never stops the rest](B06-poller-one-contact-never-stops-the-rest.md) | - | S | Done 2026-11-28 - the poller's tests, the health and Admin > Leads live checks, the e2e |
 | | **B. Buckets in the database - one bucket, nothing changes for users** | | | |
-| B07 | [Migration: buckets](B07-migration-buckets.md) | B03 | S | To do |
+| B07 | [Migration: buckets](B07-migration-buckets.md) | B03 | S | Done 2026-11-28 - migration 026; the flows and call-script live checks, the buckets upgrade check, every live check and the e2e |
 | B08 | [The flow per bucket](B08-flow-per-bucket.md) | B07 | S | To do |
 | B09 | [Migration: bucket arrivals](B09-migration-bucket-arrivals.md) | B07 | M | To do |
 | B10 | [One seed helper for tests and scripts](B10-seed-helper.md) | B09 | M | To do |
