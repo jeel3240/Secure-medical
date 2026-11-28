@@ -4,7 +4,7 @@
 
 **Why:** §4's file tree (about 170 lines of per-file notes), §5's data model, §6's flows and §7's setup repeat `SCHEMA.md`, the area docs and the README, and drift from them - e.g. "9 tables" against 26, "16 of the 40 actions" against 41 (audit, 2026-11-27).
 
-**Depends on:** D02 · **Size:** M · **Status:** To do · **Deploy note:** none - documentation only.
+**Depends on:** D02 · **Size:** M · **Status:** Done 2026-11-27 - every part of §3-§8 in its owner, checked; the per-file lines all named in area docs; the docs check passes · **Deploy note:** none - documentation only.
 
 ## Build
 
@@ -38,7 +38,12 @@ Writing the short CLAUDE.md (D05).
 
 ## As built
 
-*Empty until the ticket is done.*
+- §3: the stack and the "As built" table to `ARCHITECTURE.md` (The parts, Outside services, History); the EZ Texting notes were already `EZTEXTING-API.md`'s (Endpoints, The account); the test-account rule kept as `CLAUDE.md` rule 6; `openai` 6.x and Node 22 already `AI-AGENT.md`'s.
+- §4: the folder map to `ARCHITECTURE.md`, "The parts". Every file the tree named (about 200) was checked by script against the docs: all are named in their area doc but `api/app.ts` (now in `ARCHITECTURE.md`) and `scripts/live-flow.ts` (now in `TESTING.md`), so no area needs a follow-up ticket. The "all docs in `docs/`" rule kept (rule 10), with "CLAUDE.md stays at the root".
+- §5: every migration line was already in `SCHEMA.md`'s History, 001-024; the first nine-table list is in `ORIGINAL-PLAN.md`; "one open conversation per phone, ever" kept as a pointer to `SCHEMA.md`.
+- §6: new lead `POLLER.md`; reply `STATE-MACHINE.md` and `WEBHOOKS.md`; scoring `STATE-MACHINE.md`, "Scoring" and `FLOWS.md`; calls and their paths `TWILIO.md`, `INCOMING-CALLS.md`, `AUTO-CALLS.md`; the queue tags' dated changes `QUEUE.md`'s History; every route under `/api` `ARCHITECTURE.md`. All were already there.
+- §7 to `RUNNING.md`; the never-`twilio:configure`-with-production's-number rule kept (rule 5).
+- §8's table to `WORKFLOW.md`, "Before you start"; its rules kept (rule 3).
 
 ---
 

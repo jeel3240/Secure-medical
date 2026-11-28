@@ -39,8 +39,7 @@ The live checks and the unit test.
 
 ## Docs to update in the same commit
 
-`docs/POLLER.md`, `docs/AUDIT.md`, `docs/LOGGING.md`, `docs/SCHEMA.md`, `CLAUDE.md` §5,
-`docs/WORKFLOW.md`, `docs/BUCKETS.md`.
+`docs/POLLER.md`, `docs/AUDIT.md`, `docs/LOGGING.md`, `docs/SCHEMA.md`, `docs/WORKFLOW.md`, `docs/BUCKETS.md`.
 
 ## Not in this ticket
 

@@ -41,7 +41,7 @@ The live check, the upgrade check, the unit test.
 
 ## Docs to update in the same commit
 
-`docs/SCHEMA.md` (`calls`), `CLAUDE.md` §5, `docs/WORKFLOW.md`, `docs/AUTO-CALLS.md`
+`docs/SCHEMA.md` (`calls`), `docs/WORKFLOW.md`, `docs/AUTO-CALLS.md`
 ("How a call is placed"), `docs/BUCKETS.md`.
 
 ## Not in this ticket

@@ -8,7 +8,7 @@
 
 ## Build
 
-The steps are `docs/WORKFLOW.md`'s, "Seri, the AI agent" - every command with
+The steps are `docs/DEPLOY.md`'s, "Seri, the AI agent" - every command with
 both `-f` files, as production runs:
 
 - Merge `dev` into `main`. Deploy after 5 PM Arizona time, when the robot is

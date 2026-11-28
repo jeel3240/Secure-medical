@@ -47,8 +47,7 @@ The live check, the suite without the variable.
 
 ## Docs to update in the same commit
 
-`docs/POLLER.md` (the switch-over; the checkpoint retired), `docs/README.md` (the
-environment table), `CLAUDE.md` (§3 and §7 mention `EZT_GROUP`), `docs/AUDIT.md`
+`docs/POLLER.md` (the switch-over; the checkpoint retired), `docs/ENVIRONMENT.md` (`EZT_GROUP` retired), `docs/RUNNING.md` (where it names `EZT_GROUP`), `docs/AUDIT.md`
 (`bucket.switched_over`), `docs/LOGGING.md`, `docs/SCHEMA.md`, `docs/WORKFLOW.md`,
 `docs/BUCKETS.md`.
 

@@ -13,7 +13,7 @@ structure is fixed so every phase looks the same; do not invent files or section
 1. Read `docs/DOCS.md`, then the templates in `docs/templates/`, then one finished
    phase as the model: `docs/bucket-tickets/README.md` and two of its tickets.
 2. Pick the phase's letter: the next free one in `docs/DOCS.md`, "The phases".
-3. Read the code the phase touches before writing a ticket (CLAUDE.md §12): use
+3. Read the code the phase touches before writing a ticket (CLAUDE.md, "The order of work"): use
    read-only survey agents for a large area, and an adversarial review of the
    draft breakdown against the code before it is final.
 

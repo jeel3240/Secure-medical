@@ -5,7 +5,7 @@
 #   scripts/live-checks.sh                    # all of them
 #   scripts/live-checks.sh calls queue        # just these (names without -live-check)
 #
-# Never touches the `leads` database. docs/README.md, "How to test".
+# Never touches the `leads` database. docs/TESTING.md, "Live checks".
 cd "$(dirname "$0")/.." || exit 1
 # This project's own postgres - the one on localhost:5433 the checks connect to,
 # not the first container anywhere with "postgres" in its name (review M37).

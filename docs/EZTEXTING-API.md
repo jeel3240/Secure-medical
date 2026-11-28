@@ -14,7 +14,7 @@ and its quick start: https://developers.eztexting.com/docs/quick-start-guide.
 | Rule | Why |
 |---|---|
 | The credentials in a local `.env` are a **test account**, which may be used for development, sending included. Its `weightloss` group is the test group: add contacts to it by hand in the dashboard - they arrive with source `WebInterface` - and send to it. Test settings: `EZT_GROUP=weightloss`, `EZT_SOURCE=WebInterface`, `EZT_SEND_GROUP=weightloss` (`ENVIRONMENT.md`) | Jeel's decision, "Decisions" |
-| Production's credentials are held by Jeel and set only on the server; developers get the test account's | `CLAUDE.md`, credentials |
+| Production's credentials are held by Jeel and set only on the server; developers get the test account's | `WORKFLOW.md`, "Before you start" |
 | **Every contacts query is scoped to one group** - `listContacts` refuses without `groupName` | The account holds about 120,000 contacts |
 | Partner leads in production arrive with source `API` | How the partner adds them |
 | Two webhook subscriptions are permanent and are never removed: the client's Zapier one and production's | Others rely on them |

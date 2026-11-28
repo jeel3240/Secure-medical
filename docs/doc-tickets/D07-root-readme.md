@@ -4,7 +4,7 @@
 
 **Why:** It repeats the index and says architecture and the plan are in CLAUDE.md, which stops being true (audit, 2026-11-27).
 
-**Depends on:** D02, D06 · **Size:** S · **Status:** To do · **Deploy note:** none - documentation only.
+**Depends on:** D02, D06 · **Size:** S · **Status:** Done 2026-11-27 - the root `README.md` is one screen of links into `docs/` · **Deploy note:** none - documentation only.
 
 ## Build
 
@@ -33,7 +33,7 @@ Rewriting any other doc - each has its own ticket.
 
 ## As built
 
-*Empty until the ticket is done.*
+- The root `README.md`, 20 lines: what the app is in two sentences; links to the index, `LEAD-FLOW.md`, `ARCHITECTURE.md`, `RUNNING.md`, `TESTING.md` and `DOCS.md`; a pointer to `CLAUDE.md`; a one-line History. The doc list it repeated is the index's, and it no longer says the architecture and the plan are in `CLAUDE.md`.
 
 ---
 

@@ -44,7 +44,7 @@ The e2e itself.
 
 ## Docs to update in the same commit
 
-`docs/README.md` ("How to test": what the e2e covers), `docs/BUCKETS.md`.
+`docs/TESTING.md` (what the e2e covers), `docs/BUCKETS.md`.
 
 ## Not in this ticket
 

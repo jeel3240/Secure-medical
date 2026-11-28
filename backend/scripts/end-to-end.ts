@@ -15,8 +15,8 @@
  * boundaries, so every check below holds right up to the moment a text or a
  * call would leave the building - and no further. Nothing here shows that a
  * real phone buzzes or rings, or that a person hears the call. Those legs need
- * the test account and a real phone, which `docs/README.md` and AUTO-CALLS.md
- * (T26) describe. Until then this script proves the machine, not the delivery.
+ * the test account and a real phone, which `docs/RUNNING.md` and
+ * `docs/auto-call-tickets/` (T26) describe. Until then this script proves the machine, not the delivery.
  *
  * Stubbed at `axios.post`, deliberately, not at `sendMessage`: replacing
  * `sendMessage` would take the `dnc_list` check out with it, and the script

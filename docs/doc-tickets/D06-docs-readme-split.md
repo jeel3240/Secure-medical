@@ -4,7 +4,7 @@
 
 **Why:** It holds quick start, troubleshooting, sending, how to test, the environment table, known limits and an architecture section beside the index - with stale facts (test counts 1,634/432 against 1,965/460, "unverified" repeat leads, `EZT_SEND_GROUP` told both unset and set, `DEPLOYMENT.md` still to write) (audit, 2026-11-27).
 
-**Depends on:** D01 · **Size:** M · **Status:** To do · **Deploy note:** none - documentation only.
+**Depends on:** D01 · **Size:** M · **Status:** Done 2026-11-27 - `docs/README.md` is the index alone; `RUNNING.md` and `TESTING.md` written; `docs-check --strict` reports no index problem · **Deploy note:** none - documentation only.
 
 ## Build
 
@@ -37,7 +37,12 @@ The root README (D07).
 
 ## As built
 
-*Empty until the ticket is done.*
+- `docs/README.md`: one table - Doc · Type · Owns · Update it when - with a row for every doc in `docs/`, the two root maps, the mockup, `templates/` and the four tickets folders, grouped by type. Types are `map`, `architecture`, `area`, `reference`, `how-to`, `review`, `brief`, `standard` - and `phase tickets` for the four folders, `DOCS.md`'s own name for that type (the docs check does not read a folder's type). `node scripts/docs-check.mjs --strict` reports no index problem, and every doc passes its type's sections.
+- `docs/RUNNING.md` (how-to): the quick start, stopping, the data, sending texts locally, the EZ Texting subscription, real replies through a tunnel, posting a reply by hand, calls locally, and the local faults - from `docs/README.md`, `CLAUDE.md` §7, and the handoffs from `AUTH.md`, `WEBHOOKS.md` and `FRONTEND.md`.
+- `docs/TESTING.md` (how-to): unit and route tests, lint and types, the live checks (`check.ts` and `live-flow.ts` named), the speed check, the end-to-end script, Seri's test sets, walking a flow with one phone (from `FLOWS.md`), real calls, the docs check - no counts that drift. There is no upgrade check yet: B03 plans it.
+- `ENVIRONMENT.md` (written by the reference rewriter) linked; the environment table removed.
+- Known limits each in its owner's Not done (listed in `docs/README.md`'s History); Redis in `ARCHITECTURE.md`.
+- Fixed: the test counts (dropped), "unverified" repeat leads (settled 2026-11-27), `EZT_SEND_GROUP` told both unset and set (one row in `ENVIRONMENT.md`, the steps in `RUNNING.md`), `DEPLOYMENT.md` "still to write" (`DEPLOY.md`, D08).
 
 ---
 

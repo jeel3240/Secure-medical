@@ -55,8 +55,8 @@ The two live checks and the upgrade check.
 ## Docs to update in the same commit
 
 `docs/SCHEMA.md` (a `buckets` row; `flows`, `call_scripts`, `conversations` rows; the
-indexes), `CLAUDE.md` §5 (the migration line), `docs/WORKFLOW.md` ("Where the files
-stand"), `docs/FLOWS.md` (a flow belongs to a bucket), `docs/AUTO-CALLS.md` ("The
+indexes), `docs/WORKFLOW.md` ("Where the files
+stand"), `docs/FLOWS.md` (a flow belongs to a bucket), `docs/AUTO-CALL-SCRIPT.md` ("The
 script": a script belongs to a bucket), `docs/BUCKETS.md` (the tracker row).
 
 ## Not in this ticket

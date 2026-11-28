@@ -4,7 +4,7 @@
 
 **Why:** §10 is most of CLAUDE.md's length and is history, read at the start of every session (audit, 2026-11-27). `DOCS.md`: CLAUDE.md carries no phase history.
 
-**Depends on:** D01 · **Size:** M · **Status:** To do · **Deploy note:** none - documentation only.
+**Depends on:** D01 · **Size:** M · **Status:** Done 2026-11-27 - `docs/ORIGINAL-PLAN.md` (brief), `DOCS.md`'s phases table, the open items in their owners; the docs check passes · **Deploy note:** none - documentation only.
 
 ## Build
 
@@ -37,7 +37,11 @@ The rest of CLAUDE.md (D04, D05).
 
 ## As built
 
-*Empty until the ticket is done.*
+- `docs/ORIGINAL-PLAN.md` (brief, about 520 lines): `CLAUDE.md` §1-§9 as first written - the notes added beside them later are in their owners' History, not repeated - and §10 whole as it stood on 2026-11-27, with a note at the top pointing to what was built. Its "Deploy" open item keeps its history but points to `WORKFLOW.md`, "Where the files stand", for the files production holds.
+- `DOCS.md`, "The phases": a "What it is" column and a row for each of Phases 1-5, one line each with their state; Phases 6-8 point to their design docs' Status lines. Phase 7's long row was already `AI-AGENT.md`'s History, Phase 8's `BUCKETS.md`'s Status.
+- "Admin is read-only" and Seri's switch: already `ADMIN.md`'s Decisions (D19) - checked, nothing added.
+- The open items: "Source always reads API" added to `ADMIN-LEADS.md`'s Not done, the one place it now lives; the deep-health limit was already `LOGGING.md`'s ("Health endpoint") and `ADMIN.md`'s Not done; repeat leads already `POLLER.md`'s Not done, settled by the 2026-11-27 check.
+- The deploy state is in `WORKFLOW.md`, "Where the files stand", only.
 
 ---
 

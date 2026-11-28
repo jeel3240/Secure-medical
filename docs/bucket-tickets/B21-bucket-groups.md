@@ -55,7 +55,7 @@ The live checks and unit tests.
 
 ## Docs to update in the same commit
 
-`docs/SCHEMA.md`, `CLAUDE.md` §5, `docs/WORKFLOW.md`, `docs/AUDIT.md` (three actions),
+`docs/SCHEMA.md`, `docs/WORKFLOW.md`, `docs/AUDIT.md` (three actions),
 `docs/LOGGING.md`, `docs/POLLER.md` (where the group comes from), `docs/BUCKETS.md`.
 
 ## Not in this ticket

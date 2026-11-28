@@ -3,7 +3,7 @@
 **Goal:** a deploy runs the new image's migrations before the new api and worker
 start, so new code never runs against the old database.
 
-**Why:** the runbook (`docs/WORKFLOW.md`, the deploy steps around lines 176-177) runs
+**Why:** the runbook (`docs/DEPLOY.md`, "Deploying") runs
 `up -d --build`, then `exec api npm run migrate`. Between the two, the new code runs on
 the old schema: a robot call's `/auto/*` webhook or Seri's greeting that reads a column
 its migration adds would answer 500 (review of the Phase 8 plan, 2026-11-27). Several
@@ -15,10 +15,10 @@ the deploy note for the rest.
 ## Build
 
 - Check that the **production** image can run the migrations: the Dockerfile's
-  `production` stage (`docs/WORKFLOW.md`, "The images") must carry
+  `production` stage (`docs/DEPLOY.md`, "The images") must carry
   `backend/scripts/migrate.js` and `backend/src/db/migrations/*.sql`. If it does not,
   this ticket adds them - the one code change it may make.
-- `docs/WORKFLOW.md`, the deploy steps, in this order:
+- `docs/DEPLOY.md`, "Deploying", in this order - written there today as "The order planned":
   1. `git pull`;
   2. `docker compose -f docker-compose.yml -f docker-compose.prod.yml build api worker`;
   3. `docker compose -f docker-compose.yml -f docker-compose.prod.yml run --rm api npm run migrate`
@@ -46,9 +46,9 @@ The commands above, run and pasted into *As built*. No unit test: this is the ru
 
 ## Docs to update in the same commit
 
-`docs/WORKFLOW.md` (the deploy steps, "Migrations"); `docs/README.md` if it repeats
-them; `CLAUDE.md` §9 step 3's dated note; the A22 ticket's runbook lines, if they quote
-the old order.
+`docs/DEPLOY.md` ("Deploying", and "The order planned" folded into it);
+`docs/WORKFLOW.md` ("Migrations"); the A22 ticket's runbook lines, if they quote the
+old order.
 
 ## Not in this ticket
 

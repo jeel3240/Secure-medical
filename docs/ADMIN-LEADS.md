@@ -388,6 +388,10 @@ rows of `settings`; writes nothing - `SCHEMA.md`.
 
 - **The Source filter is single-select.** The brief asks for multi-select; the
   API already takes a comma-separated list.
+- **Source reads `API` for every production lead.** It is how the contact was
+  added to EZ Texting (`SCHEMA.md`, `leads.source`), not which partner sent it,
+  so on production it tells leads apart not at all - the queue's Source filter
+  likewise (`QUEUE.md`). Open: keep the column, or find the partner elsewhere.
 - **Polling, not push.** Five seconds is often enough at 50-100 leads a day; if
   the screens ever move to a push, this page follows (`FRONTEND.md`, "The polling
   hook").
@@ -409,6 +413,7 @@ rows of `settings`; writes nothing - `SCHEMA.md`.
 
 ## History
 
+- 2026-11-27 · "Source reads `API` for every production lead" added to Not done, from `CLAUDE.md` §10's open items, which named it and nowhere else did · D03
 - 2026-11-27 · Rewritten to the area standard: dated notes to this History, decisions to a table, the status precedence as numbered rules; the line that production had no robot calls "until `AUTO_CALLS` is on" corrected - automated calls are on in production since 2026-10-30; the queue's membership list replaced by a link to `QUEUE.md`; merged in: the page's switcher and tests from `FRONTEND.md` · docs standard · D18, D27
 - 2026-11-23 · The response written down: its fields, and the types `AdminLeadPage` and `AdminLeadRow` · review R14
 - 2026-11-22 · Rows new since the previous fetch flash only within one view: the record of rows seen kept every id ever shown, and every switch flashed the new view's rows · review M30

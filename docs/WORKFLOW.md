@@ -1,13 +1,39 @@
 # Workflow
 
-How work moves from a local branch to running on the server. `CLAUDE.md`
-section 9 is the policy; this is the practice.
+How a change gets from a branch on a laptop to `main`: branches, commits, the
+checks before a PR, the PR itself, what "done" means, and migrations - the one way
+the database ever changes. Putting `main` on the server is `DEPLOY.md`; running
+and testing locally are `RUNNING.md` and `TESTING.md`.
+
+## Before you start
+
+- **Who holds what.** A developer works with test credentials only; production's
+  are Jeel's and live only in the server's `.env`:
+
+  | Item | Who holds it | Developer gets |
+  |---|---|---|
+  | EZ Texting test account's credentials | Jeel | Yes |
+  | EZ Texting production credentials | Jeel | No |
+  | Twilio test credentials - the dev number | Jeel | Yes |
+  | Twilio production | Jeel | No |
+  | AWS console / IAM user | Jeel | No |
+  | EC2 SSH key | Jeel | No |
+  | RDS password | Jeel | No |
+  | GitHub repo | Both | Write access |
+
+- **The developer never touches EC2, RDS or the client's accounts.** Only Jeel
+  deploys.
+- **Never commit `.env`**, nor a real credential in any file. Never use real lead
+  data locally: generate fake leads.
+- **The EZ Texting account's rules** - a test account, the `weightloss` test
+  group, the group filter on every contacts query - are `EZTEXTING-API.md`, "The
+  account".
 
 ## Branches
 
-`main` is what deploys. `dev` is the integration branch. Work happens on a
-feature branch off `dev` and reaches `dev` through a PR. Jeel merges `dev` into
-`main` separately.
+`main` is what deploys. `dev` is the integration branch. Work happens on a feature
+branch off `dev` and reaches `dev` through a PR. Jeel reviews and merges into
+`dev`, then merges `dev` into `main` separately.
 
 ```bash
 git checkout dev && git pull
@@ -15,27 +41,27 @@ git checkout -b feat/short-description
 ```
 
 **Every change goes through a PR into `dev`.** Nothing is committed directly to
-`dev` or `main`, and no PR targets `main`. The developer never touches EC2, RDS
-or the client's accounts.
+`dev` or `main`, and no PR targets `main`. Prefer small PRs, one concern each.
 
 ## Commits
 
-Small and one concern each. A commit message should say why the change exists,
-not restate the diff - especially when the reason came from something that took
-effort to establish, like an API behaving differently from its documentation.
+Small and one concern each. A commit message says why the change exists, not the
+diff - above all when the reason took effort to establish, like an API behaving
+differently from its documentation.
 
-Update the relevant doc in `docs/` in the same commit as the change it
-describes. A finding that cost time to work out belongs in a doc, not only in a
-commit message.
+The doc that owns what changed is updated in the same commit (`docs/README.md`
+says which doc owns what; `DOCS.md` is how). A finding that cost time to work out
+belongs in a doc, not only in a commit message.
 
 ## Before opening a PR
 
 ```bash
 cd backend && npx tsc --noEmit    # must be clean
-npm run typecheck:scripts         # scripts/ and the tests, with the app - must be clean (2026-11-22)
+npm run typecheck:scripts         # scripts/ and the tests, with the app - must be clean
 npm test                          # must pass
 npm run lint                      # must pass - ESLint for the backend
-scripts/live-checks.sh            # when the change touches SQL - README.md, "How to test"
+scripts/live-checks.sh            # when the change touches SQL - TESTING.md, "Live checks"
+npm run docs:check                # when a doc changed - DOCS.md, "Checking a doc"
 cd ../frontend && npm run build   # type-checks and builds the frontend
 npm test                          # must pass - Vitest
 npm run lint                      # ESLint for the frontend
@@ -47,10 +73,7 @@ docker compose logs -f worker     # no errors, poll ticks look right
 
 The Docker build matters. TypeScript can pass locally while the image fails,
 because a stale `node_modules` may still hold a package that was never added to
-`package.json`. That has already happened once here, with `@types/pg`.
-
-Definition of done, from `CLAUDE.md`: works locally end to end, the PR says how
-to test it, no console errors, migrations included if the schema changed.
+`package.json` - it happened once here, with `@types/pg`.
 
 ## Opening the PR
 
@@ -58,31 +81,35 @@ to test it, no console errors, migrations included if the schema changed.
 git push -u origin feat/short-description
 ```
 
-Target `dev`. The description should cover what changed, how to verify it, and
-anything deliberately left out - a guard that is switched off, a path that is
-untested, a decision that needs Jeel's input. Say so explicitly rather than
-letting a reviewer discover it.
+Target `dev`. The description covers what changed, how to verify it, and anything
+deliberately left out - a guard that is switched off, a path that is untested, a
+decision that needs Jeel's input. Say so explicitly rather than letting a reviewer
+discover it.
+
+## The definition of done
+
+A task is done when:
+
+1. it works locally end to end with fake data;
+2. its tests pass, and the live checks when it touches SQL;
+3. the PR description says how to test it;
+4. there are no console errors;
+5. the migrations are included if the schema changed;
+6. the docs it changes are updated in the same commit.
 
 ## Migrations
 
-Plain numbered `.sql` files in `backend/src/db/migrations/`, applied by
-`npm run migrate` and recorded in `schema_migrations` so each runs once.
+Plain numbered `.sql` files in `backend/src/db/migrations/`, applied by `npm run
+migrate` (`backend/scripts/migrate.js`) and recorded in `schema_migrations`, so
+each runs once. What each table holds is `SCHEMA.md`.
 
-**The site is live, so every database change is a new migration file.** There is
-a production database on RDS holding real rows. It is only ever changed by a
-numbered file in this folder, run through the migrate script on deploy. There is
-no other route: no ALTER typed into psql, no change made by hand in a GUI, no
-edit to a file that has already shipped. A schema change that exists only on
-someone's laptop is a schema change that will be missing in production, and the
-code that depends on it will fail there and nowhere else.
-
-**One runner at a time** (2026-11-22, `docs/REVIEW-2026-11-22.md` M36). The
-runner takes a Postgres advisory lock for its whole run, so two
-`npm run migrate` at once cannot both apply the same file: the second waits,
-then finds nothing pending. It still remembers a file by its name only - an
-edited file that already ran is not noticed, which is why the rule below holds;
-a checksum would need a column on `schema_migrations`, a change to make by
-migration if it is ever wanted.
+**The site is live, so every database change is a new migration file.** The
+production database on RDS holds real rows. It is only ever changed by a numbered
+file in this folder, run through the migrate script on deploy. There is no other
+route: no `ALTER` typed into psql, no change made by hand in a GUI, no edit to a
+file that has already shipped. A schema change that exists only on someone's
+laptop is missing in production, and the code that depends on it fails there and
+nowhere else.
 
 **Never edit a migration that has already run.** Add a new numbered file that
 changes what the old one did. Assume every file already in `dev` has run in
@@ -90,223 +117,55 @@ production unless Jeel says otherwise - that assumption is cheap when wrong and
 expensive when right, because editing a file that has run leaves the two
 databases permanently different with nothing to show it.
 
-*(Jeel says otherwise, 2026-10-18: until automated calls are deployed as a
-whole, 014 onwards have not run in production and may be edited in place - 018
-was, for the call's opening. A laptop that already ran the old file re-applies
-it by hand and says so. After that deploy, the rule above holds again.)*
-*(Deployed - `main` took them on 2026-10-30 - so it does: 021 onwards are new
-files.)*
-
 This applies to the smallest changes as much as the large ones. Adding a column,
 widening one, adding an index, seeding a settings row, correcting a value: each
-one is a file. `002_dnc_release.sql` exists because two columns had to be added
-to `dnc_list` after 001 had shipped - that is the pattern, not an exception.
+one is a file. `002_dnc_release.sql` exists because two columns had to be added to
+`dnc_list` after 001 had shipped - that is the pattern, not an exception.
 
-**Files that have not reached `main` can still be combined - with care.** On
-2026-09-28 Jeel merged 004 into 003: neither had run on production, because
-production runs only what is on `main`, and `main` stopped at 002. Check that
-with `git ls-tree origin/main backend/src/db/migrations/` before combining
-anything. Keep the earlier file's name, so a database that already ran it does
-not run it again - the runner remembers files by name. A local database that
-ran the old 003 but never 004 misses the second part; rebuild it, or run the
-second part's SQL there once.
+**One runner at a time.** The runner takes a Postgres advisory lock for its whole
+run, so two `npm run migrate` at once cannot both apply the same file: the second
+waits, then finds nothing pending. It remembers a file by its name only - an edited
+file that already ran is not noticed, which is why the rule above holds; a checksum
+would need a column on `schema_migrations`, a change to make by migration if it is
+ever wanted.
 
-*(The `004` on disk today, `004_conversation_completed_at.sql`, is a later and
-unrelated file.)*
+**Run migrations through `npm run migrate`, never by piping SQL into psql.**
+Piping applies the schema without recording it, so the runner tries to apply the
+same file again later and fails.
 
-**Where the files stand - 2026-11-24.** `main` and production hold 001 to
-024: 021, five automated calls at once for each person free (T29,
-`AUTO-CALLS.md` "Traffic"), through PR #29; 022 to 024 through PR #31,
-applied on production 2026-11-24 at 23:29 UTC. The next migration is 025.
-*(Until then:)* 022 was on `dev`: Seri, the AI agent
-(Phase 7, `AI-AGENT.md`) - new columns on `calls` and `callbacks`, a new
-add-only table, `call_ai_turns`, and the `ai_agent` setting, seeded `off`. It
-changes no existing row; the app writes to the new parts only on a call Seri
-takes, so with her switch off, calls go on exactly as today. 023 too
-(2026-11-12, A15): `callbacks.note`, the one-line reason Seri gives with a call
-back she books, and one call back per call she booked it on - it changes no
-existing row. 024 too (2026-11-17, A31): `call_ai_turns.data`, the new brain's
-record of each reply, only on the relay's own notes - a new column, no row
-changed.
-
-*(How 014 to 020 went out, on `main` from 2026-10-30 - automated calls, T4,
-T6, T9, T10, T12, T13, T15c, T16 and T17, `AUTO-CALLS.md`.)* None
-changed a row production already had: 014 adds a third call direction, a
-column, two checks and an index; 015 adds the call script's four tables, its
-seed, and eight `settings` rows; 016 adds one empty column to `users`; 017
-adds three more - the "Taking calls" switch, off for everyone, when it changed
-and why - and an index of the calls still going; 018 changes three of 015's
-own rows - the call's opening, its stop and repeat lines, and its voice - and
-stops if they are not exactly as 015 left them; 019 adds the two place-on-hold
-lines to the script and `calls.held_at`, empty, with a check and an index; 020
-adds `call_offers`, empty, an index of calls by agent and end, and one
-`settings` row. Deploy with `AUTO_CALLS` unset: no automated call is placed
-until it is `on` - though W1, W2, Admin > Leads' Call column and the three
-Configuration tabs show at once - and then switch it on as `AUTO-CALLS.md`,
-T26, "Going live", says. Switched on, it calls every lead still waiting
-for a reply, those already waiting included - new leads first (T27). Run `npm run migrate` straight after the `up`: until
-017 has run, the new code cannot read `users` (`taking_calls`), so signing in
-and every page fail. `npm run migrate` applies whatever the database has not run,
-in order.
-
-*(History: 006 to 011 - the activity log, incoming calls, the callback a
-missed call books, the word kept with each answer, who picked up a call, and
-call recordings and transcripts - reached `main` on 2026-10-05; 012, the SMS
-flows as rows with the antibiotics script (`FLOWS.md`), and 013, three indexes
-for the queue and Admin > Leads (`QUEUE.md`, "How fast it is"), followed from
-`dev` after a walk with a real phone on 2026-10-06. 012 was edited on its
-branch that day, after review and before it ran anywhere but a developer's
-machine: a local database that ran the earlier 012 has to be rebuilt.)*
-
-Run migrations through `npm run migrate`, not by piping SQL into psql.
-Piping applies the schema without recording it, so the runner will try to apply
-the same file again later and fail.
-
-A migration ships in the same PR as the code that needs it, so a deploy never
+**A migration ships in the same PR as the code that needs it,** so a deploy never
 lands code expecting a column that is not there yet.
 
-## Deploying
+**Files that have not reached `main` can still be combined - with care.**
+Production runs only what is on `main`. Check what it holds with `git ls-tree
+origin/main backend/src/db/migrations/` before combining anything. Keep the earlier
+file's name, so a database that already ran it does not run it again - the runner
+remembers files by name. A local database that ran the earlier file but not the
+second misses the second part: rebuild it, or run the second part's SQL there once.
 
-Jeel only:
+### Where the files stand
 
-```bash
-ssh <ec2>
-cd /opt/secure-medical
-git pull
-docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
-docker compose exec api npm run migrate
-```
+`main` and production hold 001 to 024. The next migration is 025.
 
-**Seri, the AI agent (Phase 7, `AI-AGENT.md`; A22).** The deploy that brings
-022, 023 and 024 runs them as above: `npm run migrate` straight after the `up` -
-until they have run, the lead page, its timeline and My Callbacks read columns
-that are not there yet. Put `OPENAI_API_KEY` in the server's `.env` before that
-`up -d --build`, which recreates the api and the worker with it; added later,
-recreate both with the same `-f` files (`up -d api worker` - a `restart` keeps
-the old environment). She stays off: 022 seeds `ai_agent` as `off`, and calls
-go on exactly as today. To switch her on - and off again at any time, with no
-restart; recorded in the activity log; `on` is refused without the key - use
-the Seri card on Admin > Configuration's Calls tab (since 2026-11-24), or on
-the server:
+## When it goes wrong
 
-```bash
-docker compose -f docker-compose.yml -f docker-compose.prod.yml exec api npm run ai-agent -- on
-```
+| What you see | What it means | What to do |
+|---|---|---|
+| `tsc` passes locally and `docker compose build` fails | A package the code uses is missing from `package.json`, hidden by a local `node_modules` | Add it to `package.json` and build again |
+| The runner fails on a file that is already applied | The SQL was piped into psql, so `schema_migrations` never recorded it | Locally, rebuild the database (`docker compose down -v`, `up -d`, `npm run migrate` - this deletes local data); never pipe again |
+| A local database misses a column that `dev` has | It ran an earlier version of a file that was edited or combined before reaching `main` | Rebuild it, or run the missing SQL there once |
+| A migration needs to change what an earlier one did | The earlier one has run - or may have | A new numbered file; never edit the old one |
 
-A call already with her finishes; the next call follows the switch.
+## History
 
-**A call with Seri during a deploy is picked back up** (2026-11-13,
-`AI-AGENT.md` section 2, "When the line drops"): the api hands her line back
-to Twilio as it stops, Caddy holds Twilio's reconnect until the new api is up -
-a few seconds - and she goes on where she was. Still deploy after 5 PM Arizona:
-Caddy itself restarting is untested. **The deploy that brings this also changes
-the Caddyfile** - and since review Q11 (2026-11-23) nothing more is needed for
-it: the Caddyfile is `caddy/Caddyfile`, its folder mounted whole, and Caddy
-runs with `--watch` (`docker-compose.prod.yml`), so a `git pull` that changes
-it reaches Caddy, which reloads it within about ten seconds; a broken one is
-refused, logged by Caddy's `watcher`, and the running config kept - both seen
-on the `caddy:2` image locally. The first deploy with this change recreates
-the caddy container by itself, as its compose settings changed (the site down
-a second or two). Before, the file was mounted on its own: `git pull` replaced
-it, a running Caddy kept the old one, and Caddy had to be recreated by hand
-with `up -d --force-recreate caddy`.
-
-**Calling: run `docker compose exec api npm run twilio:configure`** on the
-first deploy that has calling, and whenever `PUBLIC_URL` or a Twilio setting
-changes. **Only ever on the server.** Run from a laptop with production's
-number, it moves production's calls to that laptop (2026-10-05; `TWILIO.md`,
-"What it needs on the Twilio account"). Locally, since 2026-10-16, there is a
-dev number, (480) 530-8582, with its own TwiML App and
-`TWILIO_IDENTITY_PREFIX=dev-` - never production's. It points the TwiML App and the phone
-number at this server, and refuses to move either from something another server
-relies on unless `--take-over` is passed (`-- --dry-run` shows what it would
-do). `TWILIO.md`, "Deploying it".
-
-**`docker compose logs` returns nothing on the server.** The production
-override sets the `awslogs` log driver on api, worker and caddy, so container
-output goes to CloudWatch: log group `/leads-app`, one stream per service named
-`api`, `worker` and `caddy`. Locally there is no override, so
-`docker compose logs` works as usual - the same command behaves differently in
-the two places, which is worth remembering before concluding a service is
-silent.
-
-Two things about that driver, both in `docker-compose.prod.yml`:
-
-- **A missing IAM permission stops containers starting,** rather than merely
-  losing logs - Docker fails at container creation. The instance role needs
-  `logs:CreateLogStream` and `logs:PutLogEvents`, plus `logs:CreateLogGroup`
-  because `awslogs-create-group` is on. So after a deploy that changes this,
-  check `docker compose ps` immediately rather than assuming a clean `up`. If
-  the API is down, drop `awslogs-create-group` and create the group by hand.
-- **Logs are shipped non-blocking,** because Docker's default blocking mode lets
-  a slow log endpoint stall writes to stdout and with them the request handling.
-  Under sustained pressure lines are dropped instead.
-
-Retention is set on the log group itself, not here - 30 days.
-
-On the very first deploy, after migrating, create the first superadmin. It
-prints a one-time temporary password:
-
-```bash
-docker compose exec api npm run create-superadmin -- you@example.com "Your Name"
-```
-
-The API refuses to start in production on any of three things, logging
-`api.refused_start` with the `reason` (`api/startup-checks.ts`): `JWT_SECRET`
-a placeholder or shorter than 32 characters - generate one with
-`openssl rand -hex 32`; `EZT_WEBHOOK_TOKEN` missing or shorter than 16; or the
-seven Twilio settings only partly set - all or none. And in any environment
-on a broken knowledge file of Seri's (`ai_knowledge_invalid`, `api/index.ts`,
-`AI-AGENT.md` section 5): the files are in the repo, so a broken one is a bug
-found on the first start.
-
-Production runs compiled `dist/`, not ts-node.
-
-### The images
-
-`backend/Dockerfile` has two stages (2026-11-22, `docs/REVIEW-2026-11-22.md`
-H13); the deploy command above is unchanged.
-
-- **`dev`** - every dependency (`npm ci`), the source, the scripts, and the
-  build. Local `docker compose` builds this stage (`target: dev`): the api and
-  the worker run under ts-node with `src/` mounted, and `npm run dev:*`,
-  `dev:auto-call` and the live checks work as before.
-- **`production`** - what the server builds (`docker-compose.prod.yml`,
-  `target: production`): the compiled `dist/` from the stage above, production
-  dependencies only (`npm ci --omit=dev`), and what `npm run migrate` reads
-  (`scripts/migrate.js`, `src/db/migrations/`); run as the unprivileged `node`
-  user. No ts-node, no tests, no dev scripts: `npm run migrate`, `ai-agent`,
-  `twilio:configure`, `openers:send-waiting` and `create-superadmin` run as
-  before; anything `dev:` cannot run there at all (`ts-node: not found`).
-  Before, the server's image carried every dev dependency, the tests and the
-  dev scripts - guarded only by `NODE_ENV` - installed without the lockfile,
-  and ran as root.
-
-Proved before the change: the production image migrated a scratch database
-(24 files), ran `ai-agent`, and started the api with `NODE_ENV=production` -
-health 200, Seri's knowledge loaded; a dev script in it, refused; the local
-`dev` image as before.
-
-The `caddy` service is built
-from `frontend/Dockerfile`, which compiles the React app and copies it into the
-Caddy image, so the same `--build` rebuilds the frontend and the server needs no
-Node install. Real credentials live in `.env`
-on the server and in no committed file.
-
-## Credentials
-
-The EZ Texting account is the client's live account with roughly 120,000 real
-contacts. Two standing rules:
-
-- Every contacts query is scoped to a group. `EZT_GROUP` is required for this
-  reason.
-- Sending is only ever to a `dev-test` group of our own phones. No such group
-  exists yet, so `sendMessage` refuses to send while `EZT_SEND_GROUP` is unset.
-  Do not set it to a real group to get a test working.
-
-**Update 2026-09-14 (Jeel):** the EZ Texting account is a test account, not the
-client's live account. The text above is kept for history. `weightloss` is the
-test group: contacts are added to it by hand in the dashboard and arrive with
-source `WebInterface`. Test settings are `EZT_GROUP=weightloss`,
-`EZT_SOURCE=WebInterface` and `EZT_SEND_GROUP=weightloss`. Keep the group filter
-on every contacts query.
+- 2026-11-27 · Split: deploying, the images, the switches, `twilio:configure` and CloudWatch to `DEPLOY.md`; the credentials table and the definition of done from `CLAUDE.md`; the EZ Texting account's rules to `EZTEXTING-API.md`, which owns them; `npm run docs:check` before a PR; the dated notes to this History · D08
+- 2026-11-24 · `main` and production hold 001 to 024: 021, five automated calls at once for each person free (T29, `AUTO-CALLS.md`, "Traffic"), through PR #29; 022 to 024 through PR #31, applied on production at 23:29 UTC. Before, on `dev`: 022, Seri (`AI-AGENT.md`) - new columns on `calls` and `callbacks`, the add-only `call_ai_turns`, and the `ai_agent` setting seeded `off`; 023 (A15), `callbacks.note` and one call back per call she booked it on; 024 (A31), `call_ai_turns.data`, the brain's record of each reply. None changed an existing row, and the app writes the new parts only on a call Seri takes, so with her switch off calls went on as before
+- 2026-11-22 · One runner at a time: the advisory lock · review M36. `npm run typecheck:scripts` added to the checks before a PR
+- 2026-10-30 · 014 to 020 - automated calls, T4, T6, T9, T10, T12, T13, T15c, T16 and T17 - reached `main` and production. None changed a row production already had: 014 adds a third call direction, a column, two checks and an index; 015 the call script's four tables, its seed, and eight `settings` rows; 016 one empty column on `users`; 017 three more - the "Taking calls" switch, off for everyone, when it changed and why - and an index of the calls still going; 018 changes three of 015's own rows - the call's opening, its stop and repeat lines, and its voice - and stops if they are not exactly as 015 left them; 019 the two place-on-hold lines and `calls.held_at`, empty, with a check and an index; 020 `call_offers`, empty, an index of calls by agent and end, and one `settings` row. Deployed with `AUTO_CALLS` unset - though W1, W2, Admin > Leads' Call column and the three Configuration tabs showed at once - then switched on as T26's going-live steps say (`DEPLOY.md`); switched on, it called every lead still waiting for a reply, new leads first (T27). `npm run migrate` was run straight after the `up`: until 017 had run, the new code could not read `users` (`taking_calls`), so signing in and every page would fail. From then the rule holds again: 021 onwards are new files
+- 2026-10-18 · Jeel: until automated calls are deployed as a whole, 014 onwards have not run in production and may be edited in place - 018 was, for the call's opening; a laptop that already ran the old file re-applies it by hand and says so
+- 2026-10-06 · 012, the SMS flows as rows with the antibiotics script (`FLOWS.md`), and 013, three indexes for the queue and Admin > Leads (`QUEUE.md`, "How fast it is"), followed from `dev` after a walk with a real phone. 012 was edited on its branch that day, after review and before it ran anywhere but a developer's machine: a local database that ran the earlier 012 has to be rebuilt
+- 2026-10-05 · 006 to 011 - the activity log, incoming calls, the callback a missed call books, the word kept with each answer, who picked up a call, and call recordings and transcripts - reached `main`
+- 2026-09-28 · Jeel merged 004 into 003: neither had run on production, because `main` stopped at 002 - checked with `git ls-tree`. The `004` on disk today, `004_conversation_completed_at.sql`, is a later and unrelated file. ESLint added to the checks before a PR
+- 2026-09-23 · Production live: every database change is a new migration file and nothing else - no hand edits, no psql · Jeel
+- 2026-09-14 · The EZ Texting rules here were written for the client's live account, about 120,000 real contacts: every contacts query scoped to a group, `EZT_GROUP` required for it; sending only ever to a `dev-test` group of our own phones - none existed, so `sendMessage` refused while `EZT_SEND_GROUP` was unset, and it was not to be set to a real group to get a test working. The same day, Jeel: the account is a test account, `weightloss` the test group - contacts added by hand in the dashboard, source `WebInterface`; test settings `EZT_GROUP=weightloss`, `EZT_SOURCE=WebInterface`, `EZT_SEND_GROUP=weightloss`; the group filter kept on every contacts query
+- 2026-09-14 · Written: branches, commits, PRs, migrations and deploying, as the practice of `CLAUDE.md` §9

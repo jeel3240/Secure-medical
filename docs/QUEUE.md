@@ -162,7 +162,7 @@ queue does not repeat them.
 | Parameter | Takes | Refused with |
 |---|---|---|
 | `tier` | `HOT`, `WARM`, `LOW`, comma-separated or given more than once, any case | 400 `invalid_tier` |
-| `source` | Partner codes, comma-separated or given more than once, each matched exactly | 400 `invalid_list` only for a value that is not text |
+| `source` | How EZ Texting received the contact (`API` for every production lead - `ADMIN-LEADS.md`, "Not done"), comma-separated or given more than once, each matched exactly | 400 `invalid_list` only for a value that is not text |
 | `since` | `1h`, `24h`, `7d`, `30d`, or `all` | 400 `invalid_since` |
 | `q` | Name, or phone in any punctuation | 400 `invalid_q` when given twice |
 | `limit` | Whole number above 0; clamped to 500, default 100 | 400 `invalid_limit` |

@@ -18,7 +18,7 @@ structure for the docs and for planning a phase, the same every time.
    table says which doc owns what. Other docs link to it (`QUEUE.md`, "The order")
    and never restate it.
 3. **The code wins.** A doc that disagrees with the code is wrong until checked;
-   whichever is wrong is fixed. Check the code before trusting a doc (CLAUDE.md §12).
+   whichever is wrong is fixed. Check the code before trusting a doc (CLAUDE.md, "The order of work").
 4. **Same commit.** A change to what the app does updates the doc that owns it in
    the same commit - not afterwards.
 5. **Decisions say who and when.** Each doc that owns decisions keeps them in its
@@ -152,15 +152,20 @@ The `/new-phase` command (`.claude/skills/new-phase/`) walks through these steps
 
 ### The phases
 
-| Phase | Letter | Design | Tickets |
-|---|---|---|---|
-| 1-5 | - | the original four-week plan (CLAUDE.md §10, moving to `ORIGINAL-PLAN.md` - D-tickets) | before this standard |
-| 6 · Automated calls | T | `AUTO-CALLS.md`, with `AUTO-CALL-SCRIPT.md` and `AUTO-CALL-TRANSFER.md` | `auto-call-tickets/` (moved out of `AUTO-CALLS.md`, 2026-11-27) |
-| 7 · AI agent | A | `AI-AGENT.md` | `ai-agent-tickets/` |
-| 8 · Several buckets | B | `BUCKETS.md` | `bucket-tickets/` |
-| Docs to this standard | D | this doc | `doc-tickets/` |
+| Phase | Letter | What it is | Design | Tickets |
+|---|---|---|---|---|
+| 1 · Foundation | - | Leads pulled in from EZ Texting, texts sent and received, sign-in. Done | `ORIGINAL-PLAN.md`, Week 1 | before this standard |
+| 2 · The SMS flow | - | The questions asked by text, the answers scored and tiered, the queue's API. Done, approved 2026-09-23 | `ORIGINAL-PLAN.md`, Week 2; `STATE-MACHINE.md` | before this standard |
+| 3 · Everything but calling | - | The screens - the queue, the agent's workspace, the timeline, My Callbacks, the admin screens, read-only - and logging, retries, the end-to-end script. Done 2026-09-28 | `ORIGINAL-PLAN.md`, "Phase 3 task list" | before this standard |
+| 4 · Calling | - | Agents call leads from the browser through Twilio; a lead calling in rings an agent, and a missed call is texted and called back. Done 2026-10-01, on production 2026-10-05 | `TWILIO.md`, `INCOMING-CALLS.md` | before this standard |
+| 5 · Flows | - | The SMS questions stored as rows, so a new set is rows, not code; the client's antibiotics flow; a recording notice on calls. On production 2026-10-06 | `FLOWS.md` | before this standard |
+| 6 · Automated calls | T | The server calls leads who never replied and puts a "yes" through to a person who is free | `AUTO-CALLS.md`, with `AUTO-CALL-SCRIPT.md` and `AUTO-CALL-TRANSFER.md` | `auto-call-tickets/` (moved out of `AUTO-CALLS.md`, 2026-11-27) |
+| 7 · AI agent | A | Seri runs the automated call: she answers questions and ends each call one of five ways, with the script as her backup | `AI-AGENT.md` | `ai-agent-tickets/` |
+| 8 · Several buckets | B | Several campaigns at once, each with its own group, questions, robot script and what Seri knows | `BUCKETS.md` | `bucket-tickets/` |
+| Docs to this standard | D | Every doc brought to this standard | this doc | `doc-tickets/` |
 
-A new phase takes the next free letter.
+Each phase's state is its design doc's Status line; Phases 1 to 5 came before
+Status lines, so their state is here. A new phase takes the next free letter.
 
 ## Checking a doc
 
@@ -179,5 +184,7 @@ is merged, it passes, and:
 
 ## History
 
+- 2026-11-27 · Every doc brought to this standard - `doc-tickets/` D01-D48, all done the same day; the docs check gained its `refs` rule (a section a doc or a code comment points at must exist) · D48
+- 2026-11-27 · "The phases" gives each phase a one-line summary, Phases 1 to 5 a row each, from `CLAUDE.md` §10's phases table, which moved to `ORIGINAL-PLAN.md` · D03
 - 2026-11-27 · Written · Jeel: every phase's planning and tickets came out a little
   different, and the docs mixed history into the text · branch `docs/standard`; the docs brought to it by `doc-tickets/`

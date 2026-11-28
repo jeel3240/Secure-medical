@@ -6,7 +6,7 @@
 #
 # Note: the awslogs log driver below means `docker compose logs` returns nothing
 # on the server. Logs are in CloudWatch, group /leads-app. Locally there is no
-# override, so `docker compose logs` works as usual. WORKFLOW.md, "Deploying".
+# override, so `docker compose logs` works as usual. DEPLOY.md, "Logs".
 
 services:
   postgres:
@@ -83,7 +83,7 @@ services:
     # Caddyfile reaches Caddy, which reloads it within seconds - a broken one is
     # refused and the running config kept. Mounted as one file, a pull swapped
     # the file under it and Caddy went on with the old one until recreated
-    # (review Q11, 2026-11-23; docs/WORKFLOW.md).
+    # (review Q11, 2026-11-23; docs/DEPLOY.md).
     command: caddy run --config /etc/caddy/Caddyfile --adapter caddyfile --watch
     volumes:
       - ./caddy:/etc/caddy:ro

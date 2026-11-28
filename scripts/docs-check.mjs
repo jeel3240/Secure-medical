@@ -336,6 +336,9 @@ function codeFiles() {
     }
   };
   for (const d of ['backend/src', 'backend/scripts', 'frontend/src']) walk(d);
+  for (const f of ['backend/Dockerfile', 'frontend/Dockerfile', 'docker-compose.yml', 'docker-compose.prod.yml', 'caddy/Caddyfile']) {
+    if (existsSync(join(ROOT, f))) out.push(f);
+  }
   return out;
 }
 

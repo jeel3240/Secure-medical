@@ -44,8 +44,7 @@ As above.
 
 ## Docs to update in the same commit
 
-`docs/AI-AGENT.md` (what she knows: packs), `docs/SCHEMA.md`, `CLAUDE.md` (§4's
-`ai/knowledge/` line, §5), `docs/WORKFLOW.md`, `docs/BUCKETS.md` (decision 7: built).
+`docs/AI-KNOWLEDGE.md` (packs), `docs/AI-AGENT.md`, `docs/SCHEMA.md`, `docs/WORKFLOW.md`, `docs/BUCKETS.md` (decision 7: built).
 
 ## Not in this ticket
 

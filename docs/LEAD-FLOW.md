@@ -1,21 +1,21 @@
 # Lead flow
 
-A lead's whole life on one page: every status it passes through, what moves it
-on, and where agents see it. Decided by Jeel, 2026-09-28.
-
-This is the map, not the rules. Each step links to the doc that owns it, and
-that doc wins if the two ever disagree:
+A lead's whole life on one page - start here. This is the map, not the rules: every
+line links to the doc that owns it, and that doc wins if the two ever disagree.
+How the parts of the system carry a lead along is `ARCHITECTURE.md`, "How they
+connect".
 
 | Part | Owned by |
 |---|---|
 | The SMS questions, replies, scoring, expiry, STOP | `STATE-MACHINE.md` |
-| How the questions are stored, and adding another set | `FLOWS.md` |
-| The statuses and exactly how each is worked out | `ADMIN-LEADS.md`, "Status is derived, never stored" |
-| Who is in the queue, the order, the STATUS column | `QUEUE.md` |
-| Picking, Wrap up, Closed and DNC | `AGENT-WORKSPACE.md` |
-| The automated call: who it rings, when, and what each answer does | `AUTO-CALLS.md` |
+| How the questions are stored - the antibiotics flow and adding another | `FLOWS.md` |
+| The statuses and exactly how each is worked out | `ADMIN-LEADS.md`, "Status" |
+| Who is in the queue, the order, the tag | `QUEUE.md` |
+| Picking up, Wrap up, Closed and DNC | `AGENT-WORKSPACE.md` |
+| Callbacks, and My Callbacks | `CALLBACKS.md` |
+| The robot's call: who it rings, when, and what each answer does | `AUTO-CALLS.md`, `AUTO-CALL-SCRIPT.md`, `AUTO-CALL-TRANSFER.md` |
 | Seri, the AI agent who runs that call when switched on | `AI-AGENT.md` |
-| Calls with a person, both ways, and a missed call | `TWILIO.md` |
+| Calls with a person: placed by an agent, and a lead calling in | `TWILIO.md`, `INCOMING-CALLS.md` |
 
 ## The main path
 
@@ -66,163 +66,76 @@ that doc wins if the two ever disagree:
                 No thanks                                 neither offers nor a rep
 ```
 
-The questions a lead gets are the **eDrugstore antibiotics** script since
-2026-10-05: did you ask about antibiotics, have you used telemedicine, how do
-you want to go on. A lead who says No to the first is asked one thing instead -
-special offers, hear from a rep, or no thanks. Offers and no thanks end there;
-**hear from a rep** is Ready, in the queue as **Wants a call**. `STATE-MACHINE.md`, "The antibiotics
-flow".
-
-An agent's DNC button leads to Opted out too, from any status.
+The questions are the eDrugstore antibiotics flow; a lead who says No to the
+first is asked one other thing - `FLOWS.md`, "The antibiotics flow". An agent's DNC
+leads to Opted out too, from any status.
 
 ## Every status
 
-These are the tabs on Admin > Leads. When more than one could apply, the
-highest in this list wins.
+The tabs on Admin > Leads. When more than one could apply, the highest in the
+list wins (`ADMIN-LEADS.md`, "Rules").
 
-| Status | Means | In the queue? |
+| Status | In one line | Owned by |
 |---|---|---|
-| **Opted out** | Texted STOP, an agent pressed DNC, the lead said stop on the automated call (T13), or the number was already blocked, or opted out at EZ Texting, when the lead arrived. The number is blocked. (A lead who later texted START still reads Opted out here, though unblocked - "Ways back") | No |
-| **Closed** | An agent pressed Closed | No, until something reopens it - "Ways back", below |
-| **Working** | An agent holds it, or has left a note, a callback, a call they placed or answered, an SMS or an outcome on it. An automated call counts only once a person took it, and a call back Seri booked not at all | Yes |
-| **Needs review** | Two replies we could not understand | Yes |
-| **Ready** | Finished the questions, or asked to hear from a rep; nobody has touched it | Yes |
-| **Offers** | Said No to the first question, then Yes to special offers. Nothing for an agent to do | No, unless they text or ring us |
-| **Not interested** | Said No to the first question, then No thanks to the offers and to a rep | No, unless they text or ring us |
-| **Expired** | Went quiet during the questions | No, unless they text or ring us |
-| **Answering** | Partway through the questions | No, unless they ring us and nobody answers, they said yes on the automated call and nobody took it (T22), a call back they booked with Seri is due (A16), our text to them did not go out, or they text us after a phone call stopped the questions (`STATE-MACHINE.md` 2d) |
-| **Awaiting reply** | Has not answered question 1 | No, with the same five exceptions |
+| **Opted out** | The number is blocked - STOP, an agent's DNC, a stop said on the robot's call, or blocked when the lead arrived | `ADMIN-LEADS.md`, "Status"; `AGENT-WORKSPACE.md`, "Blocking a number" |
+| **Closed** | An agent pressed Closed, and nothing has reopened it | `ADMIN-LEADS.md`, "Closed" |
+| **Working** | An agent holds it, or has left a trace on it | `ADMIN-LEADS.md`, "Working" |
+| **Needs review** | Two replies we could not understand | `STATE-MACHINE.md`, rule 4 |
+| **Ready** | Finished the questions, or asked to hear from a rep; nobody has touched it | `ADMIN-LEADS.md`, "Status" |
+| **Offers** | Said No, then asked for special offers only | `FLOWS.md`, "What a choice's ending means" |
+| **Not interested** | Said No, then No thanks to the offers and to a rep | `FLOWS.md`, "What a choice's ending means" |
+| **Expired** | Went quiet during the questions | `STATE-MACHINE.md`, "Expiry" |
+| **Answering** | Partway through the questions | `ADMIN-LEADS.md`, "Status" |
+| **Awaiting reply** | Has not answered question 1 | `ADMIN-LEADS.md`, "Status" |
 
-Working outranks the SMS statuses: an expired or needs-review lead that an
-agent is handling reads Working.
+Which of them are in the queue, and what brings the others in, is `QUEUE.md`, "Who
+is in it".
 
-The automated call is a second track beside the status: Admin > Leads has a
-**Call** column saying how it went - "Voicemail left", "Not interested", "Said
-yes · nobody took it" - so a lead can be Awaiting reply and Voicemail left at
-once (T23, `ADMIN-LEADS.md`, "Call"). Once a lead has answered that call - yes,
-no, the link - or rung us, the text questions stop: anything they text goes
-to a person as Inbound reply, never an automated "sorry" (`STATE-MACHINE.md`
-2d, 2026-10-27).
+**The robot's call is a second track** beside the status: Admin > Leads' Call
+column says how it went, so a lead can be Awaiting reply and "Voicemail left" at
+once (`ADMIN-LEADS.md`, "Call"). Once a lead has answered that call, or rung us,
+the text questions stop (`STATE-MACHINE.md`, rule 2d).
 
-**Seri, the AI agent** (Phase 7, `AI-AGENT.md`) - built, not yet deployed
-(2026-11-13). Off by default: her switch, `settings.ai_agent`, is seeded `off`,
-changed by `npm run ai-agent -- on|off` or the Seri card on Admin >
-Configuration's Calls tab (2026-11-24), and off whatever it says while
-`OPENAI_API_KEY` is empty. On, an answered automated call goes to her instead
-of the script's first question. She answers questions and ends the call one
-of five ways: put through to a person (the script's own transfer and hold
-line), a call back at a time the lead picks, the link texted, an opt-out (the
-number blocked, as a stop on the script) or a goodbye; if she fails, the
-script takes over from its first question. Anything the lead says to her
-stops the text questions (2d). A call back she books belongs to the lead's
-holder when an active agent holds the lead, otherwise to nobody, and does not
-make the lead Working; once due, it puts the lead first in the queue as
-**Callback · 3:00 PM**, bold, and the first agent to pick the lead up takes it.
-Admin > Leads' Call column reads "Callback booked", and her conversation is on
-the timeline under the call.
+**Seri**, with her switch on, takes an answered robot call and ends it one of five
+ways - a person now, a call back at a time the lead picks, the link, an opt-out or
+a goodbye (`AI-AGENT.md`). A call back she books puts the lead first in the queue
+once due (`CALLBACKS.md`, "Seri's call backs").
 
 ## What agents see in the queue
 
-The queue's STATUS column shows at most one of six things, in this order when
-more than one applies - Wants a call and Callback each have two places, one for
-each reason. Most rows show none.
-
-| STATUS | Means |
-|---|---|
-| **Working – nora** | nora is holding the lead right now. Others see it locked |
-| **Missed call** | The lead rang our number and nobody answered. They were told, and texted, that we will call back |
-| **Wants a call** | Said yes on the automated call and nobody took it; they were told an agent will call back. These leads are first in the queue, the longest waiting on top, until an agent calls or texts them or saves an outcome (T22, `QUEUE.md`) |
-| **Callback · 3:00 PM**, bold | A call back the lead booked with Seri on the automated call, and its time has come. First in the queue beside a missed "yes"; the first agent to pick the lead up takes it, and it reads "Callback – nora · 3:00 PM" after (A16, `QUEUE.md`) |
-| **Inbound reply** | The lead texted us and nobody has read it - or they answered and our text back failed to send |
-| **Callback – nora · 3:00 PM** | nora has a callback booked on it. Not locked, but it is nora's call to make |
-| **Wants a call** | Said No to the first question, then asked to hear from a rep - the same words, lower down |
-| **Needs review** | We could not understand their replies |
-| **-** | Waiting for someone to pick it up |
-
-A lead someone holds is always in the queue, even one picked up from Admin >
-Leads before it answered anything.
-
-"Working – nora" lasts only while nora holds the lead. Admin > Leads keeps
-saying Working after nora lets go, until the lead is Closed.
+The queue's STATUS column shows at most one tag - Working – name, Missed call,
+Wants a call, Callback · time, Inbound reply or Needs review - and most rows show
+none. Which wins, and the order of the rows, is `QUEUE.md`, "The tag" and "The
+order".
 
 ## Working a lead
 
-1. **Pick up** from the queue. Opening a row only looks; Pick up is what
-   assigns the lead.
-2. In **Wrap up**:
-   - **1 Outcome** - **Closed** or **DNC**, or neither
-   - **2 Callback** - optional
-   - **3 Note** - "no answer", "left a voicemail", "call back Friday"
-3. **Save**.
-   - With **Closed** or **DNC**: the lead is released and leaves the queue at
-     once, any open callback on it is marked done, and the agent is taken back
-     to the queue. Nobody needs to pick it up any more - Jeel, 2026-09-29.
-     While Closed or DNC is chosen, the callback choices are switched off.
-   - With only a callback or a note: the agent stays on the lead.
-4. **Back to queue** only goes back. The lead stays with the agent - locked to
-   everyone else, **Resume** in their own queue - until they save Closed or
-   DNC, or press **Release** at the top of the lead's page (Jeel, 2026-10-08;
-   it used to release the lead on the way out). A superadmin can press Release
-   on anyone's lead.
-
-There is no reason to pick when closing. The note says why, if anything does.
+1. **Pick up** from the queue - opening a row only looks (`AGENT-WORKSPACE.md`,
+   "Claim and release").
+2. In **Wrap up**: an outcome, **Closed** or **DNC**, or neither; a callback; a
+   note (`AGENT-WORKSPACE.md`, "Dispositions").
+3. **Save.** With Closed or DNC the lead is released and leaves the queue
+   (`AGENT-WORKSPACE.md`, "Closing a lead"). **Release** lets a lead go without an
+   outcome.
 
 ## Ways back into the queue
 
-| What happens | Result |
+| What happens | Owned by |
 |---|---|
-| An expired lead texts us | Back as **Inbound reply** |
-| A closed lead texts us | Back as **Inbound reply**. Once read, it is Closed again |
-| A lead calls our number and nobody answers | Back as **Missed call**, closed or not, until an agent calls or texts them, answers when they ring again, or saves an outcome. If the call rang an agent, that agent also gets it on My Callbacks. `TWILIO.md`, "A missed call" |
-| An agent books a callback after closing a lead | Back as **Callback – name · time** in the queue (Working on Admin > Leads), until the callback is done |
-| An opted-out lead texts START | Unblocked, and back as **Inbound reply** for a person to read. The questions do not restart - `STATE-MACHINE.md`, "Opting back in" |
-| An agent picks a lead and presses Release without doing anything | Back to **Ready** |
+| An expired or closed lead texts us | `QUEUE.md`, "Who is in it"; `ADMIN-LEADS.md`, "Closed" |
+| A lead calls our number and nobody answers | `INCOMING-CALLS.md`, "A missed call"; `CALLBACKS.md`, "A missed call's callback" |
+| An agent books a callback after closing a lead | `ADMIN-LEADS.md`, "Closed" |
+| An opted-out lead texts START | `STATE-MACHINE.md`, "Opting back in" |
+| An agent picks a lead up and releases it without doing anything | `AGENT-WORKSPACE.md`, "Claim and release" |
 
-## What changed on 2026-09-28
+## History
 
-The flow above replaced a looser one the same day:
-
-| Before | After |
-|---|---|
-| Every responder in the queue, including leads halfway through | Only leads that need a person |
-| Six queue tags: New, Attempted 2x, Callback, In progress, Inbound reply, Needs review | Three: Working – name, Inbound reply, Needs review |
-| Admin > Leads statuses described the SMS only; "Completed" forever | Ready, Working and Closed follow the agent part too |
-| "In progress" meant two things | Answering (SMS) and Working (agent) |
-| Eight outcomes, none of which removed a lead | Closed and DNC. Closed removes it |
-| Save and Save & next lead | Save. An outcome releases the lead and returns to the queue (2026-09-29) |
-
-## What changed on 2026-10-01
-
-Calling was built, both ways - `TWILIO.md`:
-
-| Before | After |
-|---|---|
-| The Call button was a placeholder | Agents call a lead they hold from the browser; every call is on the timeline |
-| A lead who rang our number reached nothing | They ring the browser of the agent holding them, or who last called them |
-| - | A call nobody answers: the lead hears a message and is texted, the queue says **Missed call**, and the agent it rang gets a callback - none when it rang everyone free (T19), and the lead waits in the queue for anyone |
-| Four queue statuses | Five: Missed call ranks second, after Working |
-| A callback was only ever booked by a person | The system books one for a missed call, and finishes it when the lead is got back to |
-
-## What changed on 2026-09-29
-
-Found by testing the whole flow with a real phone:
-
-| Before | After |
-|---|---|
-| A closed lead stayed in the queue as "Working – Maya" until she pressed Back to queue | Saving Closed or DNC releases it: out of the queue at once |
-| A closed lead that texted and was picked up again read Closed, and Closed could not be saved again | A lead someone holds is never closed; the holder's Closed always saves |
-| A lead picked up before it answered was missing from the queue | Holding a lead always keeps it in the queue |
-| A callback showed nothing in the queue | "Callback – Maya Chen · 8:13 PM" |
-| Closing left the lead's callback open on My Callbacks | Closing marks it done |
-| Admin > Leads Step: the last question answered, one behind | The question the lead is on now, or Done |
-| Questions checked every 60 seconds | Every 30 seconds (migration 005) |
-
-## What changed on 2026-10-05
-
-| Before | After |
-|---|---|
-| One script, health and wellness: interest, timing, how to contact | The eDrugstore antibiotics script, with a second path for a lead who says No |
-| Three questions for everyone, answers in three columns | A flow is rows - as many questions as it needs. `FLOWS.md` |
-| The queue's Interest, Timing and Preference columns | One **Answers** column |
-| Everyone who finished was Ready | Offers-only leads are **Offers**, out of the queue. A lead who asked for a rep is Ready, tagged **Wants a call** |
-| A reply and the next question were two texts | One text |
+- 2026-11-27 · Rewritten as the map: one linked line per status, tag and step, nothing restated; the four "What changed" sections moved here in date order; "built, not yet deployed" for Seri corrected - she has been on production since 2026-11-24, her switch off · D25
+- 2026-11-24 · Seri's switch on Admin > Configuration's Calls tab, as well as `npm run ai-agent -- on|off` · A22
+- 2026-11-13 · Seri described here: off by default, her switch `settings.ai_agent` seeded `off` and off whatever it says while `OPENAI_API_KEY` is empty; on, an answered robot call goes to her instead of the script's first question; anything the lead says to her stops the text questions; her call back belongs to the lead's holder when an active agent holds the lead, otherwise to nobody, does not make the lead Working, and once due puts the lead first as **Callback · 3:00 PM**, bold, taken by the first agent to pick the lead up; Admin > Leads' Call column reads "Callback booked", and her conversation is on the timeline under the call · A13-A19
+- 2026-10-27 · Once a lead has answered the robot's call - yes, no, the link - or rung us, the text questions stop: anything they text goes to a person as Inbound reply, never an automated "sorry" · rule 2d
+- 2026-10-25 · The robot's call as a second track: Admin > Leads' Call column; a "yes" nobody took is in the queue as **Wants a call**, first, the longest waiting on top · T22, T23
+- 2026-10-05 · The flows. One script, health and wellness - interest, timing, how to contact - became the eDrugstore antibiotics script, with a second path for a lead who says No. Three questions for everyone, answers in three columns, became a flow of rows, as many questions as it needs. The queue's Interest, Timing and Preference columns became one **Answers** column. Everyone who finished had been Ready; offers-only leads became **Offers**, out of the queue, and a lead who asked for a rep Ready, tagged **Wants a call**. A reply and the next question, two texts, became one · Phase 5
+- 2026-10-01 · Calling, both ways. The Call button had been a placeholder: agents call a lead they hold from the browser, every call on the timeline. A lead who rang our number had reached nothing: they ring the browser of the agent holding them, or who last called them. A call nobody answers: the lead hears a message and is texted, the queue says **Missed call**, and the agent it rang gets a callback - none when it rang everyone free (T19), and the lead waits in the queue for anyone. Four queue statuses became five, Missed call second after Working. A callback had only ever been booked by a person: the system books one for a missed call, and finishes it when the lead is got back to · Phase 4
+- 2026-09-29 · Found by testing the whole flow with a real phone. A closed lead stayed in the queue as "Working – Maya" until she pressed Back to queue: saving Closed or DNC now releases it, out of the queue at once. A closed lead that texted and was picked up again read Closed, and Closed could not be saved again: a lead someone holds is never closed, and the holder's Closed always saves. A lead picked up before it answered was missing from the queue: holding a lead always keeps it in. A callback showed nothing in the queue: "Callback – Maya Chen · 8:13 PM". Closing left the lead's callback open on My Callbacks: closing marks it done. Admin > Leads' Step showed the last question answered, one behind: the question the lead is on now, or Done. Questions checked every 60 seconds: every 30 (migration 005) · Jeel
+- 2026-09-28 · Written, decided by Jeel: the flow above replaced a looser one the same day. Every responder had been in the queue, leads halfway through included: only leads that need a person. Six queue tags - New, Attempted 2x, Callback, In progress, Inbound reply, Needs review - became three: Working – name, Inbound reply, Needs review. Admin > Leads' statuses had described the SMS only, "Completed" for ever: Ready, Working and Closed follow the agent part too. "In progress" had meant two things: Answering (SMS) and Working (agent). Eight outcomes, none of which removed a lead, became Closed and DNC, and Closed removes it. Save and Save & next lead became Save; an outcome releases the lead and returns to the queue (2026-09-29) · Jeel

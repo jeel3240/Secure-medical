@@ -4,7 +4,7 @@
 
 **Why:** Almost all of it restates `ADMIN-LEADS.md`, `QUEUE.md`, `AGENT-WORKSPACE.md`, `AI-AGENT.md` and `STATE-MACHINE.md`; it says Seri is not deployed; its four "What changed" sections are history, out of date order (audit, 2026-11-27).
 
-**Depends on:** D02, D17, D18, D20 · **Size:** S · **Status:** To do · **Deploy note:** none - documentation only.
+**Depends on:** D02, D17, D18, D20 · **Size:** S · **Status:** Done 2026-11-27 - `docs/LEAD-FLOW.md` the short map, one linked line per status; the docs check passes · **Deploy note:** none - documentation only.
 
 ## Build
 
@@ -33,7 +33,9 @@ Rewriting any other doc - each has its own ticket.
 
 ## As built
 
-*Empty until the ticket is done.*
+- `LEAD-FLOW.md` (map, about 140 lines): the owners table; the two diagrams kept; Every status - one line each with its owner; the robot's call and Seri as two short pointers; the queue's tags, Working a lead and Ways back as pointers; the four "What changed" sections to History, in date order, with the Seri and robot-call notes that had been in the body.
+- Fixed: "built, not yet deployed" for Seri - she is on production with her switch off since 2026-11-24; `ADMIN-LEADS.md`, "Status is derived, never stored" is now "Status"; the antibiotics flow is `FLOWS.md`'s.
+- `ARCHITECTURE.md`, "How they connect" links these diagrams rather than drawing them a second time.
 
 ---
 

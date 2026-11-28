@@ -156,7 +156,7 @@ export async function sendMessage(toPhones: string[], message: string): Promise<
   if (!config.ezt.sendGroup) {
     throw new Error(
       'Refusing to send: EZT_SEND_GROUP is not set. It is the switch that lets this server send ' +
-        'texts - any value turns sending on (docs/README.md, "Sending").'
+        'texts - any value turns sending on (docs/ENVIRONMENT.md, EZT_SEND_GROUP).'
     );
   }
 

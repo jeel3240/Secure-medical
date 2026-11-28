@@ -52,9 +52,9 @@ The live checks, the route and relay unit tests, the e2e.
 
 ## Docs to update in the same commit
 
-`docs/AUTO-CALLS.md` ("The script", "How a call is placed"), `docs/AI-AGENT.md` (her
+`docs/AUTO-CALL-SCRIPT.md` ("The script"), `docs/AUTO-CALLS.md` ("How a call is placed"), `docs/AI-AGENT.md` (her
 stop line and words come from the call's script), `docs/SCHEMA.md` (the dropped
-index), `CLAUDE.md` §5, `docs/WORKFLOW.md`, `docs/BUCKETS.md`.
+index), `docs/WORKFLOW.md`, `docs/BUCKETS.md`.
 
 ## Not in this ticket
 

@@ -49,7 +49,7 @@ The two live checks; the unit tests as they are.
 ## Docs to update in the same commit
 
 `docs/AUTO-CALLS.md` ("Who is called", "Traffic", T27's note), `docs/SCHEMA.md` (the
-dropped index), `CLAUDE.md` §5, `docs/WORKFLOW.md`, `docs/BUCKETS.md`.
+dropped index), `docs/WORKFLOW.md`, `docs/BUCKETS.md`.
 
 ## Not in this ticket
 

@@ -31,7 +31,7 @@ As above.
 ## Docs to update in the same commit
 
 `docs/FLOWS.md` (the new flow), `docs/STATE-MACHINE.md` (its questions, if it adds
-any path), `docs/SCHEMA.md`, `CLAUDE.md` §5, `docs/WORKFLOW.md`, `docs/BUCKETS.md`.
+any path), `docs/SCHEMA.md`, `docs/WORKFLOW.md`, `docs/BUCKETS.md`.
 
 ## Not in this ticket
 

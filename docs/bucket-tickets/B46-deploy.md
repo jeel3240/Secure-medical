@@ -33,8 +33,9 @@ What production shows, recorded.
 
 ## Docs to update in the same commit
 
-This ticket; `CLAUDE.md` (§10 Phase 8 row, "Deploy" note); `docs/WORKFLOW.md`
-("Where the files stand"); `docs/BUCKETS.md`.
+This ticket; `docs/DOCS.md` ("The phases", Phase 8's row); `docs/WORKFLOW.md`
+("Where the files stand"); `docs/DEPLOY.md` (the buckets' switches); `docs/BUCKETS.md`
+(its Status line).
 
 ## Not in this ticket
 
