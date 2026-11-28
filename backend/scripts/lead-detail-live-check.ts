@@ -17,7 +17,7 @@ import { check, failureCount, verdict } from './check';
 import { pool } from '../src/db/pool';
 import { getLeadDetail } from '../src/db/lead-detail';
 import { listQueue } from '../src/db/queue';
-import { replyAs, startFlow } from './live-flow';
+import { ANTIBIOTICS_FLOW, replyAs, startFlow } from './live-flow';
 
 
 async function refuseIfNotEmpty(): Promise<void> {
@@ -93,7 +93,7 @@ async function main(): Promise<void> {
   {
     const lead = await makeLead('+15550000203');
     await pool.query(
-      `INSERT INTO conversations (lead_id, flow_id, status, step, score) VALUES ($1, (SELECT id FROM flows WHERE is_active), 'suppressed', null, 10)`,
+      `INSERT INTO conversations (lead_id, flow_id, status, step, score) VALUES ($1, ${ANTIBIOTICS_FLOW}, 'suppressed', null, 10)`,
       [lead]
     );
     await pool.query(`INSERT INTO dnc_list (phone, reason) VALUES ($1, 'sms_stop')`, ['+15550000203']);
@@ -113,7 +113,7 @@ async function main(): Promise<void> {
     const review = await makeLead('+15550000204', { unread: true });
     await pool.query(
       `INSERT INTO conversations (lead_id, flow_id, status, step, invalid_count, score)
-       VALUES ($1, (SELECT id FROM flows WHERE is_active), 'review', 1, 2, 10)`,
+       VALUES ($1, ${ANTIBIOTICS_FLOW}, 'review', 1, 2, 10)`,
       [review]
     );
     const d = await getLeadDetail(review);
@@ -122,7 +122,7 @@ async function main(): Promise<void> {
 
     const expired = await makeLead('+15550000205');
     await pool.query(
-      `INSERT INTO conversations (lead_id, flow_id, status, step, score) VALUES ($1, (SELECT id FROM flows WHERE is_active), 'expired', 1, 10)`,
+      `INSERT INTO conversations (lead_id, flow_id, status, step, score) VALUES ($1, ${ANTIBIOTICS_FLOW}, 'expired', 1, 10)`,
       [expired]
     );
     check('expired', (await getLeadDetail(expired))?.flags.expired, true);
@@ -131,7 +131,7 @@ async function main(): Promise<void> {
   console.log('\nwho is working it');
   {
     const lead = await makeLead('+15550000206');
-    await pool.query(`INSERT INTO conversations (lead_id, flow_id, status, step, score) VALUES ($1, (SELECT id FROM flows WHERE is_active), 'open', 1, 10)`, [lead]);
+    await pool.query(`INSERT INTO conversations (lead_id, flow_id, status, step, score) VALUES ($1, ${ANTIBIOTICS_FLOW}, 'open', 1, 10)`, [lead]);
 
     const maya = await makeUser('Maya');
     await pool.query(`UPDATE leads SET assigned_to = $2, assigned_at = now() WHERE id = $1`, [lead, maya]);

@@ -40,8 +40,11 @@ let insertFails: Set<string>;
 let dncFails: Set<string>;
 /** Non-null: the leads table as a set of phones, so a second poll skips what the first took in. */
 let known: Set<string> | null;
+/** The buckets table as `onlyBucket` reads it: the first bucket's id, and how many there are (B08). */
+let bucketRow: { id: number; buckets: number };
 
 function answer(sql: string, values?: unknown[]) {
+  if (/FROM buckets/i.test(sql)) return { rows: [bucketRow], rowCount: 1 };
   if (/FROM settings WHERE key = \$1/i.test(sql)) {
     const key = values?.[0];
     if (key === 'ezt_poll_checkpoint' || key === 'poll_overlap_minutes') {
@@ -83,6 +86,7 @@ jest.mock('../db/pool', () => ({
 }));
 
 import * as logModule from '../lib/log';
+import { MoreThanOneBucket } from '../db/buckets';
 import { overlapMinutes, pollOnce } from './poller';
 
 function contact(over: Record<string, unknown> = {}) {
@@ -114,6 +118,7 @@ beforeEach(() => {
   insertFails = new Set();
   dncFails = new Set();
   known = null;
+  bucketRow = { id: 7, buckets: 1 };
   listContacts.mockReset();
   listContacts.mockResolvedValue({ content: [contact()], last: true });
 });
@@ -125,7 +130,7 @@ describe('a contact EZ Texting has marked opted out', () => {
     const stats = await pollOnce();
 
     expect(stats).toMatchObject({ fetched: 1, inserted: 0, suppressed: 1, openersSent: 0 });
-    expect(conversationInsert()?.values).toEqual([42, 'suppressed']);
+    expect(conversationInsert()?.values).toEqual([42, 'suppressed', 7]);
     // Blocked through db/dnc.ts, so the block and its activity-log record are
     // one statement - docs/AUDIT.md.
     const block = recorded.find((r) => /INSERT INTO dnc_list/i.test(r.sql));
@@ -154,7 +159,7 @@ describe('a phone already on our do-not-call list', () => {
     const stats = await pollOnce();
 
     expect(stats).toMatchObject({ suppressed: 1, inserted: 0, openersSent: 0 });
-    expect(conversationInsert()?.values).toEqual([42, 'suppressed']);
+    expect(conversationInsert()?.values).toEqual([42, 'suppressed', 7]);
     expect(sendMessage).not.toHaveBeenCalled();
     // Not opted out on EZ Texting's side: the poller blocks nothing itself.
     expect(sqlOf()).not.toMatch(/INSERT INTO dnc_list/i);
@@ -172,9 +177,9 @@ describe('an ordinary new contact', () => {
     const stats = await pollOnce();
 
     expect(stats).toMatchObject({ fetched: 1, inserted: 1, suppressed: 0, openersSent: 1 });
-    expect(conversationInsert()?.values).toEqual([42, 'open']);
-    // In the flow new leads get, on its first question.
-    expect(conversationInsert()?.sql).toMatch(/FROM flows f .* WHERE f\.is_active/i);
+    // In the flow the bucket's new leads get, on its first question - the one bucket's (B08).
+    expect(conversationInsert()?.values).toEqual([42, 'open', 7]);
+    expect(conversationInsert()?.sql).toMatch(/FROM flows f .* WHERE f\.is_active AND f\.bucket_id = \$3/i);
     expect(sendMessage).toHaveBeenCalledTimes(1);
     expect(sqlOf()).toMatch(/INSERT INTO messages/i);
     // The reply window starts when the opener goes out.
@@ -378,6 +383,19 @@ describe('the checkpoint, against what EZ Texting lists (review Q6)', () => {
     await pollOnce();
 
     expect(leadsInserted()).toEqual(['+15550000041']);
+  });
+});
+
+describe('one bucket - B08', () => {
+  it('with a second bucket, fails the poll loudly - before reading EZ Texting, so nobody is taken in', async () => {
+    bucketRow = { id: 7, buckets: 2 };
+
+    await expect(pollOnce()).rejects.toBeInstanceOf(MoreThanOneBucket);
+    expect(listContacts).not.toHaveBeenCalled();
+    expect(sqlOf()).not.toMatch(/INSERT INTO (leads|conversations)/i);
+    // The checkpoint stays, and no read is recorded: health goes degraded.
+    expect(sqlOf()).not.toMatch(/INSERT INTO settings/i);
+    expect(sendMessage).not.toHaveBeenCalled();
   });
 });
 

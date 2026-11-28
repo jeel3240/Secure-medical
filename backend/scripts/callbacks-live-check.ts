@@ -17,6 +17,7 @@ import { check, failureCount, verdict } from './check';
 import { pool } from '../src/db/pool';
 import { startOfTodaySql, startOfTomorrowSql } from '../src/db/sql';
 import { createCallback, listCallbacks, updateCallback } from '../src/db/callbacks';
+import { ANTIBIOTICS_FLOW } from './live-flow';
 
 
 async function refuseIfNotEmpty(): Promise<void> {
@@ -180,7 +181,7 @@ async function main(): Promise<void> {
     // on is tomorrow after 23:15 UTC - it failed then, whatever the code did.
     const other = await makeLead('+15550000402');
     await pool.query(
-      `INSERT INTO conversations (lead_id, flow_id, status, step, score, tier) VALUES ($1, (SELECT id FROM flows WHERE is_active), 'completed', 3, 100, 'HOT')`,
+      `INSERT INTO conversations (lead_id, flow_id, status, step, score, tier) VALUES ($1, ${ANTIBIOTICS_FLOW}, 'completed', 3, 100, 'HOT')`,
       [other]
     );
     await pool.query(`INSERT INTO notes (lead_id, agent_id, body) VALUES ($1, $2, 'older note')`, [other, maya]);

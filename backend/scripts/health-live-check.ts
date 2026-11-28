@@ -21,6 +21,7 @@
 import { check, failureCount, verdict } from './check';
 import { pool } from '../src/db/pool';
 import { getHealth, type HealthCheck } from '../src/db/health';
+import { ANTIBIOTICS_FLOW } from './live-flow';
 
 
 async function refuseIfNotEmpty(): Promise<void> {
@@ -168,7 +169,7 @@ async function main(): Promise<void> {
 
     await pool.query(
       `INSERT INTO conversations (lead_id, flow_id, status, step, expires_at)
-       VALUES ($1, (SELECT id FROM flows WHERE is_active), 'open', 1, now() - interval '1 day')`,
+       VALUES ($1, ${ANTIBIOTICS_FLOW}, 'open', 1, now() - interval '1 day')`,
       [id]
     );
 

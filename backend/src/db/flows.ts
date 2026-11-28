@@ -77,18 +77,21 @@ export async function loadFlow(q: Db, flowId: number): Promise<Flow | null> {
 }
 
 /**
- * Starts a lead's conversation in the flow new leads get: on its first
- * question when `open`, on none when `suppressed` (a blocked number is saved
- * so its arrival is visible, and is never asked anything).
+ * Starts a lead's conversation in the flow the bucket's new leads get - its one
+ * active flow (B08): on its first question when `open`, on none when
+ * `suppressed` (a blocked number is saved so its arrival is visible, and is
+ * never asked anything). The bucket is the caller's to say: never "the active
+ * flow", which a second bucket would make two.
  *
- * Throws when no flow is active. A lead with no conversation would sit in the
- * database unseen and unasked; failing the poll leaves the checkpoint where it
- * was, so the lead is picked up again once a flow is active.
+ * Throws when the bucket has no active flow. A lead with no conversation would
+ * sit in the database unseen and unasked; the poller's transaction then takes
+ * the lead back, and the next poll reads the contact again.
  */
 export async function startConversation(
   q: Db,
   leadId: number,
-  status: 'open' | 'suppressed'
+  status: 'open' | 'suppressed',
+  bucketId: number
 ): Promise<void> {
   const { rowCount } = await q.query(
     `INSERT INTO conversations (lead_id, status, step, flow_id, current_question_id)
@@ -101,11 +104,11 @@ export async function startConversation(
        SELECT fq.id, fq.position FROM flow_questions fq
        WHERE fq.flow_id = f.id ORDER BY fq.position LIMIT 1
      ) first ON true
-     WHERE f.is_active`,
-    [leadId, status]
+     WHERE f.is_active AND f.bucket_id = $3`,
+    [leadId, status, bucketId]
   );
   if (rowCount !== 1) {
-    throw new Error('No active flow with a first question: cannot start a conversation. See docs/FLOWS.md.');
+    throw new Error(`Bucket ${bucketId} has no active flow with a first question: cannot start a conversation. See docs/FLOWS.md.`);
   }
 }
 

@@ -23,7 +23,7 @@ import { getTimeline } from '../src/db/timeline';
 import { startConversation } from '../src/db/flows';
 import { failAutomatedCall, keepAnswer, linkAutomatedCall, startAutomatedCall, takeTransfer } from '../src/db/auto-calls';
 import { endAiCall, saveTurn, startAiCall } from '../src/ai/relay-store';
-import { replyAs } from './live-flow';
+import { antibiotics, ANTIBIOTICS_FLOW, replyAs } from './live-flow';
 
 
 async function refuseIfNotEmpty(): Promise<void> {
@@ -65,7 +65,7 @@ async function main(): Promise<void> {
     const lead = await makeLead('+15550000301', '2 hours');
     await pool.query(
       `INSERT INTO conversations (lead_id, flow_id, status, step, q1, q2, q3, score, tier)
-       VALUES ($1, (SELECT id FROM flows WHERE is_active), 'completed', 3, '3', '1', '1', 100, 'HOT')`,
+       VALUES ($1, ${ANTIBIOTICS_FLOW}, 'completed', 3, '3', '1', '1', 100, 'HOT')`,
       [lead]
     );
     await pool.query(
@@ -98,7 +98,7 @@ async function main(): Promise<void> {
     const lead = await makeLead('+15550000309', '2 hours');
     await pool.query(
       `INSERT INTO conversations (lead_id, flow_id, status, step, q1, q2, q3, score, tier, completed_at)
-       VALUES ($1, (SELECT id FROM flows WHERE is_active), 'completed', 3, '2', '2', '3', 60, 'WARM', now() - interval '60 minutes')`,
+       VALUES ($1, ${ANTIBIOTICS_FLOW}, 'completed', 3, '2', '2', '3', 60, 'WARM', now() - interval '60 minutes')`,
       [lead]
     );
     await pool.query(
@@ -141,7 +141,7 @@ async function main(): Promise<void> {
     const lead = await makeLead('+15550000302', '3 hours');
     await pool.query(
       `INSERT INTO conversations (lead_id, flow_id, status, step, q1, score, tier)
-       VALUES ($1, (SELECT id FROM flows WHERE is_active), 'open', 2, '3', 25, 'LOW')`,
+       VALUES ($1, ${ANTIBIOTICS_FLOW}, 'open', 2, '3', 25, 'LOW')`,
       [lead]
     );
     await pool.query(
@@ -198,7 +198,7 @@ async function main(): Promise<void> {
     const lead = await makeLead('+15550000303', '1 hour');
     await pool.query(
       `INSERT INTO conversations (lead_id, flow_id, status, step, score, agent_took_over_at)
-       VALUES ($1, (SELECT id FROM flows WHERE is_active), 'open', 1, 10, now() - interval '30 minutes')`,
+       VALUES ($1, ${ANTIBIOTICS_FLOW}, 'open', 1, 10, now() - interval '30 minutes')`,
       [lead]
     );
     await pool.query(
@@ -225,7 +225,7 @@ async function main(): Promise<void> {
     const lead = await makeLead('+15550000304', '10 days');
     await pool.query(
       `INSERT INTO conversations (lead_id, flow_id, status, step, score, tier, expires_at)
-       VALUES ($1, (SELECT id FROM flows WHERE is_active), 'expired', 1, 10, 'LOW', now() - interval '3 days')`,
+       VALUES ($1, ${ANTIBIOTICS_FLOW}, 'expired', 1, 10, 'LOW', now() - interval '3 days')`,
       [lead]
     );
     await pool.query(
@@ -242,7 +242,7 @@ async function main(): Promise<void> {
     const lead = await makeLead('+15550000305', '1 hour');
     await pool.query(
       `INSERT INTO conversations (lead_id, flow_id, status, step, score, expires_at)
-       VALUES ($1, (SELECT id FROM flows WHERE is_active), 'open', 1, 0, now() + interval '7 days')`,
+       VALUES ($1, ${ANTIBIOTICS_FLOW}, 'open', 1, 0, now() + interval '7 days')`,
       [lead]
     );
 
@@ -257,7 +257,7 @@ async function main(): Promise<void> {
     // walked the answers in order and matched digits, so "yes" was skipped and
     // the later "1" took question 1's label.
     const lead = await makeLead('+15550001900', '10 minutes');
-    await startConversation(pool, lead, 'open');
+    await startConversation(pool, lead, 'open', await antibiotics());
     for (const text of ['yes', 'hmm', '2', '1']) await replyAs(lead, text, { stored: true });
     const replies = ((await getTimeline(lead)) ?? []).filter((e) => e.kind === 'inbound');
     check(
@@ -268,7 +268,7 @@ async function main(): Promise<void> {
 
     // A second walk on the same lead: the first walk's replies keep their own answers.
     await pool.query(`UPDATE conversations SET status = 'expired' WHERE lead_id = $1 AND status = 'open'`, [lead]);
-    await startConversation(pool, lead, 'open');
+    await startConversation(pool, lead, 'open', await antibiotics());
     await replyAs(lead, 'no', { stored: true });
     const after = ((await getTimeline(lead)) ?? []).filter((e) => e.kind === 'inbound');
     check(

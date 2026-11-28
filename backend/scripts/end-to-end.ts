@@ -127,6 +127,7 @@ import { dialDueLeads, type DialDeps } from '../src/worker/auto-calls';
 import { placeAutoCall } from '../src/worker/place-auto-call';
 import type { AutoCallNumbers } from '../src/auto-calls-settings';
 import type { TwilioSettings } from '../src/twilio-settings';
+import { antibiotics } from './live-flow';
 
 
 /**
@@ -414,7 +415,7 @@ async function silentLead(phone: string, first: string, textedMinutesAgo: number
       [phone, first]
     )
   ).rows[0].id;
-  await startConversation(pool, id, 'open');
+  await startConversation(pool, id, 'open', await antibiotics());
   await sendOpener({ id, phone, firstName: first }, (await openingQuestion(pool, id))!);
   await pool.query(
     `UPDATE conversations SET question_sent_at = now() - ($2 || ' minutes')::interval WHERE lead_id = $1`,
@@ -448,7 +449,7 @@ async function main(): Promise<void> {
   ).rows[0].id;
 
   // In the flow new leads get, on its first question - as the poller does.
-  await startConversation(pool, leadId, 'open');
+  await startConversation(pool, leadId, 'open', await antibiotics());
 
   // Before the first question has gone out, a text from them is not an answer
   // to it - reply-flow.ts, "a reply before our text".

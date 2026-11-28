@@ -64,9 +64,11 @@ scripts/live-checks.sh harness-upgrade-check  # an upgrade check, by its whole n
 - Every check uses the one `check()` in `backend/scripts/check.ts`, which compares
   values whatever the order of their keys and prints the verdict the runner reads.
   Beside it, `refusedBy` names the constraint that refused a row, and `rolledBack`
-  tries statements in a transaction that is always rolled back - for a check that
-  must drop an index, or add a second bucket, without the checks after it seeing
-  that. `backend/scripts/live-flow.ts` puts a check's lead somewhere in a flow through
+  tries statements - or the app's own functions, on its connection - in a
+  transaction that is always rolled back: for a check that must drop an index, or
+  add a second bucket, without the checks after it seeing that. `live-flow.ts`
+  gives a check the antibiotics bucket (`antibiotics()`) and, for a conversation
+  seeded by hand, its active flow (`ANTIBIOTICS_FLOW`). `backend/scripts/live-flow.ts` puts a check's lead somewhere in a flow through
   the real reply path, so it has the rows a real lead has. Nothing is sent.
 
 Which check proves what is in each area doc's Tests table.
@@ -191,7 +193,8 @@ docker compose exec api npm run dev:ask-again -- +16025550123
 ```
 
 It marks the lead's open conversation expired, if it has one, starts a new one in
-the flow new leads get, and sends the first question the way the poller does.
+the flow its bucket's new leads get - the bucket of its newest conversation - and
+sends the first question the way the poller does.
 Nothing is deleted: the earlier walks and their answers stay on the lead, and the
 reset is a `dev.test_reset` row in the activity log.
 
@@ -244,6 +247,7 @@ What it checks is `DOCS.md`, "Checking a doc".
 
 ## History
 
+- 2026-11-28 · `dev:ask-again` starts the walk in the lead's own bucket; `rolledBack` hands over its connection, and `live-flow.ts` the antibiotics bucket and its flow · B08
 - 2026-11-28 · `check.ts`'s `refusedBy` (B04) and `rolledBack` written down; `buckets-upgrade-check`, the third upgrade check · B07
 - 2026-11-28 · "When it goes wrong": an upgrade check's last step, which migrates the rest, prints `migrate.js failed` with no `--to` (`scripts/upgrade.ts`, `migrateTo`) · review of B01-B06
 - 2026-11-28 · Upgrade checks: `migrate.js --to`, `scripts/upgrade.ts`, `live-checks.sh` leaving an upgrade check's database to it, and the first check, `harness-upgrade-check` · B03

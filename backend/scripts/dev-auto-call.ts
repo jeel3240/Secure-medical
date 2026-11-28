@@ -34,6 +34,7 @@
 import { mayRing, readAutoCalls, readAutoCallTestNumbers } from '../src/auto-calls-settings';
 import { config } from '../src/config';
 import { recordActivity } from '../src/db/activity';
+import { onlyBucket } from '../src/db/buckets';
 import { releaseNumber, RELEASE_REASONS } from '../src/db/dnc';
 import { startConversation } from '../src/db/flows';
 import { pool } from '../src/db/pool';
@@ -114,7 +115,8 @@ async function giveConversation(leadId: number): Promise<boolean> {
       await client.query('COMMIT');
       return false;
     }
-    await startConversation(client, leadId, 'open');
+    // In the one bucket's flow, as the poller gives every lead (B08).
+    await startConversation(client, leadId, 'open', await onlyBucket(client));
     const days = await readExpiryDays(client);
     await client.query(
       `UPDATE conversations

@@ -44,6 +44,7 @@ import { dialRoom } from '../src/db/auto-dial';
 import { finishCall, recordAnsweredBy } from '../src/db/calls';
 import { startConversation } from '../src/db/flows';
 import { pool } from '../src/db/pool';
+import { antibiotics, ANTIBIOTICS_FLOW } from './live-flow';
 
 
 async function refuseIfNotEmpty(): Promise<void> {
@@ -367,7 +368,7 @@ async function main(): Promise<void> {
   {
     const { leadId, callId } = await placedCall('+15550000511', 'CA-STOP-1');
     // Still waiting on the first text's question, as most leads the robot calls are.
-    await startConversation(pool, leadId, 'open');
+    await startConversation(pool, leadId, 'open', await antibiotics());
     const stop = {
       callId,
       step: q1,
@@ -401,7 +402,7 @@ async function main(): Promise<void> {
 
     const { leadId: finishedLead, callId: finishedCall } = await placedCall('+15550000520', 'CA-STOP-3');
     await pool.query(
-      `INSERT INTO conversations (lead_id, flow_id, status, step, score, tier, completed_at) VALUES ($1, (SELECT id FROM flows WHERE is_active), 'completed', 30, 60, 'WARM', now())`,
+      `INSERT INTO conversations (lead_id, flow_id, status, step, score, tier, completed_at) VALUES ($1, ${ANTIBIOTICS_FLOW}, 'completed', 30, 60, 'WARM', now())`,
       [finishedLead]
     );
     await keepAnswer({ ...stop, callId: finishedCall });

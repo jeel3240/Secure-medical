@@ -20,7 +20,7 @@
  */
 import { check, failureCount, verdict } from './check';
 import { pool } from '../src/db/pool';
-import { replyAs, startFlow } from './live-flow';
+import { antibiotics, replyAs, startFlow } from './live-flow';
 import axios from 'axios';
 
 // Stubbed at the HTTP boundary, not at sendMessage.
@@ -297,7 +297,7 @@ async function main(): Promise<void> {
     const before = await waitingOnQ1('+15550000693');
     await startIncomingCall({ callSid: 'CA-2C-BEFORE', fromPhone: '+15550000693' });
     await pool.query(`UPDATE conversations SET status = 'expired' WHERE lead_id = $1`, [before]);
-    await startConversation(pool, before, 'open');
+    await startConversation(pool, before, 'open', await antibiotics());
     await pool.query(`UPDATE conversations SET question_sent_at = now() WHERE lead_id = $1 AND status = 'open'`, [before]);
     const fresh = await replyAs(before, '1', { stored: true });
     check('a call to an earlier conversation stops nothing in a new one', [fresh?.result.needsPerson, (await conversationOf(before)).step], [false, 20]);

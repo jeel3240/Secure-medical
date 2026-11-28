@@ -1,3 +1,4 @@
+import { onlyBucket } from '../db/buckets';
 import { blockNumber, DNC_REASONS } from '../db/dnc';
 import { openingQuestion, startConversation } from '../db/flows';
 import { EZT_CHECKPOINT_KEY, markEztRead } from '../db/poll-state';
@@ -123,6 +124,8 @@ async function isOnDnc(phone: string): Promise<boolean> {
 async function insertLead(
   contact: EztContact,
   phone: string,
+  /** The bucket the lead arrived for - its flow is the one they get (B08). */
+  bucketId: number,
   status: 'open' | 'suppressed',
   /** EZ Texting has the contact opted out and we hold no live block for it: block it. */
   blockAsOptedOut = false
@@ -157,8 +160,8 @@ async function insertLead(
 
     const leadId: number = lead.rows[0].id;
 
-    // In the flow new leads get, on its first question - db/flows.ts.
-    await startConversation(client, leadId, status);
+    // In the flow the bucket's new leads get, on its first question - db/flows.ts.
+    await startConversation(client, leadId, status, bucketId);
 
     // Through db/dnc.ts, like every other block - Jeel, 2026-10-01. Until then
     // this was the poller's own insert, `ON CONFLICT DO NOTHING`, which wrote no
@@ -226,7 +229,7 @@ async function openLead(leadId: number, phone: string, firstName: string | null)
  * One contact of the group: blocked, new, or a phone we hold already.
  * Throws when the database does - the caller counts it and goes on.
  */
-async function takeIn(contact: EztContact, groupName: string, stats: PollStats): Promise<void> {
+async function takeIn(contact: EztContact, groupName: string, bucketId: number, stats: PollStats): Promise<void> {
   // `like` also matches "weightloss - sent", so confirm real membership.
   if (!isInGroup(contact, groupName)) {
     stats.skipped += 1;
@@ -239,7 +242,7 @@ async function takeIn(contact: EztContact, groupName: string, stats: PollStats):
   // (docs/bucket-tickets B22, B23) replaces this branch.
   const alreadyBlocked = await isOnDnc(phone);
   if (contact.optOut || alreadyBlocked) {
-    const leadId = await insertLead(contact, phone, 'suppressed', Boolean(contact.optOut) && !alreadyBlocked);
+    const leadId = await insertLead(contact, phone, bucketId, 'suppressed', Boolean(contact.optOut) && !alreadyBlocked);
     if (leadId === null) {
       stats.skipped += 1;
     } else {
@@ -248,7 +251,7 @@ async function takeIn(contact: EztContact, groupName: string, stats: PollStats):
     return;
   }
 
-  const leadId = await insertLead(contact, phone, 'open');
+  const leadId = await insertLead(contact, phone, bucketId, 'open');
   if (leadId === null) {
     stats.skipped += 1;
   } else {
@@ -273,10 +276,17 @@ async function takeIn(contact: EztContact, groupName: string, stats: PollStats):
  * A fetch that fails, or a page listed oldest first, throws: the checkpoint is
  * left untouched, so the next run re-covers the same ground, and the poll is
  * not recorded as a read.
+ *
+ * **Every lead it takes in is in the one bucket - B08.** It reads one group, so
+ * it cannot tell which bucket a contact arrived for; with a second bucket it
+ * throws `MoreThanOneBucket` before reading anything, rather than give that
+ * bucket's leads antibiotics' questions. Each arrival gets its own bucket in
+ * B23 and B24.
  */
 export async function pollOnce(): Promise<PollStats> {
   const startedAt = Date.now();
   const groupName = config.ezt.group;
+  const bucketId = await onlyBucket(pool);
 
   const checkpoint = await readCheckpoint();
   const cutoff = new Date(checkpoint.getTime() - (await readOverlapMs()));
@@ -322,7 +332,7 @@ export async function pollOnce(): Promise<PollStats> {
       }
 
       try {
-        await takeIn(contact, groupName, stats);
+        await takeIn(contact, groupName, bucketId, stats);
       } catch (err) {
         // No phone or name: the error's message only (`errText`), and when
         // EZ Texting listed the contact, which finds it there.

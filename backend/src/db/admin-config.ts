@@ -20,6 +20,7 @@
  */
 
 import { expiryDays } from './sql';
+import { onlyBucket } from './buckets';
 import { loadFlow } from './flows';
 import { RECORDING_NOTICE } from '../core/calls';
 import { readAiAgentSwitch } from '../ai/settings';
@@ -281,7 +282,8 @@ export async function getAdminConfig(calling: CallingContext = NO_CALLING): Prom
   // One read at a time: eleven at once, with the call settings', took more than the pool's ten connections on a page
   // polled every 5 seconds (review M18, 2026-11-22). Each is quick.
   const settingsRows = await pool.query(`SELECT key, value FROM settings`);
-  const activeFlow = await pool.query(`SELECT id, key, name FROM flows WHERE is_active`);
+  // The one bucket's flow (B08) - a bucket picker in its place is B31.
+  const activeFlow = await pool.query(`SELECT id, key, name FROM flows WHERE is_active AND bucket_id = $1`, [await onlyBucket(pool)]);
   const tierRows = await pool.query(`SELECT name, min_score, max_score FROM tiers ORDER BY sort_order`);
   const name = await longestFirstName();
   const script = await loadActiveCallScript(pool);
@@ -289,7 +291,7 @@ export async function getAdminConfig(calling: CallingContext = NO_CALLING): Prom
   const aiSwitch = await readAiAgentSwitch(pool);
 
   const settings = new Map<string, string>(settingsRows.rows.map((r) => [r.key, r.value]));
-  // The page describes the flow new leads get - docs/FLOWS.md.
+  // The page describes the flow the bucket's new leads get - docs/FLOWS.md.
   const flowRow = activeFlow.rows[0] ?? null;
   const flow = flowRow ? await loadFlow(pool, flowRow.id) : null;
 
