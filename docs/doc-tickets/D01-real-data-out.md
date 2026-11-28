@@ -19,7 +19,7 @@
 
 - [ ] `grep -rn` for each real number, the contact's name, "nora" and the domain over `docs/`, `CLAUDE.md`, `README.md`, `backend/` and `frontend/` (excluding `node_modules`) finds nothing;
 - [ ] backend `npm test` and frontend `npm test` pass; `scripts/live-checks.sh` passes;
-- [ ] Jeel's answer on rewriting history recorded under *As built*.
+- [x] Jeel's answer on rewriting history recorded under *As built*.
 
 ## Tests
 
@@ -38,7 +38,7 @@ Restructuring any of those docs.
 - Replaced in 30 files: seven docs, two code comments (`backend/src/db/sql.ts`, `backend/src/api/webhooks.ts`), a frontend comment, test fixtures in backend and frontend, the e2e and `.env.example`. The invented values: the handset `+16025550147`, the contact `jamie rivera` at `15125550163`, the sending number `15205550109`, the agent Nora, and `leads.example.com` in tests.
 - The domain stays in `caddy/Caddyfile`: Caddy needs it to serve the site.
 - Proved: backend 1,965 tests, frontend 460, every one of the 23 live checks, the e2e's 142 checks; `grep` over the repo finds none of the old values.
-- **Git history still holds the old text** - removing it needs a rewrite of `dev` and `main` and a force push: Jeel's decision, asked at the merge.
+- **Git history still holds the old text.** Jeel, 2026-11-27: leave the history as it is - no rewrite, no force push.
 
 ---
 

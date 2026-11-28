@@ -105,7 +105,7 @@ S is a few hours; M about a day. The *Depends on* column decides what can start.
 
 | What | Blocks |
 |---|---|
-| Jeel: whether to remove the real data from git history too (a rewrite and a force push) | Only D01's last box |
+| Nothing. Jeel, 2026-11-27: the git history is left as it is, and the inferred decision dates stand | - |
 
 ## What the audit found, in short
 
