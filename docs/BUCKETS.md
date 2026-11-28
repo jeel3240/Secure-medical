@@ -1,9 +1,11 @@
 # Several buckets (Phase 8)
 
-**Planned 2026-11-25 to 2026-11-27. Not started: Part 1 waits on the client's
-answers under "Open questions". Part 2 is on hold; Part 3 comes after both.**
-This doc is the agreed plan, and once building starts, its tracker. Every
-change to it, and every ticket built from it, updates this doc in the same
+**Planned 2026-11-25 to 2026-11-27. Not started. Part 1 is split into 49 small
+tickets, B01-B49, written 2026-11-27 - the tracker is
+[`bucket-tickets/README.md`](bucket-tickets/README.md); about forty of them can
+be built before the client answers, the intake tickets wait on the answers
+under "Open questions". Part 2 is on hold; Part 3 comes after both.** This doc
+is the agreed design; every ticket built from it updates this doc in the same
 commit, so it always says what is decided, what is built and what is not.
 
 A **bucket** is one campaign: the EZ Texting group its leads arrive in, its
@@ -33,6 +35,14 @@ The work is three parts, in this order. Each can go live on its own:
 | Switching a bucket's texts on texts everyone who waited in its group while it was off, however long ago they arrived | Jeel | 2026-11-27 |
 | The database is kept clean: each fact in one place - what moves to a new table is copied, then removed from the old place - and every rule enforced by the database itself | Jeel | 2026-11-27 |
 | Two EZ Texting groups per bucket - "Antibiotics" and "Antibiotics - taken" - so the app sees a person already on EZ Texting who joins a bucket | Proposed, waiting for the client | 2026-11-27 |
+| The **Needs review · 2 buckets** tag clears when an agent picks the person up, as Inbound reply does; on Admin > Leads a held person counts under Needs review | Jeel | 2026-11-27 |
+| "Active" in a bucket means: its text questions are open, or an agent holds the person, or they have an open callback, or a review conversation - an active person's new bucket is held | Jeel | 2026-11-27 |
+| A person's "Received" date is their newest arrival, so someone who comes back for a new bucket counts as new today | Jeel | 2026-11-27 |
+| "Worked" means worked since this bucket's conversation began: a new bucket counts as a new lead and gets its own robot call | Jeel | 2026-11-27 |
+| A lead closed before Closed asked why (no reason saved) starts a new bucket; one saved as the retired "Wrong number" does not | Jeel | 2026-11-27 |
+| A person arriving in two buckets in one read goes to the older bucket (the lower id); the other holds them | Jeel | 2026-11-27 |
+| A broken knowledge pack stops the API, as today - packs are compiled in and checked by the tests before any merge, so a broken one never reaches the server | Jeel | 2026-11-27 |
+| The app creates each bucket's "- taken" group itself, once, then reuses it - only after the client's OK | Jeel | 2026-11-27 |
 
 ## Part 1: several buckets at the same time
 
@@ -81,13 +91,15 @@ When a person arrives in a new bucket:
 
 | Their other bucket | What happens |
 |---|---|
-| Text questions still open | Nothing is sent for the new bucket: no texts, no robot call. They go into the agents' queue as **Needs review · 2 buckets**; the first bucket carries on as normal, so their replies answer its questions |
+| Active: text questions still open, an agent holding them, an open callback, or a review conversation | Nothing is sent for the new bucket: no texts, no robot call. They go into the agents' queue as **Needs review · 2 buckets**; the first bucket carries on as normal, so their replies answer its questions |
 | Finished or expired | The new bucket starts as normal: its first question, then its robot call |
 | Number on the DNC list, or opted out in EZ Texting | Nothing, ever |
 
 An agent who opens a person tagged **Needs review · 2 buckets** sees both
-buckets on the lead page and calls them. Nothing starts the new bucket's
-questions later by itself.
+buckets on the lead page and calls them; the tag clears as soon as an agent
+picks them up. Nothing starts the new bucket's questions later by itself.
+`decideArrival` (B22) is where these rows, and those of the next section,
+live in code.
 
 ### A closed lead joins a new bucket
 
@@ -213,7 +225,10 @@ There is one Seri, handed the lead's bucket's knowledge pack on each call.
 - A lead never hears another bucket's offer or answers.
 - Each bucket has its own Seri switch; with it off, its calls use its robot
   script.
-- A broken pack switches off that bucket's Seri only.
+- A broken pack stops the API, as today: packs are compiled in and every pack
+  is checked by the tests before any merge, so a broken one never reaches the
+  server. *(Until 2026-11-27 this read "switches off that bucket's Seri only" -
+  changed with the tickets, decision of that day.)*
 - An improvement to how she talks, listens or books call backs helps every
   bucket at once.
 
@@ -317,7 +332,9 @@ against a real Postgres, as for every migration since 012.
    testing.
 
 Before each step goes live, the antibiotics bucket is checked to work exactly
-as today.
+as today. The tickets split these steps finer, in the order the database and
+the deploys need - the tracker, `bucket-tickets/README.md`, is the order that
+counts.
 
 ### What each new bucket needs from the client
 
