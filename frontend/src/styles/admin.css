@@ -166,10 +166,12 @@
 }
 
 /* Overview */
-/* Overview's four totals: one card, split by thin rules. */
+/* Overview's totals: one card, one row, split by thin rules - as many columns
+   as there are totals. */
 .stats {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(0, 1fr);
   margin-bottom: var(--space-4);
 }
 

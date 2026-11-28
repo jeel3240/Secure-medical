@@ -86,3 +86,11 @@ export type CloseReason = (typeof CLOSE_REASONS)[number];
 export function isCloseReason(value: string): value is CloseReason {
   return (CLOSE_REASONS as readonly string[]).includes(value);
 }
+
+/**
+ * A sale, as Admin > Overview counts it (B05): a Closed whose reason is
+ * `sold`, or the retired `sold` outcome from before 2026-09-28, which meant
+ * the same. Typed against both lists, so neither can name a value they lack.
+ */
+export const SOLD_REASON: CloseReason = 'sold';
+export const RETIRED_SOLD: RetiredDisposition = 'sold';

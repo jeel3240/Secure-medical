@@ -112,6 +112,8 @@ export interface Overview {
     completed: number;
     /** Leads closed in the period - leads, not presses. */
     closed: number;
+    /** Of those, sold (B05): closed with the reason Sold, or the retired Sold. */
+    sold: number;
   };
   agents: {
     agentId: number;
@@ -120,6 +122,8 @@ export interface Overview {
     callbacksDue: number;
     holding: number;
     closed: number;
+    /** Leads they closed as sold in the period (B05). */
+    sold: number;
     lastActiveAt: string | null;
   }[];
   activity: {

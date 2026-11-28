@@ -300,6 +300,38 @@ async function main(): Promise<void> {
     check('covers every agent action', kinds, ['callback', 'callback', 'callback', 'disposition', 'disposition', 'disposition', 'note']);
     check('newest first', after.activity[0].at >= after.activity[1].at, true);
     check('and names the lead', after.activity[0].leadName, 'Jordan');
+
+    // Sold (B05): a Closed whose reason is sold, or the retired sold. Every
+    // period here is the viewer's - Phoenix - so "today" does not hang on the
+    // hour the check runs.
+    console.log('\nsold (B05)');
+    const zone = 'America/Phoenix';
+    const phoenixMidnight = `(date_trunc('day', now() AT TIME ZONE '${zone}') AT TIME ZONE '${zone}')`;
+    const before = (await getOverview('today', zone)).kpis.sold;
+    const outcome = async (phone: string, agent: number, value: string, reason: string | null, at = 'now()') => {
+      const id = await makeLead({ phone, status: 'completed', score: 80, tier: 'HOT' });
+      // `at` is SQL written here, never input.
+      await pool.query(`INSERT INTO dispositions (lead_id, agent_id, value, reason, created_at) VALUES ($1, $2, $3, $4, ${at})`, [id, agent, value, reason]);
+      return id;
+    };
+    const twice = await outcome('+15550000801', maya, 'closed', 'sold');
+    await pool.query(`INSERT INTO dispositions (lead_id, agent_id, value, reason) VALUES ($1, $2, 'closed', 'sold')`, [twice, maya]);
+    await outcome('+15550000802', sam, 'sold', null);
+    await outcome('+15550000803', maya, 'closed', 'not_interested');
+    await outcome('+15550000804', maya, 'closed', 'wrong_number');
+    await outcome('+15550000805', maya, 'closed', null);
+    await outcome('+15550000806', maya, 'closed', 'sold', `now() - interval '10 days'`);
+    await outcome('+15550000807', sam, 'closed', 'sold', `${phoenixMidnight} - interval '1 minute'`);
+    await outcome('+15550000808', sam, 'closed', 'sold', `${phoenixMidnight} + interval '1 minute'`);
+
+    const soldToday = await getOverview('today', zone);
+    check('none before', before, 0);
+    check('today: a reason of sold, sold twice counted once, the retired sold, and one just after Phoenix midnight', soldToday.kpis.sold, 3);
+    check('not interested, wrong number and no reason are closed, not sold', soldToday.kpis.closed - soldToday.kpis.sold >= 3, true);
+    check('per agent: Maya one, Sam two', [soldToday.agents.find((a) => a.name === 'Maya')?.sold, soldToday.agents.find((a) => a.name === 'Sam')?.sold], [1, 2]);
+    const soldThirty = await getOverview('30d', zone);
+    check('30 days: also the one 10 days ago and the one just before Phoenix midnight', soldThirty.kpis.sold, 5);
+    check('and per agent', [soldThirty.agents.find((a) => a.name === 'Maya')?.sold, soldThirty.agents.find((a) => a.name === 'Sam')?.sold], [2, 3]);
   }
 
   console.log('\nthe DNC list');

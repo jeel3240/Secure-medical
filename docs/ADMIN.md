@@ -155,17 +155,17 @@ on each call is on the lead's timeline and in Admin > Leads' Call column
 
 ### Overview
 
-`GET /api/admin/overview?period=today|7d|30d&tz=` - four totals, a per-agent
+`GET /api/admin/overview?period=today|7d|30d&tz=` - five totals, a per-agent
 table, the system checks and a recent activity feed, all worked out from the
 existing tables on each read. Nothing is stored as a running total: at 50-100
 leads a day the queries are cheap, and a stale counter is worse than a slow one.
 
 | Part | Shows |
 |---|---|
-| Totals | Leads in · Replied · Completed · Closed - for Today, 7 days or 30 days, chosen on the navy switcher |
-| Agents | Per active user, superadmins included: **Working now**, **Closed** in the period, **Due today**, **Last active** |
+| Totals | Leads in · Replied · Completed · Closed · Sold - for Today, 7 days or 30 days, chosen on the navy switcher |
+| Agents | Per active user, superadmins included: **Working now**, **Closed** and **Sold** in the period, **Due today**, **Last active** |
 | System | Database, EZ Texting sync, the expiry sweep, sending and calling - each OK or Degraded - and incoming replies, which shows its last reply with no verdict. Calling is Degraded when the phone number or the TwiML App no longer points at this server, and reads "not set up", with no verdict, where calling is off. From the health endpoint (`LOGGING.md`), so the screen and that endpoint cannot disagree |
-| Recent activity | Under the cards: "nora closed Omar Haddad", newest first, the lead's name linking to its timeline |
+| Recent activity | Under the cards: "nora closed Omar Haddad · Sold", newest first, the lead's name linking to its timeline; why it was closed after the name, when it was asked (`AGENT-WORKSPACE.md`, "Dispositions") |
 
 **Every number counts what happened in the period:**
 
@@ -175,6 +175,7 @@ leads a day the queries are cheap, and a stale counter is worse than a slow one.
 | Replied | Leads whose **first** reply came in the period. A lead from yesterday who first replies today is today's; one writing again weeks later is not counted twice |
 | Completed | Leads who finished their flow's questions in the period, whichever way it ended - a lead who said No and then chose special offers is one. `conversations.completed_at` |
 | Closed | **Leads** closed in the period, not presses of Closed: a lead closed, reopened by a text and closed again is one. It counts `closed` and the retired `sold`, `not_interested` and `wrong_number` (`AGENT-WORKSPACE.md`, "Dispositions") |
+| Sold | Of those, the **leads** closed as sold in the period: a Closed whose reason is Sold (`dispositions.reason`, asked since B04), or the retired `sold` from before 2026-09-28 (`SOLD_REASON`, `RETIRED_SOLD`). Not interested, Wrong number and a Closed saved without a reason are not. Leads, not presses, as Closed. Per agent in the agents table, against who saved it |
 | Working now | Leads the agent holds right now, whatever the period |
 | Due today | The agent's open callbacks due **by the end of today** in the viewer's time zone, overdue ones included - one booked for next week is not. A call back Seri booked counts once it is theirs - booked for the lead they held, or taken on a pick-up; one nobody has taken is no one's (`CALLBACKS.md`) |
 | Last active | Their newest note, callback booked for them, outcome, call they placed or answered - a transfer they took from an automated call included, never one nobody took - or SMS that went out |
@@ -209,8 +210,8 @@ line under its name - "The last text was refused by EZ Texting."
 
 **On screen** (`pages/admin/OverviewPage.tsx`) the page is in the card style of
 every other admin page: the navy period switcher - Today, 7 days, 30 days - and
-"Live · updated just now" at the top right; the four totals in one card split by
-thin rules (`.stats`); the Agents table and the System checks side by side from
+"Live · updated just now" at the top right; the five totals in one card, one row,
+split by thin rules (`.stats`, as many columns as totals); the Agents table and the System checks side by side from
 1100px wide; Recent activity across the page below, the lead names in the brand
 navy. A period switch keeps the old numbers on screen, faded, until the new ones
 land (`usePolling`'s `keepPreviousData` - `FRONTEND.md`, "The polling hook"),
@@ -317,8 +318,9 @@ Configuration reads `flows`, `flow_questions`, `flow_choices`, `settings`,
 | What | Where |
 |---|---|
 | Each route turns away the signed-out and agents and lets a superadmin in; the three base paths answer 404 to `POST`, `PUT`, `PATCH` and `DELETE`; Seri's switch, its own route: on, off without the key, refused without it, a body that is not on or off; Overview's periods. Pinned, so read-only stays a decision rather than something that erodes | `api/__tests__/admin-screens.test.ts` |
-| All three read models against a real database: the config against the antibiotics flow seeded by `012_flows.sql` (tiers and expiry from `001_init.sql`) and against an edited choice; the overview's period windows, totals, per-agent aggregates and activity feed; the DNC list's states, search escaping - a name with an underscore, which the old code failed - and lead-less rows; the call script and its settings - every line in order and word for word against the script the robot uses (`core/call-script-fixtures.ts`, itself held to the database by `call-script-live-check`), each question's and answer's name and when, keys and words, the link text under Messages, the settings off and on, the recording notice only on recorded calls, a setting changed by migration, one the robot cannot read, and no script active | `scripts/admin-live-check.ts` |
+| All three read models against a real database: the config against the antibiotics flow seeded by `012_flows.sql` (tiers and expiry from `001_init.sql`) and against an edited choice; the overview's period windows, totals, per-agent aggregates and activity feed; sold - a reason of Sold and the retired `sold` counted, sold twice once, Not interested, Wrong number and no reason not, only inside the period in the viewer's zone, per agent; the DNC list's states, search escaping - a name with an underscore, which the old code failed - and lead-less rows; the call script and its settings - every line in order and word for word against the script the robot uses (`core/call-script-fixtures.ts`, itself held to the database by `call-script-live-check`), each question's and answer's name and when, keys and words, the link text under Messages, the settings off and on, the recording notice only on recorded calls, a setting changed by migration, one the robot cannot read, and no script active | `scripts/admin-live-check.ts` |
 | The Seri card: each state's words, the confirm then the switch, Cancel, no Switch on without the key | `pages/admin/ConfigSeri.test.tsx` |
+| Overview's totals in order, Sold after Closed; the agents' Sold column, "-" for none; the feed's words, " · Sold" after the name | `pages/admin/OverviewPage.test.ts`, `pages/admin/OverviewPage.render.test.tsx` |
 | The robot's call settings in words - hours, days, waits - their placeholders, what picks a line of the call script; the tab read from the address | `lib/call-settings.test.ts`, `pages/admin/ConfigPage.test.ts` |
 | The DNC list's view in the address: its state tab, search and page | `lib/dnc-view.test.ts` |
 
@@ -352,6 +354,8 @@ Configuration reads `flows`, `flow_questions`, `flow_choices`, `settings`,
 
 ## History
 
+- 2026-11-28 · Overview counts sold: a Sold total after Closed, and a Sold column per agent - closed with the reason Sold, or the retired `sold`. Closed and sold are counted in one pass over the period's outcomes; counted in two more, Overview at 50,000 leads went from 25 ms to 29 ms, and in one pass it is 24 ms · B05
+- 2026-11-28 · The activity feed says why a lead was closed: "nora closed Omar Haddad · Sold" · B04
 - 2026-11-27 · Rewritten to the area standard: dated notes to this History, decisions to a table, one part of How it works per screen. Fixed: "every route has no POST, PUT, PATCH or DELETE - tests assert that" - `POST /api/admin/config/ai-agent` exists, and `admin-screens.test.ts` checks only the three base paths; "Phase 4 can add call figures back" - Phase 4 was done 2026-10-01. The read-only decision and its reasons moved here from CLAUDE.md §10; the DNC block paths linked to `AGENT-WORKSPACE.md`; merged in: Overview on screen and the Seri card from `FRONTEND.md` · docs standard · D19, D27
 - 2026-11-24 · Seri's switch on the Calls tab, the one control on Configuration; `ConfirmDialog` moved out of the Agents page into `components/` for it; proved by `ConfigSeri.test.tsx`, not yet seen in a browser that day. Until then Seri was not on Admin, and the command was the only way · Jeel
 - 2026-11-23 · Overview's `since` is the period's start, read with the counts; it had held the time of the request, which nothing on screen read. Written down: a callback in Last active is whose it is, who booked it only in the log; one lead's history is on its timeline, open to everyone, and this page is the one that puts every agent's work side by side · review R14

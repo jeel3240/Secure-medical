@@ -1,7 +1,7 @@
-/** Admin > Overview's recent activity, in words - B04 adds why a lead was closed. */
+/** Admin > Overview: the recent activity in words - B04 adds why a lead was closed - and the totals, Sold among them (B05). */
 import { describe, expect, it } from 'vitest';
 import type { Overview } from '../../api/admin';
-import { activityAfter, activityText } from './OverviewPage';
+import { activityAfter, activityText, overviewStats } from './OverviewPage';
 
 const entry = (kind: Overview['activity'][number]['kind'], detail: Record<string, unknown>): Overview['activity'][number] => ({
   kind,
@@ -26,5 +26,18 @@ describe('a lead closed, on the feed', () => {
   it('nothing after the name for anything else', () => {
     expect(activityAfter(entry('disposition', { value: 'dnc', reason: null }))).toBe('');
     expect(activityAfter(entry('note', { body: 'sold' }))).toBe('');
+  });
+});
+
+describe('the totals - B05', () => {
+  const kpis = { leadsReceived: 40, responded: 22, completed: 15, closed: 9, sold: 4 };
+
+  it('Sold comes after Closed, the last of the five', () => {
+    expect(overviewStats(kpis).map((s) => s.label)).toEqual(['Leads in', 'Replied', 'Completed', 'Closed', 'Sold']);
+  });
+
+  it('with its own number and line', () => {
+    const stats = overviewStats(kpis);
+    expect(stats[stats.length - 1]).toEqual({ label: 'Sold', value: 4, sub: 'Closed as sold' });
   });
 });
