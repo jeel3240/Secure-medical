@@ -8,7 +8,7 @@
  * the lead's name made fit to say (`cleanFirstName`), and who could take the
  * call (`WhoIsThere`), noted on each of the lead's turns for the brain.
  *
- * Until 2026-11-19 this also wrote today's brain's whole instructions - who
+ * Until 2026-11-19 this also wrote the first brain's whole instructions - who
  * she is, the rules, every answer, her five actions - asked of OpenAI in one
  * request a reply. The new brain (section 12) replaced it, and it was removed.
  */

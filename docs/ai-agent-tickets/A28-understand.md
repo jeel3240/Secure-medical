@@ -4,7 +4,7 @@
 
 **Why:** the policy (A27) can only be as right as what it is told the lead said. Labelling a line is a much smaller job than following sixty rules, so a small fast model does it well - and its mistakes can be measured on their own.
 
-**Depends on:** A24, A26, A27  ·  **Size:** M  ·  **Status:** Done 2026-11-17
+**Depends on:** A24, A26, A27 · **Size:** M · **Status:** Done 2026-11-17 - 94.5%, every stop, wrong person and wanting a person read right
 
 ## Build
 

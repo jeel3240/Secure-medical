@@ -5,7 +5,7 @@ import { useAuth } from '../auth/store';
 import { markSwitchedHere, missedTransfer } from '../lib/taking-calls';
 
 /**
- * The "Taking calls" switch in the app bar - T10, AUTO-CALLS.md "Who is free".
+ * The "Taking calls" switch in the app bar - T10, AUTO-CALL-TRANSFER.md "Who is free".
  *
  * Only people with it on are rung for a transfer from an automated call. The
  * switch decides, not the role: a superadmin who works leads turns it on, one

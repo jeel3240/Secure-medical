@@ -1,6 +1,6 @@
 /**
  * Proves migrations 016 and 017 and db/presence.ts against a real Postgres -
- * T9 and T10, docs/AUTO-CALLS.md "Who is free".
+ * T9 and T10, docs/AUTO-CALL-TRANSFER.md "Who is free".
  *
  * What a mock cannot show: that "I can take a call" holds for two minutes and
  * then lapses by itself, so a closed or sleeping browser stops counting with

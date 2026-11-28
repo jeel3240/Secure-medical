@@ -4,7 +4,7 @@
 
 **Why:** Times are easy to get wrong; they must be tested on their own.
 
-**Depends on:** nothing  ·  **Size:** Small (a few hours)  ·  **Status:** Done 2026-11-11
+**Depends on:** - · **Size:** S · **Status:** Done 2026-11-11 - `callback-time.ts`, pure, tested on its own
 
 ## Build
 

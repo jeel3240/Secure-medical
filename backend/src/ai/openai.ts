@@ -6,10 +6,6 @@
  * asks of her brain (`SeriModel`, brain.ts): two kinds of event - words as they
  * are written, and the action once it is decided - so the conversation
  * (conversation.ts) is tested with a fake in its place.
- *
- * Until 2026-11-19 this also asked today's brain - one streamed request a
- * reply, her whole instructions and the five actions as tools (`openAiModel`)
- * - kept for a rollback after the new brain took every call (A30).
  */
 
 import OpenAI from 'openai';

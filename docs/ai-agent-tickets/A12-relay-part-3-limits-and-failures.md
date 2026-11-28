@@ -4,7 +4,7 @@
 
 **Why:** One bad call must never break a call.
 
-**Depends on:** A11  ·  **Size:** Medium (about a day)  ·  **Status:** Done 2026-11-12
+**Depends on:** A11 · **Size:** M · **Status:** Done 2026-11-12 - silence, the three minutes, OpenAI slow or failing, each ending as it should
 
 ## Build
 

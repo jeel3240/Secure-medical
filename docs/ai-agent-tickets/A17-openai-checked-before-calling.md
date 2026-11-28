@@ -4,7 +4,7 @@
 
 **Why:** Decided by Jeel, 2026-11-11.
 
-**Depends on:** A12  ·  **Size:** Small (a few hours)  ·  **Status:** Done 2026-11-12
+**Depends on:** A12 · **Size:** S · **Status:** Done 2026-11-12 - nothing placed while OpenAI is down, or after three fallbacks in a row
 
 ## Build
 

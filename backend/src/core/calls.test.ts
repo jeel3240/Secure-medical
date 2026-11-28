@@ -22,7 +22,7 @@ describe('who a browser is', () => {
     expect(agentIdFromIdentity('client:jeel-agent-21', 'dev-')).toBeNull();
   });
 
-  it.each(['client:agent-0', 'client:agent-x', 'client:maya', '+16026203572', '', undefined, 21])(
+  it.each(['client:agent-0', 'client:agent-x', 'client:maya', '+16025550147', '', undefined, 21])(
     'refuses %p',
     (raw) => {
       expect(agentIdFromIdentity(raw, '')).toBeNull();

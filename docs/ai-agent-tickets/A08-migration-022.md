@@ -4,7 +4,7 @@
 
 **Why:** Every later ticket that writes data needs these columns.
 
-**Depends on:** nothing  ·  **Size:** Small (a few hours)  ·  **Status:** Done 2026-11-11
+**Depends on:** - · **Size:** S · **Status:** Done 2026-11-11 - migration 022, its rules proved by `ai-agent-live-check`
 
 ## Build
 

@@ -60,7 +60,7 @@ jest.mock('../../db/pool', () => ({ pool: { query: (...a: [string, unknown[]?]) 
 
 beforeEach(() => {
   poolQuery.mockClear();
-  startCall.mockReset().mockResolvedValue({ ok: true, phone: '+16026203572' });
+  startCall.mockReset().mockResolvedValue({ ok: true, phone: '+16025550147' });
   finishCall.mockReset().mockResolvedValue({ recorded: true, missedLeadId: null });
   startIncomingCall.mockReset().mockResolvedValue({ kind: 'unknown' });
   recordAnsweredBy.mockReset().mockResolvedValue(true);
@@ -264,7 +264,7 @@ describe('connecting a call', () => {
     expect(res.status).toBe(200);
     expect(res.type).toBe('text/xml');
     expect(res.text).toContain('callerId="+14804708259"');
-    expect(res.text).toMatch(/<Number[^>]*>\+16026203572<\/Number>/);
+    expect(res.text).toMatch(/<Number[^>]*>\+16025550147<\/Number>/);
     expect(startCall).toHaveBeenCalledWith({ callSid: 'CA100', leadId: 7, agentId: 21 });
     // Twilio is asked who picks up, and told which call to report it against.
     expect(res.text).toContain('amdStatusCallback="https://calls.example.com/api/webhooks/twilio/answered-by?call=CA100"');
@@ -284,7 +284,7 @@ describe('connecting a call', () => {
   });
 
   it.each([
-    ['no agent identity', { ...A_CALL, From: '+16026203572' }],
+    ['no agent identity', { ...A_CALL, From: '+16025550147' }],
     ['no lead', { ...A_CALL, leadId: '' }],
     ['no call id', { ...A_CALL, CallSid: '' }],
   ])('a request with %s is refused without a database lookup', async (_, params) => {
@@ -421,13 +421,13 @@ describe('a call\'s recording is ready', () => {
 describe('a lead calling our number', () => {
   const INCOMING = '/api/webhooks/twilio/incoming';
   const AFTER = '/api/webhooks/twilio/incoming/after';
-  const A_RING = { CallSid: 'CA300', From: '+16026203572', To: '+14804708259' };
+  const A_RING = { CallSid: 'CA300', From: '+16025550147', To: '+14804708259' };
 
   it('rings the lead’s agent, saying who is calling', async () => {
     startIncomingCall.mockResolvedValue({
       kind: 'ring',
       agentId: 21,
-      lead: { id: 7, name: 'Priya Sharma', phone: '+16026203572' },
+      lead: { id: 7, name: 'Priya Sharma', phone: '+16025550147' },
     });
     const { app } = await buildApp({ twilio: SETTINGS });
     const res = await fromTwilio(app, INCOMING, A_RING);
@@ -435,7 +435,7 @@ describe('a lead calling our number', () => {
     expect(res.type).toBe('text/xml');
     expect(res.text).toContain('<Identity>agent-21</Identity>');
     expect(res.text).toContain('<Parameter name="leadId" value="7"/>');
-    expect(startIncomingCall).toHaveBeenCalledWith({ callSid: 'CA300', fromPhone: '+16026203572', ringFree: false });
+    expect(startIncomingCall).toHaveBeenCalledWith({ callSid: 'CA300', fromPhone: '+16025550147', ringFree: false });
     expect(sendMissedCallText).not.toHaveBeenCalled();
   });
 
@@ -511,12 +511,12 @@ describe('a lead calling our number', () => {
   describe('a lead nobody holds or has called: everyone free rings (T19)', () => {
     const CLAIM = '/api/webhooks/twilio/incoming/claim';
     const GROUP_AFTER = `${AFTER}?ring=group`;
-    const group = { kind: 'group' as const, agentIds: [16, 19], lead: { id: 7, name: 'Priya Sharma', phone: '+16026203572' } };
+    const group = { kind: 'group' as const, agentIds: [16, 19], lead: { id: 7, name: 'Priya Sharma', phone: '+16025550147' } };
 
     it('only with automated calls on: asked to ring everyone free', async () => {
       const { app } = await buildApp({ twilio: SETTINGS, autoCalls: true });
       await fromTwilio(app, INCOMING, A_RING);
-      expect(startIncomingCall).toHaveBeenCalledWith({ callSid: 'CA300', fromPhone: '+16026203572', ringFree: true });
+      expect(startIncomingCall).toHaveBeenCalledWith({ callSid: 'CA300', fromPhone: '+16025550147', ringFree: true });
     });
 
     it('rings each of them, marked a shared ring, with the lead, the end taken from the whole ring', async () => {

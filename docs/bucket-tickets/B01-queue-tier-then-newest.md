@@ -53,7 +53,7 @@ speed check as gates.
 - `docs/DESIGN-PROMPT.md` section 2 ("sorted by score then freshness"): a dated note.
 - `docs/AUTO-CALLS.md` and `docs/FRONTEND.md` wherever they quote "Highest score
   first, then newest" (`grep`).
-- `docs/BUCKETS.md`, the decisions row on the queue order: "built (B01)".
+- `docs/QUEUE.md`, Decisions: the tier-first row marked built; `docs/BUCKETS.md`'s pointer to it unchanged.
 
 ## Not in this ticket
 

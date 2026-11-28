@@ -1,5 +1,5 @@
 /**
- * A desktop notification for an incoming call - TWILIO.md, "Incoming calls".
+ * A desktop notification for an incoming call - INCOMING-CALLS.md.
  *
  * The second way an agent learns the phone is ringing, for when the first
  * cannot reach them: the browser is behind another window or minimised, or it

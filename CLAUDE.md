@@ -1,869 +1,107 @@
-## 1. What we are building
+# Secure Medical - working in this repo
 
-A web app that:
+A web app for a call center: it takes in leads from EZ Texting, texts them a short
+qualification flow, scores them into a priority queue (HOT / WARM / LOW), lets about
+ten agents call them from the browser through Twilio, and calls those who never
+reply - the robot's script, or Seri, the AI agent. 50-100 leads a day; no HIPAA.
+Production is live. The parts and why: `docs/ARCHITECTURE.md`; a lead's life:
+`docs/LEAD-FLOW.md`.
 
-1. Picks up new leads from EZ Texting (the client's SMS platform)
-2. Runs a 3-question SMS qualification flow automatically
-3. Scores each lead and puts it in a priority queue (HOT / WARM / LOW)
-4. Lets call center agents call leads from the browser via Twilio
-5. Gives a superadmin a view of everything, plus editable scoring rules
+## The rules
 
-Reference: `Secure-Medical-Call-Center-Mockup.pdf` (8 pages, all screens and the flow logic).
+1. **Every change reaches the repo through a PR into `dev`.** Branch off `dev`, push
+   the branch, open the PR against `dev` - never against `main`, and never commit to
+   either directly. Jeel reviews and merges, and merges `dev` into `main`. Small PRs,
+   one concern each (`docs/WORKFLOW.md`).
+2. **Production is live, so every database change is a new numbered migration** in
+   `backend/src/db/migrations/`, run by `npm run migrate` - no hand edits, no psql.
+   Never edit a migration that has run: add one (`docs/WORKFLOW.md`, "Migrations").
+3. **No secrets, no real data.** Never commit `.env`, nor a real credential in any
+   file. Production's credentials are Jeel's and live only on the server; a
+   developer gets the test ones and never touches EC2, RDS or the client's accounts
+   (`docs/WORKFLOW.md`, "Before you start"). Never use real lead data locally:
+   generate fake leads.
+4. **Production runs compiled `dist/`, never ts-node.** Its settings are in
+   `docker-compose.prod.yml`, and every production command names both compose files
+   (`docs/DEPLOY.md`).
+5. **Never run `twilio:configure` (or `dev:twilio:configure`) from a laptop whose
+   `.env` holds production's number, (480) 470-8259** - check `TWILIO_PHONE_NUMBER`
+   first, and if it is that number, stop and say so. Local work uses the dev number,
+   (480) 530-8582 (`docs/TWILIO-SETUP.md`, "Before you start").
+6. **The EZ Texting account behind the local credentials is a test account.** Its
+   `weightloss` group is the test group, and every contacts query is scoped to a
+   group (`docs/EZTEXTING-API.md`, "The account").
+7. **Nothing may be lost.** The company keeps data as proof: every action a person or
+   the system can take records itself in the activity log, in the same statement or
+   transaction, and nothing overwrites or deletes the only record of something
+   (`docs/AUDIT.md`).
+8. **No names but Jeel's** in any committed file - docs, comments, fixtures,
+   knowledge files - and no real lead's number or name: phone numbers only in the
+   555 range and the two Twilio numbers (`docs/DOCS.md`, rules 5 and 8).
+9. **The code wins over a doc.** Do not assume how something works from its name,
+   and do not trust a doc over the code: check, then fix whichever is wrong.
+10. **Every area has one doc, updated in the same commit as the change** - not
+    afterwards, not in a follow-up. `docs/README.md` says which doc owns what;
+    `docs/DOCS.md` is how a doc is written, and `/new-phase` how a phase is planned.
+    All documentation lives in `docs/`, except the root `README.md` and this file,
+    which stays at the root, where Claude Code loads it.
+    A finding that cost time to establish belongs in a doc, not only in a commit.
+11. **`docs/STATE-MACHINE.md` is the SMS flow's spec** and overrides the mockup PDF,
+    which is a reference for screens and wording, not for flow logic.
+12. **Before a PR:** `npm test` and `npm run lint` in `backend/` and `frontend/`,
+    and `docker compose build api worker` - a local `node_modules` can hide a
+    dependency missing from `package.json`. The full list, and the definition of
+    done, are `docs/WORKFLOW.md`'s.
 
-**Volume:** 50–100 leads/day. ~10 agents. This is a small, steady-traffic app. No HIPAA.
+## Where things are
 
----
-
-## 2. Architecture – decided, not open for debate
-
-```
-Internet
-   │
-   ▼
-[Caddy]  HTTPS front door, port 443, auto TLS
-   │
-   ▼
-[API]    Node/Express (or FastAPI) – routes, webhooks, Twilio tokens, port 3000
-[Worker] Same codebase, different start command – polls EZ Texting, sends SMS, runs timers
-[Redis]  Job queue + timers
-   │
-   ▼
-[RDS Postgres]  Managed by AWS, outside EC2, auto backups
-[S3]            Optional extra pg_dump copies
-```
-
-- **One EC2 instance** (t3.medium, Ubuntu 24.04, Docker Compose) runs Caddy, API, Worker, Redis.
-- **RDS Postgres** is the database. Separate from EC2 so data survives if the server dies.
-- **Browsers** (agents, superadmin) hit Caddy → API.
-- **EZ Texting** is polled by Worker for new leads; posts replies to our webhook.
-- **Twilio** provides browser calling. Audio goes directly browser ↔ Twilio, never through our server.
-
-### Why NOT Lambda + API Gateway
-
-This came up, so here is the reasoning:
-
-1. **The poller must run forever.** New leads are found by polling EZ Texting every 30–60s. Lambda runs and exits; its minimum schedule is 1 minute. A `while(true)` loop in a long-lived process is the right tool.
-2. **Cold starts hurt webhooks.** EZ Texting and Twilio expect fast responses. A 1–2s cold start on idle wake-up risks timeouts and retries (= duplicate processing).
-3. **Database connections.** Each Lambda instance opens its own DB connection; needs a pooler. One process on EC2 holds one pool.
-4. **Complexity.** IAM roles, VPC config for Lambda→RDS, packaging, versions, API Gateway stages – all for 100 leads/day. The client's ops team can `docker compose restart`; they cannot debug Lambda.
-5. **Cost is not the driver.** Both are cheap at this scale. Simplicity and handover are.
-
-Lambda is right for bursty, stateless, no-background-work apps. This is the opposite.
-
-### Why NOT Supabase
-
-- We already need an always-on server (poller, webhooks, Twilio). Supabase would be a second vendor for auth + DB when the client already offered AWS.
-- Auth requirement is minimal (see §5). Supabase Auth's features would go unused.
-- Client-owned AWS = clean handover, no account transfer.
-
-### Why NOT Cognito
-
-- Requirement: superadmin creates agent accounts; agents log in with email + password. No signup, no social login, no MFA requested.
-- A `users` table + bcrypt + JWT covers it in a day. Cognito adds IAM/console overhead for nothing.
-
-### Why Caddy (not Nginx)
-
-- 3-line config, automatic Let's Encrypt certificates. Nginx needs Certbot + renewal cron.
-- Swappable in an afternoon if the client ever wants Nginx. Nothing else depends on it.
-
-### Why Postgres on RDS (not DynamoDB, not Postgres on EC2)
-
-- Data is relational (leads → conversations → messages → calls → users) with reporting queries. SQL.
-- RDS: automatic daily backups, point-in-time restore, data independent of the EC2 lifecycle. ~$20/mo.
-
----
-
-## 3. Stack
-
-| Layer | Choice |
+| Before touching | Read |
 |---|---|
-| Runtime | Node 20 (TypeScript) |
-| API | Express / Fastify |
-| Worker | Same repo, `npm run worker`, BullMQ for jobs + repeatable poll |
-| DB | Postgres 16 (local: Docker; prod: RDS) |
-| Migrations | Prisma (or node-pg-migrate with plain SQL) |
-| Cache/queue | Redis 7 |
-| Frontend | React (Vite), built to static files, served by Caddy |
-| Proxy | Caddy 2 |
-| Calling | Twilio Voice JS SDK (browser) + Programmable Voice |
-| SMS | EZ Texting REST API + inbound webhook – see below |
-| Auth | Email + password, bcrypt/argon2, JWT or session cookie |
-
-**As built, 2026-09-14.** Where the table above left a choice open, or the code
-went a different way:
-
-| Layer | Actual |
-|---|---|
-| API | Express 4. Every route is under `/api`. |
-| Worker | A plain serialised loop in `backend/src/worker/index.ts`, no job queue. Redis runs, but no code uses it; the unused `bull` and `redis` packages were removed on 2026-09-28. |
-| Migrations | Plain numbered `.sql` files run by `backend/scripts/migrate.js`. No Prisma, no node-pg-migrate. |
-| Auth | bcrypt (cost 12) and a JWT in an httpOnly, SameSite=Strict cookie. See `docs/AUTH.md`. |
-| Frontend | React 18, Vite 4, React Router 6, zustand, plain CSS with design tokens. |
-| Production web server | The `caddy` service is built from `frontend/Dockerfile`: the React build copied into a `caddy:2` image. |
-| Calling | Built 2026-10-01: the `twilio` library on the server, `@twilio/voice-sdk` in the browser. Outgoing calls, and incoming calls to one agent's browser; voicemail detection, recordings and transcripts, 2026-10-02; a recording notice, 2026-10-05. `docs/TWILIO.md`. With automated calls on, a call back nobody owns rings everyone free (T19). Automated outbound calls, placed by the server, 2026-10-18 on - `docs/AUTO-CALLS.md`. |
-| AI agent | Phase 7, on `dev`, not deployed. Built through A20 (2026-11-12); A21, the real-phone test, paused after call 112 (2026-11-17) while each reply was rebuilt as three steps - understand, decide in code, speak (A24-A33, done 2026-11-17 and 18, `docs/AI-AGENT.md` section 12); A21's checklist walked again on the new brain as A34 - calls 113-140, 2026-11-17 to 22 - then A22, the deploy. Twilio ConversationRelay with an ElevenLabs voice (Aria, `v4`, since A21's first real calls - Rachel before - and a tone given line by line, `ai/tone.ts`) and two OpenAI models, measured by A24: understand `gpt-5.4-mini`, speak `gpt-4.1-mini` (first chosen by the answer test set, A09) - `openai` 6.x and `ws` on the server - `openai` 7 needs Node 22, and the app runs Node 20. `docs/AI-AGENT.md`. |
-
-**EZ Texting API notes**
-- Quick start: https://developers.eztexting.com/docs/quick-start-guide
-- API reference (has a "Try It" button to test calls in the browser): https://developers.eztexting.com/reference
-- Base URL: `https://a.eztexting.com/v1`
-- Auth: HTTP Basic Auth with the account username + password. No separate API key. Store as `EZT_USERNAME` / `EZT_PASSWORD` in `.env`.
-- Send: `POST /v1/messages` with `{ "toNumbers": ["15551234567"], "message": "..." }`. Save the returned message ID to `messages.ezt_message_id`.
-- The account is Secure Medical's **live** account. Only send to the `dev-test` group (our own phones). Never touch `weightloss` or any real group.
-- **Update 2026-09-14 (Jeel):** the account behind the credentials in `.env` is a **test account**, not the client's live account. The whole account may be used for development, including sending SMS. The line above is kept for history. The `weightloss` group is the **test group**: add contacts to it by hand in the dashboard (they arrive with source `WebInterface`) and send to it. Test settings: `EZT_GROUP=weightloss`, `EZT_SOURCE=WebInterface`, `EZT_SEND_GROUP=weightloss`. Partner leads in production arrive with source `API`.
-
----
-
-## 4. Repo layout
-
-```
-secure-medical/
-  backend/
-    src/
-      api/          routes, webhooks, auth
-      worker/       poller, sms sender, expiry timers
-      core/         state machine, scoring, dedupe
-      db/           migrations, queries
-    Dockerfile
-    package.json
-  frontend/
-    src/
-  docker-compose.yml        local + prod (prod uses RDS via env)
-  Caddyfile
-  .env.example
-  CLAUDE.md                 must stay at root; Claude Code loads it from there
-  docs/                     all other documentation
-    README.md               how to run it
-    SCHEMA.md               data model
-    EZTEXTING-API.md        verified API behaviour
-    DESIGN-PROMPT.md        frontend design brief
-    Secure-Medical-Call-Center-Mockup.pdf
-```
-
-All documentation lives in `docs/`, except `CLAUDE.md` and a root `README.md` that only links into `docs/`. Keep it that way: when
-you change something the docs describe, update the doc in the same commit.
-
-**As built, 2026-09-14.** The tree above is the target. What exists today also includes:
-
-```
-  docker-compose.prod.yml   server-only override: RDS, no exposed ports, caddy service
-  caddy/Caddyfile           production's: /api to the api, holding a request up to 10 s while the api restarts - so Seri's reconnect lands; in its own folder, mounted whole, and Caddy runs with --watch, so a pull that changes it is reloaded by itself (review Q11, 2026-11-23)
-  README.md                 a short index into docs/
-  backend/
-    scripts/migrate.js      migration runner
-    src/api/auth/           sign-in, sessions, guards
-    src/api/users/          superadmin account management
-    src/api/admin/leads.ts  Admin > Leads query endpoint; its Call filter (T23)
-    src/api/admin/config.ts    Admin > Configuration, read-only but for Seri's switch (POST /ai-agent, 2026-11-24); tells it whether automated calls are on, the calling number, whether calls are recorded (T24), and whether Seri is on and her key set
-    src/api/admin/overview.ts  Admin > Overview statistics
-    src/api/admin/dnc.ts       Admin > DNC list, read-only
-    src/api/admin/health.ts    deep health check, superadmin only
-    src/db/health.ts        database, poller, webhook, expiry, sending
-    src/db/admin-config.ts  live copy, scoring and tiers, with segment counts; the call script line by line and the settings the robot reads, through its own readers (T24)
-    src/db/admin-overview.ts  KPIs, per-agent table, activity feed (no funnel since 2026-09-28)
-    src/db/admin-dnc.ts     the DNC list, released rows included
-    src/api/leads.ts        the agents' priority queue, and claim/release
-    src/api/lead-workspace.ts  every route on one lead: card, timeline, notes, callbacks, SMS, dispositions, read
-    src/api/filters.ts      request parsing shared by several routes: since, tz, lists, lead id
-    src/api/startup-checks.ts  what stops the API starting in production: weak JWT secret, no webhook token, Twilio settings only partly set
-    src/db/claims.ts        claiming and releasing a lead; a pick-up takes a call back nobody has - Seri's untaken (A16), or a deactivated agent's (D2); taking a call with a lead on it, the lead following the call - a transfer and a call back that rang everyone free share it (`takeCallWithLead`, review Q4)
-    src/db/read-flag.ts     clears has_unread_inbound
-    src/db/lead-detail.ts   the lead card
-    src/db/timeline.ts      the merged lead timeline; a robot call's result and what the lead said on it (T21); Seri's conversation on a call she took (A19)
-    src/db/notes.ts         agent notes, append-only
-    src/api/callbacks.ts    My Callbacks: list, reschedule, mark done
-    src/api/calls.ts        browser calling: whether it is set up, and the call token; the browser's word and the "Taking calls" switch (T9, T10); either saying someone is free rings them with a lead on hold (T17)
-    src/api/left-open.ts    a call whose end never reached us, ended from Twilio's own record 15 minutes on; `closeFromTwilio`, shared with the hold watcher (review H4, 2026-11-22)
-    src/api/hold-watch.ts   the hold watcher: every 30 seconds, leads on hold offered to whoever is free (T17), and a lead nobody is coming for sent back to /auto/hold, cutting the music short (T16); a held call Twilio says is over ended from Twilio's record (T20 review)
-    src/api/twilio-webhooks.ts  Twilio's signed webhooks: connect a call, a lead calling in, how it ended, who picked up, the recording, the recording notice; the automated call's /auto/* (T12), its transfer, /auto/claim and /auto/after (T15a), and its hold line, /auto/hold (T16), and /auto/offer, a lead on hold ringing the person who came free (T17); /auto/amd acting on Twilio's verdict - the voicemail message (T18); /incoming/claim, a person accepting a call back that rang everyone free (T19); /auto/ai-after, the end of Seri's part - her action carried out, the transfer through the same `planYes`/`yesTwiml` as /auto/gather (A14)
-    src/core/calls.ts       call rules, pure: identity, outcomes, refusals
-    src/db/calls.ts         may this call be placed, who an incoming call rings, and recording it; when an automated call is voicemail (TAKEN_BY_VERDICT_SQL, T18); a lead calling back whom nobody owns rings everyone free, and who takes it (T19)
-    src/db/lead-texts.ts    the texts a call leads to: after a call to us nobody answered, and the link a lead said yes to on the automated call (T14)
-    src/integrations/twilio.ts  what the routes need from Twilio, with no network call - tokens, signature checks, every TwiML, and the webhook paths (twilio-calls.ts, twilio-health.ts and the configure CLI take theirs from it; those three, twilio-transcripts.ts and ai/relay-messages.ts import the twilio library themselves); the automated call's TwiML, and how it listens - Deepgram, measured (T13b); its transfer's ring (T15a); the voicemail message (T18); ringing everyone free for a lead calling back (T19)
-    src/integrations/twilio-health.ts  the health report's calling check: do the number and the TwiML App point here
-    src/core/twilio-pointing.ts  what twilio:configure may point, and what it refuses - production's number from a laptop, above all
-    src/integrations/twilio-transcripts.ts  Twilio's transcription service; src/core/transcripts.ts who said what, pure
-    src/db/transcripts.ts   call recordings and transcripts; src/worker/transcripts.ts fetches them
-    src/twilio-settings.ts  calling's settings: off, on or incomplete
-    scripts/calls-live-check.ts  proves the call SQL: holder, DNC, retries; an automated call voicemail only when taken over (T18)
-    src/db/callbacks.ts     callbacks, and the today/upcoming/overdue windows; a call back Seri booked (bookAiCallback, A15)
-    src/db/dispositions.ts  setting a disposition, and the DNC block
-    src/core/dispositions.ts  Closed and DNC, pure
-    src/db/dnc.ts           blocking and releasing a number - every path uses it
-    src/db/agent-sms.ts     agent SMS, and the rule 2b take-over timestamp
-    src/core/score-breakdown.ts  answer chips and the score breakdown, pure
-    scripts/claims-live-check.ts  proves that SQL, including the claim race
-    scripts/read-flag-live-check.ts  proves a read lead leaves the queue
-    scripts/lead-detail-live-check.ts  proves the card's SQL
-    scripts/timeline-live-check.ts  proves the merge and the derived events; the robot's call with its result and answers (T21); Seri's conversation on a call she took, and how her part ended (A19)
-    scripts/callbacks-live-check.ts  proves the tab windows against a real clock
-    scripts/dispositions-live-check.ts  proves the DNC block and the queue effect
-    scripts/agent-sms-live-check.ts  proves the take-over stops the questions, and a phone call too (rule 2d), Seri's included
-    scripts/admin-live-check.ts  proves the three admin read models
-    scripts/health-live-check.ts  proves the poller staleness signal
-    src/core/queue-tags.ts  which tag a queued lead gets; Seri's call back, bold once due (A16)
-    src/db/queue.ts         the priority queue SQL; a promised call first - a missed "yes", or a call back once due that Seri booked (A16) or whose agent was deactivated (D2)
-    scripts/queue-live-check.ts  proves that SQL against a real database
-    src/api/webhooks.ts     inbound SMS from EZ Texting
-    src/core/messages.ts    renders outbound copy ({first_name}, segment limit)
-    src/core/state-machine.ts  the SMS flow, pure: follows any flow's questions and choices; scoring and tiers
-    src/core/answers.ts     matches a reply to a choice of the question asked, pure - an SMS reply, and a spoken answer on the automated call (T7); whether a lead asked Seri to stop (saysStop, A11)
-    src/db/flows.ts         loads a flow, starts a conversation on the active one, and gives its first question
-    src/core/flow-fixtures.ts  the antibiotics flow as a constant, for tests only
-    src/core/call-script.ts the automated call's script, pure: its shape, what the call does after each answer (firstAsk, afterAnswer - T8), on a live call with a lead who may have hung up (handleAnswer), and when it listens (splitForListening) - T13; who a "yes" rings (planTransfer, planAfterHolder) - T15a, T15b; who let it ring out (rangOut) - T15c; who a lead on hold rings (pickOffer) - T17; what Twilio's verdict does - the beep decides (machineVerdict, onVerdict, voicemailLine, and spokenNumber, a number read digit by digit, which Seri's answers use too) - T18
-    src/core/call-script-fixtures.ts  the call script as a constant, for tests only - the live check holds it to the database
-    src/db/call-script.ts   loads the automated call's script (migration 015), and the settings a call reads: confidence, ring time, a ring from hold's ring time (T17), when the robot calls (readCallHours, T20); how many calls at once for each person free (readCallsPerPerson, T29)
-    scripts/call-script-live-check.ts  proves migrations 015, 018 and 019: the script as agreed, its guards, answers add-only; and the call settings, 020's included
-    src/db/presence.ts      who can take a call now: each open browser says so, it holds two minutes (T9); FREE_SQL, who is free (T10); the switch turned off after a ring let run out (T15c); who is on a call or just off one, writing its note (T16, T17); another robot call's transfer ringing counts as someone coming (TRANSFER_RINGING_SQL)
-    scripts/presence-live-check.ts  proves it: the two minutes, busy, sign-out and deactivation clear it; the switch; who is free
-    src/api/taking-calls.ts the "Taking calls" switch: why it changed, and its activity row (T10)
-    src/auto-calls-settings.ts  AUTO_CALLS: on only when exactly "on" (T10); AUTO_CALL_TEST_NUMBERS, the only numbers rung outside production (T12)
-    src/db/auto-calls.ts    an automated call's row: written before Twilio is asked, linked to Twilio's call, ended if refused (T12); each answer, its result and a stop's block kept, and the end settled (T13); a transfer taken or missed (T15a); the verdict acted on under the call's lock, and nothing kept after a takeover (T18) - on a call Seri took, what the lead said to her counting as an answer (A18); Seri's result saved once, with a stop's block (keepCallResult, A14) and the call back she booked (A15)
-    src/db/hold-offers.ts   a lead on hold rung to whoever comes free: the offer written before Twilio is asked, one at a time per lead and per person, never twice to one person; who is still coming for a lead (T17)
-    src/integrations/twilio-calls.ts  the only file that asks Twilio to ring a phone - once, never retried (T12); how each ring of a transfer ended (T15c); and redirects a live call - back to the hold page (T16), to ring someone from hold (T17); and replaces it with the voicemail message (T18); how Twilio says a call ended (callEnd)
-    src/worker/place-auto-call.ts  places one automated call: the row, then Twilio, then its answer - the dev command's and the dialler's path (T12); a refusal for our account not the lead's call (T28)
-    src/worker/auto-calls.ts  the robot placing its calls by itself: one look each tick - close calls that never reached Twilio, inside the hours only, the room, the leads due - new leads first, then those already waiting at the switch-on, oldest first (T20, T27); nothing placed while Seri is on and OpenAI is down, or her last three calls fell back (A17)
-    src/db/auto-dial.ts     who the robot calls next (leadsToCall), the room (dialRoom), auto_calls_since, calls that never reached Twilio, one look at a time (T20); when they were last switched on (recordAutoCallsSwitch); a lead asked again before its call (stillDue); the robot stopped while Twilio is silent; the leads already waiting at the switch-on called too, after new leads (T27); paused 15 minutes after Twilio refuses a call for our account (T28)
-    src/core/auto-dial.ts   when the robot calls (insideCallHours, in the settings' own zone) and how many at once (callsToPlace) - five for each person free since T29 - pure (T20)
-    scripts/ai-agent-live-check.ts  proves migration 022: Seri's part of a call, her conversation's turns add-only, her call backs the only ones with no agent (A08); 023, the note on her call backs and one per call (A15); 024, the brain's record only on her relay's own notes (A31); the relay's SQL (A10-A12); whether an answered call goes to her (A13); her result saved once, the action she ended with, her transfer's ring (A14); her call backs (A15); her fallbacks pausing the robot (A17); the voicemail rule with her turns, and the verdict she waits on (A18)
-    scripts/auto-dial-live-check.ts  proves it: who is picked, when, the room, the lock, closing calls that never reached Twilio (T20); the leads already waiting at the switch-on (T27)
-    scripts/dev-auto-call.ts  local testing only: the server calls one lead - npm run dev:auto-call; --again gives the number to a fresh test lead, --unblock lifts a test block (T13); a lead with no text conversation is given one, nothing texted; scripts/dev-phone.ts reads the number
-    scripts/auto-calls-live-check.ts  proves placing one: the row, every refusal, linking, failing, two placements racing; each answer kept once; taking a transfer; acting on a voicemail verdict, under the call's lock (T18)
-    scripts/hold-offers-live-check.ts  proves migration 020: who a lead on hold rings, one at a time, never twice to one person; who is still coming (T17)
-    scripts/lead-texts-live-check.ts  proves the two texts: their words, the lead's thread, a blocked number getting neither (T14)
-    src/core/questions.ts   what the screens call a question: "Q2", and "Q1-a" for a sub-question - one rule for every screen
-    src/api/reply-flow.ts   runs the state machine for an inbound reply
-    src/worker/expiry.ts    marks stale open conversations expired
-    src/worker/retry-openers.ts  retries openers that never went out
-    src/worker/send-waiting-openers.ts  sends, by hand, the first questions an outage left unsent - npm run openers:send-waiting; arguments in src/core/resend-args.ts
-    src/db/openers-never-sent.ts  which leads never got their first question - shared by the retry and the resend
-    src/worker/opener.ts    sends question 1: shared by the poller, the retry and the resend
-    scripts/retry-openers-live-check.ts  proves the backoff and the two must-nots
-    scripts/send-waiting-openers-live-check.ts  proves the resend takes only what the retry gave up on, never twice, at its pace
-    scripts/ai-replay.ts    A21's real calls replayed through the new brain against the real OpenAI, checked for the rules that hold on every call - npm run ai:replay (A32); real lines from a local export, never committed
-    scripts/end-to-end.ts   the whole system in one run - npm run e2e; since T25 the robot's calls too, Twilio stubbed at its HTTP boundary and its webhooks signed; since A20 Seri's calls ending each way, through her real relay, OpenAI a local server
-    scripts/live-checks.sh  runs every live check, each on its own scratch database
-    scripts/check.ts        the one `check()` every live check and the end-to-end script use - keys compared in order, the verdict live-checks.sh reads (review Q9)
-    scripts/flows-live-check.ts  proves a second, five-question flow works from rows alone; scripts/live-flow.ts answers a flow for the other checks
-    scripts/dev-ask-again.ts  local testing only: asks a held lead the questions again, so one phone can walk every path
-    scripts/speed-check.ts  loads 50,000 fake leads into a scratch database and times every screen's read - npm run speed
-    src/db/leads.ts         Admin > Leads SQL; the Call column, the robot call's result (T23)
-    src/db/lead-state.ts    closed and worked, shared by the queue and Admin > Leads; a missed call, and a missed "yes" on the automated call (T22) - one "nobody got back to them" rule; when a phone call stopped the text questions (rule 2d) - a call Seri took included, once the lead talked to her
-    src/db/sql.ts           LIKE escaping and the expiry-days reader, shared by every query
-    src/db/locks.ts         an advisory lock for work done in one place at a time - the worker's cycle, the dialler's look (review M14)
-    src/core/activity.ts    every action the activity log records
-    src/db/activity.ts      writes the activity log and the raw webhook archive
-    scripts/activity-live-check.ts  proves the log cannot be altered, and 16 of the 40 actions recorded; 18 more are proved by their own area's live check, and the six account actions (sign-ins, passwords, accounts) by src/api/__tests__/activity.test.ts - AUDIT.md, "Testing"
-    src/db/holder.ts        who holds a lead - checked before every write on it
-    src/db/failed-sends.ts  keeps an agent's own text that EZ Texting refused, marked failed
-    src/db/outbound.ts      sends an automated text and records it: opener, retry, reply flow, missed-call text, the call's link
-    src/worker/index.ts     the worker loop: poll, expire, retry openers, fetch transcripts, and the robot's calls (T20); src/worker/poller.ts is the poll
-    src/api/app.ts          builds the Express app; index.ts starts it, and on Docker's stop hands Seri's calls back to Twilio to reconnect; deps.ts, http.ts are shared plumbing
-    src/config.ts           reads the environment, and exits if a required variable is missing
-    scripts/admin-leads-live-check.ts  proves the Admin > Leads statuses
-    src/lib/log.ts          structured JSON logging, with redaction enforced
-    src/cli/                create-superadmin, twilio-configure, send-waiting-openers, ai-agent (Seri's switch, A01)
-    src/ai/                 Phase 7, Seri, the AI agent on the automated call - every AI file lives here (docs/AI-AGENT.md): settings.ts, her switch and whether the next call goes to her (A01); knowledge/, what she knows - three JSON files - and knowledge.ts, which checks them at start-up and hands them out typed, with no prices (A03); callback-time.ts, when she may book a call back and how she says the time - the lead's zone from the area code, the agents' hours, "Monday at 3 PM your time" (A07) - and whether she said a time back (saysClock, A21); instructions.ts, the call's own details for the speak step - the next days with agent hours among them (A21) - with her greeting and the note of who is there on each turn (A04; today's brain's whole instructions removed 2026-11-19); safety.ts, every sentence she is about to say checked - a price, medical advice, a diagnosis or an offer we don't make is replaced with the specialist line (A05); actions.ts, her five actions, the brain's checked again - a call back outside the hours, one for a time she never said back to the lead, or a transfer with nobody there refused - and carried across Twilio as handoffData, anything unreadable read back as a fallback (A06); an action after a question anywhere in her reply held back (A21) - and the rest of that reply not said (call 95) - and the last line the relay says when she gives none (A09); model.ts, the models her brain uses; openai.ts, the one place a call reaches OpenAI - the understand step's strict JSON and the speak step's stream - with `SeriModel`, what the call asks of her brain, and `plainError`, an OpenAI error cut to its status and code for a log line; tone.ts, the tone she gives each line - the tags the voice takes, one list for the speak step and the check, and her words without them for the record and the timeline (A21); evals/, the understand and speak test sets, run against OpenAI by hand (A28, A29 - the answer test set of today's brain, `npm run ai:eval` (A09), removed 2026-11-19); relay.ts, the WebSocket Twilio opens when a call goes to her, at `/api/ai/relay` - signed by Twilio, one start per call, every turn kept, and the call picked back up from its kept turns when the line drops - the api restarting - with resume.ts (2026-11-13) - with relay-messages.ts, what Twilio sends, pure, and relay-store.ts, its SQL (A10); relay-messages.ts also holds how ConversationRelay listens and speaks for her, `RELAY_SETTINGS` (A13); conversation.ts, one call's conversation - the stop check, who is there, her brain's reply streamed, each sentence checked as it is whole (sentences.ts), her action taken or refused, being talked over (A11); and its limits - silence, three minutes, OpenAI slow or failing - ending with the fallback when she fails, on a clock the tests move by hand (fake-clock.ts) (A12); a goodbye, the link or a call back waiting for Twilio's verdict on who answered, so a voicemail's beep still gets the message (A18); answer.ts, whether an answered call goes to her and her greeting - `/auto/answer` then connects it with `seriTwiml` (integrations/twilio.ts) (A13); after.ts, what follows her part - her action with the lead on the line or gone, or the script from its first question when she failed - which `/auto/ai-after` carries out with the script's own code (A14); brain.ts, her brain on the call - understand, decide, speak, as the `SeriModel` the call asks for, one per call, wired in api/index.ts (A30; today's brain, kept for a rollback, removed 2026-11-19); speak.ts, the new brain's speak step - her persona and each reply's brief, approved answers said by code, and her introduction, a saved line (`OPENING_LINE`, 2026-11-18) (A29; `npm run ai:eval:speak`); understand.ts, the new brain's understand step - what the lead just said as short labels, strict JSON, and a bare yes or no read without OpenAI (A28; `npm run ai:eval:understand`, 196 labelled lines in evals/understand-cases.json); policy.ts, the new brain's decide step - the call's record and what she does next, pure (A27; used by the call from A30); health.ts, whether she can take calls before the robot places any - OpenAI answering a one-word check at most once a minute, her last three calls not all falling back (A17)
-    src/integrations/       EZ Texting client
-    src/db/users.ts         user queries; src/db/pool.ts
-  data/edrugstore-site/     the edrugstore.com crawl Seri's knowledge was written from - reference only, never read by the app; raw/ is git-ignored
-  frontend/
-    Dockerfile              production Caddy image with the built app
-    src/api/usePolling.ts   the one place every live screen fetches from
-    src/api/workspace.ts    lead card, timeline, notes, callbacks, dispositions, SMS
-    src/api/admin.ts        config, overview, DNC, health
-    src/lib/format.ts       phone, dates, age, names
-    src/lib/lock.ts         which queue rows an agent may open, and who may release a held lead
-    src/lib/leads-view.ts   Admin > Leads' tab, filters and page, kept in the address so Back returns to them
-    src/lib/dnc-view.ts     the same for the DNC list: its state tab, search and page (review Q8)
-    src/api/calls.ts        calling config and token; the browser's word and the "Taking calls" switch
-    src/lib/call-state.ts   a call's states, pure
-    src/lib/calling.ts      the only file that uses Twilio's Voice SDK
-    src/lib/incoming-state.ts  a lead calling in: ringing, answered, missed; alone or one of several (T11) - pure
-    src/lib/incoming-call.ts   the store that joins those states to Twilio
-    src/lib/presence.ts     what keeps this browser busy - a call, a ring, a note box; calling.ts tells the server (T9)
-    src/layout/TakingCalls.tsx  the "Taking calls" switch in the app bar, shown only with automated calls on (T10); "Missed a transfer · Taking calls off" (T15c)
-    src/lib/taking-calls.ts the switch as the server holds it, taken from the browser's 30-second report (T15c)
-    src/layout/IncomingCall.tsx  the incoming-call card and missed-call notice, on every screen
-    src/lib/caller-context.ts  "Calling back · you tried 2× today", "· automated call, 28m ago" (T19), and a transfer's line (T11), pure
-    src/lib/ringtone.ts        the ring of an incoming call, made in the browser
-    src/lib/call-notification.ts  the desktop notification for an incoming call
-    src/components/CallTranscript.tsx  a call's transcript, under the call
-    src/components/CallAnswers.tsx  what the lead said on the robot's call, under it (T21)
-    src/components/SeriConversation.tsx  a call Seri took: her conversation with the lead, and how her part ended (A19)
-    src/lib/call-results.ts  the robot call's result in words, one list for the timeline and Admin > Leads' Call column and filter (T23)
-    src/lib/call-settings.ts  the robot's call settings in words for Admin > Configuration - hours, days, waits (T24)
-    src/lib/useSecond.ts    a clock that re-renders every second
-    src/App.tsx, src/main.tsx  the routes; the entry point, which also arms the ringtone
-    src/auth/               the session store and the route guards
-    src/api/                one file per area, mirroring the backend's types: auth, client, leads, users, types
-    src/layout/AppShell.tsx  the app bar and the page; UserMenu.tsx
-    src/pages/LoginPage.tsx, ChangePasswordPage.tsx
-    src/styles/             tokens.css, then one stylesheet per area imported by global.css; type-system.test.ts guards them
-    src/components/Timeline.tsx      shared by the workspace and the timeline page
-    src/components/QueueStatus.tsx   the queue's STATUS column: icon and words
-    src/components/LeadStatus.tsx    an Admin > Leads status: icon and words
-    src/components/StatusIcon.tsx    every status icon, one set for all screens
-    src/components/TierSignal.tsx    the TIER column's bars
-    src/components/Segmented.tsx     the sliding navy switcher
-    src/components/LiveStatus.tsx    "Live · updated just now"
-    src/components/SyncStatus.tsx    "Synced with EZ Texting 1m ago"
-    src/components/RowMenu.tsx       a row's "⋯" actions menu
-    src/components/LockIcon.tsx      the padlock on a locked queue row
-    src/components/DateTimeField.tsx the date and time picker, in the app's style
-    src/components/          also the shared pieces: Button, TextField, Modal, Drawer, Banner, Badge, Spinner, OneTimeSecret (a temporary password, shown once), AuthLayout and BrandMark (the sign-in pages), useDismiss (Escape to close)
-    src/pages/QueuePage.tsx          the priority queue
-    src/pages/WorkspacePage.tsx      the agent workspace shell; LeadWorkspaceRoute.tsx makes it afresh for each lead (review H6)
-    src/pages/workspace/             header card, Call button and call bar, answers and score, notes, conversation, SMS compose, Wrap up
-    src/pages/LeadTimelinePage.tsx   read-only history with a summary sidebar
-    src/pages/CallbacksPage.tsx      My Callbacks
-    src/pages/admin/                 overview, leads, agents, config, dnc
-  docs/
-    LEAD-FLOW.md            a lead's whole life on one page - start here
-    AUTH.md  POLLER.md  WORKFLOW.md  WEBHOOKS.md  ADMIN-LEADS.md  STATE-MACHINE.md  TWILIO.md
-    AUDIT.md                the activity log: nothing is lost
-    FLOWS.md                how SMS scripts are stored as rows, how to add one, and how questions are named
-    AUTO-CALLS.md           automated outbound calls: the agreed design and the build tracker (T0-T25 done as of 2026-10-25: the server places a call, asks the script, keeps the answers, texts the link, puts a "yes" through to the lead's own agent first, then everyone free, switches off whoever let it ring out, holds a "yes" while someone is on a call or writing its note, rings the next person who comes free with the lead who has waited longest, leaves the voicemail message once a machine's greeting is over, rings everyone free for a lead calling back whom nobody owns, calls the right leads by itself at the pace the people free can take, shows each robot call on the lead's timeline with what was said, puts a "yes" nobody took first in the agents' queue, shows each lead's robot call on Admin > Leads, and the script and its settings on Admin > Configuration; every doc read against the code, and the end-to-end script runs three robot calls (T25); every path heard on a real phone, 2026-10-27 (T26); the leads already waiting at the switch-on called too, after new leads (T27, 2026-10-29); a Twilio account problem never uses up a lead's call (T28, 2026-10-29); on `main` 2026-10-30 and live; five calls at once for each person free, not one (T29, 2026-11-02))
-    AI-AGENT.md             Phase 7: Seri, the AI agent that runs the automated call - the design; ai-agent-tickets/ is its build tracker (A01-A34: A24-A34 the new brain, then A22, the deploy, and A23 after it)
-    QUEUE.md  AGENT-WORKSPACE.md  ADMIN.md  LOGGING.md  FRONTEND.md
-    BUCKETS.md              Phase 8: several buckets (campaigns) at once - the design, not started (2026-11-27); bucket-tickets/ is its build tracker (B01-B49); uploaded lists on hold; setup screens later
-    REVIEW-2026-11-22.md    the whole repo read against its docs, 2026-11-22: every finding, and whether it is fixed
-```
-
-`core/` holds the pure rules: message rendering, the SMS state machine and
-answer matching (driven from the EZ Texting webhook through `api/reply-flow.ts`,
-and for spoken answers from `api/twilio-webhooks.ts`), the call script, the
-robot's timing and pace, call and disposition rules, and the queue's tags.
-`docker-compose.yml`
-is local only; production layers `docker-compose.prod.yml` on top of it.
-
-`api` and `worker` build from the same Dockerfile; only the start command differs. *(2026-11-22: two stages - local compose builds `dev`, the server `production`: `dist/` and production dependencies only, as the `node` user. `docs/WORKFLOW.md`, "The images".)*
-
----
-
-## 5. Data model (9 tables + settings)
-
-- **users** – id, email, password_hash, name, role (superadmin/agent), is_active, must_change_password
-- **leads** – id, phone (E.164), first_name, last_name, email, source, group, ezt_contact_id, previous_lead_id, assigned_to, has_unread_inbound, created_at
-- **conversations** – id, lead_id, status (open/completed/expired/suppressed/review), step (1–3), q1, q2, q3, invalid_count, score, tier, expires_at
-- **messages** – id, lead_id, direction, body, ezt_message_id (unique), sent_by, delivery_status, created_at
-- **calls** – id, lead_id, agent_id, twilio_call_sid, started_at, duration_sec, outcome
-- **dispositions** – id, lead_id, agent_id, value, created_at
-- **notes** – id, lead_id, agent_id, body, created_at
-- **callbacks** – id, lead_id, agent_id, scheduled_at, done_at
-- **dnc_list** – phone (unique), reason, added_at
-- **settings** (key/value), **scoring_rules**, **tiers** – admin-editable
-
-Rule: **only one `open` conversation per phone number, ever.**
-
-**As built, 2026-09-14.** The migrations in `backend/src/db/migrations/` - 001
-to 024 as of 2026-11-17 - are the source of truth and `docs/SCHEMA.md` explains
-them. It differs from the list above:
-
-- **users** also has `session_version` and `last_login_at`, and since 016 (T9, 2026-10-18) `ringable_until`: until when the person's browser can take a call - said every 30 seconds, held two minutes, cleared when the session ends. `docs/AUTO-CALLS.md`, "Who is free". Since 017 (T10) `taking_calls` and `taking_calls_at`: the "Taking calls" switch, off at every sign-in and sign-out; and `taking_calls_why` (T15c), why it is so - `missed_transfer` when the server turned it off after a ring let run out.
-- **leads** has `group_id`, `group_name` and `ezt_added_at` instead of `group` and `ezt_contact_id`; EZ Texting returns no contact id.
-- **conversations** also has `agent_took_over_at` (003), `completed_at` (004), and `q1_label` to `q3_label` (009): the word the lead chose, kept with the number, so renaming a choice never renames an earlier answer.
-- **dnc_list** also has `released_at` and `released_reason` (002): a block is lifted, never deleted.
-- **settings** gained `message_missed_call` (007, reworded for eDrugstore by 012); `poll_interval_seconds` is 30 since 005.
-- **messages** also has `in_reply_to_ezt_id`, `from_number` and `received_at`; `ezt_message_id` is unique for outbound only.
-- **callbacks** also has `reason` (migration 008, 2026-10-01): `booked`, or `missed_call` for one the system books for the agent a missed call rang.
-- **calls** also has `ended_at`, and since migration 007 (2026-10-01) `direction`; an incoming call that rang nobody has no `agent_id`, nor one ringing everyone free until someone takes it (T19). Since 010 (2026-10-02) `answered_by`: who picked up a call we placed, a person or a machine - a machine makes the outcome `voicemail` for an agent's call; an automated call only when the verdict took it over (T18, `docs/AUTO-CALLS.md` "Voicemail").
-- **leads.previous_lead_id** exists but is unused and expected to be dropped - see §6.
-- **leads.assigned_at** records when an agent claimed the lead. Claims do not expire; it is what lets a superadmin see one held too long. Added 2026-09-15.
-- **flows**, **flow_questions**, **flow_choices** and **conversation_answers** - migration 012, 2026-10-05. The SMS script is rows, not code: a flow's questions, each question's choices with its reply, points and where the lead goes next, and one add-only row per answer given. **conversations** gained `flow_id`, `current_question_id`, `question_sent_at` (when the text the lead must answer went out - a reply before then is not counted) and `end_outcome`, and `step` now holds the question's position (10, 11, 20, 30), no longer 1-3; its `q1`-`q3` columns and labels, `scoring_rules`, and the question, clarification, thanks and review rows in `settings` are no longer read. A question is named by its key, a sub-question after its parent: `q1-a`, shown "Q1-a". `docs/FLOWS.md`.
-- Migration 024, 2026-11-17 (Phase 7, A31, `docs/AI-AGENT.md` section 12): `call_ai_turns.data`, the new brain's record of each reply - the acts understood, the moves decided, the call's record before and after - only on a `system` row; a call whose line dropped picks up from the last one.
-- Migration 023, 2026-11-12 (Phase 7, A15, `docs/AI-AGENT.md` section 4): `callbacks.note`, the one-line reason Seri gives with a call back she books, only on hers; and one call back per call she booked it on (`callbacks_one_per_ai_call`).
-- Migration 022, 2026-11-11 (Phase 7, A08, `docs/AI-AGENT.md` sections 4 and 9): Seri, the AI agent - on **calls**, `ai_started_at`, `ai_knowledge_version` and `ai_ended_with` (one of her five actions, or `fallback`), only on an automated call, and the result `callback_booked`; **call_ai_turns**, add-only, every turn of her conversation; on **callbacks**, the reason `ai_booked` - the only kind that may have no `agent_id`, open to everyone until taken - with `booked_by_call_id`; and the `ai_agent` setting, `off`. Written since A10 (the relay: her start, her turns, how she ended), A14 (`/auto/ai-after`: her result) and A15 (her call backs) - and only on a call she takes, so with her switch off nothing changes.
-- Migration 021, 2026-11-02 (T29, `docs/AUTO-CALLS.md`, "Traffic"): the `auto_call_calls_per_person` setting, 5 - the robot places five calls at once for each person free, not one: about 200 calls on production that day put 3 leads through to a person.
-- Migration 020, 2026-10-22 (T17, `docs/AUTO-CALLS.md`, "The hold line"): **call_offers** - each time a lead on hold rang someone who came free, ended once and never removed, one at a time per lead and per person; an index of calls by agent and end, for who has just finished a call; and the `auto_call_offer_ring_seconds` setting (20).
-- Migration 019, 2026-10-21 (T16, `docs/AUTO-CALLS.md`, "The hold line"): the place on hold as script words, `hold_next_body` ("You are next.") and `hold_place_body` ("You are number {place} in line."), and `calls.held_at`, when an automated call's lead went on hold - also how the robot knows someone is waiting (T20, `dialRoom`).
-- Migration 018, 2026-10-18 (after T12's first real call, `docs/AUTO-CALLS.md`, "The script"): the call's opening no longer says "This is an automated call" and says the offer before asking ("Today we're offering 25% off antibiotics. Are you interested in ordering?"); "won't" and "didn't" are written out, since Kore's "we won't call you again" sounded like "will" (T13); and its voice is Google Chirp3-HD Kore in place of Polly Joanna. It stops unless the three rows it changes are exactly as 015 left them.
-- Migration 015, 2026-10-18 (T6, `docs/AUTO-CALLS.md`): the automated call's script as rows - **call_scripts** (with the lines every step shares and the link text), **call_steps**, **call_choices** - and **call_answers**, add-only, one row per answer with what Twilio heard; and the `auto_call_*` rows in **settings** (11:00-17:00 America/Phoenix, Monday-Friday, 60 minutes after the first text, and the call's limits).
-- Migration 014, 2026-10-18 (T4, `docs/AUTO-CALLS.md`): **calls** can be `automated` - placed by the server, with no `agent_id` until a person takes its transfer - and gain `script_result`; one automated call per lead (`calls_one_automated_per_lead`) - a call Twilio never placed for our account's reasons (`not_placed`, T28) is not one. An automated call nobody took never makes a lead Working nor returns a missed call.
-- Migration 013, 2026-10-06: three indexes the queue and Admin > Leads needed - `callbacks (lead_id)`, agents' own texts in `messages`, and `leads` by arrival. With 50,000 leads the queue took 8 seconds; `docs/QUEUE.md`, "How fast it is".
-- **call_recordings** and **call_transcripts** - migration 011, 2026-10-02. A call's recording id at Twilio, and its transcript with who said what. `docs/TWILIO.md`, "Recordings and transcripts".
-- **activity_log** and **webhook_events** - migration 006, 2026-10-01. The company keeps data as proof: every action is one add-only row, and every inbound webhook is kept as received. The foreign keys to `leads` no longer cascade, so a lead with history cannot be deleted. `docs/AUDIT.md`.
-
----
-
-## 6. Core flows (message copy is seeded in `settings` by `001_init.sql`, and the missed-call text by `007`; the flow itself is specified in `docs/STATE-MACHINE.md`)
-
-*(2026-10-05: the script is the client's eDrugstore antibiotics flow, seeded as rows by migration 012 - the copy is in `flows`, `flow_questions` and `flow_choices`; only the missed-call text stays in `settings`, reworded by 012. `docs/FLOWS.md` for how it is stored, `docs/STATE-MACHINE.md` for what it does.)*
-
-### New lead (Worker, every 30–60s)
-1. Poll EZ Texting Contacts API for the lead group, since last checkpoint (overlap window 5 min).
-2. Normalize phone to E.164. `INSERT ... ON CONFLICT DO NOTHING`.
-3. Phone on DNC → create lead as `suppressed`, send nothing.
-4. Phone seen before with open conversation → set old one `expired`, link new lead to old.
-5. Create conversation `open`, step 1. Send opener. Set expiry timer (default 7 days, admin-editable).
-6. Advance checkpoint only after success.
-
-**Update 2026-09-14.** Step 4 has since been reversed: one person is one lead
-row, and a returning phone gets a new conversation on the existing lead rather
-than a new linked lead. The design and what it is blocked on are in
-`docs/POLLER.md` under "Not done yet". As built, the poller does steps 1-3, 5
-and 6, including setting `expires_at` when the opener goes out. Step 4 is a
-future item (§10, "Future").
-
-### Reply (API webhook `POST /api/webhooks/eztexting/<token>`)
-
-How a reply is handled - opt-outs, valid answers and the accepted words,
-unclear replies, scoring, expiry - is specified in `docs/STATE-MACHINE.md`, and
-only there. It overrides the mockup PDF where they differ: Jeel's decision,
-2026-09-19, the mockup is a reference for screens and wording, not for flow
-logic. What the webhook itself does before the state machine runs - dedupe,
-ignoring numbers we hold no lead for - is in `docs/WEBHOOKS.md`.
-
-### Scoring (defaults, admin-editable)
-Responded +10 · Completed +10 · Q1: 5/10/15 · Q2: 30/20/5 · Q3: 35/25/10
-Tiers: HOT 75–100, WARM 45–74, LOW 1–44
-
-*(2026-10-05: those points were the first flow's. Points now belong to each choice of each flow - `docs/STATE-MACHINE.md`, "The antibiotics flow". Tiers are unchanged.)*
-
-### Call (agent browser)
-1. `GET /twilio/token` → API mints Voice access token.
-2. Browser SDK dials; Twilio hits `POST /webhooks/twilio/voice` for TwiML.
-3. On end, Twilio status callback → save to `calls`.
-4. Agent sets disposition/note/callback. DNC disposition = same as SMS STOP.
-
-Queue tags (New, Attempted 1x, In progress, Callback, Needs review, Stalled at Q2, Inbound reply, Seen before) *(2026-09-28: Stalled is gone - the queue holds only leads that need a person, `docs/QUEUE.md`)* are **computed** from these tables, not stored as a status. *(2026-09-19: "Seen before" cannot occur until repeat-lead handling is built - a future item, §10.)* *(2026-09-22: built - which tag wins when several apply is in `docs/QUEUE.md`.)* *(2026-09-28: only Working – name (was In progress), Inbound reply and Needs review are shown; the rest were dropped - `docs/QUEUE.md`, "The tag".)* *(2026-09-29: Callback – name · time is back, so four.)* *(2026-10-01: Missed call - the lead rang us and nobody answered - so five. `docs/TWILIO.md`, "A missed call".)* *(2026-10-05: Wants a call - the lead said No, then asked to hear from a rep - so six. `docs/QUEUE.md`.)* *(2026-10-24, T22: Wants a call also marks a "yes" on the automated call that nobody took - ranked below Missed call, and those leads first in the queue. `docs/QUEUE.md`, "The order".)* *(2026-11-12, A16: a call back Seri booked, once due, is Callback · 3:00 PM in bold and first in the queue beside a missed "yes"; the first agent to pick the lead up takes it. `docs/QUEUE.md`.)*
-
-**Paths, as of 2026-09-15.** Caddy forwards only `/api/*` to the API; everything
-else is the frontend, so every route lives under `/api`. The EZ Texting webhook
-was built that way: `POST /api/webhooks/eztexting/<token>`, unauthenticated,
-with a random path segment in place of a signature - see `docs/WEBHOOKS.md`. The
-Twilio paths above, `/webhooks/twilio/voice` and `/twilio/token`, still need the
-same treatment when they are built. The queue API was built that way:
-`GET /api/leads`, 2026-09-22. *(2026-10-01: Twilio built that way too -
-`POST /api/calls/token`, `POST /api/webhooks/twilio/voice` and
-`POST /api/webhooks/twilio/status`, and for a lead calling in
-`POST /api/webhooks/twilio/incoming` and `/incoming/after`; and `/answered-by`, Twilio's verdict on who picked up; `/recording`, a call's recording is ready (2026-10-02); and `/notice`, the recording notice a lead we called hears first (2026-10-05). `docs/TWILIO.md`.)* *(2026-10-18: the automated call's `/api/webhooks/twilio/auto/answer`, `/auto/gather`, `/auto/status` and `/auto/amd`, only while `AUTO_CALLS` is on - `docs/AUTO-CALLS.md`, "How a call is placed".)* *(2026-10-20: its transfer's `/auto/claim` and `/auto/after` - "The transfer".)* *(2026-10-21: its hold line's `/auto/hold` - "The hold line".)* *(2026-10-22: `/auto/offer`, a lead on hold ringing the person who came free - "The hold line".)* *(2026-10-24: `/incoming/claim`, a person accepting a lead's call that rang everyone free - `docs/TWILIO.md`, "Who rings".)* *(2026-11-12: with Seri on, `/auto/answer` connects the call to her WebSocket, `/api/ai/relay`, and `/auto/ai-after` carries out the end of her part - A13, A14; `docs/AI-AGENT.md` sections 2 and 3.)*
-
----
-
-## 7. Local setup
-
-**Prerequisites:** Docker Desktop, Node 20, Git, ngrok account (free).
-
-```bash
-git clone <repo>
-cd secure-medical
-cp .env.example .env          # fill in sandbox keys from Jeel
-docker compose up -d           # postgres, redis, api, worker, caddy
-docker compose exec api npm run migrate
-docker compose logs -f worker  # should show poll ticks
-```
-
-Frontend dev: `cd frontend && npm run dev` (Vite on :5173, proxies /api to :3000).
-
-**Webhooks locally:** `ngrok http 3000` → paste the https URL into the EZ Texting sandbox and Twilio test TwiML App. Jeel will give you sandbox access; do not touch production settings.
-
-**Daily:** `docker compose stop` / `docker compose up -d` keeps your data. `docker compose down -v` wipes it.
-
-**Browse tables:** DBeaver / TablePlus → `localhost:5432`, user `app`, pass `app`, db `leads`.
-
-**Corrections, 2026-09-14.** `docs/README.md` has the current steps. Differences from the above:
-
-- The local compose file starts **postgres, redis, api and worker**. There is no caddy locally; the frontend runs on the Vite dev server.
-- Postgres is on host port **5433**, not 5432.
-- After migrating, create the first account: `docker compose exec api npm run dev:create-superadmin -- you@example.com "Your Name"`.
-- Colima works in place of Docker Desktop.
-- **Twilio locally:** nothing is pasted into Twilio by hand; `docker compose exec api npm run dev:twilio:configure` points the TwiML App and the phone number at `PUBLIC_URL`. **Never run it locally with production's number or TwiML App (Jeel, 2026-10-05)** - production is live on them, and it would move production's calls to the laptop, silently. **Calling is not tested locally at all (same day): the local `.env` keeps its `TWILIO_*` lines empty.** *(2026-10-16: local now has its own number, (480) 530-8582, its own TwiML App and `TWILIO_IDENTITY_PREFIX=dev-`, so it can never ring production's browsers or be rung by them; calling stays off locally until a tunnel is set for a test - `docs/AUTO-CALLS.md`, T3.)* `docs/TWILIO.md`, "What it needs on the Twilio account".
-
----
-
-## 8. Credentials
-
-| Item | Who holds it | Developer gets |
-|---|---|---|
-| EZ Texting sandbox API key | Jeel | Yes |
-| EZ Texting production key | Jeel | No |
-| Twilio test credentials | Jeel | Yes |
-| Twilio production | Jeel | No |
-| AWS console / IAM user | Jeel | No |
-| EC2 SSH key | Jeel | No |
-| RDS password | Jeel | No |
-| GitHub repo | Both | Write access |
-
-Never commit `.env`. Never use real lead data locally. Generate fake leads.
-
----
-
-## 9. Workflow
-
-1. Developer branches off `dev`, works there, opens a PR **into `dev`**. Never
-   commits to `dev` or `main` directly.
-2. Jeel reviews, merges to `dev`, then `dev` to `main`.
-3. Jeel SSHs into EC2: `git pull && docker compose up -d --build && docker compose exec api npm run migrate`.
-   *(2026-09-14: the full command includes the production override - `docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build`. `docs/WORKFLOW.md` has the exact steps.)*
-4. Developer never touches EC2, RDS, or client accounts.
-
-**Migrations:** plain files in `backend/src/db/migrations/`, numbered. Never edit one that has already run on RDS – add a new one. *(2026-09-23: production is live, so every database change is a new migration file and nothing else - no hand-edits, no psql. `docs/WORKFLOW.md`, "Migrations".)*
-
-**Definition of done for a task:** works locally end to end with fake data, PR description says how to test it, no console errors, migrations included if schema changed.
-
----
-
-## 10. Four-week plan
-
-Each week ends with something that can be demonstrated. Do not start the next week's work until the current week's "done when" is met.
-
-### Progress, as of 2026-09-22
-
-| Week | Done | Not done |
-|---|---|---|
-| 1 | All of it: 1 repo and Docker setup · 2 migrations · 3 auth · 4 EZ Texting client · 5 poller (60s default, admin-editable, not 45s) · 6 inbound webhook (`docs/WEBHOOKS.md`) · 7 ngrok wiring, confirmed with a real text | – |
-| 2 | 1 the pure state machine (`core/state-machine.ts`, `core/answers.ts`) · 2 wired into the webhook via `api/reply-flow.ts` · 3 opener sent by the poller · 4 STOP, and the `dnc_list` check now inside `sendMessage` · 5 unclear replies · 6 scoring · 7 expiry (`worker/expiry.ts`) · 9 the queue API (`docs/QUEUE.md`) · 10 tests. The full 3-question flow was walked against the account on 2026-09-21 | Item 8, repeat leads, is a future item |
-| 3 | 1 scaffold, login, role-based routing · 7 in part: manage agents · 9 Caddy serves the built frontend · 10 Admin > Leads (`docs/ADMIN-LEADS.md`) | 2-6, 8, the rest of 7 |
-| 4 | – | All |
-
-Auth (Week 1) and the Week 3 login were built together, ahead of the Week 1
-webhook, at Jeel's request. *(Table updated 2026-09-22.)*
-
-*(Superseded 2026-09-23 by the phases table below. As of 2026-10-01 everything
-in this table is done except repeat leads; the poller's interval is 30 seconds,
-from a `settings` row, and no screen edits it.)*
-
-### Phases, and what Phase 3 is - decided by Jeel, 2026-09-23
-
-The weeks below are the original plan. Work is now tracked in phases, which map
-onto them:
-
-| Phase | Weeks | State |
-|---|---|---|
-| 1 | Week 1 | Done |
-| 2 | Week 2 | Done, approved 2026-09-23 |
-| 3 | Week 3 **and all of Week 4 except Twilio** | Done 2026-09-28, merged into `main` |
-| 4 | Week 4 items 1-4, Twilio calling | Done 2026-10-01 - `docs/TWILIO.md`. A real call placed and recorded the same day. Incoming calls - ring one agent, text the lead on a missed call, and a callback for the agent it rang - tested by Jeel with real calls and merged into `dev` the same day. Deploying them needs migrations 007 and 008, and `twilio:configure` run on the server. On main and production since 2026-10-05 |
-| 5 | Not in the original plan | **Flows** - decided by Jeel, 2026-10-05, before launch: the SMS questions and answers stored as rows so a group with different questions is new rows, not new code; the client's eDrugstore antibiotics script as the first flow; a recording notice on calls. Built on `feat/flows`. Reviewed by three independent reads and a 50,000-lead load test on 2026-10-06, then walked with a real phone the same day - eight paths, all as specified - and merged into `dev`. Deploying it needs migrations 012 and 013. Editing a flow from the website, and a flow per EZ Texting group, are later. `docs/FLOWS.md`. On main and production since 2026-10-06 |
-| 6 | Not in the original plan | **Automated calls** - the server calls leads who never replied and puts a "yes" through to a person. T0-T25 done 2026-10-25; every path heard on a real phone 2026-10-27 (T26); the leads already waiting at the switch-on called too, after new leads, 2026-10-29 (T27); a Twilio account problem never uses up a lead's call (T28). On `main` 2026-10-30 with migrations 014 to 020, and live. Five calls at once for each person free, not one - T29, 2026-11-02, migration 021, on `main` through PR #29. `docs/AUTO-CALLS.md` |
-| 7 | Not in the original plan | **AI agent** - Seri, from eDrugstore, runs the automated call from the start: she answers questions, handles objections, knows on every turn whether anyone can take the call, and ends each call with a transfer, a call back at a time the lead picks, the link, an opt-out or a goodbye; today's script stays as the backup. Designed 2026-11-11, in 22 tickets. A01 done 2026-11-11: the OpenAI key, and the switch, changed only by `npm run ai-agent -- on\|off` and recorded in the activity log. A03 the same day: the knowledge files checked at start-up - a broken one stops the API. A08 too: migration 022, Seri's columns, her conversation's turns and her call backs. A07: when she may book a call back, in the lead's own time zone - pure, tested on its own. A04: her instructions, built from the knowledge files, the same on every call up to the call's own details. A05: every sentence she is about to say checked for a price, medical advice or a made-up offer. A06: her five actions, defined once - what OpenAI is offered, and what Twilio hands back. A09: the answer test set, 67 cases run against the real model - `gpt-4.1-mini` chosen, 133 of 134 passed, first word in 0.55 s. A02, 2026-11-12: the first test calls on the dev number - her voice picked, Rachel on ElevenLabs's `v4` model; the WebSocket through Caddy, its signature and messages confirmed, and `end` never cuts her last line. A10: the relay - the WebSocket Twilio opens for her, refused unless Twilio signed it, taking a call once and keeping every turn; one fixed line until OpenAI. A11: Seri talks - OpenAI streamed a sentence at a time, each sentence checked, her action ending the call straight after her last line, talked over cut short, and the stop words or key 9 ending the call whatever she would say; first sentence 0.66-0.90 s after the lead's words in a real run. A12: the limits - "are you still there?" after 6 seconds of silence and a goodbye after 6 more, a note to wrap up at three minutes and the call ended 20 seconds later, "One moment..." when OpenAI is slow and the script taking the call (`fallback`) at 8 seconds or when OpenAI, the socket or the relay fails; each fallback recorded with why, for A17. A13: with her switch on and the key set, an answered robot call is connected to her - `<Connect><ConversationRelay>` with A02's settings and "Hi, is this Dana?" - instead of the script's first question; off, or no key, exactly today's script. A14: `/auto/ai-after` carries out how her part ended with the script's own code - the transfer, the link, a stop's block, a goodbye's result, once; a stop or the link still carried out when the lead hung up after it; "Sorry about that." and the script's first question when she failed, recorded as a fallback when Twilio's side failed. A15: a call back she books is saved with her result, the lead's own agent's or open to everyone, with her one-line reason (migration 023, `callbacks.note`); shown on the lead's page, its timeline and Admin > Leads; not a person's work. A16: once due it puts the lead at the top of the queue, "Callback · 3:00 PM" in bold, beside a missed "yes"; the first agent to pick the lead up takes it (`callback.taken`) and it is on their My Callbacks. A17: with her on, the robot places nothing while OpenAI does not answer a one-word check (at most once a minute), or for 15 minutes after her last three calls all fell back. A18: voicemail while she talks - the beep decides, as on the script, with what the lead said to her as an answer; her goodbye, the link or a call back waits up to 15 seconds for Twilio's verdict, so a greeting she took for a "no" still gets the voicemail message. A19: her conversation on the lead's timeline, under the call - Lead and Seri lines, then how her part ended - for the agent who takes the transfer or the call back. A20: `npm run e2e` runs her calls - OpenAI down holding the robot back, then a call back, a transfer, the link, a stop and OpenAI failing mid-call - through her real relay with OpenAI stubbed at its HTTP edge; 131 checks. Found in the doc check after A20 and fixed, 2026-11-13: a lead who talked to her had the text questions stop (rule 2d), and her transfer counts as ringing for another call's "yes". A21 (every path on a real phone) and A22 (deploy with her off, then switch her on) are still to do. A23, after them (Jeel, 2026-11-16): a voicemail's menu - "press 1" - taken for a yes and put through, seen twice on production on the script. A21 paused after call 112 (2026-11-17): each fix had been a rule or a note, "less often, not never" - each reply is being rebuilt as three steps, OpenAI understanding what the lead said, tested code deciding what she does next from a record of the call, and OpenAI speaking it (A24-A34, section 12); A24-A32 built 2026-11-17 - every call runs on the new brain, today's kept for a rollback until 2026-11-19, then removed; A33, listening, 2026-11-18 - understanding started early, and Flux's end of turn at 0.6. A34, A21's checklist again on the new brain, Jeel's real-phone test: calls 113-140, 2026-11-17 to 2026-11-22 - every path heard but the three minutes, left to the tests - and call 122's call back on the screens when due; done 2026-11-23, each fault found fixed on its own branch. Then a review of the whole repo, 2026-11-22 (`docs/REVIEW-2026-11-22.md`): every finding fixed or decided on `dev`, 2026-11-23. A22, the deploy: on production 2026-11-24 through PR #31, Seri still off; switching her on next. `docs/AI-AGENT.md`; tracker `docs/ai-agent-tickets/README.md` |
-| 8 | Not in the original plan | **Several buckets** - planned 2026-11-25 to 27, not started. Several campaigns at once, each with its own EZ Texting group, text questions, robot script and what Seri knows; one person stays one lead, active in one bucket at a time. Part 2, uploading a list of past customers for reminder calls, is on hold; Part 3, setup screens, comes later. Split into 49 small tickets, B01-B49, with the decisions they build on, 2026-11-27 - about forty can be built before the client answers; the intake tickets wait on them. `docs/BUCKETS.md`; tracker `docs/bucket-tickets/README.md` |
-
-**Phase 3 is everything that is left except calling.** That means the Week 3
-list below, plus Week 4 items 5-9: error handling and retries, logging, the
-end-to-end test script, the fixes it finds, and the README. Twilio is the only
-thing held back, so the agent workspace is built with its Call button visible
-but disabled until Phase 4.
-
-Added to Phase 3, not in the original plan:
-
-- **Structured logging and a deeper health endpoint** - `docs/LOGGING.md`.
-  Today's logs are readable lines that nothing can query, and the only health
-  check proves the API process is alive and nothing more.
-- **Clearing `has_unread_inbound`.** Nothing unsets it today, so a lead who
-  texts after expiry never leaves the queue. Opening the lead is what clears it.
-- **Claiming a lead.** `assigned_to` and `assigned_at` exist and the queue reads
-  them, but nothing writes them.
-
-**Admin is read-only except Agents - decided by Jeel, 2026-09-23.** The original
-Week 3 item 7 and `DESIGN-PROMPT.md` 6b, 6c, 6e and 6f had the superadmin
-editing scoring rules, tier bands, message copy and settings from the screen.
-They do not. Admin shows the configuration; it does not change it:
-
-| Screen | Was | Is |
-|---|---|---|
-| Scoring rules and tiers (6b) | Editable inline, with **Recalculate existing** | A read-only card. No Save, no Recalculate - the feature is dropped |
-| Message copy (6c) | Seven editable fields | Read-only, on Configuration's Texts tab; the score table is on its Scoring tab |
-| Settings (6f) | Expiry, delivery type, poll interval, caller ID | Not built as an editor. Expiry and the other flow settings are shown read-only on the Texts tab; the poll interval is a settings row, caller ID an environment variable |
-| DNC list (6e) | Table plus **Add manually** | Read-only. Blocking happens through an agent's DNC disposition, a STOP reply, an EZ Texting opt-out, or a stop said on the automated call (T13) |
-| Agents (6d) | Editable | Unchanged - creating and deactivating accounts is the point of it |
-| Seri's switch | - (Phase 7) | *Added 2026-11-24, Jeel:* Switch on / off on Configuration's Calls tab, superadmin only, confirmed, recorded by whoever clicked - the one control on Configuration. `npm run ai-agent` still works |
-
-**Why:** scoring and copy are not small changes. A mistyped point value silently
-reshuffles the queue; a broken opener costs a second segment on every message or
-drops the STOP wording. Changing them through a numbered migration means a PR, a
-review and a git history of who changed what. Jeel makes those changes.
-
-A rule change therefore leaves leads already scored on their old values. That is
-accepted: it is rare, and a one-off rescore script can be run deliberately if it
-ever matters. Nothing rescores on its own.
-
-### Phase 3 task list
-
-30 tasks, each one a PR. The behaviour of every one is specified in the doc
-named beside it - read that first, not this line. §9's definition of done
-applies to each: works locally with fake data, tests, docs updated in the same
-commit.
-
-**Backend done, 2026-09-26.** Tasks 1-13: the agent workspace endpoints, agent
-SMS with rule 2b, the three read-only admin screens and the deep health
-endpoint. Suite at 360 tests, plus eight `scripts/*-live-check.ts` files that
-prove the SQL against a real Postgres.
-
-**Frontend done, 2026-09-26.** Tasks 14-25, on the same branch: the shared
-polling hook, the priority queue with the one-agent lock, the agent workspace
-(card, timeline, actions, SMS compose), the lead timeline page, My Callbacks,
-and the three admin pages. `docs/FRONTEND.md` is the record of what was built
-and why. The frontend gains its first test setup - Vitest, jsdom, tests
-covering logic rather than buttons.
-
-**Operations done, 2026-09-28.** Tasks 26-30, on `feat/phase3-operations`:
-structured JSON logging with redaction enforced in the logger, the failed-opener
-retry, the end-to-end script, and a README with how to test and known limits.
-**Phase 3 is complete.** Next is Phase 4, Twilio calling. *(Built 2026-10-01 - `docs/TWILIO.md`.)*
-
-**Open when Phase 3 closed, 2026-09-28** - each written up where it lives:
-
-- ~~**"Today" is UTC.**~~ Fixed 2026-09-28: each viewer's own time zone, sent
-  by the browser as `?tz=` - `db/sql.ts`, `startOfTodaySql`.
-- ~~**Force-release has no screen.**~~ Built 2026-10-08: a Release button on
-  the lead's page, for the holder and for a superadmin on anyone's lead. Back
-  to queue no longer releases a lead - `AGENT-WORKSPACE.md`.
-- **Source always reads "API" in production** - it is how the contact was
-  added to EZ Texting, not which partner sent it. Keep the column, or find the
-  partner elsewhere.
-- **Deploy:** `npm run migrate` applies whatever the server has not run. `main` and production hold 001 to 024 - 014 to 020, automated calls, on `main` since 2026-10-30 (`docs/AUTO-CALLS.md`); 021, five robot calls at once for each person free (T29), through PR #29; and 022 to 024, Seri's tables, the note on her call backs and the brain's record of each reply, through PR #31, applied on production 2026-11-24 - `docs/WORKFLOW.md`. The next migration is 025. Seri also needs `OPENAI_API_KEY` in the server's `.env` (set 2026-11-24); she stays off (022 seeds `ai_agent` as `off`) until switched on - the Seri card on Admin > Configuration, or `npm run ai-agent -- on` - which needs no restart. What 005 to 011 were (011: call recordings and transcripts, which also need `TWILIO_TRANSCRIPTION_SERVICE_SID` - `docs/TWILIO.md`; 010: voicemail detection; 009: the word kept with each answer - `docs/STATE-MACHINE.md`; 005, 2026-09-29: poll every 30s; 006, 2026-10-01: the activity log, the raw webhook archive, and leads that cannot be deleted - `docs/AUDIT.md`; 007 and 008, the same day: incoming calls and the callback a missed call books - `docs/TWILIO.md`). Calling also needs the seven Twilio settings - all or none, a partly set group stops the API starting - and `npm run twilio:configure` run on the server, last: the phone number rings only one deployment. Production also needs `EZT_WEBHOOK_TOKEN` set, or the API will not start - it is already set there.
-
-Task 29 found nothing to fix in the app: all three bugs the end-to-end script
-surfaced were in the script itself. Two apparent failures were the app being
-right and the script being out of date with Jeel's changes.
-
-*(2026-09-28, in review before merging: the retry of task 27 had two faults its
-own check did not catch, both fixed on the branch. Its waits counted from the
-lead's arrival, so an older lead's four retries fired in four minutes; and
-nothing stopped a first question going out days late. The README also still
-described two things changed the same day. `POLLER.md`, "Retrying a failed
-opener".)*
-
-Two things found while building, neither fixed inside its task, both needing
-Jeel:
-
-- **A disposition does not remove a lead from the queue.** `db/queue.ts` does
-  not read `dispositions` at all, so a lead dispositioned `not_interested`
-  stays in the queue at full score and the next agent picks it up again. Only
-  `dnc` removes one, and only through `dnc_list`. *(2026-09-28, Jeel: fixed.
-  Wrap up now has two outcomes, Closed and DNC. Closed takes a lead out of the
-  queue and reads Closed on Admin > Leads, next to a new Working status.
-  `AGENT-WORKSPACE.md`, "Dispositions"; `ADMIN-LEADS.md`.)*
-- **The deep health endpoint cannot be polled by external monitoring,** because
-  it is superadmin-only as `LOGGING.md` specified. If an uptime service is
-  wanted, it needs a separate unauthenticated route returning less. *(Still
-  open, 2026-09-28 - `README.md`, "Known limits".)*
-
-**Backend (`AGENT-WORKSPACE.md`, `ADMIN.md`, `LOGGING.md`)**
-
-| # | Task | Doc | Needs |
-|---|---|---|---|
-| 1 | Migration: agent take-over timestamp on `conversations` | `SCHEMA.md` | – |
-| 2 | Claim and release a lead, with superadmin force-release | `AGENT-WORKSPACE.md` | – |
-| 3 | Mark a lead read, clearing `has_unread_inbound` | `AGENT-WORKSPACE.md` | – |
-| 4 | Lead detail: card, flags, score breakdown | `AGENT-WORKSPACE.md` | – |
-| 5 | Lead timeline: merged events from five tables | `AGENT-WORKSPACE.md` | – |
-| 6 | Notes | `AGENT-WORKSPACE.md` | – |
-| 7 | Callbacks: create, reschedule, mark done, list | `AGENT-WORKSPACE.md` | – |
-| 8 | Dispositions, and the DNC path that blocks the number | `AGENT-WORKSPACE.md` | – |
-| 9 | Agent SMS, and stopping the automated questions | `STATE-MACHINE.md` 2b | 1 |
-| 10 | Admin Configuration: live copy, scoring and tiers, read-only | `ADMIN.md` | – |
-| 11 | Admin Overview statistics | `ADMIN.md` | – |
-| 12 | Admin DNC list, read-only, showing released rows | `ADMIN.md` | – |
-| 13 | Deep health endpoint: database, last poll, last webhook | `LOGGING.md` | – |
-
-**Frontend (`DESIGN-PROMPT.md`)**
-
-| # | Task | Doc | Needs |
-|---|---|---|---|
-| 14 | Shared polling hook, 5s, one place for every live screen | `QUEUE.md` | – |
-| 15 | Priority Queue screen, replacing the placeholder | `DESIGN-PROMPT.md` 2, `QUEUE.md` | 14 |
-| 16 | One-agent lock in the queue: claimed rows muted and unclickable | `DESIGN-PROMPT.md` 2 | 2, 15 |
-| 17 | Agent Workspace shell: lead card, three columns, Call button disabled | `DESIGN-PROMPT.md` 3 | 4 |
-| 18 | Timeline component | `DESIGN-PROMPT.md` 3 | 5 |
-| 19 | Workspace right column: note, callback, disposition, Save and next *(2026-09-28: Save only)* | `DESIGN-PROMPT.md` 3 | 6, 7, 8 |
-| 20 | Workspace SMS compose, with templates | `DESIGN-PROMPT.md` 3 | 9 |
-| 21 | Lead Timeline page, full width with summary sidebar | `DESIGN-PROMPT.md` 4 | 18 |
-| 22 | My Callbacks page | `DESIGN-PROMPT.md` 5 | 7 |
-| 23 | Admin Configuration page | `DESIGN-PROMPT.md` 6b, 6c | 10 |
-| 24 | Admin Overview page | `DESIGN-PROMPT.md` 6a | 11, 13 |
-| 25 | Admin DNC page | `DESIGN-PROMPT.md` 6e | 12 |
-
-**Operations (`LOGGING.md`, `README.md`)**
-
-| # | Task | Doc | Needs |
-|---|---|---|---|
-| 26 | Structured JSON logging across api and worker | `LOGGING.md` | – |
-| 27 | Error handling and retries: EZ Texting down, failed opener, duplicate webhooks | `POLLER.md`, `WEBHOOKS.md` | – |
-| 28 | End-to-end test script: lead in, SMS flow, queue, disposition, timeline | – | most |
-| 29 | Fix what task 28 finds | – | 28 |
-| 30 | README: how to run, how to test, env vars, known limits | `README.md` | – |
-
-**Not in the list, and why**
-
-- **Twilio** - Phase 4. Tasks 17 and 19 leave the Call button and the call
-  entries in the timeline in place but inert.
-- **Repeat leads** - still blocked. The check that unblocks it is one API call
-  against the test account, described in "Future: repeat leads" below. Worth
-  doing early in Phase 3: if `createdAt` moves on a re-delivered contact, it
-  becomes a 32nd task; if it does not, it stays parked and we stop planning
-  around it. *(Checked 2026-11-27: it does not move - "Future: repeat leads".)*
-- **State and Consent ref** on the workspace and timeline - no data reaches us
-  for either. `AGENT-WORKSPACE.md`, "Known gaps in the screens".
-
-### Week 1 – Foundation + prove EZ Texting works
-
-**Goal:** leads are pulled from EZ Texting into our database, and we can send and receive SMS.
-
-Build:
-1. Repo structure, `docker-compose.yml`, Dockerfile, `.env.example`, README
-2. Migrations for all tables in §5 (empty tables are fine for now)
-3. Auth: `users` table, login endpoint, JWT/session, `superadmin` and `agent` roles, superadmin can create/deactivate agents
-4. EZ Texting client module: list contacts (with group/source filter), send message
-5. Worker skeleton: loop every 45s, poll contacts, insert new leads with dedupe on phone, checkpoint stored in DB
-6. Webhook route `POST /webhooks/eztexting`: receive, verify, dedupe on message ID, save to `messages`
-7. ngrok wired to sandbox so replies reach the webhook
-
-Done when:
-- Add a contact in the EZ Texting sandbox → within 60s it appears in `leads`
-- Send an SMS from the app to a test phone → it arrives
-- Reply from that phone → row appears in `messages` with correct lead_id
-- Restarting the worker does not create duplicate leads
-
-### Week 2 – Conversation engine + scoring
-
-**Goal:** the full 3-question flow runs automatically and every lead ends with a status, score and tier.
-
-This list is the scope. How each item behaves is in `docs/STATE-MACHINE.md`.
-
-Build:
-1. State machine in `core/` – a pure function, no database calls, so every rule is unit-testable
-2. Wire it into the webhook: load conversation → run → save → send
-3. Opener sent automatically when the worker inserts a new lead - **done**
-4. STOP handling, and START releasing the block while keeping the record *(added 2026-09-22)*
-5. Unclear replies, and answer matching: numbers plus a short list of accepted words
-6. Scoring and tiers, updated on every reply
-7. Expiry of conversations that go quiet
-8. ~~Repeat leads~~ - **future, not Week 2** *(2026-09-19)*. Until then the poller skips a phone it already holds. See "Future" below
-9. Queue API: `GET /api/leads?tier=&source=&since=` returning score, tier, age, q1–q3 and the computed queue tag - **done**, `docs/QUEUE.md`
-10. Unit tests for the state machine - the list is in `docs/STATE-MACHINE.md`
-
-Not in Week 2: a sending-hours window for the opener (rejected 2026-09-19; it is sent as soon as the lead arrives), and retrying a failed opener.
-
-Done when:
-- A test phone can complete all three questions and lands as `completed` with the correct score
-- Every rule in `docs/STATE-MACHINE.md` is reproducible with a real SMS
-- Queue API returns leads sorted by score then age
-
-### Week 3 – Frontend: queue, agent workspace, timeline, admin
-
-**Goal:** agents and superadmin can use the app end to end, except calling.
-
-Build:
-1. React app scaffold, login page, role-based routing
-2. Priority queue screen (mockup p.5): HOT/WARM/LOW counts, table, filters, live age ticking, refresh on new data
-3. One-agent lock: claiming a lead sets `assigned_to`; other agents see "In progress – name" *(2026-09-28: now "Working – name")*
-4. Agent workspace (mockup p.6) minus the call button: lead card, score breakdown, SMS send, note, callback scheduling, disposition, save & next *(2026-09-28: Save only; the outcomes are Closed and DNC)*
-5. Lead timeline (mockup p.7): merged view of messages, calls, notes, callbacks, dispositions
-6. My Callbacks page
-7. Admin (mockup p.8): ~~edit scoring rules and tier thresholds, recalculate existing, edit question copy / clarification / STOP text / expiry days~~, manage agents. *(2026-09-23: all of it read-only except managing agents - see "Phases, and what Phase 3 is" above. The screen shows the questions, the clarifications, the thanks message, the score table and the tier bands; nothing is editable and Recalculate is dropped.)*
-8. Superadmin overview: all activity across agents
-9. Caddy serves the built frontend; API under `/api`
-10. **Admin > Leads** *(added 2026-09-14, not in the original plan)*: superadmin-only list of every lead, including ones that never replied, with status tabs (Awaiting reply, In progress, Completed, Needs review, Opted out, Expired), source and date filters, search, pagination, and row click to the timeline. Read-only. Backed by `GET /api/admin/leads?status=&source=&since=&q=&page=`, superadmin only; status comes from the lead's newest conversation. Spec in `docs/DESIGN-PROMPT.md` section 6g. It needs only the `leads`, `conversations` and `messages` tables, so it can be built before the queue if useful for watching the poller and the SMS flow.
-
-Done when:
-- Two agents logged in at once cannot claim the same lead
-- A lead added in EZ Texting appears in Admin > Leads as Awaiting reply within one poll interval, without a manual refresh
-- ~~Superadmin changes a scoring rule → next completed lead uses the new value~~ *(2026-09-23: rules are not changed from the screen. Instead: the Configuration page shows the values the state machine is actually using.)*
-- Every screen in the mockup exists and works with sandbox data
-
-### Week 4 – Twilio calling + end-to-end testing + handoff
-
-**Goal:** agents can call from the browser, and the whole system is tested and ready for Jeel to deploy.
-
-Build:
-1. Twilio module: mint Voice access token, TwiML App voice webhook `POST /webhooks/twilio/voice`, status callback
-2. Call button in agent workspace using Twilio Voice JS SDK; live timer; hang up
-3. Save each call to `calls` (sid, duration, outcome); show in timeline
-4. DNC disposition suppresses number for both SMS and calls
-5. Error handling and retries: EZ Texting API down, webhook duplicate, Twilio token expiry *(items 5-9 moved into Phase 3, 2026-09-23; Twilio token expiry stays here)*
-6. Logging: every worker tick, every webhook, every send, every call - structured, `docs/LOGGING.md`
-7. Full end-to-end test script: new lead → SMS flow → queue → call → disposition → timeline
-8. Fix everything found in step 7
-9. README updated: how to run, how to test, env variables, known limits
-
-Done when:
-- A fresh test lead can go from sandbox contact to a completed browser call with disposition, with no manual DB edits
-- All unit tests pass
-- Jeel can deploy `main` to EC2 following the README without asking questions
-
-### After week 4 (Jeel)
-
-- AWS provisioning, RDS, deploy, DNS, production webhooks
-- Client UAT with real agents
-- Fixes from UAT
-- Later phase (not in scope now): ElevenLabs AI attendant, voicemail, after-hours handling
-- Only if the client asks: showing responders whose conversation expired in the agents' queue as "Stalled at Qn" *(2026-09-28: the queue no longer shows partway leads at all, open or expired - Jeel's decision. This would reverse it.)*
-
-### Future: repeat leads - check first, then build
-
-When the same number is delivered again, it should start a new conversation
-unless it is mid-flow or blocked. The rules are decided and written in
-`docs/STATE-MACHINE.md`, "A number that comes back".
-
-**It is not built yet, because a return may not be detectable.** Verified
-2026-09-19 by Jeel: EZ Texting does not allow two contacts with the same phone
-number (`docs/EZTEXTING-API.md`). So a re-delivered number never arrives as a
-new contact; it is rejected or updates the existing one. The poller finds leads
-by the contact's `createdAt`, so unless an update resets that time, the poller
-never sees the return and the rules never run.
-
-Before building it:
-1. Check on the test account what happens when a number already on the account
-   is added again through the API, the way the partner sends leads: is it
-   rejected, or does it update the existing contact - and if it updates, do
-   `createdAt` or `updatedAt` change?
-2. If `createdAt` moves, build the rules as written.
-3. If not, the poller needs another signal for a return - for example
-   `updatedAt`, a group move, or the partner telling us - and that has to be
-   found first. `docs/POLLER.md`, "Not done yet", has the detail.
-
-*(Checked 2026-11-27 on the test account: step 3 applies. A number delivered
-again updates the existing contact and `createdAt` does not move; there is no
-`updatedAt`. Only the contact's groups change. `docs/EZTEXTING-API.md`, "One
-contact per phone number".)*
-
----
-
-## 12. Working with Claude Code
-
-### The order of work, every time
-
-1. **Understand what is already there.** Read the existing code and the doc for
-   that area before changing anything. Do not assume how something works from
-   its name, and do not trust a doc over the code if they disagree - check, then
-   fix whichever is wrong.
+| Anything, if the app is new to you | `docs/LEAD-FLOW.md`, then `docs/ARCHITECTURE.md` |
+| Running or testing it locally | `docs/RUNNING.md`, `docs/TESTING.md` |
+| The poller, a send or the EZ Texting webhook | `docs/EZTEXTING-API.md` first, then `docs/POLLER.md`, `docs/WEBHOOKS.md` |
+| The SMS flow | `docs/STATE-MACHINE.md`; a flow's rows, or how answers are stored, `docs/FLOWS.md` |
+| The data model or a migration | `docs/SCHEMA.md` - one open conversation per phone, ever - and `docs/WORKFLOW.md`, "Migrations" |
+| Sign-in, sessions, roles or the `users` table | `docs/AUTH.md` |
+| The queue | `docs/QUEUE.md` |
+| A lead's page: claiming, notes, outcomes, SMS | `docs/AGENT-WORKSPACE.md`; callbacks `docs/CALLBACKS.md`; the timeline `docs/TIMELINE.md` |
+| An admin screen | `docs/ADMIN.md` - read-only by decision, but for Agents and Seri's switch; Admin > Leads `docs/ADMIN-LEADS.md` |
+| Calls an agent places, Twilio's webhooks, the Call button | `docs/TWILIO.md`; a lead calling in `docs/INCOMING-CALLS.md`; the Twilio account and `twilio:configure` `docs/TWILIO-SETUP.md` |
+| The robot's calls | `docs/AUTO-CALLS.md`, `docs/AUTO-CALL-SCRIPT.md`, `docs/AUTO-CALL-TRANSFER.md` |
+| Seri, the AI agent | `docs/AI-AGENT.md`, `docs/AI-BRAIN.md`, `docs/AI-RELAY.md`, `docs/AI-KNOWLEDGE.md` |
+| Several buckets (Phase 8) | `docs/BUCKETS.md` and its tickets |
+| Anything a person or the system can do | `docs/AUDIT.md` |
+| A log line or the health check | `docs/LOGGING.md` |
+| An environment variable | `docs/ENVIRONMENT.md` |
+| The frontend | `docs/DESIGN-PROMPT.md`, the brief; `docs/FRONTEND.md`, what was built; `docs/FRONTEND-STYLE.md`; the mockup PDF for layouts and wording |
+| Branches, PRs, the definition of done | `docs/WORKFLOW.md` |
+| The server: deploying, switches, logs | `docs/DEPLOY.md` |
+| A doc, or planning a phase | `docs/DOCS.md` and `/new-phase`; every doc is in `docs/README.md` |
+| What was first planned | `docs/ORIGINAL-PLAN.md` |
+
+## The order of work, every time
+
+1. **Understand what is already there.** Read the existing code and the doc for that
+   area before changing anything. Skipping this is how the `createdAt` bug got
+   written: the plan's field names were taken on trust and the poller silently
+   ingested nothing.
 2. **Make the change.**
 3. **Verify it.** Run it. A change that has not been executed is not done.
-4. **Update the doc, in the same commit.** In depth: what changed, why, and what
-   the change does not cover. If no doc exists for that area, create it and add
-   it to the table in `docs/README.md`.
+4. **Update the doc, in the same commit.** In depth: what changed, why, and what the
+   change does not cover. If no doc exists for that area, create it from
+   `docs/templates/` and add it to `docs/README.md`.
 5. **Open a PR into `dev`.** Never commit to `main` or `dev` directly.
 
-Skipping step 1 is how the `createdAt` bug got written: the plan's field names
-were taken on trust and the poller silently ingested nothing.
+## History
 
-### Reading first
-
-- Read `docs/LEAD-FLOW.md` first if the app is new to you: a lead's whole life on one page.
-- Read `docs/EZTEXTING-API.md` before touching the poller, sender, or webhook. It has verified endpoints and field names. `docs/WEBHOOKS.md` is what our webhook does with a reply.
-- Read `docs/SCHEMA.md` before changing the data model or writing a migration.
-- Read `docs/Secure-Medical-Call-Center-Mockup.pdf` for screen layouts and wording. Its page 3 sketches the reply flow, but `docs/STATE-MACHINE.md` overrides it (2026-09-19).
-- Read `docs/DESIGN-PROMPT.md` before any frontend work - it is the original brief - and `docs/FRONTEND.md`, which is what was actually built and why.
-- Read `docs/QUEUE.md`, `docs/AGENT-WORKSPACE.md`, `docs/ADMIN.md` or `docs/ADMIN-LEADS.md` before touching the queue, a lead's actions, or an admin screen; `docs/LOGGING.md` before adding a log line or touching health.
-- Read `docs/STATE-MACHINE.md` before touching the SMS flow. It is the flow spec and overrides the mockup where they differ. Read `docs/FLOWS.md` before adding or changing a flow, or touching how answers are stored: a flow is rows, added by migration.
-- Read `docs/AUTH.md` before touching sign-in, sessions, roles or the users table.
-- Read `docs/TWILIO.md` before touching calls, Twilio's webhooks or the Call button. **Do not run `twilio:configure` (or `dev:twilio:configure`) from a local machine while the local `.env` holds production's phone number** - check `TWILIO_PHONE_NUMBER` first, and if it is (480) 470-8259, stop and say so.
-- Read `docs/AUDIT.md` before adding anything a person or the system can do. **Nothing may be lost** (Jeel, 2026-10-01): a new action records itself in the activity log, in the same statement or transaction, and nothing overwrites the only record of something.
-- Read `docs/POLLER.md` before changing the worker loop, and `docs/WORKFLOW.md` for branches, migrations and deploys.
-- **Every area has one doc, and it is updated in the same commit as the change.**
-  Not afterwards, not in a follow-up. `docs/README.md` maps each doc to what
-  changes should trigger an update. New area, new doc - add it to that table.
-  A finding that cost time to establish belongs in a doc, not just a commit
-  message.
-- Production settings live in `docker-compose.prod.yml`. Never put real credentials in any committed file.
-- Prod `api` and `worker` must run compiled `dist/` output, not ts-node.
-- **Every change reaches the repo through a PR into `dev`.** Branch off `dev`,
-  push the branch, open the PR against `dev` - never against `main`, and never
-  by committing to either directly. Jeel merges `dev` into `main`.
-- Prefer small PRs, one concern each. Run `npm test` and `npm run lint` (ESLint,
-  added 2026-09-28) before opening one, and
-  `docker compose build api worker` - a local `node_modules` can hide a
-  dependency missing from `package.json`.
+- 2026-11-27 · Cut from 870 lines to the rules and where things are. The architecture and the stack to `docs/ARCHITECTURE.md`; the file tree to its folder map and each area doc's Code; the data model to `docs/SCHEMA.md`; the core flows to their owners; local setup to `docs/RUNNING.md`; the credentials table and the definition of done to `docs/WORKFLOW.md`; deploying to `docs/DEPLOY.md`; the four-week plan, the Phase 3 task list and the progress and phases tables to `docs/ORIGINAL-PLAN.md`, the phases' summaries to `docs/DOCS.md`, "The phases", and their state to each design doc's Status line; "Admin is read-only" to `docs/ADMIN.md`'s Decisions · D02-D05
+- 2026-11-24 · Production holds migrations 001-024; Seri's switch on Admin > Configuration as well as the command · A22
+- 2026-11-23 · The file read against the code by the whole-repo review: its tree, the Phase 7 rows and the live checks' coverage corrected · review R1-R4
+- 2026-10-05 to 2026-11-27 · Phases 5 to 8 added to the phases table as each was decided: flows, automated calls, Seri, several buckets
+- 2026-10-05 · Never `twilio:configure` locally with production's number; until 2026-10-16 calling was not tested locally at all · Jeel
+- 2026-10-01 · Nothing may be lost: a new action records itself in the activity log · Jeel
+- 2026-09-28 · ESLint before every PR
+- 2026-09-23 · Work tracked in phases; Admin read-only except Agents; production live, so every database change is a new migration file · Jeel
+- 2026-09-19 · `docs/STATE-MACHINE.md` overrides the mockup for the flow · Jeel
+- 2026-09-14 · "As built" notes beside the plan; the EZ Texting account is a test account · Jeel
+- 2026-09-10 · Written as the plan and the instructions: what we build, the architecture and why, the stack, the layout, the data model, the core flows, local setup, credentials, the workflow, the four-week plan, working with Claude Code (`docs/ORIGINAL-PLAN.md`)

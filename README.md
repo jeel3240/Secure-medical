@@ -1,21 +1,20 @@
 # Secure Medical — Lead Qualification & Call Center
 
-Documentation lives in [`docs/`](docs/). [`docs/README.md`](docs/README.md) is
-how to run it, and its table says which doc covers what.
+A web app for a call center: it takes in leads from EZ Texting, texts them a short
+qualification flow, scores them into a priority queue, lets agents call them from
+the browser, and calls those who never reply with an automated call - the script,
+or Seri, the AI agent.
 
-- [How to run it, test it, and what to know](docs/README.md)
+Every doc is in [`docs/`](docs/):
+
+- [The index: every doc, its type, what it owns](docs/README.md)
 - [A lead's whole life on one page - start here](docs/LEAD-FLOW.md)
-- [State machine: the SMS flow spec](docs/STATE-MACHINE.md) · [Flows: how the scripts are stored, and adding one](docs/FLOWS.md)
-- [Poller](docs/POLLER.md) · [Webhooks](docs/WEBHOOKS.md) · [EZ Texting API behaviour](docs/EZTEXTING-API.md)
-- [Priority queue](docs/QUEUE.md) · [Agent workspace](docs/AGENT-WORKSPACE.md)
-- [Calling, outgoing and incoming (Twilio)](docs/TWILIO.md) · [Automated calls: the robot's call, and its tracker](docs/AUTO-CALLS.md)
-- [AI agent (Seri): the design](docs/AI-AGENT.md) · [its tickets](docs/ai-agent-tickets/README.md)
-- [Admin](docs/ADMIN.md) · [Admin: Leads](docs/ADMIN-LEADS.md)
-- [Auth: sign-in, sessions, roles](docs/AUTH.md)
-- [The activity log: nothing is lost](docs/AUDIT.md) · [Logging and health](docs/LOGGING.md)
-- [Database schema](docs/SCHEMA.md)
-- [Frontend: what was built and why](docs/FRONTEND.md) · [Frontend design brief](docs/DESIGN-PROMPT.md)
-- [Workflow: branches, migrations, deploys](docs/WORKFLOW.md)
+- [The architecture: the parts, how they connect, and why](docs/ARCHITECTURE.md)
+- [Running it locally](docs/RUNNING.md) · [Testing it](docs/TESTING.md)
+- [How the docs are written, and how a phase is planned](docs/DOCS.md)
 
-Architecture decisions, the data model and the plan are in
-[`CLAUDE.md`](CLAUDE.md).
+Working in the repo - for a person or Claude - starts with [`CLAUDE.md`](CLAUDE.md).
+
+## History
+
+- 2026-11-27 · One screen pointing into `docs/`: it repeated the index and said the architecture and the plan were in `CLAUDE.md` · D07

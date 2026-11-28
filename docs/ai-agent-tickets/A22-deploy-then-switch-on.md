@@ -4,11 +4,11 @@
 
 **Why:** The last step.
 
-**Depends on:** A21  ·  **Size:** Small (a few hours)
+**Depends on:** A34 · **Size:** S · **Status:** In progress - deployed 2026-11-24 with Seri off (PR #31, migrations 022-024); switching her on is next
 
 ## Build
 
-The steps are `docs/WORKFLOW.md`'s, "Seri, the AI agent" - every command with
+The steps are `docs/DEPLOY.md`'s, "Seri, the AI agent" - every command with
 both `-f` files, as production runs:
 
 - Merge `dev` into `main`. Deploy after 5 PM Arizona time, when the robot is

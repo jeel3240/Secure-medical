@@ -4,7 +4,7 @@
 
 **Why:** A21's structural failures - the opening said again two minutes in (call 112), an offer to connect in 7 of 9 replies (90), a time she picked herself (92), a Saturday (93), offers after two clear no's (99), "Not right now" taken as asking for a person (103), "Let me connect you" with nobody free (111, 112) - all came from her working out where the call was. Rules and notes moved each "less often, not never".
 
-**Depends on:** A26  ·  **Size:** L  ·  **Status:** Done 2026-11-17
+**Depends on:** A26 · **Size:** L · **Status:** Done 2026-11-17 - built and tested alone; used by the call from A30
 
 ## Build
 

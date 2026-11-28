@@ -26,7 +26,7 @@
  * turn - the lead's with a note of who is there (`leadMessage`), hers as the
  * lead heard them. Until 2026-11-19 it was sent to OpenAI whole, with today's
  * brain's instructions and notes after the lead's turns; the new brain reads
- * it instead, and those were removed (docs/AI-AGENT.md section 12).
+ * it instead, and those were removed (docs/AI-BRAIN.md).
  *
  * The limits (A12), counted from `start()` on `timers` - a fake clock in tests:
  *
@@ -115,7 +115,7 @@ export const REPLACED_NOTE = 'A sentence of her reply was replaced with the spec
 /**
  * How long an action that ends the call waits, after her last line, for
  * Twilio's verdict on who answered - A18. On the real calls to a person Twilio
- * decided 3.4 to 6.6 seconds in (AUTO-CALLS.md, "Voicemail"), so a person
+ * decided 3.4 to 6.6 seconds in (AUTO-CALL-SCRIPT.md, "Voicemail"), so a person
  * seldom waits, and then only moments after her goodbye; a call Twilio has not
  * decided by then is most likely a machine still greeting, whose beep comes
  * when the greeting ends - 9 seconds in on T18's real voicemail.

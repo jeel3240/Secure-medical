@@ -22,7 +22,7 @@ import { recordTakingCalls } from './taking-calls';
 /**
  * Someone has just come free - their browser says so (note saved or skipped)
  * or they switched "Taking calls" on: a lead waiting on hold rings them now
- * (T17, AUTO-CALLS.md "The hold line"), rather than at the hold watcher's
+ * (T17, AUTO-CALL-TRANSFER.md "The hold line"), rather than at the hold watcher's
  * next look. After the answer to the browser, and never a reason for it to
  * fail. Nothing happens unless automated calls are on, someone is on hold,
  * and the person is free.

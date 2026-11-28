@@ -13,7 +13,7 @@ export interface PublicUser {
   mustChangePassword: boolean;
   lastLoginAt: string | null;
   createdAt: string;
-  /** The "Taking calls" switch - T10, AUTO-CALLS.md "Who is free". */
+  /** The "Taking calls" switch - T10, AUTO-CALL-TRANSFER.md "Who is free". */
   takingCalls: boolean;
   /** Why it is as it is now; null for a switch never set. */
   takingCallsWhy: TakingCallsWhy | null;

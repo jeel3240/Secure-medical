@@ -49,7 +49,7 @@ The live checks.
 ## Docs to update in the same commit
 
 `docs/AUTO-CALLS.md` ("Who is called", T27's note, the refusals), `docs/AUDIT.md`,
-`docs/SCHEMA.md`, `CLAUDE.md` §5, `docs/WORKFLOW.md`, `docs/BUCKETS.md`.
+`docs/SCHEMA.md`, `docs/WORKFLOW.md`, `docs/BUCKETS.md`.
 
 ## Not in this ticket
 

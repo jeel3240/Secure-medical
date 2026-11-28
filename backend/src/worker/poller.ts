@@ -89,7 +89,11 @@ async function isOnDnc(phone: string): Promise<boolean> {
  * Inserts the lead and its conversation together. Returns null when the phone
  * is already known, which is how a re-poll of the overlap window stays a no-op.
  *
- * TODO (Phase 2): returning leads. Dropping every known phone is wrong for a
+ * Returning leads - planned in docs/BUCKETS.md ("Finding people") and built
+ * by tickets B22-B24; until then a known phone is skipped. The note below is the
+ * first plan, kept for its reasoning.
+ *
+ * Was TODO (Phase 2): returning leads. Dropping every known phone is wrong for a
  * lead that comes back months later. The poller should instead decide per
  * contact:
  *
@@ -276,9 +280,8 @@ export async function pollOnce(): Promise<PollStats> {
 
       const phone = toE164(contact.phoneNumber);
 
-      // TODO (Phase 2): this branches on optOut vs not. It needs a third case
-      // for a phone we already hold, keyed on that lead's newest conversation
-      // status - see the note on insertLead.
+      // A phone we already hold gets no third case here yet: decideArrival
+      // (docs/bucket-tickets B22, B23) replaces this branch.
       const alreadyBlocked = await isOnDnc(phone);
       if (contact.optOut || alreadyBlocked) {
         const leadId = await insertLead(contact, phone, 'suppressed', Boolean(contact.optOut) && !alreadyBlocked);

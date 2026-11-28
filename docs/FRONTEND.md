@@ -1,937 +1,413 @@
 # Frontend
 
-The React app: what exists, how the screens fetch, and the decisions that are
-not obvious from the code. `DESIGN-PROMPT.md` is the brief - what the screens
-should be. This is what they are.
+The React app agents and the superadmin use: its screens and routes, the app
+shell, how every screen fetches, the one-agent lock as the screen sees it, and the
+types it shares with the backend. The code is `frontend/src/`. What each screen
+shows is its area's doc - the table below; the design system is
+`FRONTEND-STYLE.md`; `DESIGN-PROMPT.md` is the brief it was built from, and
+"Differences from the brief" below says where it went another way.
 
-React 18, Vite 4, React Router 6, zustand, plain CSS with design tokens. No UI
-framework: the components in `src/components` are the whole kit.
+## How it works
 
-**Built 2026-09-26** - Phase 3 tasks 14-25, the frontend half. Every screen in
-the brief now exists except calling, which is Phase 4. *(Calling was built on
-2026-10-01 - `TWILIO.md`.)*
+### The stack
 
-## The screens
+React 18, Vite 4, React Router 6, zustand for the two app-wide stores (the
+session, `auth/store.ts`, and the incoming call, `lib/incoming-call.ts`), axios
+for requests (`api/client.ts`, every one under `/api`), and `@twilio/voice-sdk`
+for calling. Plain CSS on design tokens - no UI framework; the components in
+`src/components` are the whole kit (`FRONTEND-STYLE.md`).
+
+### The screens
 
 | Route | Screen | Doc |
 |---|---|---|
 | `/login`, `/change-password` | Sign in, and the forced first password change | `AUTH.md` |
-| `/queue` | Priority queue | `QUEUE.md`, `DESIGN-PROMPT.md` 2 |
-| `/leads/:id` | Agent workspace, with the Call button and the call bar - made afresh for each lead (`LeadWorkspaceRoute`, keyed by the id): going from one lead's page to another kept the first's after-call note box, and saved its note to the second (review H6, 2026-11-22) | `AGENT-WORKSPACE.md`, `TWILIO.md` ("The screen"), `DESIGN-PROMPT.md` 3 |
-| `/leads/:id/timeline` | Lead timeline, read-only | `DESIGN-PROMPT.md` 4 |
-| `/callbacks` | My callbacks | `AGENT-WORKSPACE.md`, `DESIGN-PROMPT.md` 5 |
-| `/admin/overview` | Overview | `ADMIN.md`, `DESIGN-PROMPT.md` 6a |
+| `/queue` | The priority queue - where an agent lands | `QUEUE.md` |
+| `/leads/:id` | The agent workspace, with the Call button and the call bar | `AGENT-WORKSPACE.md`, `TWILIO.md` |
+| `/leads/:id/timeline` | The lead timeline, read-only, with its summary sidebar | `TIMELINE.md` |
+| `/callbacks` | My Callbacks | `CALLBACKS.md` |
+| `/admin/overview` | Overview - where `/admin` lands | `ADMIN.md` |
 | `/admin/leads` | Every lead, replied or not | `ADMIN-LEADS.md` |
 | `/admin/agents` | Agent accounts | `AUTH.md` |
-| `/admin/config` | Configuration, read-only but for Seri's switch on Calls (2026-11-24) - three tabs, Texts, Scoring and Calls, the tab kept in the address (`?tab=`) | `ADMIN.md`, `DESIGN-PROMPT.md` 6b/6c |
-| `/admin/dnc` | Do-not-call list, read-only | `ADMIN.md`, `DESIGN-PROMPT.md` 6e |
-| every signed-in screen | The incoming-call card, mounted once in the app shell (`layout/AppShell.tsx`) | `TWILIO.md`, "Incoming calls" |
+| `/admin/config` | Configuration: Texts, Scoring and Calls, the tab in the address (`?tab=`) | `ADMIN.md` |
+| `/admin/dnc` | The do-not-call list | `ADMIN.md` |
+| every signed-in screen | The incoming-call card and the "Taking calls" switch | `INCOMING-CALLS.md`, `AUTO-CALL-TRANSFER.md` |
 
-## Type system - 2026-09-28
+`App.tsx` holds the routes. `/` goes to `/queue`, an unknown address to `/`.
+`RequireAuth` (`auth/guards.tsx`) sends a signed-out visitor to `/login` and
+someone on a temporary password to `/change-password`; `RequireRole` sends an
+agent away from `/admin`. Every admin endpoint refuses an agent on its own - the
+guard on the screen is so an agent never sees a page that would fail, not the
+security (`AUTH.md`).
 
-Measured before this change: **ten font sizes across nine screens**, where five
-would do. Three were fractions - 11.9, 12.48 and 13.6px - from `0.85em` and
-`0.85rem` resolving against whatever they sat inside. And 12, 13 and 14px were
-all in heavy use, one pixel apart: too close to read as deliberate levels, too
-far to look the same, so text meant to match looked slightly off. Card titles
-came in two styles - 14px on the workspace, a 12px uppercase caption on
-Overview, Config and the timeline sidebar - because those pages borrowed a class
-designed as a label.
+`/leads/:id` is `LeadWorkspaceRoute`, which keys `WorkspacePage` by the lead's
+id: going from one lead's page to another - Accept, or a missed call's Call
+back - builds the page afresh, so nothing of the first lead's - its after-call
+note box above all - carries over to the second.
 
-Now there are five sizes and three weights, named by role in `tokens.css`:
+### The app shell
 
-| Role | Size | Weight | For |
+`layout/AppShell.tsx`: the navy app bar - the product mark, Queue, My
+Callbacks and, for a superadmin, Admin; on the right the "Taking calls" switch
+(shown only with automated calls on, `AUTO-CALL-TRANSFER.md`, "The \"Taking calls\" switch") and the
+user menu, `layout/UserMenu.tsx`, with the person's name and role. Under it the
+page, centred and capped at 1440px. Mounted once beside the page, so it is on
+every screen, the incoming-call card (`layout/IncomingCall.tsx`,
+`INCOMING-CALLS.md`). Admin pages sit in `pages/admin/AdminLayout.tsx`, with its
+side menu: Overview, Leads, Agents, Configuration, DNC list.
+
+`main.tsx` loads the tokens and the stylesheets and arms the ringtone, so the
+first click anywhere - the sign-in button included - lets an incoming call ring
+(`INCOMING-CALLS.md`).
+
+### The polling hook
+
+`api/usePolling.ts`. Every live screen fetches through it: the queue, the
+workspace, the timeline, My Callbacks and four admin pages (Leads, Overview,
+Configuration, DNC). Admin > Agents loads once and does not poll.
+
+```ts
+const fetcher = useCallback(() => listQueue({ tier, source, since, q }), [tier, source, since, q]);
+const { data, loading, error, refresh, updatedAt, switching } = usePolling(fetcher, { keepPreviousData: true });
+```
+
+**One place, so a push can replace it.** `POLL_MS` is 5000 and the interval lives
+here alone; swapping polling for websockets means rewriting this file and no
+screen. Copying a `setInterval` to every screen is how a codebase ends up with
+five different refresh behaviours. **Refreshes do not pile up:** a screen asks
+again five seconds after the last answer arrived, not on a fixed timer, so a slow
+server never has requests piling up on it, each holding a database connection.
+
+| What it guarantees | Why |
+|---|---|
+| `data` survives a tick | A table must not blank out every five seconds |
+| `loading` is true only when there is nothing to show | A spinner on every tick makes the screen flicker |
+| An error keeps the last good `data` | A dropped connection shows a banner over the last rows - "Live updates paused" - not a blank page |
+| A stale response is discarded | A slow answer for a filter the agent has already changed must not overwrite the view |
+| The next request waits for the last answer | Never more than one request in flight from a screen |
+| The timer stops on unmount | Otherwise it polls forever and sets state on a dead component |
+| `refresh()` fetches now | A claim or a note appears at once, not up to five seconds later |
+| `keepPreviousData` keeps the old data through a switch | Opt-in: the queue's tier and search, Admin > Leads' status, the DNC list's state, My Callbacks' tab and Overview's period. The old rows stay while `switching` is true, faded and unclickable (`.is-switching`), so nobody acts on a row from the view they just left; only the table fades, so the switcher stays sharp |
+| `enabled: false` fetches nothing | For a screen not ready yet - a lead id that is not a number |
+
+`usePolling.test.ts` covers every row. None of them is visible in a browser,
+which is why they are tested at all - the screens themselves are judged by eye.
+
+**The fetcher must be stable** - wrapped in `useCallback` with the filters as its
+dependencies. A new fetcher is a new view: without `keepPreviousData` the spinner
+returns and the old rows are cleared, because rows fetched under the old filter
+do not belong under the new one. A fetcher rebuilt every render would clear the
+screen every render.
+
+**Two fetches on one screen is fine.** The workspace and the timeline page poll
+the lead card and the timeline separately, and Overview the overview and the
+health check: both are cheap, and kept apart a slow one cannot hold up the other.
+
+### The one-agent lock on screen
+
+`lib/lock.ts`. The lock is enforced on the server - `db/claims.ts`,
+`AGENT-WORKSPACE.md`, "Claim and release" - and no screen is trusted with it, but
+the queue has to decide which rows to mute before anyone clicks. A row is locked
+when its tag is `working` and someone else holds it. It is not locked when:
+
+| Case | Why |
+|---|---|
+| Nobody holds it | The usual case |
+| You hold it | Reopening your own claim is the normal way back into a lead; locking you out of it would strand you |
+| You are a superadmin | They need to see what an agent is stuck on, and may release it |
+
+A locked row is muted grey all the way across, carries a padlock
+(`components/LockIcon.tsx`) and *Locked* in place of a button, has a tooltip
+naming the holder, and has no click handler at all - the lock has to be felt, not
+only seen.
+
+#### What the button offers
+
+Not locked is not the same as claimable. `rowAction()` answers what this person
+may actually do, and the queue mutes a row it answers `locked` for, naming the
+holder from the row's tag - so the muting and the button are one rule and cannot
+drift apart:
+
+| `rowAction` | When | Button | What it does |
 |---|---|---|---|
-| heading | 20 | semibold | page titles, the lead's name |
-| title | 16 | semibold | card titles |
-| section | 14 | semibold | a heading inside a card |
-| body | 14 | regular | cells, buttons, forms, messages |
-| label | 12 | semibold, uppercase, tracked | column heads, captions, badges |
-| meta | 12 | regular | timestamps, hints, counts |
-| display | 24 | bold | scores and KPI figures |
-
-**Pick the role, not the size.** The tokens are `--text-small`, `--text-body`,
-`--text-title`, `--text-heading` and `--text-display`, plus `--weight-regular`,
-`--weight-semibold`, `--weight-bold` and `--tracking-label`. There is no token
-for 13px, deliberately.
-
-**Badges are labels.** HOT / WARM / LOW were 12px bold (700) directly under a
-TIER heading at 12px semibold (600) - same size, same capitals, different
-weight, which is the almost-match this change exists to remove.
-
-**Headings default to semibold,** in a base rule, so a rule that forgets its
-weight gets the heading weight rather than the browser's bold.
-
-**Enforced, not hoped for.** `src/styles/type-system.test.ts` reads
-`tokens.css` and every stylesheet `global.css` imports - eleven since the
-2026-09-28 split, `incoming-call.css` the newest - and fails if a stylesheet on
-disk is not imported exactly once. It fails on a size, weight or caption style the tokens do not
-name, on sizes closer than 2px apart, on a property declared twice in one rule,
-and on the same selector defined twice at the top level - a second `.avatar`,
-added for the workspace, had silently restyled the app bar on every page. Each
-check was proven by breaking the stylesheet on purpose and watching it fail.
-
-Two things worth knowing about that test. It imports the stylesheets with
-`?raw`, not `node:fs` - this is a browser app with no Node types, so `node:fs`
-fails `tsc` and with it `npm run build` - and Vitest replaces CSS with an empty
-string unless told otherwise, `?raw` included, so `vite.config.ts` opts
-everything under `src/styles` in. An earlier version read an empty string and passed four checks
-over nothing; the "really loaded" check now fails if that ever happens again.
-
-**Layout fixes found while measuring.** Checked for horizontal overflow on all
-nine screens at 1280, 1366, 1440 and 1920px. Two screens already overflowed on
-`dev`, before this change: Config (the scoring options sat side by side in a
-nowrap cell, 240px past the window) and Agents (three row actions side by side,
-past a 1366px laptop). Scoring options now stack; row actions and Config's row
-labels wrap. None overflow now. The shared table rules also lost two bugs: the
-last row's divider and the hover highlight applied to data cells but not row
-labels, leaving half a line under "Maximum possible".
-
-**Admin > Leads tabs are tighter - 2026-09-28.** Working and Closed made nine
-tabs, and the ninth wrapped onto a second line below 1366px. Narrower tab sides
-keep all nine on one line down to 1280px, measured.
-
-**Eleven tabs, and the row never wraps - 2026-10-06.** Offers made ten (and
-Not interested, the same day, eleven), and with
-three-digit counts they no longer fitted at any width up to the 1440px the
-content is capped at: "Awaiting reply" broke onto two lines inside a 32px
-track and spilled out of it. Found in review; measured, not judged by eye.
-
-- An option never wraps (`.segmented__option`, `white-space: nowrap`).
-- Admin > Leads uses the switcher's `dense` variant, 12px sides instead of 16.
-- When the row is still wider than its card - a narrow screen, or counts in
-  the thousands - **it scrolls sideways inside the card**
-  (`.table-card__toolbar--scroll`).
-- The admin layout's content column is `minmax(0, 1fr)`. As a bare `1fr` it
-  could not be narrower than its widest content, so the long row stretched
-  the whole page sideways instead of scrolling.
-
-Measured in the running app, with all eleven tabs, on 2026-10-06:
-
-| Counts | Row | 1280px | 1366px | 1440px and wider |
-|---|---|---|---|---|
-| Single digits | 1,119px | Scrolls in its card | Scrolls in its card | Fits |
-| Up to 1,284 | 1,328px | Scrolls in its card | Scrolls in its card | Scrolls in its card |
-
-At every width every option is 32px tall - none wraps - and the page itself
-never scrolls sideways. Once the counts reach three digits the row is wider
-than its card everywhere, so the last tabs are reached by scrolling it; if
-that proves awkward in use, the next step is fewer tabs in the row, not
-smaller ones.
-
-**Removed:** the admin sidebar's greyed "Soon" links - Overview, Scoring,
-Messages, DNC list, Settings. Two duplicated live links; the rest were folded
-into Configuration on 2026-09-23.
-
-## The queue - redesigned 2026-09-28
-
-Rebuilt to a mockup Jeel supplied. What changed and why:
-
-| Part | Was | Is |
-|---|---|---|
-| Layout | Filters and table loose on the page | One card holding both, the table head a light grey band |
-| Tier filter | Three pills, several at once | One segmented switcher - All, Hot, Warm, Low with counts - one at a time |
-| Tier column | Coloured badge | Signal bars and the word, `components/TierSignal.tsx` |
-| Age column | "AGE", amber and red | "WAITING", monospace, one weight and colour for every lead |
-| Status column | Coloured pills, six statuses | An icon and the words, six statuses (Callback came back 2026-09-29, Missed call added 2026-10-01, Wants a call 2026-10-05 - and since T22 also a "yes" on the automated call nobody took, those rows first), a hyphen otherwise - `components/QueueStatus.tsx` |
-| Button | Pick | **Pick up** - on every screen that picks, so the action has one name |
-| Someone else's lead | "Locked" | A padlock and "Locked", `components/LockIcon.tsx` |
-| Action column | Right-aligned | Centred - buttons and Locked on one axis |
-| Button hover | Light grey | Fills with the header's navy, white text - Pick up, Resume and View alike |
-| Chosen tier | White on grey | The header's navy, white text - the same look as a hovered action - on a thumb that slides to the chosen option. `components/Segmented.tsx`, shared with the Add agent drawer's role choice |
-| Empty cells | `-` | `-` - an em dash was tried and reverted |
-| Live label | Live | Live · updated just now |
-
-*(2026-09-29: a fourth, **Callback – Maya Chen · 8:13 PM** with a clock icon,
-came back - see below and `QUEUE.md`, "The tag".)*
-
-*(2026-10-01: a fifth, **Missed call** - a handset with an arrow turned away,
-bold like Inbound reply. The lead rang and nobody answered; it stays until
-someone gets back to them. `TWILIO.md`, "A missed call".)*
-
-**Three statuses at first, six now, and most rows have none - Jeel, 2026-09-28.**
-Working – name (was In progress – name), Inbound reply and Needs review, each an icon and the words; any
-other row shows a hyphen, like any other empty cell. New, Attempted 2x and
-Callback 3:00 PM are gone: that history belongs to the agent working the lead
-(My Callbacks, the timeline), and on the home page it gave every row something
-to say. Which status wins, and why New went too, is in `QUEUE.md`, "The tag".
-**Each status has its own icon - Jeel's mockup, 2026-09-28:**
-
-| Status | Icon | Why |
-|---|---|---|
-| Working – name | Half-filled circle | Started, not finished |
-| Inbound reply | Message box with an arrow pointing in | A text has come to us. The words are bold too: nobody has read it |
-| Needs review | Warning triangle | A person has to look at the replies |
-| Callback – name · time | Clock | Someone has a call booked on it |
-| Missed call | Handset with an arrow turned away | The lead rang and nobody answered. Bold, like Inbound reply |
-| Wants a call | Handset | The lead said No, then asked to hear from a rep (2026-10-05); or, since T22, said yes on the automated call and nobody took it - the server ranks that one just below Missed call and sorts it first. The same handset as Missed call, without the arrow; not bold, so the two reasons look alike |
-| Callback · time, due | Clock, bold | A call back Seri booked whose time has come (A16): the Callback clock, with "– name" once someone has taken it, bold like Missed call - we owe it |
-
-Admin > Leads has two more of its own: **Offers**, a price tag, muted - a
-lead who asked for special offers and nothing else - and **Not interested**,
-a circle with a line through it, muted: one who said no to the offers and to
-a rep. Offers, and the queue's Wants a call, got their own icons on
-2026-10-06: they had borrowed the inbound message box and the chat bubble,
-which already meant an unread text and Answering on the other screen. Not
-interested had its own from the start.
-
-The icons are inline SVG outlines on a 24-unit grid, drawn in the text colour
-like the padlock, so a locked row greys its icon with its words.
-`QueueStatus.test.tsx` checks that each status has its own icon and that no dot
-is drawn.
-
-*(Earlier the same day each status had a dot - first a filled dot, a ring or a
-square, then a plain dot, with Needs review's in a warm colour. Jeel: a dot
-said only "something"; an icon says which.)*
-
-**Every waiting time looks the same - Jeel, 2026-09-28.** The column first kept
-the brief's thresholds as weight - bold past 15 minutes for HOT - but that left
-it half dark and half light, and the bold even showed on a greyed-out locked
-row. Now every value has the same weight and colour, and a locked row is grey
-all the way across. `ageTone` in `lib/format.ts`, which held the thresholds, had
-no other caller and is gone with its tests. The age still ticks every second.
-
-**The segmented control is one component, and its navy slides** - Jeel,
-2026-09-28, "not smooth". `components/Segmented.tsx` replaces the markup the
-queue and the Add agent drawer each wrote by hand. The navy is a thumb behind
-the options that glides to the chosen one in 220ms, fast in the middle and
-easing to a stop. Its position is measured, because options differ in width
-and the queue's counts change them. It is placed before the first paint and
-only animates after, so a page never opens with it sweeping in; until it is
-placed the chosen option carries the navy itself, so white text never sits on
-the grey track; and `prefers-reduced-motion` switches instantly. Measured: the
-thumb passed 20, 159, 204 and 219px on its way from 2px to 228px.
-
-**The tier switcher is one choice at a time.** The old pills allowed Hot and
-Warm together; the segmented control, as drawn, does not. The API still accepts
-several tiers if a screen ever wants them again.
-
-**Fixed while building it:** `--color-surface-alt` was used in seven places and
-defined nowhere, so the browser dropped every one - queue row hover, the grey
-of a locked row, the quick-callback chips' hover, Config's message boxes and
-the Overview funnel track had never rendered. They use `--color-surface-hover`
-now, and `type-system.test.ts` fails on any `var()` that is not defined.
-
-**Checked** on a separate dev server at 1280, 1366, 1440 and 1920px: the table
-fits its card at every width, and the switcher shows the right rows with its
-counts unchanged.
-
-## Admin > Leads - redesigned 2026-09-28
-
-Rebuilt in the queue's style, from the queue's own parts, so the two screens
-cannot drift apart. `ADMIN-LEADS.md`, "The page", has the before-and-after.
-
-**Shared, not copied.** Three pieces moved out of the queue so both pages use
-them:
-
-| Component | Does |
-|---|---|
-| `components/StatusIcon.tsx` | Every status icon, one set. Working is the half-filled circle and Needs review the triangle on both pages |
-| `components/LiveStatus.tsx` | "Live · updated just now", with its own one-second clock |
-| `components/LeadStatus.tsx` | An Admin > Leads status as an icon and words |
-
-`QueueStatus.tsx` now draws its icons from `StatusIcon`; the queue looks the
-same.
-
-*(T23, 2026-10-25: a **Call** column and a Call filter - how the automated
-call went, in the words of `lib/call-results.ts`, which the timeline's robot
-call lines now read too, so the two screens say a result the same way.
-`ADMIN-LEADS.md`, "Call".)*
-
-**Fixed while building it:** a right-aligned column's heading stayed on the
-left - `.table th` outranked `.right` - so SCORE and WAITING on the queue sat
-away from their numbers. `.table th.right` fixes both pages.
-
-**The status tabs are the queue's switcher - Jeel, 2026-09-28.** They were
-underline tabs in the link blue (`--color-accent`). Jeel: blue means the brand
-navy, the header's colour. They are now `Segmented`, like the queue's tier
-switcher: the chosen status in navy, sliding between options. The underline
-tabs left on My Callbacks moved to navy as well, so no selected tab anywhere
-uses the link blue. *(Later the same day the DNC list was rebuilt the same way
-as Admin > Leads, switcher included - `ADMIN.md`, "DNC list".)*
-
-**Checked** at 1280, 1366, 1440 and 1920px: all nine statuses stay on one line,
-and nothing overflows the card. *(Eleven since 2026-10-06 - see "Eleven
-tabs, and the row never wraps", above.)* A row click opens the timeline; no console errors.
-
-## My Callbacks - rebuilt 2026-09-28
-
-In the other pages' style: one card with the navy Today · Upcoming · Overdue ·
-All switcher and its counts, the smooth switch, the phone under the lead's name
-and the tier as bars. **Pick up** sits beside a "⋯" holding Reschedule and Mark
-done. An overdue callback says so in amber under its time rather than turning
-the row red; a done one (on All) says Done.
-
-**A missed call is a row too - 2026-10-01.** The server books a callback for
-the agent the call rang. It reads **Missed call**, or **Missed 3 calls**, in
-bold in place of Overdue, shows when they last rang rather than when they
-first did, sits under Today until the day ends, and is marked done by itself
-when the lead is called or texted back. `AGENT-WORKSPACE.md`, "Callbacks".
-
-**A superadmin's picker is labelled and complete** - Jeel: "what is this
-dropdown?". It was an unlabelled select reading "My callbacks" that listed
-other agents but had no way to see everyone's, and the title stayed "My
-callbacks" whatever it showed. Now it reads **Agent: Me · All agents · karm…**,
-the title follows it ("All callbacks", "karm's callbacks"), and All agents adds
-an Agent column - "-" for a call back Seri booked that nobody has taken yet
-(A16). The API took `agentId=all` for it (`AGENT-WORKSPACE.md`).
-Agents see no picker.
-
-The underline tabs were the last of their kind; their styles are gone.
-
-**The row's button follows who holds the lead - 2026-09-29.** It said Pick up
-on every row, even to the agent already holding that lead. Now the list carries
-the lead's holder (`holder` on each row, `db/callbacks.ts`): **Pick up** when
-nobody holds it, **Resume** to its holder, and **View** to anyone else - which
-only opens the lead, read-only, since a claim would be refused.
-
-## Switching is smooth everywhere - 2026-09-28
-
-Jeel, after the Overview's period switch: "really smooth, can we add same on
-other tab". Every page with the navy switcher now keeps its table on screen
-through a switch - the queue (tier, and the search), Admin > Leads (status),
-the DNC list (state) and Overview (period). The old rows fade and cannot be
-clicked until the new ones land; only the table fades, so the switcher itself
-stays sharp. `usePolling`'s `keepPreviousData` - QUEUE.md, "The polling hook".
-
-Checked with every API answer slowed by 400ms: on all three table pages the
-table never blanked, stayed faded for the wait, and was never clickable while
-faded. My Callbacks joined them the same day.
-
-## Admin > Overview - rebuilt 2026-09-28
-
-Now in the same card style as every other admin page: the navy period switcher
-and "Live · updated" at the top right; four totals in one card split by thin
-rules (`.stats`); the Agents table and the System checks side by side; Recent
-activity across the page, the lead names in the brand navy. What each part
-shows, and what was removed and why, is in `ADMIN.md`, "Overview". The old
-`.kpi`, `.funnel`, `.overview__*` rules, and `.config__title` and
-`.config__choice` which only it still used, are gone (the System card's
-`.overview__detail` is newer).
-
-## Admin > Agents - redesigned 2026-09-28
-
-Laid out like the other admin pages: one card, the grey header band, the
-email under the name, role and status as an icon and words - Superadmin a
-shield, Agent a person; Active a tick, Pending first sign-in a clock in amber,
-Inactive a barred circle, muted.
-
-**Row actions behind one "⋯" menu** - `components/RowMenu.tsx`. Three text
-buttons on every row were most of what made the table busy. The button goes
-navy on hover like every other action; Deactivate is red in the menu. Your own
-row has no menu: you cannot change your own role or deactivate yourself, and
-your password is changed from the user menu.
-
-The menu's panel is `position: fixed`, placed from the button when it opens,
-because `.table-wrap` scrolls sideways and clips anything positioned inside it -
-the last row's menu would be cut off. It closes on Escape, an outside click, a
-scroll or a resize. Checked in the browser, with Reset password opening its
-dialog from the menu. `.table__actions` and `.table__name`, used only here, are
-gone.
-
-## The workspace - redesigned 2026-09-28
-
-Rebuilt to a mockup Jeel supplied. Every action behaves as before - checked by
-driving each one through the browser, listed at the end of this section.
-
-**One page for every lead, picked or not.** On a lead you hold, everything
-works. On any other, the page is identical, but the wrap-up and the message box
-are each a disabled `<fieldset>` - one attribute switches off every control
-inside, so none can be missed - and a strip above the header says why. The
-server refuses the write regardless (`AGENT-WORKSPACE.md`, "Rules"), so the
-disabled controls save a round trip rather than enforce anything.
-
-**Layout.** A full-width header card over three cards. The header was made
-plainer on 2026-09-29 - Jeel: the first one read as generated (initials circle,
-tiny letter-spaced uppercase labels, monospace phone and source, a big red
-score, a dashed Call button, a "Phase 4" note). It is now the full name; one
-quiet line of phone, source in words ("Web interface") and age; Score "90 /
-100" and Questions in the Step column's words ("On Q2", "Stopped at Q2",
-"Completed"); and a plain disabled Call whose reason is a tooltip *(2026-10-01:
-the button is real - `CallControl.tsx` - and off, with the reason as a tooltip,
-only when the number is blocked, calling is not set up, the lead is not picked
-up, or a call is already under way)*. The tier
-and a Send SMS button went the same day - Jeel: the score already says how
-strong the lead is, and Send SMS only moved the cursor to the message box just
-below. On a phone the phone, source and age stack. Also that day: the three answers under "What
-Priya told us" became plain text, not three coloured pills, and "Full timeline
-→" became a quiet grey link that turns navy on hover, not link blue. The score breakdown's bar and swatches
-run from light blue to the brand navy, and its total is navy - they were the
-Hot red at rising opacity, an alarm colour on every lead (same day). The three
-cards below are: what the lead told us and the score breakdown; the
-conversation; and the wrap-up.
-
-**Files.** `WorkspacePage.tsx` holds the data, picking and releasing, and the
-layout. Each card is its own component in `pages/workspace/`: `LeadHeader`,
-`LeadAnswers` and `LeadNotes` (the left column), `Conversation` with `SmsCompose` under it, and
-`ActionsPanel` (Wrap up); and for calling `CallControl` (the header's Call
-button), `CallBar` (the bar at the foot) and `useLeadCall` (the lead's call,
-owned by the page). The first two were split out of the page on
-2026-09-28, when it had reached 420 lines; the rendered page was checked
-identical before and after, HTML and every computed style, on six leads.
-
-**Notes are on the workspace - Jeel, 2026-09-29.** A Notes card under the
-score breakdown lists the lead's notes newest first, each with who wrote it and
-when; the three newest show and "Show all N" opens the rest in place. Until
-then notes were only on the Lead Timeline page, so the agent about to call - who
-most needed "wants a call after 5 PM" - never saw them, and a note saved in
-Wrap up vanished from the screen. The card reads the timeline the page already
-polls, and the page now refreshes that timeline after every save, so a new note
-(or a sent text) shows at once. `LeadNotes.test.tsx`.
-
-**The conversation keeps its newest message in view.** On opening and on every
-new message the scrolling box goes to its very end. Until 2026-09-29 it
-scrolled a marker after the last message into view, which stopped short by the
-box's padding, so the newest message's name and time sat below the edge and a
-sent text looked as if it had not arrived - Jeel. Measured after the fix: 0px
-left below, on open and after each of three new messages.
-
-**A call lives in a bar at the foot of the screen - Jeel's design,
-2026-10-01.** The header has a Call button; the call itself - who, the clock,
-Mute, Keypad, End - is `CallBar.tsx`, which slides up and stays in view, and
-becomes a note box (Save note / Skip, an ordinary note) when the call ends.
-Leaving the lead's page ends a call placed from it. `styles/call-bar.css`;
-`TWILIO.md`, "The screen".
-
-**A lead calling in is a card in the top right corner**, from
-`layout/IncomingCall.tsx` in the app shell, so it appears on any screen. It is
-described in full in `TWILIO.md`, "Incoming calls"; what a frontend change
-needs to know:
-
-| Piece | File |
-|---|---|
-| The card: who, how long it has rung, tier, score, the last thing they answered (under that question's own heading), how far the questions got, how often we tried them today; **Accept** (takes the lead, opens its workspace) and **Decline** | `layout/IncomingCall.tsx`, `styles/incoming-call.css` |
-| "Calling back · you tried 2× today" - agents' calls first, never the server's automated one among them (T5); with none, "Calling back · automated call, 28m ago" - what its voicemail asked them to return (T19); for a transfer, "Transfer · said yes to the offer" instead (T11, `transferContext`) | `lib/caller-context.ts`, pure |
-| The states - none, ringing, call, missed - and one call at a time. Each ring carries its `RingKind` (T11): alone, or shared (`group`) - one of several, or the lead's own agent rung first with the others next (T15b) - and whether it is a transfer; a shared ring that ends unanswered is gone, never "missed" | `lib/incoming-state.ts`, pure |
-| Reading the kind from the call's parameters - `ring=group`, `reason=transfer`, `step` - is `ringKind` in `lib/calling.ts`. A group ring arriving while anything keeps the browser busy (`lib/presence.ts`) is declined there and then by the store, so an open note box is never replaced by it; a ring to one person still is | `lib/incoming-call.ts` |
-| The store joining them to Twilio. A store, not page state, because a call arrives on any screen and the lead's Call button must know one is under way | `lib/incoming-call.ts` (zustand) |
-| The ringtone: a WAV made in memory, looped by an `<audio>` element, armed from `main.tsx` so the first click - sign-in included - lets it play. "Call sound off · click to turn on" shows until then. It pauses itself if it ever plays with nothing ringing - Safari restarted it by itself after a ring (2026-10-20, `TWILIO.md`) | `lib/ringtone.ts` |
-| The desktop notification, and the tab title "Incoming call" | `lib/call-notification.ts` |
-| Once accepted: the same call bar, which is why `CallBar` takes `who: { leadId, name, phone }` rather than a lead. It lives in the shell, so it survives moving between pages | `CallBar.tsx` |
-| A call's transcript, closed under the call in the conversation and on the timeline; one speaker's sentences joined into one line | `components/CallTranscript.tsx` |
-| What the lead said on the robot's call, under it and above the transcript, closed the same way: `Q1 · "yeah sure" → Yes` (T21) | `components/CallAnswers.tsx` |
-| A call Seri took: her conversation under it, closed the same way - "Lead" and "Seri" lines, then how her part ended ("Booked a call back: Mon, Nov 16 3:00 PM", "Seri stopped - the call went on with the script") - in the transcript's own classes (A19) | `components/SeriConversation.tsx` (`seriEndedText`, pure) |
-| Missed: a notice with **Call back**, which takes the lead and opens it with router state `callBack`; the workspace dials once and clears the state, so a reload does not ring them again | `IncomingCall.tsx`, `WorkspacePage.tsx` |
-| The lead's page: a **Missed call** badge beside Closed and Needs review, from `flags.missedCall`; and a **Wants a call** badge for a "yes" on the automated call nobody took, from `flags.missedYes` (T22) - the queue says only Working once the lead is picked up | `WorkspacePage.tsx` |
-| A call back Seri booked, in the queue (A16): "Callback · 3:00 PM" while nobody has it, "Callback – karm · 3:00 PM" once taken; bold once its time has come (`tag.due`), like a missed call. On My Callbacks her line fills the Last note column - "Seri: Wants to order antibiotics" - while the lead has no note; once there is one, the column shows the lead's newest, anyone's. On the timeline, "Took the callback Seri booked for ..." | `components/QueueStatus.tsx`, `pages/CallbacksPage.tsx`, `components/Timeline.tsx` |
-| A call back Seri booked (A15): on the lead's page a navy badge, "Callback booked · Thu, Nov 13 3:00 PM · Wants to order antibiotics" - the viewer's own time, whose it is once taken, her line - from `aiCallback`; on the timeline "Callback booked by Seri for ... · her line"; on Admin > Leads' Call column and filter, "Callback booked" | `WorkspacePage.tsx`, `pages/workspace/LeadHeader.tsx` (`aiCallbackLabel`), `components/Timeline.tsx`, `lib/call-results.ts` |
-
-Twilio's SDK is its own chunk, loaded once someone is signed in and calling is
-set up - a browser that can be rung has to hold a registered device - and
-re-checked every 30 seconds. Signing out destroys it. `lib/calling.ts` is the
-only file that touches the SDK.
-
-**Telling the server it can take a call** (T9, 2026-10-18 - "Who is free" in
-`AUTO-CALLS.md`). Each 30-second check also says whether the browser can take
-a call now: registered, and not busy. Busy is `lib/presence.ts`, a small
-register that knows nothing about calls: the lead's call (`useLeadCall`, by
-`useBusyWhile`) and the incoming call (`lib/incoming-call.ts`, by a store
-subscription) each mark it under their own name, and clear it when they end -
-or when the page goes. What counts as busy is pure: `occupiesAgent` in
-`lib/call-state.ts` (placed, live, or ended with the note box open - a failure
-is only a message) and `incomingOccupiesAgent` in `lib/incoming-state.ts`
-(ringing too; a missed call is only a notice). A change of busy is reported at
-once. Reports go one after another, each with a ten-second limit, so an older
-"available" never lands after a newer "busy" and one stuck request cannot hold
-back the rest. Nothing is said when listening stops: the sign-out has already
-cleared it on the server.
-
-**The "Taking calls" switch** (T10, 2026-10-18 - "Who is free" in
-`AUTO-CALLS.md`). `layout/TakingCalls.tsx`, in the app bar before the user
-menu: a small switch, `role="switch"`, muted when off and the green of a live
-call when on, in `styles/shell.css`. Shown only when `GET /api/calls/config`
-says calling is set up and `autoCalls` is on - unknown is hidden. Its state is
-the signed-in user's `takingCalls`, from the sign-in store, so it needs no
-fetch of its own and a reload shows what the server holds. A click saves
-first and flips after, disabled meanwhile; a failure leaves it as it was and
-says so on hover. Signing in starts it off.
-
-**Turned off by the server** (T15c, 2026-10-20): a person who lets a transfer
-ring out has the switch turned off. The browser learns it from the answer to
-its 30-second report (`lib/calling.ts`), which carries the switch and why
-(`takingCallsWhy`); `lib/taking-calls.ts` takes it into the signed-in user -
-unless a switch made in this browser crossed that report, whose own answer is
-newer. Off because of a missed transfer, the app bar shows "Missed a transfer
-· Taking calls off" beside the switch, amber on the navy bar
-(`.taking-calls__notice`, `role="status"`), until it is switched on again -
-after a reload too.
-
-**The centre column is a conversation, not a log.** `workspace/Conversation.tsx`
-shows the SMS thread, each call as one quiet line (since Phase 4) and the
-system markers - inbound on the left, ours on
-the right, automated sends marked `Auto` and an agent's own send carrying their
-name, so the rule 2b handoff is visible in the thread itself.
-
-That is a real change and worth knowing: **notes, callbacks and dispositions
-are no longer in the workspace centre.** They are on the Lead Timeline,
-which the conversation header links to, and which still uses `Timeline.tsx`.
-An agent on a call wants what the lead said; the full audit trail is one click
-away.
-
-**A label wherever the day changes - W1, 2026-10-18, asked for by Jeel.** Each
-item in the conversation shows only its time, so a lead worked over several
-days read as one afternoon. A small label now sits between the days, as a
-phone's messages app shows it: **Today**, **Yesterday**, **Wed, Oct 14** - the
-year only for another year - centred between two hairlines in the label style
-(`.convo__day`), so it reads as a heading over the messages rather than one
-more message. Any item can start a day: a text, a call or a system line. The
-Lead Timeline already had day separators ("WED, OCT 14"); both screens now name
-the day through one rule, `dayLabel` in `lib/format.ts`, so the timeline says
-Today and Yesterday too. It is the viewer's own day, from the browser's time
-zone, like every date on screen; "Yesterday" is the calendar day before, not
-24 hours back. `lib/format.test.ts`, `Conversation.render.test.tsx`.
-
-**A reply is labelled with the answer the server recorded for it.** `1`
-becomes "1 | Yes" because the timeline entry for that text carries
-`detail.answer` - the answer row names the message it was read from. The
-screen adds nothing of its own, and shows no label when the lead typed the
-answer's own words (`replyLabel()`, tested).
-
-*(Until 2026-10-06 the screen worked the labels out: `labelReplies()` walked
-the lead's answers in order and matched digits. It was right while every
-answer was a digit. A worded answer was skipped, and the next digit took its
-label - "yes", "2", "1" showed "1 | Yes" on a reply that meant "I know which
-antibiotic". `AGENT-WORKSPACE.md`, "How the lead card is built".)*
-
-**The composer is a message box.** Always present at the foot of the thread,
-Enter to send and Shift+Enter for a new line, templates behind a button. (The
-header's Send SMS button, which only put the cursor here, went on 2026-09-29.)
-The takeover warning appears once there
-is text and before the first send, as before; the 160-character limit and the
-blocked-number notice are unchanged.
-
-**Ticks and a red "!", not banners - Jeel, 2026-09-28.** The composer used to
-show a green "Sent." box after every send, and a red box when EZ Texting
-refused one. Both are gone. The thread now says it, the way a phone does:
-
-| The message | In the thread |
-|---|---|
-| EZ Texting accepted it | Two ticks in the bubble's bottom-right corner |
-| EZ Texting refused it | A red "!" beside the bubble, and no ticks. Hover says "Not sent" |
-
-**Two ticks mean "EZ Texting accepted it", not "reached the phone".** That is
-Jeel's decision: acceptance is what the send call answers, and nothing tells us
-about the phone - we read no delivery reports. So there is no one-tick state.
-
-**A refused message is kept.** The server stores it marked failed
-(`db/failed-sends.ts`), for automated messages too - an opener or question 2
-that never went out now shows in the thread with its "!", where before it was
-only a line in the server log. The box is cleared, as it would be for a sent
-message. When nothing is kept - a blocked number, a lead no longer yours - the
-text stays in the box and the red error above it still explains why.
-
-A first send still adds "Agent took over - automated questions stopped" to the
-thread. `Conversation.render.test.tsx` pins the ticks and the "!". On the Lead
-Timeline page a refused text reads "Delivery failed" - an agent's own as well
-as ours since 2026-10-27; before, an agent's read as sent there.
-
-*(2026-10-27: a phone call stops the automated questions too - the lead
-answered the robot's call (or talked to Seri on it, 2026-11-13), or rang us (`STATE-MACHINE.md` 2d): "Phone call -
-questions stopped" beside the badges, "Stopped at Q1 by a call" for
-Questions, "Phone call - automated questions stopped" on the timeline, and no
-compose warning, since the questions are already stopped.)*
-
-**The wrap-up, as it is now:** three numbered sections and one button. **1
-Outcome** - two buttons, Closed and DNC, DNC behind a confirm dialog. **2
-Callback** - three quick choices and "Other…", switched off while an outcome is
-chosen. **3 Note**. Then **Save**. The unsaved-changes guard asks before the
-tab is closed or reloaded. It cannot stop a move inside the app - Back to
-queue, or the browser's Back to the queue - and an unsaved note is lost that
-way.
-
-*(How it got here: the first version grouped eight outcomes as Positive / No
-contact / Negative, with DNC as a separate red link and a "Step N of 3"
-counter. Jeel replaced the outcomes with Closed and DNC on 2026-09-28, which
-took the groups and the counter with them; "Pick time..." became "Other…" on
-2026-09-29 - "Picking a date and time", below; Save & next went the same day
-as the outcomes - "One button", below. `AGENT-WORKSPACE.md`, "Dispositions".)*
-
-**"Lead N of M"** is fetched once when the workspace opens, not polled. It is
-orientation, and a number shuffling under the reader would be worse than a stale
-one. It is absent when the lead is not in the queue, which is normal - opening
-a lead can be what takes it out.
-
-**`.card` alone has no global style.** The admin pages get theirs from
-`.table-card`, and the timeline page's cards render flat. The workspace scopes its card rule to `.workspace .card`, so
-this redesign changes no other screen. A global rule would give those pages
-cards too - a separate decision.
-
-**Not in the mockup, deliberately:** its "Browser calling is off · Enable" link.
-Calling is Phase 4; a link that goes nowhere is the kind of dead control this
-phase already removed once. The note says calling is off until Phase 4.
-*(2026-10-01: calling is built; the Call button is real - `TWILIO.md`, "The screen".)*
-
-**Checked in the browser, 2026-09-28** - Send SMS focuses the composer;
-templates fill it and the takeover warning shows; Send enables and disables with
-the text; Pick time reveals the picker; a quick chip sets the callback; choosing
-an outcome advances the step; DNC opens the confirm and Cancel leaves the
-outcome alone; Save posts note, callback and disposition and clears the form;
-Save & next released and opened the next lead (since removed); the timeline page still shows all
-three; unclear replies stay unlabelled; a blocked number hides the composer and
-Send SMS; Back to queue releases the claim *(until 2026-10-08 - it only goes
-back now)*. No console errors.
-
-Agents land on `/queue`; `/admin` lands on Overview. The admin section is behind
-`RequireRole`, and every admin endpoint refuses an agent independently - the
-guard on the screen is convenience, not security.
-
-## Shared class names - 2026-09-28
-
-The table card, its toolbar and the table inside it began life on the queue and
-Admin > Leads, so every page that reused them carried `queue-card`,
-`queue__name` or `leads__search` - names that said "queue" on the DNC list. They
-were renamed for what they are, with no change to how anything looks (a
-before-and-after pixel diff of every page matched):
-
-| Was | Is |
-|---|---|
-| `queue-card`, `queue-card__toolbar`, `queue-card__search` | `table-card`, `table-card__toolbar`, `table-card__search` |
-| `queue__table`, `queue__row`, `queue__row--locked`, `leads__row--new` | `data-table`, `data-table__row`, `data-table__row--locked`, `data-table__row--new` |
-| `queue__name`, `queue__phone`, `queue__score`, `queue__source`, `queue__action`, `leads__when` | `cell-name`, `cell-sub`, `cell-strong`, `cell-code`, `cell-action`, `cell-muted` |
-| `leads__search`, `leads__select` | `search-input`, `select-input` |
-| `leads__total`, `leads__empty`, `leads__pager`, `leads__loading` | `table-card__count`, `table-card__empty`, `table-card__pager`, `loading-block` |
-
-`queue__locked` and `queue__truncated` keep their names: only the queue uses them.
-
-Internal values and screen words still differ in a few places, on purpose:
+| `pick` | Nobody holds it | **Pick up** | Claims it, opens the workspace |
+| `resume` | You hold it | **Resume** | Back into your own lead. Re-claiming it succeeds, but "Pick up" would imply taking something you already have. While it checks it reads *Opening...*, not *Picking up...* |
+| `view` | Someone else holds it, you are a superadmin | **View** | Opens the workspace read-only; claims nothing, the holder keeps it |
+| `locked` | Someone else holds it, you are an agent | *Locked* | Nothing |
+
+- **Your own claim is checked before the superadmin rule**, so a superadmin
+  working their own lead is offered Resume, not the read-only page.
+- **The holder is matched by id** - `agentId` on the tag against the signed-in
+  user's id - never by name, which two agents sharing a name would break
+  (`lock.test.ts` has two called "Sam Okonjo").
+- **A `working` tag with no holder id counts as unlocked.** The queue joins a
+  claim through `users.is_active`, so a deactivated agent's claim returns no
+  holder; muting it would strand a lead nobody could open.
+- **Resume still asks the server.** It sends the same claim as Pick up; for a
+  lead already yours `db/claims.ts` keeps `assigned_to` and the original
+  `assigned_at`, and only `updated_at` moves. It asks because the queue on
+  screen can be five seconds old: a superadmin may have released the lead and
+  someone else picked it meanwhile. A 409 shows the holder's name and refreshes.
+
+**Opening a lead never assigns it.** A row click, the lead's name as a link, and
+View all open the same workspace, read-only - actions switched off, a strip
+saying whose it is, and Pick up right there if nobody holds it. Only Pick up
+claims. Looking also leaves an unread reply unread: the workspace marks it read
+only for the holder (`AGENT-WORKSPACE.md`). The same three words are on every
+screen that claims: My Callbacks' rows offer Pick up, Resume and View the same
+way; the Lead Timeline header offers Pick up and Resume, and on a lead someone
+else holds shows "Held by <name>" and no button, for a superadmin too.
+
+Letting a lead go is the **Release** button on the lead's page, beside "Held by
+you · since 3:04 PM": shown to the holder, and to a superadmin on anyone's lead
+(`mayRelease`), and switched off during a call (`AGENT-WORKSPACE.md`, "Claim and
+release").
+
+### Types mirror the backend
+
+`api/leads.ts`, `api/workspace.ts`, `api/admin.ts`, `api/calls.ts`,
+`api/users.ts` and `api/types.ts` hold interfaces that mirror backend ones, each
+naming the file it mirrors ("Mirrors LeadDetail in
+backend/src/db/lead-detail.ts"). They are written by hand, so they can drift,
+and a drifted one renders blanks rather than errors: **check a new type against
+its backend counterpart by calling the endpoint**, not by reading the interface.
+
+Internal values and screen words differ in a few places, on purpose:
 
 | Stored or sent | Shown | Why it stays |
 |---|---|---|
-| conversation `status = 'completed'` | Ready - or Offers / Not interested, by `end_outcome` | A database value; renaming it is a migration for no behaviour change. The API's lead status is already `ready` |
-| queue tag kind `working` | Working – name | Same word since 2026-09-28 |
-| Overview `responded`, `completed` | Replied, Completed | Field names in one JSON payload, read in one page |
+| conversation `status = 'completed'` | Ready - or Offers / Not interested, by `end_outcome` | A database value; renaming it is a migration for no change in behaviour. The API's lead status is already `ready` |
+| queue tag kind `working` | Working – name | The same word |
+| Overview `responded`, `completed` | Replied, Completed | Field names in one payload, read by one page |
 
-## Picking a date and time - 2026-09-29
+Every date and time on screen is the viewer's own, from the browser's time zone;
+where the server decides what "today" is - My Callbacks, Overview - the browser
+sends its zone as `?tz=` (`viewerTimeZone`, `api/client.ts`). A request that gets
+401 mid-use drops the app to `/login` with "Your session ended." (`AUTH.md`).
 
-Wrap up's "Pick time..." and My Callbacks' Reschedule used
-`<input type="datetime-local">`, whose calendar the browser draws in its own
-blue and fonts, and which cannot be restyled - Jeel: it did not match the app.
-Both now use `components/DateTimeField.tsx`: a field like the other inputs that
-opens a small calendar (past days off, today outlined, the chosen day brand
-navy) and a time menu in 15-minute steps, with times already gone hidden for
-today. The value is the same local-time string the input gave, so nothing that
-saves a callback changed. The time menu is still the browser's own list, which
-is as plain as the other selects in the app. `DateTimeField.test.tsx`.
+### Calling in the browser
 
-**Wrap up's callback is one set of choices - Jeel, the same day.** It was
-three quick chips, a "Pick time..." chip on a line of its own, and the date
-field below that - three rows, and nothing showed which chip had been chosen.
-Now: `In 1 hour`, `Tomorrow 10 AM`, `Tomorrow 3 PM` and `Other…`. The chosen
-one is brand navy; pressing it again books nothing. `Other…` opens the
-calendar and then shows the date itself ("Sep 30, 3:00 PM"), with Clear in the
-panel. The "OPTIONAL" pill beside the heading is gone - every part of Wrap
-up is optional, so it said nothing.
+`lib/calling.ts` is the only file that touches Twilio's Voice SDK. The SDK is its
+own chunk, fetched once someone is signed in and calling is set up, because a
+browser that can be rung has to hold a registered device. What a call looks like
+on the lead's page is `TWILIO.md`, "The screen"; a lead calling in,
+`INCOMING-CALLS.md`; telling the server whether this browser can take a call,
+and the "Taking calls" switch, `AUTO-CALL-TRANSFER.md`, "Who is free".
 
-## Fetching
+### Building and serving
 
-**Every live screen polls through `api/usePolling.ts`.** One hook, 5 seconds,
-one place - so a real push can replace it later without touching a screen.
-`QUEUE.md`, "The polling hook", has the full contract and why each guarantee is
-tested rather than eyeballed.
+`npm run dev` in `frontend/` serves the app on :5173 and forwards `/api` to the
+API on `127.0.0.1:3000` (`vite.config.ts`) - the same origin as far as the
+browser is concerned, so the SameSite=Strict session cookie works as it does
+behind Caddy. `npm run build` runs `tsc` then `vite build`, into `dist/`. In
+production `frontend/Dockerfile` builds the app into the `caddy` service's
+image, which serves `dist/` and forwards only `/api/*` to the API - which is why
+every route lives under `/api`. Running everything locally is `RUNNING.md`.
 
-The short version:
+## Rules
 
-```ts
-const fetcher = useCallback(() => listQueue({ tier, source }), [tier, source]);
-const { data, loading, error, refresh, updatedAt } = usePolling(fetcher);
-```
+1. **Every live screen fetches through `usePolling`.** No screen has its own
+   timer.
+2. **The server decides; the screen only decides what to offer.** The lock, the
+   admin guard, a disabled Wrap up - each saves a round trip or a confusing page,
+   and the server refuses the same thing regardless.
+3. **One action, one name.** Pick up, Resume and View mean the same on every
+   screen, and a button says what the click does to the data, not where it goes.
+4. **Only `lib/calling.ts` touches Twilio's SDK.**
+5. **A type that mirrors the backend names the file it mirrors**, and a new one
+   is checked by calling the endpoint.
+6. **Style by role, through the tokens** - a size, weight or colour the tokens do
+   not name fails the build (`FRONTEND-STYLE.md`).
+7. **No dead controls.** A control that cannot work is not shown, and a gap with
+   no data behind it is shown as a gap - the timeline's Consent ref reads "-" -
+   so nobody wonders whether the page forgot it.
+8. **Every row opens from the keyboard**: on the queue, Admin > Leads and the
+   DNC list the lead's name is a link to the row's page (`a.cell-name`); the
+   row's click stays for the mouse. Not on a locked row.
 
-The fetcher must be wrapped in `useCallback`. A new fetcher means new filters,
-which clears the data and shows a spinner; a fetcher rebuilt every render would
-clear the screen every render.
+## Data
 
-**A failed tick keeps the last good data** and raises a banner over it. A
-dropped connection should not blank a table an agent is reading.
+The frontend holds no data of its own: every read and write is a request to the
+API, whose tables are in `SCHEMA.md`. In the browser it keeps only the session's
+user (`auth/store.ts`), the incoming call's state (`lib/incoming-call.ts`), and
+the view of Admin > Leads and the DNC list in the page's address, so Back
+returns to the same tab, filters and page (`ADMIN-LEADS.md`, "The page";
+`ADMIN.md`, "DNC list"); the queue and My Callbacks keep their view in memory and
+start over.
 
-**Two fetches on one screen is fine.** The workspace polls the lead card and the
-timeline separately, and Overview polls the overview and the health check
-separately. Both are cheap, and keeping them apart means a slow one cannot hold
-up the other.
+## Code
 
-## Types mirror the backend
-
-`api/leads.ts`, `api/workspace.ts` and `api/admin.ts` hold interfaces that
-mirror backend ones, each naming the file it mirrors. They are hand-written, so
-they can drift - and did:
-
-- `Note` carries `author`, not `agentId`/`agentName`.
-- `CallbackListRow`'s lead has no `id` and no `score`, and does have `source`.
-
-Both were wrong until the screens were run against the real endpoints, and both
-would have rendered blanks rather than errors. **Check a new type against its
-backend counterpart by calling the endpoint**, not by reading the interface.
-
-## Decisions worth knowing
-
-**No STATE column in the queue.** The mockup has one; EZ Texting sends no state
-with a contact (`EZTEXTING-API.md`), so every row would read "-" forever. Left
-out rather than given permanent space in a table the brief asks to keep dense.
-Decided 2026-09-26. It goes back in if the partner ever sends state.
-
-**The queue has one Answers column** - 2026-10-05. A row carries `answers`,
-as many as the lead's flow asked and they answered, and the cell reads "Yes ·
-No · Talk to an agent" with each question's heading on hover
-(`QueuePage.tsx`; the cell writes each answer with its question for a screen reader - `answersText`, the same words as one string, was called only by its tests and was removed, review Q7, 2026-11-23). It had three fixed columns - Interest,
-Timing, Preference - which cannot fit flows with different numbers of
-questions. The list of answer names written into `lib/format.ts` is gone:
-every word comes from the server, saved with the answer. `FLOWS.md`.
-
-**Age ticks on its own timer, not on the poll.** Once a second, from
-`lib/useSecond.ts`; `formatAge` in `lib/format.ts` words it. A number that only moved when the data refreshed would be wrong
-for up to five seconds at a time, and age is the queue's signal for how long
-someone has waited. It has had no colour or weight thresholds
-since 2026-09-28 - "Every waiting time looks the same", above.
-
-**Opening a lead never assigns it - Jeel, 2026-09-28.** A queue row click, a
-superadmin's View and the Pick up button all open the same workspace. Only Pick
-up assigns the lead; opened any other way, the workspace shows the lead read-only -
-actions switched off, a strip saying whose it is, and Pick up right there if nobody
-holds it. Looking also leaves an unread reply unread: the workspace marks it
-read only for the holder, so a glance no longer lets a lead who texted back drop
-out of the queue. A 409 on Pick up still shows the holder's name and refreshes.
-*Back to queue* only goes back - 2026-10-08. The lead stays with whoever
-holds it. Letting it go is the **Release** button at the top right, beside
-"Held by you · since 3:04 PM": shown to the holder, and to a superadmin on
-anyone's lead (`lib/lock.ts`, `mayRelease`), and switched off during a call.
-After it the page stays open, as a viewer's, with Pick up offered again.
-*(Until then Back to queue released the holder's own claim on the way out.)*
-
-(For an hour earlier the same day, a row click opened the Lead Timeline instead.
-Two different pages for the same lead read as two different things, so both now
-land on the workspace.)
-
-**The button says what the click does to the database - Jeel, 2026-09-28.** It
-read "Open", which described where the click went rather than what it did: it
-writes `leads.assigned_to` and locks every colleague out. An agent could take a
-lead believing they had only looked at it. It is now **Pick up**, and two further
-states follow from the same rule - **Resume** on your own lead, **View** on
-someone else's when you are a superadmin. `QUEUE.md`, "What the button offers",
-is the table. The same wording is on the My Callbacks row, which claims the
-same way. The Lead Timeline header has two of the three: Pick up and Resume; on
-a lead someone else holds it shows "Held by <name>" and no button, a superadmin
-included - View is on the queue and My Callbacks (review R15, 2026-11-23).
-
-**The lock is decided in `lib/lock.ts`.** The server enforces it; the screen has
-to decide which rows to mute before anyone clicks. `rowAction()` answers
-"what may this person do", and the queue mutes a row it answers `locked` for,
-naming the holder from the row's tag (`QueuePage.tsx`). `lockHolder()`, derived
-from `rowAction()` for the same answer as a name, was called only by its tests -
-removed, its tests kept as tests of `rowAction()` (review Q7, 2026-11-23). `QUEUE.md`, "The
-one-agent lock on screen", has both tables. The holder is matched by id since
-2026-09-28; before, by name, which two agents sharing a name would break.
-
-**One Save, three writes.** The workspace right column posts a note, a callback
-and a disposition to three separate endpoints. Each is append-only, so a partial
-failure leaves whatever succeeded; the panel names the part that failed rather
-than claiming the whole save went wrong.
-
-**One button: Save - Jeel, 2026-09-28.** Wrap up had a second button, *Save &
-next lead*, which saved, released the lead and opened the top unlocked lead in
-the queue. It was dropped: nothing moves an agent on to a lead they did not
-choose. Save is the primary button.
-
-**Saving an outcome ends the visit - Jeel, 2026-09-29.** With Closed or DNC,
-Save releases the lead (on the server) and takes the agent back to the queue,
-where the lead is already gone. With only a note or a callback the agent stays
-and leaves with *Back to queue*, still holding the lead. A closed lead shows Closed as the selected
-button with "Closed by Maya · 7:01 PM" beneath it. A lead someone holds is never
-closed (`AGENT-WORKSPACE.md`), so the agent holding it starts from clear buttons
-and their Closed is always saved. What Save did is a muted
-"✓ Saved 7:01 PM" beside the button, and a failure a short red line in the same
-place - both replacing a green banner over the panel that read as generic.
-
-**DNC asks twice,** and the dialog says the block can only be lifted by the lead
-texting START. The API refuses the value without `confirmDnc: true` regardless.
-
-**The SMS warning is shown before the first send,** because sending stops the
-automated questions for good (`STATE-MACHINE.md` rule 2b) and cannot be undone.
-Once the conversation has already been taken over the warning goes away - and
-it is shown only while the questions are running: a completed, expired or
-review conversation has none left to stop (`sendingStopsQuestions`, 2026-10-27;
-before, it warned on those too). On a DNC lead there is no compose box at all.
-
-**The SMS templates are hardcoded,** unlike the automated copy in `settings`.
-They are an agent's own words mid-conversation, so a mistyped one costs a single
-awkward message rather than reshaping every lead's experience. They move to
-`settings` if the client wants to edit them.
-
-**Admin pages say they are read-only.** Jeel's decision of 2026-09-23 is a
-decision, not a missing feature, so the screens explain it rather than leaving a
-superadmin hunting for a Save button.
-
-**Known gaps are shown, not hidden.** The timeline sidebar's Consent ref and
-duplicate check have no data behind them and say so. (The Overview once showed
-call figures dimmed with a note; they were removed on 2026-09-28 - `ADMIN.md`,
-"Overview".) Leaving them off would make someone wonder whether the
-page forgot them.
-
-## Sign-in fails locally with nothing wrong: something else is on port 3000
-
-Found 2026-10-11. The dev server sent `/api` to `http://localhost:3000`.
-Docker publishes the API on IPv4 only, and `localhost` is tried as IPv6 first,
-so when another project's dev server was listening on `[::1]:3000` every
-`/api` call went to it - a 308 from a stranger - and sign-in failed in this
-app. The proxy now names `127.0.0.1` (`vite.config.ts`). To see what holds the
-port: `lsof -nP -iTCP:3000 -sTCP:LISTEN`.
-
-## Refreshing - one request at a time
-
-**A screen asks again five seconds after the last answer arrived** -
-2026-10-06, `api/usePolling.ts`. It used to ask every five seconds on a fixed
-timer, whatever had happened to the request before. While the server answers
-in milliseconds the two are the same. When it is slow they are not: requests
-piled up on a server already struggling, each holding a database connection,
-and a slower answer could never catch up. Now there is never more than one
-request in flight from a screen. The race guard is unchanged - an answer that
-arrives after a newer one is still dropped.
+| File | What it does |
+|---|---|
+| `frontend/src/App.tsx`, `main.tsx` | The routes; the entry point, which loads the styles and arms the ringtone |
+| `frontend/src/auth/store.ts`, `auth/guards.tsx` | The session store; `RequireAuth` and `RequireRole` |
+| `frontend/src/api/client.ts` | axios on `/api`, `toApiError`, the 401 that ends a session, `viewerTimeZone` |
+| `frontend/src/api/usePolling.ts` | The polling hook |
+| `frontend/src/api/leads.ts`, `workspace.ts`, `admin.ts`, `calls.ts`, `users.ts`, `auth.ts`, `types.ts` | One file per area: the requests and the mirrored types |
+| `frontend/src/lib/lock.ts` | `rowAction`, `mayRelease` |
+| `frontend/src/lib/format.ts` | Phone, dates, ages, names, and `dayLabel` - one rule for naming a day on every screen |
+| `frontend/src/lib/useSecond.ts` | A clock that re-renders every second, for an age that ticks |
+| `frontend/src/layout/AppShell.tsx`, `UserMenu.tsx` | The app bar and the page |
+| `frontend/src/pages/LeadWorkspaceRoute.tsx` | The lead's page, made afresh for each lead |
+| `frontend/src/pages/`, `pages/workspace/`, `pages/admin/` | One file per screen; the workspace's cards; the admin pages - each in its area's doc |
+| `frontend/src/components/`, `styles/` | The shared kit and the stylesheets - `FRONTEND-STYLE.md` |
+| `frontend/vite.config.ts` | The dev server's port and proxy, and the test setup |
+| `frontend/Dockerfile` | The production Caddy image with the built app |
 
 ## Tests
 
-`npm test` in `frontend/`. Vitest with jsdom, 453 tests in 40 files (2026-11-23; 432 in 36 on 2026-11-13).
+`npm test` in `frontend/` - Vitest with jsdom and Testing Library - and
+`npm run lint`, ESLint with the React hooks rules. Commands for every test in the
+repo are in `TESTING.md`. Logic first: a screen is easy to judge by eye, a
+dropped response or an off-by-one is not. Each area's own frontend tests are in
+its doc's Tests table; these are the shared parts':
 
-Logic first, by agreement - a screen is easy to judge by eye, and a dropped
-response or an off-by-one age threshold is not:
-
-| File | Covers |
+| What | Where |
 |---|---|
-| `api/usePolling.test.ts` | The polling hook's guarantees, the race guard included, and that a slow answer is waited for rather than asked for again |
-| `lib/format.test.ts`, `lib/lock.test.ts` | Formatting, which row action and lock a lead gets, and who may release a held lead |
-| `lib/leads-view.test.ts` | Admin > Leads' view read from and written to the address: the round trip, defaults left out, anything unrecognised read as the default - the Call filter (T23) included |
-| `lib/dnc-view.test.ts` | The same for the DNC list: its state tab, search and page (review Q8, 2026-11-23) |
-| `pages/workspace/useLeadCall.test.ts` | The lead's call on the workspace: refreshed once and once more, never twice over; Hang up while connecting; one call at a time; leaving the lead ends it (review Q7) |
-| `components/Modal.test.tsx` | A dialog's keyboard focus: taken on opening, kept inside on Tab, given back on closing (review Q8) |
-| `lib/call-results.test.ts` | The robot's call in words: the Call column's, the timeline's capitalised, and the Call filter's choices (T23) |
-| `lib/call-settings.test.ts`, `pages/admin/ConfigPage.test.ts` | Admin > Configuration's call settings in words - hours, days, waits - its placeholders, what picks a line of the call script (T24), and its tab read from the address |
-| `components/Timeline.test.tsx`, `pages/LeadTimelinePage.test.ts` | The timeline's wording - "Delivery failed" on a refused text, ours or an agent's - and the summary sidebar |
-| `pages/workspace/SmsCompose.test.ts` | When the composer warns that sending stops the questions: only while they are running and nobody has taken them over |
-| `pages/workspace/Conversation.test.ts` | The answer shown beside a reply: the server's, and nothing when it would repeat the reply |
-| `pages/QueuePage.test.ts` | The queue's Answers cell and its tooltip |
-| `pages/workspace/Conversation.render.test.tsx` | The sent ticks and the red "!" on a refused message; a call as one line, the robot's call with its answers folded under it; a label where the day changes |
-| `components/QueueStatus.test.tsx` | The queue's six statuses, their icons, a callback's time - one of Seri's with no name yet, bold once due (A16) - and the tier bars |
-| `components/DateTimeField.test.tsx` | The date and time picker: the month grid, quarter hours, past days off, Clear, Escape |
-| `pages/workspace/LeadHeader.test.ts` | The header's source and Questions wording, a sub-question, "Q1-a", included; a phone call stopping the questions (2d); the badge of a call back Seri booked (A15) |
-| `pages/workspace/LeadNotes.test.tsx` | The Notes card: newest first, three then Show all, the author, the empty state |
-| `components/CallTranscript.test.tsx` | A call's transcript: closed until asked for, speakers joined, nothing for an unrecorded call |
-| `components/CallAnswers.test.tsx` | The robot call's answers in words - said, pressed, asked again, not understood, stop, nothing said - and the fold (T21) |
-| `components/SeriConversation.test.tsx` | A call Seri took: her lines and the lead's in order, how her part ended in words, nothing for a call she did not take (A19) |
-| `pages/workspace/LeadAnswers.test.ts` | The score breakdown's light-blue-to-navy shades, and each line's words |
-| `components/SyncStatus.test.tsx` | The EZ Texting sync line, quiet and amber |
-| `components/Segmented.test.tsx` | The sliding switcher |
-| `lib/call-state.test.ts`, `lib/calling.test.ts` | A call's states and wording; error sentences; who is calling |
-| `lib/calling.device.test.ts` | The join to Twilio's SDK, against a stand-in: placing a call, being rung, accept, decline, sign-out; telling the server whether it can take a call - registered or not, busy at once, every 30 seconds, in order |
-| `lib/presence.test.ts` | What keeps the browser busy: several reasons at once, listeners told only of a change, `useBusyWhile` following its component |
-| `layout/TakingCalls.test.tsx`, `lib/taking-calls.test.ts` | The "Taking calls" switch: shown only with automated calls on, flips once saved, one save at a time, a failure leaves it as it was; the server's word taken from the report unless a switch here crossed it; "Missed a transfer" shown for that reason only, gone once switched on |
-| `pages/workspace/CallBar.test.tsx` | The call bar in every state, and its note box |
-| `lib/incoming-state.test.ts`, `layout/IncomingCall.test.tsx` | A lead calling in: ringing, answered, missed, declined, one call at a time; what the card shows; Call back; keeping the browser busy until the note box is done; a ring several people got - cleared quietly, declined while busy with the note kept as typed, a transfer's card |
-| `lib/ringtone.test.ts`, `lib/call-notification.test.ts`, `lib/caller-context.test.ts` | The ring and its first-click unlock; the desktop notification; the "Calling back" line, and a transfer's line |
-| `styles/type-system.test.ts` | The type scale, duplicate selectors, undefined tokens - "Type system" above |
+| The polling hook: data kept through a tick and an error, loading only with nothing to show, one request at a time, a stale answer dropped, the timer stopped on unmount, `refresh`, `keepPreviousData`, `enabled` | `frontend/src/api/usePolling.test.ts` |
+| Which row action and lock a lead gets, matched by id; who may release a held lead | `frontend/src/lib/lock.test.ts` |
+| Formatting - phone, dates, ages, the day label | `frontend/src/lib/format.test.ts` |
+| The lead's page made afresh for each lead | `frontend/src/pages/LeadWorkspaceRoute.test.tsx` |
+| A dialog's focus: taken on opening, kept inside on Tab, given back on closing | `frontend/src/components/Modal.test.tsx` |
+| The sliding switcher | `frontend/src/components/Segmented.test.tsx` |
+| The date and time picker: the month grid, quarter hours, past days off, Clear, Escape | `frontend/src/components/DateTimeField.test.tsx` |
+| The type scale, one import per stylesheet, duplicate selectors and properties, undefined tokens | `frontend/src/styles/type-system.test.ts` - `FRONTEND-STYLE.md` |
 
-```bash
-cd frontend
-npm test          # once
-npm run test:watch
-```
+## Not done
 
-## Running it
+- **Live push.** Polling stands in for it, deliberately: at 50-100 leads a day
+  nobody can tell it from a push, and replacing it means rewriting
+  `usePolling.ts` alone.
+- **A list of every held lead and how long it has been held.** A superadmin finds
+  them in the queue, as "Working – name", and releases one from its page.
+- **No data for State or Consent ref.** EZ Texting sends neither: State is not
+  shown anywhere, and Consent ref reads "-" on the timeline page
+  (`EZTEXTING-API.md`, `TIMELINE.md`).
 
-`docs/README.md` has the full local setup. For the frontend alone:
+### Differences from the brief
 
-```bash
-cd frontend
-npm install
-npm run dev       # :5173, proxying /api to the API on 127.0.0.1:3000
-npm run build     # tsc then vite build, into dist/
-```
+`DESIGN-PROMPT.md` is kept as it was written. Where the app went another way:
 
-Production serves `dist/` from the `caddy` service, built by
-`frontend/Dockerfile`. Caddy forwards only `/api/*` to the API, which is why
-every route lives under `/api`.
+| The brief | Built | Where |
+|---|---|---|
+| Superadmin edits scoring, tiers, copy, settings and the DNC list | Sees them, read-only; Agents and Seri's switch are the only controls | `ADMIN.md` |
+| Type at 13-14px in tables, 16px in forms | Five sizes by role; 14px body everywhere, forms included | `FRONTEND-STYLE.md` |
+| App bar: EZ Texting and Twilio connection dots, avatar initial, role badge | The user menu with name and role in plain text, and the "Taking calls" switch with automated calls on. System status is on Admin > Overview | `ADMIN.md`, `AUTO-CALL-TRANSFER.md` |
+| Toasts, bottom right: new HOT lead, SMS sent, call ended, saved, errors; never over the Call button | None. A save is confirmed in place; the one corner notice is the incoming-call card, top right | `INCOMING-CALLS.md` |
+| A keyboard shortcut overlay (`?`); in the workspace `C`, `S`, `N`, `1-7`, Cmd/Ctrl+Enter; rows moved through with ↑ ↓ Enter | None. Enter sends in the message box and saves the after-call note; Escape closes a menu or dialog; rows are reached with Tab, the lead's name a link (rule 8) | this doc |
+| Skeleton loaders for tables | A spinner, except Admin > Agents' skeleton rows | this doc |
+| Queue: tier counters as pills, several at once; filters and table apart | One segmented switcher - All, Hot, Warm, Low with counts - one at a time; filters and table in one card | `QUEUE.md` |
+| Source as a multi-select | A single choice, on the queue and Admin > Leads; the APIs take several | `QUEUE.md`, `ADMIN-LEADS.md` |
+| Queue columns STATE, INTEREST, TIMING, PREFERENCE, AGE | No STATE; one Answers column; WAITING, with no amber or red | `QUEUE.md` |
+| Queue statuses New, Attempted, In progress, Callback, Needs review, Stalled, Inbound reply, Seen before | The tags of `QUEUE.md`, "The tag" | `QUEUE.md` |
+| Coloured tier badges | Signal bars and the word | `FRONTEND-STYLE.md` |
+| An "Open" button, with quick Call and SMS icons on hover | Pick up, Resume, View or Locked; no hover icons - calling and texting are done from the workspace | this doc |
+| A row click opens the workspace | It opens it read-only and claims nothing | this doc |
+| New rows animate in at their sorted place | Only Admin > Leads highlights a new row; the queue does not animate | `ADMIN-LEADS.md` |
+| A small unread dot on an Inbound reply row | An icon and the words in bold; Missed call is bold the same way | `FRONTEND-STYLE.md` |
+| Workspace in three columns, 30/40/30: lead card and actions, timeline, right column | A header card over three cards: what the lead told us and the score breakdown, the conversation, Wrap up | `AGENT-WORKSPACE.md` |
+| Lead card: tier badge, State, a copy button on the phone; flags Seen before and Inbound reply; a Next lead link | None of those; the flags the page shows are in `AGENT-WORKSPACE.md`; "Lead 3 of 12" beside Back to queue | `AGENT-WORKSPACE.md` |
+| Call control states, including "Twilio disconnected", and an outcome filled in after the call | A Call button and a call bar; neither that state nor an outcome filled in | `TWILIO.md` |
+| An SMS button opening a compose box | The message box always at the foot of the conversation | `AGENT-WORKSPACE.md` |
+| Note: auto-saves a draft, "Add note" | No draft. The note is saved with Save, or from the call bar after a call | `AGENT-WORKSPACE.md` |
+| Callback: "Assign to", a superadmin picking any agent | Not on the screen: Wrap up books it for whoever saves; the API takes `agentId` | `CALLBACKS.md` |
+| Seven dispositions | Closed and DNC | `AGENT-WORKSPACE.md` |
+| Save, and Save & next lead | Save only | `AGENT-WORKSPACE.md` |
+| An unsaved-changes guard on leaving | Only on closing or reloading the tab; a move inside the app is not stopped | `AGENT-WORKSPACE.md` |
+| Lead Timeline header: name, tier and score, state, phone, source, Call and SMS buttons | No state, and no Call or SMS buttons - Pick up or Resume, or "Held by <name>" | this doc |
+| Timeline: earlier leads for the same phone in a "Previous lead" section; a duplicate check with a link | Not built - repeat leads are a future item; the check always reads "not seen before" | `TIMELINE.md` |
+| My Callbacks: three tabs, overdue rows tinted, Open / Call / Reschedule / Mark done | A card with four tabs; overdue in amber; Pick up / Resume / View beside a "⋯" | `CALLBACKS.md` |
+| An "Agent" filter for a superadmin's callbacks | Built, as a labelled Agent picker | `CALLBACKS.md` |
+| Admin sub-menu: Overview, Leads, Scoring, Messages, Agents, DNC list, Settings | Overview, Leads, Agents, Configuration, DNC list | `ADMIN.md` |
+| Overview: eight KPI cards, a funnel, call figures per agent | Four totals, an agents table, system checks, recent activity | `ADMIN.md` |
+| Scoring editable inline, tier ranges, a preview panel, Save rules, Recalculate existing | Read-only cards; no preview panel; Recalculate dropped | `ADMIN.md` |
+| Message copy editable, placeholder chips, a phone-frame preview | Read-only, with character and segment counts; `{first_name}` as a chip; no phone-frame preview | `ADMIN.md` |
+| Agents: row actions as buttons | Behind one "⋯" menu | `AUTH.md` |
+| DNC list: Added by, Add manually, Export CSV | No Added by (the agent behind it is in the activity log); no manual add; no export | `ADMIN.md` |
+| A Settings page: expiry, delivery type, lead group, poll interval, caller ID, SMS templates | Not built. Expiry is shown on Configuration; the lead group and the caller ID are environment variables; the poll interval is a `settings` row; the segment limit is a constant, 160; the agents' SMS templates are in the code | `ADMIN.md`, `ENVIRONMENT.md`, `AGENT-WORKSPACE.md` |
+| Admin > Leads: its tabs, Step reached Q1-Q3, a warning banner when the poll is stale | Its own statuses, the question the lead is on, a quiet sync line | `ADMIN-LEADS.md` |
+| Not in the brief: a lead calling in | A card in the top right corner on every screen | `INCOMING-CALLS.md` |
 
-## After the review, 2026-11-22
+## Decisions
 
-The website's medium findings of `docs/REVIEW-2026-11-22.md`, each with its test where it is logic:
+| Decision | By | Date |
+|---|---|---|
+| Every live screen updates by polling every 5 seconds, from one hook, not a push | Jeel | 2026-09-23 |
+| Tests cover logic first; screens are judged by eye | Jeel | 2026-09-26 |
+| Opening a lead never assigns it: a row click and View only look, read-only, on the same workspace; only Pick up claims | Jeel | 2026-09-28 |
+| The button says what the click does: Pick up, Resume, View, on every screen that claims | Jeel | 2026-09-28 |
+| A switch keeps the old rows on screen, faded and unclickable, instead of a spinner | Jeel | 2026-09-28 |
+| "Blue" means the brand navy; no selected tab uses the link blue | Jeel | 2026-09-28 |
+| Each viewer's day is their own: "today" in the browser's time zone | Jeel | 2026-09-28 |
 
-- **Two call bars, one above the other** (M26). The lead's Call stays off while
-  an incoming call's note box is open - "Save or skip the last call's note
-  first." - and should both bars show at once (this lead's call over, its note
-  open, and a lead's call taken meanwhile), this lead's sits above the incoming
-  one, never on top (`CallBar`'s `raised`, `--call-bar-raise`).
-- **Release waits for a lead's call taken on the page** (M27).
-- **Calling's settings asked again until they answer** (M28): a page opened
-  while the API restarted was never ringable, and had no "Taking calls"
-  switch, until a reload. Both ask again every 15 seconds (`CONFIG_RETRY_MS`).
-- **A ring ends however it ends** (M29): not only Twilio's `cancel` - a dropped
-  connection (`disconnect`) or an `error` before it was answered ends it too,
-  and a ring no event ever ends is cleared after 90 seconds
-  (`RING_SAFETY_MS`), longer than any ring we place. Before, the card stayed
-  ringing, the ringtone looping and the browser busy, until Decline.
-- **Admin > Leads flashes only new rows** (M30) - "Admin > Leads", above.
-- **A failed load says so** (M31): the lead timeline page and Overview's
-  System card spun for ever; now a banner, and "Showing the last update" when
-  there is one.
-- **"You tried" by id** (M32), `lib/caller-context.ts`.
-- **A failed Reactivate says so** (M33), on its own - it showed "Could not load
-  agents" with a Retry that loaded them.
+## History
 
-## After the review: code quality, 2026-11-23
-
-The website's code-quality findings (Q7, Q8), on `fix/review-quality-frontend`:
-
-- **The lead's call refreshes once** (Q7, `useLeadCall`): a failed call is
-  followed by Twilio's `disconnect`, which ended it again - two refreshes, and
-  two more 2.5 seconds on. It now finishes once. The hook had no test; it has
-  seven - the refresh and the second one, a failure then a disconnect, Hang up
-  while connecting, no second call while one is going, a new one once the last
-  is over, leaving the lead, a call that could not be placed.
-- **Left over, removed** (Q7): `Timeline`'s `autoScroll` - the workspace has
-  its own list now, `Conversation.tsx` - with its ref, a `<div>` inside an
-  `<ol>`; `lockHolder` and `answersText`, called only by their tests (the
-  lock's tests kept, as tests of `rowAction`). One `dayOrDate` behind
-  `formatReceived` and `formatLastLogin`; `LiveStatus` on `useSecond`.
-- **Every row opens from the keyboard** (Q8): on the queue, Admin > Leads and
-  the DNC list a row opened only on a mouse click. The lead's name is now a
-  link to the same place - Tab to it, Enter - looking as the name always did
-  (`a.cell-name`); the row's click stays for the mouse. Not on a locked row.
-- **A dialog takes focus and gives it back** (Q8, `useDialogFocus`,
-  `components/useDismiss.ts`): on opening, to a control that asked for it,
-  else its first field, else its first control; Tab goes round inside it; on
-  closing, back to what opened it. `Modal` and `Drawer` both;
-  `components/Modal.test.tsx`.
-- **The Wrap up note is named** by its heading, "Note" (Q8).
-- **The DNC list's view is in the address** (Q8, `lib/dnc-view.ts`), as
-  Admin > Leads': Back from a lead's timeline returns to the same tab, search
-  and page.
-- **Not seen in a browser:** each is proved by its tests and the build; the
-  name links and the dialog focus were not looked at on screen.
-
-## Seri's switch on Configuration - 2026-11-24
-
-Jeel: a button to switch Seri on and off, so she can be stopped from a
-browser. The Calls tab's right column now holds a **Seri** card above the call
-settings (`.config__side`): her state, a line on what follows - robot calls go
-to her, use the script, get the script for want of the key, or none go at all
-with automated calls off (`seriState`, pure) - and Switch on / Switch off
-behind a confirm step. Switch on cannot be pressed without the key. After a
-switch the page reads the config again. `ConfirmDialog` moved out of the
-Agents page into `components/` for it - one copy for both. The page's line now
-says it is read-only "apart from Seri's switch, on Calls".
-`pages/admin/ConfigSeri.test.tsx`: each state's words, the confirm then the
-switch, Cancel, and no Switch on without the key. Not yet seen in a browser.
-
-## Not built
-
-- ~~**Calling.**~~ Built 2026-10-01, Phase 4 - `TWILIO.md`. Outgoing, and
-  incoming to the lead's agent - or, with automated calls on, to everyone
-  free when nobody owns the lead (T19). Recordings and transcripts were added
-  on 2026-10-02 (`TWILIO.md`). The automated call's transfer and hold line
-  are built (T15a-T17, `AUTO-CALLS.md`). Still no voicemail box for callers,
-  and no card for a caller we hold no lead for.
-- **Live push.** Polling stands in for it, deliberately - see above.
-- **Export CSV** on the DNC list. In the brief, and it hands a file of phone
-  numbers to a browser, so it needs Jeel to ask for it.
-- **Previous-lead history** on the timeline. Repeat-lead handling is a future
-  item (CLAUDE.md §10), so there is never an earlier lead to show.
-- ~~**Force-release.**~~ Built 2026-10-08: the Release button on the lead's
-  page, which a superadmin sees on anyone's lead. A list of every held lead
-  and how long it has been held is still not built - a superadmin finds them
-  in the queue, as "Working – name".
+- 2026-11-27 · Rewritten to the Area template, 937 lines to this: the queue, admin,
+  workspace, callbacks, timeline and calling sections handed to their docs
+  (`QUEUE.md`, `ADMIN.md`, `ADMIN-LEADS.md`, `AUTH.md`, `AGENT-WORKSPACE.md`,
+  `CALLBACKS.md`, `TIMELINE.md`, `TWILIO.md`, `INCOMING-CALLS.md`,
+  `AUTO-CALL-TRANSFER.md`, `RUNNING.md`); the type system, class names, date picker and icons
+  to `FRONTEND-STYLE.md`; the polling hook and the on-screen lock taken back from
+  `QUEUE.md`; the stack given `@twilio/voice-sdk`; test counts dropped; the
+  "Differences from the brief" table from `DESIGN-PROMPT.md`'s notes · one fact,
+  one place · D26-D30
+- 2026-11-24 · Seri's switch on Configuration's Calls tab, the one control there;
+  `ConfirmDialog` moved to `components/` for it · Jeel: stop her from a browser ·
+  `ADMIN.md`
+- 2026-11-23 · Code-quality review on `fix/review-quality-frontend`: the lead's
+  call refreshes once, and `useLeadCall` got its tests (Q7); `Timeline`'s
+  `autoScroll` with its ref (a `<div>` inside an `<ol>`), `lockHolder` and
+  `answersText` removed as called only by their tests - the lock's tests kept as
+  tests of `rowAction` (Q7); one `dayOrDate` behind `formatReceived` and
+  `formatLastLogin` (Q7); every row opens from the keyboard, dialogs take focus
+  and give it back, the Wrap up note named by its heading, the DNC list's view in
+  the address (Q8). Proved by the tests and the build; the name links and the
+  dialog focus were not looked at on screen. The Lead Timeline header's states
+  written down (R15) · `REVIEW-2026-11-22.md`
+- 2026-11-22 · The website's medium review findings: two call bars stack (M26);
+  Release waits for a call taken on the page (M27); calling's settings asked
+  again every 15 seconds until they answer (M28); a ring ends however it ends
+  (M29); Admin > Leads flashes only new rows (M30); a failed load says so (M31);
+  "you tried" by id (M32); a failed Reactivate says so (M33). The lead's page made
+  afresh for each lead: going from one lead to another kept the first's
+  after-call note box and saved its note to the second (H6) ·
+  `REVIEW-2026-11-22.md`
+- 2026-10-11 · The dev proxy names `127.0.0.1`, not `localhost` · another
+  project's server on `[::1]:3000` took every `/api` call (`RUNNING.md`)
+- 2026-10-08 · Back to queue only goes back; letting a lead go is the Release
+  button, for the holder and a superadmin. Until then Back to queue released the
+  holder's own claim on the way out · Jeel · `AGENT-WORKSPACE.md`
+- 2026-10-06 · A screen asks again five seconds after the last answer, not on a
+  fixed timer · requests piled up on a slow server
+- 2026-10-05 · The queue's three fixed answer columns became one Answers column,
+  and the list of answer names in `lib/format.ts` went: every word comes from the
+  server · flows differ in length · `QUEUE.md`, `FLOWS.md`
+- 2026-10-01 · Calling built (Phase 4): the Call button and the call bar, the
+  incoming-call card, Missed call. The brief's "Browser calling is off · Enable"
+  link had been left out of the workspace - a link that went nowhere - with a
+  note that calling was off until Phase 4; both went · `TWILIO.md`
+- 2026-09-28 · Opening a lead stopped assigning it: the button read "Open", then
+  **Pick**, then **Pick up** the same day, and gained Resume and View - Pick on a
+  lead someone held always returned 409 for a superadmin. For an hour that day a
+  row click opened the Lead Timeline instead; two pages for one lead read as two
+  different things, so both land on the workspace. Resume's re-claim checked
+  against the database: `assigned_at` does not move. The lock matched the holder
+  by name until the same day, when the tag gained `agentId` - two agents with the
+  same name each saw the other's lead as their own Resume row and got a 409;
+  found in review · Jeel
+- 2026-09-28 · Every page with the navy switcher keeps its table through a switch
+  (`keepPreviousData`), checked with every API answer slowed by 400ms: the table
+  never blanked, stayed faded for the wait and was never clickable while faded;
+  My Callbacks joined the same day · Jeel: "really smooth, can we add same on
+  other tab"
+- 2026-09-28 · The queue, Admin > Leads, My Callbacks, Overview, Agents and the
+  workspace rebuilt to Jeel's mockups, each in its area's doc; ESLint added; the
+  admin side menu's greyed "Soon" links - Overview, Scoring, Messages, DNC list,
+  Settings - removed: two duplicated live links, the rest had been folded into
+  Configuration on 2026-09-23 · `FRONTEND-STYLE.md`
+- 2026-09-26 · Built: Phase 3 tasks 14-25, every screen in the brief except
+  calling - `usePolling.ts` (task 14), onto which `admin/LeadsPage.tsx` moved from
+  its own copy of the interval, and the lock on screen (task 16). Run against the real endpoints, two mirrored types were wrong and
+  would have rendered blanks: `Note` carries `author`, not
+  `agentId`/`agentName`; the callback list row's lead has no `id` and no
+  `score`, and does have `source` · Phase 3

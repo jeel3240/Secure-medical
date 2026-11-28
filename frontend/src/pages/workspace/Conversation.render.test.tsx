@@ -12,7 +12,7 @@ import { Conversation } from './Conversation';
 Element.prototype.scrollIntoView = () => {};
 
 const entry = (kind: TimelineEntry['kind'], body: string, deliveryStatus?: string): TimelineEntry =>
-  ({ kind, at: '2026-09-28T10:00:00Z', author: 'karm', detail: { body, deliveryStatus } }) as TimelineEntry;
+  ({ kind, at: '2026-09-28T10:00:00Z', author: 'nora', detail: { body, deliveryStatus } }) as TimelineEntry;
 
 const renderThread = (entries: TimelineEntry[]) =>
   render(<Conversation entries={entries} leadFirstName="Ruby" />);

@@ -1,7 +1,7 @@
 import { readTwilioSettings } from './twilio-settings';
 
 // REDIS_URL left this list on 2026-09-28: nothing reads it. Redis still runs in
-// the compose files - CLAUDE.md §2 plans it for a job queue - but the code has
+// the compose files - ARCHITECTURE.md: it was planned for a job queue - but the code has
 // never used it, and a required setting nothing reads only stops the app
 // starting.
 const required = ['DATABASE_URL', 'JWT_SECRET', 'EZT_USERNAME', 'EZT_PASSWORD', 'EZT_GROUP'];

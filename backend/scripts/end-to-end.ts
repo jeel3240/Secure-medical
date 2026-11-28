@@ -8,15 +8,15 @@
  * transfer, the link, a stop, and OpenAI failing mid-call, the script taking
  * over - and the api restarting mid-call, the call picked back up where it was.
  *
- * Phase 3 task 28. This is the script CLAUDE.md §10 asks for, and the closest
+ * Phase 3 task 28. This is the script the original plan asks for (ORIGINAL-PLAN.md), and the closest
  * thing to a rehearsal of a real day before UAT.
  *
  * **What it does not prove.** EZ Texting and Twilio are stubbed at their HTTP
  * boundaries, so every check below holds right up to the moment a text or a
  * call would leave the building - and no further. Nothing here shows that a
  * real phone buzzes or rings, or that a person hears the call. Those legs need
- * the test account and a real phone, which `docs/README.md` and AUTO-CALLS.md
- * (T26) describe. Until then this script proves the machine, not the delivery.
+ * the test account and a real phone, which `docs/RUNNING.md` and
+ * `docs/auto-call-tickets/` (T26) describe. Until then this script proves the machine, not the delivery.
  *
  * Stubbed at `axios.post`, deliberately, not at `sendMessage`: replacing
  * `sendMessage` would take the `dnc_list` check out with it, and the script
@@ -333,7 +333,7 @@ async function reply(phone: string, text: string, receivedAt = new Date()) {
     .send({
       type: 'inbound_text.received',
       fromNumber: phone.replace('+', ''),
-      toNumber: '15207799209',
+      toNumber: '15205550109',
       message: text,
       received: receivedAt.toISOString(),
       optIn: false,

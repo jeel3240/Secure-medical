@@ -51,7 +51,7 @@ The live check, the upgrade check, the poller unit test.
 
 ## Docs to update in the same commit
 
-`docs/SCHEMA.md` (the table, its trigger and indexes), `CLAUDE.md` §5,
+`docs/SCHEMA.md` (the table, its trigger and indexes), 
 `docs/WORKFLOW.md`, `docs/AUDIT.md` (arrivals are an add-only record),
 `docs/POLLER.md` (the arrival is written), `docs/BUCKETS.md`.
 

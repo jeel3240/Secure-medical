@@ -2,7 +2,7 @@ import { useEffect } from 'react';
 
 /**
  * Whether anything on this browser's screen keeps its agent from taking a
- * call - T9, AUTO-CALLS.md "Who is free".
+ * call - T9, AUTO-CALL-TRANSFER.md "Who is free".
  *
  * A call being placed or live, a lead ringing, or a finished call's note box
  * still open each mark the browser busy under their own name, and clear it

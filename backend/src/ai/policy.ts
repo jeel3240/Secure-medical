@@ -1,5 +1,5 @@
 /**
- * What Seri does next - Phase 7, A27, docs/AI-AGENT.md section 12, "Decide".
+ * What Seri does next - Phase 7, A27, docs/AI-BRAIN.md, "3. Decide".
  * Pure: no OpenAI, no database, no clock of its own.
  *
  * Until A24 one OpenAI request worked out, from the transcript alone, where

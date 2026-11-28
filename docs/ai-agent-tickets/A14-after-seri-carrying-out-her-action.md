@@ -4,7 +4,7 @@
 
 **Why:** All the hard call logic already exists; this connects Seri to it.
 
-**Depends on:** A06, A13  ·  **Size:** Medium (about a day)  ·  **Status:** Done 2026-11-12
+**Depends on:** A06, A13 · **Size:** M · **Status:** Done 2026-11-12 - `/auto/ai-after` carries out her action, or the script when she failed
 
 ## Build
 

@@ -26,8 +26,7 @@ As above.
 
 ## Docs to update in the same commit
 
-`docs/AUTO-CALLS.md` ("The script"), `docs/SCHEMA.md`, `CLAUDE.md` §5,
-`docs/WORKFLOW.md`, `docs/BUCKETS.md`.
+`docs/AUTO-CALL-SCRIPT.md` ("The script"), `docs/SCHEMA.md`, `docs/WORKFLOW.md`, `docs/BUCKETS.md`.
 
 ## Not in this ticket
 

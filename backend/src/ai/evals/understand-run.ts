@@ -1,6 +1,6 @@
 /**
  * Runs the understand step's labelled set against OpenAI - A28,
- * docs/AI-AGENT.md section 8. By hand, never in CI: it calls OpenAI.
+ * docs/AI-BRAIN.md, "Tests". By hand, never in CI: it calls OpenAI.
  *
  *   OPENAI_API_KEY=... npm run ai:eval:understand
  *   npm run ai:eval:understand -- --model gpt-5.6-luna:none --runs 3 --case call1

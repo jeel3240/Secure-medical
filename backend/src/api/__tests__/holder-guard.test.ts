@@ -70,12 +70,12 @@ describe.each(WRITES)('$name', ({ path, body, write }) => {
 
   it('is refused on a lead someone else holds, naming them, and writes nothing', async () => {
     const { agent } = await signedIn();
-    holding.mockResolvedValue({ status: 'other', holder: 'karm' });
+    holding.mockResolvedValue({ status: 'other', holder: 'nora' });
 
     const res = await agent.post(path).send(body);
 
     expect(res.status).toBe(409);
-    expect(res.body).toEqual({ error: 'already_claimed', message: 'karm is working this lead.' });
+    expect(res.body).toEqual({ error: 'already_claimed', message: 'nora is working this lead.' });
     expect(write).not.toHaveBeenCalled();
   });
 
@@ -121,7 +121,7 @@ describe('the order of the checks', () => {
 describe('reading a lead', () => {
   it('needs no claim - the workspace shows a lead before it is picked', async () => {
     const { agent } = await signedIn();
-    holding.mockResolvedValue({ status: 'other', holder: 'karm' });
+    holding.mockResolvedValue({ status: 'other', holder: 'nora' });
     getLeadDetail.mockResolvedValue({ id: 7 });
 
     const res = await agent.get('/api/leads/7');

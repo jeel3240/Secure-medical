@@ -4,7 +4,7 @@
 
 **Why:** today's one prompt holds every rule, objection and example, and she copies examples word for word (the opening repeated on call 112) and repeats herself. With the decision already made, she gets only what this reply needs.
 
-**Depends on:** A27  ·  **Size:** M  ·  **Status:** Done 2026-11-17
+**Depends on:** A27 · **Size:** M · **Status:** Done 2026-11-17 - 97.6% over 21 kinds of reply
 
 ## Build
 

@@ -37,7 +37,7 @@ The live check; the frontend unit test.
 
 ## Docs to update in the same commit
 
-`docs/AGENT-WORKSPACE.md` (the timeline's events), `docs/FRONTEND.md`,
+`docs/TIMELINE.md` ("System events", and its "Not done" line this ticket fixes), `docs/FRONTEND.md`,
 `docs/BUCKETS.md`.
 
 ## Not in this ticket

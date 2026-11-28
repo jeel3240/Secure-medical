@@ -45,7 +45,7 @@ The harness check itself; the two `migrate.js` runs.
 
 ## Docs to update in the same commit
 
-- `docs/README.md`, "How to test": the upgrade check, how to write one.
+- `docs/TESTING.md`: the upgrade check, how to write one.
 - `docs/WORKFLOW.md`, "Migrations": a migration that changes existing rows ships an
   upgrade check.
 - The tracker's rules already name it.

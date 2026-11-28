@@ -1,5 +1,5 @@
 /**
- * The "Taking calls" switch - T10, docs/AUTO-CALLS.md "Who is free".
+ * The "Taking calls" switch - T10, docs/AUTO-CALL-TRANSFER.md "Who is free".
  *
  * Only people who switched it on are rung for a transfer from an automated
  * call, or counted as free. A person switches it by hand (`api/calls.ts`), and

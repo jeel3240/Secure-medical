@@ -310,7 +310,7 @@ export type TransferPlan =
   | Extract<AskOrEnd, { kind: 'end' }>;
 
 /**
- * What a "yes" to a transfer becomes - AUTO-CALLS.md "The transfer".
+ * What a "yes" to a transfer becomes - AUTO-CALL-TRANSFER.md "The transfer".
  *
  * - **The lead's own agent is free** - `holder`, the agent holding the lead,
  *   among `free`: the line, then they ring alone first, as the lead's own
@@ -342,7 +342,7 @@ export function planTransfer(
 
 /**
  * A "yes" nobody can take now - nobody free, or nobody took the ring - T16,
- * AUTO-CALLS.md "The hold line": `say`, then on hold while someone who takes
+ * AUTO-CALL-TRANSFER.md "The hold line": `say`, then on hold while someone who takes
  * transfers is on a call, or writing the note of one that just ended
  * (`onCall`, `someoneOnOrJustOffCall` - T17), and so will be free soon;
  * otherwise the busy line - nobody is coming.
@@ -377,7 +377,7 @@ export interface WaitingLead {
 }
 
 /**
- * Who a waiting lead rings now - T17, AUTO-CALLS.md "The hold line": the lead
+ * Who a waiting lead rings now - T17, AUTO-CALL-TRANSFER.md "The hold line": the lead
  * who has waited longest (`waiting` in that order), not already ringing
  * someone, rings the first free person (`free` in order) never offered that
  * lead - or only `only`, the person who has just come free. Null when there is
@@ -418,7 +418,7 @@ export function planAfterHolder(
 }
 
 /**
- * Who let a transfer's ring run out - T15c, AUTO-CALLS.md "Who is free":
+ * Who let a transfer's ring run out - T15c, AUTO-CALL-TRANSFER.md "Who is free":
  * their "Taking calls" switch goes off. Decided once the ringing is over, from
  * how the whole ring ended (`dialStatus`, Twilio's `DialCallStatus`):
  *
@@ -448,7 +448,7 @@ export function rangOut(opts: {
 
 /**
  * Twilio's verdict on who answered, as an automated call reads it - T18,
- * AUTO-CALLS.md "Voicemail". `beep`: a machine whose greeting has ended and
+ * AUTO-CALL-SCRIPT.md "Voicemail". `beep`: a machine whose greeting has ended and
  * whose beep was heard (`machine_end_beep`). `machine`: a machine, but no beep
  * heard (`machine_end_silence`, `machine_end_other` - Twilio giving up after
  * its 30 seconds - or `machine_start`). `fax`. `person`: a person, or Twilio

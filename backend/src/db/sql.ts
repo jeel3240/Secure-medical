@@ -21,7 +21,7 @@ export function likeLiteral(text: string): string {
 
 /**
  * The search box on the queue and Admin > Leads: what was typed, in the lead's
- * name, or its digits in the phone - so "(602) 620-3572" finds +16026203572.
+ * name, or its digits in the phone - so "(602) 555-0147" finds +16025550147.
  * Pushes its two values onto `values` and gives the clause, for `l` (leads).
  * One copy since review Q5, 2026-11-23 - the two screens had it word for word.
  */

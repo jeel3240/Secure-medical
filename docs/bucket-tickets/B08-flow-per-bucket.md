@@ -46,7 +46,7 @@ The live check, the poller unit test, the e2e.
 ## Docs to update in the same commit
 
 `docs/FLOWS.md` ("Several flows at once"), `docs/SCHEMA.md` (the dropped index),
-`CLAUDE.md` §5, `docs/WORKFLOW.md`, `docs/POLLER.md` (which flow a new lead gets).
+`docs/WORKFLOW.md`, `docs/POLLER.md` (which flow a new lead gets).
 
 ## Not in this ticket
 

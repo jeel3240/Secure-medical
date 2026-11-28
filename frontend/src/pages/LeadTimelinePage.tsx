@@ -36,7 +36,7 @@ import { questionsLabel } from './workspace/LeadHeader';
  * **Two rows of the brief's sidebar are missing and cannot be filled:** Consent
  * ref and the duplicate check. No data reaches us for either - the partner
  * sends no consent reference, and repeat-lead handling is not built
- * (CLAUDE.md §10). They are shown with what is actually known rather than left
+ * (BUCKETS.md plans it). They are shown with what is actually known rather than left
  * off, so nobody wonders whether the page forgot them.
  */
 

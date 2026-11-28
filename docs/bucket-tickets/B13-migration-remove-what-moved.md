@@ -45,8 +45,7 @@ The upgrade check and the full suite.
 
 ## Docs to update in the same commit
 
-`docs/SCHEMA.md` (the `leads` and `flows` rows; the index), `CLAUDE.md` §5 (and its
-note on `previous_lead_id`), `docs/WORKFLOW.md` ("Where the files stand": the
+`docs/SCHEMA.md` (the `leads` and `flows` rows; the index), `docs/WORKFLOW.md` ("Where the files stand": the
 deploy-after rule), `docs/EZTEXTING-API.md` (the field mapping), `docs/BUCKETS.md`.
 
 ## Not in this ticket

@@ -114,7 +114,7 @@ export function WorkspacePage() {
   const mine = Boolean(lead?.claimedBy && me && lead.claimedBy.id === me.id);
 
   /**
-   * Working the lead is what clears the unread flag - CLAUDE.md §10. Only once
+   * Working the lead is what clears the unread flag - AGENT-WORKSPACE.md, "Marking a lead read". Only once
    * it is yours: looking at a lead is not handling it, and marking the reply
    * read is what lets an expired lead leave the queue, so a glance must not do
    * it. Fired only while the flag is set, so a poll every five seconds does not

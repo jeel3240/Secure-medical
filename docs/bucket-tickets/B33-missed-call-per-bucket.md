@@ -46,8 +46,7 @@ As above.
 
 ## Docs to update in the same commit
 
-`docs/TWILIO.md` ("A missed call"), `docs/SCHEMA.md`, `CLAUDE.md` §5 and §6 (where the
-missed-call text lives), `docs/WORKFLOW.md`, `docs/ADMIN.md`, `docs/BUCKETS.md`.
+`docs/INCOMING-CALLS.md` ("A missed call"), `docs/SCHEMA.md`, `docs/WORKFLOW.md`, `docs/ADMIN.md`, `docs/BUCKETS.md`.
 
 ## Not in this ticket
 

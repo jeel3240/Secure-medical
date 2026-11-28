@@ -4,7 +4,7 @@
 
 **Why:** A machine must get the voicemail message, not a conversation.
 
-**Depends on:** A14  ·  **Size:** Small (a few hours)  ·  **Status:** Done 2026-11-12
+**Depends on:** A14 · **Size:** S · **Status:** Done 2026-11-12 - the beep decides; her goodbye, the link or a call back waits for the verdict
 
 ## Build
 

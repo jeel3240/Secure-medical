@@ -50,7 +50,7 @@ const CHECK_LABEL: Record<string, string> = {
   calling: 'Calling',
 };
 
-/** "karm closed Omar Haddad". */
+/** "nora closed Omar Haddad". */
 function activityText(entry: Overview['activity'][number]): string {
   switch (entry.kind) {
     case 'disposition': {

@@ -46,7 +46,7 @@ export interface TwilioSettings {
    * number the call came in on - so a laptop whose user 21 is named like
    * production's would ring for production's calls, and production's agent for
    * the laptop's test calls. A different number does not separate them; a
-   * different name does. TWILIO.md, "What it needs on the Twilio account".
+   * different name does. TWILIO-SETUP.md, "What it needs on the Twilio account".
    */
   identityPrefix: string;
 }

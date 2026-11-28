@@ -1,6 +1,6 @@
 /**
  * The switch as the server holds it, taken from the browser's report - T15c,
- * AUTO-CALLS.md "Who is free".
+ * AUTO-CALL-TRANSFER.md "Who is free".
  */
 import { beforeEach, describe, expect, it } from 'vitest';
 import type { PublicUser } from '../api/types';

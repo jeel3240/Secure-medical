@@ -4,7 +4,7 @@ export type Role = (typeof ROLES)[number];
 /**
  * Why the "Taking calls" switch is as it is now - T10, and `missed_transfer`
  * since T15c: the server turned it off after the person let a transfer ring
- * out (AUTO-CALLS.md, "Who is free").
+ * out (AUTO-CALL-TRANSFER.md, "Who is free").
  */
 export const TAKING_CALLS_WHY = ['by_hand', 'sign_in', 'sign_out', 'missed_transfer'] as const;
 export type TakingCallsWhy = (typeof TAKING_CALLS_WHY)[number];
@@ -20,7 +20,7 @@ export interface UserRow {
   sessionVersion: number;
   lastLoginAt: Date | null;
   createdAt: Date;
-  /** The "Taking calls" switch - T10, AUTO-CALLS.md "Who is free". */
+  /** The "Taking calls" switch - T10, AUTO-CALL-TRANSFER.md "Who is free". */
   takingCalls: boolean;
   /** Why it is as it is now; null for a switch never set. */
   takingCallsWhy: TakingCallsWhy | null;

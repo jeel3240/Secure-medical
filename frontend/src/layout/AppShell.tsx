@@ -42,7 +42,7 @@ export function AppShell() {
         <Outlet />
       </main>
 
-      {/* A lead calling in can arrive on any screen - TWILIO.md, "Incoming calls". */}
+      {/* A lead calling in can arrive on any screen - INCOMING-CALLS.md. */}
       <IncomingCall />
     </div>
   );

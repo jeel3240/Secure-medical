@@ -96,7 +96,7 @@ describe('a working tag with no holder id', () => {
 });
 
 describe('what the row action offers', () => {
-  const agent = { id: 2, name: 'karm', role: 'agent' } as PublicUser;
+  const agent = { id: 2, name: 'nora', role: 'agent' } as PublicUser;
   const boss = { id: 1, name: 'Jeel Kakadiya', role: 'superadmin' } as PublicUser;
 
   it('offers Pick on a lead nobody holds', () => {
@@ -105,7 +105,7 @@ describe('what the row action offers', () => {
 
   it('offers Resume on your own lead, not Pick', () => {
     // You cannot "pick" something you already hold.
-    expect(rowAction(lead({ kind: 'working', agentId: 2, agentName: 'karm' }), agent)).toBe('resume');
+    expect(rowAction(lead({ kind: 'working', agentId: 2, agentName: 'nora' }), agent)).toBe('resume');
   });
 
   it('offers Resume to a superadmin on their own lead', () => {
@@ -116,7 +116,7 @@ describe('what the row action offers', () => {
 
   it('offers a superadmin View, never Pick, on someone else`s lead', () => {
     // The server refuses that claim with 409, so Pick would always fail.
-    expect(rowAction(lead({ kind: 'working', agentId: 2, agentName: 'karm' }), boss)).toBe('view');
+    expect(rowAction(lead({ kind: 'working', agentId: 2, agentName: 'nora' }), boss)).toBe('view');
   });
 
   it('offers an agent nothing on someone else`s lead', () => {
@@ -128,7 +128,7 @@ describe('what the row action offers', () => {
   });
 
   it('locks a signed-out view of a held lead', () => {
-    expect(rowAction(lead({ kind: 'working', agentId: 2, agentName: 'karm' }), null)).toBe('locked');
+    expect(rowAction(lead({ kind: 'working', agentId: 2, agentName: 'nora' }), null)).toBe('locked');
   });
 });
 

@@ -50,8 +50,7 @@ As above.
 ## Docs to update in the same commit
 
 `docs/AI-AGENT.md` (section 7, the switch), `docs/ADMIN.md`, `docs/AUDIT.md`,
-`docs/WORKFLOW.md` (the command now takes a bucket), `docs/SCHEMA.md`, `CLAUDE.md` (§5,
-§10's notes on `npm run ai-agent -- on`), `docs/BUCKETS.md`.
+`docs/DEPLOY.md` ("Seri, the AI agent": the command now takes a bucket), `docs/SCHEMA.md`, `docs/WORKFLOW.md` ("Where the files stand"), `docs/BUCKETS.md`.
 
 ## Not in this ticket
 

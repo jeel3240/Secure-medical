@@ -1,7 +1,7 @@
 /**
  * The arguments of `npm run openers:send-waiting` - pure, so they are tested
  * without a database. The command itself is `worker/send-waiting-openers.ts`;
- * `POLLER.md`, "Resending after an outage", is how and when to run it.
+ * `DEPLOY.md`, "Resending after an outage", is how and when to run it; `POLLER.md` says what it does.
  *
  *   --from 2026-10-14            leads that arrived from then  (required)
  *   --to 2026-10-16T08:00        ... and before then           (default: now)

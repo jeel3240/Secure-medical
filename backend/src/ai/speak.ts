@@ -1,6 +1,6 @@
 /**
  * Speak: her words for the moves the policy chose - Phase 7, A29,
- * docs/AI-AGENT.md section 12. Pure: the prompt for each reply; OpenAI streams
+ * docs/AI-BRAIN.md. Pure: the prompt for each reply; OpenAI streams
  * it (`openai.ts`), the brain (`brain.ts`) sends it.
  *
  * What she does is already decided (`policy.ts`); she is told it, with only

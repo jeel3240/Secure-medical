@@ -4,7 +4,7 @@
 
 **Why:** A booked call back nobody sees is a lost lead.
 
-**Depends on:** A15  ·  **Size:** Medium (about a day)  ·  **Status:** Done 2026-11-12
+**Depends on:** A15 · **Size:** M · **Status:** Done 2026-11-12 - due, first in the queue; taken by the first agent to pick the lead up
 
 ## Build
 

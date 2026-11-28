@@ -4,7 +4,7 @@
 
 **Why:** Every later ticket needs the key and the switch. Nothing calls OpenAI yet.
 
-**Depends on:** nothing  ·  **Size:** Small (a few hours)  ·  **Status:** Done 2026-11-11
+**Depends on:** - · **Size:** S · **Status:** Done 2026-11-11 - `npm run ai-agent -- on` or `-- off`, each change recorded as `ai_agent.switched`
 
 ## Build
 

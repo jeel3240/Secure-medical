@@ -42,9 +42,9 @@ The live checks, the route test, the e2e.
 
 ## Docs to update in the same commit
 
-`docs/QUEUE.md` (when a closed lead comes back), `docs/ADMIN-LEADS.md` (Working and
-Closed), `docs/AGENT-WORKSPACE.md` (the reason is required), `docs/LEAD-FLOW.md`,
-`docs/BUCKETS.md`.
+`docs/ADMIN-LEADS.md` ("Closed": what reopens a closed lead; Working and
+Closed), `docs/QUEUE.md` ("Who is in it" links it), `docs/AGENT-WORKSPACE.md`
+(the reason is required), `docs/LEAD-FLOW.md`, `docs/BUCKETS.md`.
 
 ## Not in this ticket
 

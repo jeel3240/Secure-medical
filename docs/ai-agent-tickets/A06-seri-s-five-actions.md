@@ -4,7 +4,7 @@
 
 **Why:** One place decides what each action means, so the relay and `/auto/ai-after` agree.
 
-**Depends on:** A07  ·  **Size:** Small (a few hours)  ·  **Status:** Done 2026-11-11 - `ACTION_TOOLS` and `writtenAction` removed 2026-11-19 with today's brain; `toHandoff` checks the new brain's action, `fromHandoff` and the last lines are unchanged (`AI-AGENT.md` section 12, "Today's brain removed")
+**Depends on:** A07 · **Size:** S · **Status:** Done 2026-11-11 - `ACTION_TOOLS` and `writtenAction` removed 2026-11-19 with the one-request brain; `toHandoff` checks the new brain's action, `fromHandoff` and the last lines are unchanged (`AI-BRAIN.md`, History)
 
 ## Build
 

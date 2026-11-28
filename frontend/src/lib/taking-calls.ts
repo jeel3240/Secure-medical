@@ -3,7 +3,7 @@ import { useAuth } from '../auth/store';
 
 /**
  * The "Taking calls" switch as the server holds it - T10, and T15c,
- * AUTO-CALLS.md "Who is free".
+ * AUTO-CALL-TRANSFER.md "Who is free".
  *
  * The server turns it off by itself when the person lets a transfer ring out,
  * and the screen learns it from the answer to the browser's 30-second report

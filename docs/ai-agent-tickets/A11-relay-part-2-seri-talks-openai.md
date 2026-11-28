@@ -4,7 +4,7 @@
 
 **Why:** This is Seri.
 
-**Depends on:** A04, A05, A06, A10  ·  **Size:** Large (two days or more)  ·  **Status:** Done 2026-11-12
+**Depends on:** A04, A05, A06, A10 · **Size:** L · **Status:** Done 2026-11-12 - she talks: OpenAI streamed a sentence at a time, each checked; the stop check first
 
 ## Build
 

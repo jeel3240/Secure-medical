@@ -39,7 +39,7 @@ The whole live-check suite, the e2e and the speed check are the test of a test h
 
 ## Docs to update in the same commit
 
-`docs/README.md` ("How to test": seed with `seedLead`).
+`docs/TESTING.md` (seed with `seedLead`).
 
 ## Not in this ticket
 

@@ -11,7 +11,7 @@ export type TakingCallsState = Pick<PublicUser, 'takingCalls' | 'takingCallsWhy'
  * leads will see; the token is the browser's short-lived permission to place
  * calls as the signed-in agent. Which lead a call may reach is decided by the
  * server when the call starts, not here. And, for automated calls
- * (AUTO-CALLS.md, "Who is free"): whether this browser can take a call now
+ * (AUTO-CALL-TRANSFER.md, "Who is free"): whether this browser can take a call now
  * (T9), and the "Taking calls" switch (T10).
  */
 

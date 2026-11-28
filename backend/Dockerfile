@@ -1,4 +1,4 @@
-# Two stages from one file (review H13, 2026-11-22). docs/WORKFLOW.md, "The images".
+# Two stages from one file (review H13, 2026-11-22). docs/DEPLOY.md, "The images".
 #
 # `dev` - every dependency, the source and the scripts: what local compose runs
 # (`target: dev`, ts-node with src/ mounted) and what `npm run build` compiles in.

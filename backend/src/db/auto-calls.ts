@@ -391,7 +391,7 @@ export async function settleAutomatedCall(callId: number): Promise<void> {
 
 /**
  * Acts on Twilio's verdict on who answered the automated call `callId` - T18,
- * AUTO-CALLS.md "Voicemail". On a call Seri took (A18), anything the lead said
+ * AUTO-CALL-SCRIPT.md "Voicemail". On a call Seri took (A18), anything the lead said
  * to her counts as an answer, and a key pressed as a key: the same rule - the
  * beep decides. The call is locked while it decides
  * (`onVerdict`), so an answer kept at the same moment (`keepAnswer`) is either

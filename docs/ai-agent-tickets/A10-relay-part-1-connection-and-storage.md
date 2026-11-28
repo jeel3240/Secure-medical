@@ -4,7 +4,7 @@
 
 **Why:** The pipe first, without OpenAI, so it can be tested on its own.
 
-**Depends on:** A01, A08  ·  **Size:** Medium (about a day)  ·  **Status:** Done 2026-11-12
+**Depends on:** A01, A08 · **Size:** M · **Status:** Done 2026-11-12 - the relay at `/api/ai/relay`, refused unless Twilio signed it, every turn kept
 
 ## Build
 

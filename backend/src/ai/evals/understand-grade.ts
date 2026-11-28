@@ -1,6 +1,6 @@
 /**
  * The understand step's labelled set, and how an answer is marked - A28,
- * docs/AI-AGENT.md section 8. Pure: `understand-run.ts` asks OpenAI, this decides.
+ * docs/AI-BRAIN.md, "Tests". Pure: `understand-run.ts` asks OpenAI, this decides.
  *
  * A case passes when every `want` group is found - "a|b": either - nothing
  * else is there but what `allow` lets pass, and a call-back time has the parts

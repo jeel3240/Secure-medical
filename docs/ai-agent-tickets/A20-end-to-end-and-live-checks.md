@@ -4,7 +4,7 @@
 
 **Why:** The whole path, run in one go, before any real phone.
 
-**Depends on:** A13, A14, A15, A16, A17, A18, A19  ·  **Size:** Medium (about a day)  ·  **Status:** Done 2026-11-12
+**Depends on:** A13, A14, A15, A16, A17, A18, A19 · **Size:** M · **Status:** Done 2026-11-12 - `npm run e2e` runs her calls ending each way
 
 ## Build
 

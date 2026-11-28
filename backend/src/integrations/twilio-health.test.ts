@@ -8,15 +8,15 @@ const SETTINGS: TwilioSettings = {
   apiSecret: 'S'.repeat(32),
   twimlAppSid: `AP${'3'.repeat(32)}`,
   callerId: '+14804708259',
-  publicUrl: 'https://dailyleadhub.com',
+  publicUrl: 'https://leads.example.com',
   identityPrefix: '',
 };
 
 const HERE: CallingSetup = {
   reached: true,
-  appVoiceUrl: 'https://dailyleadhub.com/api/webhooks/twilio/voice',
+  appVoiceUrl: 'https://leads.example.com/api/webhooks/twilio/voice',
   numberFound: true,
-  numberVoiceUrl: 'https://dailyleadhub.com/api/webhooks/twilio/incoming',
+  numberVoiceUrl: 'https://leads.example.com/api/webhooks/twilio/incoming',
   numberApplicationSid: null,
 };
 

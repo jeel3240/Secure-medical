@@ -1,45 +1,63 @@
-# EZ Texting API – verified findings
+# EZ Texting API
 
-Tested against the client account on 2026-09-10. Use these exact endpoints and field names.
+How EZ Texting's REST API behaves, as this app uses it: the endpoints, the contact
+filters, the field mapping, the inbound webhook, and every finding behind them with
+its evidence and date. Use these exact endpoints and field names; a filter that
+seems to work may be doing nothing ("Filters that are silently ignored"). The
+client is `backend/src/integrations/ezt-client.ts`; what the poller and the webhook
+do with the answers is `POLLER.md` and `WEBHOOKS.md`. EZ Texting's own reference,
+with a "Try It" button for each call: https://developers.eztexting.com/reference -
+and its quick start: https://developers.eztexting.com/docs/quick-start-guide.
 
-> **Update 2026-09-14 (Jeel):** this account is a test account, not the client's live account. It may be used for development, including sending. Findings below still hold; the "live" wording is kept as written on the day.
+## The account
 
-## Auth
-- HTTP Basic Auth: account username + password. No API key.
-- Env vars: `EZT_USERNAME`, `EZT_PASSWORD`
-- Base URL: `https://a.eztexting.com/v1`
-- Docs: https://developers.eztexting.com/reference (has a "Try It" button)
-- Quick start: https://developers.eztexting.com/docs/quick-start-guide
-- Legacy API (`app.eztexting.com`) is deprecated and returns dates without time. Do not use it.
+| Rule | Why |
+|---|---|
+| The credentials in a local `.env` are a **test account**, which may be used for development, sending included. Its `weightloss` group is the test group: add contacts to it by hand in the dashboard - they arrive with source `WebInterface` - and send to it. Test settings: `EZT_GROUP=weightloss`, `EZT_SOURCE=WebInterface`, `EZT_SEND_GROUP=weightloss` (`ENVIRONMENT.md`) | Jeel's decision, "Decisions" |
+| Production's credentials are held by Jeel and set only on the server; developers get the test account's | `WORKFLOW.md`, "Before you start" |
+| **Every contacts query is scoped to one group** - `listContacts` refuses without `groupName` | The account holds about 120,000 contacts |
+| Partner leads in production arrive with source `API` | How the partner adds them |
+| Two webhook subscriptions are permanent and are never removed: the client's Zapier one and production's | Others rely on them |
+| A tunnel's subscription is registered when local testing starts and deleted when it stops | "Inbound webhook" |
 
-## List contacts (the poller call)
+## Endpoints
+
+Base URL `https://a.eztexting.com/v1`. HTTP Basic Auth with the account's username
+and password - no API key - from `EZT_USERNAME` and `EZT_PASSWORD`. The legacy API
+(`app.eztexting.com`) is deprecated and returns dates without times; it is not used.
+
+| Call | What | Used by |
+|---|---|---|
+| `GET /v1/contacts` | A page of contacts, filtered and sorted | The poller - `listContacts` |
+| `POST /v1/messages` | Send a text: `{ "toNumbers": ["15551234567"], "message": "..." }` | Every send - `sendMessage` |
+| `GET`, `POST /v1/webhooks/subscriptions`; `DELETE /v1/webhooks/subscriptions/{id}` | List, register and remove inbound-webhook subscriptions. API-only: there is no settings page | By hand - `RUNNING.md`, "Registering the subscription" |
+| `GET /v1/contacts/{phoneNumber}` | One contact | Not by the app - the 2026-11-27 test |
+| `POST /v1/contacts` | Create a contact - or, for a number already there, update it; `groupIdsAdd` adds groups | Not by the app - the 2026-11-27 test |
+| `POST /v1/contact-groups/{id}/contacts?phoneNumbers=...` | Add contacts to a group | Not by the app - the 2026-11-27 test |
+
+## Listing contacts
+
+The poller's query:
 
 ```
 GET /v1/contacts?filters[groupName][like]=weightloss&filters[source][eq]=API&sort=createdAt,desc&size=50&page=0
 ```
 
-- `size` must be one of 10, 20, 50, 100, 200. Anything else returns 400.
-- `sort=createdAt,desc` genuinely sorts server-side. Verified 2026-09-11 against
-  the 1773-contact group: `desc` and `asc` return entirely different first pages
-  (newest 2026-07-20 vs oldest 2024-07-19), so this is not coincidental ordering.
-  Do not rely on `"sorted": true` in the response as evidence - it appears even
-  when the sort field is invalid.
-- **The default order is ascending (oldest first).** Omitting `sort`, or passing
-  an unrecognised field like `sort=bogusField,desc`, silently yields oldest-first
-  rather than erroring. A typo in the sort field would leave the poller reading
-  the oldest end of the group on every tick and never seeing new contacts, with
-  no error to show for it.
-- `filters[groupName][like]=weightloss` returns only the 3 contacts in the group
-  named exactly `weightloss`, even though `like` is a substring match elsewhere.
-  But `filters[groupName][like]=weightloss - sent` returns that group's 1,773, so
-  the matching is on the whole group name, not a prefix. Re-verify `groups[].name`
-  after fetch regardless.
-- `filters[source][eq]` values: Unknown, WebInterface, Upload, WebWidget, API, Keyword. Partner leads arrive as `API`.
+| Parameter | Behaviour |
+|---|---|
+| `size` | One of 10, 20, 50, 100, 200; anything else is a 400 |
+| `sort=createdAt,desc` | Sorts on the server, newest first. **The default is oldest first**: omitting `sort`, or an unknown field such as `sort=bogusField,desc`, silently gives oldest-first with no error - a typo would leave the poller reading the oldest end of the group on every tick, never seeing a new contact. `"sorted": true` in the response proves nothing: it appears even when the sort field is invalid |
+| `filters[groupName][like]` | Matches the **whole** group name: `weightloss` returns only the group named exactly `weightloss`, not `weightloss - sent`. Re-check `groups[].name` after fetching regardless (`isInGroup`) |
+| `filters[source][eq]` | One of `Unknown`, `WebInterface`, `Upload`, `WebWidget`, `API`, `Keyword` |
+| `page` | From 0. The response is Spring Data paging: `content[]`, `totalElements`, `totalPages`, `last`, `pageable` |
+
+There is **no date filter**, so the poller sorts newest first and stops reading at
+its checkpoint rather than asking for contacts since a time (`POLLER.md`).
 
 ### Filters that work
 
-Verified 2026-09-11 by running each against a value expected to exclude
-something and checking `totalElements` actually moved.
+Each was run against a value expected to exclude something, and `totalElements`
+moved.
 
 | Filter | Notes |
 |---|---|
@@ -49,48 +67,30 @@ something and checking `totalElements` actually moved.
 | `filters[lastName][like]` | |
 | `filters[email][like]` | |
 | `filters[note][like]` | |
-| `filters[firstName][eq]` | exact match |
-| `filters[source][eq]` | enum, see values above |
-| `filters[optOut][eq]` | `true` / `false` |
+| `filters[firstName][eq]` | Exact match |
+| `filters[source][eq]` | The values above |
+| `filters[optOut][eq]` | `true` or `false` |
 
-`like` is a case-insensitive substring match: `har`, `arol` and `HAROLD` all
-matched "harold". Hence the group-membership re-check in the poller.
+`like` is a case-insensitive substring match: `jam`, `ami` and `JAMIE` all matched
+"jamie" - hence the poller's group re-check.
 
 ### Filters that are silently ignored
 
-`filters[groupId]` and `filters[id]` in any form; the operators `ne`, `in`,
-and `like` on `source`; and every date/time filter (below). These return the
-full unfiltered set, exactly like a made-up field name.
+`filters[groupId]` and `filters[id]` in any form; the operators `ne`, `in`, and
+`like` on `source`; and every date or time filter. These return the full,
+unfiltered set, exactly as a made-up field name does: **an unrecognised filter is
+ignored, never rejected**, so a new filter is verified against a record it should
+exclude. Validation is uneven: `filters[source][like]=ZZZ` is a 400 (`No enum
+constant ...Contact.ContactSource.ZZZ`), because `source` is a validated enum, while
+`filters[bogusField][gt]=xyz` is a 200 with every row.
 
-Validation is inconsistent: `filters[source][like]=ZZZ` returns 400 (`No enum
-constant ...Contact.ContactSource.ZZZ`) because `source` is a validated enum,
-but `filters[bogusField][gt]=xyz` returns 200 and every row. An absent error
-is not evidence a filter is working.
+### One contact
 
-- **No date filter exists.** Tested 2026-09-11 against a group of 3 contacts,
-  one of them three months older than the cutoff. Seventeen variants all
-  returned the full set: field names `createdAt`, `created`, `dateCreated`,
-  `created_at`; operators `gt`, `gte`, `ge`, `$gt`, `after`, `greaterThan`,
-  `min`, `from`, `start`, `between`, `eq`; values as ISO, date-only, no-Z and
-  epoch millis; and top-level `since`, `startDate`, `fromDate`, `createdAfter`,
-  `createdAtFrom`, `updatedAfter`.
-- Controls for that test: `filters[firstName][like]=harold` returned 1 and
-  `filters[optOut][eq]=true` returned 1, so filtering does reach the server,
-  while a deliberately invalid `filters[bogusField][gt]=xyz` returned all 3 -
-  identical to every date attempt.
-- **Unrecognised filters are silently ignored, never rejected.** A filter that
-  appears to work may be doing nothing. Always verify a new filter against a
-  record you expect it to exclude.
-- Consequence: the poller sorts `createdAt,desc` and stops reading at the
-  checkpoint rather than asking the server for contacts since a given time.
-- Response is Spring-Data style paging: `content[]`, `totalElements`, `totalPages`, `last`, `pageable`.
-
-### Response shape (one contact)
 ```json
 {
-  "phoneNumber": "15127698059",
-  "firstName": "harold",
-  "lastName": "holland",
+  "phoneNumber": "15125550163",
+  "firstName": "jamie",
+  "lastName": "rivera",
   "email": "x@example.com",
   "note": "weightloss",
   "source": "API",
@@ -104,116 +104,60 @@ is not evidence a filter is working.
 }
 ```
 
+A contact has no id of its own: the phone number is its identity. There is no
+`updatedAt`, though the API reference lists one.
+
 ### Field mapping
+
 | EZ Texting | Our column | Notes |
 |---|---|---|
-| `phoneNumber` | `leads.phone` | Arrives without `+`. Normalize to E.164: `"+" + phoneNumber`. |
-| `firstName`, `lastName` | `first_name`, `last_name` | May be absent. |
-| `email` | `email` | Optional. |
-| `source` | `source` | Only accept `API`. *(2026-09-14: configurable via `EZT_SOURCE`, default `API`; test contacts added by hand are `WebInterface`.)* |
-| `createdAt` | `ezt_added_at` | ISO 8601 with seconds. This is the checkpoint field. |
-| `optOut` | conversation `suppressed` + `dnc_list` | If true, never text. |
-| `groups[].id`, `groups[].name` | `group_id`, `group_name` | Store both. Filter on name (API constraint), and verify in code by exact name against `groups[]` (`isInGroup`, `integrations/ezt-client.ts`). |
-| `values` | ignore | Custom fields. |
+| `phoneNumber` | `leads.phone` | Arrives without the `+`; stored E.164, `"+" + phoneNumber` (`toE164`) |
+| `firstName`, `lastName` | `first_name`, `last_name` | May be absent |
+| `email` | `email` | Optional |
+| `source` | `source` | Only contacts of `EZT_SOURCE` are taken - `API` by default |
+| `createdAt` | `ezt_added_at` | ISO 8601 with seconds; the poller's checkpoint |
+| `optOut` | a `suppressed` conversation and a `dnc_list` row | True: never texted |
+| `groups[].id`, `groups[].name` | `group_id`, `group_name` | Both stored; filtered by name and checked by exact name in code (`isInGroup`) |
+| `values` | - | Custom fields, ignored |
 
-No `state`, no consent ref, no partner lead id come through. Do not design around them.
+No state, no consent reference and no partner lead id come through - nothing is
+designed around them.
 
-### Group IDs (client account)
-- `weightloss` = 46383471003 (new leads land here)
-- `weightloss - sent` = 46383554003 (client's existing drip moves contacts here after texting)
+### The account's groups
 
-The client's drip must be paused at go-live or leads get texted twice. Not our code's job, but the poller must tolerate contacts being moved between these two groups.
+| Group | Id | What |
+|---|---|---|
+| `weightloss` | 46383471003 | Where new leads land |
+| `weightloss - sent` | 46383554003 | Where the client's own drip moves contacts after texting them |
 
-### Poller algorithm
-```
-every 45s:
-  checkpoint = read from settings table (ISO timestamp), default = now - 1h on first run
-  page = 0
-  loop:
-    resp = GET /v1/contacts?filters[groupName][like]=weightloss&filters[source][eq]=API&sort=createdAt,desc&size=50&page={page}
-    for c in resp.content:
-      if c.createdAt <= checkpoint - 5min: goto done   # overlap window
-      phone = "+" + c.phoneNumber
-      if not any(g.name == "weightloss" for g in c.groups): continue
-      if c.optOut:
-        insert lead + conversation(status=suppressed); insert dnc_list; continue
-      inserted = INSERT INTO leads (...) ON CONFLICT (phone) DO NOTHING
-      if inserted:
-        create conversation(status=open, step=1)
-        enqueue job: send_opener(lead_id)
-    if resp.last: break
-    page += 1
-  done:
-  checkpoint = max(createdAt seen) if any else unchanged
-  write checkpoint
-```
-Rules:
-- Never advance the checkpoint on error.
-- One poller instance only.
-- Log per tick: fetched, inserted, skipped, duration.
+A drip texting the leads' group would text them twice, so it is paused at go-live -
+the client's job, not our code's; the poller tolerates a contact moving between the
+two groups.
 
-*As implemented* - `docs/POLLER.md` describes the real code, which differs
-from the sketch above: the interval is 30 seconds (migration 005), read from
-`settings` each tick; there is no job queue - the opener is sent in the same
-cycle; the group and source come from `EZT_GROUP` and `EZT_SOURCE`; a phone
-already on `dnc_list` is saved suppressed too; the conversation starts on the
-active flow's first question; and the checkpoint is written on every
-successful poll, unchanged when nothing new arrived.
+## Sending
 
-## Send message
-```
-POST /v1/messages
-{ "toNumbers": ["15551234567"], "message": "..." }
-```
-- `toNumbers` without `+` (matches how contacts come back). Confirm in sandbox whether `+1...` is also accepted.
-- Response includes a message id. Store in `messages.ezt_message_id`.
-- Delivery type (Standard 130 / Express 160) still unconfirmed with client. The opener is 130 characters plus the first name - 134 for a four-letter name, up to 160 for a thirty-letter one (2026-10-05, the antibiotics opener; the first one was 147); a longer name is dropped for "there" so it never goes over (`core/messages.ts`, `SEGMENT_LIMIT`) - so it is one segment on Express and two on Standard - worth settling before real volume.
+`POST /v1/messages` with `toNumbers` without the `+`, as contacts come back
+(`fromE164`). The response carries the message's id, stored in
+`messages.ezt_message_id`. Whether `+1…` is also accepted is not checked - the app
+never sends it.
+
+The account's delivery type, Standard (130 characters) or Express (160), is not
+confirmed with the client. The antibiotics opener is 130 characters plus the first
+name - 134 for a four-letter name, up to 160 for a thirty-letter one; a longer name
+is sent as "there" so it never goes over (`SEGMENT_LIMIT`, `core/messages.ts`). So
+it is one segment on Express and two on Standard - worth settling before real
+volume.
 
 ## Inbound webhook
 
-Verified against the live account 2026-09-14, and confirmed 2026-09-15 with a
-real text arriving through an ngrok tunnel.
-
-Subscriptions are API-only - there is no settings page:
-`POST|GET /v1/webhooks/subscriptions`, `DELETE /v1/webhooks/subscriptions/{id}`.
-Several of the same type can coexist; the account already has one pointing at
-Zapier and one at webhook.site, neither of which should be removed.
-
-**A subscription covers the whole account.** There is no group, number or
-campaign filter on it: every inbound text to any of the account's numbers is
-delivered to every subscription. Confirmed 2026-09-16, when replies to the
-client's own marketing campaigns arrived at our callback. The handler therefore
-cannot treat an unrecognised sender as a new lead - see WEBHOOKS.md.
-
-**EZ Texting disables a subscription whose callback keeps failing,** and emails
-the account to say so, naming the subscription id. Learned 2026-09-22 from such
-an email about a subscription pointing at a dead ngrok tunnel. A disabled one
-still appears in `GET /v1/webhooks/subscriptions` looking normal, so the list
-alone does not tell you a webhook is working. Recreating it is the only way
-back - there is no re-enable.
-
-**Delete a tunnel's subscription when the tunnel dies.** A quick cloudflared or
-ngrok URL is random and is released when the tunnel stops, so the subscription
-outlives it: inbound texts keep being posted to a hostname that is no longer
-ours, with our path token in the URL, until EZ Texting gives up on it. Free
-hostnames are recycled, so someone else can end up being handed the client's
-inbound SMS. So a tunnel subscription is registered when local testing starts
-and deleted when it stops, rather than left for the next session.
-
-As of 2026-09-22 the account holds **two** subscriptions: the client's Zapier
-one and production. The webhook.site one named above is gone; who removed it is
-not recorded.
-
-**The `secret` passed at registration never appears on delivery.** No signature
-header comes through, so the sender cannot be verified. A random segment in the
-callback path is the fallback - see WEBHOOKS.md.
+A subscription posts every inbound text to our callback:
 
 ```json
 {
   "id": "309112289003",
   "type": "inbound_text.received",
-  "fromNumber": "16026203572",
-  "toNumber": "15207799209",
+  "fromNumber": "16025550147",
+  "toNumber": "15205550109",
   "message": "3",
   "received": "2026-09-14T17:06:31.042+00:00",
   "optIn": false,
@@ -223,55 +167,53 @@ callback path is the fallback - see WEBHOOKS.md.
 
 | Field | Meaning |
 |---|---|
-| `fromNumber` | The lead's phone, no `+`. Normalize before lookup. |
-| `toNumber` | Our sending number. |
-| `message` | What they typed. |
-| `received` | Arrival time, with milliseconds. |
-| `optOut` | If true, suppress them. |
-| `optIn` | If true, release their block - the same as a START. |
-| `id` | **Not an id for the reply** - see below. |
+| `fromNumber` | The lead's phone, without the `+` |
+| `toNumber` | Our sending number |
+| `message` | What they typed |
+| `received` | Arrival time, with milliseconds |
+| `optOut` | True: they opted out |
+| `optIn` | True: they opted back in - the same as a START |
+| `id` | **Not an id for the reply** - below |
 
 ### `id` is the outbound message being replied to
 
-It is the id of *our* message the lead replied to, not an identifier for their
-reply. Established by sending a text, noting the `id` the send API returned
-(`309112289003`), then replying from the handset: the webhook came back with
-that same value.
+It is the id of *our* message the lead replied to. Sending a text, noting the id the
+send returned (`309112289003`) and replying from the handset brought back a webhook
+with that same value. So a lead who replies twice to one question - "3", then
+"sorry, 2" - produces two webhooks with the same `id`: deduping on it would lose the
+correction. The app dedupes on `(fromNumber, received)` instead, and keeps the `id`
+in `messages.in_reply_to_ezt_id`, as it says which question was answered
+(`WEBHOOKS.md`, "Why dedupe on (from_number, received_at)"; `SCHEMA.md`, `messages`).
+EZ Texting retries webhooks, so the dedupe is load-bearing; the handler returns 200
+fast.
 
-So a lead who replies twice to the same question - "3", then "sorry, 2" -
-produces two webhooks carrying an identical `id`. Deduping on it would reject
-the correction as a duplicate and lose it, which is a normal thing for a lead
-to do mid-qualification.
+### Subscriptions
 
-**Dedupe inbound on `(fromNumber, received)`.** The same phone cannot send two
-texts in the same millisecond. The id is still worth keeping, in
-`messages.in_reply_to_ezt_id`, because it says which question was being
-answered.
-
-The schema reflects this: `ezt_message_id` is unique only for `direction =
-'outbound'`, and a separate unique index covers `(from_number, received_at)`
-for inbound. See SCHEMA.md.
-
-- EZ Texting retries webhooks, so the dedupe is load-bearing, not defensive.
-- Return 200 fast.
+| Behaviour | What it means for us |
+|---|---|
+| **A subscription covers the whole account** - no group, number or campaign filter: every inbound text to any of the account's numbers goes to every subscription | Replies to the client's own campaigns reach us; an unknown sender is never a new lead (`WEBHOOKS.md`, "Replies from numbers we hold no lead for") |
+| Several of the same type coexist | Ours sits beside the client's Zapier one |
+| **A subscription whose callback keeps failing is disabled**, and the account emailed with its id. A disabled one still lists normally in `GET /v1/webhooks/subscriptions`; the only way back is to create it again | The list alone does not show a webhook works |
+| **A tunnel's subscription outlives the tunnel.** A quick cloudflared or ngrok address is random and released when the tunnel stops, so texts keep being posted - path token and all - to a hostname that is no longer ours until EZ Texting gives up; free hostnames are recycled, so someone else could be handed the client's inbound texts | Delete a tunnel's subscription when testing stops (`RUNNING.md`, "Receiving real replies locally") |
+| **The `secret` given at registration never appears on delivery**, and no signature header comes | The sender cannot be verified; a random segment in the callback path stands in (`WEBHOOKS.md`, "The path token") |
 
 ## One contact per phone number
 
-Verified 2026-09-19 by Jeel: **EZ Texting does not allow two contacts with the
-same phone number.** A number already on the account cannot be added again as a
-second contact.
+EZ Texting does not allow two contacts with the same number: a number already on
+the account cannot be added as a second contact. A number delivered again
+**updates the existing contact** - it adds the new group and keeps the old ones -
+and **`createdAt` never moves**. Only the partner sees the 200 instead of a 201;
+nothing on the contact says it came back. What does change is `groups[]`: a
+contact the poller already took in for one group, seen in a group it was not in, is
+the only sign of a return, and the poller sees it only by reading that group past
+its `createdAt` cutoff (`POLLER.md`; `BUCKETS.md`, "Finding people: two groups per
+bucket").
 
-So when the partner delivers a number that is already there, EZ Texting either
-rejects it or updates the existing contact - it never creates a new one. The
-existing contact keeps its original `createdAt` unless an update resets it,
-which has not been checked. This matters to the poller, which finds new leads
-by `createdAt`: see POLLER.md, "Not done yet".
-
-**Checked 2026-11-27 on the test account: nothing moves.** A made-up number
-(+1 480 555 0142) was created through `POST /v1/contacts` in a new group A,
-then added to two more new groups, 75 seconds apart each, and read back after
-each step with `GET /v1/contacts/{phoneNumber}` and the poller's own list
-query on that group. Everything was deleted afterwards; nothing was texted.
+The test, on the test account: a made-up number (+1 480 555 0142) created through
+`POST /v1/contacts` in a new group A, then added to two more new groups 75 seconds
+apart, and read back after each step with `GET /v1/contacts/{phoneNumber}` and the
+poller's own list query on that group. Everything was deleted afterwards; nothing
+was texted.
 
 | Step | Response | `createdAt` (UTC) | Groups |
 |---|---|---|---|
@@ -279,45 +221,77 @@ query on that group. Everything was deleted afterwards; nothing was texted.
 | `POST /v1/contacts` again, the same number, `groupIdsAdd: [B]` - the partner's way | **200**, `{"id": "<phone>"}` - updated, not refused | 22:48:45 | A, B |
 | `POST /v1/contact-groups/{C}/contacts?phoneNumbers=<phone>` | 200, `["<phone>"]` | 22:48:45 | A, B, C |
 
-- **A number delivered again updates the existing contact**, adds the new
-  group and keeps the old ones. Only the partner sees the 200-not-201; nothing
-  on the contact tells us.
-- **`createdAt` never moves**, by either path.
-- **There is no `updatedAt`.** The API reference lists one ("Last
-  modification date") on the contact, but neither `GET /v1/contacts/{phone}`
-  nor the list returns it - the keys are `phoneNumber`, `firstName`,
-  `lastName`, `source`, `values`, `createdAt`, `optOut`, `groups`.
-  `sort=updatedAt,desc` is accepted, which proves nothing (see "Filters that
-  are silently ignored").
-- **What does change is `groups[]`.** A contact the poller already took in for
-  one group, seen again in a group it was not in, is the only sign of a
-  return - and the poller can only see it by reading that group past its
-  `createdAt` cutoff.
+The keys returned, by either read: `phoneNumber`, `firstName`, `lastName`, `source`,
+`values`, `createdAt`, `optOut`, `groups`. `sort=updatedAt,desc` is accepted, which
+proves nothing.
 
 ## STOP handling
 
-Verified 2026-09-19 by texting STOP to the account's number from Jeel's phone.
-EZ Texting replies on its own, immediately, before our webhook is involved:
+A lead texting STOP to the account's number gets EZ Texting's own reply at once,
+before our webhook is involved:
 
 > PillRx: You have opted out of this program & will no longer receive any
 > messages. Reply REPORT to report unwanted messaging. Text START to opt back in.
 
-It also sets the contact's `optOut` to `true`, which the poller already reads.
-Consequences for us:
+EZ Texting also sets the contact's `optOut` to `true`, which the poller reads.
+Texting START sets it back to `false`, and the inbound payload carries `optIn` as
+well as `optOut`, which is how an opt-in arrives beside the keyword. "PillRx" is the
+brand configured on the account and appears in its compliance replies; our texts
+sign as "eDrugstore", and which name is right is the client's call. What our app
+does on a STOP and a START - nothing sent, the number blocked, the block lifted - is
+`STATE-MACHINE.md`, "What STOP does, end to end" and "Opting back in".
 
-- **Never send our own STOP confirmation**; the lead would get two.
-- **"PillRx" is the brand name configured on the account**, and it appears in
-  the platform's own compliance replies. Our copy signs as "eDrugstore" (it was
-  "Secure Medical" until 2026-10-05).
-  Which name is right is the client's call.
-- The reply invites START to opt back in. Verified 2026-09-22: texting START
-  sets the contact's `optOut` back to `false` on EZ Texting's side. Our own
-  block is released by the webhook when that message arrives - see
-  STATE-MACHINE.md, "Opting back in".
-- The inbound payload carries `optIn` as well as `optOut`, which is how an
-  opt-in arrives alongside the keyword.
+EZ Texting answers HELP and INFO itself too, with the account's help text: INFO
+never reaches us as a reply to our question, which is why the antibiotics flow says
+"Learn more" rather than "reply INFO" ("Findings").
 
-## Safety
-- Client account contains ~120,000 real contacts. Never query without the group filter. Never send to any group other than a `dev-test` group you created.
-- Developers use their own EZ Texting trial account, never these credentials.
-- **Update 2026-09-14 (Jeel):** the account is a test account and these credentials may be used directly for development, including sending. The two rules above are kept for history. The `weightloss` group is the test group: contacts are added to it by hand in the dashboard (source `WebInterface`) and SMS is sent to it. Keep the group filter on every contacts query regardless, since the account is large.
+## Findings
+
+| Finding | Evidence | Date |
+|---|---|---|
+| The endpoints and field names above hold | Tested against the account | 2026-09-10 |
+| `size` must be one of 10, 20, 50, 100, 200 | Any other value is a 400 | 2026-09-10 |
+| `filters[groupName][like]` matches the whole group name | `like=weightloss` returned the 3 contacts of `weightloss`; `like=weightloss - sent` returned that group's 1,773 | 2026-09-10 |
+| `sort=createdAt,desc` sorts on the server | Against the 1,773-contact group, `desc` and `asc` returned entirely different first pages - newest 2026-07-20, oldest 2024-07-19 | 2026-09-11 |
+| The default order is oldest first, and an unknown sort field is silently ignored | Omitting `sort`, and `sort=bogusField,desc`, both gave oldest-first with no error | 2026-09-11 |
+| The working filters, and `like`'s case-insensitive substring match | Each run against a value expected to exclude something; `jam`, `ami` and `JAMIE` all matched "jamie" | 2026-09-11 |
+| No date filter exists | Against a group of 3 contacts, one three months older than the cutoff, seventeen variants all returned the full set: field names `createdAt`, `created`, `dateCreated`, `created_at`; operators `gt`, `gte`, `ge`, `$gt`, `after`, `greaterThan`, `min`, `from`, `start`, `between`, `eq`; values as ISO, date-only, no-Z and epoch millis; top-level `since`, `startDate`, `fromDate`, `createdAfter`, `createdAtFrom`, `updatedAfter`. Controls: `filters[firstName][like]=jamie` returned 1 and `filters[optOut][eq]=true` returned 1, while `filters[bogusField][gt]=xyz` returned all 3 - identical to every date attempt | 2026-09-11 |
+| The inbound webhook's payload is as above | Against the account; then a real text arriving through an ngrok tunnel on 2026-09-15 | 2026-09-14 |
+| `id` is the id of our message being replied to | A text sent, its id noted (`309112289003`), a reply from the handset: the webhook carried the same value | 2026-09-14 |
+| The registration `secret` never appears on delivery | No signature header on any delivery | 2026-09-14 |
+| A subscription covers the whole account | Replies to the client's own marketing campaigns arrived at our callback | 2026-09-16 |
+| One contact per phone number | Checked by Jeel | 2026-09-19 |
+| STOP gets EZ Texting's own reply and sets `optOut` | STOP texted to the account's number from a test handset | 2026-09-19 |
+| START sets `optOut` back to `false` | START texted from a test handset | 2026-09-22 |
+| A failing subscription is disabled, and the account emailed | An email about a subscription pointing at a dead ngrok tunnel | 2026-09-22 |
+| The account holds two subscriptions: the client's Zapier one and production's | The list; the webhook.site one seen on 2026-09-14 was gone, and who removed it is not recorded | 2026-09-22 |
+| EZ Texting answers STOP, HELP and INFO itself; INFO never reaches us as a reply to our question - the lead gets the account's help text | INFO texted to the account from a test handset - so the antibiotics flow says "Learn more", not "reply INFO" (`FLOWS.md`, Decisions) | 2026-10-05 |
+| "Learn more" passes through to our webhook, and EZ Texting sends nothing of its own for it | Texted from a test handset in the real-phone walk of the antibiotics flow | 2026-10-06 |
+| A text over 160 characters arrives as one message on the handset | The 243-character reply to No on `q2` joined with `q3`, in the same walk | 2026-10-06 |
+| Two texts sent 1.2 seconds apart reached our webhook 33 milliseconds apart - EZ Texting delivered them together | The same walk; why a reply before our text is not an answer (`STATE-MACHINE.md`, rule 2c) | 2026-10-06 |
+| A number delivered again updates the contact; `createdAt` never moves; there is no `updatedAt`; only `groups[]` changes | "One contact per phone number" - the three-step test | 2026-11-27 |
+
+## Decisions
+
+| Decision | By | Date |
+|---|---|---|
+| The account behind the development credentials is a test account: it may be used for development, sending included, with `weightloss` as the test group | Jeel | 2026-09-14 |
+
+## How to add an entry
+
+1. Check the behaviour against the test account - with a control that proves the
+   call did something, since EZ Texting ignores what it does not know.
+2. Write it here in the same commit as any code that relies on it: a row in
+   "Findings" with its evidence and date, and the endpoint, filter or field in its
+   table. Then a History line.
+
+## History
+
+- 2026-11-27 · Rewritten as a reference: endpoints, filters, field map, webhook fields, and findings with evidence and date; the account's rules kept here, as the one owner; the poller sketch (every 45 s, an enqueued opener job) handed to `POLLER.md`, which has the real cycle; STOP's effects and the dedupe left to `STATE-MACHINE.md` and `WEBHOOKS.md`; the "unchecked" `createdAt` question closed by the day's test · D12
+- 2026-11-27 · Four findings from the real-phone walks of the antibiotics flow (2026-10-05, 2026-10-06), until then told only in `FLOWS.md` and `STATE-MACHINE.md`: HELP and INFO answered by EZ Texting, "Learn more" passed through, a long text arriving as one, two texts delivered together; the subscription and tunnel links pointed at `RUNNING.md` · D14, D23
+- 2026-11-27 · The test of a number delivered again: updated, `createdAt` unmoved, no `updatedAt` · `BUCKETS.md`
+- 2026-10-05 · Our texts sign as "eDrugstore" - they signed "Secure Medical" until then; the opener is the antibiotics one, 130 characters plus the name (the first opener was 147) · Phase 5, flows
+- 2026-09-22 · Two subscriptions on the account; the webhook.site one gone
+- 2026-09-19 · One contact per phone number confirmed; whether a re-delivery resets `createdAt` left unchecked until 2026-11-27
+- 2026-09-14 · The account is a test account (Jeel). Until then it was treated as the client's live account: never query without the group filter, never send to any group but a `dev-test` group of our own phones, and developers to use their own EZ Texting trial account, never these credentials. The source filter made configurable, `EZT_SOURCE`, default `API` - contacts added by hand are `WebInterface`
+- 2026-09-10 · Written: tested against the account that day, with a sketch of the poller - every 45 seconds, a `send_opener` job enqueued for each new lead, the group and source written in. The real poller differs: every 30 seconds from `settings`, the opener sent in the same cycle with no job queue, the group and source from `EZT_GROUP` and `EZT_SOURCE`, a phone already on `dnc_list` saved suppressed too, the conversation started on the active flow's first question (`POLLER.md`)

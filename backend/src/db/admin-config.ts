@@ -8,7 +8,7 @@
  * machine is actually using. ADMIN.md, "Configuration".
  *
  * And since T24 the automated call's: its script (`call_scripts`, `call_steps`,
- * `call_choices` - AUTO-CALLS.md, "The script") and the settings a call reads,
+ * `call_choices` - AUTO-CALL-SCRIPT.md, "The script") and the settings a call reads,
  * each through the reader the robot itself uses (`db/call-script.ts`), so a
  * missing or malformed value shows as the value the robot falls back to.
  *

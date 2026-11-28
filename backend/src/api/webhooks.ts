@@ -35,8 +35,8 @@ function deps() {
  * {
  *   "id": "309112289003",          // OUR message being replied to, not an id
  *   "type": "inbound_text.received",
- *   "fromNumber": "16026203572",   // lead's phone, no +
- *   "toNumber": "15207799209",     // our sending number
+ *   "fromNumber": "16025550147",   // lead's phone, no +
+ *   "toNumber": "15205550109",     // our sending number
  *   "message": "3",
  *   "received": "2026-09-14T17:06:31.042+00:00",
  *   "optIn": false,

@@ -1,6 +1,6 @@
 /**
  * The hold watcher, and offering a lead on hold to whoever comes free - T16
- * and T17, AUTO-CALLS.md "The hold line". The database and Twilio are
+ * and T17, AUTO-CALL-TRANSFER.md "The hold line". The database and Twilio are
  * replaced: what is under test is who is offered, who is sent back to
  * `/auto/hold`, and in what order.
  */

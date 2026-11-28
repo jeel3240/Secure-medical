@@ -37,8 +37,7 @@ As above.
 
 ## Docs to update in the same commit
 
-`docs/ADMIN.md` (Admin's controls - the read-only rule's exceptions now also these two),
-`CLAUDE.md` §10 ("Admin is read-only" table), `docs/AUDIT.md`, `docs/LOGGING.md`,
+`docs/ADMIN.md` (Admin's controls; Decisions - the read-only rule's exceptions now also these two), `docs/AUDIT.md`, `docs/LOGGING.md`,
 `docs/FRONTEND.md`, `docs/BUCKETS.md`.
 
 ## Not in this ticket
