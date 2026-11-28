@@ -35,6 +35,8 @@ const A_DISPOSITION = {
   agentId: 1,
   agentName: 'Maya',
   value: 'closed' as const,
+  reason: 'sold' as const,
+  conversationId: 12,
   createdAt: '2026-09-26T10:00:00.000Z',
   blockedNumber: false,
   released: true,
@@ -116,6 +118,53 @@ describe('setting a disposition', () => {
     expect((await agent.post('/api/leads/7/dispositions').send({ value: 'closed' })).status).toBe(201);
     expect((await agent.post('/api/leads/7/dispositions').send({ value: 'closed' })).status).toBe(201);
     expect(setDisposition).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe('why it was closed - B04', () => {
+  it('is saved with the outcome', async () => {
+    const { agent } = await setup();
+    const res = await agent.post('/api/leads/7/dispositions').send({ value: 'closed', reason: 'sold' });
+
+    expect(res.status).toBe(201);
+    expect(setDisposition.mock.calls[0]).toEqual([7, expect.any(Number), 'closed', 'sold']);
+  });
+
+  it.each([['not_interested'], ['wrong_number'], ['  Wrong_Number ']])('takes %j', async (reason) => {
+    const { agent } = await setup();
+    expect((await agent.post('/api/leads/7/dispositions').send({ value: 'closed', reason })).status).toBe(201);
+    expect(setDisposition.mock.calls[0][3]).toBe(reason.trim().toLowerCase());
+  });
+
+  it('is not yet required: a Closed with none is saved with none, for a page loaded before the change', async () => {
+    const { agent } = await setup();
+    for (const payload of [{ value: 'closed' }, { value: 'closed', reason: null }]) {
+      setDisposition.mockClear();
+      expect((await agent.post('/api/leads/7/dispositions').send(payload)).status).toBe(201);
+      expect(setDisposition.mock.calls[0][3]).toBeNull();
+    }
+  });
+
+  it.each([
+    ['not one of the three', { value: 'closed', reason: 'moved_away' }],
+    ['empty', { value: 'closed', reason: '' }],
+    ['not a string', { value: 'closed', reason: 1 }],
+    ['given with DNC', { value: 'dnc', confirmDnc: true, reason: 'wrong_number' }],
+  ])('is refused when it is %s', async (_label, payload) => {
+    const { agent } = await setup();
+    const res = await agent.post('/api/leads/7/dispositions').send(payload);
+
+    expect(res.status).toBe(400);
+    expect(res.body.error).toBe('invalid_reason');
+    expect(setDisposition).not.toHaveBeenCalled();
+  });
+
+  it('is left out of DNC: none given, none saved', async () => {
+    const { agent } = await setup();
+    setDisposition.mockResolvedValue({ ok: true, disposition: { ...A_DISPOSITION, value: 'dnc', reason: null, blockedNumber: true } });
+
+    expect((await agent.post('/api/leads/7/dispositions').send({ value: 'dnc', confirmDnc: true })).status).toBe(201);
+    expect(setDisposition.mock.calls[0][3]).toBeNull();
   });
 });
 

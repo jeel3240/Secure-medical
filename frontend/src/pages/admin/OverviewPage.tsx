@@ -8,7 +8,7 @@ import {
   type OverviewPeriod,
 } from '../../api/admin';
 import { usePolling } from '../../api/usePolling';
-import { DISPOSITION_LABEL } from '../../api/workspace';
+import { CLOSE_REASON_LABEL, DISPOSITION_LABEL, type CloseReason } from '../../api/workspace';
 import { Banner } from '../../components/Banner';
 import { LiveStatus } from '../../components/LiveStatus';
 import { Segmented } from '../../components/Segmented';
@@ -50,8 +50,15 @@ const CHECK_LABEL: Record<string, string> = {
   calling: 'Calling',
 };
 
-/** "nora closed Omar Haddad". */
-function activityText(entry: Overview['activity'][number]): string {
+/** What follows the lead's name: " · Sold" for a lead closed with a reason (B04), else nothing. */
+export function activityAfter(entry: Overview['activity'][number]): string {
+  if (entry.kind !== 'disposition' || entry.detail.value !== 'closed') return '';
+  const reason = entry.detail.reason;
+  return typeof reason === 'string' && reason in CLOSE_REASON_LABEL ? ` · ${CLOSE_REASON_LABEL[reason as CloseReason]}` : '';
+}
+
+/** "nora closed Omar Haddad" - and " · Sold" after the name, `activityAfter`. */
+export function activityText(entry: Overview['activity'][number]): string {
   switch (entry.kind) {
     case 'disposition': {
       const value = String(entry.detail.value);
@@ -246,6 +253,7 @@ export function OverviewPage() {
                   <Link className="activity__lead" to={`/leads/${entry.leadId}/timeline`}>
                     {entry.leadName}
                   </Link>
+                  {activityAfter(entry)}
                 </span>
                 <span className="activity__when">{formatRelative(entry.at)}</span>
               </li>

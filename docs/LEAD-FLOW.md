@@ -113,7 +113,8 @@ order".
 1. **Pick up** from the queue - opening a row only looks (`AGENT-WORKSPACE.md`,
    "Claim and release").
 2. In **Wrap up**: an outcome, **Closed** or **DNC**, or neither; a callback; a
-   note (`AGENT-WORKSPACE.md`, "Dispositions").
+   note. Closed asks why - Sold, Not interested or Wrong number (`AGENT-WORKSPACE.md`,
+   "Dispositions").
 3. **Save.** With Closed or DNC the lead is released and leaves the queue
    (`AGENT-WORKSPACE.md`, "Closing a lead"). **Release** lets a lead go without an
    outcome.
@@ -130,6 +131,7 @@ order".
 
 ## History
 
+- 2026-11-28 · Closed asks why · B04
 - 2026-11-27 · Rewritten as the map: one linked line per status, tag and step, nothing restated; the four "What changed" sections moved here in date order; "built, not yet deployed" for Seri corrected - she has been on production since 2026-11-24, her switch off · D25
 - 2026-11-24 · Seri's switch on Admin > Configuration's Calls tab, as well as `npm run ai-agent -- on|off` · A22
 - 2026-11-13 · Seri described here: off by default, her switch `settings.ai_agent` seeded `off` and off whatever it says while `OPENAI_API_KEY` is empty; on, an answered robot call goes to her instead of the script's first question; anything the lead says to her stops the text questions; her call back belongs to the lead's holder when an active agent holds the lead, otherwise to nobody, does not make the lead Working, and once due puts the lead first as **Callback · 3:00 PM**, bold, taken by the first agent to pick the lead up; Admin > Leads' Call column reads "Callback booked", and her conversation is on the timeline under the call · A13-A19

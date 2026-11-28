@@ -6,9 +6,10 @@
  */
 
 import { recordActivity } from './activity';
+import { newestConversation } from './lead-state';
 import { pool } from './pool';
 import { blockNumber, DNC_REASONS } from './dnc';
-import { DNC_DISPOSITION, type Disposition } from '../core/dispositions';
+import { DNC_DISPOSITION, type CloseReason, type Disposition } from '../core/dispositions';
 
 export interface DispositionRow {
   id: number;
@@ -16,6 +17,10 @@ export interface DispositionRow {
   agentId: number;
   agentName: string | null;
   value: Disposition;
+  /** Why it was closed - Sold, Not interested, Wrong number (B04). Null on DNC, and on a Closed saved without one. */
+  reason: CloseReason | null;
+  /** The conversation it was saved against: the lead's newest. Null for a lead with none. */
+  conversationId: number | null;
   createdAt: string;
   /** True when this disposition blocked the number. Only ever true for `dnc`. */
   blockedNumber: boolean;
@@ -51,6 +56,13 @@ export type SetDispositionResult =
  * The reason is recorded as `agent_disposition`, so the DNC screen can tell an
  * agent's decision from a lead's own opt-out.
  *
+ * **Closed says why - B04, Jeel 2026-11-27.** `reason` is Sold, Not interested
+ * or Wrong number, written in the same row, and the row names the conversation
+ * it closed: the lead's newest, read under the lead's lock in the same
+ * statement, so it is the one the agent saw. The route checks the reason; the
+ * database refuses one on DNC, or a word it does not know. A Closed with no
+ * reason is still saved, as NULL, for a browser still on the page from before.
+ *
  * **Both outcomes finish the lead, so both release it - Jeel, 2026-09-29.**
  * Until then a closed lead stayed claimed until the agent pressed Back to
  * queue, and so stayed in the queue as "Working - name": nobody needed to pick
@@ -70,7 +82,8 @@ export type SetDispositionResult =
 export async function setDisposition(
   leadId: number,
   agentId: number,
-  value: Disposition
+  value: Disposition,
+  reason: CloseReason | null = null
 ): Promise<SetDispositionResult> {
   const client = await pool.connect();
   try {
@@ -96,17 +109,20 @@ export async function setDisposition(
     }
 
     const { rows } = await client.query(
-      `INSERT INTO dispositions (lead_id, agent_id, value)
-       VALUES ($1, $2, $3)
-       RETURNING id, lead_id, agent_id, value, created_at`,
-      [leadId, agentId, value]
+      `INSERT INTO dispositions (lead_id, agent_id, value, reason, conversation_id)
+       SELECT l.id, $2, $3, $4, c.id
+       FROM leads l
+       LEFT JOIN ${newestConversation('c.id')}
+       WHERE l.id = $1
+       RETURNING id, lead_id, agent_id, value, reason, conversation_id, created_at`,
+      [leadId, agentId, value, reason]
     );
 
     await recordActivity(client, {
       action: 'outcome.set',
       actorId: agentId,
       leadId,
-      detail: { value, dispositionId: rows[0].id },
+      detail: { value, reason, dispositionId: rows[0].id },
     });
 
     const blockedNumber = value === DNC_DISPOSITION;
@@ -177,6 +193,8 @@ export async function setDisposition(
         agentId: row.agent_id,
         agentName: who.rows[0]?.name ?? null,
         value: row.value,
+        reason: row.reason,
+        conversationId: row.conversation_id,
         createdAt: row.created_at.toISOString(),
         blockedNumber,
         released: true,

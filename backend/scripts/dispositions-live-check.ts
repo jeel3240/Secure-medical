@@ -15,7 +15,7 @@
  *   DATABASE_URL=postgres://app:app@localhost:5433/disp_check JWT_SECRET=x \
  *     EZT_USERNAME=x EZT_PASSWORD=x EZT_GROUP=x npx ts-node --transpile-only scripts/dispositions-live-check.ts
  */
-import { check, failureCount, verdict } from './check';
+import { check, failureCount, refusedBy, verdict } from './check';
 import { pool } from '../src/db/pool';
 import { setDisposition } from '../src/db/dispositions';
 import { blockNumber, DNC_REASONS, releaseNumber } from '../src/db/dnc';
@@ -265,6 +265,51 @@ async function main(): Promise<void> {
       [unread]
     );
     check('and the reply is recorded read, by her, because of the outcome', read.rows, [{ actor_id: maya, because: 'outcome' }]);
+  }
+
+  console.log('\nwhy it was closed, and the conversation it closed (B04)');
+  {
+    // Two conversations: the outcome belongs to the newest, the one the agent saw.
+    const lead = await makeQueuedLead('+15550000601', 'Sold');
+    await pool.query(`UPDATE conversations SET created_at = now() - interval '2 days' WHERE lead_id = $1`, [lead]);
+    const { rows: newer } = await pool.query(
+      `INSERT INTO conversations (lead_id, status, step, score, tier) VALUES ($1, 'completed', 3, 90, 'HOT') RETURNING id`,
+      [lead]
+    );
+    const res = await setDisposition(lead, maya, 'closed', 'sold');
+    check('the reason and the newest conversation come back', res.ok && [res.disposition.reason, res.disposition.conversationId], ['sold', newer[0].id]);
+    check('and are saved in the row',
+      (await pool.query(`SELECT value, reason, conversation_id FROM dispositions WHERE lead_id = $1`, [lead])).rows,
+      [{ value: 'closed', reason: 'sold', conversation_id: newer[0].id }]);
+    check('the timeline says why', (await getTimeline(lead))?.filter((e) => e.kind === 'disposition').map((e) => e.detail),
+      [{ value: 'closed', reason: 'sold' }]);
+    check('so does the lead card', (await getLeadDetail(lead))?.closed?.reason, 'sold');
+
+    const none = await makeQueuedLead('+15550000602', 'NoReason');
+    const saved = await setDisposition(none, maya, 'closed');
+    check('a Closed with no reason - a page from before - is saved with none',
+      (await pool.query(`SELECT reason, conversation_id IS NOT NULL AS has_conversation FROM dispositions WHERE lead_id = $1`, [none])).rows,
+      [{ reason: null, has_conversation: true }]);
+    check('and reads Closed alone', [saved.ok && saved.disposition.reason, (await getLeadDetail(none))?.closed?.reason,
+      (await getTimeline(none))?.filter((e) => e.kind === 'disposition').map((e) => e.detail)], [null, null, [{ value: 'closed' }]]);
+
+    const dnc = await makeQueuedLead('+15550000603', 'DncNoReason');
+    const blocked = await setDisposition(dnc, maya, 'dnc');
+    check('DNC has no reason', blocked.ok && blocked.disposition.reason, null);
+
+    const { rows: bare } = await pool.query(`INSERT INTO leads (phone, first_name, source) VALUES ('+15550000604', 'NoConversation', 'API') RETURNING id`);
+    const noConversation = await setDisposition(bare[0].id, maya, 'closed', 'wrong_number');
+    check('a lead with no conversation yet: saved, naming none', noConversation.ok && [noConversation.disposition.reason, noConversation.disposition.conversationId], ['wrong_number', null]);
+
+    const write = (value: string, reason: string | null, conversationId: number | null = null) =>
+      refusedBy(() => pool.query(`INSERT INTO dispositions (lead_id, agent_id, value, reason, conversation_id) VALUES ($1, $2, $3, $4, $5)`,
+        [lead, maya, value, reason, conversationId]));
+    check('the database refuses a reason on DNC', await write('dnc', 'sold'), 'dispositions_reason_only_closed');
+    check('and a reason it does not know', await write('closed', 'moved_away'), 'dispositions_reason_known');
+    check('and a conversation that does not exist', await write('closed', 'sold', 999999), 'dispositions_conversation_fk');
+    check('each of the three is allowed on Closed',
+      [await write('closed', 'sold'), await write('closed', 'not_interested'), await write('closed', 'wrong_number')],
+      ['allowed', 'allowed', 'allowed']);
   }
 
   console.log('\nan unknown lead');

@@ -3,7 +3,7 @@ import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { toApiError } from '../api/client';
 import { claimLead, listQueue, releaseLead } from '../api/leads';
 import { usePolling } from '../api/usePolling';
-import { getLead, getTimeline, markRead, type LeadDetail, type TimelineEntry } from '../api/workspace';
+import { getLead, getTimeline, markRead, outcomeLabel, type LeadDetail, type TimelineEntry } from '../api/workspace';
 import { useAuth } from '../auth/store';
 import { Badge } from '../components/Badge';
 import { Banner } from '../components/Banner';
@@ -285,7 +285,8 @@ export function WorkspacePage() {
       <LeadHeader lead={lead} mine={mine} now={now} call={call} />
 
       <div className="workspace__flags">
-        {lead.closed && <Badge tone="muted">Closed</Badge>}
+        {/* "Closed · Sold": why, once it was asked (B04). */}
+        {lead.closed && <Badge tone="muted">{outcomeLabel('closed', lead.closed.reason)}</Badge>}
         {lead.flags.dnc && <Badge tone="muted">DNC</Badge>}
         {/* The queue's own words for it. A badge, like every other state of
             the lead - not a sentence across the page. */}

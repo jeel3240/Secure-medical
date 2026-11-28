@@ -11,6 +11,7 @@ import { questionShort } from '../core/questions';
 import { CLOSED_SQL, MISSED_CALL_SQL, MISSED_YES_SQL, newestConversation, phoneStoppedQuestionsAtSql, RECEIVED_SQL } from './lead-state';
 import { answerChips, scoreBreakdown, type SavedAnswer } from '../core/score-breakdown';
 import type { AnswerChip, BreakdownLine } from '../core/score-breakdown';
+import type { CloseReason } from '../core/dispositions';
 
 export interface LeadDetail {
   id: number;
@@ -54,11 +55,12 @@ export interface LeadDetail {
   claimedBy: { id: number; name: string; at: string } | null;
   /**
    * Set while the lead is closed - by the same rule the queue and Admin > Leads
-   * use, `db/lead-state.ts` - with who closed it and when. Null once a text or
-   * a later callback reopens it. Added 2026-09-29: without it the screen could
-   * not say a lead was closed, and an agent pressed Closed twice.
+   * use, `db/lead-state.ts` - with who closed it, when and why: Sold, Not
+   * interested or Wrong number (B04), null for an outcome from before it was
+   * asked. Null once a text or a later callback reopens it. Without it the
+   * screen could not say a lead was closed, and an agent pressed Closed twice.
    */
-  closed: { by: string | null; at: string } | null;
+  closed: { by: string | null; at: string; reason: CloseReason | null } | null;
 
   /**
    * The call back Seri booked, while it is open - A15, AI-AGENT.md section 4:
@@ -117,6 +119,7 @@ const SQL = `
     ${MISSED_CALL_SQL} AS missed_call,
     ${MISSED_YES_SQL} AS missed_yes,
     od.created_at AS outcome_at,
+    od.reason AS outcome_reason,
     ou.name AS outcome_by,
     ac.scheduled_at AS ai_callback_at,
     ac.note AS ai_callback_note,
@@ -137,7 +140,7 @@ const SQL = `
   LEFT JOIN users u ON u.id = l.assigned_to AND u.is_active
   LEFT JOIN dnc_list d ON d.phone = l.phone AND d.released_at IS NULL
   LEFT JOIN LATERAL (
-    SELECT od.agent_id, od.created_at FROM dispositions od
+    SELECT od.agent_id, od.created_at, od.reason FROM dispositions od
     WHERE od.lead_id = l.id
     ORDER BY od.created_at DESC, od.id DESC
     LIMIT 1
@@ -217,7 +220,7 @@ export async function getLeadDetail(leadId: number): Promise<LeadDetail | null> 
       : null,
 
     closed: r.is_closed
-      ? { by: r.outcome_by ?? null, at: r.outcome_at?.toISOString() ?? '' }
+      ? { by: r.outcome_by ?? null, at: r.outcome_at?.toISOString() ?? '', reason: r.outcome_reason ?? null }
       : null,
 
     aiCallback: r.ai_callback_at

@@ -3,8 +3,12 @@ import { useNavigate } from 'react-router-dom';
 import { toApiError } from '../../api/client';
 import {
   addNote,
+  CLOSE_REASON_LABEL,
+  CLOSE_REASONS,
   createCallback,
+  outcomeLabel,
   setDisposition,
+  type CloseReason,
   type Disposition,
   type LeadDetail,
 } from '../../api/workspace';
@@ -43,6 +47,12 @@ import { formatTime, toLocalInput } from '../../lib/format';
  * **DNC asks twice.** The API refuses `dnc` without `confirmDnc: true`; this is
  * the dialog in front of that, and it says what the block actually does. Only a
  * START from the lead lifts it.
+ *
+ * **Closed asks why - B04, Jeel 2026-11-27.** Pressing Closed opens a popup:
+ * Sold, Not interested or Wrong number. Picking one chooses Closed with it -
+ * the button reads "Closed · Sold" - and Save sends both; Cancel chooses
+ * nothing. Pressing Closed again, once chosen, takes it back. The reason is
+ * how a new bucket tells a sale from a wrong number, and how Admin counts sales.
  */
 
 /** Quick chips from the brief, plus the datetime field for anything else. */
@@ -96,6 +106,9 @@ export function ActionsPanel({
   const [note, setNote] = useState('');
   const [callbackAt, setCallbackAt] = useState('');
   const [disposition, setDispositionValue] = useState<Disposition | null>(null);
+  // Why it is closed, chosen in the popup - set only with Closed (B04).
+  const [closeReason, setCloseReason] = useState<CloseReason | null>(null);
+  const [askingWhy, setAskingWhy] = useState(false);
   const [confirmingDnc, setConfirmingDnc] = useState(false);
   // Which quick choice the callback came from, so that chip shows as chosen.
   // Null for none, or for a time picked from the calendar.
@@ -111,6 +124,8 @@ export function ActionsPanel({
   // A lead someone holds is never closed (`db/lead-state.ts`), so the agent
   // holding it always starts from clear buttons and their Closed is saved.
   const shown: Disposition | null = disposition ?? (lead.closed ? 'closed' : null);
+  // And why, on Closed: the one just picked, else the saved one's.
+  const shownReason = disposition === 'closed' ? closeReason : disposition === null ? (lead.closed?.reason ?? null) : null;
   const newOutcome = disposition !== null;
 
   const dirty = note.trim() !== '' || callbackAt !== '' || newOutcome;
@@ -161,9 +176,13 @@ export function ActionsPanel({
     let finished = false;
     if (disposition && newOutcome) {
       try {
-        await setDisposition(lead.id, disposition, disposition === 'dnc');
+        await setDisposition(lead.id, disposition, {
+          confirmDnc: disposition === 'dnc',
+          reason: disposition === 'closed' ? (closeReason ?? undefined) : undefined,
+        });
         done.push('outcome');
         setDispositionValue(null);
+        setCloseReason(null);
         finished = true;
       } catch (err) {
         failures.push(`Outcome: ${toApiError(err).message}`);
@@ -198,8 +217,20 @@ export function ActionsPanel({
       setConfirmingDnc(true);
       return;
     }
-    setDispositionValue((current) => (current === value ? null : value));
+    // Closed asks why first (B04). Chosen already, pressing it takes it back.
+    if (disposition === 'closed') {
+      setDispositionValue(null);
+      setCloseReason(null);
+      return;
+    }
+    setAskingWhy(true);
+  };
+
+  const pickReason = (reason: CloseReason) => {
+    setDispositionValue('closed');
+    setCloseReason(reason);
     dropCallback();
+    setAskingWhy(false);
   };
 
   // An outcome finishes the lead's callbacks, so a callback chosen alongside it
@@ -236,7 +267,7 @@ export function ActionsPanel({
                 onClick={() => choose(outcome.value)}
               >
                 <span className="outcome__dot" aria-hidden="true" />
-                {outcome.label}
+                {outcome.value === 'closed' && shown === 'closed' ? outcomeLabel('closed', shownReason) : outcome.label}
               </button>
             ))}
           </div>
@@ -333,6 +364,26 @@ export function ActionsPanel({
         </div>
       </fieldset>
 
+      {askingWhy && (
+        <Modal
+          title="Why is this lead closed?"
+          onClose={() => setAskingWhy(false)}
+          footer={
+            <Button variant="secondary" onClick={() => setAskingWhy(false)}>
+              Cancel
+            </Button>
+          }
+        >
+          <div className="wrapup__choices" role="group" aria-label="Why it is closed">
+            {CLOSE_REASONS.map((reason) => (
+              <button key={reason} type="button" className="chip-button" onClick={() => pickReason(reason)}>
+                {CLOSE_REASON_LABEL[reason]}
+              </button>
+            ))}
+          </div>
+        </Modal>
+      )}
+
       {confirmingDnc && (
         <Modal
           title="Add to the do-not-call list?"
@@ -346,6 +397,7 @@ export function ActionsPanel({
                 variant="danger"
                 onClick={() => {
                   setDispositionValue('dnc');
+                  setCloseReason(null);
                   dropCallback();
                   setConfirmingDnc(false);
                 }}

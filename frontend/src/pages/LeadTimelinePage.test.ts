@@ -115,8 +115,13 @@ describe('dispositions', () => {
     // Append-only: three no_answers then interested is a different story from
     // one interested, and the sidebar shows the sequence.
     expect(summary.dispositions).toEqual([
-      { at: at('09:00'), value: 'no_answer', agent: 'Rae' },
-      { at: at('10:00'), value: 'interested', agent: 'Maya' },
+      { at: at('09:00'), value: 'no_answer', reason: null, agent: 'Rae' },
+      { at: at('10:00'), value: 'interested', reason: null, agent: 'Maya' },
     ]);
+  });
+
+  it('keeps why a lead was closed - B04', () => {
+    const summary = summarise([entry('disposition', '11:00', { value: 'closed', reason: 'sold' }, 'Nora')]);
+    expect(summary.dispositions).toEqual([{ at: at('11:00'), value: 'closed', reason: 'sold', agent: 'Nora' }]);
   });
 });

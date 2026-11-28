@@ -8,7 +8,8 @@ with the conversation it closed.
 2026-09-28 Closed stands for sold, not interested and wrong number alike; a new bucket
 must know which (B22), and Admin can then count leads sold (B05).
 
-**Depends on:** B03 · **Size:** M · **Status:** To do · **Deploy note:** the route
+**Depends on:** B03 · **Size:** M · **Status:** Done 2026-11-28 - migration 025, the
+live, upgrade, route, frontend and e2e checks pass · **Deploy note:** the route
 still accepts a Closed with no reason - a browser still running the old page posts
 none until it reloads. B19 makes the reason required, a deploy later.
 
@@ -51,19 +52,19 @@ none until it reloads. B19 makes the reason required, a deploy later.
 
 ## Done when
 
-- [ ] `scripts/dispositions-live-check.ts`: the reason and the newest conversation are
+- [x] `scripts/dispositions-live-check.ts`: the reason and the newest conversation are
       saved; the two checks refuse a reason on DNC and an unknown reason (an
       `attempt()` helper, naming the constraint); Closed with no reason saves NULL.
-- [ ] `scripts/dispositions-upgrade-check.ts` (B03): dispositions seeded in the old
+- [x] `scripts/dispositions-upgrade-check.ts` (B03): dispositions seeded in the old
       shape - Closed, DNC, the retired values, a lead with two conversations - get the
       right `conversation_id` and a NULL reason.
-- [ ] Route tests (`src/api/__tests__/dispositions.test.ts`): `invalid_reason` for an
+- [x] Route tests (`src/api/__tests__/dispositions.test.ts`): `invalid_reason` for an
       unknown reason and for DNC with a reason; Closed without one accepted.
-- [ ] `core/dispositions.test.ts`: `isCloseReason`.
-- [ ] Frontend tests: Closed opens the popup; Sold then Save sends `reason: 'sold'`;
+- [x] `core/dispositions.test.ts`: `isCloseReason`.
+- [x] Frontend tests: Closed opens the popup; Sold then Save sends `reason: 'sold'`;
       Cancel leaves nothing chosen; the timeline and badge wording.
-- [ ] `outcome.set` carries `reason` (`scripts/activity-live-check.ts`).
-- [ ] `npm run e2e`: step 8's Closed sends a reason.
+- [x] `outcome.set` carries `reason` (`scripts/activity-live-check.ts`).
+- [x] `npm run e2e`: step 8's Closed sends a reason.
 
 ## Tests
 
@@ -83,7 +84,36 @@ Counting sold on Overview (B05); Closed applying to one conversation in `CLOSED_
 
 ## As built
 
-*Empty until the ticket is done.*
+- **Migration 025** (`025_close_reasons.sql`): `reason` with `dispositions_reason_known`
+  and `dispositions_reason_only_closed`; `conversation_id` with
+  `dispositions_conversation_fk`; the backfill, and a guard that stops - changing
+  nothing - when an outcome on a lead with a conversation finds none started at or
+  before it. No index on `conversation_id`: nothing reads it yet; B19, which does,
+  decides.
+- **`setDisposition(leadId, agentId, value, reason = null)`** - the reason is the last
+  argument, optional, so the callers that close without one (the queue's live check)
+  are unchanged. `conversation_id` comes from `newestConversation` in the same
+  INSERT ... SELECT, under the lead's lock. `DispositionRow` gains `reason` and
+  `conversationId`; `outcome.set` gains `reason` (null on DNC).
+- **The route** accepts `reason: null` as none; any reason with DNC, an unknown word,
+  an empty string or a non-string is `invalid_reason`; case and padding are trimmed,
+  as for `value`.
+- **One label on every screen**: `outcomeLabel(value, reason)` in
+  `frontend/src/api/workspace.ts` - the timeline, the Lead Timeline's list, the badge,
+  Wrap up's button - and Overview's `activityAfter`, " · Sold" after the lead's name.
+  The timeline's detail carries `reason` only when there is one, so older entries are
+  unchanged.
+- **The popup** is the DNC confirm's `Modal`, titled "Why is this lead closed?", the
+  three reasons as `chip-button`s in a `wrapup__choices` group, Cancel in the footer.
+  Pressing Closed again once chosen takes it back without asking. Not looked at in a
+  browser - Jeel to check it by eye.
+- **`refusedBy`** in `scripts/check.ts`: the ticket's `attempt()` helper, moved there
+  from `ai-agent-live-check.ts` so both checks share one copy.
+- **Seen failing first:** the ten new route tests on the old route; six of the seven
+  Wrap up tests on the old panel (the seventh, Closed alone, holds on both).
+- **Runs:** every live check (25, both upgrade checks among them); the e2e, 143 checks,
+  step 8 saving Sold against the lead's conversation; backend 1,985 and frontend 478
+  tests; lint, types, the frontend build, the image build.
 
 ---
 

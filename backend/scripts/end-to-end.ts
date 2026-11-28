@@ -576,9 +576,13 @@ async function main(): Promise<void> {
   const afterRelease = (await listQueue({})).leads.find((l) => l.id === leadId);
   check('the queue frees it - still there, finished and with a callback', [afterRelease !== undefined, afterRelease?.tag?.kind !== 'working'], [true, true]);
 
-  // Wrap up's outcomes are Closed and DNC (2026-09-28, AGENT-WORKSPACE.md).
-  const closed = await setDisposition(leadId, agent, 'closed');
-  check('Closed is recorded', closed.ok, true);
+  // Wrap up's outcomes are Closed and DNC (2026-09-28, AGENT-WORKSPACE.md);
+  // Closed says why (B04).
+  const closed = await setDisposition(leadId, agent, 'closed', 'sold');
+  check('Closed is recorded, with why', closed.ok && closed.disposition.reason, 'sold');
+  check('against the conversation the lead answered',
+    closed.ok && closed.disposition.conversationId,
+    (await pool.query(`SELECT id FROM conversations WHERE lead_id = $1 ORDER BY created_at DESC, id DESC LIMIT 1`, [leadId])).rows[0].id);
   check('the lead leaves the queue', (await listQueue({})).leads.some((l) => l.id === leadId), false);
   check('Admin > Leads reads Closed', (await listAdminLeads({})).leads.find((l) => l.id === leadId)?.status, 'closed');
   const closedCallback = await pool.query(`SELECT done_at IS NOT NULL AS done FROM callbacks WHERE lead_id = $1`, [leadId]);

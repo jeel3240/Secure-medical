@@ -23,7 +23,7 @@ callback done again, or releasing a lead nobody holds writes nothing.
 | `lead.released` | The Release button, a superadmin's force-release, or an outcome letting go of the lead | Who released it; subject, the holder | `heldSince`, `forced`, `because: 'outcome'` |
 | `reply.read` | An unread reply is opened - once, by whoever cleared it - or cleared by an outcome saved on the lead | The agent | `because: 'outcome'` when an outcome cleared it |
 | `note.added` | A note is saved | The agent | `noteId` - the text stays in `notes`, not copied |
-| `outcome.set` | Closed or DNC is saved | The agent | `value`, `dispositionId` |
+| `outcome.set` | Closed or DNC is saved | The agent | `value`, `reason` - why it was closed, null on DNC or a Closed with none (B04) - `dispositionId` |
 | `callback.booked` | A callback is booked, in the statement that books it. Seri's is for the lead's holder when an active agent holds the lead, otherwise open to everyone, with no subject | Who booked it; none for one the system booked for a missed call, or Seri's. Subject, whom it is for | `callbackId`, `scheduledAt`; a missed call's `because: 'missed_call'`; Seri's `via: 'seri'`, `callId`, `timeZone` - the lead's zone she agreed it in. Her one-line reason is on the callback (`note`), not here |
 | `callback.taken` | A call back nobody had became an agent's - one Seri booked, or one whose agent was deactivated: the first to pick the lead up takes it (`CALLBACKS.md`, "A call back nobody has"), in the same statement as the pick-up. On the lead's timeline | Actor and subject, that agent | `callbackId`, `scheduledAt`; `from`, the deactivated agent |
 | `callback.rescheduled` | Its time changes | Who moved it | `callbackId`, `from`, `to` |
@@ -208,6 +208,7 @@ WHERE source = 'eztexting' AND payload->>'fromNumber' = '16025550147' ORDER BY i
 
 ## History
 
+- 2026-11-28 · `outcome.set` keeps `reason`, why the lead was closed · B04
 - 2026-11-27 · Rewritten as a reference: the actions table checked against `ACTIVITY_ACTIONS` - 41 actions, not 40; every action said to be proved by a test, but `dev.test_reset` is not, and now says so; the screen's `LOG` entries handed to `TIMELINE.md`; counts dropped · D10
 - 2026-11-24 · `ai_agent.switched` also from the Seri card on Admin > Configuration, with the superadmin as actor and `via: 'website'`
 - 2026-11-23 · `dev.test_reset`: the dev scripts wrote with no record, and the number move overwrote the only record of the number a lead had · review Q9

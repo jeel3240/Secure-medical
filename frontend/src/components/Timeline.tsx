@@ -1,5 +1,5 @@
 import type { TimelineEntry, TimelineKind } from '../api/workspace';
-import { DISPOSITION_LABEL, type Disposition } from '../api/workspace';
+import { outcomeLabel } from '../api/workspace';
 import { CALL_RESULT_WORDS } from '../lib/call-results';
 import { dayLabel, formatDay, formatTime, isSameDay } from '../lib/format';
 import { CallAnswers } from './CallAnswers';
@@ -205,10 +205,9 @@ function entryText(entry: TimelineEntry): string {
       }
       return d.doneAt ? `Callback completed (was ${when})` : `Callback scheduled for ${when}`;
     }
-    case 'disposition': {
-      const value = d.value as Disposition;
-      return `Disposition: ${DISPOSITION_LABEL[value] ?? value}`;
-    }
+    case 'disposition':
+      // "Closed · Sold" - why, when it was asked (B04).
+      return `Disposition: ${outcomeLabel(String(d.value), d.reason)}`;
     case 'activity':
       return activityText(d, entry.at);
     default:

@@ -68,3 +68,21 @@ export const CLOSING_DISPOSITIONS: readonly (Disposition | RetiredDisposition)[]
 export function isDisposition(value: string): value is Disposition {
   return (DISPOSITIONS as readonly string[]).includes(value);
 }
+
+/**
+ * Why a lead was closed - asked when Closed is pressed (B04, Jeel 2026-11-27),
+ * saved in `dispositions.reason`, in the order the popup shows them. On Closed
+ * only; the database refuses one anywhere else (`dispositions_reason_only_closed`)
+ * and any other word (`dispositions_reason_known`).
+ *
+ * New values in their own column. Three of the retired outcomes have the same
+ * names (`RETIRED_DISPOSITIONS`); those are `value`s from before 2026-09-28 and
+ * stay as they are.
+ */
+export const CLOSE_REASONS = ['sold', 'not_interested', 'wrong_number'] as const;
+
+export type CloseReason = (typeof CLOSE_REASONS)[number];
+
+export function isCloseReason(value: string): value is CloseReason {
+  return (CLOSE_REASONS as readonly string[]).includes(value);
+}

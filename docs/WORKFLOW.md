@@ -157,7 +157,8 @@ second misses the second part: rebuild it, or run the second part's SQL there on
 
 ### Where the files stand
 
-`main` and production hold 001 to 024. The next migration is 025.
+`main` and production hold 001 to 024. `dev` adds 025 (B04, why a lead was
+closed). The next migration is 026.
 
 ## When it goes wrong
 
@@ -170,6 +171,7 @@ second misses the second part: rebuild it, or run the second part's SQL there on
 
 ## History
 
+- 2026-11-28 · 025 on `dev`: `dispositions.reason` and `conversation_id` · B04
 - 2026-11-28 · A migration that changes existing rows ships an upgrade check · B03
 - 2026-11-28 · On deploy the migrations run before the new code starts, so a migration suits the code still running: it adds, and a drop waits for a later deploy · B02
 - 2026-11-27 · Split: deploying, the images, the switches, `twilio:configure` and CloudWatch to `DEPLOY.md`; the credentials table and the definition of done from `CLAUDE.md`; the EZ Texting account's rules to `EZTEXTING-API.md`, which owns them; `npm run docs:check` before a PR; the dated notes to this History · D08
