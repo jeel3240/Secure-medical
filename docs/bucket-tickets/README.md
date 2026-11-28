@@ -69,7 +69,7 @@ below, is a suggested path through it.
 | # | Ticket | Depends on | Size | Status |
 |---|---|---|---|---|
 | | **A. Ready now - no buckets needed** | | | |
-| B01 | [Queue: tier first, then newest](B01-queue-tier-then-newest.md) | - | S | To do |
+| B01 | [Queue: tier first, then newest](B01-queue-tier-then-newest.md) | - | S | Done 2026-11-28 |
 | B02 | [Deploy order: migrations before the new code](B02-deploy-order-migrations-first.md) | - | S | To do |
 | B03 | [The upgrade check](B03-upgrade-check.md) | - | S | To do |
 | B04 | [Closed asks why](B04-closed-asks-why.md) | B03 | M | To do |

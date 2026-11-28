@@ -90,6 +90,16 @@ const BASE = `
 `;
 
 /**
+ * The order, after `q`'s columns: a promised call first, then the tier, then
+ * the newest, then id. Written once and used twice in `listQueue` - the page's
+ * lateral picks the rows with it and the outer statement orders them with it -
+ * so the two cannot drift apart. `t` is `q` or `page`.
+ */
+function queueOrder(t: string): string {
+  return `${t}.promised_at ASC NULLS LAST, ${t}.tier_rank ASC NULLS LAST, ${t}.received_at DESC, ${t}.id DESC`;
+}
+
+/**
  * Who belongs in the queue: only leads that need a person - Jeel, 2026-09-28.
  *
  * It used to hold every responder, including a lead halfway through the
@@ -230,6 +240,8 @@ interface QueueDbRow {
   received_at: Date | null;
   score: number;
   tier: string | null;
+  /** The tier's `sort_order` - what the rows are ordered by; null with no tier. */
+  tier_rank: number | null;
   status: QueueRow['conversationStatus'];
   end_outcome: string | null;
   answers: QueueAnswer[] | null;
@@ -253,18 +265,23 @@ interface QueueDbRow {
 /**
  * The queue, best lead first.
  *
- * Sorted by score, then by how recently the lead arrived: an agent working
- * down the list always has the highest-intent lead in front of them, and
- * between equal scores the freshest one, because speed to contact is the whole
- * point of the screen.
+ * Sorted by tier - HOT, then WARM, then LOW, in `tiers.sort_order` - and
+ * within a tier the newest first (QUEUE.md, "The order"). The tier says how
+ * strong the lead is; inside it, speed to contact is what matters, so a HOT 85
+ * that arrived two minutes ago comes before a HOT 90 that has waited five days.
+ * Score alone once came first, and kept that 90 on top (B01, Jeel 2026-11-27).
+ * The rank is the table's `sort_order`, never the tier's text, which would put
+ * LOW before WARM. A lead with no tier - held before it answered, or one who
+ * rang us and was missed - goes after LOW (`NULLS LAST`). Score is still on
+ * every row; it no longer orders them.
  *
- * **A missed "yes" comes before all of it** - T22, 2026-10-24. The lead said
- * yes to a person on the robot's call and was told an agent would call them
- * back shortly. Nothing outranks that, and with no score it would otherwise
- * sink to the bottom. Several: the one waiting longest first, as on the hold
- * line. **So does a call back Seri booked, once it is due** - A16: the lead
- * was promised a person's call at that time. Both are a promised call, sorted
- * together on when it was promised for (`promised_at`).
+ * **A promised call comes before all of it.** A missed "yes" (T22): the lead
+ * said yes to a person on the robot's call and was told an agent would call
+ * them back shortly. A call back Seri booked, once it is due (A16): the lead
+ * was promised a person's call at that time. Nothing outranks either, and with
+ * no tier each would otherwise sink to the bottom. Both are sorted together on
+ * when the call was promised for (`promised_at`), the longest waiting first, as
+ * on the hold line.
  *
  * **One statement, and one pass over the leads** - 2026-10-06. Whether a lead
  * belongs in the queue is worked out from several tables, for every lead we
@@ -295,7 +312,12 @@ export async function listQueue(query: QueueQuery = {}): Promise<QueuePage> {
     `WITH q AS MATERIALIZED (
        SELECT l.id, l.phone, l.first_name, l.last_name, l.source,
               ${RECEIVED_SQL} AS received_at,
-              c.id AS conversation_id, c.score, c.tier, c.status, c.end_outcome,
+              c.id AS conversation_id, c.score, c.tier,
+              -- The tier's place, looked up for each queued lead. Not a join on
+              -- tiers in BASE: that changed Postgres's plan for the whole
+              -- statement and took the queue from 84 ms to 293 ms (B01).
+              (SELECT t.sort_order FROM tiers t WHERE t.name = c.tier) AS tier_rank,
+              c.status, c.end_outcome,
               u.id AS agent_id, u.name AS agent_name, l.has_unread_inbound,
               ${MISSED_YES_AT_SQL} AS missed_yes_at,
               -- LEAST skips a null: whichever promised call came first.
@@ -311,7 +333,7 @@ export async function listQueue(query: QueueQuery = {}): Promise<QueuePage> {
      FROM grouped
      LEFT JOIN LATERAL (
        SELECT l.id, l.phone, l.first_name, l.last_name, l.source, l.received_at,
-              l.score, l.tier, l.status, l.end_outcome,
+              l.score, l.tier, l.tier_rank, l.status, l.end_outcome,
               -- What they answered, as saved, in the flow's order.
               (SELECT COALESCE(jsonb_agg(jsonb_build_object(
                         'key', a.question_key, 'heading', a.heading, 'label', a.label) ORDER BY a.position), '[]'::jsonb)
@@ -327,7 +349,7 @@ export async function listQueue(query: QueueQuery = {}): Promise<QueuePage> {
        FROM (
          SELECT q.* FROM q
          ${onPage}
-         ORDER BY q.promised_at ASC NULLS LAST, q.score DESC, q.received_at DESC, q.id DESC
+         ORDER BY ${queueOrder('q')}
          LIMIT ${limit}
        ) l
        -- The next callback - Seri's included, which has no agent until someone
@@ -348,7 +370,7 @@ export async function listQueue(query: QueueQuery = {}): Promise<QueuePage> {
          LIMIT 1
        ) dcb ON true
      ) page ON true
-     ORDER BY page.promised_at ASC NULLS LAST, page.score DESC, page.received_at DESC, page.id DESC`,
+     ORDER BY ${queueOrder('page')}`,
     values
   );
 

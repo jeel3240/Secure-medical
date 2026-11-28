@@ -298,6 +298,7 @@ its doc's Tests table; these are the shared parts':
 | Skeleton loaders for tables | A spinner, except Admin > Agents' skeleton rows | this doc |
 | Queue: tier counters as pills, several at once; filters and table apart | One segmented switcher - All, Hot, Warm, Low with counts - one at a time; filters and table in one card | `QUEUE.md` |
 | Source as a multi-select | A single choice, on the queue and Admin > Leads; the APIs take several | `QUEUE.md`, `ADMIN-LEADS.md` |
+| Queue sorted by score, then freshness | The promised calls first, then by tier - Hot, Warm, Low - newest first in each | `QUEUE.md` |
 | Queue columns STATE, INTEREST, TIMING, PREFERENCE, AGE | No STATE; one Answers column; WAITING, with no amber or red | `QUEUE.md` |
 | Queue statuses New, Attempted, In progress, Callback, Needs review, Stalled, Inbound reply, Seen before | The tags of `QUEUE.md`, "The tag" | `QUEUE.md` |
 | Coloured tier badges | Signal bars and the word | `FRONTEND-STYLE.md` |
@@ -342,6 +343,7 @@ its doc's Tests table; these are the shared parts':
 
 ## History
 
+- 2026-11-28 · The queue's order - by tier, newest first, not by score - added to "Differences from the brief" · B01
 - 2026-11-27 · Rewritten to the Area template, 937 lines to this: the queue, admin,
   workspace, callbacks, timeline and calling sections handed to their docs
   (`QUEUE.md`, `ADMIN.md`, `ADMIN-LEADS.md`, `AUTH.md`, `AGENT-WORKSPACE.md`,
