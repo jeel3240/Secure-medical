@@ -4,7 +4,7 @@
 
 **Why:** The closest doc to the standard; only the order, a Decisions table and History are missing, and "First superadmin" is how-to steps (audit, 2026-11-27). Every fact checked true.
 
-**Depends on:** D01 · **Size:** S · **Status:** To do · **Deploy note:** none - documentation only.
+**Depends on:** D01 · **Size:** S · **Status:** Done 2026-11-27 - AUTH.md in the area template; the docs check passes but for RUNNING.md, DEPLOY.md and ARCHITECTURE.md, still being written · **Deploy note:** none - documentation only.
 
 ## Build
 
@@ -34,7 +34,8 @@ Rewriting any other doc - each has its own ticket.
 
 ## As built
 
-*Empty until the ticket is done.*
+- `AUTH.md` in the area template: the first account (a pointer - the local and server commands handed to `RUNNING.md` and `DEPLOY.md`), endpoints, sessions, the frontend, and Admin > Agents merged from `AUTH.md.from-frontend.md`; Rules 1-5; a Decisions table (dated 2026-09-14, the first date the docs record auth as built); History.
+- Corrected: the Postgres store runs in the live checks that create accounts and in the e2e, not only "by running the app locally"; the inactive path runs the dummy bcrypt too (`burnPasswordCheck`); the other start-up refusals linked to `LOGGING.md` (`api.refused_start`), not `WORKFLOW.md`; "Who is free" now `AUTO-CALL-TRANSFER.md`.
 
 ---
 

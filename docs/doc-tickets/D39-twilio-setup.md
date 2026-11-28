@@ -4,7 +4,7 @@
 
 **Why:** How-to steps inside an area doc (audit, 2026-11-27).
 
-**Depends on:** D38, D06, D08 · **Size:** S · **Status:** To do · **Deploy note:** none - documentation only.
+**Depends on:** D38, D06, D08 · **Size:** S · **Status:** Done 2026-11-27 - `TWILIO-SETUP.md` (How-to); `docs-check --type how-to` clean but for links to `ENVIRONMENT.md` and `DEPLOY.md`, still being written · **Deploy note:** none - documentation only.
 
 ## Build
 
@@ -33,7 +33,9 @@ Rewriting any other doc - each has its own ticket.
 
 ## As built
 
-*Empty until the ticket is done.*
+- `TWILIO-SETUP.md`: Before you start (the production-number rule, stated once), What it needs on the Twilio account, Settings (the three states), Pointing Twilio at the server (the refusal table from `decidePointing`), Testing locally on the dev number, Deploying it, When it goes wrong, History.
+- Each variable links `ENVIRONMENT.md` - the old settings table handed to it; `DEPLOY.md` and `CLAUDE.md` given the link to use. Production commands carry both `-f` files.
+- The 2026-10-17 dev-number calls, the guard's history (T1-T3) and the 2026-10-05 rule are History lines; the decisions themselves are in `TWILIO.md`'s Decisions table, since a how-to has none.
 
 ---
 

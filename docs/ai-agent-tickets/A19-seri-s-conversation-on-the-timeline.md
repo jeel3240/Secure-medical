@@ -4,7 +4,7 @@
 
 **Why:** So the lead does not have to repeat themselves.
 
-**Depends on:** A10  ·  **Size:** Small (a few hours)  ·  **Status:** Done 2026-11-12
+**Depends on:** A10 · **Size:** S · **Status:** Done 2026-11-12 - her conversation under the call on the lead's timeline
 
 ## Build
 

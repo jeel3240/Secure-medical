@@ -2,7 +2,7 @@
 
 **Goal:** a call to Seri runs on understand, decide and speak, with everything the call does today still working: stops, the safety check, "One moment...", the fallback, the three minutes, silence, being talked over, the voicemail verdict.
 
-**Depends on:** A25, A27, A28, A29  ·  **Size:** L  ·  **Status:** Done 2026-11-17
+**Depends on:** A25, A27, A28, A29 · **Size:** L · **Status:** Done 2026-11-17 - every call uses it; the one-request brain kept for a rollback until 2026-11-19, then removed
 
 ## Build
 

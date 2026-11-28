@@ -4,7 +4,7 @@
 
 **Why:** call 112 - "are you still there?" came about 13 seconds after her question, not 6: the silence only counts while nobody talks, and Twilio's speaker events showed the lead talking with no words. And `SPECIALIST_LINE` (`safety.ts`) asks "Would you like me to connect you?" whoever is there - the same fault as call 111's specialist line.
 
-**Depends on:** A24  ·  **Size:** S  ·  **Status:** Done 2026-11-17
+**Depends on:** A24 · **Size:** S · **Status:** Done 2026-11-17 - silence held, not started again; the specialist line by who is there
 
 ## Build
 

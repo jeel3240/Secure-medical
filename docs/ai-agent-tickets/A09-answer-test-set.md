@@ -4,7 +4,7 @@
 
 **Why:** The only safe way to change instructions or knowledge without breaking something.
 
-**Depends on:** A04, A05, A06  ·  **Size:** Medium (about a day)  ·  **Status:** Done 2026-11-11 - removed 2026-11-19 with today's brain, which it tested (`AI-AGENT.md` section 12, "Today's brain removed"); the understand and speak sets took its place
+**Depends on:** A04, A05, A06 · **Size:** M · **Status:** Done 2026-11-11 - removed 2026-11-19 with the one-request brain, which it tested (`AI-BRAIN.md`, History); the understand and speak sets took its place
 
 ## Build
 
@@ -62,5 +62,12 @@
 **Run again 2026-11-12, after the four speaking-style lines** (`AI-AGENT.md` section 1): the old and new instructions side by side, three runs each, in the same hour - 198/201 (98.5%) and 199/201 (99.0%). The old failed `personal_info` three times of three, transferring a lead who had just read out a card number; the new passed it every time, and failed `callback_saturday` once - Saturday offered, which the booking check (A06) would refuse with a weekday instead - and `no_twice` once, ended as an opt-out. `upset` passed every run on both. **First word: 0.92 s median for both**, against 0.55 s the day before - OpenAI's speed changes from hour to hour, so compare a change or a model in the same hour, never against an old run.
 
 **What it does not cover:** how she sounds, talking over her, silence and timing - the relay's (A11, A12) and the real phone's (A21). A case is one reply at a time, not a whole call. The 9 PM and Saturday cases check what she says, while the booking check (A06) is what stops such a time being booked. A stop said in the lead's own words is also caught by the relay's own stop-word check before Seri replies (A11); the six stop cases test her without it.
+
+**Moved here from `docs/AI-AGENT.md` on 2026-11-27** (D42), where the set had its row under "Testing" (section 8) and its runs were told call by call:
+
+- **How it was run:** `cd backend && OPENAI_API_KEY=... npm run ai:eval` ran Seri's model; `-- --model gpt-5.4-mini:none --runs 2` compared another. It was run against the real model before every change to the knowledge or the instructions, and chose the model on pass rate, then speed.
+- **Her tones (A21, 2026-11-13):** told to begin every reply with a tone but shown plain lines of hers before, she gave a tone in 6 replies of 67; shown toned ones, in 127 of 136 - she keeps to tones she sees herself use, so OpenAI read back what she wrote, tones and all, and the greeting as Twilio was sent it. `dev` and the voice branch side by side, two runs each: `dev` 133 of 134, the branch 132 of 136, a tone in 127 replies, first word 0.57 s median. The branch's misses: a call back booked too soon (refused by the check, as on a call); the Saturday case, which failed on `dev` too (3 of 5 runs there, 2 of 5 on the branch); and a reply that opted the lead out, then said her greeting again - the question at its end had held the stop back, so a stop was never held back again.
+- **What the lead hears** was graded by `upToQuestion` (`sentences.ts`) after call 95 - removed with the set (review Q2, 2026-11-23).
+- **Removed 2026-11-19** with the one-request brain it tested, and the bake-off with it (`docs/AI-BRAIN.md`, History). Its lead lines live on in the understand set's labelled lines (`evals/understand-cases.json`) and its kinds of reply in the speak set; the per-call runs behind each case it gained are in A21's As built.
 
 Design: `docs/AI-AGENT.md`. All AI code in `backend/src/ai/`. One PR into `dev`.

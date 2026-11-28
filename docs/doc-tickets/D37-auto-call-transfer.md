@@ -4,7 +4,7 @@
 
 **Why:** As D36. It also names `takeCallWithLead` (`db/claims.ts`) and `closeFromTwilio` correctly, which the old text does not (audit, 2026-11-27).
 
-**Depends on:** D35 · **Size:** M · **Status:** To do · **Deploy note:** none - documentation only.
+**Depends on:** D35 · **Size:** M · **Status:** Done 2026-11-27 - `docs/AUTO-CALL-TRANSFER.md`, about 510 lines; `docs-check --type area` passes · **Deploy note:** none - documentation only.
 
 ## Build
 
@@ -33,7 +33,10 @@ Rewriting any other doc - each has its own ticket.
 
 ## As built
 
-*Empty until the ticket is done.*
+- From "Who is free" (split into "Who is free", "The "Taking calls" switch", "Letting a transfer ring out turns it off", "The app is open"), "The transfer", "The hold line", "The next person who comes free gets the waiting lead" and "A lead calling back" - each name kept.
+- `takeTransfer` is named as built on `takeCallWithLead` (`db/claims.ts`), shared with `takeIncomingCall`; the hold watcher's close as `closeFromTwilio` (`api/left-open.ts`). `FREE_SQL`'s parts named as the code has them (`ON_A_CALL_SQL`, `CALL_UNDER_WAY_HOURS`).
+- The frontend rewriter's handoff merged: the browser's own parts ("In the browser", the switch in the app bar) and three test rows. Facts `INCOMING-CALLS.md` owns - the ring markers' handling, the call-back card - are links, per the twilio rewriter's handoff.
+- Over 500 lines with the browser's parts; under the 600 limit. The "Who is free" and "The hold line" comments (about 34) are listed in `renames.from-robot.md`.
 
 ---
 

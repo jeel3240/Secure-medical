@@ -4,7 +4,7 @@
 
 **Why:** Each fact in one place (audit, 2026-11-27).
 
-**Depends on:** D17, D18, D19 · **Size:** S · **Status:** To do · **Deploy note:** none - documentation only.
+**Depends on:** D17, D18, D19 · **Size:** S · **Status:** Done 2026-11-27 - queue, Overview, Configuration's Seri card, Admin > Leads and Agents screens handed off; the polling hook and the on-screen lock written into FRONTEND.md from `usePolling.ts` and `lib/lock.ts` · **Deploy note:** none - documentation only.
 
 ## Build
 
@@ -33,7 +33,7 @@ Rewriting any other doc - each has its own ticket.
 
 ## As built
 
-*Empty until the ticket is done.*
+The queue screen went to `QUEUE.md`, Overview and the Seri card to `ADMIN.md`, the tabs and redesign history to `ADMIN-LEADS.md`, Admin > Agents to `AUTH.md`, as handoffs. `FRONTEND.md` owns "The polling hook", "The one-agent lock on screen" and "What the button offers", the names kept as headings. ADMIN-LEADS's rewrite had already fixed its stale "DNC list keeps its view in memory" line.
 
 ---
 

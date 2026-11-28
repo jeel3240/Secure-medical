@@ -4,7 +4,7 @@
 
 **Why:** the policy (A27) offers a person, a call back or the link by who is there and by what was already offered. Today four answers carry their own offer at the end - `price`, `which_medication`, `medical_question` ("I can connect you with a representative now, or have someone call you"), `personal_info` ("I can text you the link") - which says "now" with nobody free and offers again what was turned down. The understand step (A28) names an objection by id; today they have none.
 
-**Depends on:** A24  ·  **Size:** S  ·  **Status:** Done 2026-11-17
+**Depends on:** A24 · **Size:** S · **Status:** Done 2026-11-17 - objection ids and answer offers, knowledge `approved-2026-11-17`
 
 ## Build
 

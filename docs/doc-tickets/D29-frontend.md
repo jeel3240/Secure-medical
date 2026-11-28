@@ -4,7 +4,7 @@
 
 **Why:** After D26-D28 move the rest out; its stale lines - 453 tests in 40 files (41 now), a pointer to a section that does not mention the row flash, controls removed since Phase 4, the stack missing `@twilio/voice-sdk` (audit, 2026-11-27).
 
-**Depends on:** D26, D27, D28 · **Size:** M · **Status:** To do · **Deploy note:** none - documentation only.
+**Depends on:** D26, D27, D28 · **Size:** M · **Status:** Done 2026-11-27 - `FRONTEND.md` in the Area template, about 400 lines; docs check passes but for `RUNNING.md` and `TESTING.md`, still being written · **Deploy note:** none - documentation only.
 
 ## Build
 
@@ -34,7 +34,7 @@ Rewriting any other doc - each has its own ticket.
 
 ## As built
 
-*Empty until the ticket is done.*
+`FRONTEND.md` holds the stack (now with `@twilio/voice-sdk`, axios and the two zustand stores), screens, shell, polling hook, on-screen lock, types, calling and build, then Rules, Code, the shared parts' Tests (with `LeadWorkspaceRoute.test.tsx`, missing before), Not done with "Differences from the brief", Decisions and History. Test counts dropped. The "Browser calling is off" note and the struck-through Not built items went to History. It is about 400 lines, not 250: the hook and lock taken back, and the Differences table.
 
 ---
 

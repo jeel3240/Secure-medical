@@ -145,13 +145,17 @@ The `/new-phase` command (`.claude/skills/new-phase/`) walks through these steps
   `Done YYYY-MM-DD - <evidence>` · `Dropped YYYY-MM-DD - <why>`.
 - **Size:** `S` - a few hours; `M` - about a day. Nothing bigger: split it.
 - **Ticket heading:** `# <ID> · <Title>`.
+- **Phase 6's exception:** its tickets keep the ids the code cites - `T0` to
+  `T29`, with `T13b` and `T15a`-`T15c`. Their files take two digits so the folder
+  sorts (`T00-resend-first-texts.md`); the heading keeps the cited id
+  (`# T0 · ...`). They were never sized: Size is `-`.
 
 ### The phases
 
 | Phase | Letter | Design | Tickets |
 |---|---|---|---|
 | 1-5 | - | the original four-week plan (CLAUDE.md §10, moving to `ORIGINAL-PLAN.md` - D-tickets) | before this standard |
-| 6 · Automated calls | T | `AUTO-CALLS.md` | inside `AUTO-CALLS.md` (before this standard) |
+| 6 · Automated calls | T | `AUTO-CALLS.md`, with `AUTO-CALL-SCRIPT.md` and `AUTO-CALL-TRANSFER.md` | `auto-call-tickets/` (moved out of `AUTO-CALLS.md`, 2026-11-27) |
 | 7 · AI agent | A | `AI-AGENT.md` | `ai-agent-tickets/` |
 | 8 · Several buckets | B | `BUCKETS.md` | `bucket-tickets/` |
 | Docs to this standard | D | this doc | `doc-tickets/` |

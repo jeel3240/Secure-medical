@@ -4,7 +4,7 @@
 
 **Why:** The docs audit of 2026-11-27 found real data in committed files: a real contact copied from the client's EZ Texting account (a phone number and a name) in `EZTEXTING-API.md`; a real handset number in seven docs, a code comment and five test files; the account's sending number in a doc, a code comment, a test and the e2e; a tester's real handle about 70 times across `AUTO-CALLS.md`, `ADMIN.md`, `ADMIN-LEADS.md`, `LEAD-FLOW.md`, `FRONTEND.md`, a frontend comment and five test files; production's domain in `AUTO-CALLS.md`, `TWILIO.md`, `.env.example` and two tests. `DOCS.md` rules 5 and 8. First, before any other doc ticket. The values are not repeated here.
 
-**Depends on:** - · **Size:** S · **Status:** To do · **Deploy note:** none - documentation only.
+**Depends on:** - · **Size:** S · **Status:** Done 2026-11-27 - nothing real left in the repo but `caddy/Caddyfile`'s domain · **Deploy note:** none - documentation only.
 
 ## Build
 
@@ -35,7 +35,10 @@ Restructuring any of those docs.
 
 ## As built
 
-*Empty until the ticket is done.*
+- Replaced in 30 files: seven docs, two code comments (`backend/src/db/sql.ts`, `backend/src/api/webhooks.ts`), a frontend comment, test fixtures in backend and frontend, the e2e and `.env.example`. The invented values: the handset `+16025550147`, the contact `jamie rivera` at `15125550163`, the sending number `15205550109`, the agent Nora, and `leads.example.com` in tests.
+- The domain stays in `caddy/Caddyfile`: Caddy needs it to serve the site.
+- Proved: backend 1,965 tests, frontend 460, every one of the 23 live checks, the e2e's 142 checks; `grep` over the repo finds none of the old values.
+- **Git history still holds the old text** - removing it needs a rewrite of `dev` and `main` and a force push: Jeel's decision, asked at the merge.
 
 ---
 

@@ -4,7 +4,7 @@
 
 **Why:** The instructions are the heart of how Seri talks; they must be testable without OpenAI.
 
-**Depends on:** A03  ·  **Size:** Medium (about a day)  ·  **Status:** Done 2026-11-11 - `buildInstructions` removed 2026-11-19 with today's brain; `instructions.ts` keeps the call's own details for the speak step (`AI-AGENT.md` section 12, "Today's brain removed")
+**Depends on:** A03 · **Size:** M · **Status:** Done 2026-11-11 - `buildInstructions` removed 2026-11-19 with the one-request brain; `instructions.ts` keeps the call's own details for the speak step (`AI-BRAIN.md`, History)
 
 ## Build
 

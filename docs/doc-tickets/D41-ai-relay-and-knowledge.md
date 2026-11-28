@@ -4,7 +4,7 @@
 
 **Why:** The settings block shows Rachel's voice; the code has Aria, `partialPrompts` and an end of turn at 0.6 (`ai/relay-messages.ts`) (audit, 2026-11-27).
 
-**Depends on:** D40 · **Size:** S · **Status:** To do · **Deploy note:** none - documentation only.
+**Depends on:** D40 · **Size:** S · **Status:** Done 2026-11-27 - `docs/AI-RELAY.md` and `docs/AI-KNOWLEDGE.md`, both pass `--type reference` · **Deploy note:** none - documentation only.
 
 ## Build
 
@@ -33,7 +33,10 @@ Rewriting any other doc - each has its own ticket.
 
 ## As built
 
-*Empty until the ticket is done.*
+- `docs/AI-RELAY.md`: today's `RELAY_SETTINGS` (Aria, `partialPrompts`, `eotThreshold` 0.6) attribute by attribute, the TwiML as `seriTwiml` writes it, who may connect and the close codes, every message each way, how a session ends and Twilio's reconnect, the seven tones, the notes kept as turns, the timings measured on the dev number.
+- `docs/AI-KNOWLEDGE.md`: the three files, what a call reads and what is kept only for people, the rules the files keep and the loader's checks, every version, where the words came from, the crawl.
+- Counts checked against the files: 10 rules, 37 answers (36 approved, `medical_web` open), 30 products (7, 4, 1, 18), 9 objections; 353 area codes in `callback-time.ts`; 186 products and 576 pages in the crawl. Corrected: the loader does not check an answer's `note` or a product's `site_price_usd`, and only objection ids are held to the id pattern.
+- Onboarding of the Twilio account handed to `TWILIO-SETUP.md`.
 
 ---
 

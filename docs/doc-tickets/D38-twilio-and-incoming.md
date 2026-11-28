@@ -4,7 +4,7 @@
 
 **Why:** 920 lines with 49 dates; a stale ring said to stay open (closed by `callsLeftOpen`, `db/calls.ts`); the identity given without its prefix (`core/calls.ts`); the lead paragraph misses T19's ring to everyone free (audit, 2026-11-27).
 
-**Depends on:** D01 · **Size:** M · **Status:** To do · **Deploy note:** none - documentation only.
+**Depends on:** D01 · **Size:** M · **Status:** Done 2026-11-27 - `TWILIO.md` and `INCOMING-CALLS.md` in the Area template; `docs-check --type area` clean but for links to docs still being written · **Deploy note:** none - documentation only.
 
 ## Build
 
@@ -34,7 +34,10 @@ Rewriting any other doc - each has its own ticket.
 
 ## As built
 
-*Empty until the ticket is done.*
+- `TWILIO.md` keeps calls we place, the call bar, voicemail, recordings and the notice, webhook trust and calls left open, each a `###` under How it works with its old name; `INCOMING-CALLS.md` takes who rings, a missed call, the card, rings to several people, the ringtone (Safari's restart a `####` of its old name) and the notification, and `FRONTEND.md`'s incoming-call file table.
+- Fixed: the identity is `<prefix>agent-<id>` (`identityFor`); the lead says a lead nobody owns rings everyone free; a ring neither report reaches is closed by `callsLeftOpen`, not left "ringing"; the card's sketch shows today's fields ("Next step", not the first flow's question).
+- The notice's words, Twilio's prices and the legal reason for the notice are out - History says so; "What is kept as proof" is a link to `AUDIT.md`; the column meanings handed to `SCHEMA.md`.
+- Code comments that quote moved sections are listed for a later pass, not edited here (documentation-only rewrite); two are in migrations that have run and stay as they are.
 
 ---
 

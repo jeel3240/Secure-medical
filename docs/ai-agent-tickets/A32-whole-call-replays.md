@@ -4,7 +4,7 @@
 
 **Why:** the answer test set asks one reply at a time; A21's failures showed up across turns - an offer repeated, a third offer after two no's, the opening said again. A replay finds those in minutes.
 
-**Depends on:** A30, A31  ·  **Size:** M  ·  **Status:** Done 2026-11-17
+**Depends on:** A30, A31 · **Size:** M · **Status:** Done 2026-11-17 - 238 of 240 replays held every rule
 
 ## Build
 

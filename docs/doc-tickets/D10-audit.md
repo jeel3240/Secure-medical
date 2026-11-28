@@ -4,7 +4,7 @@
 
 **Why:** It says 40 actions (there are 41), that every action is recorded in a test (`dev.test_reset` is not), and holds screen and history sections (audit, 2026-11-27).
 
-**Depends on:** D01 · **Size:** M · **Status:** To do · **Deploy note:** none - documentation only.
+**Depends on:** D01 · **Size:** M · **Status:** Done 2026-11-27 - the actions table checked against `ACTIVITY_ACTIONS` - 41 rows; the docs check passes but for docs still being written · **Deploy note:** none - documentation only.
 
 ## Build
 
@@ -33,7 +33,9 @@ Rewriting any other doc - each has its own ticket.
 
 ## As built
 
-*Empty until the ticket is done.*
+- A two-rule lead (written with the action; cannot be altered), then tables: the actions - all 41 of `ACTIVITY_ACTIONS`, each with when, actor and `detail` - "Not recorded here", "How a record is written", "Add-only tables", the archive, "What the log does not cover", Testing, Decisions.
+- Fixed: 41 actions, not 40; `dev.test_reset` has no test, and says so; `dev.test_reset`'s row given its own `detail` cell; counts dropped from Testing.
+- "On the screen" moved to `TIMELINE.md`, "Log entries" (it had the wording; the rest handed off); "What was being lost" to History. Links re-pointed to `CALLBACKS.md`, `AUTO-CALL-SCRIPT.md`, `AUTO-CALL-TRANSFER.md`, `INCOMING-CALLS.md` and `AGENT-WORKSPACE.md`, "Blocking a number".
 
 ---
 

@@ -4,7 +4,7 @@
 
 **Why:** "The seven decisions" has 8 rows; "about 3,500 words of instructions" describes the removed brain; "22 tickets" (34); two live-check counts disagree; `Caddyfile` for `caddy/Caddyfile` (audit, 2026-11-27).
 
-**Depends on:** D40, D41, D42 · **Size:** M · **Status:** To do · **Deploy note:** none - documentation only.
+**Depends on:** D40, D41, D42 · **Size:** M · **Status:** Done 2026-11-27 - `docs/AI-AGENT.md` 887 lines to 355, passes `--type area` but for `DEPLOY.md`, not yet written · **Deploy note:** none - documentation only.
 
 ## Build
 
@@ -34,7 +34,10 @@ Rewriting any other doc - each has its own ticket.
 
 ## As built
 
-*Empty until the ticket is done.*
+- Rewritten to the Area template with a Status line in the fixed words (`In progress`); sections 1-7 kept as numbered `###` headings, so the code comments quoting them still resolve; 8 became Tests, 9 Data, 10 and 11 Not done; "The seven decisions" (eight rows) and the inline decisions in Decisions; the "Build tracker" section dropped.
+- Fixed: the removed brain's lines (her 3,500-word instructions, the actions as OpenAI tools, the notes); "22 tickets" (34); the two live-check counts dropped; `Caddyfile` to `caddy/Caddyfile`; the button's wording ("Switch on" / "Switch off" on the Seri card).
+- Linked, not restated: the voicemail rule (`AUTO-CALL-SCRIPT.md`), the transfer and who is free (`AUTO-CALL-TRANSFER.md`), the queue (`QUEUE.md`), her call backs' booking and pick-up (`CALLBACKS.md`), her fold on the timeline (`TIMELINE.md`), rule 2d, columns, actions, the key (`ENVIRONMENT.md`), the commands (`DEPLOY.md`, handed off).
+- The stale comments naming removed code taken out of `backend/src/ai/actions.ts` (`ACTION_TOOLS`, `writtenAction`) and `backend/src/ai/openai.ts` (`openAiModel`); nothing else in those files changed.
 
 ---
 

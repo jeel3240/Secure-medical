@@ -4,7 +4,7 @@
 
 **Why:** It says "every 45s" and "enqueue job"; calls the `createdAt` question unchecked beside the check's result; tells you to use your own trial account beside the update saying otherwise (audit, 2026-11-27).
 
-**Depends on:** D01 · **Size:** S · **Status:** To do · **Deploy note:** none - documentation only.
+**Depends on:** D01 · **Size:** S · **Status:** Done 2026-11-27 - a reference - endpoints, filters, field map, webhook fields, findings with evidence and date; the docs check passes but for `RUNNING.md` · **Deploy note:** none - documentation only.
 
 ## Build
 
@@ -33,7 +33,9 @@ Rewriting any other doc - each has its own ticket.
 
 ## As built
 
-*Empty until the ticket is done.*
+- Sections: the account's rules (the one owner), endpoints, listing contacts with its filters, one contact, the field map and the groups, sending, the inbound webhook and subscriptions, one contact per phone number with the 2026-11-27 test, STOP handling, Findings (finding · evidence · date), Decisions.
+- The stale lines to History: "every 45s" and "enqueue job" (the sketch, handed to `POLLER.md`), the `createdAt` question "unchecked", and "use your own trial account" - the test-account decision of 2026-09-14 is in Decisions. Four findings from the antibiotics flow's real-phone walks merged from the SMS rewrite's handoff.
+- STOP's effects and the dedupe now link `STATE-MACHINE.md` and `WEBHOOKS.md`; the subscription and tunnel steps link `RUNNING.md`.
 
 ---
 

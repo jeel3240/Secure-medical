@@ -4,7 +4,7 @@
 
 **Why:** Some events have no row of their own (`call.ring_not_taken`, `call.closed_late`, `auto_call.ring_not_taken`, `twilio.request_failed`, `auto_calls.test_numbers_invalid`); two cells are over 1,000 words; 26 dates (audit, 2026-11-27).
 
-**Depends on:** D01 · **Size:** M · **Status:** To do · **Deploy note:** none - documentation only.
+**Depends on:** D01 · **Size:** M · **Status:** Done 2026-11-27 - one row per event - 135, from a grep of `log.info|warn|error` in `backend/src`, diffed against the doc with nothing over; the docs check passes but for `DEPLOY.md` · **Deploy note:** none - documentation only.
 
 ## Build
 
@@ -33,7 +33,9 @@ Rewriting any other doc - each has its own ticket.
 
 ## As built
 
-*Empty until the ticket is done.*
+- "Events in use" is one table per area - event, level, when and its fields, file - one row per event, 135 in all; a script diffed the grep against the doc's rows both ways, with nothing missing and nothing extra.
+- Given rows of their own: `call.ring_not_taken`, `call.closed_late`, `call.close_late_failed`, `call.left_open_watch_failed`, `auto_call.ring_not_taken`, `twilio.request_failed`, `auto_calls.test_numbers_invalid`; `sms.failed`'s two levels and `webhook.ignored`'s two shown; `transcript.tick`'s fields named.
+- "The two ways this system goes quiet" and the CloudWatch note to `DEPLOY.md` (handoff); the 26 dated asides to History; Decisions table (the redaction rule, the superadmin-only check, "i want all real").
 
 ---
 

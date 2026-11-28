@@ -4,7 +4,7 @@
 
 **Why:** "The antibiotics flow" is a third of `STATE-MACHINE.md`; a flow is data (`FLOWS.md`), and Phase 8 adds more (audit, 2026-11-27).
 
-**Depends on:** D23, D14 · **Size:** S · **Status:** To do · **Deploy note:** none - documentation only.
+**Depends on:** D23, D14 · **Size:** S · **Status:** Done 2026-11-27 - the flow is FLOWS.md, "The antibiotics flow", checked word for word against 012_flows.sql · **Deploy note:** none - documentation only.
 
 ## Build
 
@@ -33,7 +33,8 @@ Rewriting any other doc - each has its own ticket.
 
 ## As built
 
-*Empty until the ticket is done.*
+- A section of `FLOWS.md` (about 90 lines), not `docs/flows/antibiotics.md`: questions, keys, positions, headings, choices, labels, points, replies, words, clarifications, the review text and the awards, each checked against `012_flows.sql` section 5; the path scores recomputed (55-100) and the segment lengths measured (158, 189, 243).
+- Its decisions in `FLOWS.md`'s Decisions; "No to question 3" and the lines waiting for the client in its Not done; `SCHEMA.md` already links the new place, `CLAUDE.md` and `LEAD-FLOW.md` still name the old one (renames file).
 
 ---
 

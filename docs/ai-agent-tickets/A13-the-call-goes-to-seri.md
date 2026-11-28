@@ -4,7 +4,7 @@
 
 **Why:** The switch that changes every call.
 
-**Depends on:** A01, A10  ·  **Size:** Small (a few hours)  ·  **Status:** Done 2026-11-12
+**Depends on:** A01, A10 · **Size:** S · **Status:** Done 2026-11-12 - `/auto/answer` connects an answered call to her when she is on
 
 ## Build
 

@@ -14,8 +14,10 @@
  * poller sends it. Nothing is deleted: the earlier conversations and their
  * answers stay, and so does whatever agents did with the lead.
  *
- * Refuses in production - `NODE_ENV` is the only guard: the file is not
- * compiled into dist/, but the server's image does hold scripts/.
+ * Refuses in production. The server's image cannot run it anyway - it holds
+ * only the compiled dist/ and scripts/migrate.js, with no ts-node
+ * (backend/Dockerfile, the `production` stage) - and the `NODE_ENV` check is
+ * a second guard.
  * docs/FLOWS.md, "Testing a flow with one phone".
  */
 import '../src/config';

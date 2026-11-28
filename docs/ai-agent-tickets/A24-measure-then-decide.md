@@ -4,7 +4,7 @@
 
 **Why:** the new brain asks OpenAI twice per reply where today it asks once. A reply that starts more than about 0.8 s after the lead stops already feels slow (section 1), and today's, on A21's real calls 86-112, start at 1.09 s median and 2.15 s at the slowest tenth (`call_ai_turns.latency_ms`). The second step must not make that worse.
 
-**Depends on:** -  ·  **Size:** S  ·  **Status:** Done 2026-11-17 - the bake-off script removed 2026-11-19 with today's brain, its baseline; its numbers stay in `AI-AGENT.md` section 12
+**Depends on:** - · **Size:** S · **Status:** Done 2026-11-17 - the bake-off script removed 2026-11-19 with the one-request brain, its baseline; its numbers are in `AI-BRAIN.md`, "How fast"
 
 ## Build
 

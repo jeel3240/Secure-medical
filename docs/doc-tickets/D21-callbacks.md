@@ -4,7 +4,7 @@
 
 **Why:** They are a third of `AGENT-WORKSPACE.md` and pulled from four docs (audit, 2026-11-27).
 
-**Depends on:** D20 · **Size:** S · **Status:** To do · **Deploy note:** none - documentation only.
+**Depends on:** D20 · **Size:** S · **Status:** Done 2026-11-27 - `docs/CALLBACKS.md` written, Area sections, docs check passes · **Deploy note:** none - documentation only.
 
 ## Build
 
@@ -33,7 +33,10 @@ Rewriting any other doc - each has its own ticket.
 
 ## As built
 
-*Empty until the ticket is done.*
+- `docs/CALLBACKS.md` (about 250 lines): Endpoints, Three kinds (`booked`, `missed_call`, `ai_booked`), My Callbacks: the tabs, A missed call's callback, Seri's call backs, A call back nobody has, Whose callback it is, The list row; Rules 1-10.
+- Owns the pick-up rule: `claimLead` takes every open call back nobody has - Seri's untaken, or a deactivated agent's - in the pick-up's statement, `callback.taken` with `from`. `QUEUE.md` links it; `AI-AGENT.md` already links "Seri's call backs".
+- Found: the timeline words a taken deactivated agent's call back as "Took the callback Seri booked" (`activityText` ignores `from`) - in Not done, for Jeel.
+- `docs/README.md`'s new row is a handoff (the brief forbids editing it).
 
 ---
 

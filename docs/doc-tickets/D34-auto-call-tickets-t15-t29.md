@@ -4,7 +4,7 @@
 
 **Why:** As D33.
 
-**Depends on:** D33 · **Size:** M · **Status:** To do · **Deploy note:** none - documentation only.
+**Depends on:** D33 · **Size:** M · **Status:** Done 2026-11-27 - 17 files, `T15a` to `T29`; `AUTO-CALLS.md` holds no ticket; `docs-check --type ticket` passes · **Deploy note:** none - documentation only.
 
 ## Build
 
@@ -29,7 +29,9 @@ Rewriting any other doc - each has its own ticket.
 
 ## As built
 
-*Empty until the ticket is done.*
+- As D33. The body's real-call notes moved in: "What the real transfers showed" split across T15a, T15b and T15c; the hold line's calls into T16 and T17 (with call 46's two requests); voicemail's verdict counts and calls 56-62 into T18.
+- T26's "Going live - Jeel's steps" and "To stop" moved to `DEPLOY.md` (handoff `DEPLOY.md.from-robot.md`, present tense); the ticket links it and keeps the steps as they were run on 2026-10-30 under *As built*.
+- *As built* references updated to the current doc: T15a-T15c, T16, T17 (`AUTO-CALL-TRANSFER.md`), T18 (`AUTO-CALL-SCRIPT.md`), T19 (`INCOMING-CALLS.md`, "Who rings"), T20, T27-T29 (`AUTO-CALLS.md`), T21 (`TIMELINE.md`).
 
 ---
 

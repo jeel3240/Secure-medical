@@ -4,7 +4,7 @@
 
 **Why:** Twilio's Smart Turn Detection is new (generally available 2026-11-13) but does not apply with Deepgram Flux, which uses its own end of turn; Flux has its own settings (`eotThreshold`, 0.5-0.9, default 0.8; `partialPrompts`, an early end-of-turn 150-250 ms before the final). Nova-3 without either cut sentences in half on A02's calls.
 
-**Depends on:** A30  ·  **Size:** S  ·  **Status:** Done 2026-11-18 - `partialPrompts="true"` and `eotThreshold="0.6"`, chosen on calls 118 and 119
+**Depends on:** A30 · **Size:** S · **Status:** Done 2026-11-18 - `partialPrompts="true"` and `eotThreshold="0.6"`, chosen on calls 118 and 119
 
 ## Build
 

@@ -4,7 +4,7 @@
 
 **Why:** A bad file must never reach a live call.
 
-**Depends on:** nothing  ·  **Size:** Small (a few hours)  ·  **Status:** Done 2026-11-11
+**Depends on:** - · **Size:** S · **Status:** Done 2026-11-11 - `loadKnowledge`; a broken file stops the api starting
 
 ## Build
 

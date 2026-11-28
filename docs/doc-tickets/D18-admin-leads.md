@@ -4,7 +4,7 @@
 
 **Why:** It says production has no robot calls "until `AUTO_CALLS` is on" - on since 2026-10-30; the queue membership list repeats `QUEUE.md` (audit, 2026-11-27).
 
-**Depends on:** D01 · **Size:** M · **Status:** To do · **Deploy note:** none - documentation only.
+**Depends on:** D01 · **Size:** M · **Status:** Done 2026-11-27 - `docs/ADMIN-LEADS.md` in the Area sections, docs check passes · **Deploy note:** none - documentation only.
 
 ## Build
 
@@ -35,7 +35,10 @@ Rewriting any other doc - each has its own ticket.
 
 ## As built
 
-*Empty until the ticket is done.*
+- `ADMIN-LEADS.md` rewritten (428 lines): Status, Closed, Working, Step, Call, Filters, The response, The SQL, How fast it is, The page under How it works; the precedence as Rules 1; Rules 3-5 own `CLOSED_SQL` and the four things that reopen a closed lead.
+- Fixed: "production, until `AUTO_CALLS` is on" (on since 2026-10-30) now reads "where automated calls are off"; "the DNC list keeps its view in memory" - it is in the address since review Q8; `page` capped at 100,000 (`parsePage`), and `call=all` refused.
+- The queue membership list replaced by a link to `QUEUE.md`; "Why Working and Closed were added" and the redesign table are History; "Status is derived, never stored" is now "Status" (code already quoted "Status").
+- Unsure: none of the fixes needed a guess; the closing reopen rules read straight from `CLOSED_SQL`.
 
 ---
 

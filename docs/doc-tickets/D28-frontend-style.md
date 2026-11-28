@@ -4,7 +4,7 @@
 
 **Why:** It is a third of `FRONTEND.md`, and `styles/type-system.test.ts` already enforces it (audit, 2026-11-27).
 
-**Depends on:** D01 · **Size:** S · **Status:** To do · **Deploy note:** none - documentation only.
+**Depends on:** D01 · **Size:** S · **Status:** Done 2026-11-27 - `docs/FRONTEND-STYLE.md`, every token value read from `frontend/src/styles/tokens.css`; docs check passes · **Deploy note:** none - documentation only.
 
 ## Build
 
@@ -33,7 +33,7 @@ Rewriting any other doc - each has its own ticket.
 
 ## As built
 
-*Empty until the ticket is done.*
+`docs/FRONTEND-STYLE.md` (Reference): the type system, colour, space and layout tokens with their values, what `type-system.test.ts` enforces, the shared class names, the shared components (`Segmented`, `DateTimeField`, `RowMenu`) and the status-icon set, with the measurements and class renames in its History. The stylesheet count dropped; `--color-appbar-accent` found used only by the sign-in logo.
 
 ---
 

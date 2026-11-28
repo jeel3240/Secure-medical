@@ -4,7 +4,7 @@
 
 **Why:** The last step.
 
-**Depends on:** A21  ·  **Size:** Small (a few hours)
+**Depends on:** A34 · **Size:** S · **Status:** In progress - deployed 2026-11-24 with Seri off (PR #31, migrations 022-024); switching her on is next
 
 ## Build
 

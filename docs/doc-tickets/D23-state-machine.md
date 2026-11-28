@@ -4,7 +4,7 @@
 
 **Why:** About 50 dated lines and 15 "Decided by Jeel" inline; "Seen before" called a computed tag (not built); opening versus picking clears the flag, both said; return detection "checked" and "unverified"; a returning `review` lead restarts, against `BUCKETS.md` decision 2; a real-format number (audit, 2026-11-27).
 
-**Depends on:** D01 · **Size:** M · **Status:** To do · **Deploy note:** none - documentation only.
+**Depends on:** D01 · **Size:** M · **Status:** Done 2026-11-27 - STATE-MACHINE.md in the area template, rule numbers kept; the docs check passes · **Deploy note:** none - documentation only.
 
 ## Build
 
@@ -35,7 +35,8 @@ Rewriting any other doc - each has its own ticket.
 
 ## As built
 
-*Empty until the ticket is done.*
+- `STATE-MACHINE.md` in the area template; rules 1-4 and 2b-2d kept, as `####` under Rules, "What a reply does"; the inline decisions in a table (two undated "Decided:" given 2026-09-19, the spec's date); test counts dropped; 654 lines, about 80 of them History.
+- Fixed: "Seen before" is said not to exist; the read flag clears when a lead is picked, not opened (`AGENT-WORKSPACE.md`, "Marking a lead read"); "A number that comes back" says today's behaviour and the 2026-11-27 answer, its never-built 2026-09-19 rules - which restarted a `review` lead, against `BUCKETS.md` - moved to History. The real-format number the audit named was already gone after D01.
 
 ---
 

@@ -4,7 +4,7 @@
 
 **Why:** `DOCS.md`, "Brief": kept as it was, not updated (audit, 2026-11-27).
 
-**Depends on:** D30 · **Size:** S · **Status:** To do · **Deploy note:** none - documentation only.
+**Depends on:** D30 · **Size:** S · **Status:** Done 2026-11-27 - `git diff bdb51be -- docs/DESIGN-PROMPT.md` shows only the seven lines of the top note · **Deploy note:** none - documentation only.
 
 ## Build
 
@@ -29,7 +29,7 @@ Rewriting any other doc - each has its own ticket.
 
 ## As built
 
-*Empty until the ticket is done.*
+`DESIGN-PROMPT.md` is the 2026-09-14 brief from `bdb51be` with one note under the title: the original brief, kept as written, and `FRONTEND.md` and the screens' docs say what was built. Every note removed was carried by D30: section 1's role (ADMIN); the typography (FRONTEND-STYLE); the app bar, toasts and shortcuts overlay (Differences); section 2's membership, API, STATE, tiers, source, Answers, Waiting, Stalled, Seen before, the statuses, the button, the row click, row animation, unread dot and skeleton (QUEUE, FRONTEND, Differences); section 3's redesign, chips, header, Call, draft, Assign to, outcomes, Save & next and guard (AGENT-WORKSPACE, CALLBACKS, TWILIO, Differences); section 4's header and duplicate check (TIMELINE, FRONTEND); section 5 (CALLBACKS); section 6's sub-menu, 6a-6g and the 6c "Update" bullet (ADMIN, ADMIN-LEADS, AUTH, STATE-MACHINE, Differences); the interaction notes (Differences).
 
 ---
 

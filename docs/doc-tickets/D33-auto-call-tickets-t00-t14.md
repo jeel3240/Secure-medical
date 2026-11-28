@@ -4,7 +4,7 @@
 
 **Why:** Each already has Goal, Needs, Production, Build, Done when, As built, Files and Doc - they map straight on (audit, 2026-11-27).
 
-**Depends on:** D32 · **Size:** M · **Status:** To do · **Deploy note:** none - documentation only.
+**Depends on:** D32 · **Size:** M · **Status:** Done 2026-11-27 - 16 files, `T00` to `T14` and `T13b`, every old line found in them; `docs-check --type ticket` passes · **Deploy note:** none - documentation only.
 
 ## Build
 
@@ -29,7 +29,9 @@ Rewriting any other doc - each has its own ticket.
 
 ## As built
 
-*Empty until the ticket is done.*
+- Generated from the old sections, only the headings mapped: Needs -> *Depends on*, Production -> *Deploy note*, Files -> the end of *Build*, Doc -> *Docs to update in the same commit*, "As built:" -> *As built*; the status from the tracker row. A line-by-line check found every old line in its file but for those labels.
+- Three kinds of edit beyond the headings: "this one" -> `AUTO-CALLS.md` in the docs lines; an *As built* that pointed "above" at a section now names the doc it is in (T6, T12, T13b); T0 and T3 gained a one-line *As built*, having none.
+- The body's real-call notes moved into the ticket whose calls they were: T13 (the first calls' confidence), T13b (how the silence was measured).
 
 ---
 

@@ -4,7 +4,7 @@
 
 **Why:** Its Status is not in the fixed words; a "Proposed, waiting for the client" row sits in Decisions (an open question); the queue-order row belongs to `QUEUE.md`; "before Part 1 starts" contradicts the tracker, which starts about 40 tickets before; the order of work and the client questions repeat the tracker (audit, 2026-11-27).
 
-**Depends on:** D01 · **Size:** S · **Status:** To do · **Deploy note:** none - documentation only.
+**Depends on:** D01 · **Size:** S · **Status:** Done 2026-11-27 - in the area template with a Status line in the fixed words; `--type area` passes; every section the bucket tickets quote kept by name · **Deploy note:** none - documentation only.
 
 ## Build
 
@@ -34,7 +34,9 @@ Rewriting any other doc - each has its own ticket.
 
 ## As built
 
-*Empty until the ticket is done.*
+- Area sections in order, under a `**Status:** To do` line and a parts table (Part 2 `Paused 2026-11-27 - Part 1 comes first`). Every `###` the bucket tickets quote is kept by name; the bucket tickets are untouched.
+- The "Proposed, waiting for the client" row is an open question under Not done, with the fallback if the client says no; Parts 2 and 3 are under Not done; the order of work and the client questions link the tracker's "The order" and "Waiting on" - the questions' design meaning kept here.
+- The queue-order row handed to `QUEUE.md`'s Decisions; `BUCKETS.md` keeps one sentence pointing there, as B01 names that row. The database's four rules are Rules 5-8; the column tables stay under Data for B07 and B09 to move.
 
 ---
 

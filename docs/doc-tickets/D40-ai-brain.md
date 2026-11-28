@@ -4,7 +4,7 @@
 
 **Why:** `AI-AGENT.md` is 887 lines with 193 dates; section 12 is a part of its own; lines describing the removed one-request brain (`leadTurn`, `NO_REPEAT_NOTE`...) still stand (audit, 2026-11-27).
 
-**Depends on:** D01 · **Size:** M · **Status:** To do · **Deploy note:** none - documentation only.
+**Depends on:** D01 · **Size:** M · **Status:** Done 2026-11-27 - `docs/AI-BRAIN.md`, 199 lines, passes `--type area` · **Deploy note:** none - documentation only.
 
 ## Build
 
@@ -33,7 +33,10 @@ Rewriting any other doc - each has its own ticket.
 
 ## As built
 
-*Empty until the ticket is done.*
+- `docs/AI-BRAIN.md` written from section 12 and the brain's part of section 1's "How a reply is made", to `brain.ts`, `understand.ts`, `policy.ts`, `speak.ts`, `openai.ts` and `model.ts` as they are: How it works (reading the call, understand, decide, say, the models, how fast, picking a call back up), 18 numbered policy rules, Data (the record in `call_ai_turns.data`), Code, Tests, Not done, Decisions, History.
+- The removed one-request brain (`openAiModel`, `ACTION_TOOLS`, `writtenAction`, `buildInstructions`, the four notes, `PROMPT_CACHE_KEY`, the answer test set and the bake-off) is one History line; the review's fixes (H5, M1-M8, R1-R9, Q1-Q3) are History lines pointing at `REVIEW-2026-11-22.md`.
+- Fixed on the way: the TwiML's greeting is sent with its tone (`[friendly] Hi, is this Dana?`); speak reads plain recent turns, not her tones; who is there is read before the brain, not beside it.
+- Code comments quoting section 12 are listed for re-pointing in the handoff's renames file; only `actions.ts` and `openai.ts` were changed here (D43).
 
 ---
 

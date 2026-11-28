@@ -4,7 +4,7 @@
 
 **Why:** `FRONTEND.md` is 937 lines; most of it describes areas other docs own (audit, 2026-11-27).
 
-**Depends on:** D20, D21, D22 · **Size:** M · **Status:** To do · **Deploy note:** none - documentation only.
+**Depends on:** D20, D21, D22 · **Size:** M · **Status:** Done 2026-11-27 - the workspace, My Callbacks, timeline page, call bar, incoming card and Taking-calls browser parts handed to their six owners (`*.from-frontend.md`) · **Deploy note:** none - documentation only.
 
 ## Build
 
@@ -33,7 +33,7 @@ Rewriting any other doc - each has its own ticket.
 
 ## As built
 
-*Empty until the ticket is done.*
+The workspace, My Callbacks, the Lead Timeline page, the call bar, the incoming card and the "Taking calls" switch's browser side went to `AGENT-WORKSPACE.md`, `CALLBACKS.md`, `TIMELINE.md`, `TWILIO.md`, `INCOMING-CALLS.md` and `AUTO-CALLS.md` as handoffs, each with its test rows, decisions and history; FRONTEND.md keeps only links. Fixed on the way: the old "Checked in the browser" list named Send SMS, removed 2026-09-29 (to History); the "!" hover reads "Not sent - EZ Texting did not accept it" (`Conversation.tsx`).
 
 ---
 

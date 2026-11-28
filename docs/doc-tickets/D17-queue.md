@@ -4,7 +4,7 @@
 
 **Why:** It names `AI_CALLBACK_DUE_SQL`, which does not exist (`PROMISED_CALLBACK_DUE_SQL`, `db/lead-state.ts`); "The polling hook" and "The one-agent lock on screen" are frontend; a decided but unbuilt change sits in the body (audit, 2026-11-27).
 
-**Depends on:** D01 · **Size:** M · **Status:** To do · **Deploy note:** none - documentation only.
+**Depends on:** D01 · **Size:** M · **Status:** Done 2026-11-27 - `docs/QUEUE.md` in the Area sections, docs check passes · **Deploy note:** none - documentation only.
 
 ## Build
 
@@ -35,7 +35,10 @@ Rewriting any other doc - each has its own ticket.
 
 ## As built
 
-*Empty until the ticket is done.*
+- `QUEUE.md` rewritten to the Area template (360 lines): How it works - Who is in it, The order, The tag, Filters, The response, How fast it is - then Rules (9), Data, Code, Tests, Not done, Decisions (12), History.
+- Fixed: `AI_CALLBACK_DUE_SQL` (gone since review D2) is `PROMISED_CALLBACK_DUE_SQL`/`_AT_SQL`; a due call back of a deactivated agent counts as promised too (`promisedCallbackDue`, `db/lead-state.ts`). `source` can be refused with `invalid_list`; `since=all` is accepted.
+- The polling hook and the on-screen lock handed to `FRONTEND.md` (scratchpad handoff); the closed-lead table to `ADMIN-LEADS.md`, "Closed"; Seri's and deactivated agents' call backs to `CALLBACKS.md`. The speed tables are History lines; B01's tier-first order is in Decisions, marked not built, and kept as one line under "The order".
+- Code comments still quoting moved sections (`usePolling.ts` names `QUEUE.md` for the polling decision) are listed for a later code pass; the brief forbade code edits.
 
 ---
 

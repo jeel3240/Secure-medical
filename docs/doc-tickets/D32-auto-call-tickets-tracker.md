@@ -4,7 +4,7 @@
 
 **Why:** `AUTO-CALLS.md` holds its tracker and 35 tickets inline - about 2,030 of its 3,203 lines (audit, 2026-11-27).
 
-**Depends on:** D01 · **Size:** S · **Status:** To do · **Deploy note:** none - documentation only.
+**Depends on:** D01 · **Size:** S · **Status:** Done 2026-11-27 - `docs/auto-call-tickets/README.md` in the tracker shape, 33 rows; `docs-check --type tracker` passes · **Deploy note:** none - documentation only.
 
 ## Build
 
@@ -36,7 +36,10 @@ Rewriting any other doc - each has its own ticket.
 
 ## As built
 
-*Empty until the ticket is done.*
+- `docs/auto-call-tickets/README.md`: the 33 tickets in their groups, with their old statuses, "The rules every ticket keeps" (one branch and PR each, the gates, production kept working with `AUTO_CALLS` off, never production's number), "The order" with T15's split, the decisions paragraph, and a table of where each section the tickets quote is now. Size is `-`: the tickets were never sized.
+- The id rule is written in the tracker - files `T00`-`T29`, `T13b`, `T15a`-`T15c`; the heading keeps the id the code cites (`# T0 · ...`). `DOCS.md` is not this rewriter's file: the rule and the Phase 6 row of "The phases" (tickets now in `auto-call-tickets/`) are handed over in the report.
+- W1 and W2 have no ticket file: History lines handed to `AGENT-WORKSPACE.md` and `STATE-MACHINE.md`.
+- T26: status `Done 2026-10-30`; its open box ticked - the robot live from 2026-10-30, about 200 calls on 2026-11-02 (T29). "Seen on the timeline and Admin > Leads" is inferred - for Jeel to confirm.
 
 ---
 

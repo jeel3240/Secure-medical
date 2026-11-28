@@ -4,7 +4,7 @@
 
 **Why:** It says the server's image contains `scripts/` - false since review H13 (`backend/Dockerfile`'s production stage); "The tables" repeats `SCHEMA.md`; its ADR is prose (audit, 2026-11-27).
 
-**Depends on:** D01 · **Size:** S · **Status:** To do · **Deploy note:** none - documentation only.
+**Depends on:** D01 · **Size:** S · **Status:** Done 2026-11-27 - FLOWS.md in the area template, the image claim fixed here and in dev-ask-again.ts; the docs check passes but for TESTING.md, still being written · **Deploy note:** none - documentation only.
 
 ## Build
 
@@ -36,7 +36,9 @@ Rewriting any other doc - each has its own ticket.
 
 ## As built
 
-*Empty until the ticket is done.*
+- `FLOWS.md` in the area template, "How to add one" kept as its how-to part under How it works; rules numbered 1-11 (the database's 1-7, the code's 8-11); the tables' columns left to `SCHEMA.md`, which already has them; the endings' screens linked to `QUEUE.md` and `ADMIN-LEADS.md`.
+- The real-phone walk to History, its EZ Texting findings handed to `EZTEXTING-API.md`; "Testing a flow with one phone" handed to `TESTING.md`, a stub of that name kept because `dev-ask-again.ts` quotes it.
+- The server's image holds only `dist/`, `scripts/migrate.js` and the migrations since review H13 (`backend/Dockerfile`), not `scripts/` - fixed here and in the comment of `backend/scripts/dev-ask-again.ts`.
 
 ---
 

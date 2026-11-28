@@ -4,7 +4,7 @@
 
 **Why:** Instructions alone are not enough for a medical business.
 
-**Depends on:** A03  ·  **Size:** Small (a few hours)  ·  **Status:** Done 2026-11-11
+**Depends on:** A03 · **Size:** S · **Status:** Done 2026-11-11 - `checkSentence`; every line of the knowledge files passes
 
 ## Build
 

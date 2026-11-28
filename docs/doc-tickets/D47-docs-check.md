@@ -4,7 +4,7 @@
 
 **Why:** The audit found broken pointers, renamed files, stale counts and real data that no one noticed for weeks. A check that runs keeps the standard from drifting.
 
-**Depends on:** D01 · **Size:** M · **Status:** To do · **Deploy note:** none - documentation only.
+**Depends on:** D01 · **Size:** M · **Status:** Done 2026-11-27 - `npm run docs:check`, its self-test passes · **Deploy note:** none - documentation only.
 
 ## Build
 
@@ -34,7 +34,11 @@ Rewriting any other doc - each has its own ticket.
 
 ## As built
 
-*Empty until the ticket is done.*
+- `scripts/docs-check.mjs` at the repo root; `npm run docs:check` from `backend/`. Rules: links, paths, numbers, names, sections, asides, tickets, and with `--strict` the index.
+- A path is found by its full path, from the doc's folder, from `backend/src` or `frontend/src`, or by its tail anywhere in the repo; tickets' paths are not checked (they name files to be created). Example names (`pending.md`, `express.json`) and `raw/` are allowed.
+- Numbers: the 555 range as area code or exchange, and the two Twilio numbers. Forbidden names are SHA-256 hashes in the file.
+- `--self-test`: twelve cases, each rule catching its fault and a clean doc passing.
+- First run over today's docs: 21 stale paths, each in the ticket that rewrites its doc.
 
 ---
 

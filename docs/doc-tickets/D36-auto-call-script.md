@@ -4,7 +4,7 @@
 
 **Why:** Part of splitting `AUTO-CALLS.md` by topic, under about 600 lines each (audit, 2026-11-27).
 
-**Depends on:** D35 · **Size:** M · **Status:** To do · **Deploy note:** none - documentation only.
+**Depends on:** D35 · **Size:** M · **Status:** Done 2026-11-27 - `docs/AUTO-CALL-SCRIPT.md`, about 390 lines; `docs-check --type area` passes · **Deploy note:** none - documentation only.
 
 ## Build
 
@@ -33,7 +33,9 @@ Rewriting any other doc - each has its own ticket.
 
 ## As built
 
-*Empty until the ticket is done.*
+- From "The script", "Understanding an answer" (with "When the call listens" and "How fast"), "What the call does after each answer" (with "On a live call") and "Voicemail" - each name kept as a `###`. Voicemail's "Not covered" is under Not done, with A23.
+- Eight decisions (email, the doubtful hearing, the link, the opening, the voice, "won't", Deepgram, the beep). The real calls' evidence went to T13, T13b and T18; the body keeps the rule and its reasons.
+- Checked against the code: `SPEECH_MODEL` `deepgram_nova-3`, `MAX_SPOKEN_LENGTH` 300, `readMinConfidence` 0.4, `onVerdict`'s branches, the DNC label "Said stop on automated call". The comments quoting "Voicemail", "The script" and "Understanding an answer" are listed in `renames.from-robot.md`.
 
 ---
 

@@ -4,7 +4,7 @@
 
 **Why:** Its Status line says "Being built" (every ticket is done); its Stage 2 row says Seri is not deployed; it says calling tickets deploy with `AUTO_CALLS` off (on since 2026-10-30); about 25 decisions are scattered inline (audit, 2026-11-27).
 
-**Depends on:** D34 · **Size:** M · **Status:** To do · **Deploy note:** none - documentation only.
+**Depends on:** D34 · **Size:** M · **Status:** Done 2026-11-27 - `AUTO-CALLS.md` in the area template, about 520 lines; `docs-check --type area` passes but for `DEPLOY.md`, still being written · **Deploy note:** none - documentation only.
 
 ## Build
 
@@ -36,7 +36,10 @@ Rewriting any other doc - each has its own ticket.
 
 ## As built
 
-*Empty until the ticket is done.*
+- Status `Done 2026-11-02`; the Stage 2 row (Seri "not deployed") and "deployed with `AUTO_CALLS` off" moved to History as what used to be; ten decisions in one table, the script's and the transfer's in their own docs.
+- Linked, not repeated: columns `SCHEMA.md`, actions `AUDIT.md`, log lines `LOGGING.md`, the queue `QUEUE.md`, Seri `AI-AGENT.md`, rule 2d `STATE-MACHINE.md`, variables `ENVIRONMENT.md`, switching `DEPLOY.md`, the timeline `TIMELINE.md`, the call back `INCOMING-CALLS.md`. The webhook table lost its empty "Later" column; each row now links the doc with the detail.
+- Section names kept as `###`: "The whole flow", "When a lead is called", "Leads already waiting", "Traffic", "When Twilio refuses", "How a call is placed", "Where it shows". A table, "The sections that moved", maps every moved name, so the code comments that quote them still lead somewhere; the comments themselves are not edited here (code is not this rewriter's) - each is listed in `renames.from-robot.md`.
+- Over the 450-line aim: the webhook table and the Tests table carry it; under the 600 limit.
 
 ---
 

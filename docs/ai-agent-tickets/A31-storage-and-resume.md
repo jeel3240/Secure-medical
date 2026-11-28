@@ -4,7 +4,7 @@
 
 **Why:** "Nothing may be lost" (`docs/AUDIT.md`), and "why did she say that?" must be answerable from the database. Today's resume rebuilds the conversation from the turns (`resume.ts`); the record must come back with it - and a deploy is exactly when the code that rebuilds it may have changed, so the record is kept, not replayed.
 
-**Depends on:** A30  ·  **Size:** M  ·  **Status:** Done 2026-11-17
+**Depends on:** A30 · **Size:** M · **Status:** Done 2026-11-17 - migration 024
 
 ## Build
 

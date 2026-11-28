@@ -4,7 +4,7 @@
 
 **Why:** It says no admin route takes POST - `POST /api/admin/config/ai-agent` exists (`api/admin/config.ts`), and the test only checks the base path (`admin-screens.test.ts`); "Phase 4 can add call figures back" - Phase 4 was done 2026-10-01; headings carry history (audit, 2026-11-27).
 
-**Depends on:** D01, D03 · **Size:** M · **Status:** To do · **Deploy note:** none - documentation only.
+**Depends on:** D01, D03 · **Size:** M · **Status:** Done 2026-11-27 - `docs/ADMIN.md` in the Area sections, docs check passes · **Deploy note:** none - documentation only.
 
 ## Build
 
@@ -36,7 +36,9 @@ Rewriting any other doc - each has its own ticket.
 
 ## As built
 
-*Empty until the ticket is done.*
+- `ADMIN.md` rewritten (359 lines): Configuration (The messages, Three tabs, The automated call, Seri's switch), Overview and DNC list under How it works; the read-only rule and its reasons (from CLAUDE.md §10, read, not edited) as Rules 1-2 and the Decisions table, with Seri's switch the one exception, linked to `AI-AGENT.md` section 7.
+- Fixed: "no POST, PUT, PATCH or DELETE - tests assert that" - `POST /api/admin/config/ai-agent` exists; `admin-screens.test.ts` asserts 404 only on the three base paths and tests the switch route on its own. "Phase 4 can add call figures back" (Phase 4 done 2026-10-01) is now a Not done line.
+- Added from the code: the switch's 400 `invalid_body` and 409 `no_key`, Overview's `invalid_period`/`invalid_tz`, the DNC list's `invalid_state`.
 
 ---
 

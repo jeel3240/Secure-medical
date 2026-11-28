@@ -4,7 +4,7 @@
 
 **Why:** It is a separate part of the app, inside `AGENT-WORKSPACE.md` (audit, 2026-11-27); B12 changes it next.
 
-**Depends on:** D20 · **Size:** S · **Status:** To do · **Deploy note:** none - documentation only.
+**Depends on:** D20 · **Size:** S · **Status:** Done 2026-11-27 - `docs/TIMELINE.md` written, Area sections, docs check passes · **Deploy note:** none - documentation only.
 
 ## Build
 
@@ -33,7 +33,10 @@ Rewriting any other doc - each has its own ticket.
 
 ## As built
 
-*Empty until the ticket is done.*
+- `docs/TIMELINE.md` (about 240 lines) names `db/timeline.ts` and `components/Timeline.tsx`: its sources and kinds, `TIMELINE_ACTIONS`, the system events, the order, and the words for messages, calls, the robot's call, Seri's part, callbacks and log entries.
+- From the code: a `not_placed` robot call is left off; a call carries `agentId`; the reply's answer label (`detail.answer`) moved here from the lead card.
+- Not done: system events from the newest conversation only (B12), Consent ref and State, Previous lead, the `callback.taken` wording.
+- B12's docs line still names `AGENT-WORKSPACE.md`; the change is a handoff (the brief forbids editing other tickets).
 
 ---
 

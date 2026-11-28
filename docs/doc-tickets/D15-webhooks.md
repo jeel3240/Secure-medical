@@ -4,7 +4,7 @@
 
 **Why:** Its "Not done" holds a decision; a struck-through step; a pointer to "the list further down" that does not exist; the subscription steps are how-to (audit, 2026-11-27).
 
-**Depends on:** D01 · **Size:** S · **Status:** To do · **Deploy note:** none - documentation only.
+**Depends on:** D01 · **Size:** S · **Status:** Done 2026-11-27 - WEBHOOKS.md in the area template; the docs check passes but for RUNNING.md, still being written · **Deploy note:** none - documentation only.
 
 ## Build
 
@@ -36,7 +36,9 @@ Rewriting any other doc - each has its own ticket.
 
 ## As built
 
-*Empty until the ticket is done.*
+- `WEBHOOKS.md` in the area template, its steps in the code's order: the opt-in release runs before the state machine and the block after it (the old list had them the other way round); the struck-through step and the dated asides to History; three decisions in a table.
+- "Opt-out and opt-in words" owns the STOP and START lists (`api/webhooks.ts`); `STATE-MACHINE.md` links it.
+- Registering the subscription, testing by hand and receiving replies locally handed to `RUNNING.md`; the broken "list further down" made a link to `EZTEXTING-API.md`, "The account"; Twilio's webhook count dropped.
 
 ---
 

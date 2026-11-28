@@ -4,7 +4,7 @@
 
 **Why:** The brief is frozen (`DOCS.md`, "Brief"); its notes are the app's record, in the wrong place (audit, 2026-11-27).
 
-**Depends on:** D29 · **Size:** S · **Status:** To do · **Deploy note:** none - documentation only.
+**Depends on:** D29 · **Size:** S · **Status:** Done 2026-11-27 - every note's fact linked to its owner, handed off, or a row of FRONTEND.md's "Differences from the brief" · **Deploy note:** none - documentation only.
 
 ## Build
 
@@ -33,7 +33,7 @@ Rewriting any other doc - each has its own ticket.
 
 ## As built
 
-*Empty until the ticket is done.*
+About 60 notes: those the owners already had are linked (QUEUE, ADMIN, ADMIN-LEADS, AGENT-WORKSPACE, TWILIO, STATE-MACHINE); the screen facts they lacked are handoffs (QUEUE, AGENT-WORKSPACE, CALLBACKS, TIMELINE, AUTH); the gaps nobody owns - no toasts, no shortcuts, a spinner not a skeleton, no "Assign to", no draft save, Settings not built, no phone-frame preview, no hover icons, no row animation - are rows of FRONTEND.md's "Differences from the brief". `SEGMENT_LIMIT` (160, `core/messages.ts`) checked for the Settings row.
 
 ---
 

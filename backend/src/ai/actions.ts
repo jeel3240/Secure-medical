@@ -11,10 +11,6 @@
  * carried out - a call back at 8 PM, a transfer with nobody there - is refused,
  * logged as the brain's fault (`ai_policy.guard`), and the call goes on.
  *
- * Until 2026-11-19 the actions were also offered to OpenAI as tools
- * (`ACTION_TOOLS`), and one written in brackets instead of taken was taken
- * all the same (`writtenAction`) - today's brain's, removed with it.
- *
  * `fallback` is not hers: the relay ends with it when she fails (A12), and
  * anything unreadable handed back reads as it, so the call falls back to the
  * script rather than to nothing.

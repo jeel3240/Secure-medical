@@ -4,7 +4,7 @@
 
 **Why:** Five tables with different columns, a legend, "Found fine" as a section, statuses as long sentences (audit, 2026-11-27).
 
-**Depends on:** D01 · **Size:** S · **Status:** To do · **Deploy note:** none - documentation only.
+**Depends on:** D01 · **Size:** S · **Status:** Done 2026-11-27 - one findings table after the lead, all 85 findings kept with their status; `--type review` passes · **Deploy note:** none - documentation only.
 
 ## Build
 
@@ -29,7 +29,8 @@ Rewriting any other doc - each has its own ticket.
 
 ## As built
 
-*Empty until the ticket is done.*
+- Lead paragraphs: what was reviewed and how, what the id letters and kinds mean, and "Found fine". Then one table - Id · What · Where · Status - for all 85 findings (2 D, 13 H, 42 M, 16 R, 12 Q).
+- Each fix moved into What after "**Fix:**"; statuses are `Fixed YYYY-MM-DD - <branch>` or `Decided 2026-11-23 - see <doc>`; D1 and D2 link `WEBHOOKS.md` and `QUEUE.md` for the decision text; R10's struck-through text rewritten.
 
 ---
 

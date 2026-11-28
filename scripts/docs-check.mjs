@@ -55,7 +55,7 @@ const TYPES = {
 const TICKET_SECTIONS = ['Build', 'Done when', 'Tests', 'Docs to update in the same commit', 'Not in this ticket', 'As built'];
 const TRACKER_SECTIONS = ['The rules every ticket keeps', 'The tickets', 'The order', 'Waiting on', 'The decisions these tickets build on'];
 // Finished phases' folders, kept as they were written (DOCS.md, "The phases").
-const LEGACY_TICKET_DIRS = ['ai-agent-tickets', 'auto-call-tickets'];
+const LEGACY_TICKET_DIRS = ['ai-agent-tickets'];
 // Sections where dates and "As built" belong.
 const DATED_SECTIONS = ['History', 'Decisions'];
 
