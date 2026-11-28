@@ -13,7 +13,7 @@
 import { check, failureCount, verdict } from './check';
 import { pool } from '../src/db/pool';
 import { startFlow } from './live-flow';
-import { listAdminLeads } from '../src/db/leads';
+import { lastPollAt, listAdminLeads } from '../src/db/leads';
 import { startAutomatedCall } from '../src/db/auto-calls';
 import { bookAiCallback } from '../src/db/callbacks';
 
@@ -277,6 +277,25 @@ async function main(): Promise<void> {
   check('not called: every lead but the eight', [notCalled.total, withCalls.total], [27, 35]);
   check('the agent\'s call among them', notCalled.leads.some((l) => l.firstName === 'Called'), true);
   check('and the call Twilio never placed', notCalled.leads.some((l) => l.firstName === 'NotPlaced'), true);
+
+  // "Synced": when EZ Texting was last read (B06), else the checkpoint's time.
+  console.log('\n"Synced"');
+  const setting = (key: string, minutesAgo: number) =>
+    pool.query(
+      `INSERT INTO settings (key, value, updated_at) VALUES ($1, 'x', now() - ($2 || ' minutes')::interval)
+       ON CONFLICT (key) DO UPDATE SET updated_at = EXCLUDED.updated_at`,
+      [key, String(minutesAgo)]
+    );
+  const minutesAgo = async () => {
+    const { at } = await lastPollAt();
+    return at === null ? null : Math.round((Date.now() - Date.parse(at)) / 60_000);
+  };
+  check('never polled: nothing to say', await minutesAgo(), null);
+  await setting('ezt_poll_checkpoint', 20);
+  check('only the checkpoint: its time', await minutesAgo(), 20);
+  await setting('ezt_last_read_at', 3);
+  check('once EZ Texting has been read: that time, not the checkpoint\'s', await minutesAgo(), 3);
+  check('and the poll interval beside it', (await lastPollAt()).intervalSeconds, 30);
 
   console.log(verdict());
   await pool.end();

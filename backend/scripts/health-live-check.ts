@@ -2,10 +2,13 @@
  * Proves db/health.ts against a real Postgres.
  *
  * The check that matters here is the one a mock would have got wrong: the
- * poller's liveness comes from `settings.updated_at`, not from the checkpoint's
- * value. The value is the newest contact's createdAt, which stands still on a
- * quiet account while the worker polls happily every 30 seconds. Reading it would
- * report a healthy system as dead every time leads stop arriving.
+ * poller's liveness comes from when it last read EZ Texting - the
+ * `ezt_last_read_at` row (B06), else the checkpoint row's `updated_at` - not
+ * from the checkpoint's value. The value is the newest contact's createdAt,
+ * which stands still on a quiet account while the worker polls happily every
+ * 30 seconds. Reading it would report a healthy system as dead every time leads
+ * stop arriving. The sections before "when EZ Texting was last read" have no
+ * `ezt_last_read_at` row: they prove the fallback.
  *
  * It writes rows, so it refuses to run against a database that holds any:
  *
@@ -29,6 +32,16 @@ async function refuseIfNotEmpty(): Promise<void> {
 }
 
 const named = (checks: HealthCheck[], name: string) => checks.find((c) => c.name === name);
+
+/** Writes when EZ Texting was last read, as the poller does (B06), that many minutes ago. */
+async function setLastRead(minutesAgo: number): Promise<void> {
+  await pool.query(
+    `INSERT INTO settings (key, value, updated_at)
+     VALUES ('ezt_last_read_at', (now() - ($1 || ' minutes')::interval)::text, now() - ($1 || ' minutes')::interval)
+     ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = EXCLUDED.updated_at`,
+    [String(minutesAgo)]
+  );
+}
 
 /** Writes the checkpoint the way the poller does, with updated_at set explicitly. */
 async function setCheckpoint(value: Date, updatedMinutesAgo: number): Promise<void> {
@@ -102,6 +115,26 @@ async function main(): Promise<void> {
     check('seven minutes is not', named((await getHealth()).checks, 'poller')?.status, 'degraded');
 
     await setCheckpoint(new Date(), 0);
+  }
+
+  console.log('\nwhen EZ Texting was last read (B06)');
+  {
+    // A poll that read the account but kept its checkpoint back behind a
+    // contact that failed: the worker is polling.
+    await setCheckpoint(new Date(), 15);
+    await setLastRead(0);
+    const read = named((await getHealth()).checks, 'poller');
+    check('read a moment ago, checkpoint written 15 minutes ago: healthy', [read?.status, read?.detail.ageSeconds], ['ok', 0]);
+
+    // Once the row exists it is the signal, whatever the checkpoint says.
+    await setCheckpoint(new Date(), 0);
+    await setLastRead(15);
+    const stopped = named((await getHealth()).checks, 'poller');
+    check('read 15 minutes ago, checkpoint fresh: degraded', [stopped?.status, stopped?.message?.includes('900s')], ['degraded', true]);
+    check('the checkpoint\'s value still reported beside it', typeof stopped?.detail.checkpointValue, 'string');
+
+    await pool.query(`DELETE FROM settings WHERE key = 'ezt_last_read_at'`);
+    check('without the row, the checkpoint\'s time once more', named((await getHealth()).checks, 'poller')?.status, 'ok');
   }
 
   console.log('\nthe last inbound webhook');

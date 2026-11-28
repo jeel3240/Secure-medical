@@ -75,7 +75,7 @@ below, is a suggested path through it.
 | B03 | [The upgrade check](B03-upgrade-check.md) | - | S | Done 2026-11-28 |
 | B04 | [Closed asks why](B04-closed-asks-why.md) | B03 | M | Done 2026-11-28 |
 | B05 | [Overview counts sold](B05-overview-counts-sold.md) | B04 | S | Done 2026-11-28 |
-| B06 | [Poller: one contact never stops the rest](B06-poller-one-contact-never-stops-the-rest.md) | - | S | To do |
+| B06 | [Poller: one contact never stops the rest](B06-poller-one-contact-never-stops-the-rest.md) | - | S | Done 2026-11-28 |
 | | **B. Buckets in the database - one bucket, nothing changes for users** | | | |
 | B07 | [Migration: buckets](B07-migration-buckets.md) | B03 | S | To do |
 | B08 | [The flow per bucket](B08-flow-per-bucket.md) | B07 | S | To do |

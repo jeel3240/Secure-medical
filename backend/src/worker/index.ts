@@ -102,6 +102,7 @@ async function cycle(): Promise<void> {
       skipped: stats.skipped,
       suppressed: stats.suppressed,
       openers: stats.openersSent,
+      failed: stats.failed,
       ms: stats.durationMs,
     });
   } catch (err) {

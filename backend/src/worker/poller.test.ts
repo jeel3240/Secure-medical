@@ -35,6 +35,11 @@ let dncRows: { rows: unknown[]; rowCount: number };
 /** What `settings` holds for the poller's own two keys - null: no row (review Q6: one answer for every key hid them). */
 let checkpointValue: string | null;
 let overlapValue: string | null;
+/** Phones whose lead insert, or whose do-not-call check, throws - B06. */
+let insertFails: Set<string>;
+let dncFails: Set<string>;
+/** Non-null: the leads table as a set of phones, so a second poll skips what the first took in. */
+let known: Set<string> | null;
 
 function answer(sql: string, values?: unknown[]) {
   if (/FROM settings WHERE key = \$1/i.test(sql)) {
@@ -49,8 +54,19 @@ function answer(sql: string, values?: unknown[]) {
   if (/JOIN flow_questions fq ON fq.id = c.current_question_id/i.test(sql)) {
     return { rows: [{ body: 'Hi {first_name}, reply 1. A, 2. B, 3. C' }], rowCount: 1 };
   }
-  if (/FROM dnc_list/i.test(sql)) return dncRows;
-  if (/INSERT INTO leads/i.test(sql)) return leadInsertReturns;
+  if (/FROM dnc_list/i.test(sql)) {
+    if (dncFails.has(String(values?.[0]))) throw new Error('connection reset');
+    return dncRows;
+  }
+  if (/INSERT INTO leads/i.test(sql)) {
+    const phone = String(values?.[0]);
+    if (insertFails.has(phone)) throw new Error('could not write the lead');
+    if (known) {
+      if (known.has(phone)) return { rows: [], rowCount: 0 };
+      known.add(phone);
+    }
+    return leadInsertReturns;
+  }
   return { rows: [], rowCount: 1 };
 }
 
@@ -95,6 +111,9 @@ beforeEach(() => {
   dncRows = { rows: [], rowCount: 0 };
   checkpointValue = null;
   overlapValue = null;
+  insertFails = new Set();
+  dncFails = new Set();
+  known = null;
   listContacts.mockReset();
   listContacts.mockResolvedValue({ content: [contact()], last: true });
 });
@@ -359,5 +378,110 @@ describe('the checkpoint, against what EZ Texting lists (review Q6)', () => {
     await pollOnce();
 
     expect(leadsInserted()).toEqual(['+15550000041']);
+  });
+});
+
+describe('one contact never stops the rest - B06', () => {
+  const CHECKPOINT = new Date('2026-11-23T18:00:00.000Z');
+  const minutesFrom = (minutes: number) => new Date(CHECKPOINT.getTime() + minutes * 60_000).toISOString();
+  const checkpointWritten = () =>
+    recorded.find((r) => /INSERT INTO settings/i.test(r.sql) && r.values?.[0] === 'ezt_poll_checkpoint')?.values?.[1];
+  const page = () => ({
+    content: [
+      contact({ phoneNumber: '15550000051', createdAt: minutesFrom(10) }),
+      contact({ phoneNumber: '15550000052', createdAt: minutesFrom(6) }),
+      contact({ phoneNumber: '15550000053', createdAt: minutesFrom(2) }),
+    ],
+    last: true,
+  });
+
+  beforeEach(() => {
+    checkpointValue = CHECKPOINT.toISOString();
+    overlapValue = '5';
+    known = new Set();
+    listContacts.mockResolvedValue(page());
+  });
+
+  it.each([
+    ['its lead cannot be written', () => insertFails.add('+15550000052')],
+    ['its do-not-call check throws', () => dncFails.add('+15550000052')],
+  ])('when %s: the others are taken in and texted, it is counted, and the checkpoint stops just before it', async (_label, fail) => {
+    fail();
+    const errors = jest.spyOn(logModule.log, 'error').mockImplementation(() => undefined);
+
+    const stats = await pollOnce();
+
+    expect(stats).toMatchObject({ fetched: 3, inserted: 2, openersSent: 2, failed: 1 });
+    expect(sendMessage).toHaveBeenCalledTimes(2);
+    expect(checkpointWritten()).toBe(new Date(Date.parse(minutesFrom(6)) - 1).toISOString());
+    // Logged without the phone or the name: when EZ Texting listed it, and the error.
+    const failed = errors.mock.calls.filter(([event]) => event === 'poll.contact_failed');
+    expect(failed).toHaveLength(1);
+    expect(failed[0][1]).toEqual({ createdAt: minutesFrom(6), err: expect.any(String) });
+    expect(JSON.stringify(failed[0][1])).not.toMatch(/5550000052|Ada/);
+    errors.mockRestore();
+  });
+
+  it('the next poll reads it again and takes it in; the two before are skipped as phones we hold', async () => {
+    insertFails.add('+15550000052');
+    jest.spyOn(logModule.log, 'error').mockImplementation(() => undefined);
+    await pollOnce();
+
+    checkpointValue = checkpointWritten() as string;
+    insertFails.clear();
+    recorded.length = 0;
+    sendMessage.mockClear();
+    const again = await pollOnce();
+
+    expect(again).toMatchObject({ inserted: 1, skipped: 2, failed: 0 });
+    expect(sendMessage).toHaveBeenCalledTimes(1);
+    expect(checkpointWritten()).toBe(minutesFrom(10));
+    jest.restoreAllMocks();
+  });
+
+  it('two that fail: the checkpoint stops before the older', async () => {
+    insertFails.add('+15550000051').add('+15550000053');
+    jest.spyOn(logModule.log, 'error').mockImplementation(() => undefined);
+
+    const stats = await pollOnce();
+
+    expect(stats).toMatchObject({ inserted: 1, failed: 2 });
+    expect(checkpointWritten()).toBe(new Date(Date.parse(minutesFrom(2)) - 1).toISOString());
+    jest.restoreAllMocks();
+  });
+
+  it('one inside the overlap, older than the checkpoint: the checkpoint goes back to just before it', async () => {
+    listContacts.mockResolvedValue({ content: [contact({ phoneNumber: '15550000054', createdAt: minutesFrom(-3) })], last: true });
+    insertFails.add('+15550000054');
+    jest.spyOn(logModule.log, 'error').mockImplementation(() => undefined);
+
+    await pollOnce();
+
+    expect(checkpointWritten()).toBe(new Date(Date.parse(minutesFrom(-3)) - 1).toISOString());
+    jest.restoreAllMocks();
+  });
+});
+
+describe('when EZ Texting was last read - B06', () => {
+  const readWritten = () => recorded.some((r) => /INSERT INTO settings/i.test(r.sql) && r.values?.[0] === 'ezt_last_read_at');
+
+  it('is written on a quiet poll', async () => {
+    listContacts.mockResolvedValue({ content: [], last: true });
+    await pollOnce();
+    expect(readWritten()).toBe(true);
+  });
+
+  it('and on a poll where a contact failed - it read the account all the same', async () => {
+    insertFails.add('+15551230000');
+    jest.spyOn(logModule.log, 'error').mockImplementation(() => undefined);
+    expect((await pollOnce()).failed).toBe(1);
+    expect(readWritten()).toBe(true);
+    jest.restoreAllMocks();
+  });
+
+  it('but not when the fetch failed', async () => {
+    listContacts.mockRejectedValue(new Error('EZ Texting down'));
+    await expect(pollOnce()).rejects.toThrow('EZ Texting down');
+    expect(readWritten()).toBe(false);
   });
 });

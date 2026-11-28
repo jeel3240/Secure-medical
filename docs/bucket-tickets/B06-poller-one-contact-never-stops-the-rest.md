@@ -11,7 +11,8 @@ where it was (survey, 2026-11-27). And health (`db/health.ts`) and Admin > Leads
 polled" - the checkpoint goes in B25, so they need their own signal first. Useful on
 its own, today.
 
-**Depends on:** - · **Size:** S · **Status:** To do · **Deploy note:** none.
+**Depends on:** - · **Size:** S · **Status:** Done 2026-11-28 - the poller's tests,
+the health and Admin > Leads live checks, the e2e · **Deploy note:** none.
 
 ## Build
 
@@ -28,14 +29,14 @@ its own, today.
 
 ## Done when
 
-- [ ] `src/worker/poller.test.ts`: one contact's insert throws - the others are taken
+- [x] `src/worker/poller.test.ts`: one contact's insert throws - the others are taken
       in and texted, `failed` is 1, the checkpoint stops before the failed one, and a
       second poll takes it in; a DNC check that throws for one contact - the same;
       `ezt_last_read_at` written on a quiet poll and on a poll with a failure, not on a
       poll whose fetch failed.
-- [ ] `scripts/health-live-check.ts`: last poll read from `ezt_last_read_at`, the
+- [x] `scripts/health-live-check.ts`: last poll read from `ezt_last_read_at`, the
       fallback when it is missing.
-- [ ] `scripts/admin-leads-live-check.ts` or the admin live check: "Synced" from the
+- [x] `scripts/admin-leads-live-check.ts` or the admin live check: "Synced" from the
       new row.
 
 ## Tests
@@ -54,7 +55,28 @@ Reading groups by membership (B24); the checkpoint's removal (B25).
 
 ## As built
 
-*Empty until the ticket is done.*
+- **`takeIn`** in `worker/poller.ts` is one contact - the group check, the
+  do-not-call check, the insert, the first question - and `pollOnce` calls it in a
+  `try`; a throw logs `poll.contact_failed` (`createdAt`, `err`), adds to
+  `PollStats.failed`, and marks the oldest failed time. `poll.tick` logs `failed`.
+- **The checkpoint after a failure** is one millisecond before the oldest failed
+  contact's `createdAt`, when that is earlier than what the poll reached - which
+  can be earlier than the checkpoint it read, for a contact that failed inside the
+  overlap (a test for that case). A contact that fails every time holds it there;
+  `POLLER.md` says so under "Not done".
+- **`db/poll-state.ts`** holds the two keys, `markEztRead` (the poller's write,
+  after the checkpoint's) and `LAST_READ_AT_SQL` - `ezt_last_read_at`'s
+  `updated_at`, else the checkpoint row's - which `db/health.ts` and `db/leads.ts`
+  both read, so the two screens cannot disagree. The row needs no migration: the
+  poller upserts it, as it does the checkpoint.
+- **Tests seen failing first:** the poller suite does not compile on the old poller
+  (no `failed` on `PollStats`), and the old one threw on the first failed contact;
+  on the old readers, two health checks and the "Synced" check failed.
+- **Runs:** the poller's 33 tests; the health live check (33) and the Admin > Leads
+  one (59), the sections before "when EZ Texting was last read" proving the
+  fallback; every live check (25); the e2e, 143; backend 1,994 tests; lint, types,
+  the image build.
+- **Also:** `SCHEMA.md`'s `settings` rows, `ADMIN-LEADS.md`'s sync line and data.
 
 ---
 
