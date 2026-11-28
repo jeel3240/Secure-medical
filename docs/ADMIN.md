@@ -19,7 +19,7 @@ polls its route every 5 seconds and says "Live · updated just now" in its heade
 
 One page shows what we ask, what each answer is worth and how the robot's call
 goes, from `GET /api/admin/config` - one page, because none of it has actions and
-it is read together. It reads the flow new leads get (`flows`,
+it is read together. It reads the flow the one bucket's new leads get (`flows`,
 `flow_questions`, `flow_choices` - `FLOWS.md`), `settings`, `tiers`, and the
 automated call's script and settings, on every request - never a copy in the
 frontend. That is the point of the page: not documentation of what was meant,
@@ -354,6 +354,7 @@ Configuration reads `flows`, `flow_questions`, `flow_choices`, `settings`,
 
 ## History
 
+- 2026-11-28 · Configuration reads the one bucket's active flow (`onlyBucket`); a bucket picker in its place is B31 · B08
 - 2026-11-28 · Tests: the admin live check proves the feed's SQL carries an outcome's reason, where only a frontend test with a hand-built entry did · review of B01-B06
 - 2026-11-28 · Overview counts sold: a Sold total after Closed, and a Sold column per agent - closed with the reason Sold, or the retired `sold`. Closed and sold are counted in one pass over the period's outcomes; counted in two more, Overview at 50,000 leads went from 25 ms to 29 ms, and in one pass it is 24 ms · B05
 - 2026-11-28 · The activity feed says why a lead was closed: "nora closed Omar Haddad · Sold" · B04

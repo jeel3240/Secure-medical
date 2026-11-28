@@ -22,6 +22,7 @@ import { blockNumber, DNC_REASONS, releaseNumber } from '../src/db/dnc';
 import { listQueue } from '../src/db/queue';
 import { getTimeline } from '../src/db/timeline';
 import { getLeadDetail } from '../src/db/lead-detail';
+import { ANTIBIOTICS_FLOW } from './live-flow';
 
 
 async function refuseIfNotEmpty(): Promise<void> {
@@ -49,7 +50,7 @@ async function makeQueuedLead(phone: string, name: string): Promise<number> {
   const id = rows[0].id;
   await pool.query(
     `INSERT INTO conversations (lead_id, flow_id, status, step, score, tier)
-     VALUES ($1, (SELECT id FROM flows WHERE is_active), 'completed', 3, 100, 'HOT')`,
+     VALUES ($1, ${ANTIBIOTICS_FLOW}, 'completed', 3, 100, 'HOT')`,
     [id]
   );
   return id;
@@ -273,7 +274,7 @@ async function main(): Promise<void> {
     const lead = await makeQueuedLead('+15550000601', 'Sold');
     await pool.query(`UPDATE conversations SET created_at = now() - interval '2 days' WHERE lead_id = $1`, [lead]);
     const { rows: newer } = await pool.query(
-      `INSERT INTO conversations (lead_id, flow_id, status, step, score, tier) VALUES ($1, (SELECT id FROM flows WHERE is_active), 'completed', 3, 90, 'HOT') RETURNING id`,
+      `INSERT INTO conversations (lead_id, flow_id, status, step, score, tier) VALUES ($1, ${ANTIBIOTICS_FLOW}, 'completed', 3, 90, 'HOT') RETURNING id`,
       [lead]
     );
     const res = await setDisposition(lead, maya, 'closed', 'sold');

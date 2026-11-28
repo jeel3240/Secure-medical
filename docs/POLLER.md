@@ -76,9 +76,11 @@ shows up within the overlap**, 5 minutes after its `createdAt` (Not done).
    - if `optOut`, or the phone is on `dnc_list`: insert the lead with a
      `suppressed` conversation, and - when EZ Texting has it opted out and we
      hold no live block for it - block the number ("Who is never texted");
-   - otherwise insert the lead with an `open` conversation on its flow's first
-     question (`startConversation`, `db/flows.ts`), then send that question and
-     record it as an outbound message.
+   - otherwise insert the lead with an `open` conversation on the first question
+     of its bucket's active flow (`startConversation`, `db/flows.ts`) - the one
+     bucket's, looked up once a poll before EZ Texting is read (`onlyBucket`,
+     `db/buckets.ts`; rule 8) - then send that question and record it as an
+     outbound message.
 6. If the page was not the last, request the next one.
 7. Write the checkpoint: the newest `createdAt` actually seen, or - when nothing
    new arrived - the same value again; but never past a contact that failed - just
@@ -137,7 +139,7 @@ message (`db/outbound.ts`), so the lead's thread shows it with a red "!", and
 `openers` in the `poll.tick` line is lower than `inserted`.
 
 **The first question is rendered before it is sent.** It is the first question
-of the flow new leads get (`openingQuestion`, `db/flows.ts`; `FLOWS.md`), which
+of the flow the lead was started in (`openingQuestion`, `db/flows.ts`; `FLOWS.md`), which
 holds the copy, `{first_name}` included. `core/messages.ts` puts in the lead's
 first name, or "there" when EZ Texting gave none, and drops the name when
 keeping it would push the text past one 160-character segment - a long name
@@ -318,6 +320,11 @@ out.
    later.
 6. **No text without `EZT_SEND_GROUP`.**
 7. **A page not newest-first stops the poll**, with nothing written.
+8. **Every lead it takes in is in the one bucket.** It reads one group, so it
+   cannot tell which bucket a contact arrived for: with a second bucket the poll
+   stops before EZ Texting is read - `MoreThanOneBucket`, logged as `poll.failed`
+   - rather than give that bucket's leads antibiotics' questions. Each arrival
+   gets a bucket of its own in B23 and B24 (`BUCKETS.md`).
 
 ## Data
 
@@ -338,6 +345,7 @@ in `ENVIRONMENT.md`.
 | `backend/src/worker/index.ts` | The loop: the cycle's five tasks under `withTryLock`, then the wait |
 | `backend/src/worker/poller.ts` | `pollOnce`, `takeIn` - one contact, `insertLead`, `openLead`, `overlapMinutes`, `assertNewestFirst` |
 | `backend/src/db/poll-state.ts` | `markEztRead`, `LAST_READ_AT_SQL`, the two keys - when EZ Texting was last read |
+| `backend/src/db/buckets.ts` | `onlyBucket`, `MoreThanOneBucket` - the bucket every lead is taken in for |
 | `backend/src/worker/opener.ts` | `sendOpener` - the first question, recorded, its reply window opened |
 | `backend/src/worker/retry-openers.ts` | `retryFailedOpeners`, `retryGaveUp` - the backoff and the 24-hour cap |
 | `backend/src/db/openers-never-sent.ts` | `findOpenersNeverSent` - which leads never got their first question |
@@ -352,7 +360,7 @@ in `ENVIRONMENT.md`.
 
 | What | Where |
 |---|---|
-| Opted-out and blocked contacts saved suppressed and never texted; a new contact opened; a known phone or one outside the group skipped; a failed, refused, timed-out or blocked first question; the checkpoint - not advanced on a failure, written on a quiet poll, the cutoff, paging, an oldest-first page refused, a missing or unreadable checkpoint, the overlap from its own setting | `backend/src/worker/poller.test.ts` |
+| Opted-out and blocked contacts saved suppressed and never texted; a new contact opened; a known phone or one outside the group skipped; a failed, refused, timed-out or blocked first question; the checkpoint - not advanced on a failure, written on a quiet poll, the cutoff, paging, an oldest-first page refused, a missing or unreadable checkpoint, the overlap from its own setting; each lead in the one bucket's flow, and a second bucket failing the poll before anything is read | `backend/src/worker/poller.test.ts` |
 | One contact failing - its lead's insert, or its do-not-call check: the others taken in and texted, `failed` 1, the log line without phone or name, the checkpoint just before it, the next poll taking it in and skipping the rest; two failing, the checkpoint before the older; one inside the overlap, the checkpoint moved back; the read recorded on a quiet poll and on one with a failure, not when the fetch failed | `backend/src/worker/poller.test.ts`, "one contact never stops the rest" |
 | The last read as the health check and "Synced" see it: the row, else the checkpoint's time | `backend/scripts/health-live-check.ts`, `backend/scripts/admin-leads-live-check.ts` |
 | The real poll for an opted-out contact, one released by START, one already blocked - the block and its record | `backend/scripts/activity-live-check.ts` |
@@ -398,6 +406,7 @@ in `ENVIRONMENT.md`.
 
 ## History
 
+- 2026-11-28 · A new lead starts in its bucket's flow - the one bucket's, looked up once a poll (`onlyBucket`); with a second bucket the poll stops before reading anything (rule 8), until each arrival has a bucket of its own · B08
 - 2026-11-28 · Decisions: the quiet-poll row says what it records - it had read "A quiet poll still writes the checkpoint, so its time says the worker polled - since B06 the `ezt_last_read_at` row says it"; since B06 the record is `ezt_last_read_at` ("A cycle") · review of B01-B06
 - 2026-11-28 · One contact never stops the rest: each is taken in on its own, a failure logged (`poll.contact_failed`), counted (`failed`) and read again next poll, the checkpoint held just before it. Until then an error in `insertLead`, `isOnDnc` or `startConversation` for one contact failed the whole poll and left the checkpoint where it was. And `ezt_last_read_at`, when EZ Texting was last read, is what health and "Synced" read, in place of the checkpoint row's `updated_at` · B06
 - 2026-11-27 · Rewritten to the area template: the cycle's five tasks (it said

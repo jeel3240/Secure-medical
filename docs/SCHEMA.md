@@ -2,7 +2,7 @@
 
 Every table in the app's Postgres database, one section each: its columns, what
 each means, its constraints and indexes, and the migration that made it. The
-migrations in `backend/src/db/migrations/` - `001` to `026`, run in order by
+migrations in `backend/src/db/migrations/` - `001` to `027`, run in order by
 `backend/scripts/migrate.js` - are the source of truth; this doc is checked
 against them. What a table is *for*, and the rules the code keeps with it, are in
 the doc named beside it.
@@ -336,11 +336,11 @@ antibiotics flow".
 | `id` | | primary key |
 | `key` | Stable name for code and logs: `antibiotics` | not null, unique |
 | `name` | | not null |
-| `ezt_group` | The EZ Texting group whose leads get this flow. Not read: with one active flow every new lead gets it | |
+| `ezt_group` | The EZ Texting group whose leads get this flow. Not read: a flow's leads are its bucket's | |
 | `responded_points` | Awarded once, on the first reply | not null, check `> 0` |
 | `completed_points` | Awarded when the flow ends by a choice whose ending is `completed` | not null, default 0 |
 | `review_body` | Sent after a second unclear reply | not null |
-| `is_active` | The flow its bucket's new leads are given | not null, default false; `flows_one_active_per_bucket`: at most one per bucket (026); `flows_one_active`: at most one in all (012) - the code reads "the active flow" (`FLOWS.md`) |
+| `is_active` | The flow its bucket's new leads are given | not null, default false; `flows_one_active_per_bucket`: at most one per bucket (026) |
 | `created_at` | | not null, default now() |
 | `bucket_id` | The bucket it is a flow of. `wellness` and `antibiotics` are both antibiotics' | not null, references `buckets` (`flows_bucket_fk`) (026) |
 
@@ -588,6 +588,7 @@ values are fixed in code instead.
 
 ## History
 
+- 2026-11-28 · `flows_one_active` dropped (027): one active flow per bucket, no longer one in all - the code asks for a bucket's · B08
 - 2026-11-28 · `buckets` (026), with antibiotics; `flows.bucket_id` and `call_scripts.bucket_id`, and one active flow and script per bucket beside the one-overall indexes the code still relies on; `conversations.flow_id` required · the database knows buckets before any code reads them · B07
 - 2026-11-28 · `dispositions.conversation_id` can be null on an outcome the old code saved during 025's deploy; the two poll rows' readers and writers corrected - the checkpoint is the newest contact seen, `db/health.ts` reads its value, and `ezt_last_read_at` is written through `markEztRead` · review of B01-B06
 - 2026-11-28 · `settings` row `ezt_last_read_at`, the poller's own · health and "Synced" read when EZ Texting was read, not when the checkpoint moved - which a failed contact now holds back · B06

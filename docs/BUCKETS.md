@@ -280,7 +280,7 @@ those columns go. So does `leads.previous_lead_id`, never used (`SCHEMA.md`).
 
 | Table | Change |
 |---|---|
-| `flows` | `bucket_id`, required, and one active flow per bucket - built by B07 (`SCHEMA.md`, `flows`). The one-overall index goes in B08; `flows.ezt_group`, never read, goes |
+| `flows` | `bucket_id`, required, and one active flow per bucket in place of one overall - built by B07 and B08 (`SCHEMA.md`, `flows`). `flows.ezt_group`, never read, goes |
 | `call_scripts` | `bucket_id`, required, and one active script per bucket - built by B07 (`SCHEMA.md`, `call_scripts`); `call_scripts_one_active`, one overall, goes in B18. Only antibiotics has a script; a new bucket has none. The voicemail, link and stop lines leave it for `buckets` (B50) |
 | `conversations` | No new column: the bucket is its flow's, so the two cannot disagree. `flow_id` is required - built by B07 |
 | `calls` | `conversation_id` on an automated call. `calls_one_automated_per_lead` becomes one per conversation, keeping its `not_placed` exception |
@@ -456,6 +456,7 @@ on its own by B01.
 
 ## History
 
+- 2026-11-28 · The code asks for a bucket's active flow, and the one-overall index is gone (027). The poller and Admin > Configuration read "the only bucket" (`onlyBucket`) until each arrival has a bucket (B23) and Admin a picker (B31); with a second bucket the poller stops rather than guess · B08
 - 2026-11-28 · `buckets` built, with antibiotics, and every flow and call script in it, one active per bucket beside the one-overall indexes the code still relies on (026). Built differently: the table has a `key`, `antibiotics`, beside its name - a stable name for code, as `flows` and `call_scripts` have; the antibiotics bucket is made by 026 with only the columns read so far, each later column filled in by the migration that adds it, where this doc had said the one migration adding the tables would fill in everything · B07
 - 2026-11-28 · Status In progress: B01-B06 are built. "Nothing is built" taken out; the next migration number left to `WORKFLOW.md` - it read 025, which B04 used; the `dispositions` row and Wrap up's Closed say what B04 built - the row had read "required on a new Closed by the route; and `conversation_id`, the bucket it closed. Rows from before stay as they are", and Wrap up's Closed "`closed`, no reason" · review of B01-B06
 - 2026-11-28 · Closed asks why, built: the popup and `dispositions.reason`, with each outcome's conversation (B04). The new bucket's use of it is B22 · B04

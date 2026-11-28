@@ -22,6 +22,7 @@ import { listAdminLeads } from '../src/db/leads';
 import { listDnc } from '../src/db/admin-dnc';
 import { blockNumber, DNC_REASONS, releaseNumber } from '../src/db/dnc';
 import { ANTIBIOTICS_CALL } from '../src/core/call-script-fixtures';
+import { ANTIBIOTICS_FLOW } from './live-flow';
 
 
 async function refuseIfNotEmpty(): Promise<void> {
@@ -66,7 +67,7 @@ async function makeLead(spec: LeadSpec): Promise<number> {
     const completedAgo = spec.status === 'completed' ? String(spec.completedDaysAgo ?? spec.daysAgo ?? 0) : null;
     await pool.query(
       `INSERT INTO conversations (lead_id, flow_id, status, step, score, tier, completed_at)
-       VALUES ($1, (SELECT id FROM flows WHERE is_active), $2, 3, $3, $4, CASE WHEN $5::text IS NULL THEN NULL ELSE now() - ($5 || ' days')::interval END)`,
+       VALUES ($1, ${ANTIBIOTICS_FLOW}, $2, 3, $3, $4, CASE WHEN $5::text IS NULL THEN NULL ELSE now() - ($5 || ' days')::interval END)`,
       [id, spec.status, spec.score ?? 0, spec.tier ?? null, completedAgo]
     );
   }

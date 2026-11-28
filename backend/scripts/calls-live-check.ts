@@ -28,6 +28,7 @@ import { listQueue } from '../src/db/queue';
 import { blockNumber, DNC_REASONS } from '../src/db/dnc';
 import { listAdminLeads } from '../src/db/leads';
 import { getTimeline } from '../src/db/timeline';
+import { ANTIBIOTICS_FLOW } from './live-flow';
 
 
 async function refuseIfNotEmpty(): Promise<void> {
@@ -59,7 +60,7 @@ async function makeLead(phone: string, name: string, holder: number | null): Pro
   );
   await pool.query(
     `INSERT INTO conversations (lead_id, flow_id, status, step, q1, q2, q3, score, tier)
-     VALUES ($1, (SELECT id FROM flows WHERE is_active), 'completed', 3, '1', '1', '1', 90, 'HOT')`,
+     VALUES ($1, ${ANTIBIOTICS_FLOW}, 'completed', 3, '1', '1', '1', 90, 'HOT')`,
     [rows[0].id]
   );
   return rows[0].id;

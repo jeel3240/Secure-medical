@@ -18,7 +18,7 @@
  */
 import { check, failureCount, verdict } from './check';
 import { pool } from '../src/db/pool';
-import { startFlow } from './live-flow';
+import { ANTIBIOTICS_FLOW, startFlow } from './live-flow';
 import { listQueue } from '../src/db/queue';
 import { getLeadDetail } from '../src/db/lead-detail';
 import { keepCallResult, startAutomatedCall, missTransfer } from '../src/db/auto-calls';
@@ -44,7 +44,7 @@ async function lead(opts: {
   // conversation's status and score. The answer columns are no longer read.
   await pool.query(
     `INSERT INTO conversations (lead_id, status, step, q1, q2, q3, score, tier, flow_id)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8, (SELECT id FROM flows WHERE is_active))`,
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8, ${ANTIBIOTICS_FLOW})`,
     [id, opts.status, 1, opts.q1 ?? null, opts.q2 ?? null, opts.q3 ?? null, opts.score, opts.tier]
   );
   return id;
@@ -99,7 +99,7 @@ async function main() {
   const called = await lead({ phone: '+15550000008', first: 'Called', source: 'CORE-G-27', ageMin: 15, status: 'completed', q1: '2', q2: '2', q3: '2', score: 50, tier: 'WARM' });
 
   // history that must not multiply rows
-  await pool.query(`INSERT INTO conversations (lead_id, flow_id, status, step, score, tier) VALUES ($1,(SELECT id FROM flows WHERE is_active),'expired',1,20,'LOW')`, [hot]);
+  await pool.query(`INSERT INTO conversations (lead_id, flow_id, status, step, score, tier) VALUES ($1,${ANTIBIOTICS_FLOW},'expired',1,20,'LOW')`, [hot]);
   await pool.query(`UPDATE conversations SET created_at = now() - interval '2 days' WHERE lead_id = $1 AND status = 'expired'`, [hot]);
   await pool.query(`INSERT INTO calls (lead_id, agent_id, outcome) VALUES ($1,$2,'no_answer'),($1,$2,'no_answer')`, [called, michael]);
   await pool.query(`INSERT INTO callbacks (lead_id, agent_id, scheduled_at) VALUES ($1,$2, now() + interval '3 hours'),($1,$2, now() + interval '1 hour')`, [released, michael]);

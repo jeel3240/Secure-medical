@@ -31,6 +31,7 @@ import {
 import { startConversation } from '../src/db/flows';
 import { pool } from '../src/db/pool';
 import { dialDueLeads, type DialDeps } from '../src/worker/auto-calls';
+import { antibiotics } from './live-flow';
 
 
 async function refuseIfNotEmpty(): Promise<void> {
@@ -58,7 +59,7 @@ async function lead(opts: { sent: Date | null; arrived?: Date; status?: string; 
       arrived,
     ])
   ).rows[0].id as number;
-  await startConversation(pool, id, 'open');
+  await startConversation(pool, id, 'open', await antibiotics());
   await pool.query(
     `UPDATE conversations SET question_sent_at = $2, expires_at = $2::timestamptz + interval '7 days', status = $3 WHERE lead_id = $1`,
     [id, opts.sent, opts.status ?? 'open']

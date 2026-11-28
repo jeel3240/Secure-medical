@@ -5,19 +5,21 @@
  * antibiotics flow. No table, no column and no code is added for it.
  *
  * Also proves what migration 012 seeded, and that the two flows do not leak
- * into each other: a lead stays in the flow it started in; and what 026 (B07)
- * added - every flow in a bucket, one active flow per bucket.
+ * into each other: a lead stays in the flow it started in; what 026 (B07)
+ * and 027 (B08) made of it - every flow in a bucket, one active flow per bucket
+ * and no longer one in all; and that a lead starts in its own bucket's flow.
  *
  * It writes rows, so it refuses to run against a database that holds any:
  * `scripts/live-checks.sh flows` gives it a scratch database.
  */
 import { check, failureCount, rolledBack, verdict } from './check';
 import { getAdminConfig } from '../src/db/admin-config';
+import { bucketByKey, MoreThanOneBucket, onlyBucket } from '../src/db/buckets';
 import { loadFlow, startConversation } from '../src/db/flows';
 import { getLeadDetail } from '../src/db/lead-detail';
 import { pool } from '../src/db/pool';
 import { listQueue } from '../src/db/queue';
-import { replyAs, startFlow } from './live-flow';
+import { antibiotics, replyAs, startFlow } from './live-flow';
 
 
 let nextPhone = 900;
@@ -73,7 +75,7 @@ async function main(): Promise<void> {
       .catch((err: Error) => {
         refused = err.message;
       });
-    check('only one flow can be the one new leads get', /flows_one_active/.test(refused), true);
+    check('only one flow in a bucket can be the one its new leads get', /flows_one_active_per_bucket/.test(refused), true);
 
     // The rules a migration adding a flow is held to, by the database.
     const refusedBy = async (sql: string) => {
@@ -105,7 +107,7 @@ async function main(): Promise<void> {
     );
   }
 
-  console.log('\nevery flow in a bucket, one active per bucket (026)');
+  console.log('\nevery flow in a bucket, one active per bucket (026, 027)');
   {
     check('one bucket, antibiotics', (await pool.query(`SELECT key, name FROM buckets ORDER BY id`)).rows, [
       { key: 'antibiotics', name: 'Antibiotics' },
@@ -125,22 +127,24 @@ async function main(): Promise<void> {
        VALUES ('${key}', '${key}', 10, 'x', ${active}, (SELECT id FROM buckets WHERE key = '${bucket}'))`;
     const twoBuckets = `INSERT INTO buckets (key, name) VALUES ('second', 'Second')`;
 
-    const sameBucket = await rolledBack(pool, async (tried) => {
-      // Both indexes would refuse it; the old one goes - in this transaction
-      // only - so the refusal is the bucket's own.
-      await tried('DROP INDEX flows_one_active');
-      return tried(flow('again', 'antibiotics', true));
-    });
-    check('a second active flow in the same bucket is refused, by the bucket\'s index', sameBucket, 'flows_one_active_per_bucket');
-
-    const [inTheOther, withoutTheOld] = await rolledBack(pool, async (tried) => {
-      await tried(twoBuckets);
-      const refused = await tried(flow('other', 'second', true));
-      await tried('DROP INDEX flows_one_active');
-      return [refused, await tried(flow('other', 'second', true))];
-    });
-    check('an active flow in each of two buckets: the old index, still there, refuses it', inTheOther, 'flows_one_active');
-    check('and the bucket\'s index alone allows it', withoutTheOld, 'allowed');
+    check(
+      'one active flow in all is no longer a rule: its index is gone (027)',
+      (await pool.query(`SELECT to_regclass('public.flows_one_active') IS NULL AS gone`)).rows[0].gone,
+      true
+    );
+    check(
+      'a second active flow in the same bucket is refused, by the bucket\'s index',
+      await rolledBack(pool, (tried) => tried(flow('again', 'antibiotics', true))),
+      'flows_one_active_per_bucket'
+    );
+    check(
+      'an active flow in each of two buckets is allowed',
+      await rolledBack(pool, async (tried) => {
+        await tried(twoBuckets);
+        return tried(flow('other', 'second', true));
+      }),
+      'allowed'
+    );
 
     const noBucket = await rolledBack(pool, (tried) =>
       tried(`INSERT INTO flows (key, name, responded_points, review_body) VALUES ('loose', 'Loose', 10, 'x')`)
@@ -158,6 +162,65 @@ async function main(): Promise<void> {
       return tried(`INSERT INTO conversations (lead_id, status, step) SELECT id, 'open', 1 FROM leads WHERE phone = '+15550000899'`);
     });
     check('a conversation in no flow is refused: it would be in no bucket', /null value in column "flow_id"/.test(noFlow), true);
+  }
+
+  console.log('\na second bucket, with its own flow (B08)');
+  {
+    check('with one bucket, the only bucket is antibiotics', await onlyBucket(pool), await antibiotics());
+
+    const seen = await rolledBack(pool, async (tried, client) => {
+      await tried(`INSERT INTO buckets (key, name) VALUES ('second', 'Second')`);
+      await tried(
+        `INSERT INTO flows (key, name, responded_points, review_body, is_active, bucket_id)
+         SELECT 'other', 'Other', 10, 'x', true, id FROM buckets WHERE key = 'second'`
+      );
+      await tried(
+        `INSERT INTO flow_questions (flow_id, key, position, body, clarify_body, heading)
+         SELECT id, 'o1', 10, 'The second bucket asks this first?', 'Reply 1 or 2.', 'Other 1' FROM flows WHERE key = 'other'`
+      );
+      const lead = async (phone: string): Promise<number> =>
+        (await client.query(`INSERT INTO leads (phone, first_name, source) VALUES ($1, 'Two', 'API') RETURNING id`, [phone])).rows[0].id;
+      const firstQuestion = async (leadId: number) =>
+        (
+          await client.query(
+            `SELECT f.key AS flow, q.key AS question
+             FROM conversations c JOIN flows f ON f.id = c.flow_id JOIN flow_questions q ON q.id = c.current_question_id
+             WHERE c.lead_id = $1`,
+            [leadId]
+          )
+        ).rows[0];
+
+      const inAntibiotics = await lead('+15550000896');
+      const inSecond = await lead('+15550000897');
+      await startConversation(client, inAntibiotics, 'open', await antibiotics());
+      await startConversation(client, inSecond, 'open', (await bucketByKey(client, 'second'))!);
+
+      let only = '';
+      await onlyBucket(client).then(
+        (id) => (only = `bucket ${id}`),
+        (err: Error) => (only = err instanceof MoreThanOneBucket ? `MoreThanOneBucket: ${err.count}` : err.message)
+      );
+
+      // A bucket with no active flow: nothing to start, and it says which.
+      await tried(`INSERT INTO buckets (key, name) VALUES ('third', 'Third')`);
+      const third = (await bucketByKey(client, 'third'))!;
+      let none = '';
+      await startConversation(client, await lead('+15550000898'), 'open', third).catch((err: Error) => (none = err.message));
+
+      return {
+        antibiotics: await firstQuestion(inAntibiotics),
+        second: await firstQuestion(inSecond),
+        only,
+        none: none.startsWith(`Bucket ${third} has no active flow`),
+      };
+    });
+    check('each bucket\'s lead starts on its own flow\'s first question', [seen.antibiotics, seen.second], [
+      { flow: 'antibiotics', question: 'q1' },
+      { flow: 'other', question: 'o1' },
+    ]);
+    check('with two buckets, "the only bucket" refuses - the poller stops rather than guess', seen.only, 'MoreThanOneBucket: 2');
+    check('a bucket with no active flow starts nothing, and the error names it', seen.none, true);
+    check('and none of it outlives the check', (await pool.query(`SELECT count(*)::int AS n FROM buckets`)).rows[0].n, 1);
   }
 
   console.log('\na lead in the antibiotics flow');
@@ -182,7 +245,7 @@ async function main(): Promise<void> {
       );
 
     const twice = await makeLead('Twice');
-    await startConversation(pool, twice, 'open');
+    await startConversation(pool, twice, 'open', await antibiotics());
     const tooSoon = await replyAs(twice, 'yes', { beforeOurText: true });
     check('a text before the first question has gone out is not an answer to it', [tooSoon?.result.answer, (await conversationOf(twice)).score], [null, 0]);
 
@@ -199,7 +262,7 @@ async function main(): Promise<void> {
 
     // Two unclear texts in a row used to use up the one "sorry" and send the lead to review.
     const fumble = await makeLead('Fumble');
-    await startConversation(pool, fumble, 'open');
+    await startConversation(pool, fumble, 'open', await antibiotics());
     await replyAs(fumble, 'huh');
     await replyAs(fumble, 'huh?', { beforeOurText: true });
     check('two unclear texts in a row cost one "sorry", not a trip to review', (await conversationOf(fumble)).status, 'open');
@@ -257,7 +320,7 @@ async function main(): Promise<void> {
     );
 
     const all = await makeLead('AllFive');
-    await startConversation(pool, all, 'open');
+    await startConversation(pool, all, 'open', await antibiotics());
     check('a new lead now starts in the new flow, on its first question', await conversationOf(all), {
       flow: 'weight',
       status: 'open',
@@ -287,7 +350,7 @@ async function main(): Promise<void> {
     check('five answers, five rows', answers.map((a) => `${a.question_key}:${a.label}`), ['w1:W1A', 'w2:W2A', 'w3:W3A', 'w4:W4A', 'w5:W5A']);
 
     const skipper = await makeLead('Skipper');
-    await startConversation(pool, skipper, 'open');
+    await startConversation(pool, skipper, 'open', await antibiotics());
     await replyAs(skipper, '1');
     const jumped = await replyAs(skipper, 'b');
     check('its branch works: choice 2 of question 2 skips to question 5', [jumped?.result.conversation.step, jumped?.result.send], [5, ['Weight question 5? Reply 1 or 2.']]);

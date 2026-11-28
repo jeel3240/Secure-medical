@@ -158,7 +158,8 @@ second misses the second part: rebuild it, or run the second part's SQL there on
 ### Where the files stand
 
 `main` and production hold 001 to 024. `dev` adds 025 (B04, why a lead was
-closed) and 026 (B07, buckets). The next migration is 027.
+closed), 026 (B07, buckets) and 027 (B08, one active flow per bucket). The next
+migration is 028.
 
 ## When it goes wrong
 
@@ -171,6 +172,7 @@ closed) and 026 (B07, buckets). The next migration is 027.
 
 ## History
 
+- 2026-11-28 · 027 on `dev`: `flows_one_active` dropped · B08
 - 2026-11-28 · 026 on `dev`: `buckets`, every flow and call script in one, `conversations.flow_id` required · B07
 - 2026-11-28 · 025 on `dev`: `dispositions.reason` and `conversation_id` · B04
 - 2026-11-28 · A migration that changes existing rows ships an upgrade check · B03

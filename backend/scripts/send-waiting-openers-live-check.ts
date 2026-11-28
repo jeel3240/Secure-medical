@@ -38,6 +38,7 @@ import { startConversation } from '../src/db/flows';
 import { pool } from '../src/db/pool';
 import { retryFailedOpeners } from '../src/worker/retry-openers';
 import { resendWaitingOpeners, type ResendDeps, type ResendReport } from '../src/worker/send-waiting-openers';
+import { antibiotics } from './live-flow';
 
 
 const EVERY_MS = 30_000;
@@ -85,7 +86,7 @@ async function waitingLead(phone: string, hoursAgo: number, attempts: number): P
     [phone, String(hoursAgo)]
   );
   const id = rows[0].id as number;
-  await startConversation(pool, id, 'open');
+  await startConversation(pool, id, 'open', await antibiotics());
   for (let i = 0; i < attempts; i++) {
     await pool.query(
       `INSERT INTO messages (lead_id, direction, body, delivery_status, created_at)

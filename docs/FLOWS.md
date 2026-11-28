@@ -176,7 +176,8 @@ no code.
    ("Naming a question, and sub-questions", above).
 3. Insert each question's choices into `flow_choices`, with the flow's id and
    `next_question_id` or an `ending`.
-4. To make it the one new leads get: set the old flow's `is_active` to false and
+4. To make it the one its bucket's new leads get: set that bucket's old flow's
+   `is_active` to false and
    the new one's to true, in the same migration.
 
 `012_flows.sql`, section 5, is the pattern to copy. `scripts/flows-live-check.ts`
@@ -227,9 +228,9 @@ Making another flow active changes what **new** leads get (rule 10).
 
 ### Rules the database enforces
 
-1. **Every flow is in a bucket, and one flow is active** - the one new leads get
-   (`flows_one_active`); at most one in each bucket
-   (`flows_one_active_per_bucket`). `flows.bucket_id` is required; `wellness` and
+1. **Every flow is in a bucket, and a bucket has at most one active flow** - the
+   one its new leads get (`flows_one_active_per_bucket`); each bucket can have its
+   own. `flows.bucket_id` is required; `wellness` and
    `antibiotics` are both in antibiotics.
 2. **A choice either leads to a question or ends the flow**, never both and
    never neither (`flow_choices_next_or_end`).
@@ -289,13 +290,14 @@ Making another flow active changes what **new** leads get (rule 10).
 
 | File | What it does |
 |---|---|
-| `backend/src/db/flows.ts` | `loadFlow`; `startConversation`, a new lead on the active flow's first question; `openingQuestion` |
+| `backend/src/db/flows.ts` | `loadFlow`; `startConversation`, a new lead on the first question of its bucket's active flow - the bucket is the caller's to say; `openingQuestion` |
+| `backend/src/db/buckets.ts` | `onlyBucket` - the bucket the poller and Admin > Configuration read, while there is one; `bucketByKey` |
 | `backend/src/core/state-machine.ts` | `step` follows a flow; the `Ending` type and `NOT_FOR_AGENTS` |
 | `backend/src/core/answers.ts` | `matchChoice` - a reply against one question's choices |
 | `backend/src/api/reply-flow.ts` | Loads the conversation and its flow, runs `step`, saves the answer row |
 | `backend/src/core/questions.ts` | `questionShort` - "Q1", "Q1-a", or the heading |
 | `backend/src/core/score-breakdown.ts` | The breakdown from the saved answers and the flow's awards |
-| `backend/src/db/admin-config.ts` | Admin > Configuration's copy, scoring and maximum score, from the active flow |
+| `backend/src/db/admin-config.ts` | Admin > Configuration's copy, scoring and maximum score, from the one bucket's active flow |
 | `backend/src/db/migrations/012_flows.sql` | The tables, the `wellness` flow carried over, the antibiotics flow |
 | `backend/src/core/flow-fixtures.ts` | The antibiotics flow as a constant, for tests only |
 
@@ -305,11 +307,11 @@ Making another flow active changes what **new** leads get (rule 10).
 |---|---|
 | Every branch of the antibiotics flow, every rule, and a five-question flow on the same code | `backend/src/core/state-machine.test.ts`, `backend/src/core/answers.test.ts` |
 | The webhook walking the flow: the answer row, the joined text | `backend/src/api/__tests__/webhooks.test.ts` |
-| A second flow added as rows only, with a branch; a lead staying in its own flow; what the migration seeded; every flow in a bucket, one active per bucket, the one-overall index still there | `backend/scripts/flows-live-check.ts` |
+| A second flow added as rows only, with a branch; a lead staying in its own flow; what the migration seeded; every flow in a bucket, one active per bucket and no longer one in all; a second bucket's lead starting on its own flow, "the only bucket" refusing two, a bucket with no active flow starting nothing | `backend/scripts/flows-live-check.ts` |
 | Every flow lands in antibiotics, the retired one too, and no conversation is touched; a conversation with no flow stops the migration | `backend/scripts/buckets-upgrade-check.ts` |
 | A saved answer keeping its label and points after the flow changes; that it cannot be edited | `backend/scripts/lead-detail-live-check.ts` |
 | The queue: offers leads out, Wants a call tagged, a row's answers | `backend/scripts/queue-live-check.ts` |
-| Admin > Leads' Offers status; Configuration reading the active flow | `backend/scripts/admin-leads-live-check.ts`, `backend/scripts/admin-live-check.ts` |
+| Admin > Leads' Offers status; Configuration reading the bucket's active flow | `backend/scripts/admin-leads-live-check.ts`, `backend/scripts/admin-live-check.ts` |
 
 `backend/scripts/live-checks.sh` runs every live check on its own scratch
 database.
@@ -325,10 +327,11 @@ path - local only. How to use it is in `TESTING.md`.
 
 - **Editing a flow from the website.** A flow is changed by a migration (rule
   11). The tables are what such a screen would edit; it is a later phase.
-- **Several flows at once.** One flow is active. Each flow is in a bucket, and
-  the database allows one active per bucket, but the code still reads "the
-  active flow" and the one-overall index keeps it to one; `flows.ezt_group` is
-  not read. A flow per bucket is Phase 8 - `BUCKETS.md`.
+- **A second bucket's flow, used.** Each bucket can have its own active flow, and
+  `startConversation` starts a lead in the bucket it is given - but the poller
+  takes every lead in for the one bucket, and stops when there are two
+  (`POLLER.md`, rule 8), until each arrival has a bucket (B23, B24).
+  `flows.ezt_group` is not read. The rest is Phase 8 - `BUCKETS.md`.
 - **A question that is not a choice** - a date, a free-text answer. Every
   question is a list of choices.
 - **The maximum score** on Admin > Configuration is the awards plus the best
@@ -366,6 +369,7 @@ path - local only. How to use it is in `TESTING.md`.
 
 ## History
 
+- 2026-11-28 · A bucket's active flow, not "the active flow": `startConversation` takes the bucket, and `flows_one_active` is gone (027), so each bucket can have its own (rule 1); Not done's "Several flows at once" now says what is left · B08
 - 2026-11-28 · Every flow is in a bucket - both in antibiotics - with one active per bucket beside one overall; a conversation's flow required, so every conversation is in a bucket · B07
 - 2026-11-27 · Rewritten to the area template; the antibiotics flow moved here
   from `STATE-MACHINE.md`, checked word for word against migration 012; the

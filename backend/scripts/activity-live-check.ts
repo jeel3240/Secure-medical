@@ -26,6 +26,7 @@ import { addNote } from '../src/db/notes';
 import { markLeadRead } from '../src/db/read-flag';
 import * as eztClientModule from '../src/integrations/ezt-client';
 import { pollOnce } from '../src/worker/poller';
+import { ANTIBIOTICS_FLOW } from './live-flow';
 
 /** The module the poller reads EZ Texting through, so a check can supply its answer. */
 const eztClient = eztClientModule as unknown as { listContacts: (...args: unknown[]) => Promise<unknown> };
@@ -54,7 +55,7 @@ async function makeLead(): Promise<{ id: number; phone: string }> {
   const phone = `+15550000${nextPhone++}`;
   const { rows } = await pool.query(`INSERT INTO leads (phone, first_name) VALUES ($1, 'Lead') RETURNING id`, [phone]);
   await pool.query(
-    `INSERT INTO conversations (lead_id, flow_id, status, step, q1, q2, q3, score, tier) VALUES ($1, (SELECT id FROM flows WHERE is_active), 'completed', 3, '1', '1', '1', 90, 'HOT')`,
+    `INSERT INTO conversations (lead_id, flow_id, status, step, q1, q2, q3, score, tier) VALUES ($1, ${ANTIBIOTICS_FLOW}, 'completed', 3, '1', '1', '1', 90, 'HOT')`,
     [rows[0].id]
   );
   return { id: rows[0].id, phone };

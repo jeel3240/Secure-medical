@@ -19,6 +19,7 @@ import { check, failureCount, verdict } from './check';
 import { pool } from '../src/db/pool';
 import { markLeadRead } from '../src/db/read-flag';
 import { listQueue } from '../src/db/queue';
+import { ANTIBIOTICS_FLOW } from './live-flow';
 
 
 async function refuseIfNotEmpty(): Promise<void> {
@@ -42,7 +43,7 @@ async function makeExpiredLeadWithReply(phone: string): Promise<number> {
   // unread flag can keep them in it.
   await pool.query(
     `INSERT INTO conversations (lead_id, flow_id, status, step, q1, score, tier, expires_at)
-     VALUES ($1, (SELECT id FROM flows WHERE is_active), 'expired', 2, '3', 25, 'LOW', now() - interval '2 days')`,
+     VALUES ($1, ${ANTIBIOTICS_FLOW}, 'expired', 2, '3', 25, 'LOW', now() - interval '2 days')`,
     [leadId]
   );
   return leadId;
@@ -104,7 +105,7 @@ async function main(): Promise<void> {
     const lead: number = rows[0].id;
     await pool.query(
       `INSERT INTO conversations (lead_id, flow_id, status, step, q1, q2, q3, score, tier)
-       VALUES ($1, (SELECT id FROM flows WHERE is_active), 'completed', 3, '3', '1', '1', 100, 'HOT')`,
+       VALUES ($1, ${ANTIBIOTICS_FLOW}, 'completed', 3, '3', '1', '1', 100, 'HOT')`,
       [lead]
     );
 
@@ -124,7 +125,7 @@ async function main(): Promise<void> {
     const lead: number = rows[0].id;
     await pool.query(
       `INSERT INTO conversations (lead_id, flow_id, status, step, q1, score, tier, agent_took_over_at)
-       VALUES ($1, (SELECT id FROM flows WHERE is_active), 'open', 2, '3', 25, 'LOW', now() - interval '10 minutes')`,
+       VALUES ($1, ${ANTIBIOTICS_FLOW}, 'open', 2, '3', 25, 'LOW', now() - interval '10 minutes')`,
       [lead]
     );
 

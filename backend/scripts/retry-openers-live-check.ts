@@ -42,6 +42,7 @@ import { startConversation } from '../src/db/flows';
 import { pool } from '../src/db/pool';
 import { retryFailedOpeners } from '../src/worker/retry-openers';
 import { blockNumber, DNC_REASONS } from '../src/db/dnc';
+import { antibiotics } from './live-flow';
 
 
 async function refuseIfNotEmpty(): Promise<void> {
@@ -70,7 +71,7 @@ async function leadWithFailedOpener(
   const id = rows[0].id;
 
   // In the active flow, on its first question - as the poller leaves a new lead.
-  await startConversation(pool, id, 'open');
+  await startConversation(pool, id, 'open', await antibiotics());
 
   const failedAgo = String(opts.lastFailedMinutesAgo ?? opts.minutesAgo);
   for (let i = 0; i < (opts.attempts ?? 1); i++) {
@@ -264,7 +265,7 @@ async function main(): Promise<void> {
     await pool.query(
       `SELECT 1`
     );
-    await startConversation(pool, fine, 'open');
+    await startConversation(pool, fine, 'open', await antibiotics());
     await pool.query(`UPDATE conversations SET expires_at = now() + interval '7 days' WHERE lead_id = $1`, [fine]);
     await pool.query(
       `INSERT INTO messages (lead_id, direction, body, ezt_message_id)

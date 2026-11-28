@@ -10,7 +10,8 @@
  *
  * In one transaction the lead's open conversation, if it has one, is marked
  * expired - one open conversation per number, ever - and a new one is started
- * in the flow new leads get. Then the first question is sent, the way the
+ * in the flow its bucket's new leads get: the bucket of its newest
+ * conversation's flow (B08). A lead with no conversation gets the only bucket's. Then the first question is sent, the way the
  * poller sends it. Nothing is deleted: the earlier conversations and their
  * answers stay, and so does whatever agents did with the lead.
  *
@@ -22,6 +23,7 @@
  */
 import '../src/config';
 import { recordActivity } from '../src/db/activity';
+import { onlyBucket } from '../src/db/buckets';
 import { openingQuestion, startConversation } from '../src/db/flows';
 import { pool } from '../src/db/pool';
 import { sendOpener } from '../src/worker/opener';
@@ -41,7 +43,9 @@ async function main(): Promise<number> {
 
   const { rows } = await pool.query(
     `SELECT l.id, l.first_name,
-            EXISTS (SELECT 1 FROM dnc_list d WHERE d.phone = l.phone AND d.released_at IS NULL) AS blocked
+            EXISTS (SELECT 1 FROM dnc_list d WHERE d.phone = l.phone AND d.released_at IS NULL) AS blocked,
+            (SELECT f.bucket_id FROM conversations c JOIN flows f ON f.id = c.flow_id
+             WHERE c.lead_id = l.id ORDER BY c.created_at DESC, c.id DESC LIMIT 1) AS bucket_id
      FROM leads l WHERE l.phone = $1`,
     [phone]
   );
@@ -62,7 +66,7 @@ async function main(): Promise<number> {
       `UPDATE conversations SET status = 'expired', updated_at = now() WHERE lead_id = $1 AND status = 'open' RETURNING id`,
       [lead.id]
     );
-    await startConversation(client, lead.id, 'open');
+    await startConversation(client, lead.id, 'open', lead.bucket_id ?? (await onlyBucket(client)));
     // Recorded with the change, as every write is - AUDIT.md (review Q9).
     await recordActivity(client, {
       action: 'dev.test_reset',
