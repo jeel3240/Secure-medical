@@ -1,5 +1,6 @@
 import { blockNumber, DNC_REASONS } from '../db/dnc';
 import { openingQuestion, startConversation } from '../db/flows';
+import { EZT_CHECKPOINT_KEY, markEztRead } from '../db/poll-state';
 import { pool } from '../db/pool';
 import { config } from '../config';
 import {
@@ -12,7 +13,7 @@ import {
 import { errText, log } from '../lib/log';
 import { sendOpener } from './opener';
 
-const CHECKPOINT_KEY = 'ezt_poll_checkpoint';
+const CHECKPOINT_KEY = EZT_CHECKPOINT_KEY;
 const PAGE_SIZE = 50;
 const DEFAULT_LOOKBACK_MS = 60 * 60 * 1000;
 
@@ -22,6 +23,8 @@ export interface PollStats {
   skipped: number;
   suppressed: number;
   openersSent: number;
+  /** Contacts that could not be taken in this poll - each read again next time (B06). */
+  failed: number;
   durationMs: number;
 }
 
@@ -220,12 +223,56 @@ async function openLead(leadId: number, phone: string, firstName: string | null)
 }
 
 /**
+ * One contact of the group: blocked, new, or a phone we hold already.
+ * Throws when the database does - the caller counts it and goes on.
+ */
+async function takeIn(contact: EztContact, groupName: string, stats: PollStats): Promise<void> {
+  // `like` also matches "weightloss - sent", so confirm real membership.
+  if (!isInGroup(contact, groupName)) {
+    stats.skipped += 1;
+    return;
+  }
+
+  const phone = toE164(contact.phoneNumber);
+
+  // A phone we already hold gets no third case here yet: decideArrival
+  // (docs/bucket-tickets B22, B23) replaces this branch.
+  const alreadyBlocked = await isOnDnc(phone);
+  if (contact.optOut || alreadyBlocked) {
+    const leadId = await insertLead(contact, phone, 'suppressed', Boolean(contact.optOut) && !alreadyBlocked);
+    if (leadId === null) {
+      stats.skipped += 1;
+    } else {
+      stats.suppressed += 1;
+    }
+    return;
+  }
+
+  const leadId = await insertLead(contact, phone, 'open');
+  if (leadId === null) {
+    stats.skipped += 1;
+  } else {
+    stats.inserted += 1;
+    if (await openLead(leadId, phone, contact.firstName ?? null)) {
+      stats.openersSent += 1;
+    }
+  }
+}
+
+/**
  * One poll cycle: page through the group newest-first, stopping once contacts
  * predate the checkpoint's overlap window.
  *
- * The checkpoint advances to the newest createdAt actually seen, and only if
- * the whole cycle succeeded - a throw here leaves it untouched so the next
- * run re-covers the same ground.
+ * **One contact never stops the rest - B06.** Each is taken in on its own;
+ * one the database refuses is logged (`poll.contact_failed`), counted
+ * (`failed`) and passed, and the walk goes on. The checkpoint then advances to
+ * the newest createdAt seen, but never past a failed contact: to just before
+ * the oldest one, so the next poll reads it again. Those after it that were
+ * taken in are skipped then as phones we hold (`ON CONFLICT DO NOTHING`).
+ *
+ * A fetch that fails, or a page listed oldest first, throws: the checkpoint is
+ * left untouched, so the next run re-covers the same ground, and the poll is
+ * not recorded as a read.
  */
 export async function pollOnce(): Promise<PollStats> {
   const startedAt = Date.now();
@@ -240,9 +287,11 @@ export async function pollOnce(): Promise<PollStats> {
     skipped: 0,
     suppressed: 0,
     openersSent: 0,
+    failed: 0,
     durationMs: 0,
   };
   let newest: Date | null = null;
+  let oldestFailed: Date | null = null;
   let page = 0;
   let reachedCutoff = false;
 
@@ -272,35 +321,14 @@ export async function pollOnce(): Promise<PollStats> {
         newest = addedAt;
       }
 
-      // `like` also matches "weightloss - sent", so confirm real membership.
-      if (!isInGroup(contact, groupName)) {
-        stats.skipped += 1;
-        continue;
-      }
-
-      const phone = toE164(contact.phoneNumber);
-
-      // A phone we already hold gets no third case here yet: decideArrival
-      // (docs/bucket-tickets B22, B23) replaces this branch.
-      const alreadyBlocked = await isOnDnc(phone);
-      if (contact.optOut || alreadyBlocked) {
-        const leadId = await insertLead(contact, phone, 'suppressed', Boolean(contact.optOut) && !alreadyBlocked);
-        if (leadId === null) {
-          stats.skipped += 1;
-        } else {
-          stats.suppressed += 1;
-        }
-        continue;
-      }
-
-      const leadId = await insertLead(contact, phone, 'open');
-      if (leadId === null) {
-        stats.skipped += 1;
-      } else {
-        stats.inserted += 1;
-        if (await openLead(leadId, phone, contact.firstName ?? null)) {
-          stats.openersSent += 1;
-        }
+      try {
+        await takeIn(contact, groupName, stats);
+      } catch (err) {
+        // No phone or name: the error's message only (`errText`), and when
+        // EZ Texting listed the contact, which finds it there.
+        stats.failed += 1;
+        if (!oldestFailed || addedAt < oldestFailed) oldestFailed = addedAt;
+        log.error('poll.contact_failed', { createdAt: contact.createdAt, err: errText(err) });
       }
     }
 
@@ -308,12 +336,18 @@ export async function pollOnce(): Promise<PollStats> {
     page += 1;
   }
 
-  // A quiet poll still writes the checkpoint - the same value, a fresh
-  // updated_at. That time is what Admin > Leads' "Synced" line and the health
-  // check read as "the worker last polled"; written only when a new contact
-  // arrived, it stood still on a quiet account and both reported a healthy
-  // worker as stopped. Jeel, 2026-09-28.
-  await writeCheckpoint(newest ?? checkpoint);
+  // Never past a contact that failed: just before the oldest, so it is read
+  // again next poll - which may be earlier than the checkpoint read at the
+  // start, when it failed inside the overlap.
+  const reached = newest ?? checkpoint;
+  await writeCheckpoint(
+    oldestFailed && oldestFailed.getTime() - 1 < reached.getTime() ? new Date(oldestFailed.getTime() - 1) : reached
+  );
+  // That EZ Texting was read, failures or not - what health and Admin > Leads'
+  // "Synced" read as the last poll (`db/poll-state.ts`). A quiet poll writes it
+  // too: a time that moved only when a contact arrived called a healthy worker
+  // stopped on a quiet account (Jeel, 2026-09-28).
+  await markEztRead();
 
   stats.durationMs = Date.now() - startedAt;
   return stats;

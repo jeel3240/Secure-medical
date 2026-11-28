@@ -69,7 +69,8 @@ shows up within the overlap**, 5 minutes after its `createdAt` (Not done).
    `sort=createdAt,desc`, 50 a page.
 4. Walk the page. Stop the whole cycle at the first contact at or older than
    the cutoff - everything below it is older still.
-5. For each contact above the cutoff:
+5. For each contact above the cutoff, on its own (`takeIn`) - one the database
+   refuses is logged as `poll.contact_failed`, counted in `failed`, and passed:
    - confirm it is really in the group, by exact name against `groups[]`;
    - normalise the phone to E.164;
    - if `optOut`, or the phone is on `dnc_list`: insert the lead with a
@@ -80,9 +81,13 @@ shows up within the overlap**, 5 minutes after its `createdAt` (Not done).
      record it as an outbound message.
 6. If the page was not the last, request the next one.
 7. Write the checkpoint: the newest `createdAt` actually seen, or - when nothing
-   new arrived - the same value again. Every successful poll writes it, so
-   `settings.updated_at` is the time of the last poll, which the health check
-   and Admin > Leads read.
+   new arrived - the same value again; but never past a contact that failed - just
+   before the oldest one, so the next poll reads it again.
+8. Write `ezt_last_read_at`: the time EZ Texting was read, failed contacts or not
+   (`markEztRead`, `db/poll-state.ts`). It is what the health check and Admin >
+   Leads' "Synced" call the last poll (`LAST_READ_AT_SQL`); on a database whose
+   worker has not polled since it existed, they read the checkpoint row's
+   `updated_at` instead.
 
 ### Why each piece is there
 
@@ -99,10 +104,30 @@ lead, and what makes the overlap safe.
 matches "weightloss - sent" - so membership is checked against `groups[]`
 rather than trusted from the filter.
 
-**The checkpoint is written last, and only on success.** A throw anywhere leaves
-it untouched, so the next cycle covers the same ground again rather than
-skipping it; EZ Texting unreachable mid-poll loses nothing - the leads arrive a
-poll later.
+**The checkpoint is written last, and only when EZ Texting was read.** A fetch
+that fails, or a page listed oldest first, throws: the checkpoint is left
+untouched and no read is recorded, so the next cycle covers the same ground again
+rather than skipping it; EZ Texting unreachable mid-poll loses nothing - the leads
+arrive a poll later.
+
+**One contact never stops the rest.** Each contact is taken in inside its own
+`try`. One the database refuses - its lead, its conversation, its block, or the
+do-not-call check before them - is logged as `poll.contact_failed` with the
+error's message and when EZ Texting listed it, never its phone or name; it is
+counted in `failed`, and the walk goes on to the next. The lead and its
+conversation are one transaction (`insertLead`), so a failed contact leaves
+nothing half-written. The checkpoint then stops just before the oldest failed
+contact - earlier than the one read at the start, when it failed inside the
+overlap - so the next poll reads it again; the contacts after it that were taken
+in are skipped then as phones we hold. A contact that fails every time holds the
+checkpoint there: each poll reads back to it and logs it again, and nothing
+after it is lost.
+
+**When it last read EZ Texting, apart from the checkpoint.** The checkpoint says
+where the next poll reads back to; it stands still on a quiet account, and is
+held back behind a failed contact. `ezt_last_read_at` says when the account was
+last read, so a poll that kept its checkpoint back still counts as a poll, and
+the checkpoint can go (B25) without the health check losing its signal.
 
 **A failed first question does not fail the cycle.** `openLead` catches every
 error from `sendOpener`. The lead is committed by then, so throwing would
@@ -158,7 +183,7 @@ for a contact that arrives with the flag anyway.
 ### Reading the log
 
 ```
-{"ts":"2026-09-28T23:50:24.426Z","level":"info","event":"poll.tick","svc":"worker","fetched":3,"inserted":1,"skipped":1,"suppressed":0,"openers":1,"ms":352}
+{"ts":"2026-09-28T23:50:24.426Z","level":"info","event":"poll.tick","svc":"worker","fetched":3,"inserted":1,"skipped":1,"suppressed":0,"openers":1,"failed":0,"ms":352}
 ```
 
 One JSON line per poll, event `poll.tick` (`LOGGING.md`):
@@ -170,6 +195,7 @@ One JSON line per poll, event `poll.tick` (`LOGGING.md`):
 | `skipped` | Examined but not written - already known, or not in the group |
 | `suppressed` | Opted out at EZ Texting, or already on `dnc_list`: lead written, nothing sent, blocked if it was not already |
 | `openers` | Question 1 sent. Lower than `inserted` means a send failed |
+| `failed` | Contacts the database refused, each with its own `poll.contact_failed` line; read again next poll |
 
 These need not add up. Contacts below the cutoff stop the cycle and are never
 examined, so `fetched` is usually larger than the rest together. In steady
@@ -280,16 +306,18 @@ out.
 
 ## Rules
 
-1. **The checkpoint moves only after a whole cycle succeeds**, and every
-   successful poll writes it.
-2. **One cycle at a time**, whatever runs it - the advisory lock.
-3. **A failed first question never fails the cycle**; it is kept as a failed
+1. **The checkpoint moves only after a cycle has read EZ Texting**, and never past
+   a contact that failed; every poll that read it records the read
+   (`ezt_last_read_at`).
+2. **One contact never stops the rest** - it is logged, counted and read again.
+3. **One cycle at a time**, whatever runs it - the advisory lock.
+4. **A failed first question never fails the cycle**; it is kept as a failed
    message.
-4. **Never a blocked number, never a second first question, never one more
+5. **Never a blocked number, never a second first question, never one more
    than 24 hours late by itself** - only a person, through the resend, sends one
    later.
-5. **No text without `EZT_SEND_GROUP`.**
-6. **A page not newest-first stops the poll**, with nothing written.
+6. **No text without `EZT_SEND_GROUP`.**
+7. **A page not newest-first stops the poll**, with nothing written.
 
 ## Data
 
@@ -297,7 +325,8 @@ Writes `leads` (`ON CONFLICT (phone) DO NOTHING`), its first `conversations`
 row (`startConversation`), the first question's `messages` row
 (`db/outbound.ts`), and blocks through `db/dnc.ts` (`dnc_list` and its
 `dnc.blocked` activity row). Reads and writes `settings`:
-`ezt_poll_checkpoint`, `poll_interval_seconds` (read every cycle), and
+`ezt_poll_checkpoint`, `ezt_last_read_at` (written every poll that read EZ
+Texting), `poll_interval_seconds` (read every cycle), and
 `poll_overlap_minutes` - their seeds and fallbacks are in `SCHEMA.md`, "`settings`
 rows". The variables it reads - `EZT_GROUP`, `EZT_SOURCE`, `EZT_SEND_GROUP` - are
 in `ENVIRONMENT.md`.
@@ -307,7 +336,8 @@ in `ENVIRONMENT.md`.
 | File | What it does |
 |---|---|
 | `backend/src/worker/index.ts` | The loop: the cycle's five tasks under `withTryLock`, then the wait |
-| `backend/src/worker/poller.ts` | `pollOnce`, `insertLead`, `openLead`, `overlapMinutes`, `assertNewestFirst` |
+| `backend/src/worker/poller.ts` | `pollOnce`, `takeIn` - one contact, `insertLead`, `openLead`, `overlapMinutes`, `assertNewestFirst` |
+| `backend/src/db/poll-state.ts` | `markEztRead`, `LAST_READ_AT_SQL`, the two keys - when EZ Texting was last read |
 | `backend/src/worker/opener.ts` | `sendOpener` - the first question, recorded, its reply window opened |
 | `backend/src/worker/retry-openers.ts` | `retryFailedOpeners`, `retryGaveUp` - the backoff and the 24-hour cap |
 | `backend/src/db/openers-never-sent.ts` | `findOpenersNeverSent` - which leads never got their first question |
@@ -323,6 +353,8 @@ in `ENVIRONMENT.md`.
 | What | Where |
 |---|---|
 | Opted-out and blocked contacts saved suppressed and never texted; a new contact opened; a known phone or one outside the group skipped; a failed, refused, timed-out or blocked first question; the checkpoint - not advanced on a failure, written on a quiet poll, the cutoff, paging, an oldest-first page refused, a missing or unreadable checkpoint, the overlap from its own setting | `backend/src/worker/poller.test.ts` |
+| One contact failing - its lead's insert, or its do-not-call check: the others taken in and texted, `failed` 1, the log line without phone or name, the checkpoint just before it, the next poll taking it in and skipping the rest; two failing, the checkpoint before the older; one inside the overlap, the checkpoint moved back; the read recorded on a quiet poll and on one with a failure, not when the fetch failed | `backend/src/worker/poller.test.ts`, "one contact never stops the rest" |
+| The last read as the health check and "Synced" see it: the row, else the checkpoint's time | `backend/scripts/health-live-check.ts`, `backend/scripts/admin-leads-live-check.ts` |
 | The real poll for an opted-out contact, one released by START, one already blocked - the block and its record | `backend/scripts/activity-live-check.ts` |
 | The backoff and the three must-nots | `backend/scripts/retry-openers-live-check.ts` |
 | The resend: the leads it takes and those it must not, never twice across runs, the pace, stopping and carrying on, a lead that changes while it runs, one run at a time | `backend/scripts/send-waiting-openers-live-check.ts` |
@@ -346,6 +378,10 @@ in `ENVIRONMENT.md`.
   taken in** - one EZ Texting lists late, or one added to the group by hand more
   than 5 minutes after it was created: by the time it is seen it is older than
   the cutoff. `BUCKETS.md`'s two groups fix this too.
+- **A contact that fails every time is read again every poll, for ever** - logged
+  each time, never given up on. It holds the checkpoint behind it, so every poll
+  reads back to it; nothing is lost, and the fix is its cause. The two-group read
+  (B24) replaces the checkpoint.
 - **No page cap.** A checkpoint set far in the past would walk the whole group
   in one cycle - 36 requests for a 1,773-contact group at 50 a page, far more for
   the whole account. Harmless at 50-100 leads a day, but unbounded.
@@ -355,13 +391,14 @@ in `ENVIRONMENT.md`.
 | Decision | By | Date |
 |---|---|---|
 | Poll every 30 seconds, not 60 (migration 005) | Jeel | 2026-09-29 |
-| A quiet poll still writes the checkpoint, so its time says the worker polled | Jeel | 2026-09-28 |
+| A quiet poll still writes the checkpoint, so its time says the worker polled - since B06 the `ezt_last_read_at` row says it | Jeel | 2026-09-28 |
 | The opener retry counts each wait from the last failed attempt, and never sends a first question more than 24 hours after the lead arrived | Jeel | 2026-09-28 |
 | The poller's block goes through `db/dnc.ts`, like every other | Jeel | 2026-10-01 |
 | A first question days late is sent only by hand, after a person has looked at the list - not by changing the retry | Jeel | 2026-10-16 |
 
 ## History
 
+- 2026-11-28 · One contact never stops the rest: each is taken in on its own, a failure logged (`poll.contact_failed`), counted (`failed`) and read again next poll, the checkpoint held just before it. Until then an error in `insertLead`, `isOnDnc` or `startConversation` for one contact failed the whole poll and left the checkpoint where it was. And `ezt_last_read_at`, when EZ Texting was last read, is what health and "Synced" read, in place of the checkpoint row's `updated_at` · B06
 - 2026-11-27 · Rewritten to the area template: the cycle's five tasks (it said
   four), the wait after each cycle (it said every 30 seconds); the repeat-lead
   check answered - `createdAt` does not move on a return; the resend's running

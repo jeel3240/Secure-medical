@@ -7,10 +7,11 @@
  * "Health endpoint".
  *
  * **The worker has no HTTP server,** so its health is inferred from what it
- * writes. The honest signal is when the poll checkpoint was last *touched*, not
- * the value it holds: the value is the newest contact's `createdAt`, which
- * stands still on a quiet account even while the worker polls happily every
- * minute. `settings.updated_at` is the one that moves on every successful poll.
+ * writes. The honest signal is when it last read EZ Texting - the
+ * `ezt_last_read_at` row, written on every poll that read the account
+ * (`db/poll-state.ts`, B06) - not the checkpoint's value: that is the newest
+ * contact's `createdAt`, which stands still on a quiet account, and is held
+ * back behind a contact that failed, while the worker polls happily.
  *
  * **Both ways this system goes quiet are silences, not failures** - LOGGING.md.
  * Neither crashes anything, so this endpoint reports ages rather than just
@@ -18,6 +19,7 @@
  */
 
 import { pool } from './pool';
+import { EZT_CHECKPOINT_KEY, LAST_READ_AT_SQL } from './poll-state';
 import { config } from '../config';
 
 export type HealthStatus = 'ok' | 'degraded';
@@ -98,7 +100,10 @@ export async function getHealth(): Promise<Health> {
   }
 
   const [checkpointRows, webhookRows, expiryRows, sendRows] = await Promise.all([
-    pool.query(`SELECT value, updated_at FROM settings WHERE key = 'ezt_poll_checkpoint'`),
+    pool.query(
+      `SELECT ${LAST_READ_AT_SQL} AS last_read_at,
+              (SELECT value FROM settings WHERE key = '${EZT_CHECKPOINT_KEY}') AS checkpoint_value`
+    ),
     pool.query(
       `SELECT max(COALESCE(received_at, created_at)) AS at FROM messages WHERE direction = 'inbound'`
     ),
@@ -125,8 +130,8 @@ export async function getHealth(): Promise<Health> {
     ),
   ]);
 
-  // updated_at, not value: see the note at the top of this file.
-  const lastPollAt: Date | null = checkpointRows.rows[0]?.updated_at ?? null;
+  // When EZ Texting was last read, not the checkpoint's value: see the note at the top of this file.
+  const lastPollAt: Date | null = checkpointRows.rows[0]?.last_read_at ?? null;
   const lastPollAge = ageMs(lastPollAt);
   const pollStale = lastPollAge === null || lastPollAge > POLL_STALE_MS;
 
@@ -145,7 +150,7 @@ export async function getHealth(): Promise<Health> {
       staleAfterSeconds: POLL_STALE_MS / 1000,
       // What the checkpoint holds, which is a different thing from when it was
       // written and is shown so the two are not confused.
-      checkpointValue: checkpointRows.rows[0]?.value ?? null,
+      checkpointValue: checkpointRows.rows[0]?.checkpoint_value ?? null,
     },
   });
 

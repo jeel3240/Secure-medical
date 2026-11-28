@@ -226,7 +226,7 @@ The types are `AdminLeadPage` and `AdminLeadRow` in `db/leads.ts`, copied in
 | `total` | The rows the current tab holds - `counts[status]`, or `counts.all` |
 | `page`, `pageSize` | The page shown and its size: 50 rows, which the route does not let the request change |
 | `sources` | Every source any lead has, for the Source filter - not only this page's |
-| `poll` | `at`, the worker's last successful poll, and `intervalSeconds`, its interval - the "Synced with EZ Texting" line ("The page", below) |
+| `poll` | `at`, when the worker last read EZ Texting, and `intervalSeconds`, its interval - the "Synced with EZ Texting" line ("The page", below) |
 
 **Score and tier are the running values**, returned at every stage. Scoring
 starts at the first reply, so a lead partway through has a real score - 10 for
@@ -302,8 +302,10 @@ the first load of another view: a tab, a filter, a page or a search is another
 list, not new rows.
 
 **The EZ Texting sync line.** Under "Live · updated just now" sits "Synced with
-EZ Texting 1m ago": the last time the worker polled for new leads, from the
-poll checkpoint, which the poller writes on every successful poll (`POLLER.md`).
+EZ Texting 1m ago": the last time the worker read EZ Texting for new leads - the
+`ezt_last_read_at` row the poller writes on every poll that read the account, else
+the poll checkpoint's time (`LAST_READ_AT_SQL`, `db/poll-state.ts`; `POLLER.md`, "A
+cycle").
 The interval is read as the worker reads it (`pollIntervalSeconds`,
 `db/sql.ts`): 30 seconds unless the setting is above 0. After three poll
 intervals without a poll - the spec's signal that the worker has stopped - it
@@ -355,8 +357,8 @@ list"); the queue and My Callbacks keep theirs in memory and start over.
 
 Reads `leads`, the newest row of `conversations`, `conversation_answers`,
 `flow_questions`, `dnc_list`, `dispositions`, `notes`, `callbacks`, `calls`,
-`messages`, `users`, and the `ezt_poll_checkpoint` and `poll_interval_seconds`
-rows of `settings`; writes nothing - `SCHEMA.md`.
+`messages`, `users`, and the `ezt_last_read_at`, `ezt_poll_checkpoint` and
+`poll_interval_seconds` rows of `settings`; writes nothing - `SCHEMA.md`.
 
 ## Code
 
@@ -413,6 +415,7 @@ rows of `settings`; writes nothing - `SCHEMA.md`.
 
 ## History
 
+- 2026-11-28 · "Synced" reads when EZ Texting was last read (`ezt_last_read_at`), the checkpoint's time its fallback; proved in `admin-leads-live-check.ts` · B06
 - 2026-11-27 · "Source reads `API` for every production lead" added to Not done, from `CLAUDE.md` §10's open items, which named it and nowhere else did · D03
 - 2026-11-27 · Rewritten to the area standard: dated notes to this History, decisions to a table, the status precedence as numbered rules; the line that production had no robot calls "until `AUTO_CALLS` is on" corrected - automated calls are on in production since 2026-10-30; the queue's membership list replaced by a link to `QUEUE.md`; merged in: the page's switcher and tests from `FRONTEND.md` · docs standard · D18, D27
 - 2026-11-23 · The response written down: its fields, and the types `AdminLeadPage` and `AdminLeadRow` · review R14

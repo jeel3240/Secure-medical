@@ -2,6 +2,7 @@ import type { CallResult } from '../core/call-script';
 import { questionShort } from '../core/questions';
 import { CLOSED_SQL, newestConversation, RECEIVED_SQL, WORKED_SQL } from './lead-state';
 import { leadSearchSql, pollIntervalSeconds } from './sql';
+import { LAST_READ_AT_SQL } from './poll-state';
 import { pool } from './pool';
 
 /**
@@ -328,21 +329,18 @@ export async function listLeadSources(): Promise<string[]> {
 }
 
 /**
- * When the poller last advanced its checkpoint. The page warns when this is
- * older than three poll intervals, which is the spec's signal that the worker
- * has stopped.
+ * When the poller last read EZ Texting (`db/poll-state.ts`, B06). The page
+ * warns when this is older than three poll intervals, which is the spec's
+ * signal that the worker has stopped.
  */
 export async function lastPollAt(): Promise<{ at: string | null; intervalSeconds: number }> {
-  const { rows } = await pool.query(
-    `SELECT key, value, updated_at FROM settings
-     WHERE key IN ('ezt_poll_checkpoint', 'poll_interval_seconds')`
+  const { rows } = await pool.query<{ at: Date | null; interval: string | null }>(
+    `SELECT ${LAST_READ_AT_SQL} AS at,
+            (SELECT value FROM settings WHERE key = 'poll_interval_seconds') AS interval`
   );
 
-  const checkpoint = rows.find((r) => r.key === 'ezt_poll_checkpoint');
-  const interval = rows.find((r) => r.key === 'poll_interval_seconds');
-
   return {
-    at: checkpoint?.updated_at?.toISOString() ?? null,
-    intervalSeconds: pollIntervalSeconds(interval?.value),
+    at: rows[0]?.at?.toISOString() ?? null,
+    intervalSeconds: pollIntervalSeconds(rows[0]?.interval),
   };
 }

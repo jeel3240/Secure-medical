@@ -511,7 +511,8 @@ its own transaction, and records it; a file is never run twice.
 |---|---|---|---|
 | `poll_interval_seconds` | Seconds between worker cycles; read every tick | `60` (001); `30` (005) | `worker/index.ts`, `db/sql.ts` |
 | `poll_overlap_minutes` | How far behind its checkpoint each poll reads again; 5 when not above 0 | `5` (001) | `worker/poller.ts` |
-| `ezt_poll_checkpoint` | The newest contact `createdAt` the poller has seen. Written on every successful poll, unchanged when nothing arrived, so its `updated_at` is when the last poll succeeded (`LOGGING.md`, "Health endpoint") | no migration: the poller writes it | `worker/poller.ts`, `db/health.ts`, `db/leads.ts` |
+| `ezt_poll_checkpoint` | Where the next poll reads back to: the newest contact `createdAt` taken in, held just before the oldest contact that failed (`POLLER.md`, "A cycle"). Written on every poll that read EZ Texting, unchanged when nothing arrived; its `updated_at` is what health and "Synced" read where `ezt_last_read_at` does not exist yet | no migration: the poller writes it | `worker/poller.ts`, `db/poll-state.ts` |
+| `ezt_last_read_at` | When the poller last read EZ Texting, failed contacts or not - what health and Admin > Leads' "Synced" call the last poll (`LOGGING.md`, "Health endpoint"). The time is in `value` and `updated_at` alike | no migration: the poller writes it (B06) | `worker/poller.ts`, `db/poll-state.ts`, `db/health.ts`, `db/leads.ts` |
 | `expiry_days` | Days a lead has to reply to a text | `7` (001) | `db/sql.ts` (`readExpiryDays`) |
 | `max_invalid_before_review` | Unclear replies before a conversation goes to review | `1` (001) | `api/reply-flow.ts` |
 | `message_missed_call` | The text after a call to us nobody answered | 007; reworded for eDrugstore by 012 | `db/lead-texts.ts` |
@@ -568,6 +569,7 @@ values are fixed in code instead.
 
 ## History
 
+- 2026-11-28 · `settings` row `ezt_last_read_at`, the poller's own · B06
 - 2026-11-28 · `dispositions.reason` and `dispositions.conversation_id`, with their checks and foreign key (025); the next number is left to `WORKFLOW.md`, "Where the files stand", rather than written here too · B04
 - 2026-11-27 · Rewritten as a reference: one section per table, from migrations 001-024. `dispositions.value`'s current values given as `closed` and `dnc` - the old text listed DNC among the retired ones. `ezt_poll_checkpoint`, `auto_calls_on`, `auto_calls_since` and `schema_migrations` added; the claims, unread-reply, take-over, LOW-tier, repeat-lead and connection notes handed to their owners; `expiry_days = 'banana'` no longer said to fail where it is read - every reader falls back to 7 since review M17 · D09
 - 2026-11-17 · Migration 024: `call_ai_turns.data`, the new brain's record of each reply, only on a `system` turn · A31
