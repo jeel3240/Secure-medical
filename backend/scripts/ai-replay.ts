@@ -1,5 +1,5 @@
 /**
- * Whole-call replays - A32, docs/AI-AGENT.md section 12. By hand, never in CI:
+ * Whole-call replays - A32, docs/AI-BRAIN.md. By hand, never in CI:
  * it calls OpenAI.
  *
  *   OPENAI_API_KEY=... npm run ai:replay -- --real turns.json [--runs 5] [--call 112] [--show]

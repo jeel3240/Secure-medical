@@ -22,6 +22,9 @@
 //   tickets   - a ticket's heading is `# <ID> · <Title>`, its id its file's;
 //               tickets and trackers in folders that follow the standard have
 //               the template's sections in order
+//   refs      - every `DOC.md, "Section"` (or `DOC.md section N`) in a doc or a
+//               code comment names a heading that exists - outside History
+//               sections and finished tickets, which keep the names of their day
 //   index     - (--strict) every doc in docs/ is a row of docs/README.md's table
 
 import { createHash } from 'node:crypto';
@@ -276,6 +279,66 @@ function orderOf(secs, wanted, what, say) {
   }
 }
 
+// --- references to doc sections -----------------------------------------------
+
+let HEADINGS = null;
+function headings() {
+  if (HEADINGS) return HEADINGS;
+  HEADINGS = new Map();
+  for (const f of allDocs()) {
+    const hs = readFileSync(join(ROOT, f), 'utf8').split('\n')
+      .map((l) => l.match(/^#{1,6}\s+(.*?)\s*$/)).filter(Boolean).map((m) => normHeading(m[1]));
+    const name = basename(f);
+    HEADINGS.set(name, (HEADINGS.get(name) || []).concat(hs));
+  }
+  return HEADINGS;
+}
+
+function normHeading(s) {
+  return s.replace(/[`"“”]/g, '').replace(/\s+/g, ' ').trim().toLowerCase();
+}
+
+const REF_RE = /([A-Z][A-Z0-9-]+\.md),?\s*(?:"([^"\n]{2,80})"|section (\d+))/g;
+
+export function checkRefs(file, text, { skipHistory }) {
+  const problems = [];
+  const lines = text.split('\n');
+  let inHistory = false;
+  lines.forEach((line, i) => {
+    if (/^## /.test(line)) inHistory = /^## History\b/.test(line);
+    if (skipHistory && inHistory) return;
+    for (const m of line.matchAll(REF_RE)) {
+      const [, doc, section, num] = m;
+      const hs = headings().get(doc);
+      if (!hs) continue; // a doc that is not ours (or gone) - the paths rule reports files
+      if (section) {
+        const want = normHeading(section);
+        if (!hs.some((h) => h === want || h.startsWith(want) || h.includes(want))) {
+          problems.push({ file, line: i + 1, rule: 'refs', msg: `${doc} has no section "${section}"` });
+        }
+      } else if (!hs.some((h) => new RegExp(`^${num}[.\\s]`).test(h))) {
+        problems.push({ file, line: i + 1, rule: 'refs', msg: `${doc} has no section ${num}` });
+      }
+    }
+  });
+  return problems;
+}
+
+function codeFiles() {
+  const out = [];
+  const skip = new Set(['node_modules', 'dist', 'migrations']);
+  const walk = (dir) => {
+    for (const name of readdirSync(join(ROOT, dir))) {
+      if (skip.has(name)) continue;
+      const rel = join(dir, name);
+      if (statSync(join(ROOT, rel)).isDirectory()) walk(rel);
+      else if (/\.(ts|tsx|js|mjs|sh|css)$/.test(name)) out.push(rel);
+    }
+  };
+  for (const d of ['backend/src', 'backend/scripts', 'frontend/src']) walk(d);
+  return out;
+}
+
 // --- which files, which types -------------------------------------------------
 
 function allDocs() {
@@ -332,6 +395,11 @@ function selfTest() {
   expect('a wrong ticket heading is caught', checkDoc('docs/x-tickets/X01-a.md', '# X02 · A', { type: 'ticket' }), 'tickets');
   expect('a ticket\'s sections out of order are caught',
     checkDoc('docs/x-tickets/X01-a.md', ['# X01 · A', '## Done when', 'x', '## Build', 'y'].join('\n'), { type: 'ticket' }), 'sections');
+  HEADINGS = new Map([['QUEUE.md', ['the order', 'the tag']]]);
+  expect('a reference to a section that exists passes', checkRefs('x.ts', '// QUEUE.md, "The order"', { skipHistory: false }));
+  expect('a reference to a missing section is caught', checkRefs('x.ts', '// QUEUE.md, "The ordering rules"', { skipHistory: false }), 'refs');
+  expect('a History line may name an old section', checkRefs('docs/X.md', '## History\n- QUEUE.md, "Gone"', { skipHistory: true }));
+  HEADINGS = null;
   FORBIDDEN.add(hash('zzforbiddenzz'));
   expect('a forbidden name is caught', checkDoc('docs/X.md', good + '\nzzforbiddenzz was here', { type: 'area' }), 'names');
   console.log(failed ? `\n${failed} self-test(s) FAILED` : '\nall self-tests passed');
@@ -354,8 +422,23 @@ function main() {
     const { type, legacy } = typeOf(file, index, override);
     // A ticket names files it will create, so its paths are not checked.
     const skipPaths = type === 'ticket' || type === 'tracker';
-    problems.push(...checkDoc(file, readFileSync(join(ROOT, file), 'utf8'), { type, legacy, skipPaths }));
+    const text = readFileSync(join(ROOT, file), 'utf8');
+    problems.push(...checkDoc(file, text, { type, legacy, skipPaths }));
+    if (type !== 'ticket' && type !== 'tracker' && type !== 'brief' && type !== 'review') {
+      problems.push(...checkRefs(file, text, { skipHistory: true }));
+    }
+    // A ticket not yet done will be built from today's docs, so it must point
+    // at them; a finished ticket keeps the names of its day.
+    if (type === 'ticket' && !/\*\*Status:\*\* (Done|Dropped)/.test(text)) {
+      problems.push(...checkRefs(file, text.split('\n## As built')[0], { skipHistory: false }));
+    }
     if (strict && !type) problems.push({ file, line: 1, rule: 'index', msg: 'not in docs/README.md\'s index with a Type' });
+  }
+  // Code comments that point at doc sections, checked on a full run.
+  if (!files.length) {
+    for (const file of codeFiles()) {
+      problems.push(...checkRefs(file, readFileSync(join(ROOT, file), 'utf8'), { skipHistory: false }));
+    }
   }
   if (strict) {
     for (const f of allDocs()) {

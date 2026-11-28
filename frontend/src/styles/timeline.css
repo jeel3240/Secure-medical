@@ -265,7 +265,7 @@
   margin: 0;
 }
 
-/* Rows with no data behind them - AGENT-WORKSPACE.md, "Known gaps". */
+/* Rows with no data behind them - AGENT-WORKSPACE.md, "Not done". */
 .summary__gap {
   color: var(--color-text-muted);
 }

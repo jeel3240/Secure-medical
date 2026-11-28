@@ -104,7 +104,7 @@ const QUERIES: { kind: TimelineKind; sql: string }[] = [
         WHERE a.call_id = c.id
       ) ans ON true
       -- A call Seri took: her conversation, in the order it was said, and the
-      -- action she ended with (A19, AI-AGENT.md section 9). Empty otherwise.
+      -- action she ended with (A19, AI-AGENT.md, "Data"). Empty otherwise.
       LEFT JOIN LATERAL (
         SELECT json_agg(json_build_object('who', at.who, 'text', at.text) ORDER BY at.id) AS turns
         FROM call_ai_turns at

@@ -1,5 +1,5 @@
 /**
- * The "Taking calls" switch - T10, AUTO-CALLS.md "Who is free".
+ * The "Taking calls" switch - T10, AUTO-CALL-TRANSFER.md "Who is free".
  *
  * Only people who switched it on are rung for a transfer from an automated
  * call. It is switched by hand, and off at every sign-in and sign-out; every

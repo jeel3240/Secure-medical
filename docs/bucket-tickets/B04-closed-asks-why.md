@@ -71,7 +71,7 @@ As above: live check, upgrade check, route and core unit tests, frontend tests, 
 
 ## Docs to update in the same commit
 
-`docs/AGENT-WORKSPACE.md` ("Dispositions": the planned note becomes what is built),
+`docs/AGENT-WORKSPACE.md` ("Dispositions" - the planned popup moves there from "Not done" - and a History line),
 `docs/SCHEMA.md` (the `dispositions` row; the unconstrained-columns table), `CLAUDE.md`
 §5 (the migration line), `docs/WORKFLOW.md` ("Where the files stand"), `docs/AUDIT.md`
 (`outcome.set` keeps `reason`), `docs/FRONTEND.md`, `docs/LEAD-FLOW.md` (Wrap up),

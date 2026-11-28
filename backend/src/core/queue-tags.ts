@@ -2,7 +2,7 @@
  * The status an agent sees against a lead in the queue.
  *
  * Pure: the caller passes the facts, this decides. Statuses are computed,
- * never stored, so they stay true as conversations advance - CLAUDE.md §6.
+ * never stored, so they stay true as conversations advance - QUEUE.md, "The tag".
  *
  * The shape is structured rather than a finished string: the API returns what
  * is true, the screen decides how to word it ("Working – Michael"). That

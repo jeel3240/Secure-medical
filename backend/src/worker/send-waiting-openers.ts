@@ -7,7 +7,7 @@
  * about nine hours, and a lead more than a day old is never sent one
  * (`worker/retry-openers.ts`). Those leads were paid for and never asked
  * anything. Run by hand - `npm run openers:send-waiting`, its arguments in
- * `core/resend-args.ts` - and `POLLER.md`, "Resending after an outage", says
+ * `core/resend-args.ts` - and `DEPLOY.md`, "Resending after an outage", says
  * how and when.
  *
  * What it will and will not do:

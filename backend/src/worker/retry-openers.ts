@@ -8,7 +8,7 @@
  * nothing, and is never contacted again. Nothing retried it. That is the worst
  * failure in the system: a lead the client paid for, sitting in a table,
  * silent, with no sign on any screen that anything went wrong. Deferred from
- * Week 2 (CLAUDE.md §10) into this task.
+ * Week 2 (ORIGINAL-PLAN.md) into this task.
  *
  * **Which leads.** `db/openers-never-sent.ts`, which also explains how a
  * failed opener is recognised - shared since 2026-10-16 with the resend after

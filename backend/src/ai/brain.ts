@@ -1,5 +1,5 @@
 /**
- * The new brain on the call - Phase 7, A30, docs/AI-AGENT.md section 12:
+ * The new brain on the call - Phase 7, A30, docs/AI-BRAIN.md:
  * understand, decide, speak, behind the same `SeriModel` the call already
  * asks (`conversation.ts`). One per call: it keeps the call's record.
  *

@@ -111,7 +111,7 @@ const closeIfOver = twilioSettings
 if (closeIfOver) watchLeftOpen({ callsLeftOpen: () => callsLeftOpen(LEFT_OPEN_MINUTES), closeIfOver });
 
 // A lead on hold is looked at every 30 seconds, not only when a track of hold
-// music ends, and offered to whoever is free - AUTO-CALLS.md "The hold line".
+// music ends, and offered to whoever is free - AUTO-CALL-TRANSFER.md "The hold line".
 // Only with automated calls on.
 if (autoCalls && twilioSettings && closeIfOver) {
   const settings = twilioSettings;

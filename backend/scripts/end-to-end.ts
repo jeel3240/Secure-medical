@@ -8,7 +8,7 @@
  * transfer, the link, a stop, and OpenAI failing mid-call, the script taking
  * over - and the api restarting mid-call, the call picked back up where it was.
  *
- * Phase 3 task 28. This is the script CLAUDE.md §10 asks for, and the closest
+ * Phase 3 task 28. This is the script the original plan asks for (ORIGINAL-PLAN.md), and the closest
  * thing to a rehearsal of a real day before UAT.
  *
  * **What it does not prove.** EZ Texting and Twilio are stubbed at their HTTP

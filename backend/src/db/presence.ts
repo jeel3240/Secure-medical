@@ -110,7 +110,7 @@ export const TRANSFER_RINGING_SQL = `EXISTS (
  * Whether someone who takes transfers is on a call now, or has just finished
  * one and is writing its note - an active account, the switch on - and so will
  * be free soon: a "yes" nobody can take waits on hold for them (T16, T17,
- * AUTO-CALLS.md "The hold line"). Someone with the switch off would never be
+ * AUTO-CALL-TRANSFER.md "The hold line"). Someone with the switch off would never be
  * rung for it. So does another of the robot's calls ringing its transfer
  * (`TRANSFER_RINGING_SQL`); `exceptCallId` is the call asking.
  */
@@ -157,7 +157,7 @@ export async function setRingable(q: Querier, userId: number, available: boolean
 
 /**
  * `userId` let a transfer's ring run its course, untouched - T15c,
- * AUTO-CALLS.md "Who is free": their "Taking calls" switch goes off, so a desk
+ * AUTO-CALL-TRANSFER.md "Who is free": their "Taking calls" switch goes off, so a desk
  * left with it on stops being rung, and their screen says why.
  *
  * Only if it is still on, the account active, and they are not on a call by

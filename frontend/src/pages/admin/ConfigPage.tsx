@@ -305,7 +305,7 @@ function TiersCard({ tiers }: { tiers: AdminConfig['tiers'] }) {
         ))}
       </dl>
       {/* Leads keep the score they were given; nothing rescores on its
-          own - CLAUDE.md §10. */}
+          own - ADMIN.md, "Decisions". */}
       <p className="card-note">A rule change does not rescore leads already scored.</p>
     </section>
   );

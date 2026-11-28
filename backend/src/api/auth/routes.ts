@@ -78,7 +78,7 @@ export function authRouter(deps: AppDeps): Router {
       await deps.users.recordLogin(user.id);
       await deps.activity.record({ action: 'auth.signed_in', actorId: user.id });
       // "Taking calls" starts off at every sign-in: the person chooses to be
-      // rung today (AUTO-CALLS.md, "Who is free"). Written every time, so the
+      // rung today (AUTO-CALL-TRANSFER.md, "Who is free"). Written every time, so the
       // reason it is off is this sign-in - never yesterday's missed transfer;
       // recorded only when it was on.
       await deps.users.update(user.id, { takingCalls: { on: false, why: 'sign_in' } });

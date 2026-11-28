@@ -35,7 +35,7 @@ export const ACTIVITY_ACTIONS = [
   'call.missed',
   /**
    * A person took a lead's call that rang everyone free - `detail.callId`
-   * (T19, AUTO-CALLS.md "A lead calling back"). Once per call: the first to
+   * (T19, AUTO-CALL-TRANSFER.md "A lead calling back"). Once per call: the first to
    * accept; the call is theirs from then.
    */
   'call.taken',
@@ -47,7 +47,7 @@ export const ACTIVITY_ACTIONS = [
   'call.transferred',
   /**
    * A "yes" nobody could take went on hold, waiting for someone on a call -
-   * `detail.callId` (T16, AUTO-CALLS.md "The hold line"). The system's doing.
+   * `detail.callId` (T16, AUTO-CALL-TRANSFER.md "The hold line"). The system's doing.
    */
   'call.held',
   /** Twilio's verdict on who picked up a call we placed - a person or a machine. */
@@ -61,7 +61,7 @@ export const ACTIVITY_ACTIONS = [
   'dnc.released',
   /**
    * The "Taking calls" switch went on or off - `detail.on`, and `detail.why`:
-   * `by_hand`, `sign_in` or `sign_out` (T10, AUTO-CALLS.md "Who is free"), or
+   * `by_hand`, `sign_in` or `sign_out` (T10, AUTO-CALL-TRANSFER.md "Who is free"), or
    * `missed_transfer` - the server turned it off after a ring was let run out,
    * with `detail.callId` (T15c).
    */

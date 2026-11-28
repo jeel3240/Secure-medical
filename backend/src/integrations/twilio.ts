@@ -169,7 +169,7 @@ export function ringAgentTwiml(
 
 /**
  * Ring everyone free for a lead who is calling us and is nobody's - T19,
- * AUTO-CALLS.md "A lead calling back". As `ringAgentTwiml`, but each browser
+ * AUTO-CALL-TRANSFER.md "A lead calling back". As `ringAgentTwiml`, but each browser
  * is marked `ring=group`: the ring goes on without anyone who does not take
  * it, so it clears there with no "Missed call" notice, and a busy browser
  * turns it down (T11). The first to accept takes the call (`/incoming/claim`).
@@ -389,7 +389,7 @@ export function seriTwiml(settings: TwilioSettings, opts: { callId: number; gree
 }
 
 /**
- * A "yes" put through to people - T15a, AUTO-CALLS.md "The transfer".
+ * A "yes" put through to people - T15a, AUTO-CALL-TRANSFER.md "The transfer".
  *
  * The lines, then - on a transfer's first ring of a recorded call - the
  * recording notice, then every person in `agentIds` rung together for
@@ -496,7 +496,7 @@ export function holdTrackIndex(played: unknown, waitedSeconds: number): number {
 }
 
 /**
- * A lead on hold - T16, AUTO-CALLS.md "The hold line". The lines, then - with
+ * A lead on hold - T16, AUTO-CALL-TRANSFER.md "The hold line". The lines, then - with
  * a `track` - the music, then back to `/auto/hold`, which says the place
  * again and decides whether they still wait. Without a track - a "yes" just
  * put on hold - straight on to `/auto/hold`.
@@ -530,7 +530,7 @@ export function holdTwiml(
 
 /**
  * The voicemail message, left after the beep, then the call ends - T18,
- * AUTO-CALLS.md "Voicemail". Said in the script's voice, with our number - the
+ * AUTO-CALL-SCRIPT.md "Voicemail". Said in the script's voice, with our number - the
  * one the lead saw - read out digit by digit. Replaces whatever the call was
  * doing (`replaceCall`), so nothing comes before it. A second's quiet before
  * hanging up: a voicemail can clip what was said just as the caller left - the

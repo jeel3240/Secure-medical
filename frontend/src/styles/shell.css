@@ -89,7 +89,7 @@
   gap: var(--space-2);
 }
 
-/* The "Taking calls" switch - T10, AUTO-CALLS.md "Who is free". On the navy bar,
+/* The "Taking calls" switch - T10, AUTO-CALL-TRANSFER.md "Who is free". On the navy bar,
    so it uses the bar's colours; green when on, the colour of a live call. */
 .taking-calls {
   display: flex;

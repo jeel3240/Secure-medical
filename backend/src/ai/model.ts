@@ -6,7 +6,7 @@
 
 /**
  * The model she speaks with - the speak step (A29). Chosen by the answer test
- * set (A09, 2026-11-11) for today's brain, of the small fast models the one
+ * set (A09, 2026-11-11) for the first brain, of the small fast models the one
  * that passed most cases, then the quickest to its first word; measured again
  * for speaking by A24.
  */

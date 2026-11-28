@@ -33,7 +33,7 @@ describe('her persona', () => {
 });
 
 describe('no price, nor a product\'s web address, in anything she is told', () => {
-  // Carried over from today's brain's instructions, removed 2026-11-19.
+  // Carried over from the first brain's instructions, removed 2026-11-19.
   it('her persona and every brief', () => {
     const prices = productsFile.products.map((p) => p.site_price_usd).filter((p): p is string => typeof p === 'string');
     expect(prices.length).toBeGreaterThan(0);

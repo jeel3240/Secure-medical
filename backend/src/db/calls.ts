@@ -36,7 +36,7 @@ export type StartCallResult = { ok: true; phone: string } | { ok: false; reason:
  * The rules are the ones every other write on a lead follows: the agent must
  * be active and hold the lead (AGENT-WORKSPACE.md, "Rules"), and the number
  * must not be on the do-not-call list - a DNC blocks calls as well as texts
- * (CLAUDE.md §6). The lead row is locked so a release or a DNC cannot land
+ * (AGENT-WORKSPACE.md, "Blocking a number"). The lead row is locked so a release or a DNC cannot land
  * between the check and the insert.
  *
  * A retry from Twilio carries the same CallSid: the row already exists, the
@@ -276,7 +276,7 @@ export type IncomingCall =
  * **Whose.** The agent holding the lead; failing that, the agent who last
  * called them, since theirs is the call being returned. Only an active agent
  * counts, switch or not. With neither, and `ringFree` - automated calls on
- * (T19, AUTO-CALLS.md "A lead calling back") - everyone free rings together
+ * (T19, AUTO-CALL-TRANSFER.md "A lead calling back") - everyone free rings together
  * (`FREE_SQL`, at most ten): a lead returning the robot's voicemail has no
  * agent yet. With nobody to ring, the call is saved as missed straight away,
  * so the lead is texted and shows in the queue.

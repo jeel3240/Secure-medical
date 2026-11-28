@@ -25,7 +25,7 @@ const DAY = 24 * 60 * MINUTE;
 // ---------------------------------------------------------------------------
 // The lead's time zone, from the area code
 
-/** Where the hours are kept, and what an unknown area code gets: Seri asks. */
+/** Where the hours are kept, and what an unknown area code gets: Seri says "Arizona time" (FALLBACK_ZONE_SAID). */
 export const FALLBACK_ZONE = 'America/Phoenix';
 
 /**
@@ -112,7 +112,7 @@ const ZONE_BY_AREA_CODE: ReadonlyMap<string, string> = new Map(
 
 export interface LeadZone {
   zone: string;
-  /** False when the area code told us nothing: the zone is Arizona's, and Seri asks. */
+  /** False when the area code told us nothing: the zone is Arizona's, and Seri says so ("Arizona time"). */
   known: boolean;
 }
 

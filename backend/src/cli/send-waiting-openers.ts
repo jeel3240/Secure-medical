@@ -1,6 +1,6 @@
 /**
  * Sends the first question to leads an EZ Texting outage left without one -
- * worker/send-waiting-openers.ts. POLLER.md, "Resending after an outage", has
+ * worker/send-waiting-openers.ts. DEPLOY.md, "Resending after an outage", has
  * when and how to run it; core/resend-args.ts the arguments.
  *
  *   docker compose exec worker npm run openers:send-waiting -- --from 2026-10-14 --dry-run

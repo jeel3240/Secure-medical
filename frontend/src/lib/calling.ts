@@ -21,7 +21,7 @@ import { switchMark, takeServerSwitch } from './taking-calls';
  * than reusing a device in an unknown state.
  *
  * **Receiving.** A lead who calls our number rings the browser of one agent
- * (TWILIO.md, "Incoming calls"). That only works while this Device is
+ * (INCOMING-CALLS.md). That only works while this Device is
  * registered with Twilio, so `listenForCalls` registers it as soon as an agent
  * is signed in and checks every half minute that it still is - a laptop that
  * slept, a token that could not be refreshed, a device discarded after a
@@ -31,7 +31,7 @@ import { switchMark, takeServerSwitch } from './taking-calls';
  * a call now - registered with Twilio, and nothing on screen keeping the agent
  * busy (`lib/presence.ts`) - and it says so at once when busy changes. The
  * server keeps the word for two minutes, so a browser that closes or sleeps
- * stops counting by itself (T9, AUTO-CALLS.md "Who is free"). When Twilio is
+ * stops counting by itself (T9, AUTO-CALL-TRANSFER.md "Who is free"). When Twilio is
  * unreachable it says "not available" rather than nothing, so the server
  * knows within half a minute, not two.
  */

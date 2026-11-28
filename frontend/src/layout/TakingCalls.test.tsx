@@ -1,5 +1,5 @@
 /**
- * The "Taking calls" switch in the app bar - T10, AUTO-CALLS.md "Who is free";
+ * The "Taking calls" switch in the app bar - T10, AUTO-CALL-TRANSFER.md "Who is free";
  * and the notice when the server turned it off for a missed transfer (T15c).
  */
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';

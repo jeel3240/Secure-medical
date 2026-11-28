@@ -1,6 +1,6 @@
 /**
  * Proves migration 020 and db/hold-offers.ts against a real Postgres - T17,
- * docs/AUTO-CALLS.md "The hold line".
+ * docs/AUTO-CALL-TRANSFER.md "The hold line".
  *
  * What a mock cannot show: that a lead on hold is offered to someone truly
  * free - the switch on, a browser open, no call going - longest waiting

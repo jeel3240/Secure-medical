@@ -1,6 +1,6 @@
 /**
  * The hold watcher, and offering a lead on hold to whoever comes free - T16
- * and T17, docs/AUTO-CALLS.md "The hold line".
+ * and T17, docs/AUTO-CALL-TRANSFER.md "The hold line".
  *
  * A lead waiting on hold hears a classical track, 5 to 10 minutes long, and
  * Twilio asks `/auto/hold` again only when it ends. So the server acts for
