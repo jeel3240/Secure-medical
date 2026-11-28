@@ -1,12 +1,12 @@
 # Several buckets (Phase 8)
 
-**Status:** To do
+**Status:** In progress
 
-Nothing is built. The phase is three parts, each able to go live on its own:
+The phase is three parts, each able to go live on its own:
 
 | Part | What | Status |
 |---|---|---|
-| 1 | Several buckets at the same time - tickets B01-B49, [`bucket-tickets/README.md`](bucket-tickets/README.md); the intake tickets wait on the client ("Not done") | To do |
+| 1 | Several buckets at the same time - tickets B01-B49, [`bucket-tickets/README.md`](bucket-tickets/README.md); the intake tickets wait on the client ("Not done") | In progress |
 | 2 | Upload a list of past customers for reminder calls | Paused 2026-11-27 - Part 1 comes first |
 | 3 | Screens that make setting up a bucket easy - after Parts 1 and 2 are in use | To do |
 
@@ -242,8 +242,8 @@ early.
 
 ### The database
 
-Every database change is a new numbered migration; the next is 025. Rules 5-8
-apply. When each table is built, its columns move into `SCHEMA.md` (B07, B09); until
+Every database change is a new numbered migration - the next number is in
+`WORKFLOW.md`, "Where the files stand". Rules 5-8 apply. When each table is built, its columns move into `SCHEMA.md` (B07, B09); until
 then they are here.
 
 **New: `buckets`** - one row per campaign.
@@ -284,7 +284,7 @@ those columns go. So does `leads.previous_lead_id`, never used (`SCHEMA.md`).
 | `call_scripts` | `bucket_id`, required. `call_scripts_one_active` becomes one active per bucket - only antibiotics has one; a new bucket has none. The voicemail, link and stop lines leave it for `buckets` (B50) |
 | `conversations` | No new column: the bucket is its flow's, so the two cannot disagree |
 | `calls` | `conversation_id` on an automated call. `calls_one_automated_per_lead` becomes one per conversation, keeping its `not_placed` exception |
-| `dispositions` | `reason` - `sold`, `not_interested`, `wrong_number` - only on `closed` (a check), required on a new Closed by the route; and `conversation_id`, the bucket it closed. Rows from before stay as they are. A new field, not the retired values of the same names, so rows from before keep meaning what they meant |
+| `dispositions` | `reason` - why a Closed was closed - and `conversation_id`, the bucket it closed: built by B04, so in `SCHEMA.md`. The route requires the reason from B19 |
 | `settings` | `message_missed_call` and `ai_agent` move into `buckets`. The robot's hours stay one setting for all, unless the client answers otherwise |
 
 The antibiotics bucket is created, and everything above filled in for it, in the
@@ -308,7 +308,7 @@ same migration that adds the tables.
 | Seri's knowledge | Three files in `backend/src/ai/knowledge/` | A pack per bucket |
 | Seri's switch | One `settings` row, `ai_agent` | One per bucket |
 | Queue, Admin > Leads | No bucket | Bucket column and filter; the **Needs review · 2 buckets** tag |
-| Wrap up's Closed | `closed`, no reason (`core/dispositions.ts`) | A reason - sold, not interested, wrong number - saved with it |
+| Wrap up's Closed | Asks why - Sold, Not interested or Wrong number - and saves it with the outcome (B04) | The reason decides whether a new bucket starts (B22) |
 | A closed lead | Reopened by four things (`CLOSED_SQL`) | Also by a new bucket starting, when closed as Sold or Not interested |
 | Admin > Configuration | Shows the one bucket | A bucket picker at the top; the Calls tab shows that bucket's calls and Seri switches, and its robot script if it has one |
 
@@ -330,7 +330,7 @@ calls per bucket - Seri's for every new bucket - then Seri per bucket.
 
 ## Not done
 
-Nothing is built yet; the tracker has every ticket's state. Beyond Part 1's tickets:
+The tracker has every ticket's state. Beyond Part 1's tickets:
 
 - **Waiting on the client: two groups per bucket.** Is it OK for the app to move
   leads into a "- taken" group once it has taken them in? Is a bucket's main group
@@ -456,6 +456,7 @@ on its own by B01.
 
 ## History
 
+- 2026-11-28 · Status In progress: B01-B06 are built. "Nothing is built" taken out; the next migration number left to `WORKFLOW.md` - it read 025, which B04 used; the `dispositions` row and Wrap up's Closed say what B04 built - the row had read "required on a new Closed by the route; and `conversation_id`, the bucket it closed. Rows from before stay as they are", and Wrap up's Closed "`closed`, no reason" · review of B01-B06
 - 2026-11-28 · Closed asks why, built: the popup and `dispositions.reason`, with each outcome's conversation (B04). The new bucket's use of it is B22 · B04
 - 2026-11-27 · New buckets get no robot call script - their calls are Seri's, with a goodbye line and the agents' queue when she fails, and the dialler waiting while OpenAI is down; antibiotics keeps its script. The call lines (voicemail, link, stop) move to `buckets`; B48 dropped, B50 and B51 added · Jeel
 - 2026-11-27 · Rewritten to the area template, with a Status line in the fixed words: the two-groups proposal moved from Decisions to Not done as an open question; the queue-order decision handed to `QUEUE.md`; Parts 2 and 3 under Not done; the order of work replaced by the tracker's "The order", and the client's questions linked to its "Waiting on"; "before Part 1 starts" dropped - the tracker lets about forty tickets start before the client answers · D45

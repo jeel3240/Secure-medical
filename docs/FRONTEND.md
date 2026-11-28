@@ -343,8 +343,8 @@ its doc's Tests table; these are the shared parts':
 
 ## History
 
-- 2026-11-28 · Overview's five totals, Sold the fifth; `.stats` takes as many columns as it has totals · B05
-- 2026-11-28 · Closed asks why, in a popup, the reason shown as "Closed · Sold" (`outcomeLabel`) · B04
+- 2026-11-28 · Overview's five totals, Sold the fifth; `.stats` takes as many columns as it has totals · Admin counts sales · B05
+- 2026-11-28 · Closed asks why, in a popup, the reason shown as "Closed · Sold" (`outcomeLabel`) · Jeel: one Closed stood for sold, not interested and wrong number alike · B04
 - 2026-11-28 · The queue's order - by tier, newest first, not by score - added to "Differences from the brief" · B01
 - 2026-11-27 · Rewritten to the Area template, 937 lines to this: the queue, admin,
   workspace, callbacks, timeline and calling sections handed to their docs

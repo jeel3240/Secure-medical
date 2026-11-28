@@ -7,7 +7,7 @@ and per agent, beside Closed.
 (`BUCKETS.md`, "A closed lead joins a new bucket").
 
 **Depends on:** B04 · **Size:** S · **Status:** Done 2026-11-28 - the admin live check's
-sold section, the frontend tests and the speed check · **Deploy note:** none, no
+sold section, the frontend tests and the speed check; the card seen in Chrome · **Deploy note:** none, no
 migration.
 
 ## Build
@@ -61,6 +61,12 @@ A bucket filter on Overview; any other new statistic.
   `.stats` became one row of as many columns as totals (`grid-auto-flow: column`),
   where it was four fixed. The column is proved by a render test of the page with
   its API mocked (`OverviewPage.render.test.tsx`). Not looked at in a browser.
+- **Reviewed 2026-11-28, after group A:** seen in Chrome on fake leads - five
+  totals in one row, Sold last; the agents' Sold column; 1 sold today, 3 over 7 days
+  with the retired `sold` among them. The agents card's subtitle became "Closed and
+  sold in this period". Which rows count as sold is SQL - a count over the
+  database's rows, built from `SOLD_REASON` and `RETIRED_SOLD` - so the admin live
+  check proves it, not a pure function.
 
 ---
 

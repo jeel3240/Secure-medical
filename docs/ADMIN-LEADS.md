@@ -377,7 +377,7 @@ Reads `leads`, the newest row of `conversations`, `conversation_answers`,
 
 | What | Where |
 |---|---|
-| Every SMS status, each kind of agent trace on its own, Closed and a lead closed under a retired value, reopening by a later callback or a text, the tab counts; the Call column - each result, two tracks at once, a "yes" taken reading Working, Calling now and No result by the call's age, a lead never called and an agent's own call reading nothing, the filter alone, with a tab and with the counts, and Not called; a call back Seri booked - Callback booked, not Working, and its filter; each row of the Step table | `scripts/admin-leads-live-check.ts` |
+| Every SMS status, each kind of agent trace on its own, Closed and a lead closed under a retired value, reopening by a later callback or a text, the tab counts; the Call column - each result, two tracks at once, a "yes" taken reading Working, Calling now and No result by the call's age, a lead never called and an agent's own call reading nothing, the filter alone, with a tab and with the counts, and Not called; a call back Seri booked - Callback booked, not Working, and its filter; each row of the Step table; "Synced" - the last-read row, and the checkpoint's time without it | `scripts/admin-leads-live-check.ts` |
 | A missed call reopening a closed lead, and an outcome settling it | `scripts/calls-live-check.ts` |
 | A lead someone holds is never closed | `scripts/dispositions-live-check.ts` |
 | The route: superadmin only, each filter refused with its 400 | `api/__tests__/admin-leads.test.ts` |
@@ -415,6 +415,7 @@ Reads `leads`, the newest row of `conversations`, `conversation_answers`,
 
 ## History
 
+- 2026-11-28 · Tests: the live check's "Synced" checks listed · review of B01-B06
 - 2026-11-28 · "Synced" reads when EZ Texting was last read (`ezt_last_read_at`), the checkpoint's time its fallback; proved in `admin-leads-live-check.ts` · B06
 - 2026-11-27 · "Source reads `API` for every production lead" added to Not done, from `CLAUDE.md` §10's open items, which named it and nowhere else did · D03
 - 2026-11-27 · Rewritten to the area standard: dated notes to this History, decisions to a table, the status precedence as numbered rules; the line that production had no robot calls "until `AUTO_CALLS` is on" corrected - automated calls are on in production since 2026-10-30; the queue's membership list replaced by a link to `QUEUE.md`; merged in: the page's switcher and tests from `FRONTEND.md` · docs standard · D18, D27

@@ -246,18 +246,21 @@ and **DNC**, then the callback and the note.
   - The database refuses a reason on anything but Closed
     (`dispositions_reason_only_closed`) and any other word
     (`dispositions_reason_known`).
-  - Every screen names it the same way (`outcomeLabel`): "Disposition: Closed ·
-    Sold" on the timeline, "Closed · Sold" on the lead's badge, in Wrap up and in the
-    Lead Timeline's Dispositions list, and "Nora closed Omar Haddad · Sold" on Admin
-    > Overview's feed. An outcome saved before the question was asked has none and
-    reads Closed alone.
+  - The lead's screens name it the same way (`outcomeLabel`): "Closed · Sold" on
+    the lead's badge and in Wrap up, and on the timeline and its sidebar
+    (`TIMELINE.md`, "What it is built from"). Admin > Overview's feed gives it after
+    the lead's name (`ADMIN.md`, "Overview"). An outcome saved before the question
+    was asked has none and reads Closed alone.
   - These are new values in a new column - not the retired `value`s of the same
     names (`RETIRED_DISPOSITIONS`), which stay as they are.
 - **Each outcome names the conversation it closed**, `dispositions.conversation_id`:
   the lead's newest, read under the lead's lock in the same statement, so it is the
   one the agent saw; null for a lead with none. Migration 025 filled it in for every
-  outcome before it - the newest conversation started at or before the outcome.
-  Nothing reads it yet: B19 makes Closed apply to that conversation.
+  outcome before it - the newest conversation started at or before the outcome. The
+  old code, still running between `migrate` and `up` on 025's deploy (`DEPLOY.md`,
+  "Deploying"), saves an outcome without it, so a few rows from those seconds can be
+  null. Nothing reads it yet: B19 makes Closed apply to that conversation, and fills
+  those rows in by 025's rule before it reads them.
 - **Append-only, like notes.** Nothing updates or deletes a disposition. The
   timeline shows the sequence: a lead closed, reopened by a callback and closed
   again is a different story from one closed once.
@@ -598,6 +601,7 @@ action recorded.
 
 ## History
 
+- 2026-11-28 · An outcome's words: the lead's screens are `outcomeLabel`'s, the timeline's and Overview's feed linked to their owners rather than written here; `conversation_id` can be null on an outcome the old code saved during 025's deploy, which B19 fills in · review of B01-B06
 - 2026-11-28 · Closed asks why - Sold, Not interested or Wrong number - in a popup, saved in `dispositions.reason`, and each outcome names the conversation it closed (`conversation_id`, filled in for the old ones by migration 025); shown as "Closed · Sold" on every screen. Until then Closed stood for all three, and the note was the only place that said which · Jeel · B04
 - 2026-11-27 · Rewritten to the area standard: dated notes to this History, decisions to a table; callbacks split out to `CALLBACKS.md` and the timeline to `TIMELINE.md`; rules 2b and 2d linked to `STATE-MACHINE.md` rather than restated; the DNC block paths owned here, as "Blocking a number"; "What it needed that did not exist" and the check counts moved here. Merged in: the workspace screen from `FRONTEND.md` ("The workspace on screen"), and why claims never expire from `SCHEMA.md` · docs standard · D20, D26, D09
 - 2026-11-23 · A deactivated agent's open call backs are nobody's, and picking the lead up takes them · review D2

@@ -63,14 +63,8 @@ New code that reads what a migration adds fails until that migration has run. Ru
 the other way round - the new code started, then the migrations - a robot call's
 `/auto/*` webhook or Seri's greeting that read a new column would answer 500 for
 the seconds between, and signing in would fail if `users` gained a column the
-code reads. Running the migrations first is safe because of how they are written
-(`WORKFLOW.md`, "Migrations"):
-
-- one that **adds** - a table, a column, an index, a row - is invisible to the
-  old code still running;
-- one that **drops** or renames ships only in a deploy after the code stopped
-  reading what it drops: add, move the readers, then drop, each in its own
-  deploy.
+code reads. Running the migrations first is safe only because every migration is
+written to suit the old code still running - `WORKFLOW.md`, "Migrations", says how.
 
 ### During a deploy
 
@@ -307,13 +301,14 @@ by hand (`WORKFLOW.md`, "Migrations").
 
 ## When it goes wrong
 
-Two ways the system goes quiet crash nothing, so whatever watches it alerts on the
-absence of activity as well as on errors - the first two rows.
+Three ways the system goes quiet crash nothing, so whatever watches it alerts on the
+absence of activity as well as on errors - the first three rows.
 
 | What you see | What it means | What to do |
 |---|---|---|
-| No new leads; `poll.tick` still appears with `inserted` at 0, beside `level=error` lines | EZ Texting is rejecting us: the worker keeps ticking and the api answering, and leads simply stop arriving | Check the account and its credentials; once it works, "Resending after an outage" |
+| No new leads; `poll.failed` lines where `poll.tick` should be | EZ Texting cannot be read - it is rejecting us, or down: the worker keeps cycling and the api answering, and leads simply stop arriving. The health check's `poller` goes degraded (`LOGGING.md`, "Health endpoint") | Check the account and its credentials; once it works, "Resending after an outage" |
 | No `poll.tick` at all from the worker | The worker died without its container stopping: nothing logs from that process. The last poll time is in the health report for this reason (`LOGGING.md`, "Health endpoint") | Recreate the worker: `docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d worker` |
+| `poll.tick` with `failed` above 0, beside `poll.contact_failed` lines | The database refused one contact. The rest of that poll went on, and every poll reads it again until it goes in (`POLLER.md`, "Why each piece is there"). The health check stays ok - EZ Texting was read - so these lines are the only sign | Its `err` says why; fix that, and the next poll takes it in. Its `createdAt` finds the contact in EZ Texting |
 | The api or the worker will not start after a deploy, and `docker compose logs` shows nothing | A missing CloudWatch permission - Docker fails at container creation | Give the instance role the three `logs:` permissions, or drop `awslogs-create-group` and create the group by hand |
 | `api.refused_start` in the `api` stream | A production setting that would leave a hole - its `reason` says which ("What stops the api starting") | Set it in `.env`, then `up -d api worker` |
 | `run --rm api npm run migrate` fails | A migration's SQL failed. Its file ran in one transaction, so it left nothing behind; the old code is still running | Do not run `up`. Fix the migration in a new commit and deploy again ("Deploying", step 2) |
@@ -326,6 +321,7 @@ absence of activity as well as on errors - the first two rows.
 
 ## History
 
+- 2026-11-28 · "When it goes wrong": a contact the database refuses (`poll.contact_failed`), which the health check does not show; and EZ Texting failing logs `poll.failed`, not a `poll.tick` with `inserted` at 0 - the worker logs `poll.tick` only on a poll that read the account. "Why the migrations go first" points to `WORKFLOW.md`, "Migrations", for how a migration suits the old code, rather than saying it again · review of B01-B06
 - 2026-11-28 · The migrations run before the new code starts: `build`, `run --rm api npm run migrate` with the new image, then `up -d`. Until then the steps were `up -d --build`, then `exec api npm run migrate` - for those seconds the new code ran on the old database; with 017, signing in and every page would fail until it had run (`WORKFLOW.md`, History, 2026-10-30). Proved locally: `build`, the new image migrating a scratch database while nothing new ran, `up -d api`, health 200; and the `production` image migrating a scratch database, as `node`, with no ts-node. The order first planned built only `api` and `worker`, which would have left the frontend - built into the Caddy image - on the old version · B02
 - 2026-11-27 · Written from `WORKFLOW.md`'s "Deploying" and "The images", `SCHEMA.md`'s "Connecting", `LOGGING.md`'s "The two ways this system goes quiet", `POLLER.md`'s resend steps, `AUTH.md`'s first superadmin, `AI-AGENT.md` section 7's commands and T26's going-live steps; every production command given with both `-f` files - `docker compose exec api npm run migrate` had been written without them · D08, D09, D11, D16, D13, D43, D34
 - 2026-11-24 · Seri's code and migrations 022-024 deployed, her switch off; `OPENAI_API_KEY` set; her switch on Admin > Configuration as well as the command · A22, PR #31

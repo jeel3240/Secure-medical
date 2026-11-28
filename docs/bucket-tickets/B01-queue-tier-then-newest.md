@@ -87,6 +87,11 @@ The tier switcher, the filters and their counts; the Bucket column (B27); the
   `FRONTEND.md` quoted no order line, so nothing there changed besides that row.
 - **Also changed:** the comment on `completed` in `core/state-machine.ts` - "Agents
   call, by tier"; the live check's header dropped its drifting check count.
+- **Reviewed 2026-11-28, after group A:** the order is SQL by nature - an ORDER BY
+  over the database's rows - so it is proved by the queue live check, not by a pure
+  function in `core/`; a copy of the rule in TypeScript would test itself, not the
+  query. Seen in Chrome on fake leads: Hot, then Warm, then Low, newest first in
+  each.
 
 ---
 

@@ -69,7 +69,7 @@ database, never here.
 |---|---|---|---|
 | `poll.tick` | info | Each poll that read EZ Texting: `fetched`, `inserted` (new leads), `skipped`, `suppressed`, `openers` (first questions sent), `failed` (contacts the database refused), `ms` | `worker/index.ts` |
 | `poll.contact_failed` | error | One contact could not be taken in; the rest of the poll goes on, and it is read again next poll (`POLLER.md`, "Why each piece is there"): `createdAt` - when EZ Texting listed it - and `err`. Never its phone or name | `worker/poller.ts` |
-| `poll.failed` | error | A poll failed - EZ Texting could not be read, or listed a page oldest first: `err`; the checkpoint is left where it was | `worker/index.ts` |
+| `poll.failed` | error | A poll failed, in place of its `poll.tick` - EZ Texting could not be read, it listed a page oldest first, or the database would not read or write the poll's own `settings` rows: `err`. Failing before the checkpoint is written, it leaves the checkpoint where it was; failing after, on the last-read row, the checkpoint has moved and only the last-read time has not | `worker/index.ts` |
 | `conversation.expired` | info | Only when the sweep expired some: `expired`, `ms` | `worker/index.ts` |
 | `expiry.failed` | error | The sweep failed, `err` | `worker/index.ts` |
 | `opener.retry` | info | One line per pass that had something due: `due`, `sent`, `failed`, `unconfirmed` (timed out, perhaps delivered - taken as sent), `abandoned`, `tooOld`, `ms` (`POLLER.md`, "Retrying a failed opener") | `worker/index.ts` |
@@ -279,7 +279,9 @@ response beside the time, so the two are not confused. `scripts/health-live-chec
 pins it every way: a week-old value with a fresh poll is healthy, a fresh value with
 a 15-minute-old poll is not; a fresh read with a 15-minute-old checkpoint is healthy,
 a 15-minute-old read with a fresh checkpoint is not; without the row, the
-checkpoint's time. The
+checkpoint's time. So a contact the database refuses never makes the `poller` check degraded - the
+poll read the account all the same. Its only sign is `poll.contact_failed`, and
+`failed` above 0 on `poll.tick` (`DEPLOY.md`, "When it goes wrong"). The
 worker has no HTTP server, so what it writes is the honest signal that it is alive.
 6 minutes is twelve 30-second cycles: a slow EZ Texting page or a restart is not a
 false alarm, and a dead worker is noticed within the working hour.
@@ -320,6 +322,7 @@ less - not this guard removed.
 
 ## History
 
+- 2026-11-28 · `poll.failed` names every way a poll fails, the database's included, and what each leaves of the checkpoint; the health endpoint says a refused contact never makes the `poller` check degraded, so its log line is the only sign · review of B01-B06
 - 2026-11-28 · `poll.contact_failed`, and `failed` on `poll.tick`; the `poller` check reads when EZ Texting was last read (`ezt_last_read_at`), the checkpoint's `updated_at` its fallback · B06
 - 2026-11-27 · Rewritten as a reference: one row per event from a grep of `log.info|warn|error` in `backend/src` - 135 events; rows of their own for `call.ring_not_taken`, `call.closed_late`, `call.close_late_failed`, `call.left_open_watch_failed`, `auto_call.ring_not_taken`, `twilio.request_failed` and `auto_calls.test_numbers_invalid`, which were sentences inside other rows; "The two ways this system goes quiet" and the CloudWatch note handed to `DEPLOY.md` · D11
 - 2026-11-24 · `ai_agent.switched`, Seri's switch changed from Admin > Configuration

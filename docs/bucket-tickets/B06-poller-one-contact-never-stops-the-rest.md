@@ -77,6 +77,14 @@ Reading groups by membership (B24); the checkpoint's removal (B25).
   fallback; every live check (25); the e2e, 143; backend 1,994 tests; lint, types,
   the image build.
 - **Also:** `SCHEMA.md`'s `settings` rows, `ADMIN-LEADS.md`'s sync line and data.
+- **Reviewed 2026-11-28, after group A:** the next poll taking a failed contact in
+  was tested only after an insert failure; the same test runs for a do-not-call
+  check that threw (34 tests; both fail when the checkpoint is not held back).
+  Docs the commit missed: `DEPLOY.md` had no row for a refused contact - which the
+  health check does not show - and its first row said EZ Texting failing logs a
+  `poll.tick`, when it logs `poll.failed`; `LOGGING.md`'s `poll.failed` named only
+  EZ Texting's failures; `SCHEMA.md`'s readers of the two poll rows; `RUNNING.md`'s
+  sample line; `ADMIN-LEADS.md`'s Tests; `BUCKETS.md`'s Status.
 
 ---
 

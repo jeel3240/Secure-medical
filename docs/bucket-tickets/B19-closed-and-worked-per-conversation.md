@@ -11,14 +11,22 @@ disposition whatever came after, and `STATUS_SQL` (`backend/src/db/leads.ts`) ra
 Working, from weight loss's first text on.
 
 **Depends on:** B04 · **Size:** S · **Status:** To do · **Deploy note:** the deploy
-after B04's - old browsers have reloaded by then.
+after B04's - old browsers have reloaded by then, and the old code that saved
+outcomes without a conversation has stopped.
 
 ## Build
 
+- A migration that fills in `dispositions.conversation_id` where it is still null on
+  a lead that has a conversation, by 025's rule: the newest conversation started at
+  or before the outcome. On 025's deploy the old code, running between `migrate` and
+  `up`, saved outcomes without it (`AGENT-WORKSPACE.md`, "Dispositions"); read as
+  they are, those leads would come back into the queue. It stops, changing nothing,
+  if one is still left without one - 025's guard.
 - `CLOSED_SQL`: the newest disposition counts only when its `conversation_id` is the
-  lead's newest conversation. A new bucket's conversation - started only for Sold, Not
-  interested, or no reason (B22) - therefore reopens the person; a wrong number never
-  starts one, so stays closed. The four existing ways a closed lead reopens are
+  lead's newest conversation - or both are null, for a lead with no conversation. A
+  new bucket's conversation - started only for Sold, Not interested, or no reason
+  (B22) - therefore reopens the person; a wrong number never starts one, so stays
+  closed. The four existing ways a closed lead reopens are
   unchanged.
 - `STATUS_SQL`: "worked" since the newest conversation began - `workedSinceSql`
   (B17; whichever ticket is built first adds it to `lead-state.ts`).
@@ -27,6 +35,10 @@ after B04's - old browsers have reloaded by then.
 
 ## Done when
 
+- [ ] An upgrade check: migrated to the last migration before this one, an outcome
+      seeded with `conversation_id` null on a lead with a conversation - filled in
+      with the right one; one on a lead with none - left null; every other row
+      unchanged.
 - [ ] `scripts/queue-live-check.ts`: closed in conversation 1, then conversation 2
       started - in the queue by conversation 2's rules, like a new lead; closed in the
       newest conversation - out, as today.
@@ -38,10 +50,11 @@ after B04's - old browsers have reloaded by then.
 
 ## Tests
 
-The live checks, the route test, the e2e.
+The upgrade check, the live checks, the route test, the e2e.
 
 ## Docs to update in the same commit
 
+`docs/SCHEMA.md` (`dispositions.conversation_id` - no longer null from a deploy),
 `docs/ADMIN-LEADS.md` ("Closed": what reopens a closed lead; Working and
 Closed), `docs/QUEUE.md` ("Who is in it" links it), `docs/AGENT-WORKSPACE.md`
 (the reason is required), `docs/LEAD-FLOW.md`, `docs/BUCKETS.md`.

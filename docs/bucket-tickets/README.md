@@ -1,7 +1,7 @@
 # Phase 8 tickets: several buckets
 
-The build of `docs/BUCKETS.md`, Part 1, split into small tickets - written
-2026-11-27, nothing built yet. Each ticket is one branch off `dev`, merged into
+The build of `docs/BUCKETS.md`, Part 1, split into small tickets; each one's state
+is its row in "The tickets". Each ticket is one branch off `dev`, merged into
 `dev` with `--no-ff`, with its code, its tests and every related doc in the same
 commit. Read `BUCKETS.md` first, then the ticket.
 
@@ -55,7 +55,7 @@ on the code before the change.
   not change), named constraints, and a "stops unless" guard wherever it changes rows
   it expects in a known state (018's pattern).
 
-**Deploy notes.** Since B02 the runbook runs the migrations before the new code
+**Deploy notes.** The runbook runs the migrations before the new code
 starts (`DEPLOY.md`, "Deploying"), so a ticket's code may read a column its own
 migration adds. Its migration must then suit the old code still running - it adds;
 a drop waits for a later deploy. A ticket's *Deploy note* says when it needs more.
@@ -70,12 +70,12 @@ below, is a suggested path through it.
 | # | Ticket | Depends on | Size | Status |
 |---|---|---|---|---|
 | | **A. Ready now - no buckets needed** | | | |
-| B01 | [Queue: tier first, then newest](B01-queue-tier-then-newest.md) | - | S | Done 2026-11-28 |
-| B02 | [Deploy order: migrations before the new code](B02-deploy-order-migrations-first.md) | - | S | Done 2026-11-28 |
-| B03 | [The upgrade check](B03-upgrade-check.md) | - | S | Done 2026-11-28 |
-| B04 | [Closed asks why](B04-closed-asks-why.md) | B03 | M | Done 2026-11-28 |
-| B05 | [Overview counts sold](B05-overview-counts-sold.md) | B04 | S | Done 2026-11-28 |
-| B06 | [Poller: one contact never stops the rest](B06-poller-one-contact-never-stops-the-rest.md) | - | S | Done 2026-11-28 |
+| B01 | [Queue: tier first, then newest](B01-queue-tier-then-newest.md) | - | S | Done 2026-11-28 - the queue live check's order section, the e2e and the speed check |
+| B02 | [Deploy order: migrations before the new code](B02-deploy-order-migrations-first.md) | - | S | Done 2026-11-28 - the new order run locally, and the production image migrating a scratch database |
+| B03 | [The upgrade check](B03-upgrade-check.md) | - | S | Done 2026-11-28 - `harness-upgrade-check` in the full live-check run |
+| B04 | [Closed asks why](B04-closed-asks-why.md) | B03 | M | Done 2026-11-28 - migration 025; the live, upgrade, route, frontend and e2e checks; the popup seen in Chrome |
+| B05 | [Overview counts sold](B05-overview-counts-sold.md) | B04 | S | Done 2026-11-28 - the admin live check's sold section, the frontend tests and the speed check; the card seen in Chrome |
+| B06 | [Poller: one contact never stops the rest](B06-poller-one-contact-never-stops-the-rest.md) | - | S | Done 2026-11-28 - the poller's tests, the health and Admin > Leads live checks, the e2e |
 | | **B. Buckets in the database - one bucket, nothing changes for users** | | | |
 | B07 | [Migration: buckets](B07-migration-buckets.md) | B03 | S | To do |
 | B08 | [The flow per bucket](B08-flow-per-bucket.md) | B07 | S | To do |

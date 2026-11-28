@@ -47,7 +47,7 @@ export interface Summary {
   smsIn: number;
   lastContact: { at: string; inbound: boolean } | null;
   nextCallback: { at: string; agent: string | null } | null;
-  /** `reason` is why it was closed (B04) - absent on an outcome from before it was asked. */
+  /** `reason` is why it was closed (B04) - null on an outcome from before it was asked, and on DNC. */
   dispositions: { at: string; value: Disposition; reason: CloseReason | null; agent: string | null }[];
 }
 

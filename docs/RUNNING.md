@@ -61,7 +61,7 @@ account, and to receive its real replies through a tunnel. Testing is
    ```
 
    ```
-   {"ts":"2026-09-28T23:50:24.426Z","level":"info","event":"poll.tick","svc":"worker","fetched":2,"inserted":0,"skipped":2,"suppressed":0,"openers":0,"ms":336}
+   {"ts":"2026-09-28T23:50:24.426Z","level":"info","event":"poll.tick","svc":"worker","fetched":2,"inserted":0,"skipped":2,"suppressed":0,"openers":0,"failed":0,"ms":336}
    ```
 
 7. In a second terminal, start the frontend, then open http://localhost:5173:
@@ -197,6 +197,7 @@ switch locally is `docker compose exec api npm run dev:ai-agent -- on`
 
 ## History
 
+- 2026-11-28 · The sample `poll.tick` line carries `failed`, as the worker logs it since B06 · review of B01-B06
 - 2026-11-27 · Written from `docs/README.md`'s quick start, "Sending" and troubleshooting, `CLAUDE.md` §7, and the how-to parts of `AUTH.md` (the first superadmin), `WEBHOOKS.md` (the subscription, real replies, posting by hand) and `FRONTEND.md` (the frontend's commands, port 3000) · D06, D13, D15, D29
 - 2026-11-22 · The local postgres, redis and api ports opened on `127.0.0.1` only · review M35
 - 2026-10-16 · A dev number of the laptop's own for calls; until then calling was not tested locally at all and the local `.env` kept its `TWILIO_*` lines empty (`TWILIO-SETUP.md`)

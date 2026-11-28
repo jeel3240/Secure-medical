@@ -316,10 +316,10 @@ async function main(): Promise<void> {
     };
     const twice = await outcome('+15550000801', maya, 'closed', 'sold');
     await pool.query(`INSERT INTO dispositions (lead_id, agent_id, value, reason) VALUES ($1, $2, 'closed', 'sold')`, [twice, maya]);
-    await outcome('+15550000802', sam, 'sold', null);
-    await outcome('+15550000803', maya, 'closed', 'not_interested');
+    const retiredSold = await outcome('+15550000802', sam, 'sold', null);
+    const notInterested = await outcome('+15550000803', maya, 'closed', 'not_interested');
     await outcome('+15550000804', maya, 'closed', 'wrong_number');
-    await outcome('+15550000805', maya, 'closed', null);
+    const noReason = await outcome('+15550000805', maya, 'closed', null);
     await outcome('+15550000806', maya, 'closed', 'sold', `now() - interval '10 days'`);
     await outcome('+15550000807', sam, 'closed', 'sold', `${phoenixMidnight} - interval '1 minute'`);
     await outcome('+15550000808', sam, 'closed', 'sold', `${phoenixMidnight} + interval '1 minute'`);
@@ -332,6 +332,13 @@ async function main(): Promise<void> {
     const soldThirty = await getOverview('30d', zone);
     check('30 days: also the one 10 days ago and the one just before Phoenix midnight', soldThirty.kpis.sold, 5);
     check('and per agent', [soldThirty.agents.find((a) => a.name === 'Maya')?.sold, soldThirty.agents.find((a) => a.name === 'Sam')?.sold], [2, 3]);
+
+    // The feed carries why a lead was closed (B04), from the same row: the
+    // words on screen are `activityAfter`'s (OverviewPage.tsx).
+    const feedDetail = (leadId: number) => soldToday.activity.find((a) => a.kind === 'disposition' && a.leadId === leadId)?.detail;
+    check('the feed carries a Closed\'s reason', feedDetail(notInterested), { value: 'closed', reason: 'not_interested' });
+    check('and none for a Closed saved without one', feedDetail(noReason), { value: 'closed', reason: null });
+    check('and none for the retired sold, whose value says it', feedDetail(retiredSold), { value: 'sold', reason: null });
   }
 
   console.log('\nthe DNC list');
