@@ -41,8 +41,8 @@ async function makeExpiredLeadWithReply(phone: string): Promise<number> {
   // Scored, so the queue counts them a responder, and expired, so only the
   // unread flag can keep them in it.
   await pool.query(
-    `INSERT INTO conversations (lead_id, status, step, q1, score, tier, expires_at)
-     VALUES ($1, 'expired', 2, '3', 25, 'LOW', now() - interval '2 days')`,
+    `INSERT INTO conversations (lead_id, flow_id, status, step, q1, score, tier, expires_at)
+     VALUES ($1, (SELECT id FROM flows WHERE is_active), 'expired', 2, '3', 25, 'LOW', now() - interval '2 days')`,
     [leadId]
   );
   return leadId;
@@ -103,8 +103,8 @@ async function main(): Promise<void> {
     );
     const lead: number = rows[0].id;
     await pool.query(
-      `INSERT INTO conversations (lead_id, status, step, q1, q2, q3, score, tier)
-       VALUES ($1, 'completed', 3, '3', '1', '1', 100, 'HOT')`,
+      `INSERT INTO conversations (lead_id, flow_id, status, step, q1, q2, q3, score, tier)
+       VALUES ($1, (SELECT id FROM flows WHERE is_active), 'completed', 3, '3', '1', '1', 100, 'HOT')`,
       [lead]
     );
 
@@ -123,8 +123,8 @@ async function main(): Promise<void> {
     );
     const lead: number = rows[0].id;
     await pool.query(
-      `INSERT INTO conversations (lead_id, status, step, q1, score, tier, agent_took_over_at)
-       VALUES ($1, 'open', 2, '3', 25, 'LOW', now() - interval '10 minutes')`,
+      `INSERT INTO conversations (lead_id, flow_id, status, step, q1, score, tier, agent_took_over_at)
+       VALUES ($1, (SELECT id FROM flows WHERE is_active), 'open', 2, '3', 25, 'LOW', now() - interval '10 minutes')`,
       [lead]
     );
 

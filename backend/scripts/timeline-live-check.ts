@@ -64,8 +64,8 @@ async function main(): Promise<void> {
   {
     const lead = await makeLead('+15550000301', '2 hours');
     await pool.query(
-      `INSERT INTO conversations (lead_id, status, step, q1, q2, q3, score, tier)
-       VALUES ($1, 'completed', 3, '3', '1', '1', 100, 'HOT')`,
+      `INSERT INTO conversations (lead_id, flow_id, status, step, q1, q2, q3, score, tier)
+       VALUES ($1, (SELECT id FROM flows WHERE is_active), 'completed', 3, '3', '1', '1', 100, 'HOT')`,
       [lead]
     );
     await pool.query(
@@ -97,8 +97,8 @@ async function main(): Promise<void> {
     // it down under itself. It now sits at completed_at.
     const lead = await makeLead('+15550000309', '2 hours');
     await pool.query(
-      `INSERT INTO conversations (lead_id, status, step, q1, q2, q3, score, tier, completed_at)
-       VALUES ($1, 'completed', 3, '2', '2', '3', 60, 'WARM', now() - interval '60 minutes')`,
+      `INSERT INTO conversations (lead_id, flow_id, status, step, q1, q2, q3, score, tier, completed_at)
+       VALUES ($1, (SELECT id FROM flows WHERE is_active), 'completed', 3, '2', '2', '3', 60, 'WARM', now() - interval '60 minutes')`,
       [lead]
     );
     await pool.query(
@@ -140,8 +140,8 @@ async function main(): Promise<void> {
   {
     const lead = await makeLead('+15550000302', '3 hours');
     await pool.query(
-      `INSERT INTO conversations (lead_id, status, step, q1, score, tier)
-       VALUES ($1, 'open', 2, '3', 25, 'LOW')`,
+      `INSERT INTO conversations (lead_id, flow_id, status, step, q1, score, tier)
+       VALUES ($1, (SELECT id FROM flows WHERE is_active), 'open', 2, '3', 25, 'LOW')`,
       [lead]
     );
     await pool.query(
@@ -197,8 +197,8 @@ async function main(): Promise<void> {
   {
     const lead = await makeLead('+15550000303', '1 hour');
     await pool.query(
-      `INSERT INTO conversations (lead_id, status, step, score, agent_took_over_at)
-       VALUES ($1, 'open', 1, 10, now() - interval '30 minutes')`,
+      `INSERT INTO conversations (lead_id, flow_id, status, step, score, agent_took_over_at)
+       VALUES ($1, (SELECT id FROM flows WHERE is_active), 'open', 1, 10, now() - interval '30 minutes')`,
       [lead]
     );
     await pool.query(
@@ -224,8 +224,8 @@ async function main(): Promise<void> {
   {
     const lead = await makeLead('+15550000304', '10 days');
     await pool.query(
-      `INSERT INTO conversations (lead_id, status, step, score, tier, expires_at)
-       VALUES ($1, 'expired', 1, 10, 'LOW', now() - interval '3 days')`,
+      `INSERT INTO conversations (lead_id, flow_id, status, step, score, tier, expires_at)
+       VALUES ($1, (SELECT id FROM flows WHERE is_active), 'expired', 1, 10, 'LOW', now() - interval '3 days')`,
       [lead]
     );
     await pool.query(
@@ -241,8 +241,8 @@ async function main(): Promise<void> {
   {
     const lead = await makeLead('+15550000305', '1 hour');
     await pool.query(
-      `INSERT INTO conversations (lead_id, status, step, score, expires_at)
-       VALUES ($1, 'open', 1, 0, now() + interval '7 days')`,
+      `INSERT INTO conversations (lead_id, flow_id, status, step, score, expires_at)
+       VALUES ($1, (SELECT id FROM flows WHERE is_active), 'open', 1, 0, now() + interval '7 days')`,
       [lead]
     );
 

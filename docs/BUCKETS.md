@@ -246,18 +246,18 @@ Every database change is a new numbered migration - the next number is in
 `WORKFLOW.md`, "Where the files stand". Rules 5-8 apply. When each table is built, its columns move into `SCHEMA.md` (B07, B09); until
 then they are here.
 
-**New: `buckets`** - one row per campaign.
+**New: `buckets`** - one row per campaign. Built by B07 with `key`, `name` and
+`created_at` (`SCHEMA.md`, `buckets`); each column below comes with the ticket that
+first reads it.
 
 | Column | What |
 |---|---|
-| `id`, `name` | "Antibiotics"; the name is unique |
 | `ezt_group_id`, `ezt_group_name` | The main group the partner adds leads to; unique |
 | `ezt_taken_group_id`, `ezt_taken_group_name` | The "- taken" group; unique |
 | `knowledge_key` | Seri's pack, the folder `backend/src/ai/knowledge/<key>/`. Her knowledge stays in the repo, changed by a reviewed PR |
 | `missed_call_text` | Moved from `settings.message_missed_call` |
 | `texts_on`, `calls_on`, `ai_agent_on` | Its three switches, each change in `activity_log`; `ai_agent_on` moved from `settings.ai_agent` |
 | `voicemail_body`, `link_text`, `opt_out_body`, `opt_out_words` | Its call lines, moved from `call_scripts` (copied, then removed), read by Seri and by antibiotics' robot script - one place for every bucket (B50) |
-| `created_at` | |
 
 **New: `bucket_arrivals`** - add-only, one row each time the poller takes a person in
 for a bucket. Today a known phone is skipped and leaves no trace.
@@ -280,15 +280,15 @@ those columns go. So does `leads.previous_lead_id`, never used (`SCHEMA.md`).
 
 | Table | Change |
 |---|---|
-| `flows` | `bucket_id`, required. One active flow per bucket, in place of one overall. `flows.ezt_group`, never read, goes |
-| `call_scripts` | `bucket_id`, required. `call_scripts_one_active` becomes one active per bucket - only antibiotics has one; a new bucket has none. The voicemail, link and stop lines leave it for `buckets` (B50) |
-| `conversations` | No new column: the bucket is its flow's, so the two cannot disagree |
+| `flows` | `bucket_id`, required, and one active flow per bucket - built by B07 (`SCHEMA.md`, `flows`). The one-overall index goes in B08; `flows.ezt_group`, never read, goes |
+| `call_scripts` | `bucket_id`, required, and one active script per bucket - built by B07 (`SCHEMA.md`, `call_scripts`); `call_scripts_one_active`, one overall, goes in B18. Only antibiotics has a script; a new bucket has none. The voicemail, link and stop lines leave it for `buckets` (B50) |
+| `conversations` | No new column: the bucket is its flow's, so the two cannot disagree. `flow_id` is required - built by B07 |
 | `calls` | `conversation_id` on an automated call. `calls_one_automated_per_lead` becomes one per conversation, keeping its `not_placed` exception |
 | `dispositions` | `reason` - why a Closed was closed - and `conversation_id`, the bucket it closed: built by B04, so in `SCHEMA.md`. The route requires the reason from B19 |
 | `settings` | `message_missed_call` and `ai_agent` move into `buckets`. The robot's hours stay one setting for all, unless the client answers otherwise |
 
-The antibiotics bucket is created, and everything above filled in for it, in the
-same migration that adds the tables.
+The antibiotics bucket is made by 026 (B07); each column above is filled in for it
+by the migration that adds it.
 
 ## Code
 
@@ -456,6 +456,7 @@ on its own by B01.
 
 ## History
 
+- 2026-11-28 · `buckets` built, with antibiotics, and every flow and call script in it, one active per bucket beside the one-overall indexes the code still relies on (026). Built differently: the table has a `key`, `antibiotics`, beside its name - a stable name for code, as `flows` and `call_scripts` have; the antibiotics bucket is made by 026 with only the columns read so far, each later column filled in by the migration that adds it, where this doc had said the one migration adding the tables would fill in everything · B07
 - 2026-11-28 · Status In progress: B01-B06 are built. "Nothing is built" taken out; the next migration number left to `WORKFLOW.md` - it read 025, which B04 used; the `dispositions` row and Wrap up's Closed say what B04 built - the row had read "required on a new Closed by the route; and `conversation_id`, the bucket it closed. Rows from before stay as they are", and Wrap up's Closed "`closed`, no reason" · review of B01-B06
 - 2026-11-28 · Closed asks why, built: the popup and `dispositions.reason`, with each outcome's conversation (B04). The new bucket's use of it is B22 · B04
 - 2026-11-27 · New buckets get no robot call script - their calls are Seri's, with a goodbye line and the agents' queue when she fails, and the dialler waiting while OpenAI is down; antibiotics keeps its script. The call lines (voicemail, link, stop) move to `buckets`; B48 dropped, B50 and B51 added · Jeel

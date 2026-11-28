@@ -169,7 +169,8 @@ shows each text as sent, with its segment count (`ADMIN.md`, "Configuration").
 A flow is added by a **migration that only inserts rows**. No table, no column,
 no code.
 
-1. Insert the flow into `flows`, with `is_active = false`.
+1. Insert the flow into `flows`, with `is_active = false` and its bucket's
+   `bucket_id` - every flow is in one (`SCHEMA.md`, `buckets`).
 2. Insert its questions into `flow_questions`: keys `q1`, `q2`... and `q1-a` for
    a sub-question; positions in tens, a sub-question behind its parent
    ("Naming a question, and sub-questions", above).
@@ -226,7 +227,10 @@ Making another flow active changes what **new** leads get (rule 10).
 
 ### Rules the database enforces
 
-1. **One flow is active** - the one new leads get (`flows_one_active`).
+1. **Every flow is in a bucket, and one flow is active** - the one new leads get
+   (`flows_one_active`); at most one in each bucket
+   (`flows_one_active_per_bucket`). `flows.bucket_id` is required; `wellness` and
+   `antibiotics` are both in antibiotics.
 2. **A choice either leads to a question or ends the flow**, never both and
    never neither (`flow_choices_next_or_end`).
 3. **A choice belongs to one flow, and can only lead to a question of that
@@ -234,8 +238,9 @@ Making another flow active changes what **new** leads get (rule 10).
    as well as its question: the database can then hold both the question and
    the next question to it. Without it a choice could point into another flow
    and a lead would be sent a question that is not theirs.
-4. **A conversation is only ever on a question of its own flow**
-   (`conversations_question_in_flow`).
+4. **A conversation is in a flow, and only ever on a question of its own flow**
+   (`conversations.flow_id`, required; `conversations_question_in_flow`). So
+   every conversation is in a bucket: its flow's.
 5. **A flow awards something for replying** (`responded_points > 0`, with no
    default). "Has replied" is read everywhere as "score above 0" - the queue,
    the lead card - so a flow that gave nothing for a reply would hide its own
@@ -300,7 +305,8 @@ Making another flow active changes what **new** leads get (rule 10).
 |---|---|
 | Every branch of the antibiotics flow, every rule, and a five-question flow on the same code | `backend/src/core/state-machine.test.ts`, `backend/src/core/answers.test.ts` |
 | The webhook walking the flow: the answer row, the joined text | `backend/src/api/__tests__/webhooks.test.ts` |
-| A second flow added as rows only, with a branch; a lead staying in its own flow; what the migration seeded | `backend/scripts/flows-live-check.ts` |
+| A second flow added as rows only, with a branch; a lead staying in its own flow; what the migration seeded; every flow in a bucket, one active per bucket, the one-overall index still there | `backend/scripts/flows-live-check.ts` |
+| Every flow lands in antibiotics, the retired one too, and no conversation is touched; a conversation with no flow stops the migration | `backend/scripts/buckets-upgrade-check.ts` |
 | A saved answer keeping its label and points after the flow changes; that it cannot be edited | `backend/scripts/lead-detail-live-check.ts` |
 | The queue: offers leads out, Wants a call tagged, a row's answers | `backend/scripts/queue-live-check.ts` |
 | Admin > Leads' Offers status; Configuration reading the active flow | `backend/scripts/admin-leads-live-check.ts`, `backend/scripts/admin-live-check.ts` |
@@ -319,9 +325,10 @@ path - local only. How to use it is in `TESTING.md`.
 
 - **Editing a flow from the website.** A flow is changed by a migration (rule
   11). The tables are what such a screen would edit; it is a later phase.
-- **Several flows at once.** One flow is active. `flows.ezt_group` is there to
-  give each EZ Texting group its own flow; the poller does not read it. Planned
-  as Phase 8, a flow per bucket - `BUCKETS.md`.
+- **Several flows at once.** One flow is active. Each flow is in a bucket, and
+  the database allows one active per bucket, but the code still reads "the
+  active flow" and the one-overall index keeps it to one; `flows.ezt_group` is
+  not read. A flow per bucket is Phase 8 - `BUCKETS.md`.
 - **A question that is not a choice** - a date, a free-text answer. Every
   question is a list of choices.
 - **The maximum score** on Admin > Configuration is the awards plus the best
@@ -359,6 +366,7 @@ path - local only. How to use it is in `TESTING.md`.
 
 ## History
 
+- 2026-11-28 · Every flow is in a bucket - both in antibiotics - with one active per bucket beside one overall; a conversation's flow required, so every conversation is in a bucket · B07
 - 2026-11-27 · Rewritten to the area template; the antibiotics flow moved here
   from `STATE-MACHINE.md`, checked word for word against migration 012; the
   tables' columns left to `SCHEMA.md`; the endings' screens linked to

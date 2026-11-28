@@ -401,7 +401,7 @@ async function main(): Promise<void> {
 
     const { leadId: finishedLead, callId: finishedCall } = await placedCall('+15550000520', 'CA-STOP-3');
     await pool.query(
-      `INSERT INTO conversations (lead_id, status, step, score, tier, completed_at) VALUES ($1, 'completed', 30, 60, 'WARM', now())`,
+      `INSERT INTO conversations (lead_id, flow_id, status, step, score, tier, completed_at) VALUES ($1, (SELECT id FROM flows WHERE is_active), 'completed', 30, 60, 'WARM', now())`,
       [finishedLead]
     );
     await keepAnswer({ ...stop, callId: finishedCall });

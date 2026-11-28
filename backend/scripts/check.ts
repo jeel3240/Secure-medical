@@ -9,6 +9,8 @@
  * line, "all checks passed" or "N check(s) FAILED" (`verdict`).
  */
 
+import type { Pool } from 'pg';
+
 let checks = 0;
 let failures = 0;
 
@@ -55,6 +57,33 @@ export async function refusedBy(run: () => Promise<unknown>): Promise<string> {
   } catch (err) {
     const refused = err as { constraint?: string; message: string };
     return refused.constraint ?? refused.message;
+  }
+}
+
+/**
+ * Runs `fn` inside a transaction that is always rolled back, on one connection:
+ * for a check that must change what the checks after it rely on - a second
+ * bucket, an index dropped to see the one beside it refuse (B07). `tried` runs
+ * one statement in a savepoint, so a refusal does not end the transaction, and
+ * says 'allowed' or what refused it, as `refusedBy` does.
+ */
+export async function rolledBack<T>(
+  db: Pool,
+  fn: (tried: (sql: string, values?: unknown[]) => Promise<string>) => Promise<T>
+): Promise<T> {
+  const client = await db.connect();
+  const tried = async (sql: string, values: unknown[] = []): Promise<string> => {
+    await client.query('SAVEPOINT tried');
+    const result = await refusedBy(() => client.query(sql, values));
+    await client.query(result === 'allowed' ? 'RELEASE SAVEPOINT tried' : 'ROLLBACK TO SAVEPOINT tried');
+    return result;
+  };
+  try {
+    await client.query('BEGIN');
+    return await fn(tried);
+  } finally {
+    await client.query('ROLLBACK');
+    client.release();
   }
 }
 
