@@ -209,7 +209,7 @@ new ones land - `usePolling`'s `keepPreviousData`, QUEUE.md - rather than
 blanking for a spinner. Checked by sampling the page every 20ms through a
 switch: it never went blank.
 
-**Recent activity** sits under the cards: "karm closed Omar Haddad", newest
+**Recent activity** sits under the cards: "nora closed Omar Haddad", newest
 first, the lead's name linking to its timeline.
 
 **Removed:** the funnel, which drew the same numbers as the cards as bars; the

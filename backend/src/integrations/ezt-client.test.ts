@@ -33,28 +33,28 @@ describe('sendMessage', () => {
   it('sends when the number is not blocked', async () => {
     notBlocked();
 
-    const result = await sendMessage(['+16026203572'], 'hello');
+    const result = await sendMessage(['+16025550147'], 'hello');
 
     expect(result.id).toBe('sent-1');
     expect(post).toHaveBeenCalledTimes(1);
     // The API wants the number without the +.
-    expect(post.mock.calls[0][1]).toMatchObject({ toNumbers: ['16026203572'], message: 'hello' });
+    expect(post.mock.calls[0][1]).toMatchObject({ toNumbers: ['16025550147'], message: 'hello' });
   });
 
   it('refuses when the number is on dnc_list, and sends nothing', async () => {
-    poolQuery.mockResolvedValue({ rows: [{ phone: '+16026203572' }], rowCount: 1 });
+    poolQuery.mockResolvedValue({ rows: [{ phone: '+16025550147' }], rowCount: 1 });
 
-    await expect(sendMessage(['+16026203572'], 'hello')).rejects.toThrow(BlockedNumberError);
+    await expect(sendMessage(['+16025550147'], 'hello')).rejects.toThrow(BlockedNumberError);
     expect(post).not.toHaveBeenCalled();
   });
 
   it('keeps the blocked numbers off the message, which is logged - on `phones` only (review H1)', async () => {
-    poolQuery.mockResolvedValue({ rows: [{ phone: '+16026203572' }], rowCount: 1 });
+    poolQuery.mockResolvedValue({ rows: [{ phone: '+16025550147' }], rowCount: 1 });
 
-    const err = await sendMessage(['+16026203572'], 'hello').catch((e: unknown) => e);
+    const err = await sendMessage(['+16025550147'], 'hello').catch((e: unknown) => e);
     expect(err).toBeInstanceOf(BlockedNumberError);
     expect((err as Error).message).toBe('Refusing to send: the number is on dnc_list');
-    expect((err as BlockedNumberError).phones).toEqual(['+16026203572']);
+    expect((err as BlockedNumberError).phones).toEqual(['+16025550147']);
   });
 
   it('refuses the whole send when any recipient is blocked', async () => {
@@ -77,7 +77,7 @@ describe('sendMessage', () => {
       return { data: { id: 'sent-1' } };
     });
 
-    await sendMessage(['+16026203572'], 'hello');
+    await sendMessage(['+16025550147'], 'hello');
 
     expect(order).toEqual(['dnc', 'post']);
   });
@@ -85,10 +85,10 @@ describe('sendMessage', () => {
   it('normalises a bare number before comparing, so it cannot slip through', async () => {
     poolQuery.mockResolvedValue({ rows: [], rowCount: 0 });
 
-    await sendMessage(['16026203572'], 'hello');
+    await sendMessage(['16025550147'], 'hello');
 
     // dnc_list stores E.164; querying the bare form would match nothing.
-    expect(poolQuery.mock.calls[0][1]).toEqual([['+16026203572']]);
+    expect(poolQuery.mock.calls[0][1]).toEqual([['+16025550147']]);
   });
 
   it('refuses before touching the database when EZT_SEND_GROUP is unset', async () => {
@@ -97,7 +97,7 @@ describe('sendMessage', () => {
     config.ezt.sendGroup = '';
 
     // Said as what it is: a switch, not a group of numbers allowed (review Q12, 2026-11-23).
-    await expect(sendMessage(['+16026203572'], 'hello')).rejects.toThrow(/EZT_SEND_GROUP is not set\. It is the switch/);
+    await expect(sendMessage(['+16025550147'], 'hello')).rejects.toThrow(/EZT_SEND_GROUP is not set\. It is the switch/);
     expect(poolQuery).not.toHaveBeenCalled();
     expect(post).not.toHaveBeenCalled();
 

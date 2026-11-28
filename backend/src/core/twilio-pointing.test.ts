@@ -1,6 +1,6 @@
 import { decidePointing, isTunnelHost } from './twilio-pointing';
 
-const PRODUCTION = 'https://dailyleadhub.com/api/webhooks/twilio/incoming';
+const PRODUCTION = 'https://leads.example.com/api/webhooks/twilio/incoming';
 const LAPTOP = 'https://quiet-river-maple.trycloudflare.com/api/webhooks/twilio/incoming';
 const OLD_TUNNEL = 'https://loud-ocean-birch.trycloudflare.com/api/webhooks/twilio/incoming';
 
@@ -57,7 +57,7 @@ describe('pointing a number or app at this server', () => {
     it('refuses an address that is not this app, on any host', () => {
       for (const voiceUrl of [
         'https://demo.twilio.com/welcome/voice/',
-        'https://dailyleadhub.com/something-else',
+        'https://leads.example.com/something-else',
         'https://quiet-river-maple.trycloudflare.com/other/path',
       ]) {
         expect(decidePointing({ voiceUrl }, PRODUCTION, false)).toEqual({ action: 'refuse', why: 'elsewhere', current: voiceUrl });
@@ -93,7 +93,7 @@ describe('isTunnelHost', () => {
     (host) => expect(isTunnelHost(host)).toBe(true)
   );
 
-  it.each(['dailyleadhub.com', 'trycloudflare.com.evil.example', 'ngrok.io.example.com', 'example.com'])(
+  it.each(['leads.example.com', 'trycloudflare.com.evil.example', 'ngrok.io.example.com', 'example.com'])(
     '%s is not',
     (host) => expect(isTunnelHost(host)).toBe(false)
   );

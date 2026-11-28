@@ -333,7 +333,7 @@ async function reply(phone: string, text: string, receivedAt = new Date()) {
     .send({
       type: 'inbound_text.received',
       fromNumber: phone.replace('+', ''),
-      toNumber: '15207799209',
+      toNumber: '15205550109',
       message: text,
       received: receivedAt.toISOString(),
       optIn: false,

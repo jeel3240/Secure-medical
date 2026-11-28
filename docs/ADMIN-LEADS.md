@@ -74,7 +74,7 @@ Two renames came with it, so each word means one thing:
 
 | Was | Is | Why |
 |---|---|---|
-| `in_progress`, In progress | `answering`, Answering | The queue's "In progress – karm" means an agent holds the lead. Two meanings for one phrase |
+| `in_progress`, In progress | `answering`, Answering | The queue's "In progress – nora" means an agent holds the lead. Two meanings for one phrase |
 | `completed`, Completed | `ready`, Ready | "Completed" read as finished when the calling had not started. Briefly "Ready to call" the same day - Jeel: that reads as an instruction to call, so just Ready |
 
 The API values changed with the labels. `?status=in_progress` or
@@ -276,8 +276,8 @@ What is typed is escaped before it reaches `LIKE`, so a `%` or `_` is that
 character, not a wildcard - `db/sql.ts`, 2026-09-28; until then this page did
 not escape at all, and `%` matched every lead.
 
-Search matches name, or phone with punctuation stripped, so `(602) 620-3572`
-finds `+16026203572`.
+Search matches name, or phone with punctuation stripped, so `(602) 555-0147`
+finds `+16025550147`.
 
 `scripts/admin-leads-live-check.ts` proves the statuses against a real
 database: every SMS status, each kind of agent trace on its own, Closed and a

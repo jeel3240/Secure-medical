@@ -271,5 +271,5 @@ WHERE a.lead_id = 42 AND a.action = 'lead.released' ORDER BY a.id;
 
 -- Every text EZ Texting sent us from one number, as received.
 SELECT received_at, payload FROM webhook_events
-WHERE source = 'eztexting' AND payload->>'fromNumber' = '16026203572' ORDER BY id;
+WHERE source = 'eztexting' AND payload->>'fromNumber' = '16025550147' ORDER BY id;
 ```

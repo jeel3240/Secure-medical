@@ -22,7 +22,7 @@ const renderTag = (tag: QueueTag) => {
 
 describe('statuses', () => {
   it.each<[string, QueueTag, string, string, boolean]>([
-    ['someone working it', { kind: 'working', agentId: 2, agentName: 'karm' }, 'Working – karm', 'half', false],
+    ['someone working it', { kind: 'working', agentId: 2, agentName: 'nora' }, 'Working – nora', 'half', false],
     ['an unread reply', { kind: 'inbound_reply' }, 'Inbound reply', 'inbound', true],
     ['a call nobody answered', { kind: 'missed_call' }, 'Missed call', 'missed', true],
     ['a lead who asked to hear from a rep', { kind: 'wants_call' }, 'Wants a call', 'phone', false],
@@ -59,7 +59,7 @@ describe('statuses', () => {
   });
 
   it('names the holder with an en dash, as drawn', () => {
-    expect(tagText({ kind: 'working', agentId: 2, agentName: 'karm' })).toBe('Working – karm');
+    expect(tagText({ kind: 'working', agentId: 2, agentName: 'nora' })).toBe('Working – nora');
   });
 });
 

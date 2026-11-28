@@ -933,14 +933,14 @@ heard and the call ended 2 seconds after. The music page's request comes
 first. So the offer row is written before Twilio is asked, and `/auto/hold`,
 asked while an offer is live, answers with the same ring and changes nothing.
 
-**What the real calls showed** - T16 (2026-10-21, Jeel's phone, karm "on a
+**What the real calls showed** - T16 (2026-10-21, Jeel's phone, nora "on a
 call" - a call row added by hand in the local database for the test):
 
 - **On hold, then out when nobody is on a call** (call 40): the yes, the hold
-  line, "You are next." and a track; karm's call ended at 04:12:31, the
+  line, "You are next." and a track; nora's call ended at 04:12:31, the
   watcher sent the lead back 6 seconds later, and the busy line - 69 seconds
   on hold, `transfer_missed`.
-- **The safety stop** (call 42, set to 1 minute for the test): karm still on
+- **The safety stop** (call 42, set to 1 minute for the test): nora still on
   the call, the busy line after 86 seconds - the minute, then the watcher's
   next look.
 - **Twilio asked `/auto/hold` twice as the music was cut**, the two requests
@@ -949,21 +949,21 @@ call" - a call row added by hand in the local database for the test):
   `via=watcher` and logged (`auto_call.hold_ended`) - the start of call 46's
   experiment above.
 
-T17 (2026-10-22, Jeel's phone on hold, karm on a call added by hand, then
-karm's real browser):
+T17 (2026-10-22, Jeel's phone on hold, nora on a call added by hand, then
+nora's real browser):
 
-- **karm's call ends, karm's window rings, karm takes it** (call 50): rung 17
+- **nora's call ends, nora's window rings, nora takes it** (call 50): rung 17
   seconds after the call row ended - the browser saw no call end, so it was
-  its next 30-second word - accepted 7 seconds later; karm holds the lead,
+  its next 30-second word - accepted 7 seconds later; nora holds the lead,
   `transferred`.
-- **The note saved** (call 53): karm's note box open from a real call, the
+- **The note saved** (call 53): nora's note box open from a real call, the
   lead on hold; the call row ended and nothing rang for 35 seconds, the lead
-  still on hold; the note saved at 06:01:13.904 and karm's window rang 16 ms
+  still on hold; the note saved at 06:01:13.904 and nora's window rang 16 ms
   later; taken.
 - **The note skipped, then declined** (call 55): rang at once on Skip;
-  declined - the offer `declined`, karm's switch left on, and with nobody else
+  declined - the offer `declined`, nora's switch left on, and with nobody else
   coming, the busy line 6 seconds later, `transfer_missed`.
-- **Rang out** (call 48): the offer `missed`, karm's switch turned off, and
+- **Rang out** (call 48): the offer `missed`, nora's switch turned off, and
   the busy line straight after - nobody else was coming.
 - **Found on the note test, and fixed before it:** someone writing the note of
   a call that just ended counted as nobody - not on a call, not free - so a
@@ -1079,10 +1079,10 @@ deploy: `docs/ai-agent-tickets/A23-a-voicemail-menu-is-never-put-through.md`.)*
   beep was sent by hand - signed as Twilio signs, Twilio's own `unknown`
   verdict cleared first in the local database - since a phone that says yes
   cannot also beep.
-- **A beep while karm's window rang** (call 62): the ring began 14 seconds
+- **A beep while nora's window rang** (call 62): the ring began 14 seconds
   after the yes - the line and the notice take that long - and stopped 4
-  seconds later at the beep; the message played; karm's window cleared with
-  no notice, and karm's switch stayed on, though Twilio reported the ring
+  seconds later at the beep; the message played; nora's window cleared with
+  no notice, and nora's switch stayed on, though Twilio reported the ring
   `no-answer`.
 
 ## A lead calling back
@@ -1374,7 +1374,7 @@ away from production by accident.
 - [x] A real call to the new number rings the local browser - only it, as
       `dev-agent-16`; answered, 6 seconds, recording saved.
 - [x] Production untouched - its number and TwiML App read back on Twilio
-      before and after, still pointing at dailyleadhub.com. (Checked on
+      before and after, still pointing at production's domain. (Checked on
       Twilio directly rather than on Admin > Overview, whose Calling check
       reads the same two settings.)
 
@@ -2193,8 +2193,8 @@ missed transfer, and its screen says so.
 - [x] Someone else takes it -> nobody else's switch changes - call 37. (Call
       35, before the fix, switched the other person off: Twilio reports a ring
       cut short by another's answer as `no-answer`, like one that ran out.)
-- [x] B not free -> B is not rung, and B's switch stays on - call 36: karm's
-      note box was still open, so only Jeel was rung; karm's switch stayed on.
+- [x] B not free -> B is not rung, and B's switch stays on - call 36: nora's
+      note box was still open, so only Jeel was rung; nora's switch stayed on.
       A decline keeps it on too - call 34.
 
 As built: "Who is free", "Letting a transfer ring out turns it off". Two
@@ -2469,13 +2469,13 @@ agent owns them.
       (`calls-live-check`, 133).
 - [x] A real call back after T18's voicemail rings the free browsers -
       2026-10-24, call 63: Jeel's phone called the dev number, both windows
-      rang; karm accepted and took the call and the lead; Jeel's ring,
+      rang; nora accepted and took the call and the lead; Jeel's ring,
       reported `no-answer` the same instant, was ignored; answered, 10
       seconds, recorded.
 - [x] Nobody takes it - call 64: rung, then missed, nobody's; the lead heard
       that we would call back and got the missed-call text; nobody's switch
-      changed. It rang one person: karm's note box from call 63 was still
-      open, so karm was not free. Its card read "Calling back · automated
+      changed. It rang one person: nora's note box from call 63 was still
+      open, so nora was not free. Its card read "Calling back · automated
       call, 28m ago" - the robot's call 62, 27 minutes 44 seconds before.
 - [x] With `AUTO_CALLS` off, the existing incoming-call tests pass - one
       expectation names the new argument, `ringFree: false`. Route tests for
@@ -2629,7 +2629,7 @@ said.
       long; each answer in order, its question named "Q1"; an agent's call
       carries neither (`timeline-live-check`, 30).
 - [x] Seen in the browser on a lead after a real call - 2026-10-24, Jeel:
-      lead 50, "said yes · karm took it"; lead 59, "not interested", its
+      lead 50, "said yes · nora took it"; lead 59, "not interested", its
       Answers opened; lead 51, "said yes · nobody took it".
 
 As built: `AGENT-WORKSPACE.md`, "The timeline". Two wording choices beyond
@@ -2923,13 +2923,13 @@ worker`, outside the calling hours - a call still going loses its webhooks
 
 **Done when**
 - [x] Every path above heard and saved correctly - 2026-10-27, on the dev
-      number to Jeel's phone, two browsers (Jeel, karm), calls 66 to 85:
+      number to Jeel's phone, two browsers (Jeel, nora), calls 66 to 85:
 
       | Case | Call | Heard / done | Saved |
       |---|---|---|---|
-      | Yes, taken | 67 | "Yes" 0.70, both rang, karm took it | `transferred`, lead karm's |
+      | Yes, taken | 67 | "Yes" 0.70, both rang, nora took it | `transferred`, lead nora's |
       | Yes, nobody took it | 68 | "Yes" 0.78, both rang out | `transfer_missed`, both switched off, queue Wants a call |
-      | Yes, on hold, then taken | 70 | "Yes" 0.86, karm on a call: hold; the call ended, karm rung from hold | `transferred`, lead karm's |
+      | Yes, on hold, then taken | 70 | "Yes" 0.86, nora on a call: hold; the call ended, nora rung from hold | `transferred`, lead nora's |
       | No, then the link | 71 | "No" 0.73, "Yes" 0.86 | `link_sent`, text received |
       | No, then no - keys | 72 | 2, then 2 | `not_interested`, no text |
       | Silence twice | 73 | nothing, twice | `no_response` |
@@ -2941,17 +2941,17 @@ worker`, outside the calling hours - a call still going loses its webhooks
       | Hung up mid-question | 79 | | `hung_up`, no answer kept |
       | Declined | 80 | the iPhone sent it to voicemail: the message left | `voicemail_left` (a decline that gives busy is `unanswered` - call 56) |
       | Yes, nobody taking calls | 81 | "Yes" 0.92, nothing rang | `transfer_missed`, `nobody_free` |
-      | Yes, the lead's own agent first | 82 | "Yes" 0.87, Jeel rung alone, let it ring out, then karm | `transferred` to karm, taken from Jeel; Jeel switched off |
-      | On hold, nobody coming | 84 | karm on a call: hold; karm switched off - the busy line 18 seconds later | `transfer_missed` |
-      | Calling back the lead's agent | 85 | only Jeel rang, not karm; not answered | missed, the missed-call text, a callback for Jeel |
+      | Yes, the lead's own agent first | 82 | "Yes" 0.87, Jeel rung alone, let it ring out, then nora | `transferred` to nora, taken from Jeel; Jeel switched off |
+      | On hold, nobody coming | 84 | nora on a call: hold; nora switched off - the busy line 18 seconds later | `transfer_missed` |
+      | Calling back the lead's agent | 85 | only Jeel rang, not nora; not answered | missed, the missed-call text, a callback for Jeel |
 
       Found on the way, nothing changed: a browser with no microphone
-      cannot accept (call 66 - karm's window had none; the lead was picked up
-      for karm before the sound failed, and Jeel's window then took the call
+      cannot accept (call 66 - nora's window had none; the lead was picked up
+      for nora before the sound failed, and Jeel's window then took the call
       and the lead) - a headset before the ring, and a reload, as before; a
       spoken "No" heard at 0.00 confidence is taken as no figure, not doubt
-      (T7), so it counted (call 77); and the "pretend call" that put karm
-      on a call was a `calls` row of karm's, by hand, on the local database.
+      (T7), so it counted (call 77); and the "pretend call" that put nora
+      on a call was a `calls` row of nora's, by hand, on the local database.
 - [ ] The first real robot calls on production, seen on the timeline and
       Admin > Leads.
 

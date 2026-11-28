@@ -271,8 +271,8 @@ when the lead is called or texted back. `AGENT-WORKSPACE.md`, "Callbacks".
 **A superadmin's picker is labelled and complete** - Jeel: "what is this
 dropdown?". It was an unlabelled select reading "My callbacks" that listed
 other agents but had no way to see everyone's, and the title stayed "My
-callbacks" whatever it showed. Now it reads **Agent: Me · All agents · karm…**,
-the title follows it ("All callbacks", "karm's callbacks"), and All agents adds
+callbacks" whatever it showed. Now it reads **Agent: Me · All agents · nora…**,
+the title follows it ("All callbacks", "nora's callbacks"), and All agents adds
 an Agent column - "-" for a call back Seri booked that nobody has taken yet
 (A16). The API took `agentId=all` for it (`AGENT-WORKSPACE.md`).
 Agents see no picker.
@@ -413,7 +413,7 @@ needs to know:
 | A call Seri took: her conversation under it, closed the same way - "Lead" and "Seri" lines, then how her part ended ("Booked a call back: Mon, Nov 16 3:00 PM", "Seri stopped - the call went on with the script") - in the transcript's own classes (A19) | `components/SeriConversation.tsx` (`seriEndedText`, pure) |
 | Missed: a notice with **Call back**, which takes the lead and opens it with router state `callBack`; the workspace dials once and clears the state, so a reload does not ring them again | `IncomingCall.tsx`, `WorkspacePage.tsx` |
 | The lead's page: a **Missed call** badge beside Closed and Needs review, from `flags.missedCall`; and a **Wants a call** badge for a "yes" on the automated call nobody took, from `flags.missedYes` (T22) - the queue says only Working once the lead is picked up | `WorkspacePage.tsx` |
-| A call back Seri booked, in the queue (A16): "Callback · 3:00 PM" while nobody has it, "Callback – karm · 3:00 PM" once taken; bold once its time has come (`tag.due`), like a missed call. On My Callbacks her line fills the Last note column - "Seri: Wants to order antibiotics" - while the lead has no note; once there is one, the column shows the lead's newest, anyone's. On the timeline, "Took the callback Seri booked for ..." | `components/QueueStatus.tsx`, `pages/CallbacksPage.tsx`, `components/Timeline.tsx` |
+| A call back Seri booked, in the queue (A16): "Callback · 3:00 PM" while nobody has it, "Callback – nora · 3:00 PM" once taken; bold once its time has come (`tag.due`), like a missed call. On My Callbacks her line fills the Last note column - "Seri: Wants to order antibiotics" - while the lead has no note; once there is one, the column shows the lead's newest, anyone's. On the timeline, "Took the callback Seri booked for ..." | `components/QueueStatus.tsx`, `pages/CallbacksPage.tsx`, `components/Timeline.tsx` |
 | A call back Seri booked (A15): on the lead's page a navy badge, "Callback booked · Thu, Nov 13 3:00 PM · Wants to order antibiotics" - the viewer's own time, whose it is once taken, her line - from `aiCallback`; on the timeline "Callback booked by Seri for ... · her line"; on Admin > Leads' Call column and filter, "Callback booked" | `WorkspacePage.tsx`, `pages/workspace/LeadHeader.tsx` (`aiCallbackLabel`), `components/Timeline.tsx`, `lib/call-results.ts` |
 
 Twilio's SDK is its own chunk, loaded once someone is signed in and calling is

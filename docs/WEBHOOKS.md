@@ -251,7 +251,7 @@ weaker guarantee: anyone who learns the URL can post.
 curl -X POST http://localhost:3000/api/webhooks/eztexting/$EZT_WEBHOOK_TOKEN \
   -H 'Content-Type: application/json' \
   -d '{"id":"309112289003","type":"inbound_text.received",
-       "fromNumber":"16026203572","toNumber":"15207799209",
+       "fromNumber":"16025550147","toNumber":"15205550109",
        "message":"3","received":"2026-09-14T17:06:31.042+00:00",
        "optIn":false,"optOut":false}'
 ```

@@ -254,7 +254,7 @@ refused (`parseSearch`): until 2026-11-22 both were dropped without a word
 (review M19). Admin > Leads and the DNC list read theirs the same way.
 
 `q` matches first and last name, or the phone with punctuation stripped, so
-`(602) 620-3572` finds `+16026203572`. What is typed is escaped before it
+`(602) 555-0147` finds `+16025550147`. What is typed is escaped before it
 reaches `LIKE`: a `%` in the search box is the character, not a wildcard.
 
 ## The response

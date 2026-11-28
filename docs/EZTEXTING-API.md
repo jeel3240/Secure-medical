@@ -53,8 +53,8 @@ something and checking `totalElements` actually moved.
 | `filters[source][eq]` | enum, see values above |
 | `filters[optOut][eq]` | `true` / `false` |
 
-`like` is a case-insensitive substring match: `har`, `arol` and `HAROLD` all
-matched "harold". Hence the group-membership re-check in the poller.
+`like` is a case-insensitive substring match: `jam`, `ami` and `JAMIE` all
+matched "jamie". Hence the group-membership re-check in the poller.
 
 ### Filters that are silently ignored
 
@@ -74,7 +74,7 @@ is not evidence a filter is working.
   `min`, `from`, `start`, `between`, `eq`; values as ISO, date-only, no-Z and
   epoch millis; and top-level `since`, `startDate`, `fromDate`, `createdAfter`,
   `createdAtFrom`, `updatedAfter`.
-- Controls for that test: `filters[firstName][like]=harold` returned 1 and
+- Controls for that test: `filters[firstName][like]=jamie` returned 1 and
   `filters[optOut][eq]=true` returned 1, so filtering does reach the server,
   while a deliberately invalid `filters[bogusField][gt]=xyz` returned all 3 -
   identical to every date attempt.
@@ -88,9 +88,9 @@ is not evidence a filter is working.
 ### Response shape (one contact)
 ```json
 {
-  "phoneNumber": "15127698059",
-  "firstName": "harold",
-  "lastName": "holland",
+  "phoneNumber": "15125550163",
+  "firstName": "jamie",
+  "lastName": "rivera",
   "email": "x@example.com",
   "note": "weightloss",
   "source": "API",
@@ -212,8 +212,8 @@ callback path is the fallback - see WEBHOOKS.md.
 {
   "id": "309112289003",
   "type": "inbound_text.received",
-  "fromNumber": "16026203572",
-  "toNumber": "15207799209",
+  "fromNumber": "16025550147",
+  "toNumber": "15205550109",
   "message": "3",
   "received": "2026-09-14T17:06:31.042+00:00",
   "optIn": false,

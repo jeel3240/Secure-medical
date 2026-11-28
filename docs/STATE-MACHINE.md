@@ -677,7 +677,7 @@ left it `expired`, set `has_unread_inbound`, and sent nothing.
   Built 2026-09-21: `sendMessage` in `integrations/ezt-client.ts` queries
   `dnc_list` and throws `BlockedNumberError` before calling the API, so no
   caller can forget. A bare number is normalised to E.164 first - comparing
-  `16026203572` against a stored `+16026203572` would match nothing and send to
+  `16025550147` against a stored `+16025550147` would match nothing and send to
   a blocked phone.
   The conversation still advances when a send is refused: the lead's answer is
   recorded, and only the message is withheld. Its `conversation.advanced` log

@@ -846,7 +846,7 @@ The notes of the day first said nothing could text anyone; that was wrong,
 found the next day. Test with a lead whose phone is your own.
 
 Production's number and TwiML App were read back on Twilio before and after:
-both still pointed at dailyleadhub.com. Nothing needs undoing after a session -
+both still pointed at production's domain. Nothing needs undoing after a session -
 when the tunnel stops, only the dev number points at a dead address; the next
 session starts a tunnel and runs `dev:twilio:configure` again.
 
@@ -855,7 +855,7 @@ own phone.
 
 ## Deploying it
 
-1. Set the seven variables in the server's `.env`. `PUBLIC_URL=https://dailyleadhub.com`.
+1. Set the seven variables in the server's `.env`. `PUBLIC_URL` is production's `https://` address.
 2. Deploy as usual (`WORKFLOW.md`, "Deploying"), including `npm run migrate` -
    incoming calls need migrations 007 and 008, voicemail detection 010,
    recordings and transcripts 011 - and for those, `TWILIO_TRANSCRIPTION_SERVICE_SID`
