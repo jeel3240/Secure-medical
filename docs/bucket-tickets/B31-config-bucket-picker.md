@@ -13,7 +13,7 @@ note:** none.
 ## Build
 
 - `backend/src/db/admin-config.ts`: `getAdminConfig(bucketId)` - everything per bucket
-  that is per bucket (the flow and its scoring, the call script, the missed-call text,
+  that is per bucket (the flow and its scoring, the robot script if it has one, the missed-call text,
   Seri's switch); the shared parts unchanged (the tiers, the robot's hours and limits);
   the list of buckets.
 - `backend/src/api/admin/config.ts`: `?bucket=<key>`, checked - 400 `invalid_bucket`;
@@ -40,7 +40,7 @@ As above.
 
 ## Not in this ticket
 
-Switches for texts and robot calls (B32); editing anything (Part 3).
+Switches for texts and calls (B32); editing anything (Part 3).
 
 ## As built
 

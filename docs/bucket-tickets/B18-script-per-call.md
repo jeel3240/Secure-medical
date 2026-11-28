@@ -1,7 +1,6 @@
 # B18 · The script per call
 
-**Goal:** every part of a robot call - its words, the link it texts, its voicemail, the
-transfer's ring and Seri's stop line - comes from the script of the call's own bucket.
+**Goal:** a robot call's script - its words and the transfer's ring - is the one of the call's own bucket, and a bucket with no robot script (every new bucket, Jeel 2026-11-27) gets none, never antibiotics'.
 
 **Why:** today every lookup is "the active script" (`loadActiveCallScript`,
 `backend/src/db/call-script.ts`), read fresh on every `/auto/*` webhook, and again in
@@ -16,8 +15,7 @@ migration that only drops an index, after the code stops relying on it.
 ## Build
 
 - `db/call-script.ts`:
-  - `loadScriptForCall(q, callId)` - the call's conversation, its flow's bucket, that
-    bucket's active script;
+  - `loadScriptForCall(q, callId)` - the call's conversation, its flow's bucket, that bucket's active script, or `null` when the bucket has none;
   - `loadBucketScript(q, bucketId)`;
   - `loadActiveCallScript` removed.
 - `backend/src/api/twilio-webhooks.ts`: the `loadScript` dependency takes the call;

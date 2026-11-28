@@ -15,16 +15,16 @@ A section in `docs/BUCKETS.md`, "How to add a bucket", in order:
 
 1. The content from the client - the checklist in "What each new bucket needs".
 2. A migration: the bucket row; its flow, questions and choices, the best answers
-   reaching 100 (`FLOWS.md`); its missed-call text and line; its call script
-   (`AUTO-CALLS.md`, "The script"); everything off. A commented SQL skeleton beside it,
+   reaching 100 (`FLOWS.md`); its missed-call text and line; its call lines - voicemail, link, stop (B50); no robot
+   script; everything off. A commented SQL skeleton beside it,
    copied from the test bucket of B43.
 3. Its EZ Texting group set on each environment - the command from B21.
 4. Its Seri pack: a folder, the campaign, answers, products and playbook, its eval
    cases; registered; `knowledge_key` set in a migration.
-5. The checks before each switch: texts - a test contact on the test account; robot
-   calls - a call on the dev number; Seri - her evals pass, then calls on the dev
-   number.
-6. The switches, one at a time, on Admin > Configuration.
+5. The checks before each switch: texts - a test contact on the test account; Seri -
+   her evals pass, then calls on the dev number.
+6. The switches, one at a time, on Admin > Configuration: texts, then Seri and calls
+   together - a bucket with no robot script calls only through her.
 
 ## Done when
 

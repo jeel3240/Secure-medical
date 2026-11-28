@@ -5,7 +5,7 @@ script.
 
 **Why:** `BUCKETS.md`, order of work step 2.
 
-**Depends on:** B47 · **Size:** S · **Status:** Waits on the client's content ·
+**Depends on:** B47 · **Size:** S · **Status:** Dropped 2026-11-27 - new buckets have no robot script; their calls are Seri's (Jeel) ·
 **Deploy note:** a migration with new rows only.
 
 ## Build

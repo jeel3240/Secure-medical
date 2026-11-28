@@ -53,7 +53,7 @@ dropped index), `docs/WORKFLOW.md`, `docs/BUCKETS.md`.
 
 ## Not in this ticket
 
-Robot calls switched per bucket, and a per-bucket switch-on time (B34).
+Calls switched per bucket, and a per-bucket switch-on time (B34).
 
 ## As built
 

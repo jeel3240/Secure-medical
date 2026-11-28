@@ -13,8 +13,8 @@ did for their phases.
 
 ## Build
 
-- A test bucket, seeded by the e2e in its own database only: its flow, call script,
-  missed-call text and line, groups, and a test knowledge pack (registered in code
+- A test bucket, seeded by the e2e in its own database only: its flow, its call lines (B50),
+  missed-call text and line, groups, and a test knowledge pack - and no robot script (registered in code
   under a key no production bucket uses).
 - EZ Texting stubbed at its HTTP edge for the group reads and moves as well as sends
   (today only `axios.post` is stubbed), so the real `pollOnce` runs.
@@ -23,11 +23,13 @@ did for their phases.
   2. Dana added to the test bucket while antibiotics is open - held, **Needs review ·
      2 buckets** in the queue; an agent picks her up - "Working"; nothing texted for
      the test bucket;
-  3. Sam arrives in the test bucket - its question 1; no reply - the robot calls with
-     the test bucket's script; a "no" then the link - the test bucket's link text;
+  3. Sam arrives in the test bucket - its question 1; no reply - Seri calls with the
+     test pack (the bucket has no robot script); a "no" then the link - the test
+     bucket's link text; antibiotics' calls stay on its script while its Seri is off;
   4. Sam calls back and nobody answers - the test bucket's missed-call line and text;
-  5. Seri on for the test bucket only - Sam's next call goes to her with the test
-     pack; antibiotics' calls stay on the script;
+  5. OpenAI fails during Riley's test-bucket call - one goodbye line, the call ends,
+     and Riley is first in the queue as a due call back (B51); with the test bucket's
+     Seri off, nobody in it is called (B34);
   6. a lead closed as Sold in antibiotics arrives in the test bucket - its questions
      start; one closed as Wrong number - nothing.
 - The "Not proved" line updated.
