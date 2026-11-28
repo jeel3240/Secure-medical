@@ -24,56 +24,65 @@ accounts. Getting a change onto `main` is `WORKFLOW.md`.
 
 ## Deploying
 
-Today's steps:
-
 ```bash
 ssh <ec2>
 cd /opt/secure-medical
 git pull
-docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
-docker compose -f docker-compose.yml -f docker-compose.prod.yml exec api npm run migrate
+docker compose -f docker-compose.yml -f docker-compose.prod.yml build
+docker compose -f docker-compose.yml -f docker-compose.prod.yml run --rm api npm run migrate
+docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
 ```
 
-1. **Run `npm run migrate` straight after the `up`.** It applies, in order,
-   whatever the database has not run. Until a migration has run, new code that
-   reads its columns fails there - with 017 due, signing in and every page
-   would, as the code reads `users.taking_calls`.
-2. **Check `docker compose -f docker-compose.yml -f docker-compose.prod.yml ps`**
+1. **Build every image.** `build` with no service named builds the three that have
+   a build: the api's and the worker's (`backend/Dockerfile`, its `production`
+   stage) and Caddy's, which holds the built frontend - `frontend/Dockerfile`
+   compiles the React app and copies it into the Caddy image, so the server needs
+   no Node install. Nothing that is running changes yet.
+2. **Migrate with the new image, while the old code still runs.** `run --rm api`
+   starts a one-off container from the api image just built, runs `npm run
+   migrate` against the database, and removes itself; the running api and worker
+   are not touched. It applies, in order, whatever the database has not run -
+   nothing, when the deploy brings no new file.
+   **If it fails, stop there.** Each file runs in its own transaction, so the one
+   that failed left nothing behind, and the old code goes on running against a
+   database it knows. Fix the migration in a new commit and deploy again; never
+   run `up` after a failed migration.
+3. **Start the new code.** `up -d` recreates each container whose image or
+   settings changed - the api and the worker, Caddy when the frontend or its
+   settings changed - and leaves the rest running.
+4. **Check `docker compose -f docker-compose.yml -f docker-compose.prod.yml ps`**
    after a deploy that changes the log settings: a missing CloudWatch permission
    stops a container starting ("Logs", below).
-3. **Calling:** on the first deploy with calling, and whenever `PUBLIC_URL` or a
+5. **Calling:** on the first deploy with calling, and whenever `PUBLIC_URL` or a
    Twilio setting changes, run `twilio:configure` last ("Pointing Twilio at the
    server").
 
-The same `--build` rebuilds the frontend: the `caddy` service is built from
-`frontend/Dockerfile`, which compiles the React app and copies it into the Caddy
-image, so the server needs no Node install.
+### Why the migrations go first
 
-**A call with Seri during a deploy is picked back up.** As the api stops, it hands
-her line back to Twilio; Caddy holds Twilio's reconnect until the new api is up -
-a few seconds - and she goes on where she was (`AI-AGENT.md`, "When the line
-drops").
+New code that reads what a migration adds fails until that migration has run. Run
+the other way round - the new code started, then the migrations - a robot call's
+`/auto/*` webhook or Seri's greeting that read a new column would answer 500 for
+the seconds between, and signing in would fail if `users` gained a column the
+code reads. Running the migrations first is safe because of how they are written
+(`WORKFLOW.md`, "Migrations"):
+
+- one that **adds** - a table, a column, an index, a row - is invisible to the
+  old code still running;
+- one that **drops** or renames ships only in a deploy after the code stopped
+  reading what it drops: add, move the readers, then drop, each in its own
+  deploy.
+
+### During a deploy
+
+**A call with Seri is picked back up.** As the api stops, it hands her line back
+to Twilio; Caddy holds Twilio's reconnect until the new api is up - a few seconds
+- and she goes on where she was (`AI-AGENT.md`, "When the line drops").
 
 **The Caddyfile reaches Caddy by itself.** It is `caddy/Caddyfile`, its folder
 mounted and Caddy run with `--watch`, so a `git pull` that changes it is reloaded
 within about ten seconds; a broken one is refused, logged by Caddy's `watcher`,
 and the running config kept. A deploy that changes the `caddy` service's compose
 settings recreates its container by itself - the site down a second or two.
-
-### The order planned
-
-B02 will change the order so the new code never runs against the old database -
-not done yet; the steps above are what is true today:
-
-1. `git pull`;
-2. `docker compose -f docker-compose.yml -f docker-compose.prod.yml build api worker`;
-3. `docker compose -f docker-compose.yml -f docker-compose.prod.yml run --rm api npm run migrate` -
-   the new image, against the database, while the old containers still run;
-4. `docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d`.
-
-A migration that adds is invisible to the old code still running; one that drops
-ships only in a deploy after the code stopped reading what it drops
-(`bucket-tickets/B02-deploy-order-migrations-first.md`).
 
 ## The images
 
@@ -172,8 +181,8 @@ on").
 
 ## Seri, the AI agent
 
-**Her key.** `OPENAI_API_KEY` goes in the server's `.env` before the `up -d
---build` that should use it, so the api and the worker are recreated with it.
+**Her key.** `OPENAI_API_KEY` goes in the server's `.env` before the deploy that
+should use it, so its `up -d` recreates the api and the worker with it.
 Added later, recreate both - a `restart` keeps the old environment:
 
 ```bash
@@ -307,7 +316,8 @@ absence of activity as well as on errors - the first two rows.
 | No `poll.tick` at all from the worker | The worker died without its container stopping: nothing logs from that process. The last poll time is in the health report for this reason (`LOGGING.md`, "Health endpoint") | Recreate the worker: `docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d worker` |
 | The api or the worker will not start after a deploy, and `docker compose logs` shows nothing | A missing CloudWatch permission - Docker fails at container creation | Give the instance role the three `logs:` permissions, or drop `awslogs-create-group` and create the group by hand |
 | `api.refused_start` in the `api` stream | A production setting that would leave a hole - its `reason` says which ("What stops the api starting") | Set it in `.env`, then `up -d api worker` |
-| Signing in and every page fail straight after a deploy | The new code reads a column a migration adds, and `npm run migrate` has not run | Run it |
+| `run --rm api npm run migrate` fails | A migration's SQL failed. Its file ran in one transaction, so it left nothing behind; the old code is still running | Do not run `up`. Fix the migration in a new commit and deploy again ("Deploying", step 2) |
+| Signing in and every page fail straight after a deploy | The migrations were skipped, or `up` ran after one failed: the new code reads a column that is not there | Run `npm run migrate` ("Deploying", step 2); if it fails, the row above |
 | `self signed certificate in certificate chain` | The app connected to RDS without `NODE_ENV=production` | The compose override sets it; check the service runs with `docker-compose.prod.yml` |
 | Calls stopped and `auto_call.webhooks_silent` in the worker's log | Twilio's reports are not reaching the api: `PUBLIC_URL` wrong, the api down, or `AUTO_CALLS` changed for the worker only | Recreate both containers with the same `.env` (`up -d api worker`); check `PUBLIC_URL` |
 | `auto_call.twilio_refusing` | Twilio refused a call for our account's reasons - the key, the account, a limit; the robot pauses 15 minutes and tries one call again | Check the Twilio account; no lead's call is used up (`AUTO-CALLS.md`, "When Twilio refuses") |
@@ -316,6 +326,7 @@ absence of activity as well as on errors - the first two rows.
 
 ## History
 
+- 2026-11-28 · The migrations run before the new code starts: `build`, `run --rm api npm run migrate` with the new image, then `up -d`. Until then the steps were `up -d --build`, then `exec api npm run migrate` - for those seconds the new code ran on the old database; with 017, signing in and every page would fail until it had run (`WORKFLOW.md`, History, 2026-10-30). Proved locally: `build`, the new image migrating a scratch database while nothing new ran, `up -d api`, health 200; and the `production` image migrating a scratch database, as `node`, with no ts-node. The order first planned built only `api` and `worker`, which would have left the frontend - built into the Caddy image - on the old version · B02
 - 2026-11-27 · Written from `WORKFLOW.md`'s "Deploying" and "The images", `SCHEMA.md`'s "Connecting", `LOGGING.md`'s "The two ways this system goes quiet", `POLLER.md`'s resend steps, `AUTH.md`'s first superadmin, `AI-AGENT.md` section 7's commands and T26's going-live steps; every production command given with both `-f` files - `docker compose exec api npm run migrate` had been written without them · D08, D09, D11, D16, D13, D43, D34
 - 2026-11-24 · Seri's code and migrations 022-024 deployed, her switch off; `OPENAI_API_KEY` set; her switch on Admin > Configuration as well as the command · A22, PR #31
 - 2026-11-23 · The Caddyfile in `caddy/`, its folder mounted and watched: before, the file was mounted on its own, `git pull` replaced it, a running Caddy kept the old one, and Caddy had to be recreated by hand with `up -d --force-recreate caddy`. The reload and the refusal of a broken file were both seen on the `caddy:2` image locally · review Q11

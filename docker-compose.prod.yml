@@ -1,5 +1,6 @@
 # docker-compose.prod.yml  (OVERRIDE - only applied on the server)
-# Server command:  docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
+# Every server command names both files: docker compose -f docker-compose.yml -f docker-compose.prod.yml ...
+# Deploying is build, then migrate with the new image, then up - docs/DEPLOY.md, "Deploying".
 #
 # Anything written here REPLACES the same setting in docker-compose.yml.
 # Anything not mentioned here stays as it is in docker-compose.yml.

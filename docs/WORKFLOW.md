@@ -136,6 +136,12 @@ same file again later and fails.
 **A migration ships in the same PR as the code that needs it,** so a deploy never
 lands code expecting a column that is not there yet.
 
+**On deploy the migrations run before the new code starts** (`DEPLOY.md`,
+"Deploying"), so for a while the old code runs on the new schema. A migration must
+suit the code still running: it adds - a table, a column, an index, a row - and a
+drop or a rename ships in a later deploy than the change that stopped reading what
+it drops (`DEPLOY.md`, "Why the migrations go first").
+
 **Files that have not reached `main` can still be combined - with care.**
 Production runs only what is on `main`. Check what it holds with `git ls-tree
 origin/main backend/src/db/migrations/` before combining anything. Keep the earlier
@@ -158,6 +164,7 @@ second misses the second part: rebuild it, or run the second part's SQL there on
 
 ## History
 
+- 2026-11-28 · On deploy the migrations run before the new code starts, so a migration suits the code still running: it adds, and a drop waits for a later deploy · B02
 - 2026-11-27 · Split: deploying, the images, the switches, `twilio:configure` and CloudWatch to `DEPLOY.md`; the credentials table and the definition of done from `CLAUDE.md`; the EZ Texting account's rules to `EZTEXTING-API.md`, which owns them; `npm run docs:check` before a PR; the dated notes to this History · D08
 - 2026-11-24 · `main` and production hold 001 to 024: 021, five automated calls at once for each person free (T29, `AUTO-CALLS.md`, "Traffic"), through PR #29; 022 to 024 through PR #31, applied on production at 23:29 UTC. Before, on `dev`: 022, Seri (`AI-AGENT.md`) - new columns on `calls` and `callbacks`, the add-only `call_ai_turns`, and the `ai_agent` setting seeded `off`; 023 (A15), `callbacks.note` and one call back per call she booked it on; 024 (A31), `call_ai_turns.data`, the brain's record of each reply. None changed an existing row, and the app writes the new parts only on a call Seri takes, so with her switch off calls went on as before
 - 2026-11-22 · One runner at a time: the advisory lock · review M36. `npm run typecheck:scripts` added to the checks before a PR
