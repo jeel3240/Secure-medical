@@ -167,7 +167,7 @@ export async function getOverview(period: OverviewPeriod, timeZone?: string): Pr
       SELECT * FROM (
         SELECT 'disposition' AS kind, d.created_at AS at, u.name AS agent_name,
                l.id AS lead_id, l.first_name, l.last_name,
-               jsonb_build_object('value', d.value) AS detail
+               jsonb_build_object('value', d.value, 'reason', d.reason) AS detail
         FROM dispositions d
         JOIN leads l ON l.id = d.lead_id
         LEFT JOIN users u ON u.id = d.agent_id

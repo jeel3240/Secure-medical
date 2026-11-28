@@ -59,8 +59,8 @@ export interface LeadDetail {
   chips: AnswerChip[];
   breakdown: BreakdownLine[];
   claimedBy: { id: number; name: string; at: string } | null;
-  /** Set while the lead is closed: who closed it and when. */
-  closed: { by: string | null; at: string } | null;
+  /** Set while the lead is closed: who closed it, when, and why - null for one closed before that was asked (B04). */
+  closed: { by: string | null; at: string; reason: CloseReason | null } | null;
   /**
    * The call back Seri booked, while open (A15): when, her one-line reason,
    * and whose it is - null while it is open to everyone.
@@ -159,12 +159,38 @@ export const DISPOSITION_LABEL: Record<string, string> = {
   dnc: 'DNC',
 };
 
+/** Mirrors core/dispositions.ts: why a lead was closed, in the popup's order (B04). */
+export const CLOSE_REASONS = ['sold', 'not_interested', 'wrong_number'] as const;
+
+export type CloseReason = (typeof CLOSE_REASONS)[number];
+
+export const CLOSE_REASON_LABEL: Record<CloseReason, string> = {
+  sold: 'Sold',
+  not_interested: 'Not interested',
+  wrong_number: 'Wrong number',
+};
+
+/**
+ * An outcome as every screen names it: "Closed · Sold", or "Closed" alone for
+ * one saved before the reason was asked (B04). A word it does not know is
+ * shown as it is.
+ */
+export function outcomeLabel(value: string, reason?: unknown): string {
+  const label = DISPOSITION_LABEL[value] ?? value;
+  if (typeof reason !== 'string' || !reason) return label;
+  return `${label} · ${CLOSE_REASON_LABEL[reason as CloseReason] ?? reason}`;
+}
+
 export interface DispositionRow {
   id: number;
   leadId: number;
   agentId: number;
   agentName: string | null;
   value: Disposition;
+  /** Why it was closed (B04); null on DNC. */
+  reason: CloseReason | null;
+  /** The conversation it was saved against: the lead's newest. */
+  conversationId: number | null;
   createdAt: string;
   /** True when this disposition blocked the number. Only ever for `dnc`. */
   blockedNumber: boolean;
@@ -175,15 +201,17 @@ export interface DispositionRow {
 /**
  * `dnc` needs `confirmDnc: true` or the API refuses it - the block is lifted
  * only by a START from the lead, so a mis-click must not be able to set it.
+ * `closed` carries why (B04); nothing else does.
  */
 export async function setDisposition(
   id: number,
   value: Disposition,
-  confirmDnc = false
+  { confirmDnc = false, reason }: { confirmDnc?: boolean; reason?: CloseReason } = {}
 ): Promise<DispositionRow> {
   const { data } = await api.post<{ disposition: DispositionRow }>(`/leads/${id}/dispositions`, {
     value,
     ...(value === 'dnc' ? { confirmDnc } : {}),
+    ...(value === 'closed' && reason ? { reason } : {}),
   });
   return data.disposition;
 }

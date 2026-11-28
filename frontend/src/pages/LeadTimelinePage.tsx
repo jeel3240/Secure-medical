@@ -6,7 +6,8 @@ import { useAuth } from '../auth/store';
 import {
   getLead,
   getTimeline,
-  DISPOSITION_LABEL,
+  outcomeLabel,
+  type CloseReason,
   type Disposition,
   type LeadDetail,
   type TimelineEntry,
@@ -46,7 +47,8 @@ export interface Summary {
   smsIn: number;
   lastContact: { at: string; inbound: boolean } | null;
   nextCallback: { at: string; agent: string | null } | null;
-  dispositions: { at: string; value: Disposition; agent: string | null }[];
+  /** `reason` is why it was closed (B04) - absent on an outcome from before it was asked. */
+  dispositions: { at: string; value: Disposition; reason: CloseReason | null; agent: string | null }[];
 }
 
 /** Exported for its tests: the sidebar is entirely this function's output. */
@@ -78,6 +80,7 @@ export function summarise(entries: TimelineEntry[]): Summary {
         summary.dispositions.push({
           at: entry.at,
           value: entry.detail.value as Disposition,
+          reason: typeof entry.detail.reason === 'string' ? (entry.detail.reason as CloseReason) : null,
           agent: entry.author,
         });
         break;
@@ -264,7 +267,7 @@ export function LeadTimelinePage() {
               {summary.dispositions.map((d, i) => (
                 <li key={`${d.at}-${i}`}>
                   <span className="summary__list-when">{whenFormat.format(new Date(d.at))}</span>
-                  <strong>{DISPOSITION_LABEL[d.value] ?? d.value}</strong>
+                  <strong>{outcomeLabel(d.value, d.reason)}</strong>
                   {d.agent && <span className="summary__list-who">{d.agent}</span>}
                 </li>
               ))}

@@ -2,7 +2,7 @@
 
 Every table in the app's Postgres database, one section each: its columns, what
 each means, its constraints and indexes, and the migration that made it. The
-migrations in `backend/src/db/migrations/` - `001` to `024`, run in order by
+migrations in `backend/src/db/migrations/` - `001` to `025`, run in order by
 `backend/scripts/migrate.js` - are the source of truth; this doc is checked
 against them. What a table is *for*, and the rules the code keeps with it, are in
 the doc named beside it.
@@ -165,6 +165,8 @@ call per lead, a call Twilio never placed for our account's reasons left out
 | `agent_id` | Who saved it | not null, references `users` | 001 |
 | `value` | `closed` or `dnc`, the two the route accepts (`core/dispositions.ts`, `DISPOSITIONS`). Older rows may hold a retired value - `sold`, `interested`, `callback_set`, `no_answer`, `voicemail`, `not_interested`, `wrong_number` (`RETIRED_DISPOSITIONS`); they are kept, and still named on screen | not null; no check | 001 |
 | `created_at` | | not null, default now() | 001 |
+| `reason` | Why it was closed: `sold`, `not_interested` or `wrong_number` (`CLOSE_REASONS`). Null on DNC, on every row from before 025, and on a Closed saved without one while the route still accepts that (`AGENT-WORKSPACE.md`, "Dispositions"). New values, apart from the retired `value`s of the same names | `dispositions_reason_known`: one of the three; `dispositions_reason_only_closed`: null unless `value = 'closed'` | 025 |
+| `conversation_id` | The conversation it was saved against: the lead's newest. Filled in by 025 for every older row with the newest started at or before it; 025 stops if an outcome on a lead that has a conversation gets none. Null for a lead with none | references `conversations` (`dispositions_conversation_fk`) | 025 |
 
 Index: `idx_dispositions_lead_id` (001).
 
@@ -553,8 +555,9 @@ values are fixed in code instead.
 
 ## How to add an entry
 
-1. Write a new numbered migration in `backend/src/db/migrations/` - the next is
-   `025` - following `WORKFLOW.md`, "Migrations". Never edit one that has run on
+1. Write a new numbered migration in `backend/src/db/migrations/` - the next number
+   is in `WORKFLOW.md`, "Where the files stand" - following `WORKFLOW.md`,
+   "Migrations". Never edit one that has run on
    production.
 2. In the same commit, change this doc: the table's section (a new section and a
    row in "Tables" for a new table), its constraints and indexes with their names,
@@ -565,6 +568,7 @@ values are fixed in code instead.
 
 ## History
 
+- 2026-11-28 · `dispositions.reason` and `dispositions.conversation_id`, with their checks and foreign key (025); the next number is left to `WORKFLOW.md`, "Where the files stand", rather than written here too · B04
 - 2026-11-27 · Rewritten as a reference: one section per table, from migrations 001-024. `dispositions.value`'s current values given as `closed` and `dnc` - the old text listed DNC among the retired ones. `ezt_poll_checkpoint`, `auto_calls_on`, `auto_calls_since` and `schema_migrations` added; the claims, unread-reply, take-over, LOW-tier, repeat-lead and connection notes handed to their owners; `expiry_days = 'banana'` no longer said to fail where it is read - every reader falls back to 7 since review M17 · D09
 - 2026-11-17 · Migration 024: `call_ai_turns.data`, the new brain's record of each reply, only on a `system` turn · A31
 - 2026-11-12 · Migration 023: `callbacks.note`, Seri's reason, and `callbacks_one_per_ai_call` · A15

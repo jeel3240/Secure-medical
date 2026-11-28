@@ -137,7 +137,7 @@ const QUERIES: { kind: TimelineKind; sql: string }[] = [
   {
     kind: 'disposition',
     sql: `
-      SELECT d.created_at AS at, u.name AS author, d.value
+      SELECT d.created_at AS at, u.name AS author, d.value, d.reason
       FROM dispositions d
       LEFT JOIN users u ON u.id = d.agent_id
       WHERE d.lead_id = $1
@@ -415,7 +415,8 @@ function toEntry(kind: TimelineKind, row: TimelineRow): TimelineEntry {
         },
       };
     case 'disposition':
-      return { kind, at, author: row.author, detail: { value: row.value } };
+      // Why it was closed, when it was asked (B04): an outcome from before has none.
+      return { kind, at, author: row.author, detail: { value: row.value, ...(row.reason ? { reason: row.reason } : {}) } };
     default:
       return { kind, at, author: null, detail: {} };
   }

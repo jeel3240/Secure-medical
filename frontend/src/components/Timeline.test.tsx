@@ -254,6 +254,16 @@ describe('callbacks and dispositions', () => {
     // Not "callback_set".
     expect(screen.getByText('Disposition: Callback set')).toBeDefined();
   });
+
+  it('says why a lead was closed - B04', () => {
+    render(<Timeline entries={[entry({ kind: 'disposition', detail: { value: 'closed', reason: 'not_interested' } })]} />);
+    expect(screen.getByText('Disposition: Closed · Not interested')).toBeDefined();
+  });
+
+  it('and Closed alone for one closed before that was asked', () => {
+    render(<Timeline entries={[entry({ kind: 'disposition', detail: { value: 'closed' } })]} />);
+    expect(screen.getByText('Disposition: Closed')).toBeDefined();
+  });
 });
 
 describe('the list', () => {

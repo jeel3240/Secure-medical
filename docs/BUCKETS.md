@@ -81,11 +81,13 @@ where these rows, and those of the next section, live in code.
 **Closed** belongs to the whole lead and keeps it out of the queue until one of four
 things reopens it (`CLOSED_SQL`, `db/lead-state.ts`). With one lead per person, a lead
 closed in antibiotics would stay hidden when it joins weight loss. And Closed alone
-cannot say whether the bucket should start: it stands for Sold, Not interested and
-Wrong number alike (`AGENT-WORKSPACE.md`, "Dispositions").
+could not say whether the bucket should start: it stood for Sold, Not interested and
+Wrong number alike.
 
 So **Closed asks why.** Pressing Closed in Wrap up opens a popup with three
 choices; the agent picks one and it is saved with the outcome. DNC is unchanged.
+Built - B04 (`AGENT-WORKSPACE.md`, "Dispositions"); what a new bucket does with the
+reason is B22.
 
 | Closed as | When the person joins a new bucket |
 |---|---|
@@ -94,7 +96,7 @@ choices; the agent picks one and it is saved with the outcome. DNC is unchanged.
 | **Not interested** | The new bucket starts - they said no to one product, and the partner sent them for another on purpose |
 
 DNC is the outcome for "never contact again": it blocks every bucket, texts and
-calls. The reason also lets Admin count leads sold, which the app cannot do today.
+calls. The reason also lets Admin count leads sold (B05).
 A lead closed before Closed asked why - no reason saved - starts a new bucket; one
 saved as the retired `wrong_number` does not.
 
@@ -434,7 +436,7 @@ only, and is decided when Part 3 starts.
 | Part 1 comes first; Part 2 is on hold | Jeel | 2026-11-27 |
 | A person is active in one bucket at a time. Arriving in a second bucket while the first one's text questions are open sends nothing, and puts them in the queue as **Needs review · 2 buckets** | Jeel | 2026-11-27 |
 | One person is one lead. Each bucket they join adds a conversation to that lead, and the same agent works them across buckets | Jeel | 2026-11-27 |
-| Pressing Closed opens a popup asking why: Sold, Not interested or Wrong number. A new bucket starts for a lead closed as Sold or Not interested, never for Wrong number | Jeel | 2026-11-27 |
+| Pressing Closed opens a popup asking why: Sold, Not interested or Wrong number. A new bucket starts for a lead closed as Sold or Not interested, never for Wrong number. The popup and the reason built - B04 | Jeel | 2026-11-27 |
 | One score scale for every bucket: each bucket's points are written so the best answers reach 100, and the tiers - HOT 75-100, WARM 45-74, LOW 1-44 - stay shared, so one queue sorts fairly | Jeel | 2026-11-27 |
 | Switching a bucket's texts on texts everyone who waited in its group while it was off, however long ago they arrived | Jeel | 2026-11-27 |
 | The database is kept clean: each fact in one place - what moves to a new table is copied, then removed from the old place - and every rule enforced by the database itself | Jeel | 2026-11-27 |
@@ -454,6 +456,7 @@ on its own by B01.
 
 ## History
 
+- 2026-11-28 · Closed asks why, built: the popup and `dispositions.reason`, with each outcome's conversation (B04). The new bucket's use of it is B22 · B04
 - 2026-11-27 · New buckets get no robot call script - their calls are Seri's, with a goodbye line and the agents' queue when she fails, and the dialler waiting while OpenAI is down; antibiotics keeps its script. The call lines (voicemail, link, stop) move to `buckets`; B48 dropped, B50 and B51 added · Jeel
 - 2026-11-27 · Rewritten to the area template, with a Status line in the fixed words: the two-groups proposal moved from Decisions to Not done as an open question; the queue-order decision handed to `QUEUE.md`; Parts 2 and 3 under Not done; the order of work replaced by the tracker's "The order", and the client's questions linked to its "Waiting on"; "before Part 1 starts" dropped - the tracker lets about forty tickets start before the client answers · D45
 - 2026-11-27 · Part 1 split into 49 tickets, B01-B49 (`bucket-tickets/`). A broken knowledge pack now stops the API, as today - it had read "switches off that bucket's Seri only". Decided with Jeel: the tag, "active", "Received", "worked", an old Closed, two buckets in one read, the "- taken" group; and the queue's order (`QUEUE.md`)

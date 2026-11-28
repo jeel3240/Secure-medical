@@ -43,6 +43,21 @@ export function failureCount(): number {
   return failures;
 }
 
+/**
+ * 'allowed', or the name of the constraint that refused what `run` wrote - else
+ * the error's message, for a trigger or a rule with no name. How a check proves
+ * the database says no to a row, and which of its rules did.
+ */
+export async function refusedBy(run: () => Promise<unknown>): Promise<string> {
+  try {
+    await run();
+    return 'allowed';
+  } catch (err) {
+    const refused = err as { constraint?: string; message: string };
+    return refused.constraint ?? refused.message;
+  }
+}
+
 /** The last line `live-checks.sh` reads. */
 export function verdict(): string {
   return failures === 0 ? '\nall checks passed' : `\n${failures} check(s) FAILED`;

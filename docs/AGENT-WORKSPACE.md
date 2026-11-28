@@ -231,8 +231,33 @@ and **DNC**, then the callback and the note.
 - **What the old outcomes said is covered elsewhere:** a booked callback is its own
   record and on My Callbacks; "no answer" and "voicemail" are a note, and every call
   is a row in `calls` with how it ended (`TWILIO.md`); "interested" is a note or a
-  callback; sold, not interested and wrong number are **Closed**, with the note
-  saying why.
+  callback; sold, not interested and wrong number are **Closed**, with the reason
+  saying which (below).
+- **Closed asks why.** Pressing Closed in Wrap up opens a popup, "Why is this lead
+  closed?", with **Sold**, **Not interested** and **Wrong number**. Picking one
+  chooses Closed with it - the button reads "Closed · Sold" - and Save sends both;
+  Cancel chooses nothing; pressing Closed again, once chosen, takes it back. The
+  reason is saved in the same row, `dispositions.reason` (`CLOSE_REASONS`). It is how
+  a new bucket tells a sale from a wrong number (`BUCKETS.md`, "A closed lead joins a
+  new bucket") and how Admin counts sales.
+  - The route: an unknown reason, or any reason with DNC, is 400 `invalid_reason`. A
+    Closed with no reason is still accepted, saved with none: a browser still on the
+    page from before sends none until it reloads. B19 makes it required.
+  - The database refuses a reason on anything but Closed
+    (`dispositions_reason_only_closed`) and any other word
+    (`dispositions_reason_known`).
+  - Every screen names it the same way (`outcomeLabel`): "Disposition: Closed ·
+    Sold" on the timeline, "Closed · Sold" on the lead's badge, in Wrap up and in the
+    Lead Timeline's Dispositions list, and "Nora closed Omar Haddad · Sold" on Admin
+    > Overview's feed. An outcome saved before the question was asked has none and
+    reads Closed alone.
+  - These are new values in a new column - not the retired `value`s of the same
+    names (`RETIRED_DISPOSITIONS`), which stay as they are.
+- **Each outcome names the conversation it closed**, `dispositions.conversation_id`:
+  the lead's newest, read under the lead's lock in the same statement, so it is the
+  one the agent saw; null for a lead with none. Migration 025 filled it in for every
+  outcome before it - the newest conversation started at or before the outcome.
+  Nothing reads it yet: B19 makes Closed apply to that conversation.
 - **Append-only, like notes.** Nothing updates or deletes a disposition. The
   timeline shows the sequence: a lead closed, reopened by a callback and closed
   again is a different story from one closed once.
@@ -502,7 +527,7 @@ action recorded.
 | `backend/src/core/score-breakdown.ts` | `answerChips`, `scoreBreakdown` - pure |
 | `backend/src/db/read-flag.ts` | `markLeadRead` |
 | `backend/src/db/notes.ts` | `addNote` |
-| `backend/src/core/dispositions.ts` | `DISPOSITIONS`, `RETIRED_DISPOSITIONS`, `CLOSING_DISPOSITIONS`, `DNC_DISPOSITION` |
+| `backend/src/core/dispositions.ts` | `DISPOSITIONS`, `RETIRED_DISPOSITIONS`, `CLOSING_DISPOSITIONS`, `DNC_DISPOSITION`, `CLOSE_REASONS`, `isCloseReason` |
 | `backend/src/db/dispositions.ts` | `setDisposition`: the outcome, the release, the block, the callbacks, in one transaction |
 | `backend/src/db/dnc.ts` | `blockNumber`, `releaseNumber`, `isBlockedNow`, `DNC_REASONS`, `RELEASE_REASONS` |
 | `backend/src/db/agent-sms.ts` | `sendAgentSms`, `AGENT_SMS_LIMIT` |
@@ -511,7 +536,8 @@ action recorded.
 | `frontend/src/pages/workspace/LeadHeader.tsx` | The header card; `questionsLabel`, `aiCallbackLabel` |
 | `frontend/src/pages/workspace/LeadAnswers.tsx`, `frontend/src/pages/workspace/LeadNotes.tsx` | The left column |
 | `frontend/src/pages/workspace/Conversation.tsx`, `frontend/src/pages/workspace/SmsCompose.tsx` | The conversation and the message box; `replyLabel`, `sendingStopsQuestions` |
-| `frontend/src/pages/workspace/ActionsPanel.tsx` | Wrap up |
+| `frontend/src/pages/workspace/ActionsPanel.tsx` | Wrap up; the popup asking why a lead is closed |
+| `frontend/src/api/workspace.ts` | `setDisposition`, `CLOSE_REASONS`, `CLOSE_REASON_LABEL`, `outcomeLabel` - an outcome's words on every screen |
 | `frontend/src/pages/workspace/CallControl.tsx`, `frontend/src/pages/workspace/CallBar.tsx`, `frontend/src/pages/workspace/useLeadCall.ts` | Calling - `TWILIO.md` |
 | `frontend/src/lib/lock.ts` | `rowAction`, `mayRelease` |
 
@@ -526,6 +552,10 @@ action recorded.
 | A taken-over lead leaves the queue once read; a completed one stays | `scripts/read-flag-live-check.ts`, `api/__tests__/read-flag.test.ts` |
 | Notes | `api/__tests__/notes.test.ts` |
 | The outcome's transaction; blocking reuses the one row a number may have; a blocked lead leaves the queue and a released one returns; re-blocking after a release clears the release columns; Closed takes a lead out, the retired closing values still do, and what keeps or brings a closed one back; a lead someone holds is never closed | `scripts/dispositions-live-check.ts`, `api/__tests__/dispositions.test.ts`, `core/dispositions.test.ts` |
+| Why it was closed: the reason and the newest conversation saved, on the timeline and the card; Closed with none saved with none; DNC with none; the database refusing a reason on DNC, an unknown word and a conversation that does not exist; the route's `invalid_reason` | `scripts/dispositions-live-check.ts`, "why it was closed", `api/__tests__/dispositions.test.ts`, `core/dispositions.test.ts` |
+| Migration 025 over outcomes in the old shape: each the conversation newest when it was saved, the higher id on a tie, none for a lead with none, no reason; it stops, changing nothing, on an outcome older than all of its lead's conversations | `scripts/dispositions-upgrade-check.ts` |
+| Closed asks why on screen: the popup, Sold then Save sending it, Cancel choosing nothing, Closed again taking it back, a saved reason shown; DNC sending none | `pages/workspace/ActionsPanel.test.tsx` |
+| An outcome's words - "Closed · Sold", Closed alone | `api/workspace.test.ts`, `components/Timeline.test.tsx`, `pages/LeadTimelinePage.test.ts`, `pages/admin/OverviewPage.test.ts` |
 | An agent's text: a reply before it advances and scores, the same reply after it does nothing, the take-over set once, neither a blocked number nor a failed send records one; a phone call stops the questions too. It stubs `axios`, not `sendMessage`, so the real `dnc_list` check stays in the path | `scripts/agent-sms-live-check.ts`, `api/__tests__/agent-sms.test.ts` |
 | Release and the lock on screen | `lib/lock.test.ts` |
 | The header's source and Questions wording, a sub-question ("Q1-a") included; a phone call stopping the questions; the badge of a call back Seri booked | `pages/workspace/LeadHeader.test.ts` |
@@ -542,9 +572,8 @@ action recorded.
   (`EZTEXTING-API.md`).
 - **"Seen before"** needs repeat-lead handling, not built (`STATE-MACHINE.md`, "A
   number that comes back").
-- **Closed asks no reason.** Phase 8 makes it ask why - Sold, Not interested or Wrong
-  number - so a closed lead knows whether a new bucket may start (`BUCKETS.md`, "A
-  closed lead joins a new bucket"; B04).
+- **The reason is not yet required** - a Closed with none is accepted for one release
+  (B19); and Closed still closes the whole lead, not the conversation it names (B19).
 - **Nothing releases a lead by itself** (rule 2) - a superadmin's Release is the way
   out.
 
@@ -554,7 +583,8 @@ action recorded.
 |---|---|---|
 | Every write on a lead needs the caller to hold it; reading does not | Jeel | 2026-09-28 |
 | A lead stays with the agent who picked it up until they let it go on purpose - an outcome or Release; Back to queue only goes back | Jeel | 2026-10-08 |
-| Wrap up has two outcomes, Closed and DNC, with no reason to pick; the note says why | Jeel | 2026-09-28 |
+| Wrap up has two outcomes, Closed and DNC, with no reason to pick; the note says why - the reason replaced by Closed asking why (2026-11-27) | Jeel | 2026-09-28 |
+| Closed asks why in a popup - Sold, Not interested or Wrong number - and the reason is saved with the outcome | Jeel | 2026-11-27 |
 | Both outcomes release the lead and end the visit, back to the queue | Jeel | 2026-09-29 |
 | Closing finishes the lead's open callbacks | Jeel | 2026-09-29 |
 | A text EZ Texting refuses stays in the thread, marked not sent; a send's result shows in the thread - two ticks, or a red "!" - not as a banner, two ticks meaning EZ Texting accepted it, with no one-tick state | Jeel | 2026-09-28 |
@@ -568,6 +598,7 @@ action recorded.
 
 ## History
 
+- 2026-11-28 · Closed asks why - Sold, Not interested or Wrong number - in a popup, saved in `dispositions.reason`, and each outcome names the conversation it closed (`conversation_id`, filled in for the old ones by migration 025); shown as "Closed · Sold" on every screen. Until then Closed stood for all three, and the note was the only place that said which · Jeel · B04
 - 2026-11-27 · Rewritten to the area standard: dated notes to this History, decisions to a table; callbacks split out to `CALLBACKS.md` and the timeline to `TIMELINE.md`; rules 2b and 2d linked to `STATE-MACHINE.md` rather than restated; the DNC block paths owned here, as "Blocking a number"; "What it needed that did not exist" and the check counts moved here. Merged in: the workspace screen from `FRONTEND.md` ("The workspace on screen"), and why claims never expire from `SCHEMA.md` · docs standard · D20, D26, D09
 - 2026-11-23 · A deactivated agent's open call backs are nobody's, and picking the lead up takes them · review D2
 - 2026-11-23 · The text box on a DNC lead is not shown, with the line in its place; this doc had called it "disabled", which the code never was · review R15

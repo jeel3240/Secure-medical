@@ -15,7 +15,7 @@
  *
  *   scripts/live-checks.sh ai-agent
  */
-import { check, failureCount, verdict } from './check';
+import { check, failureCount, refusedBy, verdict } from './check';
 import { seriGreeting } from '../src/ai/answer';
 import { fallbackStreak } from '../src/ai/health';
 import { endAiCall, recordedHandoff, resumeAiCall, saveTurn, startAiCall, verdictState, whoIsThere } from '../src/ai/relay-store';
@@ -29,15 +29,7 @@ import { pool } from '../src/db/pool';
 
 
 /** 'allowed', or the name of the check, trigger or rule that refused it. */
-async function attempt(sql: string, values: unknown[] = []): Promise<string> {
-  try {
-    await pool.query(sql, values);
-    return 'allowed';
-  } catch (err) {
-    const e = err as { constraint?: string; message: string };
-    return e.constraint ?? e.message;
-  }
-}
+const attempt = (sql: string, values: unknown[] = []): Promise<string> => refusedBy(() => pool.query(sql, values));
 
 async function refuseIfNotEmpty(): Promise<void> {
   const { rows } = await pool.query(

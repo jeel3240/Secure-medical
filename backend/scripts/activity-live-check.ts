@@ -177,13 +177,14 @@ async function main(): Promise<void> {
     const lead = await makeLead();
     await claimLead(lead.id, maya);
     await createCallback(lead.id, maya, new Date(Date.now() + 3600_000));
-    await setDisposition(lead.id, maya, 'closed');
+    await setDisposition(lead.id, maya, 'closed', 'sold');
     const rows = (await logFor(lead.id)).slice(2);
     check('the outcome, the release it causes and the callback it finishes are all recorded', actions(rows), [
       'outcome.set',
       'lead.released',
       'callback.done',
     ]);
+    check('the outcome keeps why it was closed (B04)', [rows[0].detail.value, rows[0].detail.reason], ['closed', 'sold']);
     check('the release says it was the outcome', rows[1].detail.because, 'outcome');
     check('and so does the finished callback', rows[2].detail.because, 'outcome');
   }

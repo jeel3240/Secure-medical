@@ -1,4 +1,12 @@
-import { CLOSING_DISPOSITIONS, DISPOSITIONS, DNC_DISPOSITION, RETIRED_DISPOSITIONS, isDisposition } from './dispositions';
+import {
+  CLOSE_REASONS,
+  CLOSING_DISPOSITIONS,
+  DISPOSITIONS,
+  DNC_DISPOSITION,
+  RETIRED_DISPOSITIONS,
+  isCloseReason,
+  isDisposition,
+} from './dispositions';
 
 describe('dispositions', () => {
   it('are Closed and DNC only - Jeel, 2026-09-28', () => {
@@ -16,5 +24,19 @@ describe('dispositions', () => {
 
   it('leave DNC out of the closing list - blocking the number already removes the lead', () => {
     expect(CLOSING_DISPOSITIONS).not.toContain(DNC_DISPOSITION);
+  });
+});
+
+describe('why a lead was closed - B04', () => {
+  it('is Sold, Not interested or Wrong number, in the popup\'s order', () => {
+    expect([...CLOSE_REASONS]).toEqual(['sold', 'not_interested', 'wrong_number']);
+  });
+
+  it.each(CLOSE_REASONS.map((r) => [r]))('knows %s', (reason) => {
+    expect(isCloseReason(reason)).toBe(true);
+  });
+
+  it.each([['closed'], ['dnc'], ['interested'], ['Sold'], [' sold'], ['']])('knows nothing else - not %j', (word) => {
+    expect(isCloseReason(word)).toBe(false);
   });
 });

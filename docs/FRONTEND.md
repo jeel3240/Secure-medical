@@ -312,7 +312,7 @@ its doc's Tests table; these are the shared parts':
 | An SMS button opening a compose box | The message box always at the foot of the conversation | `AGENT-WORKSPACE.md` |
 | Note: auto-saves a draft, "Add note" | No draft. The note is saved with Save, or from the call bar after a call | `AGENT-WORKSPACE.md` |
 | Callback: "Assign to", a superadmin picking any agent | Not on the screen: Wrap up books it for whoever saves; the API takes `agentId` | `CALLBACKS.md` |
-| Seven dispositions | Closed and DNC | `AGENT-WORKSPACE.md` |
+| Seven dispositions | Closed - asked why in a popup: Sold, Not interested or Wrong number - and DNC | `AGENT-WORKSPACE.md` |
 | Save, and Save & next lead | Save only | `AGENT-WORKSPACE.md` |
 | An unsaved-changes guard on leaving | Only on closing or reloading the tab; a move inside the app is not stopped | `AGENT-WORKSPACE.md` |
 | Lead Timeline header: name, tier and score, state, phone, source, Call and SMS buttons | No state, and no Call or SMS buttons - Pick up or Resume, or "Held by <name>" | this doc |
@@ -343,6 +343,7 @@ its doc's Tests table; these are the shared parts':
 
 ## History
 
+- 2026-11-28 · Closed asks why, in a popup, the reason shown as "Closed · Sold" (`outcomeLabel`) · B04
 - 2026-11-28 · The queue's order - by tier, newest first, not by score - added to "Differences from the brief" · B01
 - 2026-11-27 · Rewritten to the Area template, 937 lines to this: the queue, admin,
   workspace, callbacks, timeline and calling sections handed to their docs

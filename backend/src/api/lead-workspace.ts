@@ -10,7 +10,7 @@
 import type { Router } from 'express';
 import { asyncHandler, HttpError } from './http';
 import { parseLeadId } from './filters';
-import { DISPOSITIONS, DNC_DISPOSITION, isDisposition } from '../core/dispositions';
+import { CLOSE_REASONS, DISPOSITIONS, DNC_DISPOSITION, isCloseReason, isDisposition, type CloseReason } from '../core/dispositions';
 
 /**
  * Free text from an agent. Trimmed, required, and capped well above anything
@@ -202,7 +202,7 @@ export function leadWorkspaceRoutes(router: Router): void {
       const leadId = parseLeadId(req.params.id);
       await requireHolding(leadId, req.user!.id);
 
-      const body = (req.body ?? {}) as { value?: unknown; confirmDnc?: unknown };
+      const body = (req.body ?? {}) as { value?: unknown; confirmDnc?: unknown; reason?: unknown };
 
       const value = typeof body.value === 'string' ? body.value.trim().toLowerCase() : '';
       if (!isDisposition(value)) {
@@ -211,6 +211,18 @@ export function leadWorkspaceRoutes(router: Router): void {
           'invalid_disposition',
           `Disposition must be one of: ${DISPOSITIONS.join(', ')}.`
         );
+      }
+
+      // Why it was closed (B04): on Closed only, and one of the three. Not yet
+      // required - a browser still on the page from before sends none until it
+      // reloads; a Closed without one is saved with none. B19 requires it.
+      let reason: CloseReason | null = null;
+      if (body.reason !== undefined && body.reason !== null) {
+        const word = typeof body.reason === 'string' ? body.reason.trim().toLowerCase() : '';
+        if (value !== 'closed' || !isCloseReason(word)) {
+          throw new HttpError(400, 'invalid_reason', `reason must be one of: ${CLOSE_REASONS.join(', ')} - and only with closed.`);
+        }
+        reason = word;
       }
 
       // DNC blocks the number everywhere and only a START lifts it, so the
@@ -225,7 +237,7 @@ export function leadWorkspaceRoutes(router: Router): void {
         );
       }
 
-      const result = await db.setDisposition(leadId, req.user!.id, value);
+      const result = await db.setDisposition(leadId, req.user!.id, value, reason);
 
       if (!result.ok) {
         // Let go of and picked up by someone else since `requireHolding` asked (review M10).

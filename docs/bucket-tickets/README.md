@@ -73,7 +73,7 @@ below, is a suggested path through it.
 | B01 | [Queue: tier first, then newest](B01-queue-tier-then-newest.md) | - | S | Done 2026-11-28 |
 | B02 | [Deploy order: migrations before the new code](B02-deploy-order-migrations-first.md) | - | S | Done 2026-11-28 |
 | B03 | [The upgrade check](B03-upgrade-check.md) | - | S | Done 2026-11-28 |
-| B04 | [Closed asks why](B04-closed-asks-why.md) | B03 | M | To do |
+| B04 | [Closed asks why](B04-closed-asks-why.md) | B03 | M | Done 2026-11-28 |
 | B05 | [Overview counts sold](B05-overview-counts-sold.md) | B04 | S | To do |
 | B06 | [Poller: one contact never stops the rest](B06-poller-one-contact-never-stops-the-rest.md) | - | S | To do |
 | | **B. Buckets in the database - one bucket, nothing changes for users** | | | |
