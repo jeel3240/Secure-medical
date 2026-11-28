@@ -73,30 +73,43 @@ completed a second conversation is not dragged back by the first having expired.
    `promised_at`, the `LEAST` of `MISSED_YES_AT_SQL` (when the robot's call was
    made) and `PROMISED_CALLBACK_DUE_AT_SQL` (the time the call back was booked
    for). An overdue one stays on top until someone calls.
-2. `score DESC`.
+2. The tier: HOT, then WARM, then LOW - `tiers.sort_order`, as `tier_rank`.
+   A lead with no tier comes after LOW.
 3. The most recently received (`RECEIVED_SQL`: `ezt_added_at`, else `created_at`).
-4. Id, so two identical rows never swap places.
+4. Id, the higher first, so two identical rows never swap places.
 
-Score first is the point of the screen; freshest next, because speed to
-contact is what the score is for (`DESIGN-PROMPT.md` section 2, "sorted by
-score then freshness"). A promised call comes before all of it: the lead was
-told a person would call - shortly, or at the time they picked - and nothing in
-the queue is warmer. With no score it would otherwise sink to the bottom. The
-longest waiting goes first, as the hold line takes the longest waiting first
-(`AUTO-CALL-TRANSFER.md`, "The hold line"). Once someone gets back to the lead it drops
-to its own place - usually out of the queue, as it never replied.
+The tier says how strong the lead is; inside a tier, speed to contact is what
+matters. So a HOT 85 that arrived two minutes ago comes before a HOT 90 that has
+waited five days, and every HOT lead comes before every WARM one, however new.
+The score is still on every row and on the lead's page; it no longer orders the
+rows. The rank is the table's `sort_order`, never the tier's text, which would
+put LOW before WARM.
+
+A promised call comes before all of it: the lead was told a person would call -
+shortly, or at the time they picked - and nothing in the queue is warmer. With
+no tier it would otherwise sink to the bottom. The longest waiting goes first,
+as the hold line takes the longest waiting first (`AUTO-CALL-TRANSFER.md`, "The
+hold line"). Once someone gets back to the lead it drops to its own place -
+usually out of the queue, as it never replied.
 
 An agent's own callback is not moved up: it is theirs, on My Callbacks, and
-keeps the lead at its score.
+keeps the lead in its tier's place.
 
-A lead with no score and no promised call - held before it answered, or one who
-rang us and was missed - sorts to the bottom. The list stops at 100 rows by
-default, so in a queue that long it would not be shown; at 50-100 leads a day
-the queue has not come close.
+A lead with no tier and no promised call - held before it answered, or one who
+rang us and was missed - sorts to the bottom, newest first. The list stops at
+100 rows by default, so in a queue that long it would not be shown; at 50-100
+leads a day the queue has not come close.
+
+**One order, written once.** The page's rows are picked in the `page` lateral
+and ordered again by the outer statement; both use `queueOrder`, so the two
+cannot drift apart. The rank is looked up for each queued lead
+(`SELECT sort_order FROM tiers WHERE name = c.tier`), not joined in `BASE`: the
+join changed Postgres's plan for the whole statement and took the queue as it
+opens from 84 ms to 293 ms at 50,000 leads.
 
 **The page says the order** (`orderText`, `QueuePage.tsx`): "Missed transfers
-and Seri's due call backs first, then highest score, then newest." while
-automated calls are on, and "Highest score first, then newest." while they are
+and Seri's due call backs first, then Hot, Warm and Low, newest first." while
+automated calls are on, and "Hot, Warm and Low, newest first." while they are
 off, when no transfers are made. A missed "yes" nobody got back to before
 automated calls were switched off still sorts first, under the second line.
 "Missed a transfer" is already what the app bar says to the person who let one
@@ -105,9 +118,6 @@ ring out (`AUTO-CALL-TRANSFER.md`, "Letting a transfer ring out turns it off").
 **Only under All.** A missed "yes" and a due call back of Seri's have no tier,
 so picking Hot, Warm or Low hides them, like any lead with no score. The tier
 switcher starts on All.
-
-Decided and not yet built: tier first, then newest, after the promised calls
-(Decisions; `bucket-tickets/B01-queue-tier-then-newest.md`).
 
 ### The tag
 
@@ -227,8 +237,8 @@ request, so the cost grows with every lead ever received, not with the size of
 the queue. `npm run speed` (`backend/scripts/speed-check.ts`) loads 50,000 fake
 leads - about a year and a half at 100 a day, with their answers, messages,
 calls, robot calls, call backs, notes and outcomes - and times every screen's
-read. On a laptop the queue as it opens takes about 76 ms, one tier about the
-same, the last 7 days about 11 ms and a name search about 16 ms. History has
+read. On a laptop the queue as it opens takes about 82 ms, one tier about the
+same, the last 7 days about 13 ms and a name search about 10 ms. History has
 each measurement.
 
 What keeps it there:
@@ -297,7 +307,8 @@ table's head a light grey band:
    Nothing is rewritten: reactivating them gives the leads back.
 6. **Closed is one definition**, `CLOSED_SQL`, shared with Admin > Leads, so the
    two screens cannot disagree.
-7. **A promised call comes first**, before any score.
+7. **A promised call comes first**, before any tier; then the tiers, each newest
+   first.
 8. **At most one tag per row**, the first that applies in the table's order.
 9. **A bad filter is refused with a 400**, never ignored.
 
@@ -315,7 +326,7 @@ cleared by marking a lead read (`AGENT-WORKSPACE.md`, "Marking a lead read").
 |---|---|
 | `backend/src/api/leads.ts` | `GET /api/leads`: parses the filters, calls `listQueue`. Also claim and release |
 | `backend/src/api/filters.ts` | `parseList`, `parseSearch`, `parseSince` - shared with Admin > Leads and the DNC list |
-| `backend/src/db/queue.ts` | `INCLUDED`, the order, `listQueue` - the page, the counts and the sources in one statement |
+| `backend/src/db/queue.ts` | `INCLUDED`, the order (`queueOrder`), `listQueue` - the page, the counts and the sources in one statement |
 | `backend/src/db/lead-state.ts` | `CLOSED_SQL`, `MISSED_CALL_SQL`, `MISSED_YES_SQL`, `MISSED_YES_AT_SQL`, `PROMISED_CALLBACK_DUE_SQL`, `PROMISED_CALLBACK_DUE_AT_SQL`, `nobodysCallbackSql`, `RECEIVED_SQL`, `newestConversation` |
 | `backend/src/core/queue-tags.ts` | `queueTag`: which tag wins, pure |
 | `frontend/src/pages/QueuePage.tsx` | The screen; `orderText`, the line that says the order |
@@ -328,7 +339,8 @@ cleared by marking a lead read (`AGENT-WORKSPACE.md`, "Marking a lead read").
 | Which tag wins | `core/queue-tags.test.ts` |
 | The route: filters, refusals, the response | `api/__tests__/queue.test.ts` |
 | The SQL against a real database - inclusion, exclusion, order, every tag, each filter, the counts; a partway lead kept out, and kept in when held, booked, or taken over and replied to; call attempts showing no tag | `scripts/queue-live-check.ts` |
-| A missed "yes", through the real writes (`startAutomatedCall`, `missTransfer`, `startCall`, `setDisposition`): first, before a 90-point lead, the longest waiting on top; Wants a call with no score; flagged on the card; in the total under no tier; a robot call ending any other way puts nobody in; the link text, the automated text and an agent's refused text do not clear it; picked up it reads Working and stays first; an agent's call, text or outcome clears it | `scripts/queue-live-check.ts` |
+| The order: a HOT 85 from two minutes ago above a HOT 90 from five days ago; across the whole queue every HOT above every WARM and every WARM above every LOW, newest first inside each; a lead with no tier after LOW, though newest; a missed "yes" and a due call back still first; two identical rows the higher id first | `scripts/queue-live-check.ts`, "order: tier first, then newest (B01)" |
+| A missed "yes", through the real writes (`startAutomatedCall`, `missTransfer`, `startCall`, `setDisposition`): first, before every HOT lead, the longest waiting on top; Wants a call with no score; flagged on the card; in the total under no tier; a robot call ending any other way puts nobody in; the link text, the automated text and an agent's refused text do not clear it; picked up it reads Working and stays first; an agent's call, text or outcome clears it | `scripts/queue-live-check.ts` |
 | Seri's call backs, booked as `/auto/ai-after` books them (`keepCallResult`) and taken by `claimLead`: not due, not in; due, first, no score, tagged nobody's and due; overdue, beside a missed "yes" in promise order; picked up, the agent's, recorded once; put back, still on top and named; a second pick-up leaves it with the first; an outcome finishes it | `scripts/queue-live-check.ts` |
 | A deactivated agent's call back | `scripts/queue-live-check.ts`, "a deactivated agent's call back (D2)" |
 | The missed call: in with no score, reopening a closed lead, its tag, what settles it | `scripts/calls-live-check.ts` |
@@ -345,7 +357,6 @@ cleared by marking a lead read (`AGENT-WORKSPACE.md`, "Marking a lead read").
   to be dense, and goes back in if the partner ever sends state.
 - **No paging.** `limit` cuts the list and `total` says by how much; at 50-100
   leads a day the default of 100 holds several days of queue.
-- **Tier first, then newest** is decided and not built - B01.
 - **"Seen before, stopped at Qn"** is in the mockup and not built: a returning
   lead is not yet handled (`STATE-MACHINE.md`, "A number that comes back").
 - **Membership is worked out, not stored**, so the read grows with every lead
@@ -360,13 +371,13 @@ cleared by marking a lead read (`AGENT-WORKSPACE.md`, "Marking a lead read").
 | A closed lead leaves the queue; only what stands on its own, or a callback booked after closing, brings it back | Jeel | 2026-09-28 |
 | An unread text puts a lead in the queue on its own, score or none | Jeel | 2026-09-28 |
 | Holding a lead needs no score: a lead someone holds is always in the queue | Jeel | 2026-09-29 |
-| Score first, then newest, then id | Jeel | 2026-09-22 |
+| Score first, then newest, then id - replaced by tier first, then newest (2026-11-27) | Jeel | 2026-09-22 |
 | Few tags, and most rows have none; New and Attempted dropped | Jeel | 2026-09-28 |
 | "Working", the word Admin > Leads uses, not "In progress" | Jeel | 2026-09-28 |
 | The Callback tag back, naming whose callback it is | Jeel | 2026-09-29 |
 | A "yes" nobody takes puts the lead first in the queue as Wants a call - the longest waiting on top, ranked with the missed call | Jeel | 2026-10-17 |
 | A due call back Seri booked shares the top with a missed "yes", sorted on when each call was promised for | Jeel | 2026-11-11 |
-| Tier first, then newest, after the promised calls: HOT newest first, then WARM, then LOW. Score first keeps a HOT 90 that has waited five days above a HOT 85 that arrived two minutes ago. The page's line changes with it. Made while planning Phase 8 but not bucket work. Not built - B01 (`bucket-tickets/B01-queue-tier-then-newest.md`) | Jeel | 2026-11-27 |
+| Tier first, then newest, after the promised calls: HOT newest first, then WARM, then LOW. Score first keeps a HOT 90 that has waited five days above a HOT 85 that arrived two minutes ago. The page's line changes with it. Made while planning Phase 8 but not bucket work. Built - B01 (`bucket-tickets/B01-queue-tier-then-newest.md`) | Jeel | 2026-11-27 |
 | No STATE column on the screen: EZ Texting sends none; it returns if the partner ever sends state | Jeel | 2026-09-26 |
 | The screen rebuilt to Jeel's mockup: one card, a segmented tier switcher one choice at a time, tiers as bars, statuses as an icon and words | Jeel | 2026-09-28 |
 | Every waiting time looks the same: no amber, red or bold thresholds | Jeel | 2026-09-28 |
@@ -374,6 +385,7 @@ cleared by marking a lead read (`AGENT-WORKSPACE.md`, "Marking a lead read").
 
 ## History
 
+- 2026-11-28 · Tier first, then newest, after the promised calls: score left the order, `tier_rank` from `tiers.sort_order` took its place, the two ORDER BYs became one `queueOrder`, and the page's line reads "Hot, Warm and Low, newest first". Timed at 50,000 leads on the same laptop: the queue as it opens 83.6 ms before, 82.4 ms after; one tier 87.2 and 82.3; a name search 10.8 and 10.0; the last 7 days 14.5 and 13.0. A first version joined `tiers` in `BASE` and took the queue as it opens to 293 ms, as the join changed the plan for the whole statement; the rank is looked up for each queued lead instead · Jeel · B01
 - 2026-11-27 · Rewritten to the area standard: dated notes to this History, decisions to a table; the polling hook and the on-screen lock handed to `FRONTEND.md`; a call back nobody has to `CALLBACKS.md`; the constant named `AI_CALLBACK_DUE_SQL`, which no longer exists, corrected to `PROMISED_CALLBACK_DUE_SQL`; merged in: the screen from `FRONTEND.md`, and the tier-first decision row from `BUCKETS.md` · docs standard · D17, D27, D45
 - 2026-11-27 · Tier first, then newest decided, not built - raised while planning several buckets (`BUCKETS.md`), built on its own · Jeel · B01
 - 2026-11-23 · A deactivated agent's open call backs are nobody's: no name on the tag, a due one at the top as "Callback · 2:00 PM" in bold (`PROMISED_CALLBACK_DUE_SQL`, which replaced `AI_CALLBACK_DUE_SQL`), the first agent to pick the lead up takes it. Before, an open call back stayed in the deactivated agent's name - "Callback · Maya" - so others left it, it was on nobody's My Callbacks and not on Overview: a promised call nobody would make unless a superadmin moved it by hand · review D2

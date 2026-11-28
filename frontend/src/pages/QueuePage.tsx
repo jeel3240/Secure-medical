@@ -18,7 +18,8 @@ import { useSecond } from '../lib/useSecond';
 import { rowAction } from '../lib/lock';
 
 /**
- * The agents' landing screen: every responder, highest score first.
+ * The agents' landing screen: every lead that needs a person - the promised
+ * calls first, then Hot, Warm and Low, newest first in each.
  *
  * DESIGN-PROMPT.md 2 for the layout, QUEUE.md for what the endpoint returns and
  * which leads are in it. Phase 3 tasks 15 and 16.
@@ -60,16 +61,16 @@ export function answersTitle(answers: QueueLead['answers']): string | undefined 
 }
 
 /**
- * The order, as the page states it. A "yes" on the robot's call that nobody
- * took comes first (T22), and so does a call back Seri booked once it is due
- * (A16) - QUEUE.md "The order". Said only while automated calls are on, so
- * nobody reads about transfers that cannot happen; Seri's call backs were left
- * out of it until review R15, 2026-11-23.
+ * The order, as the page states it - QUEUE.md, "The order". A "yes" on the
+ * robot's call that nobody took comes first (T22), and so does a call back
+ * Seri booked once it is due (A16); then the tiers, newest first in each
+ * (B01). The first half is said only while automated calls are on, so nobody
+ * reads about transfers that cannot happen.
  */
 export function orderText(autoCalls: boolean): string {
   return autoCalls
-    ? "Missed transfers and Seri's due call backs first, then highest score, then newest."
-    : 'Highest score first, then newest.';
+    ? "Missed transfers and Seri's due call backs first, then Hot, Warm and Low, newest first."
+    : 'Hot, Warm and Low, newest first.';
 }
 
 const SINCE: { key: string; label: string }[] = [

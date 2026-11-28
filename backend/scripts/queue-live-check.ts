@@ -14,7 +14,7 @@
  *     EZT_USERNAME=x EZT_PASSWORD=x EZT_GROUP=x npx ts-node --transpile-only scripts/queue-live-check.ts
  *
  * Re-running needs a fresh database: DROP and re-migrate - or
- * `scripts/live-checks.sh queue`. 84 checks as of 2026-11-12.
+ * `scripts/live-checks.sh queue`.
  */
 import { check, failureCount, verdict } from './check';
 import { pool } from '../src/db/pool';
@@ -106,11 +106,14 @@ async function main() {
   await pool.query(`INSERT INTO callbacks (lead_id, agent_id, scheduled_at, done_at) VALUES ($1,$2, now(), now())`, [stale, michael]);
 
   const all = await listQueue();
-  check('order: score desc then freshest', all.leads.map((l) => l.firstName), ['Hot', 'Held', 'Released', 'Stale', 'Tie-newer', 'Tie-older', 'Called', 'Busy', 'Back', 'Handover', 'Booked', 'Low']);
+  // Tier first, then newest - B01, Jeel 2026-11-27. The cases one by one are
+  // in "order: tier first, then newest", at the end.
+  check('order: tier first, then newest', all.leads.map((l) => l.firstName), ['Hot', 'Held', 'Tie-newer', 'Called', 'Released', 'Stale', 'Tie-older', 'Back', 'Busy', 'Booked', 'Handover', 'Low']);
   // Jeel, 2026-09-28: only leads that need a person. Warm answered one question
   // and is still open - not asked for a call yet, so not here.
   check('a lead partway through the questions is not in the queue', all.leads.some((l) => l.firstName === 'Warm'), false);
-  check('same score: the fresher lead is on top', all.leads.filter((l) => l.score === 55).map((l) => l.firstName), ['Tie-newer', 'Tie-older']);
+  check('within a tier, the newest on top, whatever the score', all.leads.filter((l) => l.tier === 'WARM').map((l) => [l.firstName, l.score]),
+    [['Tie-newer', 55], ['Called', 50], ['Released', 70], ['Stale', 60], ['Tie-older', 55]]);
   check('excluded the rest', all.total, 12);
   check('tier counts', all.counts, { all: 12, HOT: 2, WARM: 5, LOW: 5 });
   check('sources', all.sources, ['CORE-G-27', 'CORE-G-31']);
@@ -163,7 +166,7 @@ async function main() {
   check('limit is clamped, never rejected', (await listQueue({ limit: 9999 })).limit, 500);
 
   const combined = await listQueue({ tier: ['HOT', 'WARM'], source: ['CORE-G-27'], q: 'e' });
-  check('filters combine', combined.leads.map((l) => l.firstName), ['Hot', 'Held', 'Released', 'Stale', 'Tie-newer', 'Tie-older', 'Called']);
+  check('filters combine', combined.leads.map((l) => l.firstName), ['Hot', 'Held', 'Tie-newer', 'Called', 'Released', 'Stale', 'Tie-older']);
 
   // Never answered a question - score 0 - then texted after the conversation
   // ended. Flagged for a person, and until 2026-09-28 kept out by score > 0,
@@ -247,7 +250,7 @@ async function main() {
   const queueNow = async () => (await listQueue({ limit: 200 })).leads;
   const at = (rows: { id: number }[], id: number) => rows.findIndex((l) => l.id === id);
   let rows = await queueNow();
-  check('a "yes" nobody took is first - before the 90-point lead - the longest waiting on top',
+  check('a "yes" nobody took is first - before every HOT lead - the longest waiting on top',
     rows.slice(0, 4).map((l) => l.firstName), ['YesCalled', 'YesClosed', 'YesTexted', 'Hot']);
   check('with no score, tagged Wants a call', [rows[0].score, rows[0].tag], [0, { kind: 'wants_call' }]);
   check('the lead card says so too', (await getLeadDetail(yesCalled))?.flags.missedYes, true);
@@ -276,7 +279,7 @@ async function main() {
   const placed = await startCall({ callSid: 'CA-T22-1', leadId: yesCalled, agentId: michael });
   check('the agent\'s call is placed', placed.ok, true);
   rows = await queueNow();
-  check('called: no longer first - still in, as Michael holds it, at its own score', [at(rows, yesCalled) > 0, rows[at(rows, yesCalled)]?.tag?.kind, (await getLeadDetail(yesCalled))?.flags.missedYes], [true, 'working', false]);
+  check('called: no longer first - still in, as Michael holds it, in its own place', [at(rows, yesCalled) > 0, rows[at(rows, yesCalled)]?.tag?.kind, (await getLeadDetail(yesCalled))?.flags.missedYes], [true, 'working', false]);
   await pool.query(`UPDATE leads SET assigned_to = NULL, assigned_at = NULL WHERE id = $1`, [yesCalled]);
   check('and once let go, out of the queue - it never replied', at(await queueNow(), yesCalled), -1);
 
@@ -307,7 +310,7 @@ async function main() {
   await pool.query(`UPDATE callbacks SET scheduled_at = now() - interval '1 minute' WHERE lead_id = $1`, [seriLead]);
   const dueAt = (await pool.query(`SELECT scheduled_at FROM callbacks WHERE lead_id = $1`, [seriLead])).rows[0].scheduled_at.toISOString();
   rows = await queueNow();
-  check('due: in, and first - before the 90-point lead - with no score', [rows[0].firstName, rows[0].score, rows[1].firstName], ['SeriBooked', 0, 'Hot']);
+  check('due: in, and first - before every HOT lead - with no score', [rows[0].firstName, rows[0].score, rows[1].firstName], ['SeriBooked', 0, 'Hot']);
   check('tagged as a callback, nobody\'s yet, due', rows[0].tag, { kind: 'callback', at: dueAt, due: true });
 
   const late = await silentLead('+15550000312', 'SeriLate');
@@ -361,7 +364,7 @@ async function main() {
 
   await pool.query(`UPDATE users SET is_active = false WHERE id = $1`, [leaver]);
   rows = await queueNow();
-  check('deactivated: nobody\'s - no name, bold, ahead of the 90-point lead', [rows[at(rows, owed)]?.tag, at(rows, owed) < at(rows, hot)],
+  check('deactivated: nobody\'s - no name, bold, ahead of every HOT lead', [rows[at(rows, owed)]?.tag, at(rows, owed) < at(rows, hot)],
     [{ kind: 'callback', at: owedAt, due: true }, true]);
   check('nothing rewritten: the row still says whose it was',
     (await pool.query(`SELECT agent_id FROM callbacks WHERE lead_id = $1`, [owed])).rows[0].agent_id, leaver);
@@ -385,6 +388,41 @@ async function main() {
   check('put back: theirs, named - an active agent\'s, so not pushed up', (await releaseLead(owed, michael, false)).ok, true);
   rows = await queueNow();
   check('the row', rows[at(rows, owed)]?.tag, { kind: 'callback', agentId: michael, agentName: 'Michael', at: owedAt });
+
+  // Tier first, then newest, after the promised calls - B01, Jeel 2026-11-27
+  // (QUEUE.md, "The order"). Score first kept a HOT 90 that had waited five
+  // days above a HOT 85 that arrived two minutes ago.
+  console.log('\norder: tier first, then newest (B01)');
+  const tiered = (phone: string, first: string, ageMin: number, score: number, tier: string) =>
+    lead({ phone, first, source: 'CORE-G-27', ageMin, status: 'completed', q1: '1', q2: '1', q3: '1', score, tier });
+  const oldNinety = await tiered('+15550000401', 'OldNinety', 5 * 1440, 90, 'HOT');
+  const newEightyFive = await tiered('+15550000402', 'NewEightyFive', 2, 85, 'HOT');
+  const newWarm = await tiered('+15550000403', 'NewWarm', 1, 74, 'WARM');
+  const newLow = await tiered('+15550000404', 'NewLow', 1, 44, 'LOW');
+  const twinA = await tiered('+15550000405', 'TwinA', 600, 50, 'WARM');
+  const twinB = await tiered('+15550000406', 'TwinB', 600, 50, 'WARM');
+  await pool.query(`UPDATE leads SET ezt_added_at = (SELECT ezt_added_at FROM leads WHERE id = $1) WHERE id = $2`, [twinA, twinB]);
+  // Texted us without answering anything: in the queue, with no tier - the newest lead of all.
+  const untiered = await lead({ phone: '+15550000407', first: 'Untiered', source: 'CORE-G-27', ageMin: 0, status: 'expired', score: 0, tier: null, unread: true });
+  const yesB01 = await silentLead('+15550000408', 'YesB01');
+  await robotCall(yesB01, 1, 'transfer_missed');
+  rows = await queueNow();
+  const ours = [oldNinety, newEightyFive, newWarm, newLow, twinA, twinB, untiered, yesB01];
+  check('the order of these, among the rest',
+    rows.filter((l) => ours.includes(l.id)).map((l) => l.firstName),
+    ['YesB01', 'NewEightyFive', 'OldNinety', 'NewWarm', 'TwinB', 'TwinA', 'NewLow', 'Untiered']);
+  check('a HOT 85 from two minutes ago above a HOT 90 from five days ago', at(rows, newEightyFive) < at(rows, oldNinety), true);
+  const rank: Record<string, number> = { HOT: 1, WARM: 2, LOW: 3 };
+  const withTier = rows.filter((l) => l.tier !== null);
+  check('across the whole queue: every HOT above every WARM, every WARM above every LOW, however new',
+    withTier.every((l, i) => i === 0 || rank[withTier[i - 1].tier!] <= rank[l.tier!]), true);
+  check('and inside each tier, the newest first',
+    withTier.every((l, i) => i === 0 || withTier[i - 1].tier !== l.tier || Date.parse(withTier[i - 1].receivedAt!) >= Date.parse(l.receivedAt!)), true);
+  check('a lead with no tier after every LOW, though it is the newest of all',
+    at(rows, untiered) > Math.max(...rows.map((l, i) => (l.tier === 'LOW' ? i : -1))), true);
+  check('a missed "yes" and a due call back of Seri\'s still come first',
+    [at(rows, yesB01) < at(rows, newEightyFive), at(rows, seriLead) >= 0 && at(rows, seriLead) < at(rows, newEightyFive)], [true, true]);
+  check('two identical rows: the higher id first, so they never swap', at(rows, twinB) + 1, at(rows, twinA));
 
   console.log(verdict());
   await pool.end();

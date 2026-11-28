@@ -18,11 +18,11 @@ describe('a lead\'s answers in the queue', () => {
 });
 
 describe('the order, as the page states it', () => {
-  it('a "yes" nobody took and Seri\'s due call backs first, while automated calls are on - T22, A16', () => {
-    expect(orderText(true)).toBe("Missed transfers and Seri's due call backs first, then highest score, then newest.");
+  it('a "yes" nobody took and Seri\'s due call backs first, then the tiers, newest first - T22, A16, B01', () => {
+    expect(orderText(true)).toBe("Missed transfers and Seri's due call backs first, then Hot, Warm and Low, newest first.");
   });
 
-  it('otherwise as before: there are no transfers to miss', () => {
-    expect(orderText(false)).toBe('Highest score first, then newest.');
+  it('with automated calls off, only the tiers: there are no transfers to miss', () => {
+    expect(orderText(false)).toBe('Hot, Warm and Low, newest first.');
   });
 });

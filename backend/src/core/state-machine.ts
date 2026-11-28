@@ -19,7 +19,7 @@ export type ConversationStatus = 'open' | 'completed' | 'expired' | 'suppressed'
 
 /**
  * How a flow ended, from the choice that ended it:
- * - `completed`: the questions are answered. Agents call, by score.
+ * - `completed`: the questions are answered. Agents call, by tier.
  * - `offers`: wants offers only. Not for agents.
  * - `wants_contact`: asked to hear from a rep. Agents call.
  * - `declined`: wants neither offers nor a rep. Not for agents.
