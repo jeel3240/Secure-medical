@@ -6,7 +6,8 @@ and per agent, beside Closed.
 **Why:** the reason B04 saves makes it countable; the app cannot say today
 (`BUCKETS.md`, "A closed lead joins a new bucket").
 
-**Depends on:** B04 · **Size:** S · **Status:** To do · **Deploy note:** none, no
+**Depends on:** B04 · **Size:** S · **Status:** Done 2026-11-28 - the admin live check's
+sold section, the frontend tests and the speed check · **Deploy note:** none, no
 migration.
 
 ## Build
@@ -21,11 +22,11 @@ migration.
 
 ## Done when
 
-- [ ] `scripts/admin-live-check.ts`: a reason `sold` counts; the retired value `sold`
+- [x] `scripts/admin-live-check.ts`: a reason `sold` counts; the retired value `sold`
       counts; `not_interested`, `wrong_number` and no reason do not; only inside the
       period, in the viewer's time zone; per agent.
-- [ ] Frontend test: the card and the column.
-- [ ] `npm run speed`: the Overview timing no slower - numbers in *As built*.
+- [x] Frontend test: the card and the column.
+- [x] `npm run speed`: the Overview timing no slower - numbers in *As built*.
 
 ## Tests
 
@@ -41,7 +42,25 @@ A bucket filter on Overview; any other new statistic.
 
 ## As built
 
-*Empty until the ticket is done.*
+- **The rule's words in core:** `SOLD_REASON` and `RETIRED_SOLD` in
+  `core/dispositions.ts`, typed against `CLOSE_REASONS` and `RETIRED_DISPOSITIONS`;
+  `sold(d)` in `db/admin-overview.ts` builds the SQL from them.
+- **One pass, not two more.** Written as two more subqueries - one for the total,
+  one per agent - Overview at 50,000 leads went from 25 ms to 29 ms (three rounds,
+  old and new alternating on one loaded database: 25.6 / 29.0, 23.9 / 29.2, 24.8 /
+  29.7). Closed and sold now come from one pass over the period's outcomes with
+  `FILTER`: a subquery `outcomes` for the totals, a `CROSS JOIN LATERAL` per agent.
+  Then 24.5 / 23.8, 24.2 / 24.9, 24.0 / 24.4; the full speed check 25.4 ms before,
+  24.1 ms after.
+- **The speed check's outcomes** carry a reason - Sold, Not interested and Wrong
+  number in turn - and their conversation, as the app writes them since B04.
+- **The live check** runs every sold check in the viewer's zone, Phoenix, with one
+  sale a minute before its midnight and one a minute after; six checks failed on
+  the old query.
+- **The frontend:** `overviewStats` (exported, tested) lists the five totals;
+  `.stats` became one row of as many columns as totals (`grid-auto-flow: column`),
+  where it was four fixed. The column is proved by a render test of the page with
+  its API mocked (`OverviewPage.render.test.tsx`). Not looked at in a browser.
 
 ---
 

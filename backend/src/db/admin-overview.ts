@@ -23,7 +23,7 @@
  * if the client wants them); the rest were numbers nobody acted on.
  */
 
-import { CLOSING_DISPOSITIONS } from '../core/dispositions';
+import { CLOSING_DISPOSITIONS, RETIRED_SOLD, SOLD_REASON } from '../core/dispositions';
 import { pool } from './pool';
 import { RECEIVED_SQL } from './lead-state';
 import { startOfTodaySql, startOfTomorrowSql, wordList } from './sql';
@@ -49,6 +49,8 @@ export interface AgentRow {
   callbacksDue: number;
   /** Leads this agent holds right now, whatever the period. */
   holding: number;
+  /** Leads this agent closed as sold in the period (B05) - leads, not presses. */
+  sold: number;
   /** Leads this agent closed in the period - `closed`, and the retired values that meant the same. */
   closed: number;
   /** This agent's newest action of any kind - a note, callback, outcome, call or SMS. Null if none. */
@@ -76,6 +78,8 @@ export interface Overview {
     completed: number;
     /** Closed in the period - `closed`, and the retired values that meant the same. */
     closed: number;
+    /** Of those, sold (B05): a Closed whose reason is `sold`, or the retired `sold`. Leads, not presses. */
+    sold: number;
   };
   agents: AgentRow[];
   activity: ActivityEntry[];
@@ -90,6 +94,10 @@ export async function getOverview(period: OverviewPeriod, timeZone?: string): Pr
   // `closed` and the retired values that meant the same, so leads closed under
   // the old list still count. Constants from core/dispositions.ts, never input.
   const closing = wordList(CLOSING_DISPOSITIONS);
+
+  // A sale (B05): why it was closed, since B04 - or the retired `sold`, from
+  // before 2026-09-28. Constants from core/dispositions.ts, never input.
+  const sold = (d: string) => `(${d}.reason = ${wordList([SOLD_REASON])} OR ${d}.value = ${wordList([RETIRED_SOLD])})`;
 
   const [leadRows, agentRows, activityRows] = await Promise.all([
     // Every total counts things that *happened* in the period - Jeel,
@@ -114,23 +122,25 @@ export async function getOverview(period: OverviewPeriod, timeZone?: string): Pr
           SELECT count(DISTINCT lead_id)::int FROM conversations
           WHERE completed_at >= ${since}
         ) AS completed,
-        -- Leads, not presses.
-        (
-          SELECT count(DISTINCT lead_id)::int FROM dispositions
-          WHERE value IN (${closing}) AND created_at >= ${since}
-        ) AS closed,
+        outcomes.closed,
+        outcomes.sold,
         -- The start of the period, as every count above used it.
         ${since} AS since
+      -- Closed and sold in one pass over the period's outcomes. Leads, not presses.
+      FROM (
+        SELECT count(DISTINCT d.lead_id) FILTER (WHERE d.value IN (${closing}))::int AS closed,
+               count(DISTINCT d.lead_id) FILTER (WHERE ${sold('d')})::int AS sold
+        FROM dispositions d
+        WHERE d.created_at >= ${since}
+      ) outcomes
     `),
 
     pool.query(`
       SELECT
         u.id AS agent_id,
         u.name,
-        (
-          SELECT count(DISTINCT d.lead_id)::int FROM dispositions d
-          WHERE d.agent_id = u.id AND d.value IN (${closing}) AND d.created_at >= ${since}
-        ) AS closed,
+        outcomes.closed,
+        outcomes.sold,
         -- Due today - overdue ones included, next week's not. It counted only
         -- those already due, so a callback at 3 PM showed nothing all
         -- morning, and a manager could not see who had calls to make that
@@ -156,6 +166,13 @@ export async function getOverview(period: OverviewPeriod, timeZone?: string): Pr
           ) acts
         ) AS last_active_at
       FROM users u
+      -- Closed and sold in one pass over the agent's outcomes in the period.
+      CROSS JOIN LATERAL (
+        SELECT count(DISTINCT d.lead_id) FILTER (WHERE d.value IN (${closing}))::int AS closed,
+               count(DISTINCT d.lead_id) FILTER (WHERE ${sold('d')})::int AS sold
+        FROM dispositions d
+        WHERE d.agent_id = u.id AND d.created_at >= ${since}
+      ) outcomes
       WHERE u.is_active
       ORDER BY u.name
     `),
@@ -215,6 +232,7 @@ export async function getOverview(period: OverviewPeriod, timeZone?: string): Pr
       responded: leads.responded,
       completed: leads.completed,
       closed: leads.closed,
+      sold: leads.sold,
     },
     agents: agentRows.rows.map((r) => ({
       agentId: r.agent_id,
@@ -222,6 +240,7 @@ export async function getOverview(period: OverviewPeriod, timeZone?: string): Pr
       callbacksDue: r.callbacks_due,
       holding: r.holding,
       closed: r.closed,
+      sold: r.sold,
       lastActiveAt: r.last_active_at?.toISOString() ?? null,
     })),
     activity: activityRows.rows.map((r) => ({

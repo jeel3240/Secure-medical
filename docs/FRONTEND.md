@@ -320,7 +320,7 @@ its doc's Tests table; these are the shared parts':
 | My Callbacks: three tabs, overdue rows tinted, Open / Call / Reschedule / Mark done | A card with four tabs; overdue in amber; Pick up / Resume / View beside a "⋯" | `CALLBACKS.md` |
 | An "Agent" filter for a superadmin's callbacks | Built, as a labelled Agent picker | `CALLBACKS.md` |
 | Admin sub-menu: Overview, Leads, Scoring, Messages, Agents, DNC list, Settings | Overview, Leads, Agents, Configuration, DNC list | `ADMIN.md` |
-| Overview: eight KPI cards, a funnel, call figures per agent | Four totals, an agents table, system checks, recent activity | `ADMIN.md` |
+| Overview: eight KPI cards, a funnel, call figures per agent | Five totals - Sold among them - an agents table, system checks, recent activity | `ADMIN.md` |
 | Scoring editable inline, tier ranges, a preview panel, Save rules, Recalculate existing | Read-only cards; no preview panel; Recalculate dropped | `ADMIN.md` |
 | Message copy editable, placeholder chips, a phone-frame preview | Read-only, with character and segment counts; `{first_name}` as a chip; no phone-frame preview | `ADMIN.md` |
 | Agents: row actions as buttons | Behind one "⋯" menu | `AUTH.md` |
@@ -343,6 +343,7 @@ its doc's Tests table; these are the shared parts':
 
 ## History
 
+- 2026-11-28 · Overview's five totals, Sold the fifth; `.stats` takes as many columns as it has totals · B05
 - 2026-11-28 · Closed asks why, in a popup, the reason shown as "Closed · Sold" (`outcomeLabel`) · B04
 - 2026-11-28 · The queue's order - by tier, newest first, not by score - added to "Differences from the brief" · B01
 - 2026-11-27 · Rewritten to the Area template, 937 lines to this: the queue, admin,

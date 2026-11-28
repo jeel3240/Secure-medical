@@ -74,7 +74,7 @@ below, is a suggested path through it.
 | B02 | [Deploy order: migrations before the new code](B02-deploy-order-migrations-first.md) | - | S | Done 2026-11-28 |
 | B03 | [The upgrade check](B03-upgrade-check.md) | - | S | Done 2026-11-28 |
 | B04 | [Closed asks why](B04-closed-asks-why.md) | B03 | M | Done 2026-11-28 |
-| B05 | [Overview counts sold](B05-overview-counts-sold.md) | B04 | S | To do |
+| B05 | [Overview counts sold](B05-overview-counts-sold.md) | B04 | S | Done 2026-11-28 |
 | B06 | [Poller: one contact never stops the rest](B06-poller-one-contact-never-stops-the-rest.md) | - | S | To do |
 | | **B. Buckets in the database - one bucket, nothing changes for users** | | | |
 | B07 | [Migration: buckets](B07-migration-buckets.md) | B03 | S | To do |

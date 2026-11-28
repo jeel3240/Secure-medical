@@ -4,6 +4,8 @@ import {
   DISPOSITIONS,
   DNC_DISPOSITION,
   RETIRED_DISPOSITIONS,
+  RETIRED_SOLD,
+  SOLD_REASON,
   isCloseReason,
   isDisposition,
 } from './dispositions';
@@ -38,5 +40,13 @@ describe('why a lead was closed - B04', () => {
 
   it.each([['closed'], ['dnc'], ['interested'], ['Sold'], [' sold'], ['']])('knows nothing else - not %j', (word) => {
     expect(isCloseReason(word)).toBe(false);
+  });
+});
+
+describe('a sale - B05', () => {
+  it('is a Closed whose reason is sold, or the retired sold outcome', () => {
+    expect([SOLD_REASON, RETIRED_SOLD]).toEqual(['sold', 'sold']);
+    expect(CLOSE_REASONS).toContain(SOLD_REASON);
+    expect(RETIRED_DISPOSITIONS).toContain(RETIRED_SOLD);
   });
 });

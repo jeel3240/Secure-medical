@@ -50,6 +50,22 @@ const CHECK_LABEL: Record<string, string> = {
   calling: 'Calling',
 };
 
+/**
+ * The totals across the top, in order. Each counts what *happened* in the
+ * period, not what arrived in it - a lead from yesterday who replies today is
+ * today's reply. ADMIN.md, "Overview". Sold sits after Closed: it is a share of
+ * it (B05).
+ */
+export function overviewStats(kpis: Overview['kpis']): { label: string; value: number; sub: string }[] {
+  return [
+    { label: 'Leads in', value: kpis.leadsReceived, sub: 'Arrived from EZ Texting' },
+    { label: 'Replied', value: kpis.responded, sub: 'First reply' },
+    { label: 'Completed', value: kpis.completed, sub: 'Finished the questions' },
+    { label: 'Closed', value: kpis.closed, sub: 'Leads closed by agents' },
+    { label: 'Sold', value: kpis.sold, sub: 'Closed as sold' },
+  ];
+}
+
 /** What follows the lead's name: " · Sold" for a lead closed with a reason (B04), else nothing. */
 export function activityAfter(entry: Overview['activity'][number]): string {
   if (entry.kind !== 'disposition' || entry.detail.value !== 'closed') return '';
@@ -115,15 +131,7 @@ export function OverviewPage() {
 
   if (!data) return <Banner tone="error">{error ?? 'The overview could not be loaded.'}</Banner>;
 
-  const { kpis } = data;
-  // Each counts what *happened* in the period, not what arrived in it - a lead
-  // from yesterday who replies today is today's reply. ADMIN.md, "Overview".
-  const stats = [
-    { label: 'Leads in', value: kpis.leadsReceived, sub: 'Arrived from EZ Texting' },
-    { label: 'Replied', value: kpis.responded, sub: 'First reply' },
-    { label: 'Completed', value: kpis.completed, sub: 'Finished the questions' },
-    { label: 'Closed', value: kpis.closed, sub: 'Leads closed by agents' },
-  ];
+  const stats = overviewStats(data.kpis);
 
   return (
     <section>
@@ -154,7 +162,7 @@ export function OverviewPage() {
         <section className={`card table-card${switching ? ' is-switching' : ''}`}>
           <header className="card-head">
             <h2 className="card-head__title">Agents</h2>
-            <span className="card-head__meta">Closed in this period</span>
+            <span className="card-head__meta">Closed and sold in this period</span>
           </header>
           <div className="table-wrap">
             <table className="table data-table">
@@ -163,6 +171,7 @@ export function OverviewPage() {
                   <th>Agent</th>
                   <th className="right">Working now</th>
                   <th className="right">Closed</th>
+                  <th className="right">Sold</th>
                   <th className="right" title="Callbacks due by the end of today, overdue ones included">Due today</th>
                   <th>Last active</th>
                 </tr>
@@ -175,6 +184,7 @@ export function OverviewPage() {
                     </td>
                     <td className="right tabular">{agent.holding || '-'}</td>
                     <td className="right tabular cell-strong">{agent.closed || '-'}</td>
+                    <td className="right tabular">{agent.sold || '-'}</td>
                     <td className="right tabular">{agent.callbacksDue || '-'}</td>
                     <td className="cell-muted">
                       {agent.lastActiveAt ? formatRelative(agent.lastActiveAt) : 'No activity yet'}

@@ -93,8 +93,9 @@ async function load(): Promise<void> {
            SELECT a.lead_id, 'outbound', 'Great. The next question follows here for the lead to answer.', 'r' || a.id, NULL, a.created_at + interval '2 seconds'
            FROM conversation_answers a`);
 
-  await q(`INSERT INTO dispositions (lead_id, agent_id, value, created_at)
-           SELECT n, 1 + (n % 10), 'closed', at + interval '1 day' FROM speed_plan
+  // Why each was closed, and its conversation, as the app writes them since B04.
+  await q(`INSERT INTO dispositions (lead_id, agent_id, value, reason, conversation_id, created_at)
+           SELECT n, 1 + (n % 10), 'closed', (ARRAY['sold', 'not_interested', 'wrong_number'])[1 + n % 3], n, at + interval '1 day' FROM speed_plan
            WHERE kind >= 40 AND kind < 88 AND kind NOT BETWEEN 75 AND 82 AND at < now() - interval '3 days' AND n % 20 <> 0`);
   await q(`INSERT INTO notes (lead_id, agent_id, body, created_at)
            SELECT n, 1 + (n % 10), 'Spoke to the lead, will call back.', at + interval '1 hour' FROM speed_plan
