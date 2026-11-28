@@ -55,9 +55,10 @@ on the code before the change.
   not change), named constraints, and a "stops unless" guard wherever it changes rows
   it expects in a known state (018's pattern).
 
-**Deploy notes.** Until B02 lands, the runbook starts the new code before running the
-migrations: a ticket whose code reads a column its own migration adds says
-"deploy outside the robot's calling hours" in its *Deploy note*.
+**Deploy notes.** Since B02 the runbook runs the migrations before the new code
+starts (`DEPLOY.md`, "Deploying"), so a ticket's code may read a column its own
+migration adds. Its migration must then suit the old code still running - it adds;
+a drop waits for a later deploy. A ticket's *Deploy note* says when it needs more.
 
 ## The tickets
 
@@ -70,7 +71,7 @@ below, is a suggested path through it.
 |---|---|---|---|---|
 | | **A. Ready now - no buckets needed** | | | |
 | B01 | [Queue: tier first, then newest](B01-queue-tier-then-newest.md) | - | S | Done 2026-11-28 |
-| B02 | [Deploy order: migrations before the new code](B02-deploy-order-migrations-first.md) | - | S | To do |
+| B02 | [Deploy order: migrations before the new code](B02-deploy-order-migrations-first.md) | - | S | Done 2026-11-28 |
 | B03 | [The upgrade check](B03-upgrade-check.md) | - | S | To do |
 | B04 | [Closed asks why](B04-closed-asks-why.md) | B03 | M | To do |
 | B05 | [Overview counts sold](B05-overview-counts-sold.md) | B04 | S | To do |

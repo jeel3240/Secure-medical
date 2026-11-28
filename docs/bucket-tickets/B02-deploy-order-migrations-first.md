@@ -9,8 +9,9 @@ the old schema: a robot call's `/auto/*` webhook or Seri's greeting that reads a
 its migration adds would answer 500 (review of the Phase 8 plan, 2026-11-27). Several
 Phase 8 tickets add a column and read it in the same merge.
 
-**Depends on:** - · **Size:** S · **Status:** To do · **Deploy note:** this ticket is
-the deploy note for the rest.
+**Depends on:** - · **Size:** S · **Status:** Done 2026-11-28 - the new order run
+locally and the production image migrating a scratch database · **Deploy note:** this
+ticket is the deploy note for the rest.
 
 ## Build
 
@@ -32,12 +33,12 @@ the deploy note for the rest.
 
 ## Done when
 
-- [ ] Locally, on a scratch database: `docker compose build api worker`, then
+- [x] Locally, on a scratch database: `docker compose build api worker`, then
       `docker compose run --rm api npm run migrate`, then `docker compose up -d`, and
       the app answers - the output in *As built*.
-- [ ] The production stage proven able to migrate: `docker build --target production`
+- [x] The production stage proven able to migrate: `docker build --target production`
       and `npm run migrate` run from that image against a scratch database.
-- [ ] Every doc that gives the deploy commands says the same thing (`grep` for
+- [x] Every doc that gives the deploy commands says the same thing (`grep` for
       `up -d --build` and `npm run migrate`).
 
 ## Tests
@@ -56,7 +57,32 @@ Automating deploys; any rollback tooling.
 
 ## As built
 
-*Empty until the ticket is done.*
+- **No code change.** The `production` stage already carries `scripts/migrate.js`
+  and `src/db/migrations/` (since review H13). The only file besides the docs is
+  `docker-compose.prod.yml`'s header comment, which gave the old `up -d --build`.
+- **`build`, not `build api worker`.** The order as planned built only the api and
+  the worker; `up -d` does not build, so the frontend - built into the Caddy
+  image - would have stayed on the old version. `build` with no service named
+  builds the api, the worker and Caddy (`docker compose ... config` lists those
+  three with a build; postgres is `dev-only`).
+- **Run locally** (the dev images; only the api started, as a local worker polls
+  the EZ Texting test account): `docker compose build api worker` - built;
+  `docker compose run --rm -e DATABASE_URL=.../deploy_b02 api npm run migrate` -
+  "applied 24 migration(s)", nothing new started; the same again - "no pending
+  migrations"; the local database - "no pending migrations"; `docker compose up -d
+  api` - `/api/health` 200 `{"status":"ok"}`; the api stopped again after, as it was.
+- **The production image:** `docker build --target production`, then `docker run
+  ... npm run migrate` on a scratch database - "applied 24 migration(s)"; inside it
+  `whoami` is `node`, `scripts/` holds `migrate.js`, 24 migration files, no ts-node.
+- **The docs agree.** `grep` for `up -d --build` and `npm run migrate`: `DEPLOY.md`
+  (the runbook, Seri's key, two rows of "When it goes wrong"), `WORKFLOW.md`
+  ("Migrations") and the compose comment changed. The old order stays only in
+  History lines, Done tickets and `ORIGINAL-PLAN.md`, a brief. A22's Build quotes
+  it for the deploy of 2026-11-24, already done; what A22 has left is the switch,
+  so it was not edited. "The order planned" folded into "Deploying", with "Why the
+  migrations go first" and "During a deploy" beside it; nothing cited the old name.
+- **The tracker's deploy notes** now say the migrations run first, and what a
+  migration must therefore be.
 
 ---
 
