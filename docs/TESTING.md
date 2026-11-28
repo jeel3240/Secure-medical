@@ -233,7 +233,7 @@ What it checks is `DOCS.md`, "Checking a doc".
 | A live check prints `Refusing to run` | The database it was given holds leads (or users) | Run it through `scripts/live-checks.sh`, which makes a scratch database |
 | `postgres is not running` from `live-checks.sh` | This project's postgres container is down | `docker compose up -d postgres` |
 | `MIGRATION FAILED` beside a check | A migration does not apply to an empty database | Its own error is printed under the line; fix the migration |
-| An upgrade check prints `migrate.js --to ... failed` | A migration does not apply over the rows the check seeded | The runner's error follows; fix the migration, or the seed if it is not the old shape |
+| An upgrade check prints `migrate.js --to ... failed`, or `migrate.js failed` on its last step | A migration does not apply over the rows the check seeded | The runner's error follows; fix the migration, or the seed if it is not the old shape |
 | An upgrade check prints `Refusing to run: this database has been migrated already` | It was given a migrated database; it migrates its own | Run it through `scripts/live-checks.sh`, or give it a new, empty one |
 | `npm run e2e` fails on a missing package | The api container runs an older image | `docker compose build api`, then `docker compose up -d --no-deps api` |
 | `ts-node: not found` | A dev script run in the server's production image | Dev scripts run only locally |
@@ -241,6 +241,7 @@ What it checks is `DOCS.md`, "Checking a doc".
 
 ## History
 
+- 2026-11-28 · "When it goes wrong": an upgrade check's last step, which migrates the rest, prints `migrate.js failed` with no `--to` (`scripts/upgrade.ts`, `migrateTo`) · review of B01-B06
 - 2026-11-28 · Upgrade checks: `migrate.js --to`, `scripts/upgrade.ts`, `live-checks.sh` leaving an upgrade check's database to it, and the first check, `harness-upgrade-check` · B03
 - 2026-11-27 · Written from `docs/README.md`'s "How to test", `FRONTEND.md`'s test commands and `FLOWS.md`'s "Testing a flow with one phone"; the counts of tests and checks dropped, as they drift; the claim that the server's image holds `scripts/` corrected - since review H13 it holds only `dist/`, `scripts/migrate.js` and the migrations · D06, D14, D29
 - 2026-11-23 · One `check()` for every live check and the end-to-end script, keys put in order before comparing, so a check no longer passes or fails on the order a query gave them · review Q9

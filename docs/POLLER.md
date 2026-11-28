@@ -391,13 +391,14 @@ in `ENVIRONMENT.md`.
 | Decision | By | Date |
 |---|---|---|
 | Poll every 30 seconds, not 60 (migration 005) | Jeel | 2026-09-29 |
-| A quiet poll still writes the checkpoint, so its time says the worker polled - since B06 the `ezt_last_read_at` row says it | Jeel | 2026-09-28 |
+| A quiet poll still records that it read EZ Texting, so the time says the worker polled | Jeel | 2026-09-28 |
 | The opener retry counts each wait from the last failed attempt, and never sends a first question more than 24 hours after the lead arrived | Jeel | 2026-09-28 |
 | The poller's block goes through `db/dnc.ts`, like every other | Jeel | 2026-10-01 |
 | A first question days late is sent only by hand, after a person has looked at the list - not by changing the retry | Jeel | 2026-10-16 |
 
 ## History
 
+- 2026-11-28 · Decisions: the quiet-poll row says what it records - it had read "A quiet poll still writes the checkpoint, so its time says the worker polled - since B06 the `ezt_last_read_at` row says it"; since B06 the record is `ezt_last_read_at` ("A cycle") · review of B01-B06
 - 2026-11-28 · One contact never stops the rest: each is taken in on its own, a failure logged (`poll.contact_failed`), counted (`failed`) and read again next poll, the checkpoint held just before it. Until then an error in `insertLead`, `isOnDnc` or `startConversation` for one contact failed the whole poll and left the checkpoint where it was. And `ezt_last_read_at`, when EZ Texting was last read, is what health and "Synced" read, in place of the checkpoint row's `updated_at` · B06
 - 2026-11-27 · Rewritten to the area template: the cycle's five tasks (it said
   four), the wait after each cycle (it said every 30 seconds); the repeat-lead

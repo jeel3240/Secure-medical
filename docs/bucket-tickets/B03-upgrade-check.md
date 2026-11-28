@@ -80,6 +80,9 @@ The upgrade checks of later migrations - each migration ticket writes its own.
 - **Docs:** `TESTING.md` ("Upgrade checks", two rows of "When it goes wrong"),
   `WORKFLOW.md` ("Migrations"), and one line in `SCHEMA.md`'s steps for changing
   the schema.
+- **Reviewed 2026-11-28, after group A:** `SCHEMA.md`'s step changed without its
+  History line, added then; `TESTING.md`'s row named only `migrate.js --to ...
+  failed`, while the last step, which migrates the rest, prints `migrate.js failed`.
 
 ---
 

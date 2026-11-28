@@ -422,13 +422,16 @@ describe('one contact never stops the rest - B06', () => {
     errors.mockRestore();
   });
 
-  it('the next poll reads it again and takes it in; the two before are skipped as phones we hold', async () => {
-    insertFails.add('+15550000052');
+  it.each([
+    ['its lead could not be written', () => insertFails.add('+15550000052'), () => insertFails.clear()],
+    ['its do-not-call check threw', () => dncFails.add('+15550000052'), () => dncFails.clear()],
+  ])('when %s, the next poll reads it again and takes it in; the two before are skipped as phones we hold', async (_label, fail, mend) => {
+    fail();
     jest.spyOn(logModule.log, 'error').mockImplementation(() => undefined);
     await pollOnce();
 
     checkpointValue = checkpointWritten() as string;
-    insertFails.clear();
+    mend();
     recorded.length = 0;
     sendMessage.mockClear();
     const again = await pollOnce();

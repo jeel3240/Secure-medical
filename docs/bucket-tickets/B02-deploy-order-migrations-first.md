@@ -83,6 +83,12 @@ Automating deploys; any rollback tooling.
   migrations go first" and "During a deploy" beside it; nothing cited the old name.
 - **The tracker's deploy notes** now say the migrations run first, and what a
   migration must therefore be.
+- **Reviewed 2026-11-28, after group A:** the order was proved in pieces - the new
+  image migrating a scratch database while the old code ran, then `up -d api` -
+  not as one run of the production runbook, whose `build` under
+  `docker-compose.prod.yml` builds the Caddy image too. `DEPLOY.md` and
+  `WORKFLOW.md` both said how a migration suits the old code; `DEPLOY.md` now points
+  to `WORKFLOW.md`, "Migrations", which owns it.
 
 ---
 

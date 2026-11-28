@@ -25,7 +25,7 @@ what happened; the screen decides the icons and wording, as it does for queue ta
 | `calls` | `call` | `outcome`, `durationSec`, `direction`, `agentId`; on the robot's call `scriptResult` and `answers`; on a call Seri took `seri`; a recorded call's `transcript` |
 | `notes` | `note` | The body |
 | `callbacks` | `callback` | `scheduledAt`, `doneAt`, `reason`; on one Seri booked, her `note` |
-| `dispositions` | `disposition` | The value |
+| `dispositions` | `disposition` | The value, and on a Closed asked why, its `reason` - worded "Disposition: Closed · Sold" (`outcomeLabel`, `AGENT-WORKSPACE.md`, "Dispositions") |
 | `activity_log`, the actions with no row of their own (`TIMELINE_ACTIONS`) | `activity` | The action and its detail, and `subject` - whose claim was released or whose callback was moved, when that is not who did it |
 | The lead and its newest conversation | `system` | The events below |
 
@@ -193,7 +193,7 @@ read from the top: the list does not jump to its end under the reader.
 - **The sidebar is worked out from the timeline** (`summarise`), not from another
   endpoint: Status, Attempts (calls, texts out, texts in - an agent's call and the
   robot's count, one the lead placed does not), Last contact, Next action ("Callback
-  3:00 PM · Maya Chen"), DNC and the dispositions. Counting what the page already
+  3:00 PM · Maya Chen"), DNC and the dispositions, each with its reason. Counting what the page already
   holds costs nothing and cannot disagree with it.
 - **Two of the brief's sidebar rows have no data and are shown as gaps** ("Not
   done"): Consent ref, and Duplicate check.
@@ -263,6 +263,7 @@ Reads `leads`, the newest `conversations` row, `messages`, `conversation_answers
 
 ## History
 
+- 2026-11-28 · An outcome carries why the lead was closed, on the timeline and in the sidebar's dispositions - built by B04, whose commit left this doc as it was · B04, review of B01-B06
 - 2026-11-27 · Written, from `AGENT-WORKSPACE.md`'s "The timeline", the lead card's answer labels and its known gaps; merged in: the Lead Timeline page from `FRONTEND.md`, and the log's place on screen from `AUDIT.md` · docs standard · D22, D26, D10
 - 2026-11-23 · `Timeline`'s `autoScroll`, left over from when the workspace used it, removed with its ref (a `<div>` inside an `<ol>`); the page header's two states written down - Pick up and Resume, "Held by" for anyone else's, a superadmin included · review Q7, R15
 - 2026-11-22 · The Lead Timeline page spun for ever when a load failed; it is a banner since · review M31

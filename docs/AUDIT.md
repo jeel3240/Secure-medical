@@ -208,7 +208,7 @@ WHERE source = 'eztexting' AND payload->>'fromNumber' = '16025550147' ORDER BY i
 
 ## History
 
-- 2026-11-28 · `outcome.set` keeps `reason`, why the lead was closed · B04
+- 2026-11-28 · `outcome.set` keeps `reason`, why the lead was closed · nothing may be lost: the reason is recorded with the action, in the same transaction · B04
 - 2026-11-27 · Rewritten as a reference: the actions table checked against `ACTIVITY_ACTIONS` - 41 actions, not 40; every action said to be proved by a test, but `dev.test_reset` is not, and now says so; the screen's `LOG` entries handed to `TIMELINE.md`; counts dropped · D10
 - 2026-11-24 · `ai_agent.switched` also from the Seri card on Admin > Configuration, with the superadmin as actor and `via: 'website'`
 - 2026-11-23 · `dev.test_reset`: the dev scripts wrote with no record, and the number move overwrote the only record of the number a lead had · review Q9

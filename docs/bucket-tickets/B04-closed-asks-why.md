@@ -9,7 +9,7 @@ with the conversation it closed.
 must know which (B22), and Admin can then count leads sold (B05).
 
 **Depends on:** B03 · **Size:** M · **Status:** Done 2026-11-28 - migration 025, the
-live, upgrade, route, frontend and e2e checks pass · **Deploy note:** the route
+live, upgrade, route, frontend and e2e checks pass; the popup seen in Chrome · **Deploy note:** the route
 still accepts a Closed with no reason - a browser still running the old page posts
 none until it reloads. B19 makes the reason required, a deploy later.
 
@@ -114,6 +114,20 @@ Counting sold on Overview (B05); Closed applying to one conversation in `CLOSED_
 - **Runs:** every live check (25, both upgrade checks among them); the e2e, 143 checks,
   step 8 saving Sold against the lead's conversation; backend 1,985 and frontend 478
   tests; lint, types, the frontend build, the image build.
+- **Reviewed 2026-11-28, after group A:**
+  - **Seen in Chrome** on fake leads, with calling and texting off: the popup, Sold
+    making the button "Closed · Sold", Cancel choosing nothing with Save still off,
+    each reason saved, the badge, the timeline and its sidebar, and Overview's feed.
+  - **Two docs this commit should have changed:** `TIMELINE.md` (a `disposition`
+    entry carries its reason), fixed in the review, and `ADMIN.md` (the feed's
+    words), which B05's commit brought up to date.
+  - **A gap left for B19:** on 025's deploy the old code, still running between
+    `migrate` and `up`, saves outcomes without `conversation_id`, and 025's
+    backfill has already run. Nothing reads the column yet; B19, its first reader,
+    fills those rows in by the same rule before it reads them (its Build).
+  - The live check now proves the feed's SQL carries the reason; only a frontend
+    test with a hand-built entry did. `SCHEMA.md`'s unconstrained-columns table
+    rightly left alone: `reason` has its checks.
 
 ---
 
