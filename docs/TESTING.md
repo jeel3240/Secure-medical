@@ -1,7 +1,8 @@
 # Testing it
 
 Every way the app is tested, and the command for each: unit and route tests,
-lint and type checks, the live checks against a real Postgres, the speed check,
+lint and type checks, the live checks against a real Postgres, the upgrade
+checks of migrations that change existing rows, the speed check,
 the end-to-end script, Seri's test sets against OpenAI, walking a flow with one
 phone, and the docs check. What each area's tests prove is in its own doc's
 Tests table; this is how to run them. Running the app is `RUNNING.md`.
@@ -48,8 +49,9 @@ scratch database:
 
 ```bash
 cd backend
-scripts/live-checks.sh              # all of them
-scripts/live-checks.sh flows queue  # just these - the names without -live-check
+scripts/live-checks.sh                        # all of them, the upgrade checks too
+scripts/live-checks.sh flows queue            # just these - the names without -live-check
+scripts/live-checks.sh harness-upgrade-check  # an upgrade check, by its whole name
 ```
 
 - It uses this project's own postgres (`docker compose ps -q postgres`), the one on
@@ -65,6 +67,45 @@ scripts/live-checks.sh flows queue  # just these - the names without -live-check
   the real reply path, so it has the rows a real lead has. Nothing is sent.
 
 Which check proves what is in each area doc's Tests table.
+
+## Upgrade checks
+
+A live check's database is empty when it is migrated, so a migration that changes
+or fills in existing rows - a backfill, a copy from one column to another, a "stops
+unless" guard - never runs over a row there. An upgrade check proves it on rows in
+the old shape, as production's database has them. Every such migration ships one
+(`WORKFLOW.md`, "Migrations").
+
+An upgrade check is `backend/scripts/<name>-upgrade-check.ts`. It:
+
+1. refuses a database that has been migrated (`refuseUnlessEmpty`);
+2. migrates its empty database to the version before the migration it proves -
+   `migrateTo('021')`, which runs `scripts/migrate.js --to 021`: every file up to
+   and including `021_*.sql`, then stops, recorded in `schema_migrations` as any
+   run is;
+3. seeds rows in that version's shape with plain SQL - never through
+   `src/db/`, whose functions expect today's shape;
+4. takes the rows as they are (`rowsOf`), runs the migration it proves
+   (`migrateTo('025')`), and checks each row came through as the migration
+   promises - what it must not touch with `asBefore`, what it fills in by value -
+   with `scripts/check.ts`'s `check`;
+5. runs the rest (`migrateTo()`), so a later migration that cannot run over those
+   rows fails here too, and ends with `verdict()`.
+
+The helpers are `backend/scripts/upgrade.ts`; `scripts/harness-upgrade-check.ts`
+is the first and the pattern - 021's rows through 022 to 024. `live-checks.sh`
+makes an upgrade check's empty database but does not migrate it, and prints the
+same line as for any check. By hand, on a database of its own:
+
+```bash
+docker compose exec postgres psql -U app -d postgres -c 'CREATE DATABASE upgrade_check'
+cd backend
+DATABASE_URL=postgres://app:app@localhost:5433/upgrade_check JWT_SECRET=x EZT_USERNAME=x \
+  EZT_PASSWORD=x EZT_GROUP=x npx ts-node --transpile-only scripts/harness-upgrade-check.ts
+```
+
+`migrate.js --to` takes a number of three digits and refuses anything else, a
+number with no file, and a database already past it.
 
 ## The speed check
 
@@ -192,12 +233,15 @@ What it checks is `DOCS.md`, "Checking a doc".
 | A live check prints `Refusing to run` | The database it was given holds leads (or users) | Run it through `scripts/live-checks.sh`, which makes a scratch database |
 | `postgres is not running` from `live-checks.sh` | This project's postgres container is down | `docker compose up -d postgres` |
 | `MIGRATION FAILED` beside a check | A migration does not apply to an empty database | Its own error is printed under the line; fix the migration |
+| An upgrade check prints `migrate.js --to ... failed` | A migration does not apply over the rows the check seeded | The runner's error follows; fix the migration, or the seed if it is not the old shape |
+| An upgrade check prints `Refusing to run: this database has been migrated already` | It was given a migrated database; it migrates its own | Run it through `scripts/live-checks.sh`, or give it a new, empty one |
 | `npm run e2e` fails on a missing package | The api container runs an older image | `docker compose build api`, then `docker compose up -d --no-deps api` |
 | `ts-node: not found` | A dev script run in the server's production image | Dev scripts run only locally |
 | A test set or replay throws `OPENAI_API_KEY is not set` | The key is not in the shell | `OPENAI_API_KEY=... npm run ...` |
 
 ## History
 
+- 2026-11-28 · Upgrade checks: `migrate.js --to`, `scripts/upgrade.ts`, `live-checks.sh` leaving an upgrade check's database to it, and the first check, `harness-upgrade-check` · B03
 - 2026-11-27 · Written from `docs/README.md`'s "How to test", `FRONTEND.md`'s test commands and `FLOWS.md`'s "Testing a flow with one phone"; the counts of tests and checks dropped, as they drift; the claim that the server's image holds `scripts/` corrected - since review H13 it holds only `dist/`, `scripts/migrate.js` and the migrations · D06, D14, D29
 - 2026-11-23 · One `check()` for every live check and the end-to-end script, keys put in order before comparing, so a check no longer passes or fails on the order a query gave them · review Q9
 - 2026-11-22 · `live-checks.sh` uses this project's own postgres, and a migration that fails stops its check with its own error · review M37; `npm run typecheck:scripts` added; `ai:replay` exits 1 when a replay breaks a rule; the end-to-end script at 142 checks - 131 on 2026-11-12, 97 before Seri - beside twenty-three live checks

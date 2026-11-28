@@ -129,6 +129,12 @@ file that already ran is not noticed, which is why the rule above holds; a check
 would need a column on `schema_migrations`, a change to make by migration if it is
 ever wanted.
 
+**A migration that changes or fills in existing rows ships an upgrade check** -
+a backfill, a copy, a guard that stops unless the rows are as expected. The live
+checks run every migration on an empty database, which proves nothing about rows;
+an upgrade check runs it over rows seeded in the old shape (`TESTING.md`,
+"Upgrade checks").
+
 **Run migrations through `npm run migrate`, never by piping SQL into psql.**
 Piping applies the schema without recording it, so the runner tries to apply the
 same file again later and fails.
@@ -164,6 +170,7 @@ second misses the second part: rebuild it, or run the second part's SQL there on
 
 ## History
 
+- 2026-11-28 · A migration that changes existing rows ships an upgrade check · B03
 - 2026-11-28 · On deploy the migrations run before the new code starts, so a migration suits the code still running: it adds, and a drop waits for a later deploy · B02
 - 2026-11-27 · Split: deploying, the images, the switches, `twilio:configure` and CloudWatch to `DEPLOY.md`; the credentials table and the definition of done from `CLAUDE.md`; the EZ Texting account's rules to `EZTEXTING-API.md`, which owns them; `npm run docs:check` before a PR; the dated notes to this History · D08
 - 2026-11-24 · `main` and production hold 001 to 024: 021, five automated calls at once for each person free (T29, `AUTO-CALLS.md`, "Traffic"), through PR #29; 022 to 024 through PR #31, applied on production at 23:29 UTC. Before, on `dev`: 022, Seri (`AI-AGENT.md`) - new columns on `calls` and `callbacks`, the add-only `call_ai_turns`, and the `ai_agent` setting seeded `off`; 023 (A15), `callbacks.note` and one call back per call she booked it on; 024 (A31), `call_ai_turns.data`, the brain's record of each reply. None changed an existing row, and the app writes the new parts only on a call Seri takes, so with her switch off calls went on as before

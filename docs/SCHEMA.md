@@ -560,7 +560,8 @@ values are fixed in code instead.
    row in "Tables" for a new table), its constraints and indexes with their names,
    a "`settings` rows" row for a new setting, and a History line.
 3. A rule the database enforces is proved by a live check against a real Postgres
-   (`backend/scripts/live-checks.sh`).
+   (`backend/scripts/live-checks.sh`); a migration that changes existing rows, by
+   an upgrade check as well (`TESTING.md`, "Upgrade checks").
 
 ## History
 
