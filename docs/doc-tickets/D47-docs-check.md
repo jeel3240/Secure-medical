@@ -10,7 +10,7 @@
 
 - `scripts/docs-check.mjs` at the repo root (plain Node, no dependencies), run with `npm run docs:check` from `backend/`:
 -   - every relative link and every backticked `docs/...md` or `backend/...`/`frontend/...` path exists;
--   - no phone number outside an allowed list (the 555 range, the dev and production Twilio numbers), no name from a forbidden list, no `dailyleadhub`;
+-   - no phone number outside an allowed list (the 555 range, the dev and production Twilio numbers), no name or domain from a forbidden list (kept as hashes, so the check does not itself hold them);
 -   - each doc's type from `docs/README.md`'s table, and its `##` headings a subsequence of the type's order (`DOCS.md`);
 -   - no dated aside - `*(20` - outside a History section;
 - documented in `TESTING.md`; listed in the tracker gates; a ticket's *Done when* runs it.

@@ -160,7 +160,10 @@ A new phase takes the next free letter.
 
 ## Checking a doc
 
-Before a doc change is merged:
+`npm run docs:check` (from `backend/`; `scripts/docs-check.mjs`) checks the
+links, file paths, phone numbers, forbidden names, sections and dated asides of
+every doc - `--self-test` shows each rule catching its fault. Before a doc change
+is merged, it passes, and:
 
 - [ ] its type, and its sections in the type's order;
 - [ ] the body says how things work today - no dated notes left in it;
