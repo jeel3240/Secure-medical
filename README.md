@@ -16,6 +16,7 @@ how to run it, and its table says which doc covers what.
 - [Database schema](docs/SCHEMA.md)
 - [Frontend: what was built and why](docs/FRONTEND.md) · [Frontend design brief](docs/DESIGN-PROMPT.md)
 - [Workflow: branches, migrations, deploys](docs/WORKFLOW.md)
+- [How the docs are written, and how a phase is planned](docs/DOCS.md)
 
 Architecture decisions, the data model and the plan are in
 [`CLAUDE.md`](CLAUDE.md).

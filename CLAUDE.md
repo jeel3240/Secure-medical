@@ -842,6 +842,7 @@ were taken on trust and the poller silently ingested nothing.
 
 ### Reading first
 
+- **Every doc follows `docs/DOCS.md`** (Jeel, 2026-11-27): its type and sections, today first and history last, one fact in one place, the templates in `docs/templates/`. Read it before writing or changing any doc. **A new phase is planned with `/new-phase`** (`.claude/skills/new-phase/`) - the same design doc, decisions, tracker and ticket files every time; no other planning files (no `pending.md`, `plan.md`). The docs are being brought to the standard - `docs/doc-tickets/README.md`.
 - Read `docs/LEAD-FLOW.md` first if the app is new to you: a lead's whole life on one page.
 - Read `docs/EZTEXTING-API.md` before touching the poller, sender, or webhook. It has verified endpoints and field names. `docs/WEBHOOKS.md` is what our webhook does with a reply.
 - Read `docs/SCHEMA.md` before changing the data model or writing a migration.

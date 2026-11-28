@@ -325,6 +325,7 @@ commit.
 | Doc | Covers | Update it when you change |
 |---|---|---|
 | `../CLAUDE.md` | Architecture decisions, four-week plan | An architectural decision |
+| `DOCS.md` | How every doc is written: the rules, the types of doc and their sections, planning a phase, the phases' letters; `templates/` holds the skeletons; `doc-tickets/` brings the docs to it | The standard itself, or a new phase (its row in "The phases") |
 | `LEAD-FLOW.md` | A lead's whole life on one page: every status, the queue, Wrap up. Start here | Any status, the queue's contents, or Wrap up - alongside the doc that owns the rule |
 | `AUTH.md` | Sign-in, sessions, roles, account management | Auth routes, guards or the users table |
 | `SCHEMA.md` | Database tables and why | A migration |
