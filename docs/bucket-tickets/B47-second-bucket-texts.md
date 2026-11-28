@@ -12,7 +12,7 @@ client's content · **Deploy note:** a migration with new rows only.
 Following "How to add a bucket" (B44):
 
 - a migration: the bucket row; its flow - questions, choices, replies and points, the
-  best answers reaching 100; its missed-call text and line; texts and robot calls off;
+  best answers reaching 100; its missed-call text and line; texts, calls and Seri off; its call lines (B50);
 - its EZ Texting group set on the test account, then on production;
 - a test contact on the test account walks the flow; then texts switched on in
   production from Admin.
@@ -35,7 +35,7 @@ any path), `docs/SCHEMA.md`, `docs/WORKFLOW.md`, `docs/BUCKETS.md`.
 
 ## Not in this ticket
 
-Its robot script (B48) and its Seri (B49).
+Its Seri and its calls (B49). It has no robot script (Jeel, 2026-11-27; B48 dropped).
 
 ## As built
 

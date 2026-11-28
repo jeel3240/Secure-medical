@@ -11,8 +11,9 @@ Nothing is built. The phase is three parts, each able to go live on its own:
 | 3 | Screens that make setting up a bucket easy - after Parts 1 and 2 are in use | To do |
 
 A **bucket** is one campaign: the EZ Texting group its leads arrive in, its text
-questions, its robot call script, what Seri knows for it, and its missed-call
-text. The app runs one bucket today, antibiotics; this is the agreed design for
+questions, what Seri knows for it - its calls are Seri's - and its missed-call
+text. Antibiotics also keeps the robot call script it has today; a new bucket has
+none (Jeel, 2026-11-27). The app runs one bucket today, antibiotics; this is the agreed design for
 running several at once. Every ticket built from it updates this doc in the same
 commit, so it always says what is decided, what is built and what is not. The code
 it changes is spread across `backend/src` - "What changes in the code", below.
@@ -23,11 +24,13 @@ it changes is spread across `backend/src` - "What changes in the code", below.
 
 - the EZ Texting group its leads arrive in, and its "- taken" group;
 - its text questions - a flow (`FLOWS.md`);
-- its robot call script (`AUTO-CALL-SCRIPT.md`, "The script") and the link it texts;
+- its call lines: the voicemail message, the link text and the stop line and words -
+  read by Seri, and by antibiotics' robot script (`AUTO-CALL-SCRIPT.md`, "The
+  script"), which no other bucket has;
 - its missed-call text;
 - what Seri knows for it - a knowledge pack ("Seri with several buckets");
-- its own switches: texts, robot calls, Seri. A new bucket starts with all three
-  off.
+- its own switches: texts, calls, Seri. A new bucket starts with all three off; with
+  no robot script, its calls go out only with Seri on.
 
 The antibiotics bucket becomes the first bucket: today's flow and robot script
 belong to it, and every lead today is recorded as having arrived in it ("The
@@ -41,7 +44,7 @@ One person can be in more than one bucket. One person stays one lead, as today
 row"):
 
 - each bucket a person joins adds a **conversation** to their lead, with that
-  bucket's questions, answers, score and robot call;
+  bucket's questions, answers, score and automated call;
 - the queue shows them once, with their current bucket - the bucket of their newest
   conversation - and the same agent works them across buckets;
 - the lead page and timeline show every bucket they have been in;
@@ -64,8 +67,8 @@ When a person arrives in a new bucket:
 
 | Their other bucket | What happens |
 |---|---|
-| Active: text questions still open, an agent holding them, an open callback, or a review conversation | Nothing is sent for the new bucket: no texts, no robot call. They go into the agents' queue as **Needs review · 2 buckets**; the first bucket carries on as normal, so their replies answer its questions |
-| Finished or expired | The new bucket starts as normal: its first question, then its robot call |
+| Active: text questions still open, an agent holding them, an open callback, or a review conversation | Nothing is sent for the new bucket: no texts, no automated call. They go into the agents' queue as **Needs review · 2 buckets**; the first bucket carries on as normal, so their replies answer its questions |
+| Finished or expired | The new bucket starts as normal: its first question, then its automated call |
 | Number on the DNC list, or opted out in EZ Texting | Nothing, ever |
 
 An agent who opens a person tagged **Needs review · 2 buckets** sees both buckets on
@@ -86,7 +89,7 @@ choices; the agent picks one and it is saved with the outcome. DNC is unchanged.
 
 | Closed as | When the person joins a new bucket |
 |---|---|
-| **Sold** | The new bucket starts: its questions and its robot call, and the lead reopens the normal way, for example when they answer |
+| **Sold** | The new bucket starts: its questions and its automated call, and the lead reopens the normal way, for example when they answer |
 | **Wrong number** | Nothing: the phone is not that person |
 | **Not interested** | The new bucket starts - they said no to one product, and the partner sent them for another on purpose |
 
@@ -171,7 +174,7 @@ new bucket's group holds only people the app has never taken in.
 | Replies | The conversation stays on its bucket's questions to the end |
 | Score and tier | The bucket's own points, on the one shared scale: its best answers reach 100 (`FLOWS.md`: no lead may pass 100), and HOT, WARM and LOW mean the same in every bucket |
 | The queue and Admin > Leads | One list for everyone, with a Bucket column and a Bucket filter. A person's "Received" date is their newest arrival, so someone who comes back for a new bucket counts as new today; on Admin > Leads a held person counts under Needs review |
-| Robot calls | The bucket's script and link; switched on or off per bucket. "Worked" means worked since this bucket's conversation began, so a new bucket counts as a new lead and gets its own robot call |
+| Automated calls | Seri, with the bucket's pack and call lines; switched on or off per bucket. A bucket with no robot script places no call while Seri is off; while OpenAI is down the dialler waits, as it does today; if Seri fails during a call she says one goodbye line and the lead goes to the agents (B51). Antibiotics' robot script still takes its calls when Seri is off or fails. "Worked" means worked since this bucket's conversation began, so a new bucket counts as a new lead and gets its own call |
 | Missed-call text | The bucket's own wording |
 | Seri | The bucket's knowledge pack; switched on or off per bucket |
 
@@ -186,10 +189,11 @@ There is one Seri, handed the lead's bucket's knowledge pack on each call.
 | How she books call backs and puts people through | ✓ | |
 | Brand, the offer, how she introduces herself | | ✓ |
 | Approved answers and the product list | | ✓ |
-| Stop line, link text and voicemail message - from the bucket's robot script | | ✓ |
+| Stop line, link text and voicemail message - the bucket's call lines | | ✓ |
 
 - A lead never hears another bucket's offer or answers.
-- Each bucket has its own Seri switch; with it off, its calls use its robot script.
+- Each bucket has its own Seri switch; with it off, antibiotics' calls use its robot
+  script, and a bucket with no script places no calls.
 - A broken pack stops the API, as a broken knowledge file does today: packs are
   compiled in and every pack is checked by the tests before any merge, so a broken
   one never reaches the server.
@@ -205,7 +209,7 @@ answers and a round of testing before her switch goes on.
 
 - [ ] The EZ Texting group its leads arrive in
 - [ ] The text questions, the answer choices, the reply to each, and the points - the best answers reaching 100
-- [ ] The robot call wording, and the link to text
+- [ ] The voicemail message, the link to text and the stop wording
 - [ ] The missed-call text
 - [ ] For Seri: the brand and offer, approved answers to the questions people ask, and the product list
 
@@ -249,7 +253,8 @@ then they are here.
 | `ezt_taken_group_id`, `ezt_taken_group_name` | The "- taken" group; unique |
 | `knowledge_key` | Seri's pack, the folder `backend/src/ai/knowledge/<key>/`. Her knowledge stays in the repo, changed by a reviewed PR |
 | `missed_call_text` | Moved from `settings.message_missed_call` |
-| `texts_on`, `robot_calls_on`, `ai_agent_on` | Its three switches, each change in `activity_log`; `ai_agent_on` moved from `settings.ai_agent` |
+| `texts_on`, `calls_on`, `ai_agent_on` | Its three switches, each change in `activity_log`; `ai_agent_on` moved from `settings.ai_agent` |
+| `voicemail_body`, `link_text`, `opt_out_body`, `opt_out_words` | Its call lines, moved from `call_scripts` (copied, then removed), read by Seri and by antibiotics' robot script - one place for every bucket (B50) |
 | `created_at` | |
 
 **New: `bucket_arrivals`** - add-only, one row each time the poller takes a person in
@@ -274,7 +279,7 @@ those columns go. So does `leads.previous_lead_id`, never used (`SCHEMA.md`).
 | Table | Change |
 |---|---|
 | `flows` | `bucket_id`, required. One active flow per bucket, in place of one overall. `flows.ezt_group`, never read, goes |
-| `call_scripts` | `bucket_id`, required. `call_scripts_one_active` becomes one active per bucket |
+| `call_scripts` | `bucket_id`, required. `call_scripts_one_active` becomes one active per bucket - only antibiotics has one; a new bucket has none. The voicemail, link and stop lines leave it for `buckets` (B50) |
 | `conversations` | No new column: the bucket is its flow's, so the two cannot disagree |
 | `calls` | `conversation_id` on an automated call. `calls_one_automated_per_lead` becomes one per conversation, keeping its `not_placed` exception |
 | `dispositions` | `reason` - `sold`, `not_interested`, `wrong_number` - only on `closed` (a check), required on a new Closed by the route; and `conversation_id`, the bucket it closed. Rows from before stay as they are. A new field, not the retired values of the same names, so rows from before keep meaning what they meant |
@@ -295,20 +300,20 @@ same migration that adds the tables.
 | `leads` | One per phone (`phone` unique, 001) | Unchanged |
 | `conversations` | One open per lead (001) | Unchanged; its bucket comes from its flow |
 | `flows` | One active (`is_active`); `flows.ezt_group` exists but is not read (012, `FLOWS.md`) | One per bucket |
-| `call_scripts` | One active (`call_scripts_one_active`, 015) | One per bucket |
-| `calls` | One automated call per lead (`calls_one_automated_per_lead`, 014) | One per conversation, so each bucket gets its robot call |
+| `call_scripts` | One active (`call_scripts_one_active`, 015) | Antibiotics' only; a new bucket has none |
+| `calls` | One automated call per lead (`calls_one_automated_per_lead`, 014) | One per conversation, so each bucket gets its call |
 | Missed-call text | One `settings` row, `message_missed_call` | One per bucket |
 | Seri's knowledge | Three files in `backend/src/ai/knowledge/` | A pack per bucket |
 | Seri's switch | One `settings` row, `ai_agent` | One per bucket |
 | Queue, Admin > Leads | No bucket | Bucket column and filter; the **Needs review · 2 buckets** tag |
 | Wrap up's Closed | `closed`, no reason (`core/dispositions.ts`) | A reason - sold, not interested, wrong number - saved with it |
 | A closed lead | Reopened by four things (`CLOSED_SQL`) | Also by a new bucket starting, when closed as Sold or Not interested |
-| Admin > Configuration | Shows the one bucket | A bucket picker at the top; the Calls tab shows that bucket's robot and Seri switches |
+| Admin > Configuration | Shows the one bucket | A bucket picker at the top; the Calls tab shows that bucket's calls and Seri switches, and its robot script if it has one |
 
 Which ticket changes which file, in which order, is the tracker's,
 [`bucket-tickets/README.md`](bucket-tickets/README.md), "The order" - the order that
 counts, split finer than the three steps of Part 1: buckets and texts first, then
-robot calls per bucket, then Seri per bucket.
+calls per bucket - Seri's for every new bucket - then Seri per bucket.
 
 ## Tests
 
@@ -317,7 +322,7 @@ robot calls per bucket, then Seri per bucket.
 | Every constraint of each new migration, against a real Postgres | A live check, as for every migration since 012 |
 | A migration that fills in existing rows, on a copy of today's data | The upgrade check (B03) |
 | Each row of the arrival tables above | Unit tests on `decideArrival`, one per row (B22) |
-| Two buckets end to end: a held person, each bucket's words, robot calls only where on | `npm run e2e`, across a test bucket (B43) |
+| Two buckets end to end: a held person, each bucket's words, calls only where on, a bucket with no script called only by Seri | `npm run e2e`, across a test bucket (B43) |
 | Every path on the test account | B45 |
 | The antibiotics bucket exactly as today, before each step goes live | The gates in the tracker, "The rules every ticket keeps" |
 
@@ -337,7 +342,7 @@ Nothing is built yet; the tracker has every ticket's state. Beyond Part 1's tick
 - **Waiting on the client: the rest.** The tracker's "Waiting on" says which tickets
   each blocks.
   - *Staff and hours:* will the same call center staff handle every bucket, or each
-    bucket its own team? Should robot calls for every bucket use today's hours,
+    bucket its own team? Should automated calls for every bucket use today's hours,
     11 AM to 5 PM Arizona time, Monday to Friday? A team per bucket means the queue,
     the transfers and who is free are all split by bucket.
   - *Calling number:* one phone number for all buckets, or one each? A number per
@@ -365,8 +370,9 @@ reminder. The client's answers:
 
 What the answers mean for the build:
 
-- Each list can be a bucket of its own, with its own reminder script; it does not
-  need Seri per bucket, so it can follow Part 1's robot calls per bucket.
+- Each list can be a bucket of its own. Its reminders are fixed calls, not
+  conversations - the client's answer: never Seri - so Part 2 brings back a script
+  per list, built on antibiotics' robot script code; Part 1's new buckets have none.
 - A second call breaks today's one robot call per lead
   (`calls_one_automated_per_lead`).
 - The texts the app sends on its own - the missed-call text, the link after a "yes"
@@ -435,7 +441,8 @@ only, and is decided when Part 3 starts.
 | The **Needs review · 2 buckets** tag clears when an agent picks the person up, as Inbound reply does; on Admin > Leads a held person counts under Needs review | Jeel | 2026-11-27 |
 | "Active" in a bucket means: its text questions are open, or an agent holds the person, or they have an open callback, or a review conversation - an active person's new bucket is held | Jeel | 2026-11-27 |
 | A person's "Received" date is their newest arrival, so someone who comes back for a new bucket counts as new today | Jeel | 2026-11-27 |
-| "Worked" means worked since this bucket's conversation began: a new bucket counts as a new lead and gets its own robot call | Jeel | 2026-11-27 |
+| "Worked" means worked since this bucket's conversation began: a new bucket counts as a new lead and gets its own call | Jeel | 2026-11-27 |
+| New buckets have no robot call script: their calls are Seri's. While OpenAI is down the dialler waits; if Seri fails during a call she says one goodbye line and the lead goes to the agents. Antibiotics keeps its robot script as it is | Jeel | 2026-11-27 |
 | A lead closed before Closed asked why (no reason saved) starts a new bucket; one saved as the retired "Wrong number" does not | Jeel | 2026-11-27 |
 | A person arriving in two buckets in one read goes to the older bucket (the lower id); the other holds them | Jeel | 2026-11-27 |
 | A broken knowledge pack stops the API, as today - packs are compiled in and checked by the tests before any merge, so a broken one never reaches the server | Jeel | 2026-11-27 |
@@ -447,6 +454,7 @@ on its own by B01.
 
 ## History
 
+- 2026-11-27 · New buckets get no robot call script - their calls are Seri's, with a goodbye line and the agents' queue when she fails, and the dialler waiting while OpenAI is down; antibiotics keeps its script. The call lines (voicemail, link, stop) move to `buckets`; B48 dropped, B50 and B51 added · Jeel
 - 2026-11-27 · Rewritten to the area template, with a Status line in the fixed words: the two-groups proposal moved from Decisions to Not done as an open question; the queue-order decision handed to `QUEUE.md`; Parts 2 and 3 under Not done; the order of work replaced by the tracker's "The order", and the client's questions linked to its "Waiting on"; "before Part 1 starts" dropped - the tracker lets about forty tickets start before the client answers · D45
 - 2026-11-27 · Part 1 split into 49 tickets, B01-B49 (`bucket-tickets/`). A broken knowledge pack now stops the API, as today - it had read "switches off that bucket's Seri only". Decided with Jeel: the tag, "active", "Received", "worked", an old Closed, two buckets in one read, the "- taken" group; and the queue's order (`QUEUE.md`)
 - 2026-11-27 · On the test account, a contact joining another group moves neither `createdAt` nor anything else (`EZTEXTING-API.md`); the two-group plan written, and `groupIdsAdd` tried - `groupIdsRemove` not yet. Part 2 put on hold (Jeel)

@@ -1,11 +1,10 @@
 # B49 · Second bucket: Seri
 
-**Goal:** Seri runs the second bucket's calls with its own pack, switched on only after
-her answers pass their tests and real calls.
+**Goal:** Seri runs the second bucket's calls with its own pack - the only way it is called, as it has no robot script - switched on, with its calls, only after her answers pass their tests and real calls.
 
 **Why:** `BUCKETS.md`: a new bucket's Seri is copy, edit, test, then switch on.
 
-**Depends on:** B48 · **Size:** M · **Status:** Waits on the client's content ·
+**Depends on:** B47 · **Size:** M · **Status:** Waits on the client's content ·
 **Deploy note:** the pack ships compiled; the switch stays off until the end.
 
 ## Build
@@ -15,8 +14,8 @@ her answers pass their tests and real calls.
 - Its eval cases (B42); both evals run until they pass at the bar Phase 7 set
   (`AI-AGENT.md`).
 - Calls on the dev number through the A34 checklist that apply to it.
-- Then her switch on for that bucket in production, and the first calls checked, as
-  A22.
+- Then her switch and the bucket's calls on in production (B32, B35), and the first
+  calls checked, as A22.
 
 ## Done when
 

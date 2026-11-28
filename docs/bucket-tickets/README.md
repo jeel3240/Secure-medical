@@ -105,9 +105,11 @@ below, is a suggested path through it.
 | B30 | [Lead page: the person's buckets](B30-lead-page-bucket-badges.md) | B09, B12 | S | To do |
 | B31 | [Admin > Configuration: a bucket picker](B31-config-bucket-picker.md) | B08, B18, B33, B35 | M | To do |
 | B32 | [Admin > Configuration: switches per bucket](B32-config-bucket-switches.md) | B26, B34 | M | Waits on the client |
-| | **F. Robot calls per bucket** | | | |
+| | **F. Calls per bucket - Seri's for every new bucket** | | | |
 | B33 | [Missed-call text and line per bucket](B33-missed-call-per-bucket.md) | B07 | S | To do |
-| B34 | [Robot calls per bucket](B34-robot-calls-per-bucket.md) | B17 | M | To do |
+| B34 | [Calls per bucket](B34-calls-per-bucket.md) | B17 | M | To do |
+| B50 | [The call lines per bucket](B50-call-lines-per-bucket.md) | B07, B18 | M | To do |
+| B51 | [Seri failing on a bucket with no script](B51-seri-fallback-with-no-script.md) | B15, B18, B35 | S | Waits on A22 (via B35) |
 | | **G. Seri per bucket** | | | |
 | B35 | [Seri's switch per bucket](B35-seri-switch-per-bucket.md) | B15, A22 | M | Waits on A22 |
 | B36 | [Knowledge packs](B36-knowledge-packs.md) | B07 | M | To do |
@@ -118,20 +120,22 @@ below, is a suggested path through it.
 | B41 | [Seri's health per bucket](B41-seri-health-per-bucket.md) | B15, B35 | S | Waits on A22 |
 | B42 | [The evals per pack](B42-evals-per-pack.md) | B37 | S | To do |
 | | **H. Proving it and shipping** | | | |
-| B43 | [A test bucket and the e2e across two buckets](B43-e2e-two-buckets.md) | B18, B28, B33, B34 (the gate), B40 | M | To do |
+| B43 | [A test bucket and the e2e across two buckets](B43-e2e-two-buckets.md) | B18, B28, B33, B34, B50, B51 (the gate), B40 | M | To do |
 | B44 | [How to add a bucket](B44-how-to-add-a-bucket.md) | B43 | S | To do |
 | B45 | [Every path on the test account](B45-real-test-two-buckets.md) | B43 | M | To do |
 | B46 | [Deploy, the switch-over watched](B46-deploy.md) | B45 | S | To do |
 | B47 | [Second bucket: texts](B47-second-bucket-texts.md) | B46, the client's content | S | Waits on the client |
-| B48 | [Second bucket: robot script](B48-second-bucket-robot-script.md) | B47 | S | Waits on the client |
-| B49 | [Second bucket: Seri](B49-second-bucket-seri.md) | B48 | M | Waits on the client |
+| B48 | [Second bucket: robot script](B48-second-bucket-robot-script.md) | B47 | S | Dropped 2026-11-27 - new buckets have no robot script; their calls are Seri's (Jeel) |
+| B49 | [Second bucket: Seri](B49-second-bucket-seri.md) | B47 | M | Waits on the client |
 
 ## The gate
 
 - **No second bucket row on production** until B18 (each call's own script), B28 (held
-  people visible), B33 (its own missed-call text) and B34 (robot calls only where on)
+  people visible), B33 (its own missed-call text) and B34 (calls only where on, and only
+  where someone can answer)
   are deployed - without them a second bucket's leads get antibiotics' words.
-- **No Seri for a second bucket** until B35 to B41 are deployed.
+- **No calls for a second bucket** - they are Seri's, as it has no robot script - until
+  B35 to B41, B50 and B51 are deployed.
 - **B24 and B25 reach production in the same deploy**: the two-group read without the
   switch-over would text every old contact in the group.
 
@@ -141,8 +145,8 @@ The suggested path, each group's tickets in number order:
 
 1. A (B01-B06) - each useful on its own, today.
 2. B (B07-B12), then C (B14-B19) - the database and the rules, still one bucket.
-3. E's B27, F (B33-B34), G (B36-B40, B42) - in any order once their dependencies are in.
-4. B35 and B41 once A22 is done.
+3. E's B27, F (B33, B34, B50), G (B36-B40, B42) - in any order once their dependencies are in.
+4. B35, B41 and B51 once A22 is done.
 5. D (B20-B26) once the client says yes to two groups; B28 and B29 with it.
 6. B13 in the deploy after B11, B14 and B23 are live.
 7. H (B43-B46), then the second bucket (B47-B49) when its content arrives.
@@ -155,7 +159,7 @@ The suggested path, each group's tickets in number order:
 | The client: the same staff and calling hours for every bucket? | Built for one team and one set of hours; a team per bucket is new tickets |
 | The client: one calling number, or one per bucket? | Built for one number; a number per bucket is new tickets |
 | The client: is every bucket eDrugstore? | B37's fields hold the brand per bucket either way |
-| The client: the next bucket's content | B47-B49 |
+| The client: the next bucket's content | B47, B49 (B48 dropped) |
 | A22 - Seri's first production calls checked | B35, B41 |
 
 ## The decisions these tickets build on

@@ -20,7 +20,9 @@ test account (groups `weightloss` and a second test group) and the dev number,
 - after the first finishes, the second starts; closed as Sold - starts; as Wrong
   number - nothing;
 - the switch-over on a test group holding old contacts - nobody texted;
-- a robot call per bucket, each with its own words, link and voicemail;
+- a call per bucket: antibiotics' robot script with its Seri off; the second bucket
+  only through Seri, with its own link and voicemail; Seri failing on it - the goodbye
+  line and the lead first in the agents' queue;
 - a missed call per bucket - the line and the text;
 - Seri on for one bucket only - her calls with that pack; the other on the script;
 - the texts, robot and Seri switches, from Admin;

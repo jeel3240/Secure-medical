@@ -1,6 +1,6 @@
 # B32 · Admin > Configuration: switches per bucket
 
-**Goal:** a superadmin switches a bucket's texts and robot calls on and off from Admin
+**Goal:** a superadmin switches a bucket's texts and calls on and off from Admin
 > Configuration, confirmed, recorded - as Seri's switch is.
 
 **Why:** a new bucket starts with everything off (`BUCKETS.md`); B26 and B34 add the
@@ -12,15 +12,16 @@ switches with a command. The page gets the button, like Seri's (2026-11-24).
 ## Build
 
 - `backend/src/api/admin/config.ts`, superadmin only:
-  `POST /buckets/:key/texts` and `POST /buckets/:key/robot-calls` with `{ on }` - 400
+  `POST /buckets/:key/texts` and `POST /buckets/:key/calls` with `{ on }` - 400
   `invalid_body`; 404 for an unknown bucket; 409 `no_group` (texts, groups not set) or
-  `no_script` (robot calls, no active script); otherwise `switchTexts` /
-  `switchRobotCalls` with `via: 'website'` and the user.
+  `no_caller` (calls, when the bucket has neither a robot script nor a Seri pack); otherwise `switchTexts` /
+  `switchCalls` with `via: 'website'` and the user.
 - `frontend/src/api/admin.ts`: the two calls.
 - `frontend/src/pages/admin/ConfigPage.tsx`: a "Texts" card on the Texts tab and a
-  "Robot calls" card on the Calls tab, beside Seri's - state, a one-line note, Switch
+  "Calls" card on the Calls tab, beside Seri's - state, a one-line note, Switch
   on / Switch off behind `ConfirmDialog`. The wording from a pure function, as
-  `seriState` does, tested on its own.
+  `seriState` does, tested on its own; on a bucket with no robot script the Calls card
+  says calls go out only with Seri on.
 
 ## Done when
 

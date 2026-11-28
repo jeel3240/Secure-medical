@@ -24,6 +24,8 @@ adds - outside the robot's hours until B02 is in.
 - The dialler's gate (`worker/index.ts`, `worker/auto-calls.ts`): Seri's readiness
   asked per bucket that has her on - B41 makes her health per bucket; here only the
   switch.
+- On a bucket with no robot script, Seri off means no calls at all (B34): the confirm
+  dialog and the command both say so.
 - `backend/src/cli/ai-agent.ts`: `npm run ai-agent -- <bucket key> on|off`; an unknown
   key lists the buckets.
 - `backend/src/api/admin/config.ts`: `POST /buckets/:key/ai-agent` in place of
