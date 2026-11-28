@@ -2,10 +2,14 @@
 # Runs live checks, each on its own freshly migrated scratch database, and
 # prints one line per check. From backend/, with the local postgres up:
 #
-#   scripts/live-checks.sh                    # all of them
-#   scripts/live-checks.sh calls queue        # just these (names without -live-check)
+#   scripts/live-checks.sh                         # all of them, upgrade checks too
+#   scripts/live-checks.sh calls queue             # just these (names without -live-check)
+#   scripts/live-checks.sh harness-upgrade-check   # an upgrade check, by its whole name
 #
-# Never touches the `leads` database. docs/TESTING.md, "Live checks".
+# An upgrade check (`*-upgrade-check.ts`, B03) gets an empty database that is
+# not migrated here: the check migrates it to an old version, seeds rows in that
+# shape, then runs the rest itself. Never touches the `leads` database.
+# docs/TESTING.md, "Live checks" and "Upgrade checks".
 cd "$(dirname "$0")/.." || exit 1
 # This project's own postgres - the one on localhost:5433 the checks connect to,
 # not the first container anywhere with "postgres" in its name (review M37).
@@ -13,16 +17,20 @@ PG=$(docker compose ps -q postgres 2>/dev/null)
 [ -z "$PG" ] && { echo "postgres is not running: docker compose up -d postgres"; exit 1; }
 
 names=("$@")
-[ ${#names[@]} -eq 0 ] && names=($(ls scripts/*-live-check.ts | xargs -n1 basename | sed 's/-live-check\.ts$//'))
+[ ${#names[@]} -eq 0 ] && names=($(ls scripts/*-live-check.ts scripts/*-upgrade-check.ts 2>/dev/null | xargs -n1 basename | sed -e 's/-live-check\.ts$//' -e 's/\.ts$//'))
 
 failed=0
 for name in "${names[@]}"; do
-  sc="${name%-live-check}-live-check"
+  case "$name" in
+    *-upgrade-check) sc="$name" ;;
+    *) sc="${name%-live-check}-live-check" ;;
+  esac
   db="lc_$(echo "$sc" | tr '-' '_')"
   docker exec "$PG" psql -U app -d postgres -qc "DROP DATABASE IF EXISTS $db" -c "CREATE DATABASE $db" >/dev/null 2>&1
   url="postgres://app:app@localhost:5433/$db"
   # A migration that fails stops this check with its own error, not a check failing for no reason shown.
-  if ! migrated=$(DATABASE_URL=$url node scripts/migrate.js 2>&1); then
+  # An upgrade check is left its empty database: it runs the migrations itself.
+  if [[ "$sc" != *-upgrade-check ]] && ! migrated=$(DATABASE_URL=$url node scripts/migrate.js 2>&1); then
     printf "%-28s     | MIGRATION FAILED\n" "$sc"
     echo "$migrated" | tail -3
     failed=1
